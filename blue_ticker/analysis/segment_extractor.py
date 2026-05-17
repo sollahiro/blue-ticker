@@ -66,10 +66,16 @@ _BUSINESS_DIMENSION_KEYWORDS: tuple[str, ...] = (
 
 # 地域別
 _GEOGRAPHY_TEXT_BLOCK_TAGS: frozenset[str] = frozenset([
-    "InformationAboutGeographicalAreasIFRSTextBlock",   # IFRS
-    "InformationAboutGeographicalAreasTextBlock",        # J-GAAP
-    "InformationAboutGeographicalAreasUSGAAPTextBlock",  # US-GAAP
-    "RelatedInformationTextBlock",                       # J-GAAP 関連情報（混在）
+    "InformationAboutGeographicalAreasIFRSTextBlock",              # IFRS
+    "InformationAboutGeographicalAreasTextBlock",                   # J-GAAP
+    "InformationAboutGeographicalAreasUSGAAPTextBlock",             # US-GAAP
+    "RelatedInformationTextBlock",                                  # J-GAAP 関連情報（混在）
+    "RevenuesFromExternalCustomersInformationForEachRegionTextBlock",   # J-GAAP 地域ごとの外部顧客への売上収益
+    "PropertyPlantAndEquipmentInformationForEachRegionTextBlock",       # J-GAAP 地域ごとの有形固定資産
+])
+_GEOGRAPHY_MIXED_TAGS: frozenset[str] = frozenset([
+    "RelatedInformationTextBlock",                          # J-GAAP 関連情報（セグメント・地域が混在）
+    "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  # US-GAAP 連結財務諸表注記（地域別を内包）
 ])
 _GEOGRAPHY_HEADING_KEYWORDS: list[str] = [
     "地域ごとの情報",
@@ -169,12 +175,12 @@ def _apply_period_ordering(tables: list[SegmentTable]) -> None:
 
 def _find_next_table(element: Any) -> Any | None:
     for sibling in element.next_siblings:
-        if not hasattr(sibling, "name"):
+        if not isinstance(sibling, Tag):
             continue
         if sibling.name == "table":
             return sibling
-        found = sibling.find("table") if hasattr(sibling, "find") else None
-        if found:
+        found = sibling.find("table")
+        if found and isinstance(found, Tag):
             return found
     return None
 
@@ -355,11 +361,11 @@ def extract_segment_info(xbrl_dir: Path) -> SegmentResult:
 
 def extract_geography_info(xbrl_dir: Path) -> SegmentResult:
     """連結財務諸表注記から地域別（所在地別）情報を抽出する。"""
-    dedicated = _GEOGRAPHY_TEXT_BLOCK_TAGS - frozenset(["RelatedInformationTextBlock"])
+    dedicated = _GEOGRAPHY_TEXT_BLOCK_TAGS - _GEOGRAPHY_MIXED_TAGS
     tables = _extract_from_text_blocks(
         xbrl_dir,
         dedicated_tags=dedicated,
-        mixed_tags=frozenset(["RelatedInformationTextBlock"]),
+        mixed_tags=_GEOGRAPHY_MIXED_TAGS,
         dedicated_heading="地域ごとの情報",
         mixed_keywords=_GEOGRAPHY_HEADING_KEYWORDS,
     )
