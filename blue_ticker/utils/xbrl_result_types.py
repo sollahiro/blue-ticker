@@ -177,6 +177,30 @@ class TangibleFixedAssetsResult(TypedDict):
     reason: NotRequired[str]
 
 
+class CapitalExpenditureResult(TypedDict):
+    current: float | None
+    prior: float | None
+    method: str
+    accounting_standard: str
+    reason: NotRequired[str]
+
+
+class ShareBuybackResult(TypedDict):
+    current: float | None
+    prior: float | None
+    method: str
+    accounting_standard: str
+    reason: NotRequired[str]
+
+
+class ResearchDevelopmentResult(TypedDict):
+    current: float | None
+    prior: float | None
+    method: str
+    accounting_standard: str
+    reason: NotRequired[str]
+
+
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
     op: OperatingProfitResult

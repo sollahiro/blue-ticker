@@ -17,6 +17,9 @@ RAW_MILLION_FIELDS = frozenset((
     "CFO",
     "CFI",
     "CashEq",
+    "Capex",
+    "Buyback",
+    "RD",
 ))
 
 

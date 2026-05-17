@@ -60,6 +60,9 @@ class RawData(TypedDict, total=False):
     NetAssets: float | None
     CFO: float | None
     CFI: float | None
+    Capex: float | None
+    Buyback: float | None
+    RD: float | None
     EPS: float | None
     BPS: float | None
     ShOutFY: float | None

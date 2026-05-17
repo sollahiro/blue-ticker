@@ -15,13 +15,21 @@ from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 
 def _is_consolidated_duration(ctx: str) -> bool:
-    """連結の当期損益コンテキストかどうか。"""
-    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    """連結の当期損益コンテキストかどうか。セグメント軸メンバー（Member末尾）は除外する。"""
+    return (
+        any(p in ctx for p in DURATION_CONTEXT_PATTERNS)
+        and "_NonConsolidated" not in ctx
+        and not ctx.endswith("Member")
+    )
 
 
 def _is_consolidated_prior_duration(ctx: str) -> bool:
-    """連結の前期損益コンテキストかどうか。"""
-    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    """連結の前期損益コンテキストかどうか。セグメント軸メンバー（Member末尾）は除外する。"""
+    return (
+        any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS)
+        and "_NonConsolidated" not in ctx
+        and not ctx.endswith("Member")
+    )
 
 
 def _is_nonconsolidated_duration(ctx: str) -> bool:
@@ -48,13 +56,21 @@ def _is_pure_nonconsolidated_context(ctx: str, patterns: list[str]) -> bool:
 
 
 def _is_consolidated_instant(ctx: str) -> bool:
-    """連結の期末残高コンテキストかどうか。"""
-    return any(p in ctx for p in INSTANT_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    """連結の期末残高コンテキストかどうか。セグメント軸メンバー（Member末尾）は除外する。"""
+    return (
+        any(p in ctx for p in INSTANT_CONTEXT_PATTERNS)
+        and "_NonConsolidated" not in ctx
+        and not ctx.endswith("Member")
+    )
 
 
 def _is_consolidated_prior_instant(ctx: str) -> bool:
-    """連結の前期末残高コンテキストかどうか。"""
-    return any(p in ctx for p in PRIOR_INSTANT_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    """連結の前期末残高コンテキストかどうか。セグメント軸メンバー（Member末尾）は除外する。"""
+    return (
+        any(p in ctx for p in PRIOR_INSTANT_CONTEXT_PATTERNS)
+        and "_NonConsolidated" not in ctx
+        and not ctx.endswith("Member")
+    )
 
 
 def _is_nonconsolidated_instant(ctx: str) -> bool:

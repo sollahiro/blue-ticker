@@ -500,6 +500,58 @@ CF_INVESTING_TAGS: list[str] = [
     "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
 ]
 
+# 設備投資（CapEx）タグ定義
+# analysis/capital_expenditure.py で使用
+
+CAPEX_OVERVIEW_TAGS: list[str] = [
+    "CapitalExpendituresOverviewOfCapitalExpendituresEtc",  # 設備投資等の概要（J-GAAP / IFRS 共通）
+]
+
+CAPEX_CF_JGAAP_TAGS: list[str] = [
+    "PurchaseOfPropertyPlantAndEquipmentInvCF",             # J-GAAP CF計算書 有形固定資産の取得
+]
+
+CAPEX_CF_IFRS_TAGS: list[str] = [
+    "AcquisitionOfPropertyPlantAndEquipmentInvCFIFRS",      # IFRS CF計算書 有形固定資産の取得
+    "PurchaseOfPropertyPlantAndEquipmentInvCFIFRS",         # IFRS CF計算書 代替
+]
+
+# 自己株式取得（Share Buyback）タグ定義
+# analysis/share_buyback.py で使用
+
+SHARE_BUYBACK_JGAAP_TAGS: list[str] = [
+    "PurchaseOfTreasuryStockFinCF",                         # J-GAAP CF計算書 自己株式の取得
+]
+
+SHARE_BUYBACK_IFRS_TAGS: list[str] = [
+    "PaymentsForPurchaseOfTreasurySharesFinCFIFRS",         # IFRS CF計算書 自己株式の取得（jpigp_cor）
+    "PurchaseOfTreasurySharesFinCFIFRS",                    # IFRS CF計算書 代替
+    "AcquisitionOfTreasurySharesFinCFIFRS",                 # IFRS CF計算書 代替
+    "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS",         # IFRS CF計算書 会社固有タグ（トヨタ等）
+    "PurchaseOfTreasurySharesSSIFRS",                       # IFRS 株主資本等変動計算書（最終フォールバック）
+]
+
+# 研究開発費（R&D Expenses）タグ定義
+# analysis/research_development.py で使用
+
+# J-GAAP / IFRS 共通: 「研究開発活動」セクションで開示される総額
+RD_EXPENSE_COMMON_TAGS: list[str] = [
+    "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",  # J-GAAP / IFRS（研究開発活動セクション）
+]
+
+# J-GAAP 固有: 損益計算書・販管費内で開示される場合のフォールバック
+RD_EXPENSE_JGAAP_TAGS: list[str] = [
+    "ResearchAndDevelopmentExpensesSGA",                    # 販管費内の研究開発費
+    "ResearchAndDevelopmentExpenses",                       # 独立行項目の研究開発費
+]
+
+# IFRS 固有: フォールバック
+RD_EXPENSE_IFRS_TAGS: list[str] = [
+    "ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS",  # IFRS P&L（ホンダ等、セグメント別開示のみの企業）
+    "ResearchAndDevelopmentExpensesIFRS",                   # IFRS 研究開発費
+    "ResearchAndDevelopmentCostsIFRS",                      # IFRS 代替
+]
+
 # 実効税率（Tax）タグ定義
 # analysis/tax_expense.py で使用
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
 from blue_ticker.analysis.cash_flow import extract_cash_flow
 from blue_ticker.analysis.depreciation import extract_depreciation
 from blue_ticker.analysis.employees import extract_employees
@@ -15,6 +16,8 @@ from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_
 from blue_ticker.analysis.interest_expense import extract_interest_expense
 from blue_ticker.analysis.net_revenue import extract_net_revenue
 from blue_ticker.analysis.operating_profit import extract_operating_profit
+from blue_ticker.analysis.research_development import extract_research_development
+from blue_ticker.analysis.share_buyback import extract_share_buyback
 from blue_ticker.analysis.tax_expense import extract_tax_expense
 from blue_ticker.analysis.sections import (
     BalanceSheetSection,
@@ -127,6 +130,9 @@ _extract_tax_compat = _make_section_wrapper(IncomeStatementSection, extract_tax_
 _extract_nr_compat = _make_section_wrapper(IncomeStatementSection, extract_net_revenue)
 _extract_cf_compat = _make_section_wrapper(CashFlowSection, extract_cash_flow)
 _extract_da_compat = _make_section_wrapper(CashFlowSection, extract_depreciation)
+_extract_capex_compat = _make_section_wrapper(CashFlowSection, extract_capital_expenditure)
+_extract_buyback_compat = _make_section_wrapper(CashFlowSection, extract_share_buyback)
+_extract_rd_compat = _make_section_wrapper(IncomeStatementSection, extract_research_development)
 _extract_bs_compat = _make_section_wrapper(BalanceSheetSection, extract_balance_sheet)
 _extract_ibd_compat = _make_section_wrapper(BalanceSheetSection, extract_interest_bearing_debt)
 _extract_ppe_compat = _make_section_wrapper(BalanceSheetSection, extract_tangible_fixed_assets)
@@ -158,6 +164,9 @@ class _XbrlFinancials(TypedDict):
     net_assets: float | None
     cfo: float | None
     cfi: float | None
+    capex: float | None
+    buyback: float | None
+    rd: float | None
     sh: ShareholderMetrics
 
 
@@ -194,6 +203,11 @@ def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
     cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
     if not _result_has_signal(cf_result):
         cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    capex_result = _extract_capex_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    buyback_result = _extract_buyback_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
+    if not _result_has_signal(buyback_result):
+        buyback_result = _extract_buyback_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    rd_result = _extract_rd_compat(xbrl_path, pre_parsed=all_pre_parsed)
     sh_result = extract_shareholder_metrics(
         xbrl_path,
         pre_parsed=all_pre_parsed,
@@ -209,6 +223,9 @@ def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
         net_assets=bs_result.get("net_assets"),
         cfo=cf_result["cfo"].get("current"),
         cfi=cf_result["cfi"].get("current"),
+        capex=capex_result.get("current"),
+        buyback=buyback_result.get("current"),
+        rd=rd_result.get("current"),
         sh=sh_result,
     )
 
@@ -240,6 +257,9 @@ def _build_xbrl_record(
         "NetAssets": fin["net_assets"],
         "CFO": fin["cfo"],
         "CFI": fin["cfi"],
+        "Capex": fin["capex"],
+        "Buyback": fin["buyback"],
+        "RD": fin["rd"],
         "EPS": sh.get("EPS"),
         "BPS": sh.get("BPS"),
         "ShOutFY": sh.get("ShOutFY"),
