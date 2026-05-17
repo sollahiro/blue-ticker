@@ -418,6 +418,46 @@ def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> FieldSet:
     return _extract_html_labels(soup, _USGAAP_BS_HTML_LABEL_MAP)
 
 
+# US-GAAP 連結損益計算書 HTML → FieldSet
+# HTML ラベル（部分一致） → 仮想タグ名
+# 税引前利益は "税金等調整前当期純利益"（US-GAAP式）と "税引前当期純利益"（J-GAAP式）の両方を登録し、
+# 先にヒットした方が採用される（_extract_html_labels は remaining から削除済みラベルをスキップ）。
+_USGAAP_PL_HTML_LABEL_MAP: dict[str, str] = {
+    "販売費及び一般管理費":     "USGAAP_HTML_SGA",
+    "営業利益":                "USGAAP_HTML_OperatingIncome",
+    "税金等調整前当期純利益":   "USGAAP_HTML_PreTaxIncome",
+    "税引前当期純利益":         "USGAAP_HTML_PreTaxIncome",
+    "税金等調整前当期純損失":   "USGAAP_HTML_PreTaxIncome",
+    "法人税等":                "USGAAP_HTML_IncomeTax",
+}
+
+
+def parse_usgaap_html_pl_fields(xbrl_dir: Path) -> FieldSet:
+    """US-GAAP 連結損益計算書 HTML から FieldSet を生成する。
+
+    0105020（連結損益計算書）を優先し、"営業利益" がなければ 0105010 にフォールバックする
+    （会社によって IS と BS が同一ファイルに収録される場合があるため）。
+    返す値の単位は円。BS4 が未インストールの場合は空の FieldSet を返す。
+    """
+    if not _BS4_AVAILABLE:
+        return {}
+
+    pl_html: Path | None = None
+    for prefix in ("0105020", "0105010"):
+        candidate = _find_html_by_prefix(xbrl_dir, prefix)
+        if candidate is None:
+            continue
+        if "営業利益" in candidate.read_text(encoding="utf-8", errors="ignore"):
+            pl_html = candidate
+            break
+
+    if pl_html is None:
+        return {}
+
+    soup = BeautifulSoup(pl_html.read_text(encoding="utf-8", errors="ignore"), "html.parser")
+    return _extract_html_labels(soup, _USGAAP_PL_HTML_LABEL_MAP)
+
+
 def _find_html_by_prefix(xbrl_dir: Path, prefix: str) -> Path | None:
     # xbrl_dir が PublicDoc 相当のディレクトリの場合と、
     # そのルート（S100XXXX_xbrl）が渡される場合の両方に対応する

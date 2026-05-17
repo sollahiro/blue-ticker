@@ -29,6 +29,7 @@ from blue_ticker.analysis.field_parser import (
     parse_duration_fields,
     parse_instant_fields,
     parse_usgaap_html_bs_fields,
+    parse_usgaap_html_pl_fields,
     resolve_aggregate,
     resolve_item,
     resolve_item_prefer_current,
@@ -174,6 +175,8 @@ class IncomeStatementSection(Section):
     def from_xbrl(cls, xbrl_dir: Path, accounting_standard: str | None = None) -> "IncomeStatementSection":
         field_set = parse_duration_fields(xbrl_dir, allowed_tags=cls._TAGS)
         std = accounting_standard or detect_accounting_standard(field_set)
+        if std == "US-GAAP":
+            field_set.update(parse_usgaap_html_pl_fields(xbrl_dir))
         return cls(field_set, std, xbrl_dir)
 
     @classmethod
@@ -184,6 +187,8 @@ class IncomeStatementSection(Section):
         xbrl_dir: Path | None = None,
     ) -> "IncomeStatementSection":
         field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
+        if accounting_standard == "US-GAAP" and xbrl_dir is not None:
+            field_set.update(parse_usgaap_html_pl_fields(xbrl_dir))
         return cls(field_set, accounting_standard, xbrl_dir)
 
 
