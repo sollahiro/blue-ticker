@@ -85,12 +85,6 @@ ticker analyze <code> --half
 ticker analyze <code> --no-cache
 ```
 
-検証用の内部フィールドが必要な場合に使う。
-
-```bash
-ticker analyze <code> --format json --include-debug-fields
-```
-
 回答では、CLIの表やJSONをそのまま長く貼るより、ユーザーの問いに合わせて以下を中心に整理する。
 
 - 売上高、営業利益、営業利益率の推移
