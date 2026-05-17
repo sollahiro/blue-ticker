@@ -180,6 +180,7 @@ class EdinetFetcher:
                     return _slice_docs_preserving_amendments(mem, max_years)
 
             # 永続キャッシュが十分な通常書類を持っていれば使う
+            known_not_found_fy_ends: frozenset[str] = frozenset()
             if self.cache_manager is not None:
                 cached = await self.cache_manager.async_get(persistent_key)
                 if (
@@ -193,6 +194,9 @@ class EdinetFetcher:
                     if len(cached_regular) >= max_years:
                         self._doc_cache[lock_key] = cached["docs"]
                         return _slice_docs_preserving_amendments(cached["docs"], max_years)
+                    raw_nf = cached.get("not_found_fy_ends")
+                    if isinstance(raw_nf, list):
+                        known_not_found_fy_ends = frozenset(raw_nf)
 
             # financial_data 由来の docs_from_records を試みる（max_years 以上あれば採用）
             annual_records = [r for r in financial_data if r.get("CurPerType") == "FY"]
@@ -200,14 +204,22 @@ class EdinetFetcher:
 
             if docs_from_records and len(docs_from_records) >= max_years:
                 docs = docs_from_records[:save_count]
+                not_found_fy_ends: list[str] = []
             else:
-                docs = await self._search_edinet_annual_docs(code, save_count)
+                docs, not_found_fy_ends = await self._search_edinet_annual_docs(
+                    code, save_count, known_not_found_fy_ends=known_not_found_fy_ends
+                )
 
             self._doc_cache[lock_key] = docs
             if self.cache_manager is not None:
+                merged_not_found = sorted(known_not_found_fy_ends | set(not_found_fy_ends))
                 await self.cache_manager.async_set(
                     persistent_key,
-                    {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
+                    {
+                        "_cache_version": _EDINET_DOCS_CACHE_VERSION,
+                        "docs": docs,
+                        "not_found_fy_ends": merged_not_found,
+                    },
                 )
             return _slice_docs_preserving_amendments(docs, max_years)
 
@@ -215,17 +227,20 @@ class EdinetFetcher:
         self,
         code: str,
         max_years: int,
-    ) -> list[dict[str, Any]]:
+        *,
+        known_not_found_fy_ends: frozenset[str] = frozenset(),
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         """EDINET の有価証券報告書を発見する。
 
         build_document_index_for_code() による3段階フォールバック検索を行う。
         """
         if not self.edinet_client:
-            return []
+            return [], []
         return await build_document_index_for_code(
             code,
             self.edinet_client,
             analysis_years=max_years,
+            known_not_found_fy_ends=known_not_found_fy_ends,
         )
 
     async def _search_edinet_half_docs(
@@ -340,7 +355,7 @@ class EdinetFetcher:
         code: str,
     ) -> dict[str, Any] | None:
         """最新の有価証券報告書(120)を1件取得する。"""
-        docs = await self._search_edinet_annual_docs(code, 10)
+        docs, _ = await self._search_edinet_annual_docs(code, 10)
         annual_reports = [
             doc for doc in docs if doc.get("docTypeCode") == EDINET_DOC_TYPE_ANNUAL_REPORT
         ]

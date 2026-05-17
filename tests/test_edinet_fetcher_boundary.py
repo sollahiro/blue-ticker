@@ -28,7 +28,7 @@ async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() 
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=([{"docID": "S100TEST"}], []))  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
         "72030",
@@ -41,7 +41,7 @@ async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() 
 
     assert docs == [{"docID": "S100TEST"}]
     # save_count = max(EDINET_DOC_DISCOVERY_LIMIT=10, max_years=1) = 10
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 10)
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 10, known_not_found_fy_ends=frozenset())
 
 
 @pytest.mark.asyncio
@@ -54,7 +54,7 @@ async def test_fetch_latest_annual_report_selects_latest_120_doc() -> None:
         {"docID": "NEW", "docTypeCode": "120", "submitDateTime": "2024-06-01T10:00:00"},
     ]
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._search_edinet_annual_docs = AsyncMock(return_value=docs)  # type: ignore[method-assign]
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=(docs, []))  # type: ignore[method-assign]
 
     doc = await fetcher.fetch_latest_annual_report("72030")
 
@@ -232,7 +232,7 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
-    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=([{"docID": "S100TEST"}], []))  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
         code,
@@ -251,7 +251,7 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100ANNUAL"}])  # type: ignore[method-assign]
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=([{"docID": "S100ANNUAL"}], []))  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
         "59320",
@@ -268,7 +268,7 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
 
     assert docs == [{"docID": "S100ANNUAL"}]
     # save_count = max(10, 5) = 10
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 10)
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 10, known_not_found_fy_ends=frozenset())
 
 
 @pytest.mark.asyncio

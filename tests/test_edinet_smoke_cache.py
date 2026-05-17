@@ -31,7 +31,7 @@ def test_smoke_companies_from_codes_allows_custom_codes() -> None:
 
 @pytest.mark.asyncio
 async def test_prepare_edinet_smoke_cache_downloads_latest_annual_doc(monkeypatch) -> None:
-    async def fake_build_document_index_for_code(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+    async def fake_build_document_index_for_code(*args: Any, **kwargs: Any) -> tuple[list[dict[str, Any]], list[str]]:
         return [
             {
                 "docID": "OLD",
@@ -45,7 +45,7 @@ async def test_prepare_edinet_smoke_cache_downloads_latest_annual_doc(monkeypatc
                 "edinet_fy_end": "2025-03-31",
                 "submitDateTime": "2025-06-01 10:00",
             },
-        ]
+        ], []
 
     monkeypatch.setattr(
         edinet_smoke_cache,

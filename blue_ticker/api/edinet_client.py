@@ -40,6 +40,7 @@ class EdinetAPIClient:
         self._session_loop: asyncio.AbstractEventLoop | None = None
         self._download_locks: dict[str, asyncio.Lock] = {}
         self._date_fetch_semaphore = asyncio.Semaphore(10)
+        self._xbrl_download_semaphore = asyncio.Semaphore(4)
         self._document_index_locks: dict[int, asyncio.Lock] = {}
 
     def update_api_key(self, api_key: str | None) -> None:
@@ -465,7 +466,8 @@ class EdinetAPIClient:
                 return None
 
             try:
-                content = await self._request_binary(f"/documents/{doc_id}", {"type": 1})
+                async with self._xbrl_download_semaphore:
+                    content = await self._request_binary(f"/documents/{doc_id}", {"type": 1})
                 return self.cache_store.store_xbrl_zip(doc_id, content, save_dir)
             except Exception as e:
                 logger.error(f"❌ [EDINET] XBRL Download error {doc_id}: {e}")

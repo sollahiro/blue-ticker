@@ -89,7 +89,7 @@ async def prepare_edinet_smoke_cache(
 
     for company in companies:
         try:
-            docs = await build_document_index_for_code(
+            docs, _ = await build_document_index_for_code(
                 company.code,
                 edinet_client,
                 initial_scan_days=initial_scan_days,

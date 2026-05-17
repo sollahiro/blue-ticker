@@ -341,7 +341,8 @@ async def build_document_index_for_code(
     *,
     initial_scan_days: int = 365,
     analysis_years: int = 5,
-) -> list[dict[str, Any]]:
+    known_not_found_fy_ends: frozenset[str] = frozenset(),
+) -> tuple[list[dict[str, Any]], list[str]]:
     """EDINETで指定銘柄の過去 analysis_years 年分の有価証券報告書を発見する。
 
     返却リストには通常書類（docTypeCode=120）と訂正書類（130）が含まれる。
@@ -354,14 +355,19 @@ async def build_document_index_for_code(
         edinet_client: EdinetAPIClient インスタンス
         initial_scan_days: 直近スキャン日数（デフォルト365日）
         analysis_years: 取得する年数（デフォルト5）
+        known_not_found_fy_ends: 前回検索で見つからなかった期末日（YYYY-MM-DD）。
+            検索窓が完全に過去の年度のみ格納されている前提。
 
     Returns:
-        書類リスト（新しい年度順、末尾に訂正書類）。見つからない場合は空リスト。
+        (docs, not_found_fy_ends) のタプル。
+        docs: 書類リスト（新しい年度順、末尾に訂正書類）。見つからない場合は空リスト。
+        not_found_fy_ends: 今回新たに「検索窓が過去になっても見つからなかった」年度の
+            期末日リスト（YYYY-MM-DD）。
     """
     # ① 直近スキャンで最新有報を発見
     recent = await _find_most_recent_annual_report(code, edinet_client, initial_scan_days)
     if not recent:
-        return []
+        return [], []
 
     # periodEnd から会計期末パターンを確定
     period_end_str: str = recent.get("periodEnd", "")
@@ -370,7 +376,7 @@ async def build_document_index_for_code(
         logger.warning(
             f"[EDINET Discovery] {code}: periodEnd を解析できません: {period_end_str!r}"
         )
-        return []
+        return [], []
 
     fy_end_month = period_end_dt.month
     fy_end_day = period_end_dt.day
@@ -392,6 +398,9 @@ async def build_document_index_for_code(
         if dt:
             prev_submit_date = dt.date()
 
+    today = datetime.now().date()
+    not_found_fy_ends: list[str] = []
+
     # ② 過去年度を3段階フォールバックで検索
     for i in range(1, analysis_years + 1):
         target_year = period_end_dt.year - i
@@ -405,6 +414,11 @@ async def build_document_index_for_code(
                 expected_prev = prev_submit_date.replace(year=prev_submit_date.year - 1)
             except ValueError:
                 expected_prev = prev_submit_date - timedelta(days=365)
+
+        if fy_end_str_i in known_not_found_fy_ends:
+            logger.debug(f"[EDINET Discovery] {code} {fy_end_str_i}: negative cache skip")
+            prev_submit_date = expected_prev
+            continue
 
         found = await _find_annual_report_for_fy(
             code, fy_end, edinet_client, prev_submit_date=expected_prev
@@ -421,9 +435,11 @@ async def build_document_index_for_code(
         else:
             # 見つからなくても継続（途中欠損を許容し、提出日推定を1年ずらす）
             prev_submit_date = expected_prev
+            # 提出期限（期末+TIER3_MAX_DAYS）が完全に過去になった年度だけ negative cache する
+            if (fy_end + timedelta(days=_TIER3_MAX_DAYS)) < today:
+                not_found_fy_ends.append(fy_end_str_i)
 
     # ③ 訂正書類の収集（直近 initial_scan_days 日 = 既キャッシュ範囲）
-    today = datetime.now().date()
     amendments_start = today - timedelta(days=initial_scan_days)
     original_ids = {d["docID"] for d in docs if d.get("docID")}
     amendments = await _find_amendments(original_ids, edinet_client, amendments_start, today)
@@ -448,7 +464,7 @@ async def build_document_index_for_code(
     n_annual = sum(1 for d in docs if d.get("docTypeCode") == _ANNUAL_REPORT_DOC_TYPE)
     n_amend = sum(1 for d in docs if d.get("docTypeCode") == _AMENDMENT_DOC_TYPE)
     logger.info(f"[EDINET Discovery] {code}: 有報{n_annual}件 訂正{n_amend}件 発見")
-    return docs
+    return docs, not_found_fy_ends
 
 
 async def build_half_year_document_index_for_code(
@@ -465,13 +481,14 @@ async def build_half_year_document_index_for_code(
     返却書類には edinet_fy_end / period_type="2Q" など、既存 fetcher が扱える
     メタ情報を付与する。
     """
+    _all_docs, _ = await build_document_index_for_code(
+        code,
+        edinet_client,
+        initial_scan_days=initial_scan_days,
+        analysis_years=analysis_years,
+    )
     annual_docs = [
-        doc for doc in await build_document_index_for_code(
-            code,
-            edinet_client,
-            initial_scan_days=initial_scan_days,
-            analysis_years=analysis_years,
-        )
+        doc for doc in _all_docs
         if doc.get("docTypeCode") == _ANNUAL_REPORT_DOC_TYPE and not doc.get("_is_amendment")
     ]
     if not annual_docs:

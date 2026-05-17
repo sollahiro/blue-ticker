@@ -29,8 +29,8 @@ def mock_client():
     return client
 
 
-async def _search_annual_side_effect(code, max_years):
-    return [_make_doc(f"202{5 - i}-03-31") for i in range(max_years)]
+async def _search_annual_side_effect(code, max_years, *, known_not_found_fy_ends=frozenset()):
+    return [_make_doc(f"202{5 - i}-03-31") for i in range(max_years)], []
 
 
 def test_short_cache_not_returned_for_larger_request(cache_manager, mock_client):
