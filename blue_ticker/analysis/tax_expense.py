@@ -42,6 +42,23 @@ def extract_tax_expense(section: IncomeStatementSection) -> TaxExpenseResult:
         pretax = section.resolve(["USGAAP_HTML_PreTaxIncome"])
         tax = section.resolve(["USGAAP_HTML_IncomeTax"])
 
+        # 合計行がない場合は当期法人税 + 繰延税金を合算する
+        if tax["current"] is None and tax["prior"] is None:
+            tax_c = section.resolve(["USGAAP_HTML_IncomeTaxCurrent"])
+            tax_d = section.resolve(["USGAAP_HTML_IncomeTaxDeferred"])
+            if (
+                tax_c["current"] is not None or tax_d["current"] is not None
+                or tax_c["prior"] is not None or tax_d["prior"] is not None
+            ):
+                def _sum_tax(a: float | None, b: float | None) -> float | None:
+                    return None if a is None and b is None else (a or 0.0) + (b or 0.0)
+
+                tax = {  # type: ignore[assignment]
+                    "current": _sum_tax(tax_c["current"], tax_d["current"]),
+                    "prior": _sum_tax(tax_c["prior"], tax_d["prior"]),
+                    "tag": None,
+                }
+
         def _tax_rate_usgaap(p: float | None, t: float | None) -> float | None:
             return t / p if p is not None and t is not None and p != 0 else None
 
