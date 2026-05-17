@@ -74,7 +74,7 @@ def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> "FieldSet":
 def parse_usgaap_html_pl_fields(xbrl_dir: Path) -> "FieldSet":
     """US-GAAP 連結損益計算書 HTML から FieldSet を生成する。
 
-    0105020（連結損益計算書）を優先し、"営業利益" がなければ 0105010 にフォールバックする。
+    0105020（連結損益計算書）を優先し、なければ 0105010 にフォールバックする。
     返す値の単位は円。BS4 が未インストールの場合は空の FieldSet を返す。
     """
     if not _BS4_AVAILABLE:
