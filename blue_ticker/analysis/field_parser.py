@@ -11,12 +11,6 @@ XBRLの生XMLパース（collect_numeric_elements）とコンテキスト解釈�
 from pathlib import Path
 from typing import TypedDict
 
-try:
-    from bs4 import BeautifulSoup
-    _BS4_AVAILABLE = True
-except ImportError:
-    _BS4_AVAILABLE = False
-
 from blue_ticker.analysis.context_helpers import (
     _is_consolidated_duration,
     _is_consolidated_instant,
@@ -29,8 +23,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_pure_nonconsolidated_context,
     has_nonconsolidated_contexts,
 )
-from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
-from blue_ticker.constants.financial import MILLION_YEN
+from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from blue_ticker.constants.xbrl import (
     DURATION_CONTEXT_PATTERNS,
     INSTANT_CONTEXT_PATTERNS,
@@ -378,147 +371,3 @@ def derive_subtraction(
         else None
     )
     return {"tag": derived_tag, "current": current, "prior": prior}
-
-
-# US-GAAP 連結財政状態計算書 HTML → FieldSet
-# HTML ラベル（部分一致） → 仮想タグ名
-_USGAAP_BS_HTML_LABEL_MAP: dict[str, str] = {
-    "流動資産合計":                             "USGAAP_HTML_CurrentAssets",
-    "有形固定資産合計":                         "USGAAP_HTML_PPENet",
-    "投資及び長期債権合計":                     "USGAAP_HTML_InvestmentsLTReceivables",
-    "その他の資産合計":                         "USGAAP_HTML_OtherNCA",
-    "流動負債合計":                             "USGAAP_HTML_CurrentLiabilities",
-    "固定負債合計":                             "USGAAP_HTML_NonCurrentLiabilities",
-    "負債合計":                                 "USGAAP_HTML_TotalLiabilities",
-    "純資産合計":                               "USGAAP_HTML_NetAssets",
-    # 富士フイルム形式 IBD ラベル
-    "社債及び短期借入金":                       "USGAAP_HTML_IBDCurrent",
-    "社債及び長期借入金":                       "USGAAP_HTML_IBDNonCurrent",
-    # キヤノン形式 IBD ラベル（"長期債務" は CF 文中にも現れるため章番号付きで特定する）
-    "短期借入金及び１年以内に返済する長期債務合計": "USGAAP_HTML_IBDCurrent",
-    "Ⅱ　長期債務":                          "USGAAP_HTML_IBDNonCurrent",
-}
-
-
-def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> FieldSet:
-    """US-GAAP 連結財政状態計算書 HTML（0105010_*）から FieldSet を生成する。
-
-    XBRL XML に含まれない流動資産・有形固定資産・IBD 等を仮想タグ名で返す。
-    返す値の単位は円（parse_html_number の百万円値 × MILLION_YEN）。
-    BS4 が未インストールの場合は空の FieldSet を返す。
-    """
-    if not _BS4_AVAILABLE:
-        return {}
-
-    bs_html = _find_html_by_prefix(xbrl_dir, "0105010")
-    if bs_html is None:
-        return {}
-
-    soup = BeautifulSoup(bs_html.read_text(encoding="utf-8", errors="ignore"), "html.parser")
-    return _extract_html_labels(soup, _USGAAP_BS_HTML_LABEL_MAP)
-
-
-# US-GAAP 連結損益計算書 HTML → FieldSet
-# HTML ラベル（部分一致） → 仮想タグ名
-# 税引前利益は "税金等調整前当期純利益"（US-GAAP式）と "税引前当期純利益"（J-GAAP式）の両方を登録し、
-# 先にヒットした方が採用される（_extract_html_labels は remaining から削除済みラベルをスキップ）。
-_USGAAP_PL_HTML_LABEL_MAP: dict[str, str] = {
-    "販売費及び一般管理費":     "USGAAP_HTML_SGA",
-    "営業利益":                "USGAAP_HTML_OperatingIncome",
-    "税金等調整前当期純利益":   "USGAAP_HTML_PreTaxIncome",
-    "税引前当期純利益":         "USGAAP_HTML_PreTaxIncome",
-    "税金等調整前当期純損失":   "USGAAP_HTML_PreTaxIncome",
-    "法人税等":                "USGAAP_HTML_IncomeTax",
-}
-
-
-def parse_usgaap_html_pl_fields(xbrl_dir: Path) -> FieldSet:
-    """US-GAAP 連結損益計算書 HTML から FieldSet を生成する。
-
-    0105020（連結損益計算書）を優先し、"営業利益" がなければ 0105010 にフォールバックする
-    （会社によって IS と BS が同一ファイルに収録される場合があるため）。
-    返す値の単位は円。BS4 が未インストールの場合は空の FieldSet を返す。
-    """
-    if not _BS4_AVAILABLE:
-        return {}
-
-    pl_html: Path | None = None
-    for prefix in ("0105020", "0105010"):
-        candidate = _find_html_by_prefix(xbrl_dir, prefix)
-        if candidate is None:
-            continue
-        if "営業利益" in candidate.read_text(encoding="utf-8", errors="ignore"):
-            pl_html = candidate
-            break
-
-    if pl_html is None:
-        return {}
-
-    soup = BeautifulSoup(pl_html.read_text(encoding="utf-8", errors="ignore"), "html.parser")
-    return _extract_html_labels(soup, _USGAAP_PL_HTML_LABEL_MAP)
-
-
-def _find_html_by_prefix(xbrl_dir: Path, prefix: str) -> Path | None:
-    # xbrl_dir が PublicDoc 相当のディレクトリの場合と、
-    # そのルート（S100XXXX_xbrl）が渡される場合の両方に対応する
-    candidates = [xbrl_dir, xbrl_dir / "XBRL" / "PublicDoc"]
-    for search_dir in candidates:
-        if not search_dir.is_dir():
-            continue
-        for ext in ("*.htm", "*.html"):
-            files = [f for f in search_dir.glob(ext) if f.name.startswith(prefix)]
-            if files:
-                return files[0]
-    return None
-
-
-def _extract_html_labels(soup: "BeautifulSoup", label_map: dict[str, str]) -> FieldSet:
-    """soup の全 <tr> を走査し label_map に一致する行の当期/前期値を返す。
-
-    列構造パターン:
-      A: [ラベル, (注記,) 前期値, 当期値]           ← 富士フイルム等
-      B: [ラベル, (注記,) 前期値, 前期比%, 当期値, 当期比%]  ← キヤノン等（構成比列あり）
-
-    財務金額（百万円単位）は通常 >= 200 であり、構成比（0–100）と区別できる。
-    「最後の財務値 = 当期、末尾から2番目の財務値 = 前期」で統一して取得する。
-    """
-    field_set: FieldSet = {}
-    remaining = set(label_map.keys())
-
-    for row in soup.find_all("tr"):
-        if not remaining:
-            break
-        cells = row.find_all(["td", "th"])
-        if not cells:
-            continue
-        texts = [c.get_text(" ", strip=True).replace("\xa0", " ") for c in cells]
-
-        # 第1パス: 先頭セルの完全一致（"負債合計" ⊂ "流動負債合計" などの誤マッチを防ぐ）
-        matched: str | None = None
-        if texts:
-            for label in list(remaining):
-                if texts[0] == label:
-                    matched = label
-                    break
-        # 第2パス: セクション番号付きラベル（"１　社債及び短期借入金" 等）向け部分一致
-        if matched is None:
-            for label in list(remaining):
-                if any(label in text for text in texts):
-                    matched = label
-                    break
-        if matched is None:
-            continue
-
-        numbers = [parse_html_number(t) for t in texts]
-        all_nums = [n for n in numbers if n is not None]
-        if not all_nums:
-            continue
-        # 財務値と構成比が混在する行: 絶対値 >= 200 の数値のみ財務値とみなす
-        financial = [n for n in all_nums if abs(n) >= 200]
-        found = financial if financial else all_nums
-        current = found[-1] * MILLION_YEN
-        prior = found[-2] * MILLION_YEN if len(found) >= 2 else None
-        field_set[label_map[matched]] = {"current": current, "prior": prior}
-        remaining.discard(matched)
-
-    return field_set

@@ -322,80 +322,6 @@ def _parse_loan_tables(tables: list) -> dict:
     }
 
 
-def _extract_usgaap_from_html(htm_file: Path) -> Optional[dict]:
-    """
-    US-GAAP iXBRLファイルから借入金ノートセクションを解析し、
-    有利子負債の構成要素を返す。
-
-    年度によって見出し・フォーマットが異なるため _USGAAP_LOAN_SECTION_PATTERNS で複数対応。
-    Returns dict with same shape as extract_interest_bearing_debt(), or None if not found.
-    """
-    if not _BS4_AVAILABLE:
-        return None
-
-    content = htm_file.read_text(encoding="utf-8", errors="ignore")
-
-    idx = _find_loan_section_pos(content)
-    if idx < 0:
-        return None
-
-    section_html = content[max(0, idx - 200): idx + 20000]
-    soup = BeautifulSoup(section_html, "html.parser")
-    tables = soup.find_all("table")
-    if not tables:
-        return None
-
-    parsed_tables = []
-    for tbl in tables:
-        rows = tbl.find_all("tr")
-        if not rows:
-            continue
-        header_row = [c.get_text(strip=True) for c in rows[0].find_all(["td", "th"])]
-        data_rows = []
-        for row in rows[1:]:
-            cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
-            if cells:
-                data_rows.append(cells)
-        parsed_tables.append({"headers": header_row, "rows": data_rows})
-
-    extracted = _parse_loan_tables(parsed_tables)
-    short_term_current, short_term_prior = extracted["short_term"]
-    lt_total_current,   lt_total_prior   = extracted["lt_total"]
-    lt_1yr_current,     lt_1yr_prior     = extracted["lt_1yr"]
-    bonds_current,      bonds_prior      = extracted["bonds"]
-
-    if all(v is None for v in [short_term_current, lt_total_current, bonds_current]):
-        return None
-
-    def _subtract(a, b):
-        return None if a is None else a - (b or 0)
-
-    lt_longterm_current = _subtract(lt_total_current, lt_1yr_current)
-    lt_longterm_prior   = _subtract(lt_total_prior,   lt_1yr_prior)
-
-    def _to_yen(v):
-        return v * 1_000_000 if v is not None else None
-
-    components = [
-        {"label": "短期借入金",               "tag": "USGAAP_ShortTermLoans",        "current": _to_yen(short_term_current),  "prior": _to_yen(short_term_prior)},
-        {"label": "コマーシャル・ペーパー",    "tag": None,                            "current": None,                         "prior": None},
-        {"label": "1年内償還予定の社債",       "tag": None,                            "current": None,                         "prior": None},
-        {"label": "1年内返済予定の長期借入金", "tag": "USGAAP_CurrentPortionLTLoans",  "current": _to_yen(lt_1yr_current),      "prior": _to_yen(lt_1yr_prior)},
-        {"label": "社債",                     "tag": "USGAAP_Bonds",                  "current": _to_yen(bonds_current),       "prior": _to_yen(bonds_prior)},
-        {"label": "長期借入金",               "tag": "USGAAP_LTLoans",                "current": _to_yen(lt_longterm_current), "prior": _to_yen(lt_longterm_prior)},
-    ]
-
-    def safe_sum(vals):
-        vs = [v for v in vals if v is not None]
-        return sum(vs) if vs else None
-
-    return {
-        "current": safe_sum([c["current"] for c in components]),
-        "prior":   safe_sum([c["prior"]   for c in components]),
-        "method":  "usgaap_html",
-        "components": components,
-    }
-
 
 def _is_usgaap_xbrl(tag_elements: dict) -> bool:
     """XBRLインスタンスのタグ群がUS-GAAP企業（連結数値なし）かどうかを判定。"""
@@ -471,24 +397,6 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             tag_elements[tag].update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
-
-    # --- US-GAAP 企業の早期検出: HTML解析にフォールバック ---
-    # US-GAAP企業はXBRLに連結借入金タグを持たず、iXBRL HTMLから取得する。
-    # 非連結フォールバックで親会社J-GAAP値を拾わないよう先に処理する。
-    if _is_usgaap_xbrl(tag_elements):
-        htm_files = list(xbrl_dir.rglob("*.htm")) + list(xbrl_dir.rglob("*.html"))
-        for htm_file in htm_files:
-            result = _extract_usgaap_from_html(htm_file)
-            if result is not None:
-                return result
-        # 借入金ノートが見つからない = 有利子負債ゼロ（「該当事項はありません」）
-        for htm_file in htm_files:
-            content = htm_file.read_text(encoding="utf-8", errors="ignore")
-            if "借入金等明細表" in content and "該当事項はありません" in content:
-                zero_comps = [{"label": d["label"], "tag": None, "current": 0.0, "prior": 0.0}
-                              for d in COMPONENT_DEFINITIONS]
-                return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "accounting_standard": "US-GAAP", "components": zero_comps}
-        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": "US-GAAP", "components": []}
 
     # --- 直接法 ---
     for ibd_tag in INTEREST_BEARING_DEBT_TAGS:

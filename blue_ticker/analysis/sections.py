@@ -28,11 +28,13 @@ from blue_ticker.analysis.field_parser import (
     field_set_from_pre_parsed_duration,
     parse_duration_fields,
     parse_instant_fields,
-    parse_usgaap_html_bs_fields,
-    parse_usgaap_html_pl_fields,
     resolve_aggregate,
     resolve_item,
     resolve_item_prefer_current,
+)
+from blue_ticker.analysis.usgaap.html_fields import (
+    parse_usgaap_html_bs_fields,
+    parse_usgaap_html_pl_fields,
 )
 from blue_ticker.constants.xbrl import (
     ALL_STANDARD_BS_ITEMS,

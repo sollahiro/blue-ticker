@@ -21,6 +21,7 @@ except ImportError:
     _BS4_AVAILABLE = False
     _XMLParsedAsHTMLWarning = None  # type: ignore[assignment,misc]
 
+from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.utils.xbrl_result_types import XbrlFact, XbrlFactIndex, XbrlTagElements
 
 
@@ -431,3 +432,71 @@ def extract_ifrs_textblock_table(
         return result
 
     return {}
+
+
+def _find_html_by_prefix(xbrl_dir: Path, prefix: str) -> Path | None:
+    """xbrl_dir 内で指定プレフィックス（0105010 等）で始まる HTML ファイルを返す。
+
+    PublicDoc 直下と XBRL/PublicDoc の両方を探索する。
+    """
+    candidates = [xbrl_dir, xbrl_dir / "XBRL" / "PublicDoc"]
+    for search_dir in candidates:
+        if not search_dir.is_dir():
+            continue
+        for ext in ("*.htm", "*.html"):
+            files = [f for f in search_dir.glob(ext) if f.name.startswith(prefix)]
+            if files:
+                return files[0]
+    return None
+
+
+def _extract_html_labels(
+    soup: "_BeautifulSoup",
+    label_map: dict[str, str],
+) -> dict[str, dict[str, float | None]]:
+    """soup の全 <tr> を走査し label_map に一致する行の当期/前期値を返す。
+
+    列構造パターン:
+      A: [ラベル, (注記,) 前期値, 当期値]           ← 富士フイルム等
+      B: [ラベル, (注記,) 前期値, 前期比%, 当期値, 当期比%]  ← キヤノン等（構成比列あり）
+
+    財務金額（百万円単位）は通常 >= 200 であり、構成比（0–100）と区別できる。
+    「最後の財務値 = 当期、末尾から2番目の財務値 = 前期」で統一して取得する。
+    """
+    field_set: dict[str, dict[str, float | None]] = {}
+    remaining = set(label_map.keys())
+
+    for row in soup.find_all("tr"):
+        if not remaining:
+            break
+        cells = row.find_all(["td", "th"])
+        if not cells:
+            continue
+        texts = [c.get_text(" ", strip=True).replace("\xa0", " ") for c in cells]
+
+        matched: str | None = None
+        if texts:
+            for label in list(remaining):
+                if texts[0] == label:
+                    matched = label
+                    break
+        if matched is None:
+            for label in list(remaining):
+                if any(label in text for text in texts):
+                    matched = label
+                    break
+        if matched is None:
+            continue
+
+        numbers = [parse_html_number(t) for t in texts]
+        all_nums = [n for n in numbers if n is not None]
+        if not all_nums:
+            continue
+        financial = [n for n in all_nums if abs(n) >= 200]
+        found = financial if financial else all_nums
+        current = found[-1] * MILLION_YEN
+        prior = found[-2] * MILLION_YEN if len(found) >= 2 else None
+        field_set[label_map[matched]] = {"current": current, "prior": prior}
+        remaining.discard(matched)
+
+    return field_set
