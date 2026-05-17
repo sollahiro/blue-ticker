@@ -29,7 +29,7 @@ async def main(api_key: str) -> None:
     for company in DEFAULT_SMOKE_COMPANIES:
         print(f"\n[{company.code}] {company.name} ({company.category})")
         try:
-            docs = await build_document_index_for_code(
+            docs, _ = await build_document_index_for_code(
                 company.code,
                 client,
                 initial_scan_days=400,

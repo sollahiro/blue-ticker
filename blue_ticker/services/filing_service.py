@@ -48,16 +48,21 @@ class FilingService:
         fetch_annual = not requested or bool(requested.intersection({"120", "130"}))
         fetch_half = not requested or bool(requested.intersection({"140", "160"}))
 
-        tasks: list[Any] = []
+        gather_tasks: list[Any] = []
         if fetch_annual:
-            tasks.append(edinet_fetcher._search_edinet_annual_docs(code, max_years))
+            gather_tasks.append(edinet_fetcher._search_edinet_annual_docs(code, max_years))
         if fetch_half:
-            tasks.append(edinet_fetcher._search_edinet_half_docs(code, max_years))
+            gather_tasks.append(edinet_fetcher._search_edinet_half_docs(code, max_years))
 
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*gather_tasks)
         docs: list[dict[str, Any]] = []
-        for batch in results:
-            docs.extend(batch)
+        result_iter = iter(results)
+        if fetch_annual:
+            annual_docs, _ = next(result_iter)
+            docs.extend(annual_docs)
+        if fetch_half:
+            half_docs = next(result_iter)
+            docs.extend(half_docs)
 
         if requested:
             docs = [doc for doc in docs if doc.get("docTypeCode") in requested]
