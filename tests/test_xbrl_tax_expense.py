@@ -231,6 +231,21 @@ class TestUsGaapHtml(unittest.TestCase):
         # 9500 + (-743) = 8757
         self.assertAlmostEqual(result["income_tax"], 8_757_000_000)
 
+    def test_partial_aggregate_fills_prior_from_components(self):
+        """US-GAAP HTML: 合計行に当期しかない場合、前期を個別成分から補完する。"""
+        self._write_usgaap_xbrl()
+        html = _make_usgaap_html("""
+            <tr><td>税引前当期純利益</td><td>36,000</td><td>38,440</td></tr>
+            <tr><td>法人税等合計</td><td></td><td>8,757</td></tr>
+            <tr><td>法人税、住民税及び事業税</td><td>7,000</td><td>7,500</td></tr>
+            <tr><td>法人税等調整額</td><td>1,000</td><td>1,257</td></tr>
+        """)
+        (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
+        self.assertEqual(result["method"], "usgaap_html")
+        self.assertAlmostEqual(result["income_tax"], 8_757_000_000)       # aggregate current
+        self.assertAlmostEqual(result["prior_income_tax"], 8_000_000_000)  # 7000 + 1000 from components
+
     def test_no_html_returns_not_found(self):
         """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
         self._write_usgaap_xbrl()

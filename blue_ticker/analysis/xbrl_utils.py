@@ -481,7 +481,7 @@ def _extract_html_labels(
                     matched = label
                     break
         if matched is None:
-            for label in list(remaining):
+            for label in sorted(remaining, key=len, reverse=True):
                 if any(label in text for text in texts):
                     matched = label
                     break
