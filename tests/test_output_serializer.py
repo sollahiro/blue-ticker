@@ -441,6 +441,7 @@ def test_debug_fields_set_is_exactly():
         "BalanceSheetComponents",
         "BalanceSheetAccountingStandard",
         "OperatingProfitChangeReconciliationDiff",
+        "ROICWaterfallReconciliationDiff",
         "CalculatedEPS",
         "CalculatedBPS",
         "EPSDirectDiff",
