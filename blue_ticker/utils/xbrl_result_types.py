@@ -82,6 +82,7 @@ class BalanceSheetResult(TypedDict):
     method: str
     components: list[MetricComponent]
     reason: NotRequired[str]
+    prior_net_assets: NotRequired[float | None]
 
 
 class InterestExpenseResult(TypedDict):

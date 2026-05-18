@@ -20,6 +20,10 @@ from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_years,
 )
+from blue_ticker.utils.roic_waterfall import (
+    apply_roic_waterfall_from_xbrl,
+    apply_roic_waterfall_to_years,
+)
 from blue_ticker.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from blue_ticker.utils.metrics_access import year_metric_value
 from blue_ticker.utils.metrics_types import CalculatedData, MetricSource, RawXbrlExtraction, YearEntry
@@ -154,6 +158,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         raw["current_liabilities"] = bs.get("current_liabilities")
         raw["non_current_liabilities"] = bs.get("non_current_liabilities")
         raw["net_assets"] = bs.get("net_assets")
+        raw["prior_net_assets"] = bs.get("prior_net_assets")
         raw["balance_sheet_components"] = [
             {
                 "label": c["label"],
@@ -799,6 +804,14 @@ class IndividualAnalyzer:
         apply_operating_profit_change_to_years(years)
         _apply_nopat(years)
         _apply_roic(years)
+        apply_roic_waterfall_from_xbrl(
+            years,
+            all_metrics.get("gp", {}),
+            all_metrics.get("op", {}),
+            all_metrics.get("ibd", {}),
+            all_metrics.get("bs", {}),
+        )
+        apply_roic_waterfall_to_years(years)
         _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {

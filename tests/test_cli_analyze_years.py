@@ -176,7 +176,7 @@ def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
         "コア営業利益前年差",
         "売上差影響",
         "粗利率差影響",
-        "販管費影響",
+        "販管費差影響",
         "ROE (%)",
         "ROIC (%)",
         "株主資本コスト (%)",

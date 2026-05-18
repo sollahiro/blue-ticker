@@ -16,6 +16,7 @@ _DEBUG_FIELDS: frozenset[str] = frozenset({
     "BalanceSheetComponents",
     "BalanceSheetAccountingStandard",
     "OperatingProfitChangeReconciliationDiff",
+    "ROICWaterfallReconciliationDiff",
     "CalculatedEPS",
     "CalculatedBPS",
     "EPSDirectDiff",

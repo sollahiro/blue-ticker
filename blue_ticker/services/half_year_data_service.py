@@ -24,6 +24,7 @@ from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_to_periods,
     apply_operating_profit_change_to_periods_from_xbrl,
 )
+from blue_ticker.utils.roic_waterfall import apply_roic_waterfall_to_periods
 from blue_ticker.utils.output_serializer import serialize_half_year_periods
 from blue_ticker.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry
 
@@ -117,6 +118,7 @@ def _apply_nopat_and_roic(
     invested_capital = net_assets_m + ibd_m
     if invested_capital == 0:
         return
+    data["InvestedCapital"] = invested_capital
     data["ROIC"] = nopat / invested_capital * PERCENT
     _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NOPAT / (NetAssets + InterestBearingDebt)")
 
@@ -443,6 +445,7 @@ class HalfYearDataService:
             fy_op_by_end,
         )
         apply_operating_profit_change_to_periods(base_periods)
+        apply_roic_waterfall_to_periods(base_periods)
         self.cache_manager.set(cache_key, {
             "_cache_version": _CACHE_VERSION,
             "periods": base_periods,

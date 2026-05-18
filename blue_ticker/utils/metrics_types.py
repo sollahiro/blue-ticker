@@ -171,6 +171,13 @@ class CalculatedData(TypedDict, total=False):
     CostOfDebt: float | None
     WACC: float | None
     WACCLabel: str | None
+    # ── roic_waterfall.py ──
+    NOPATMargin: float | None
+    InvestedCapitalTurnover: float | None
+    ROICDelta: float | None
+    ROICMarginEffect: float | None
+    ROICTurnoverEffect: float | None
+    ROICWaterfallReconciliationDiff: float | None
 
 
 class YearEntry(TypedDict):
@@ -207,6 +214,7 @@ class RawXbrlExtraction(TypedDict, total=False):
     current_liabilities: float | None
     non_current_liabilities: float | None
     net_assets: float | None
+    prior_net_assets: float | None
     balance_sheet_components: list[BalanceSheetComponent]
     balance_sheet_method: str
     balance_sheet_accounting_standard: str

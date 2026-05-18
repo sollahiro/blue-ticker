@@ -44,6 +44,11 @@ def extract_balance_sheet(section: BalanceSheetSection) -> BalanceSheetResult:
     non_current_liabilities = label_to_value.get("非流動負債")
     net_assets = label_to_value.get("純資産/資本合計")
 
+    prior_net_assets: float | None = next(
+        (c["prior"] for c in components if c["label"] == "純資産/資本合計" and c["prior"] is not None),
+        None,
+    )
+
     has_any = any(
         v is not None
         for v in [total_assets, current_assets, non_current_assets,
@@ -60,6 +65,7 @@ def extract_balance_sheet(section: BalanceSheetSection) -> BalanceSheetResult:
         "accounting_standard": accounting_standard,
         "method": "field_parser" if has_any else "not_found",
         "components": components,
+        "prior_net_assets": prior_net_assets,
     }
     if not has_any:
         result["reason"] = "貸借対照表タグが見つからない"
