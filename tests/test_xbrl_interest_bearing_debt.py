@@ -496,7 +496,10 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 # テスト（本番実装を使用）
 # ---------------------------------------------------------------------------
 
-from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt  # noqa: E402
+from blue_ticker.analysis.interest_bearing_debt import (  # noqa: E402
+    extract_interest_bearing_debt,
+    _extract_ifrs_lease_liabilities,
+)
 from blue_ticker.analysis.sections import BalanceSheetSection  # noqa: E402
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
@@ -732,6 +735,142 @@ class TestNotFound(unittest.TestCase):
         result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
+
+
+def _make_xbrl_with_lease_textblock(base_elements_xml: str, lease_html_rows: str) -> str:
+    """リース注記TextBlockを含む XBRL を生成する。"""
+    lease_html = f"&lt;table&gt;{lease_html_rows}&lt;/table&gt;"
+    return _make_xbrl(
+        base_elements_xml
+        + f"""
+    <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock
+        contextRef="CurrentYearInstant">{lease_html}</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock>
+"""
+    )
+
+
+_IFRS_BORROWINGS_XML = """
+    <jppfs_cor:BorrowingsCLIFRS contextRef="CurrentYearInstant"
+        unitRef="JPY">5923000000</jppfs_cor:BorrowingsCLIFRS>
+    <jppfs_cor:BondsPayableNCLIFRS contextRef="CurrentYearInstant"
+        unitRef="JPY">204412000000</jppfs_cor:BondsPayableNCLIFRS>
+    <jppfs_cor:BorrowingsNCLIFRS contextRef="CurrentYearInstant"
+        unitRef="JPY">211795000000</jppfs_cor:BorrowingsNCLIFRS>
+"""
+
+
+class TestExtractIfrsLeaseLiabilities(unittest.TestCase):
+    """_extract_ifrs_lease_liabilities のユニットテスト。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.xbrl_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_pattern_a_cl_and_ncl(self):
+        """パターンA: 流動（1年以内）と非流動（1年超）の両方がある場合。"""
+        rows = (
+            "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,500&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
+            "&lt;tr&gt;&lt;td&gt;支払期日が1年超&lt;/td&gt;&lt;td&gt;28,000&lt;/td&gt;&lt;td&gt;32,000&lt;/td&gt;&lt;/tr&gt;"
+        )
+        xbrl = _make_xbrl_with_lease_textblock(_IFRS_BORROWINGS_XML, rows)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        section = BalanceSheetSection.from_xbrl(self.xbrl_dir)
+        lease_c, lease_p, comps = _extract_ifrs_lease_liabilities(section)
+        from blue_ticker.constants.financial import MILLION_YEN
+        self.assertAlmostEqual(lease_c, 37_000 * MILLION_YEN)
+        self.assertAlmostEqual(lease_p, 32_500 * MILLION_YEN)
+        labels = [c["label"] for c in comps]
+        self.assertIn("リース負債（流動）", labels)
+        self.assertIn("リース負債（非流動）", labels)
+
+    def test_pattern_b_book_value(self):
+        """パターンB: 「帳簿価額」行のみある場合。"""
+        rows = (
+            "&lt;tr&gt;&lt;td&gt;帳簿価額&lt;/td&gt;&lt;td&gt;28,500&lt;/td&gt;&lt;td&gt;32,539&lt;/td&gt;&lt;/tr&gt;"
+        )
+        xbrl = _make_xbrl_with_lease_textblock(_IFRS_BORROWINGS_XML, rows)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        section = BalanceSheetSection.from_xbrl(self.xbrl_dir)
+        lease_c, lease_p, comps = _extract_ifrs_lease_liabilities(section)
+        from blue_ticker.constants.financial import MILLION_YEN
+        self.assertAlmostEqual(lease_c, 32_539 * MILLION_YEN)
+        self.assertAlmostEqual(lease_p, 28_500 * MILLION_YEN)
+        self.assertEqual(len(comps), 1)
+        self.assertEqual(comps[0]["label"], "リース負債")
+
+    def test_no_matching_rows_returns_none(self):
+        """マッチするリース行がない場合は (None, None, []) を返す。"""
+        rows = (
+            "&lt;tr&gt;&lt;td&gt;減価償却費&lt;/td&gt;&lt;td&gt;1,000&lt;/td&gt;&lt;td&gt;1,200&lt;/td&gt;&lt;/tr&gt;"
+        )
+        xbrl = _make_xbrl_with_lease_textblock(_IFRS_BORROWINGS_XML, rows)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        section = BalanceSheetSection.from_xbrl(self.xbrl_dir)
+        lease_c, lease_p, comps = _extract_ifrs_lease_liabilities(section)
+        self.assertIsNone(lease_c)
+        self.assertIsNone(lease_p)
+        self.assertEqual(comps, [])
+
+    def test_no_textblock_returns_none(self):
+        """TextBlock自体がない場合は (None, None, []) を返す。"""
+        xbrl = _make_xbrl(_IFRS_BORROWINGS_XML)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        section = BalanceSheetSection.from_xbrl(self.xbrl_dir)
+        lease_c, lease_p, comps = _extract_ifrs_lease_liabilities(section)
+        self.assertIsNone(lease_c)
+        self.assertIsNone(lease_p)
+        self.assertEqual(comps, [])
+
+
+class TestIfrsLeaseAddedToIbd(unittest.TestCase):
+    """extract_interest_bearing_debt でリース負債が加算されることのテスト。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.xbrl_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_lease_added_to_ifrs_ibd(self):
+        """IFRSで借入金タグ + リース注記が両方ある場合、リース負債が加算される。"""
+        rows = (
+            "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
+            "&lt;tr&gt;&lt;td&gt;支払期日が1年超&lt;/td&gt;&lt;td&gt;28,000&lt;/td&gt;&lt;td&gt;32,000&lt;/td&gt;&lt;/tr&gt;"
+        )
+        xbrl = _make_xbrl_with_lease_textblock(_IFRS_BORROWINGS_XML, rows)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
+        from blue_ticker.constants.financial import MILLION_YEN
+        # 借入金合計: 5923+204412+211795 = 422130 百万円
+        # リース負債: 5000+32000 = 37000 百万円
+        # IBD合計: 459130 百万円
+        self.assertIn("lease_textblock", result["method"])
+        self.assertAlmostEqual(result["current"], (422_130 + 37_000) * MILLION_YEN)
+        labels = [c["label"] for c in result["components"]]
+        self.assertIn("リース負債（流動）", labels)
+        self.assertIn("リース負債（非流動）", labels)
+
+    def test_jgaap_lease_not_added(self):
+        """J-GAAPではリース注記があってもリース負債は加算されない。"""
+        rows = (
+            "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
+        )
+        jgaap_xml = """
+    <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
+        unitRef="JPY">10000000000</jppfs_cor:ShortTermLoansPayable>
+    <jppfs_cor:LongTermLoansPayable contextRef="CurrentYearInstant"
+        unitRef="JPY">50000000000</jppfs_cor:LongTermLoansPayable>
+"""
+        xbrl = _make_xbrl_with_lease_textblock(jgaap_xml, rows)
+        (self.xbrl_dir / "instance.xml").write_text(xbrl, encoding="utf-8")
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
+        self.assertEqual(result["accounting_standard"], "J-GAAP")
+        self.assertNotIn("lease_textblock", result["method"])
+        self.assertAlmostEqual(result["current"], 60_000_000_000)
 
 
 if __name__ == "__main__":
