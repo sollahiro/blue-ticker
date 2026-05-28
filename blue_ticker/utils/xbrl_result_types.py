@@ -202,6 +202,22 @@ class ResearchDevelopmentResult(TypedDict):
     reason: NotRequired[str]
 
 
+class BankFinancialsResult(TypedDict):
+    """銀行業固有 貸借対照表項目の抽出結果。金額は円単位。"""
+
+    deposits: float | None
+    deposits_prior: float | None
+    loans: float | None
+    loans_prior: float | None
+    cash_due_from_banks: float | None
+    cash_due_from_banks_prior: float | None
+    negotiable_cds: float | None
+    negotiable_cds_prior: float | None
+    accounting_standard: str
+    method: str
+    reason: NotRequired[str]
+
+
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
     op: OperatingProfitResult

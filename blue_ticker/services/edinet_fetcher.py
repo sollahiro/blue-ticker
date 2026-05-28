@@ -55,6 +55,7 @@ from blue_ticker.services._xbrl_record_builder import (
     _build_xbrl_record,
     _docs_from_xbrl_records,
     _employees_compat,
+    _extract_bank_compat,
     _extract_bs_compat,
     _extract_cf_compat,
     _extract_da_compat,
@@ -98,6 +99,12 @@ class ExtractorSpec:
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("ibd", "IBD", _extract_ibd_compat),
+    ExtractorSpec(
+        "bank",
+        "銀行財務",
+        _extract_bank_compat,
+        result_check=lambda r: r.get("deposits") is not None,
+    ),
     ExtractorSpec(
         "ppe",
         "PPE",

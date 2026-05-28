@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.bank_financials import extract_bank_financials
 from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
 from blue_ticker.analysis.cash_flow import extract_cash_flow
 from blue_ticker.analysis.depreciation import extract_depreciation
@@ -136,6 +137,7 @@ _extract_rd_compat = _make_section_wrapper(IncomeStatementSection, extract_resea
 _extract_bs_compat = _make_section_wrapper(BalanceSheetSection, extract_balance_sheet)
 _extract_ibd_compat = _make_section_wrapper(BalanceSheetSection, extract_interest_bearing_debt)
 _extract_ppe_compat = _make_section_wrapper(BalanceSheetSection, extract_tangible_fixed_assets)
+_extract_bank_compat = _make_section_wrapper(BalanceSheetSection, extract_bank_financials)
 
 _SHAREHOLDER_CALCULATION_FIELDS: tuple[str, ...] = (
     # extract_shareholder_metrics() が返す検証・注記fallback由来の値を

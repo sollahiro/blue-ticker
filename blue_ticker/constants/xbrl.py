@@ -908,3 +908,23 @@ PPE_CONSTRUCTION_DEP_TAGS: list[str] = ["ConstructionInProgressAccumulatedImpair
 # 賃貸用車両及び器具（IFRS tools フォールバック。ToolsFurnitureAndFixturesIFRS が存在しない場合に使用）
 PPE_LEASED_VEHICLES_COST_TAGS: list[str] = ["VehiclesAndEquipmentOnOperatingLeasesAcquisitionCostIFRS"]
 PPE_LEASED_VEHICLES_DEP_TAGS: list[str] = ["VehiclesAndEquipmentOnOperatingLeasesAccumulatedDepreciationAndImpairmentIFRS"]
+
+# 銀行業 貸借対照表固有タグ（_BNK suffix）
+# analysis/bank_financials.py で使用
+
+BANK_DEPOSITS_TAGS: list[str] = [
+    "DepositsLiabilitiesBNK",  # J-GAAP 預金（負債）
+]
+
+BANK_LOANS_TAGS: list[str] = [
+    "LoansAndBillsDiscountedAssetsBNK",  # J-GAAP 貸出金（資産）
+]
+
+BANK_CASH_DUE_FROM_BANKS_TAGS: list[str] = [
+    "CashAndDueFromBanksAssetsBNK",  # J-GAAP 現金預け金（銀行業）
+    "CashAndDepositsAssetsINS",       # J-GAAP 現金預け金（保険・フィナンシャルグループ）
+]
+
+BANK_NEGOTIABLE_CD_TAGS: list[str] = [
+    "NegotiableCertificatesOfDepositLiabilitiesBNK",  # J-GAAP 譲渡性預金（負債）
+]

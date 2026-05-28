@@ -38,6 +38,10 @@ from blue_ticker.analysis.usgaap.html_fields import (
 )
 from blue_ticker.constants.xbrl import (
     ALL_STANDARD_BS_ITEMS,
+    BANK_CASH_DUE_FROM_BANKS_TAGS,
+    BANK_DEPOSITS_TAGS,
+    BANK_LOANS_TAGS,
+    BANK_NEGOTIABLE_CD_TAGS,
     BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS,
     CAPEX_CF_IFRS_TAGS,
     CAPEX_CF_JGAAP_TAGS,
@@ -283,6 +287,10 @@ def _bs_all_tags() -> frozenset[str]:
     tags += PPE_CONSTRUCTION_DEP_TAGS
     tags += PPE_LEASED_VEHICLES_COST_TAGS
     tags += PPE_LEASED_VEHICLES_DEP_TAGS
+    tags += BANK_DEPOSITS_TAGS
+    tags += BANK_LOANS_TAGS
+    tags += BANK_CASH_DUE_FROM_BANKS_TAGS
+    tags += BANK_NEGOTIABLE_CD_TAGS
     return frozenset(tags)
 
 
