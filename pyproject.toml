@@ -1,6 +1,6 @@
 [project]
 name = "blue-ticker"
-version = "26.5.24"
+version = "26.5.25"
 description = "BLUE TICKER: 正確な情報収集に特化した日本株分析CLIツール"
 authors = [
     {name = "sollahiro", email = "sollahiro@gmail.com"}
