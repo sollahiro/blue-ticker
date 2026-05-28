@@ -261,7 +261,7 @@ def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBeari
         if lease_c is not None or lease_p is not None:
             existing_c = result["current"]
             existing_p = result["prior"]
-            result = {
+            result: InterestBearingDebtResult = {
                 "current": (existing_c or 0.0) + (lease_c or 0.0),
                 "prior": (existing_p or 0.0) + (lease_p or 0.0),
                 "method": result["method"] + "+lease_textblock",
