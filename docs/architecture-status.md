@@ -6,7 +6,7 @@
 このメモは、アーキテクチャ棚卸しで見つかった問題を「何が問題だったか」「現在どう扱っているか」で追えるようにした対応台帳です。
 
 詳細な構造図と指標カタログは `docs/architecture-review.md` を参照してください。
-リモートMCP移行とEDINETキャッシュbackendの将来計画は `docs/remote-mcp-cache-roadmap.md` を参照してください。
+リモートMCP移行とEDINETキャッシュbackendの将来計画は `docs/mcp-server-roadmap.md` を参照してください。
 
 ## 状況サマリー
 
