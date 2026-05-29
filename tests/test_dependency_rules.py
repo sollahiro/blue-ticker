@@ -55,3 +55,12 @@ def test_layer_direction_rules():
         for module in _iter_imports(py_file):
             assert not module.startswith("blue_ticker.app"), f"{py_file}: {module}"
             assert not module.startswith("blue_ticker.services"), f"{py_file}: {module}"
+
+    for py_file in (PACKAGE_ROOT / "mcp_server").rglob("*.py"):
+        for module in _iter_imports(py_file):
+            assert not module.startswith("blue_ticker.app"), f"{py_file}: {module}"
+
+    for layer in ("app", "services", "infrastructure", "utils"):
+        for py_file in (PACKAGE_ROOT / layer).rglob("*.py"):
+            for module in _iter_imports(py_file):
+                assert not module.startswith("blue_ticker.mcp_server"), f"{py_file}: {module}"

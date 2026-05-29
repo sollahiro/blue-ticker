@@ -32,15 +32,18 @@ blue-ticker を以下の 2 本立てで使う構成を目指す。
 [チャットボット] MCP ツール → [MCP サーバー] → データストア
 ```
 
-CLI は MCP クライアントとして HTTP 通信をせず、同一マシン上のファイルを直接読む。
+**自己ホスト（現行）**: CLI は MCP サーバーへ HTTP 通信せず、同一マシン上のデータストアをローカルファイルとして直接読む。
 `mcp` パッケージは CLI バイナリには含めない。
+
+**将来（サーバー別マシン化後）**: CLI は `remote` backend 経由でサーバーへ HTTP 通信する（Phase 3 対応時）。
+`mcp-server-plan.md` の「CLI を `get_financial_summary` / `get_filings` の結果を受け取る形へ移行」はこの段階を指す。
 
 **理由**: 自己ホスト前提ではファイル共有が最もシンプル。CLI バイナリの容量増大を避けられる。
 
 ### 2. API キー管理
 
-EDINET API キーはサーバー側の設定（環境変数または `settings_store`）で管理する。
-ユーザーは `ticker config set edinet-key` を実行しなくてよい。
+EDINET API キーはサーバー側の `settings_store` で管理する（`ticker config set edinet-key`）。
+ユーザー（クライアント側）は API キーを持たなくてよい。
 
 ### 3. 依存パッケージ
 
@@ -75,10 +78,11 @@ CLI は将来的にサーバーの `get_financial_summary` ツール相当を呼
 各ステージは独立してスケジュール・拡張できる。
 
 ```
-Stage 1  書類一覧同期   EDINET API → documents_by_date/, document_indexes/
-Stage 2  XBRL取得       書類一覧 → xbrl_raw/{doc_id}/
-Stage 3  XBRL数値抽出   xbrl_raw → xbrl_extracted/{doc_id}.json
-Stage 4  財務指標計算   xbrl_extracted → analysis/{code}.json
+Stage 1  書類一覧同期   EDINET API → analysis_cache/external/edinet/documents_by_date/
+                                      analysis_cache/external/edinet/document_indexes/
+Stage 2  XBRL取得       書類一覧 → analysis_cache/external/edinet/xbrl/{doc_id}/
+Stage 3  XBRL数値抽出   xbrl → analysis_cache/derived/xbrl_numeric_index/{doc_id}.json
+Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/analysis/{code}.json
 ```
 
 各ステージに `status.json` を持たせ「どこまで処理したか」を管理する。
@@ -197,7 +201,7 @@ pyproject.toml
 
 ### 必須（使い始める前に）
 
-- [ ] `poetry add --group server "mcp>=1.0.0,<2.0.0" && poetry lock` を実行する
+- [ ] `poetry lock` を実行する（`pyproject.toml` に `[dependency-groups].server` は追加済み）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する
 - [ ] `blt-server` で起動確認し、`sync_document_list` ツールで書類一覧を初回同期する
 

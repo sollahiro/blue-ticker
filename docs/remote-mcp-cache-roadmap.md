@@ -244,4 +244,4 @@ EDINET external cacheは外部取得物、derived cacheはBLUE TICKER生成物�
 - `docs/architecture-review.md`
 - `docs/architecture-status.md`
 - `.agents/rules/project/caching.md`
-- `.agents/rules/project/mcp-cli-parity.md`
+- `.agents/rules/project/dependencies.md` — アーキテクチャ依存ルール（mcp_server レイヤーを含む）
