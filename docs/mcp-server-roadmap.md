@@ -75,8 +75,8 @@ ticker config login
 ### 1. 通信モデル：共有データストア方式（現行）
 
 ```
-[MCP サーバー]   書き込み →  analysis_cache/（ファイル）
-[CLI]            読み込み ←  analysis_cache/（ファイル）
+[MCP サーバー]   読み書き ↔  analysis_cache/（ファイル）
+[CLI local]      読み書き ↔  analysis_cache/（ファイル）  ← local backend 時は CLI も書く
 [チャットボット]  MCP ツール → [MCP サーバー] → analysis_cache/
 ```
 
@@ -377,9 +377,11 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ## 設計上の判断
 
-### ローカルキャッシュは正式 backend として残す
+### ローカルキャッシュは正式 backend として残す（当面 A、条件付きで B へ移行）
 
-ローカルキャッシュは、リモート移行後も CLI 利用時の正式 backend とする。EDINET API キーをローカルに置き、CLI が直接 EDINET API へアクセスする使い方は残す。
+**現在の方針（A）**: `local` backend は blt-server 不要の独立モードとして維持する。CLI 単体で EDINET API にアクセスし、`analysis_cache/` に書き込む。blt-server と CLI が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
+
+**B への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合、CLI の EDINET 直接アクセスを廃止しサーバー一本化（B）を検討する。B では CLI は `local` backend での書き込みをやめ、サーバーが書いたキャッシュを読むだけになる。
 
 ### EDINET external cache と derived cache は分ける
 
@@ -402,6 +404,8 @@ EDINET external cache は外部取得物、derived cache は BLUE TICKER 生成�
 - remote backend 利用時の `ticker cache status` 表示内容
 - remote XBRL artifact をローカルにどれくらい保持するか（サーバー別マシン化時）
 - local / remote 間で分析結果キャッシュ `derived/` を共有するか、backend ごとに分けるか
+
+> **解消済み**: 自己ホスト時に CLI（local）と blt-server が同一 `analysis_cache/` に並走書き込みする競合リスク → 両者は同じロジックで同じ結果を書くため実質無害（設計上の判断参照）。
 
 ---
 
