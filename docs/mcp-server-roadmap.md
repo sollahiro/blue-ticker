@@ -149,7 +149,12 @@ pyproject.toml
   [project.scripts].blt-server ← blue_ticker.mcp_server.server:main
 ```
 
-起動コマンド: `blt-server`（streamable-http、デフォルトポート 8000）
+起動コマンド（`mcp` は server group のため通常インストールに含まれない）:
+
+```bash
+poetry install --with server
+blt-server  # streamable-http、デフォルトポート 8000
+```
 
 #### データパイプライン（ステージ設計）
 
@@ -299,7 +304,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 - remote MCP は remote server 上のキャッシュと EDINET 取得機能を使う。
 - remote MCP の公開機能とパラメーターは、CLI の公開機能を基準に設計する。
-- remote MCP は、ローカルの `analysis_cache` を直接操作しない。
+- サーバーが別マシンへ移行した後は、remote MCP は CLI マシンの `analysis_cache` を直接操作しない（現行の自己ホスト方式では同一マシン上の `analysis_cache` を共有する）。
 - キャッシュ削除系は引き続き慎重に扱う。remote MCP から破壊的な削除操作を出す場合は、別途安全設計を行う。
 
 **実装済み（2026-05-30）**:
@@ -336,6 +341,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ### 必須（使い始める前に）
 
+- [ ] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key`）
 - [ ] `blt-server` で起動確認し、`sync_document_list` ツールで書類一覧を初回同期する
 
@@ -406,4 +412,4 @@ EDINET external cache は外部取得物、derived cache は BLUE TICKER 生成�
 - `docs/architecture-status.md` — コードベース現状評価
 - `docs/architecture-review.md`
 - `.agents/rules/project/caching.md` — キャッシュ設計規約
-- `.agents/rules/project/dependencies.md` — アーキテクチャ依存ルール（mcp_server レイヤーを含む）
+- `.agents/rules/project/dependencies.md` — アーキテクチャ依存ルール（app/services/infrastructure/utils。mcp_server レイヤーは `tests/test_dependency_rules.py` で追加検証）
