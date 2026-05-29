@@ -23,7 +23,8 @@ flowchart TD
     Agent --> RemoteCLI["② remote CLI\nPhase 2/3"]
     Chatbot["AI チャットボット\n(Claude.ai 等)"] --> RemoteMCP["③ remote MCP\nPhase 4"]
 
-    LocalCLI -->|"EDINET API 直接\n+ local analysis_cache/"| EdinetAPI["EDINET API"]
+    LocalCLI -->|"EDINET API 直接"| EdinetAPI["EDINET API"]
+    LocalCLI --- LocalCache["local analysis_cache/"]
 
     RemoteCLI -->|"HTTP\n(Phase 3)"| Server["blt-server"]
     RemoteMCP -->|"MCP tools"| Server
@@ -81,9 +82,9 @@ ticker config login
 
 | 利用形態 | API キーの所在 |
 |---|---|
-| CLI + `local` backend | CLI マシンの `settings_store`（`ticker config set edinet-key`） |
-| CLI + `remote` backend | サーバー側の `settings_store`（CLI ユーザーは不要） |
-| チャットボット + remote MCP | サーバー側の `settings_store`（チャットボットユーザーは不要） |
+| ① local CLI | CLI マシンの `settings_store`（`ticker config set edinet-key`） |
+| ② remote CLI | サーバー側の `settings_store`（CLI ユーザーは不要） |
+| ③ remote MCP | サーバー側の `settings_store`（チャットボットユーザーは不要） |
 
 ### 3. 依存パッケージ
 
@@ -102,9 +103,11 @@ server = [
 
 ### 5. 計算ロジックの置き場所
 
-財務指標計算（YoY、ROE、ROIC、WACC など）は**サーバー側**で行い、MCP ツールが算出済みデータを返す。CLI は受け取ったデータを整形・表示するレンダラーとして特化する（自己ホスト現行では `data_service` を直接呼ぶが、将来的にレンダラーへ移行）。
+**① local CLI**: CLI が `data_service` → `analyzer.py` 経由で自前計算する。
 
-**採用理由**: CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
+**②③ remote CLI / remote MCP**: blt-server が計算し、算出済みデータを返す。CLI（②）はその結果を整形・表示するレンダラーとして特化する。
+
+**採用理由（②③）**: CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
 
 ---
 
@@ -336,7 +339,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ## TODO
 
-### 必須（使い始める前に）
+### 必須（③ blt-server を使い始める前に）
 
 - [ ] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key`）
@@ -346,13 +349,13 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 - [ ] `sync_document_list` の定期実行を cron または launchd で設定する（例: 毎朝 7:00）
 
-### 中期（CLI のサーバー化対応）
+### 中期（② remote CLI 採用を決断した場合）
 
 - [ ] Phase 2: `ticker config set edinet-backend remote` のサポートを実装する
 - [ ] `services/data_service.py` の「取得部分」と「計算部分」を分割する（Phase 3 の前提）
   - 取得部分（EDINET 通信・XBRL 展開）: サーバー側で完結
   - 計算部分（YoY 差分・比率計算）: `get_financial_summary` ツールが担う
-- [ ] CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行する（Phase 3 対応時）
+- [ ] CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行する（Phase 3）
   - `analyze` コマンド: `get_financial_summary` → 整形出力
   - `filings` コマンド: `get_filings` → 整形出力
 
@@ -395,8 +398,6 @@ EDINET external cache は外部取得物、derived cache は BLUE TICKER 生成�
 - remote backend 利用時の `ticker cache status` 表示内容
 - remote XBRL artifact をローカルにどれくらい保持するか（サーバー別マシン化時）
 - local / remote 間で分析結果キャッシュ `derived/` を共有するか、backend ごとに分けるか
-
-> **解消済み**: 自己ホスト時に CLI（local）と blt-server が同一 `analysis_cache/` に並走書き込みする競合リスク → 両者は同じロジックで同じ結果を書くため実質無害（設計上の判断参照）。
 
 ---
 
