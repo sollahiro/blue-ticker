@@ -3,15 +3,15 @@
 作成日: 2026-05-06
 最終更新: 2026-05-30
 
-blue-ticker は **3 つの利用経路**を持つ。現行稼働は ① のみ。
+blue-ticker は **3 つの利用経路**を持つ。現行稼働は local CLI のみ。
 
-| # | 経路 | 利用者 | EDINET 通信 | 状態 |
-|---|---|---|---|---|
-| ① | **local CLI** | 開発者・AI エージェント（Skills） | CLI プロセスが直接実行 | 現行 |
-| ② | **remote CLI** | 開発者・AI エージェント（Skills） | blt-server が実行 | Phase 2/3 以降 |
-| ③ | **remote MCP** | AI チャットボット（Claude.ai 等） | blt-server が実行 | Phase 4（進行中） |
+| 経路 | 利用者 | EDINET 通信 | 状態 |
+|---|---|---|---|
+| **local CLI** | 開発者・AI エージェント（Skills） | CLI プロセスが直接実行 | 現行 |
+| **remote CLI** | 開発者・AI エージェント（Skills） | blt-server が実行 | Phase 2/3 以降 |
+| **remote MCP** | AI チャットボット（Claude.ai 等） | blt-server が実行 | Phase 4（進行中） |
 
-② と ③ はどちらも blt-server を経由するが、クライアントが異なる（CLI vs MCP クライアント）。
+remote CLI と remote MCP はどちらも blt-server を経由するが、クライアントが異なる（CLI vs MCP クライアント）。
 
 ---
 
@@ -19,9 +19,9 @@ blue-ticker は **3 つの利用経路**を持つ。現行稼働は ① のみ�
 
 ```mermaid
 flowchart TD
-    Agent["AI エージェント\n(Claude Code + Skills)"] --> LocalCLI["① local CLI\n現行"]
-    Agent --> RemoteCLI["② remote CLI\nPhase 2/3"]
-    Chatbot["AI チャットボット\n(Claude.ai 等)"] --> RemoteMCP["③ remote MCP\nPhase 4"]
+    Agent["AI エージェント\n(Claude Code + Skills)"] --> LocalCLI["local CLI\n現行"]
+    Agent --> RemoteCLI["remote CLI\nPhase 2/3"]
+    Chatbot["AI チャットボット\n(Claude.ai 等)"] --> RemoteMCP["remote MCP\nPhase 4"]
 
     LocalCLI -->|"EDINET API 直接"| EdinetAPI["EDINET API"]
     LocalCLI --- LocalCache["local analysis_cache/"]
@@ -36,10 +36,10 @@ flowchart TD
 
 ## ゴール
 
-- ① local CLI は blt-server 不要の独立モードとして維持する。
-- ③ remote MCP により AI チャットボットが財務データにアクセスできるようにする。
-- ② remote CLI により、将来 EDINET API キーをサーバーに集中させる経路を開く。
-- ② への移行は「API キーをサーバーだけに集中させたい」要件が強くなった時点で検討する。
+- local CLI は blt-server 不要の独立モードとして維持する。
+- remote MCP により AI チャットボットが財務データにアクセスできるようにする。
+- remote CLI により、将来 EDINET API キーをサーバーに集中させる経路を開く。
+- remote CLI への移行は「API キーをサーバーだけに集中させたい」要件が強くなった時点で検討する。
 
 ## 非ゴール
 
@@ -50,16 +50,16 @@ flowchart TD
 
 ---
 
-## CLI backend 設定（② 実装後）
+## CLI backend 設定（remote CLI 実装後）
 
 backend は CLI の個別サブコマンドではなく、設定で選択する。
 
 ```bash
-# ① local CLI（現行・デフォルト）
+# local CLI（現行・デフォルト）
 ticker config set edinet-backend local
 ticker config set edinet-key <EDINET_API_KEY>
 
-# ② remote CLI（Phase 2 以降）
+# remote CLI（Phase 2 以降）
 ticker config set edinet-backend remote
 ticker config login
 ```
@@ -70,21 +70,21 @@ ticker config login
 
 ### 1. 通信モデル
 
-**① local CLI（現行）**: CLI プロセスが EDINET API に直接アクセスし、`analysis_cache/` に読み書きする。blt-server 不要。
+**local CLI（現行）**: CLI プロセスが EDINET API に直接アクセスし、`analysis_cache/` に読み書きする。blt-server 不要。
 
-**② remote CLI（Phase 3 以降）**: CLI は HTTP 経由で blt-server に委譲し、`analysis_cache/` への直接アクセスをやめる。CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのはこの段階。
+**remote CLI（Phase 3 以降）**: CLI は HTTP 経由で blt-server に委譲し、`analysis_cache/` への直接アクセスをやめる。CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのはこの段階。
 
-**③ remote MCP（現行）**: blt-server が EDINET API にアクセスし `analysis_cache/` に書く。CLI と同一マシンで並走する場合は同じパスを共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
+**remote MCP（現行）**: blt-server が EDINET API にアクセスし `analysis_cache/` に書く。local CLI と同一マシンで並走する場合は同じパスを共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
 
-**採用理由**: ① は blt-server 不要でシンプル。`mcp` パッケージを CLI バイナリに含めずに済む。
+**採用理由**: local CLI は blt-server 不要でシンプル。`mcp` パッケージを CLI バイナリに含めずに済む。
 
 ### 2. API キー管理
 
 | 利用形態 | API キーの所在 |
 |---|---|
-| ① local CLI | CLI マシンの `settings_store`（`ticker config set edinet-key`） |
-| ② remote CLI | サーバー側の `settings_store`（CLI ユーザーは不要） |
-| ③ remote MCP | サーバー側の `settings_store`（チャットボットユーザーは不要） |
+| local CLI | CLI マシンの `settings_store`（`ticker config set edinet-key`） |
+| remote CLI | サーバー側の `settings_store`（CLI ユーザーは不要） |
+| remote MCP | サーバー側の `settings_store`（チャットボットユーザーは不要） |
 
 ### 3. 依存パッケージ
 
@@ -103,11 +103,11 @@ server = [
 
 ### 5. 計算ロジックの置き場所
 
-**① local CLI**: CLI が `data_service` → `analyzer.py` 経由で自前計算する。
+**local CLI**: CLI が `data_service` → `analyzer.py` 経由で自前計算する。
 
-**②③ remote CLI / remote MCP**: blt-server が計算し、算出済みデータを返す。CLI（②）はその結果を整形・表示するレンダラーとして特化する。
+**remote CLI / remote MCP**: blt-server が計算し、算出済みデータを返す。remote CLI では CLI はその結果を整形・表示するレンダラーとして特化する。
 
-**採用理由（②③）**: CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
+**採用理由（remote CLI / remote MCP）**: CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
 
 ---
 
@@ -264,7 +264,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ### Phase 2: config 設計（未着手）
 
-目的: backend 選択と認証設定を CLI 設定に導入する。
+目的: backend 選択と認証設定を CLI 設定に導入する（remote CLI の前提）。
 
 - `SettingsStore` に `edinetBackend` を追加する。初期値は `local`。
 - 許可値はまず `local` / `remote` の 2 択にする。
@@ -278,12 +278,12 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 - `analyze` / `filings` / `filing` / `cache` など各サブコマンドに `--edinet-backend` は追加しない。
 - OAuth の具体実装前は、remote backend を選べても「未対応」と分かる戻り値にするか、設定保存のみ先行する。
 
-### Phase 3: remote backend 最小実装（未着手）
+### Phase 3: remote CLI 最小実装（未着手）
 
-目的: CLI が EDINET API へ直接アクセスせず、remote server から同等のデータを取得できるようにする。
+目的: CLI が EDINET API へ直接アクセスせず、blt-server から同等のデータを取得できるようにする。
 
 - `RemoteEdinetCacheBackend` を追加する。
-- remote server との通信は標準ライブラリまたは既存依存で実装する。新規依存が必要な場合は事前確認する。
+- blt-server との通信は標準ライブラリまたは既存依存で実装する。新規依存が必要な場合は事前確認する。
 - remote backend は以下の操作を提供する。
   - 日別書類一覧の取得
   - 年次書類インデックスの取得
@@ -296,13 +296,13 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 - remote cache の TTL や更新方針はサーバー側で管理する。
 - CLI 側には remote から取得した XBRL artifact の短期キャッシュだけを置く設計を優先する。
 
-**自己ホスト版の例外**: サーバーと CLI が同一マシン上にある場合は `RemoteEdinetCacheBackend` を経由せず、サーバーが書いたデータストアをローカルファイルとして直接読む（現行の共有データストア方式）。Phase 3 の HTTP 通信実装はサーバーを別マシンへ移す時点で対応する。
+**自己ホスト版の例外**: blt-server と CLI が同一マシン上にある場合は `RemoteEdinetCacheBackend` を経由せず、blt-server が書いたデータストアをローカルファイルとして直接読む。Phase 3 の HTTP 通信実装はサーバーを別マシンへ移す時点で対応する。
 
 ### Phase 4: remote MCP 導入（進行中）
 
-目的: MCP 利用時の EDINET 処理を remote server 側へ寄せる。
+目的: MCP 利用時の EDINET 処理を blt-server 側へ寄せる。
 
-- remote MCP は remote server 上のキャッシュと EDINET 取得機能を使う。
+- remote MCP は blt-server 上のキャッシュと EDINET 取得機能を使う。
 - remote MCP の公開機能とパラメーターは、CLI の公開機能を基準に設計する。
 - サーバーが別マシンへ移行した後は、remote MCP は CLI マシンの `analysis_cache` を直接操作しない（現行の自己ホスト方式では同一マシン上の `analysis_cache` を共有する）。
 - キャッシュ削除系は引き続き慎重に扱う。remote MCP から破壊的な削除操作を出す場合は、別途安全設計を行う。
@@ -339,7 +339,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ## TODO
 
-### 必須（③ blt-server を使い始める前に）
+### 必須（blt-server を使い始める前に）
 
 - [ ] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key`）
@@ -349,7 +349,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 - [ ] `sync_document_list` の定期実行を cron または launchd で設定する（例: 毎朝 7:00）
 
-### 中期（② remote CLI 採用を決断した場合）
+### 中期（remote CLI 採用を決断した場合）
 
 - [ ] Phase 2: `ticker config set edinet-backend remote` のサポートを実装する
 - [ ] `services/data_service.py` の「取得部分」と「計算部分」を分割する（Phase 3 の前提）
@@ -371,11 +371,11 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ## 設計上の判断
 
-### ① local CLI は独立モードとして維持する（② への移行は条件付き）
+### local CLI は独立モードとして維持する（remote CLI への移行は条件付き）
 
-**現在の方針**: ① local CLI は blt-server 不要の独立モードとして維持する。① と ③ が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
+**現在の方針**: local CLI は blt-server 不要の独立モードとして維持する。local CLI と remote MCP が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
 
-**② への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合に ② remote CLI（サーバー一本化）を検討する。② では CLI は EDINET への直接アクセスをやめ、blt-server が書いたキャッシュを読む形へ移行する。
+**remote CLI への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合に remote CLI（サーバー一本化）を検討する。remote CLI では CLI は EDINET への直接アクセスをやめ、blt-server が書いたキャッシュを読む形へ移行する。
 
 ### EDINET external cache と derived cache は分ける
 
