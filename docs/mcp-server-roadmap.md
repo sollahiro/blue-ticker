@@ -84,6 +84,8 @@ ticker config login
 
 **将来（サーバー別マシン化後）**: CLI は `remote` backend 経由でサーバーへ HTTP 通信する（Phase 3 対応時）。CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのはこの段階を指す。
 
+**採用理由**: 自己ホスト前提ではファイル共有が最もシンプル。CLI バイナリの容量増大を避けられる。
+
 ### 2. API キー管理
 
 | 利用形態 | API キーの所在 |
@@ -110,6 +112,8 @@ server = [
 ### 5. 計算ロジックの置き場所
 
 財務指標計算（YoY、ROE、ROIC、WACC など）は**サーバー側**で行い、MCP ツールが算出済みデータを返す。CLI は受け取ったデータを整形・表示するレンダラーとして特化する（自己ホスト現行では `data_service` を直接呼ぶが、将来的にレンダラーへ移行）。
+
+**採用理由**: CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
 
 ---
 
@@ -175,7 +179,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 | Stage 1 | **実装済み** | `sync/document_list.py`。既存 `cache catchup` と同等ロジック |
 | Stage 2 | 未実装 | 将来拡張 |
 | Stage 3 | 未実装 | 将来拡張 |
-| Stage 4 | 未実装（オンデマンド動作） | `get_financial_summary` 呼び出し時にオンデマンドで実行・キャッシュ |
+| Stage 4 | バッチ未実装（オンデマンドで代替中） | `get_financial_summary` 呼び出し時にオンデマンドで実行・キャッシュ |
 
 #### MCP ツール一覧
 
@@ -251,6 +255,8 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 ---
 
 ## フェーズ計画
+
+> **フェーズ順序について**: Phase 5（ローカル MCP 廃止）は Phase 4 と並行して先に完了した。Phase 2・3 は Phase 4 の本格稼働後に取り組む予定のため、番号順に完了していない。
 
 ### Phase 1: 抽象化の定着（完了）
 
@@ -386,14 +392,6 @@ EDINET external cache は外部取得物、derived cache は BLUE TICKER 生成�
 ### backend 選択は config で行う
 
 サブコマンドごとに backend option を足すと CLI の表面積が増える。通常利用では backend は環境・認証に紐づくため、`config` に集約する。
-
-### 自己ホスト版では共有データストア方式を採用する
-
-サーバーと CLI が同一マシン上にある場合、CLI は MCP サーバーへ HTTP 通信せず、サーバーが書いたデータストア（`analysis_cache/` と同じ構造）をローカルファイルとして直接読む。`mcp` パッケージは CLI バイナリに含めない。サーバーを別マシンへ移す段階で Phase 3 の HTTP 通信実装を追加する。
-
-### 計算ロジックはサーバー側で実行する
-
-財務指標計算（YoY 差分・ROE・ROIC・WACC 等）は MCP サーバーが担い、CLI はその結果を整形・表示するレンダラーとして特化する。これにより CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
 
 ---
 
