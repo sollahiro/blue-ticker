@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 ticker = "blue_ticker.app.cli:main"
 blt = "blue_ticker.app.cli:main"
+blt-server = "blue_ticker.mcp_server.server:main"
 
 [tool.poetry]
 packages = [
@@ -30,6 +31,9 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
+server = [
+    "mcp>=1.0.0,<2.0.0",
+]
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.2.0",

@@ -1,7 +1,7 @@
 # リモートMCP移行とキャッシュ抽象化ロードマップ
 
 作成日: 2026-05-06
-最終更新: 2026-05-06
+最終更新: 2026-05-30
 
 この文書は、将来的にローカルMCPを廃止し、リモートMCPへ移行するための設計ロードマップです。ローカルCLIとローカルキャッシュは廃止対象ではなく、CLI + Skills でAIエージェントがローカル操作する経路として残します。
 
@@ -64,7 +64,7 @@ ticker config login
 
 ## 現在地
 
-EDINET external cache の抽象境界は追加済み。
+### EDINET キャッシュ境界（Phase 1 完了）
 
 | ファイル | 役割 |
 |---|---|
@@ -73,7 +73,22 @@ EDINET external cache の抽象境界は追加済み。
 | `blue_ticker/api/edinet_client.py` | 具象 `EdinetCacheStore` ではなく `EdinetCacheBackend` を受け取る |
 | `tests/test_edinet_client.py` | メモリbackendを差し込み、抽象境界で動くことを確認 |
 
-この段階では、ユーザー向け挙動は変えない。既存のローカルキャッシュとEDINET API直接通信はそのまま動作する。
+### MCP サーバー初期実装（Phase 4 一部着手）
+
+自己ホスト・認証なし・共有データストア方式で `mcp_server/` モジュールを新設した。
+詳細は `docs/mcp-server-plan.md` を参照。
+
+| ファイル | 役割 |
+|---|---|
+| `blue_ticker/mcp_server/server.py` | FastMCP エントリポイント。`blt-server` コマンドで起動 |
+| `blue_ticker/mcp_server/tools/search.py` | `search_companies`、`search_by_sector` ツール |
+| `blue_ticker/mcp_server/tools/filings.py` | `get_filings` ツール |
+| `blue_ticker/mcp_server/tools/financial.py` | `get_financial_summary` ツール |
+| `blue_ticker/mcp_server/tools/filing_content.py` | `get_filing_content` ツール |
+| `blue_ticker/mcp_server/sync/document_list.py` | `sync_document_list`。Stage 1 バッチ（書類一覧差分更新） |
+
+`mcp` パッケージは `[dependency-groups].server` にのみ追加。CLI バイナリには含まれない。
+トランスポートは `streamable-http`。
 
 ## フェーズ計画
 
@@ -129,7 +144,11 @@ EDINET external cache の抽象境界は追加済み。
 - remote cacheのTTLや更新方針はサーバー側で管理する。
 - CLI側にはremoteから取得したXBRL artifactの短期キャッシュだけを置く設計を優先する。
 
-### Phase 4: remote MCP 導入
+**自己ホスト版の例外**: サーバーと CLI が同一マシン上にある場合は `RemoteEdinetCacheBackend` を経由せず、
+サーバーが書いたデータストアをローカルファイルとして直接読む（共有データストア方式）。
+Phase 3 の HTTP 通信実装はサーバーを別マシンへ移す時点で改めて対応する。
+
+### Phase 4: remote MCP 導入（進行中）
 
 目的: MCP利用時のEDINET処理をremote server側へ寄せる。
 
@@ -137,6 +156,20 @@ EDINET external cache の抽象境界は追加済み。
 - remote MCPの公開機能とパラメーターは、CLIの公開機能を基準に設計する。
 - remote MCPは、ローカルの `analysis_cache` を直接操作しない。
 - キャッシュ削除系は引き続き慎重に扱う。remote MCPから破壊的な削除操作を出す場合は、別途安全設計を行う。
+
+**実装済み（2026-05-30）**:
+
+- `blue_ticker/mcp_server/` に FastMCP サーバーを新設。`blt-server` コマンドで起動。
+- MCP ツール 5 本（`search_companies`、`search_by_sector`、`get_filings`、`get_financial_summary`、`get_filing_content`）。
+- 書類一覧の定期同期バッチ（`sync_document_list`）。
+- 財務指標計算はサーバー側（`data_service` + `analyzer.py` 経由）で実行し、算出済みデータを返す。
+
+**残タスク**:
+
+- CLI を算出済みデータの受け取り・整形に特化させる（現状は data_service を直接呼ぶ）。
+- `mcp` パッケージのインストール（`poetry add --group server "mcp>=1.0.0,<2.0.0"`）。
+- `sync_document_list` の定期実行設定（cron 等）。
+- `tests/test_dependency_rules.py` に `mcp_server` レイヤーのルールを追加。
 
 完了条件:
 
@@ -183,17 +216,31 @@ EDINET external cacheは外部取得物、derived cacheはBLUE TICKER生成物�
 
 サブコマンドごとに backend option を足すとCLIの表面積が増える。通常利用ではbackendは環境・認証に紐づくため、`config` に集約する。
 
+### 自己ホスト版では共有データストア方式を採用する
+
+サーバーと CLI が同一マシン上にある場合、CLI は MCP サーバーへ HTTP 通信せず、
+サーバーが書いたデータストア（既存の `analysis_cache/` と同じ構造）をローカルファイルとして直接読む。
+`mcp` パッケージは CLI バイナリに含めない。サーバーを別マシンへ移す段階で Phase 3 の HTTP 通信実装を追加する。
+
+### 計算ロジックはサーバー側で実行する
+
+財務指標計算（YoY 差分・ROE・ROIC・WACC 等）は MCP サーバーが担い、CLI はその結果を整形・表示するレンダラーとして特化する。
+これにより CLI とチャットボットが同じ計算結果を参照でき、数値の一貫性が保たれる。
+現在の `services/analyzer.py` はサーバー側の `data_service` 経由で呼ばれる。
+
 ## 未決事項
 
-- remote serverのAPI設計
+- ~~remote serverのAPI設計~~ → MCPツールインターフェース確定済み（`docs/mcp-server-plan.md` 参照）
 - OAuthフローとトークン保存場所
-- remote cacheのTTL、更新、削除ポリシー
+- ~~remote cacheのTTL、更新方針~~ → Stage 1 は `EdinetCacheStore` の既存 TTL を踏襲。Stage 2 以降は別途設計
+- remote cache 削除ポリシー
 - remote backend利用時の `ticker cache status` 表示内容
-- remote XBRL artifactをローカルにどれくらい保持するか
+- remote XBRL artifactをローカルにどれくらい保持するか（サーバー別マシン化時）
 - local/remote間で分析結果キャッシュ `derived/` を共有するか、backendごとに分けるか
 
 ## 関連ドキュメント
 
+- `docs/mcp-server-plan.md` — MCPサーバーの具体的な実装状況と TODO（本ドキュメントの下流）
 - `docs/architecture-review.md`
 - `docs/architecture-status.md`
 - `.agents/rules/project/caching.md`
