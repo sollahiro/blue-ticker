@@ -71,9 +71,9 @@ ticker config login
 
 **① local CLI（現行）**: CLI プロセスが EDINET API に直接アクセスし、`analysis_cache/` に読み書きする。blt-server 不要。
 
-**③ remote MCP（現行）**: blt-server が EDINET API にアクセスし `analysis_cache/` に書く。CLI と同一マシンで並走する場合は同じパスを共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
-
 **② remote CLI（Phase 3 以降）**: CLI は HTTP 経由で blt-server に委譲し、`analysis_cache/` への直接アクセスをやめる。CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのはこの段階。
+
+**③ remote MCP（現行）**: blt-server が EDINET API にアクセスし `analysis_cache/` に書く。CLI と同一マシンで並走する場合は同じパスを共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
 
 **採用理由**: ① は blt-server 不要でシンプル。`mcp` パッケージを CLI バイナリに含めずに済む。
 
