@@ -103,6 +103,11 @@ mebuki_startup.log
 ._*
 
 # ==========================================
+# Internal / non-public development docs and fixtures
+# ==========================================
+tests/fixtures/
+
+# ==========================================
 # Secrets and credentials
 # ==========================================
 *.pem

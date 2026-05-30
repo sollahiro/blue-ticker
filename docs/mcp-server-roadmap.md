@@ -72,7 +72,7 @@ ticker config login
 
 **local CLI（現行）**: CLI プロセスが EDINET API に直接アクセスし、`analysis_cache/` に読み書きする。blt-server 不要。
 
-**remote (self-host)（Phase 2/3）**: blt-server が同一マシンで動き、EDINET API を叩いて `analysis_cache/` に書く。CLI はそのファイルをローカルパスで直接読む（HTTP 不要）。local CLI と同一マシンで並走する場合は同じ `analysis_cache/` を共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
+**remote (self-host)（Phase 2/3）**: blt-server が同一マシンで動き、EDINET API を叩いて `analysis_cache/` に書く。CLI はそのファイルをローカルパスで直接読む（HTTP 不要）。local CLI と同一マシンで並走する場合は同じ `analysis_cache/` を共有する（両者は同じロジックで同じ結果を書くため内容差分は出にくいが、同時書き込み時の atomicity は保証されない点は留意）。
 
 **remote (cloud)（将来）**: blt-server がリモートサーバーで動く。CLI は HTTP 経由でアクセスし、MCP クライアント（Claude.ai 等）も同じ blt-server に接続する。`analysis_cache/` はサーバー側で独立管理。
 
@@ -166,7 +166,7 @@ Stage 3  XBRL 数値抽出  xbrl → analysis_cache/derived/xbrl_numeric_index/{
 Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/analysis/{code}.json
 ```
 
-各ステージに `status.json` を持たせ「どこまで処理したか」を管理する。後ろのステージは前のステージの出力を読むだけで疎結合を維持する。
+各ステージに `status.json` を持たせ「どこまで処理したか」を管理する設計（Stage 1 から順次導入予定）。後ろのステージは前のステージの出力を読むだけで疎結合を維持する。
 
 | ステージ | 状況 | 備考 |
 |---|---|---|
@@ -278,25 +278,23 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 - `analyze` / `filings` / `filing` / `cache` など各サブコマンドに `--edinet-backend` は追加しない。
 - OAuth の具体実装前は、remote backend を選べても「未対応」と分かる戻り値にするか、設定保存のみ先行する。
 
-### Phase 3: remote CLI 最小実装（未着手）
+### Phase 3: remote (self-host) CLI 最小実装（未着手）
 
-目的: CLI が EDINET API へ直接アクセスせず、blt-server から同等のデータを取得できるようにする。
+目的: CLI が EDINET API へ直接アクセスせず、同一マシン上の blt-server が書いた `analysis_cache/` をローカルファイルとして直接読む形に移行する。
 
-- `RemoteEdinetCacheBackend` を追加する。
-- blt-server との通信は標準ライブラリまたは既存依存で実装する。新規依存が必要な場合は事前確認する。
+**Phase 3 の主対象は self-host（ファイル直読み）**。HTTP 通信実装は blt-server を別マシンへ移す時点（remote (cloud) 移行フェーズ）で追加する。
+
+- `RemoteEdinetCacheBackend` を追加する（ローカルファイル読み取り実装から始める）。
 - remote backend は以下の操作を提供する。
   - 日別書類一覧の取得
   - 年次書類インデックスの取得
   - XBRL package の取得
   - XBRL をローカル解析用ディレクトリへ materialize する処理
-- XBRL 解析コードは当面 `Path` ベースを維持する。remote から取得した XBRL も、CLI 側の一時または artifact cache に展開して既存解析器へ渡す。
+- XBRL 解析コードは当面 `Path` ベースを維持する。blt-server が展開した XBRL を直接参照して既存解析器へ渡す。
 
 注意点:
 - remote backend では CLI から EDINET API キーを使わない。
 - remote cache の TTL や更新方針はサーバー側で管理する。
-- CLI 側には remote から取得した XBRL artifact の短期キャッシュだけを置く設計を優先する。
-
-**自己ホスト版の例外**: blt-server と CLI が同一マシン上にある場合は `RemoteEdinetCacheBackend` を経由せず、blt-server が書いたデータストアをローカルファイルとして直接読む。Phase 3 の HTTP 通信実装はサーバーを別マシンへ移す時点で対応する。
 
 ### Phase 4: self-hosted MCP 暫定稼働（進行中）
 
@@ -348,13 +346,14 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 ### 近期（Stage 1 安定化）
 
 - [ ] `sync_document_list` の定期実行を cron または launchd で設定する（例: 毎朝 7:00）
+- [ ] Stage 1 に `status.json` を追加する（同期済み日付・最終実行日時を記録。Stage 2 実装前の前提）
 
 ### 中期（remote CLI 採用を決断した場合）
 
 - [ ] Phase 2: `ticker config set edinet-backend remote` のサポートを実装する
 - [ ] `services/data_service.py` の「取得部分」と「計算部分」を分割する（Phase 3 の前提）
   - 取得部分（EDINET 通信・XBRL 展開）: サーバー側で完結
-  - 計算部分（YoY 差分・比率計算）: `get_financial_summary` ツールが担う
+  - 計算部分（YoY 差分・比率計算）: `data_service` / `analyzer.py` が担う（`get_financial_summary` ツールはその結果を整形して返す薄い公開境界）
 - [ ] CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行する（Phase 3）
   - `analyze` コマンド: `get_financial_summary` → 整形出力
   - `filings` コマンド: `get_filings` → 整形出力
@@ -364,7 +363,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 - [ ] Stage 2: XBRL ダウンロードの事前取得バッチ（対象銘柄リストを設定で管理）
 - [ ] Stage 3: XBRL 数値抽出の事前取得バッチ
 - [ ] Stage 4: 財務指標計算の事前取得バッチ（`get_financial_summary` をオンデマンドから事前計算へ）
-- [ ] 各ステージの `status.json` 管理（処理済みリストと更新日時）
+- [ ] Stage 2 以降の `status.json` 管理（処理済み doc_id リストと更新日時。Stage 1 の実装パターンを踏襲）
 - [ ] 抽出ロジック変更時の差分検証ツール：新旧ロジックの抽出結果を銘柄・指標ごとに比較し、変更が意図通りであることの確認と意図しない相違の検知を両方できる仕組みを blt-server のデータ構築フローに組み込む
 - [ ] OAuth 認証の追加（複数ユーザー・外部公開が必要になった場合）
 
@@ -374,7 +373,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ### local CLI は独立モードとして維持する（remote CLI への移行は条件付き）
 
-**現在の方針**: local CLI は blt-server 不要の独立モードとして維持する。local CLI と remote (self-host) の blt-server が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
+**現在の方針**: local CLI は blt-server 不要の独立モードとして維持する。local CLI と remote (self-host) の blt-server が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため内容差分は出にくい（`_cache_version` 照合で古いエントリは上書きされる）。ただし `CacheManager.set()` はプロセス間の atomic write を保証しないため、同時書き込み時の挙動については別途確認が必要。
 
 **remote への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合に remote (self-host) CLI または remote (cloud) への移行を検討する。remote モードでは CLI は EDINET への直接アクセスをやめ、blt-server が書いたキャッシュを読む形へ移行する。
 
