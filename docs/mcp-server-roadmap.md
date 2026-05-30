@@ -3,15 +3,15 @@
 作成日: 2026-05-06
 最終更新: 2026-05-30
 
-blue-ticker は **3 つの利用経路**を持つ。現行稼働は local CLI のみ。
+blue-ticker は **3 つのデプロイモード**を持つ。EDINET データを誰が取得するかが主な違い。
 
-| 経路 | 利用者 | EDINET 通信 | 状態 |
-|---|---|---|---|
-| **local CLI** | 開発者・AI エージェント（Skills） | CLI プロセスが直接実行 | 現行 |
-| **remote CLI** | 開発者・AI エージェント（Skills） | blt-server が実行 | Phase 2/3 以降 |
-| **remote MCP** | AI チャットボット（Claude.ai 等） | blt-server が実行 | Phase 4（進行中） |
+| モード | blt-server | EDINET を叩くのは | クライアント | 状態 |
+|---|---|---|---|---|
+| **local CLI** | なし | CLI | CLI | 現行 |
+| **remote (self-host)** | 同一マシン | blt-server | CLI | Phase 2/3 以降 |
+| **remote (cloud)** | リモートサーバー | blt-server | CLI・MCP | 将来検討 |
 
-remote CLI と remote MCP はどちらも blt-server を経由するが、クライアントが異なる（CLI vs MCP クライアント）。
+**Phase 4（進行中）**: remote (self-host) 上で blt-server を起動し、MCP クライアント（Claude.ai 等）から接続する形で暫定稼働中。MCP の本番形態は remote (cloud) を想定。
 
 ---
 
@@ -19,17 +19,18 @@ remote CLI と remote MCP はどちらも blt-server を経由するが、クラ
 
 ```mermaid
 flowchart TD
-    Agent["AI エージェント\n(Claude Code + Skills)"] --> LocalCLI["local CLI\n現行"]
-    Agent --> RemoteCLI["remote CLI\nPhase 2/3"]
-    Chatbot["AI チャットボット\n(Claude.ai 等)"] --> RemoteMCP["remote MCP\nPhase 4"]
+    Agent["AI エージェント\n(Claude Code + Skills)"]
+    Chatbot["AI チャットボット\n(Claude.ai 等)"]
 
-    LocalCLI -->|"EDINET API 直接"| EdinetAPI["EDINET API"]
-    LocalCLI --- LocalCache["local analysis_cache/"]
+    Agent -->|"local CLI（現行）"| EdinetAPI["EDINET API"]
+    Agent -->|"remote self-host\n（Phase 2/3）"| SelfServer["blt-server\n（同一マシン）"]
+    Agent -->|"remote cloud\n（将来）"| CloudServer["blt-server\n（リモート）"]
 
-    RemoteCLI -->|"HTTP\n(Phase 3)"| Server["blt-server"]
-    RemoteMCP -->|"MCP tools"| Server
-    Server -->|"EDINET API"| EdinetAPI
-    Server --- ServerCache["server analysis_cache/"]
+    Chatbot -->|"MCP（Phase 4 暫定）"| SelfServer
+    Chatbot -->|"MCP（将来）"| CloudServer
+
+    SelfServer -->|"EDINET API"| EdinetAPI
+    CloudServer -->|"EDINET API"| EdinetAPI
 ```
 
 ---
@@ -37,8 +38,7 @@ flowchart TD
 ## ゴール
 
 - local CLI は blt-server 不要の独立モードとして維持する。
-- remote MCP により AI チャットボットが財務データにアクセスできるようにする。
-- remote CLI により、将来 EDINET API キーをサーバーに集中させる経路を開く。
+- remote (cloud) により AI チャットボットおよび CLI が共通の blt-server を通じて財務データにアクセスできるようにする。
 - remote CLI への移行は「API キーをサーバーだけに集中させたい」要件が強くなった時点で検討する。
 
 ## 非ゴール
@@ -72,11 +72,11 @@ ticker config login
 
 **local CLI（現行）**: CLI プロセスが EDINET API に直接アクセスし、`analysis_cache/` に読み書きする。blt-server 不要。
 
-**remote CLI（Phase 3 以降）**: CLI は HTTP 経由で blt-server に委譲し、`analysis_cache/` への直接アクセスをやめる。CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのはこの段階。
+**remote (self-host)（Phase 2/3）**: blt-server が同一マシンで動き、EDINET API を叩いて `analysis_cache/` に書く。CLI はそのファイルをローカルパスで直接読む（HTTP 不要）。local CLI と同一マシンで並走する場合は同じ `analysis_cache/` を共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
 
-**remote MCP（現行）**: blt-server が EDINET API にアクセスし `analysis_cache/` に書く。local CLI と同一マシンで並走する場合は同じパスを共有する（両者は同じロジックで同じ結果を書くため競合は無害）。
+**remote (cloud)（将来）**: blt-server がリモートサーバーで動く。CLI は HTTP 経由でアクセスし、MCP クライアント（Claude.ai 等）も同じ blt-server に接続する。`analysis_cache/` はサーバー側で独立管理。
 
-**採用理由**: local CLI は blt-server 不要でシンプル。`mcp` パッケージを CLI バイナリに含めずに済む。
+CLI を `get_financial_summary` / `get_filings` の結果を受け取る薄いレンダラーへ移行するのは remote モード導入時。
 
 ### 2. API キー管理
 
@@ -298,14 +298,14 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 **自己ホスト版の例外**: blt-server と CLI が同一マシン上にある場合は `RemoteEdinetCacheBackend` を経由せず、blt-server が書いたデータストアをローカルファイルとして直接読む。Phase 3 の HTTP 通信実装はサーバーを別マシンへ移す時点で対応する。
 
-### Phase 4: remote MCP 導入（進行中）
+### Phase 4: self-hosted MCP 暫定稼働（進行中）
 
-目的: MCP 利用時の EDINET 処理を blt-server 側へ寄せる。
+目的: remote (self-host) 上で MCP を先行稼働させ、AI チャットボットからの財務データアクセスを実現する。本番形態は remote (cloud) への移行を想定。
 
-- remote MCP は blt-server 上のキャッシュと EDINET 取得機能を使う。
-- remote MCP の公開機能とパラメーターは、CLI の公開機能を基準に設計する。
-- サーバーが別マシンへ移行した後は、remote MCP は CLI マシンの `analysis_cache` を直接操作しない（現行の自己ホスト方式では同一マシン上の `analysis_cache` を共有する）。
-- キャッシュ削除系は引き続き慎重に扱う。remote MCP から破壊的な削除操作を出す場合は、別途安全設計を行う。
+- blt-server は同一マシンで動き、MCP クライアントはローカルの blt-server に接続する。
+- MCP ツールの公開機能とパラメーターは、CLI の公開機能を基準に設計する。
+- remote (cloud) へ移行した後は、MCP クライアントは CLI マシンの `analysis_cache` を直接操作しない。
+- キャッシュ削除系は引き続き慎重に扱う。MCP から破壊的な削除操作を出す場合は、別途安全設計を行う。
 
 **実装済み（2026-05-30）**:
 
@@ -374,9 +374,9 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ### local CLI は独立モードとして維持する（remote CLI への移行は条件付き）
 
-**現在の方針**: local CLI は blt-server 不要の独立モードとして維持する。local CLI と remote MCP が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
+**現在の方針**: local CLI は blt-server 不要の独立モードとして維持する。local CLI と remote (self-host) の blt-server が同一マシンで並走しても、両者は同じロジック・同じパスに同じ結果を書くため競合は実質的に無害（`_cache_version` 照合で古いエントリは上書きされる）。
 
-**remote CLI への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合に remote CLI（サーバー一本化）を検討する。remote CLI では CLI は EDINET への直接アクセスをやめ、blt-server が書いたキャッシュを読む形へ移行する。
+**remote への移行トリガー**: 「EDINET API キーをサーバーだけに集中させたい」要件が強くなった場合に remote (self-host) CLI または remote (cloud) への移行を検討する。remote モードでは CLI は EDINET への直接アクセスをやめ、blt-server が書いたキャッシュを読む形へ移行する。
 
 ### EDINET external cache と derived cache は分ける
 
