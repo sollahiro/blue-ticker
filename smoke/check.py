@@ -4,12 +4,17 @@ smoke/check.py — smoke_expected/*.json と実際の抽出値を比較し、差
 本番ロジックを変更した後に実行し、意図しない値の変化がないかを確認する。
 差分がある場合は exit(1)。
 
+フィクスチャを直接編集するとチェックサム検証で弾かれる。
+更新は update_fixtures.py --ticker XXXX で行う。
+
 実行方法:
     poetry run python smoke/check.py           # 通常チェック
     poetry run python smoke/check.py --verbose  # 差分発生時にコンポーネント詳細を表示
 """
 import argparse
 import asyncio
+import hashlib
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,13 +22,40 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from _common import (
+    FIXTURE_DIR,
     edinet_cache_dir,
     extract_actuals,
     has_any_expected_value,
     load_fixtures,
 )
 
+_CHECKSUM_FILE = FIXTURE_DIR / ".checksums.json"
+
 _FLOAT_REL_TOL = 1e-4
+
+
+def _verify_checksums() -> list[str]:
+    """フィクスチャファイルの SHA-256 を .checksums.json と照合する。
+
+    改ざん（直接編集）を検出したファイル名のリストを返す。
+    .checksums.json が存在しない場合はエラーとして扱う。
+    """
+    if not _CHECKSUM_FILE.exists():
+        return [".checksums.json が見つかりません — smoke/smoke_expected/.checksums.json を生成してください"]
+
+    recorded: dict[str, str] = json.loads(_CHECKSUM_FILE.read_text(encoding="utf-8"))
+    violations: list[str] = []
+
+    for fixture_path in sorted(f for f in FIXTURE_DIR.glob("*.json") if not f.name.startswith(".")):
+        expected_hash = recorded.get(fixture_path.name)
+        if expected_hash is None:
+            violations.append(f"{fixture_path.name}: チェックサム未登録（update_fixtures.py --ticker で追加してください）")
+            continue
+        actual_hash = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            violations.append(f"{fixture_path.name}: チェックサム不一致（直接編集されています）")
+
+    return violations
 
 
 def _check_field(label: str, actual: Any, expected: Any) -> str | None:
@@ -156,6 +188,14 @@ async def _main() -> int:
     parser = argparse.ArgumentParser(description="smoke check")
     parser.add_argument("--verbose", "-v", action="store_true", help="差分発生時にコンポーネント詳細を表示")
     args = parser.parse_args()
+
+    violations = _verify_checksums()
+    if violations:
+        print("ERROR: フィクスチャの整合性チェック失敗", file=sys.stderr)
+        for v in violations:
+            print(f"  {v}", file=sys.stderr)
+        print("  → フィクスチャの更新は update_fixtures.py --ticker XXXX で行ってください", file=sys.stderr)
+        return 1
 
     cache_dir = edinet_cache_dir()
     if not cache_dir.is_dir():

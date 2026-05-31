@@ -44,7 +44,7 @@ def load_fixtures() -> list[tuple[str, dict[str, Any]]]:
         return []
     return [
         (path.stem, json.loads(path.read_text(encoding="utf-8")))
-        for path in sorted(FIXTURE_DIR.glob("*.json"))
+        for path in sorted(f for f in FIXTURE_DIR.glob("*.json") if not f.name.startswith("."))
     ]
 
 
