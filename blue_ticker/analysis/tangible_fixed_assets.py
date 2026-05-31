@@ -24,6 +24,7 @@ from blue_ticker.constants.xbrl import (
     PPE_BUILDINGS_DEP_TAGS,
     PPE_BUILDINGS_IFRS_DIRECT,
     PPE_BUILDINGS_JGAAP_DIRECT,
+    PPE_BUILDINGS_ONLY_JGAAP_TAGS,
     PPE_CONSTRUCTION_COST_TAGS,
     PPE_CONSTRUCTION_DEP_TAGS,
     PPE_CONSTRUCTION_IFRS_DIRECT,
@@ -38,6 +39,7 @@ from blue_ticker.constants.xbrl import (
     PPE_MACHINERY_DEP_TAGS,
     PPE_MACHINERY_IFRS_DIRECT,
     PPE_MACHINERY_JGAAP_DIRECT,
+    PPE_STRUCTURES_JGAAP_TAGS,
     PPE_TAGS_USGAAP_TOTAL,
     PPE_TOOLS_IFRS_DIRECT,
     PPE_TOOLS_JGAAP_DIRECT,
@@ -60,6 +62,12 @@ def _net_value(
         return None
     dep = section.resolve(dep_tags)["current"]
     return cost + (dep if dep is not None else 0.0)
+
+
+def _resolve_ppe_item(section: BalanceSheetSection, tags: list[str]) -> float | None:
+    """PPE 内訳タグを解決する。0.0 は nil 起源の可能性が高いため None として扱う。"""
+    val = section.resolve(tags)["current"]
+    return None if val == 0.0 else val
 
 
 def extract_tangible_fixed_assets(section: BalanceSheetSection) -> TangibleFixedAssetsResult:
@@ -111,11 +119,17 @@ def extract_tangible_fixed_assets(section: BalanceSheetSection) -> TangibleFixed
             construction = _net_value(section, PPE_CONSTRUCTION_COST_TAGS, PPE_CONSTRUCTION_DEP_TAGS)
 
     elif accounting_standard == "J-GAAP":
-        buildings = section.resolve(PPE_BUILDINGS_JGAAP_DIRECT)["current"]
-        land = section.resolve(PPE_LAND_JGAAP_DIRECT)["current"]
-        machinery = section.resolve(PPE_MACHINERY_JGAAP_DIRECT)["current"]
-        tools = section.resolve(PPE_TOOLS_JGAAP_DIRECT)["current"]
-        construction = section.resolve(PPE_CONSTRUCTION_JGAAP_DIRECT)["current"]
+        buildings = _resolve_ppe_item(section, PPE_BUILDINGS_JGAAP_DIRECT)
+        if buildings is None:
+            # 建物・構築物が個別タグで報告されている場合は合算する
+            b = _resolve_ppe_item(section, PPE_BUILDINGS_ONLY_JGAAP_TAGS)
+            s = _resolve_ppe_item(section, PPE_STRUCTURES_JGAAP_TAGS)
+            if b is not None or s is not None:
+                buildings = (b or 0.0) + (s or 0.0)
+        land = _resolve_ppe_item(section, PPE_LAND_JGAAP_DIRECT)
+        machinery = _resolve_ppe_item(section, PPE_MACHINERY_JGAAP_DIRECT)
+        tools = _resolve_ppe_item(section, PPE_TOOLS_JGAAP_DIRECT)
+        construction = _resolve_ppe_item(section, PPE_CONSTRUCTION_JGAAP_DIRECT)
 
     else:
         buildings = None
