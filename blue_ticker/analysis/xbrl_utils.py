@@ -462,9 +462,17 @@ def _extract_html_labels(
 
     財務金額（百万円単位）は通常 >= 200 であり、構成比（0–100）と区別できる。
     「最後の財務値 = 当期、末尾から2番目の財務値 = 前期」で統一して取得する。
+
+    同じ仮想タグに複数ラベルが対応する場合（例: "有形固定資産合計" と "有形固定資産" が
+    どちらも PPENet を指す）、一方がマッチして値がセットされた時点で他方も remaining から
+    除去する。これにより CF 表など後続のセクションで意図しない上書きを防ぐ。
     """
     field_set: dict[str, dict[str, float | None]] = {}
     remaining = set(label_map.keys())
+    # 仮想タグ → そのタグに対応するラベルの集合（一括除去用）
+    tag_to_labels: dict[str, set[str]] = {}
+    for lbl, vtag in label_map.items():
+        tag_to_labels.setdefault(vtag, set()).add(lbl)
 
     for row in soup.find_all("tr"):
         if not remaining:
@@ -496,7 +504,9 @@ def _extract_html_labels(
         found = financial if financial else all_nums
         current = found[-1] * MILLION_YEN
         prior = found[-2] * MILLION_YEN if len(found) >= 2 else None
-        field_set[label_map[matched]] = {"current": current, "prior": prior}
-        remaining.discard(matched)
+        vtag = label_map[matched]
+        field_set[vtag] = {"current": current, "prior": prior}
+        # 同じ仮想タグに対応するラベルをすべて除去（後続セクションによる上書き防止）
+        remaining -= tag_to_labels.get(vtag, set())
 
     return field_set

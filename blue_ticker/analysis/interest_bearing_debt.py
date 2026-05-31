@@ -150,7 +150,50 @@ def _extract_ifrs_lease_liabilities(
             }],
         )
 
+    # パターンC: 「リース負債の現在価値」（クボタ型: 割引後現在価値合計）
+    pv_vals = table.get("リース負債の現在価値")
+    if pv_vals is not None:
+        c_m, p_m = pv_vals
+        return (
+            c_m * MILLION_YEN if c_m is not None else None,
+            p_m * MILLION_YEN if p_m is not None else None,
+            [{
+                "label": "リース負債",
+                "tag": None,
+                "current": c_m * MILLION_YEN if c_m is not None else None,
+                "prior": p_m * MILLION_YEN if p_m is not None else None,
+            }],
+        )
+
     return None, None, []
+
+
+def _extract_usgaap_lease_liabilities(
+    section: BalanceSheetSection,
+) -> tuple[float | None, float | None, list[MetricComponent]]:
+    """US-GAAP BS HTMLからオペレーティング・リース負債残高を抽出する（ASC 842）。
+
+    Returns:
+        (current_yen, prior_yen, components)。取得できない場合は (None, None, [])。
+    """
+    cl_fv = section.resolve(["USGAAP_HTML_LeaseLiabilitiesCurrent"])
+    ncl_fv = section.resolve(["USGAAP_HTML_LeaseLiabilitiesNonCurrent"])
+    cl_c = cl_fv["current"] if cl_fv["tag"] else None
+    cl_p = cl_fv["prior"] if cl_fv["tag"] else None
+    ncl_c = ncl_fv["current"] if ncl_fv["tag"] else None
+    ncl_p = ncl_fv["prior"] if ncl_fv["tag"] else None
+
+    if cl_c is None and ncl_c is None:
+        return None, None, []
+
+    total_c = (cl_c or 0.0) + (ncl_c or 0.0)
+    total_p = ((cl_p or 0.0) + (ncl_p or 0.0)) if (cl_p is not None or ncl_p is not None) else None
+    components: list[MetricComponent] = []
+    if cl_c is not None:
+        components.append({"label": "リース負債（流動）", "tag": None, "current": cl_c, "prior": cl_p})
+    if ncl_c is not None:
+        components.append({"label": "リース負債（非流動）", "tag": None, "current": ncl_c, "prior": ncl_p})
+    return total_c, total_p, components
 
 
 def resolve_ibd(section: BalanceSheetSection) -> ResolvedItem:
@@ -265,6 +308,20 @@ def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBeari
                 "current": (existing_c or 0.0) + (lease_c or 0.0),
                 "prior": (existing_p or 0.0) + (lease_p or 0.0),
                 "method": result["method"] + "+lease_textblock",
+                "accounting_standard": accounting_standard,
+                "components": result["components"] + lease_comps,
+            }
+
+    # US-GAAP適用企業: オペレーティング・リース負債を追加（ASC 842）
+    if accounting_standard == "US-GAAP":
+        lease_c, lease_p, lease_comps = _extract_usgaap_lease_liabilities(section)
+        if lease_c is not None:
+            existing_c = result["current"]
+            existing_p = result["prior"]
+            result = {
+                "current": (existing_c or 0.0) + lease_c,
+                "prior": ((existing_p or 0.0) + lease_p) if lease_p is not None else existing_p,
+                "method": result["method"] + "+lease_html",
                 "accounting_standard": accounting_standard,
                 "components": result["components"] + lease_comps,
             }

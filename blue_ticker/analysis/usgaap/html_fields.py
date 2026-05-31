@@ -32,9 +32,16 @@ _USGAAP_BS_HTML_LABEL_MAP: dict[str, str] = {
     "固定負債合計":                             "USGAAP_HTML_NonCurrentLiabilities",
     "負債合計":                                 "USGAAP_HTML_TotalLiabilities",
     "純資産合計":                               "USGAAP_HTML_NetAssets",
-    # PPE 内訳（取得原価ゼロ確定項目のみ。建物・機械は取得原価のみ開示のため除外）
+    # PPE 内訳（取得原価ベース。土地・建設仮勘定は非償却のため取得原価 = 帳簿価額）
     "土地":                                     "USGAAP_HTML_Land",
     "建設仮勘定":                               "USGAAP_HTML_ConstructionInProgress",
+    # PPE 建物・機械（取得原価。富士フイルム形式・キヤノン形式で節番号付きも substring でヒット）
+    "建物及び構築物":                           "USGAAP_HTML_BuildingsGross",
+    "機械装置及び備品":                         "USGAAP_HTML_MachineryGross",   # キヤノン形式
+    "機械装置及びその他の有形固定資産":         "USGAAP_HTML_MachineryGross",   # 富士フイルム形式
+    # オペレーティング・リース負債（ASC 842）。節番号・中点の有無を問わず substring でヒット
+    "短期オペレーティング":                     "USGAAP_HTML_LeaseLiabilitiesCurrent",
+    "長期オペレーティング":                     "USGAAP_HTML_LeaseLiabilitiesNonCurrent",
     # 富士フイルム形式 IBD ラベル
     "社債及び短期借入金":                       "USGAAP_HTML_IBDCurrent",
     "社債及び長期借入金":                       "USGAAP_HTML_IBDNonCurrent",

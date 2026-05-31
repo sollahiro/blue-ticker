@@ -132,16 +132,20 @@ def extract_tangible_fixed_assets(section: BalanceSheetSection) -> TangibleFixed
         construction = _resolve_ppe_item(section, PPE_CONSTRUCTION_JGAAP_DIRECT)
 
     else:  # US-GAAP
-        # 建物・機械は取得原価のみ開示（per-item 減価償却不明）のため null
+        # 建物・機械は取得原価（gross）で開示。減価償却累計額は合計のみ開示のため per-item 純額不明
         # 土地・建設仮勘定は非償却資産のため取得原価 = 帳簿価額
-        buildings = None
+        buildings = section.resolve(["USGAAP_HTML_BuildingsGross"])["current"]
         land = section.resolve(["USGAAP_HTML_Land"])["current"]
-        machinery = None
+        machinery = section.resolve(["USGAAP_HTML_MachineryGross"])["current"]
         tools = None
         construction = section.resolve(["USGAAP_HTML_ConstructionInProgress"])["current"]
 
     known = [v for v in (buildings, land, machinery, tools, construction) if v is not None]
-    others: float | None = total - sum(known) if known else None
+    if accounting_standard == "US-GAAP":
+        # US-GAAP の buildings/machinery は取得原価（gross）のため、net 合計との差引は無意味
+        others: float | None = None
+    else:
+        others = total - sum(known) if known else None
 
     return {
         "buildings": buildings,
