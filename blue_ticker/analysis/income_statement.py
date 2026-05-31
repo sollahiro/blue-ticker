@@ -21,11 +21,15 @@ from blue_ticker.constants.xbrl import (
     NET_SALES_TAGS,
     OPERATING_PROFIT_DIRECT_TAGS,
     OPERATING_REVENUE_TAGS,
+    ORDINARY_INCOME_TAGS,
+    ORDINARY_REVENUE_TAGS,
 )
 from blue_ticker.utils.xbrl_result_types import IncomeStatementResult
 
 
 def _sales_label_for_tag(tag: str | None) -> str:
+    if tag in ORDINARY_REVENUE_TAGS:
+        return "経常収益"
     if tag in OPERATING_REVENUE_TAGS:
         return "営業収益"
     if tag in ("NetSalesIFRS", "RevenueIFRS", "RevenueIFRSSummaryOfBusinessResults", "Revenue"):
@@ -50,6 +54,8 @@ def extract_income_statement(section: IncomeStatementSection) -> IncomeStatement
 
     sales_item = section.resolve_prefer_current(NET_SALES_TAGS)
     op_item = section.resolve_prefer_current(OPERATING_PROFIT_DIRECT_TAGS)
+    if op_item["current"] is None and op_item["prior"] is None:
+        op_item = section.resolve_prefer_current(ORDINARY_INCOME_TAGS)
     np_item = section.resolve_prefer_current(NET_PROFIT_TAGS)
 
     found_tags = [

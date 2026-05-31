@@ -592,13 +592,6 @@ IFRS_TAX_MARKER_TAGS: list[str] = (
 # 営業利益（OP）タグ定義
 # analysis/operating_profit.py で使用
 
-OPERATING_PROFIT_DIRECT_TAGS: list[str] = [
-    "OperatingProfitLossIFRS",        # IFRS連結
-    "OperatingIncomeLoss",            # J-GAAP連結（標準）
-    "OperatingIncome",                # J-GAAP（旧タグ / 個別フォールバック）
-    "USGAAP_HTML_OperatingIncome",   # US-GAAP HTML仮想タグ（parse_usgaap_html_pl_fields が生成）
-]
-
 ORDINARY_INCOME_TAGS: list[str] = [
     "OrdinaryIncome",            # J-GAAP 金融機関向け経常利益
     "OrdinaryIncomeLoss",        # J-GAAP 経常利益（代替）
@@ -608,6 +601,13 @@ ORDINARY_INCOME_TAGS: list[str] = [
 ORDINARY_REVENUE_TAGS: list[str] = [
     "OrdinaryIncomeBNK",  # 銀行等の経常収益
     "OrdinaryIncomeSummaryOfBusinessResults",  # 銀行等の経常収益（要約情報）
+]
+
+OPERATING_PROFIT_DIRECT_TAGS: list[str] = [
+    "OperatingProfitLossIFRS",        # IFRS連結
+    "OperatingIncomeLoss",            # J-GAAP連結（標準）
+    "OperatingIncome",                # J-GAAP（旧タグ / 個別フォールバック）
+    "USGAAP_HTML_OperatingIncome",   # US-GAAP HTML仮想タグ（parse_usgaap_html_pl_fields が生成）
 ]
 
 # 営業利益 計算法: GrossProfit − SGA で算出する
@@ -697,6 +697,7 @@ NET_SALES_TAGS: list[str] = [
     "NetSalesOfCompletedConstructionContractsCNS",                           # 建設業: 完成工事高
     "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",      # 建設業: 完成工事高（決算短信）
     *OPERATING_REVENUE_TAGS,
+    *ORDINARY_REVENUE_TAGS,                     # J-GAAP 銀行等: 経常収益（フォールバック）
 ]
 
 # 当期純利益（Net Profit）タグ（親会社帰属 → PL全体の優先順）
@@ -958,4 +959,16 @@ BANK_CASH_DUE_FROM_BANKS_TAGS: list[str] = [
 
 BANK_NEGOTIABLE_CD_TAGS: list[str] = [
     "NegotiableCertificatesOfDepositLiabilitiesBNK",  # J-GAAP 譲渡性預金（負債）
+]
+
+# 銀行業 有利子負債コンポーネント定義
+# analysis/interest_bearing_debt.py で使用
+# DepositsLiabilitiesBNK の存在を銀行業判定マーカーとする
+BANK_IBD_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
+    {"label": "預金",                   "tags": ["DepositsLiabilitiesBNK"]},
+    {"label": "譲渡性預金",             "tags": ["NegotiableCertificatesOfDepositLiabilitiesBNK"]},
+    {"label": "コマーシャル・ペーパー", "tags": ["CommercialPapersLiabilities"]},
+    {"label": "借用金",                 "tags": ["BorrowedMoneyLiabilitiesBNK"]},
+    {"label": "短期社債",               "tags": ["ShortTermBondsPayable"]},
+    {"label": "社債",                   "tags": ["BondsPayable"]},
 ]

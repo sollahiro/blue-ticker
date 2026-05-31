@@ -15,6 +15,7 @@ from blue_ticker.analysis.sections import BalanceSheetSection
 from blue_ticker.analysis.xbrl_utils import extract_ifrs_textblock_table, find_xbrl_files
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
+    BANK_IBD_COMPONENT_DEFINITIONS,
     COMPONENT_DEFINITIONS,
     IBD_CURRENT_COMPONENTS,
     IBD_IFRS_CL_TAGS,
@@ -217,9 +218,51 @@ def resolve_ibd(section: BalanceSheetSection) -> ResolvedItem:
     return section.resolve_aggregate([["USGAAP_HTML_IBDCurrent"], ["USGAAP_HTML_IBDNonCurrent"]])
 
 
+def _extract_bank_ibd(section: BalanceSheetSection) -> InterestBearingDebtResult | None:
+    """銀行業向け有利子負債を構成要素（預金・譲渡性預金・CP・借用金・短期社債・社債）から積み上げる。
+
+    DepositsLiabilitiesBNK が存在しない場合は None を返し、通常の IBD 抽出へフォールバックする。
+    """
+    marker = section.resolve(["DepositsLiabilitiesBNK"])
+    if marker["current"] is None and marker["prior"] is None:
+        return None
+
+    components: list[MetricComponent] = []
+    current_total = prior_total = 0.0
+    has_current = has_prior = False
+
+    for comp_def in BANK_IBD_COMPONENT_DEFINITIONS:
+        item = section.resolve(comp_def["tags"])
+        c, p = item["current"], item["prior"]
+        if c is not None:
+            current_total += c
+            has_current = True
+        if p is not None:
+            prior_total += p
+            has_prior = True
+        components.append({
+            "label": comp_def["label"],
+            "tag": item["tag"],
+            "current": c,
+            "prior": p,
+        })
+
+    return {
+        "current": current_total if has_current else None,
+        "prior": prior_total if has_prior else None,
+        "method": "bank_components",
+        "accounting_standard": section.accounting_standard,
+        "components": components,
+    }
+
+
 def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBearingDebtResult:
     """貸借対照表セクションから有利子負債を構成要素ごとに抽出する。"""
     accounting_standard = section.accounting_standard
+
+    bank_result = _extract_bank_ibd(section)
+    if bank_result is not None:
+        return bank_result
 
     resolved = resolve_ibd(section)
     tag, current, prior = resolved["tag"], resolved["current"], resolved["prior"]
