@@ -593,9 +593,10 @@ IFRS_TAX_MARKER_TAGS: list[str] = (
 # analysis/operating_profit.py で使用
 
 OPERATING_PROFIT_DIRECT_TAGS: list[str] = [
-    "OperatingProfitLossIFRS",   # IFRS連結
-    "OperatingIncomeLoss",       # J-GAAP連結（標準）
-    "OperatingIncome",           # J-GAAP（旧タグ / 個別フォールバック）
+    "OperatingProfitLossIFRS",        # IFRS連結
+    "OperatingIncomeLoss",            # J-GAAP連結（標準）
+    "OperatingIncome",                # J-GAAP（旧タグ / 個別フォールバック）
+    "USGAAP_HTML_OperatingIncome",   # US-GAAP HTML仮想タグ（parse_usgaap_html_pl_fields が生成）
 ]
 
 ORDINARY_INCOME_TAGS: list[str] = [
