@@ -625,10 +625,14 @@ INTEREST_EXPENSE_JGAAP_TAGS: list[str] = [
     "InterestExpensesNOE",
 ]
 
-# IFRS: 支払利息（InterestExpensesIFRS）を優先し、存在しない場合は金融費用合計（FinanceCostsIFRS）にフォールバック
+# IFRS: 支払利息タグ優先順
+# InterestExpensesIFRS → IFRS 7注記の償却原価測定負債利息 → 同資産変形 → 金融費用合計（最終フォールバック）
+# FinanceCostsIFRS は金融費用合計（支払利息＋その他）のため過大になることがある
 INTEREST_EXPENSE_IFRS_TAGS: list[str] = [
-    "InterestExpensesIFRS",   # 支払利息（推奨）
-    "FinanceCostsIFRS",       # 金融費用合計（フォールバック）
+    "InterestExpensesIFRS",                                              # 支払利息（P&L直接タグ）
+    "FinancialLiabilitiesMeasuredAtAmortizedCostInterestExpensesIFRS",  # 償却原価測定金融負債の利息（クボタ等）
+    "FinancialAssetsMeasuredAtAmortizedCostInterestExpensesIFRS",       # 同上（スズキ等の表記ゆれ）
+    "FinanceCostsIFRS",                                                  # 金融費用合計（最終フォールバック）
 ]
 
 IFRS_INTEREST_EXPENSE_MARKER_TAGS: list[str] = (
