@@ -375,6 +375,18 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "LongTermDebtNCLIFRS",          # IFRS 非流動負債 集約（社債+借入金合計）
         ],
     },
+    {
+        "label": "リース負債（流動）",
+        "tags": [
+            "LeaseObligationsCL",           # J-GAAP 流動リース負債
+        ],
+    },
+    {
+        "label": "リース負債（非流動）",
+        "tags": [
+            "LeaseObligationsNCL",          # J-GAAP 非流動リース負債
+        ],
+    },
 ]
 
 # 売上総利益（GP）タグ定義
@@ -837,10 +849,12 @@ IBD_CURRENT_COMPONENTS: list[list[str]] = [
     ["ShortTermBondsPayable"],
     ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "CurrentPortionOfBondsCLIFRS"],
     ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"],
+    ["LeaseObligationsCL"],
 ]
 IBD_NON_CURRENT_COMPONENTS: list[list[str]] = [
     ["BondsPayable", "BondsPayableNCLIFRS"],
     ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"],
+    ["LeaseObligationsNCL"],
 ]
 
 # IFRS 集約タグ（流動・非流動それぞれ1タグで全コンポーネントを集約）
