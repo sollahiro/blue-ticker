@@ -107,7 +107,8 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
         return None
 
     client = _CachedXbrlClient(cache_dir)
-    fetcher = EdinetFetcher(edinet_client=client)  # type: ignore[arg-type]
+    # cache_manager=None: smoke は常に XBRL ソースから再計算し、derived キャッシュを参照・書込みしない
+    fetcher = EdinetFetcher(edinet_client=client, cache_manager=None)  # type: ignore[arg-type]
     financial_record = {
         "CurPerType": "FY",
         "CurFYEn": fy_end,

@@ -1,5 +1,8 @@
 """
-smoke/prepare_cache.py — smoke企業の最新XBRLを tmp_cache/edinet/ に展開する。
+smoke/prepare_cache.py — smoke_expected/*.json が指定する期末日の XBRL を tmp_cache/edinet/ に展開する。
+
+決算期は fixture の fy_end に固定される。このスクリプトを何度実行しても
+同じ期末日の書類のみダウンロードされ、fixture の参照先が変わることはない。
 
 実行方法:
     poetry run python smoke/prepare_cache.py
@@ -7,64 +10,57 @@ smoke/prepare_cache.py — smoke企業の最新XBRLを tmp_cache/edinet/ に展�
 import asyncio
 import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from _common import FIXTURE_DIR, load_fixtures
 from blue_ticker.api.edinet_cache_store import EdinetCacheStore
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.infrastructure.settings import SettingsStore as Settings
 from blue_ticker.utils.edinet_discovery import build_document_index_for_code
+from blue_ticker.utils.fiscal_year import normalize_date_format
 
 SMOKE_CACHE_DIR = Path("tmp_cache/edinet")
 SEARCH_JSON_PATH = SMOKE_CACHE_DIR / "search_smoke.json"
-
-
-@dataclass(frozen=True)
-class SmokeCompany:
-    code: str
-    name: str
-    category: str
-
-
-DEFAULT_SMOKE_COMPANIES: tuple[SmokeCompany, ...] = (
-    SmokeCompany("4901", "富士フイルム",   "US-GAAP"),
-    SmokeCompany("7751", "キヤノン",       "US-GAAP/IFRS boundary"),
-    SmokeCompany("8306", "三菱UFJ",        "J-GAAP financial"),
-    SmokeCompany("8316", "三井住友",       "J-GAAP financial"),
-    SmokeCompany("6103", "オークマ",       "J-GAAP operating"),
-    SmokeCompany("6326", "クボタ",         "IFRS"),
-    SmokeCompany("2802", "味の素",         "IFRS"),
-    SmokeCompany("7269", "スズキ",         "IFRS/J-GAAP boundary"),
-    SmokeCompany("7422", "東邦レマック",   "J-GAAP nonconsolidated"),
-    SmokeCompany("3490", "アズ企画設計",   "J-GAAP nonconsolidated/consolidated boundary"),
-)
 
 
 async def main(api_key: str) -> None:
     cache_store = EdinetCacheStore(cache_dir=SMOKE_CACHE_DIR)
     client = EdinetAPIClient(api_key=api_key, cache_store=cache_store)
 
+    fixtures = load_fixtures()
+    if not fixtures:
+        print("smoke_expected/ にフィクスチャが見つかりません", file=sys.stderr)
+        sys.exit(1)
+
     all_docs: list[dict] = []
-    for company in DEFAULT_SMOKE_COMPANIES:
-        print(f"\n[{company.code}] {company.name} ({company.category})")
+    for fixture_id, fixture in fixtures:
+        code: str = fixture["code"]
+        fy_end: str = fixture["fy_end"]   # 固定された期末日。このスクリプトは変更しない
+        name: str = fixture.get("name", code)
+
+        print(f"\n[{code}] {name}  fy_end={fy_end}")
         try:
             docs, _ = await build_document_index_for_code(
-                company.code,
+                code,
                 client,
                 initial_scan_days=400,
-                analysis_years=2,
+                analysis_years=3,
             )
             annual = [d for d in docs if d.get("docTypeCode") == "120" and not d.get("_is_amendment")]
-            if not annual:
-                print("  → 有価証券報告書が見つかりません")
+
+            # fixture の fy_end に一致する書類のみ対象とする
+            target = next(
+                (d for d in annual if (normalize_date_format(str(d.get("periodEnd") or "")) or "") == fy_end),
+                None,
+            )
+            if target is None:
+                print(f"  → {fy_end} の有価証券報告書が見つかりません")
                 continue
 
-            latest = sorted(annual, key=lambda d: str(d.get("submitDateTime") or ""), reverse=True)[0]
-            doc_id = str(latest["docID"])
-            fy_end = str(latest.get("periodEnd") or "")
-            print(f"  → 最新: docID={doc_id}  期末={fy_end}")
+            doc_id = str(target["docID"])
+            print(f"  → docID={doc_id}")
 
             xbrl_path = await client.download_document(doc_id, doc_type=1, save_dir=SMOKE_CACHE_DIR)
             if xbrl_path:
@@ -72,7 +68,7 @@ async def main(api_key: str) -> None:
             else:
                 print("  → XBRLダウンロード失敗")
 
-            all_docs.append(latest)
+            all_docs.append(target)
         except Exception as exc:
             print(f"  → エラー: {exc}")
 
