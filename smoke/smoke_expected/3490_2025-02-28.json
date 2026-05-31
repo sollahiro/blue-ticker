@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "3490",
+  "name": "AZplanning",
+  "fy_end": "2025-02-28",
+  "income_statement": {
+    "sales": 12430301000.0,
+    "operating_profit": 975125000.0,
+    "net_profit": 461965000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 1941236000.0,
+    "method": "direct"
+  },
+  "balance_sheet": {
+    "total_assets": 13239919000.0,
+    "current_assets": 12588127000.0,
+    "non_current_assets": 651792000.0,
+    "current_liabilities": 3038170000.0,
+    "non_current_liabilities": 7243582000.0,
+    "net_assets": 2958166000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 9257387000.0,
+    "method": "field_parser"
+  },
+  "cash_flow": {
+    "cfo": -2014514000.0,
+    "cfi": -68814000.0
+  },
+  "employees": {
+    "current": 63.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 34258000.0
+  },
+  "interest_expense": {
+    "current": 131328000.0
+  },
+  "tax_expense": {
+    "pretax_income": 740629000.0,
+    "income_tax": 278663000.0,
+    "effective_tax_rate": 0.37625180758517424
+  },
+  "tangible_fixed_assets": {
+    "total": 466491000.0,
+    "buildings": 453778000.0,
+    "land": null,
+    "machinery": null,
+    "tools": 11577000.0,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

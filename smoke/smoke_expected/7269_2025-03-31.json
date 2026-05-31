@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "7269",
+  "name": "スズキ",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 5825161000000.0,
+    "operating_profit": 642851000000.0,
+    "net_profit": 416050000000.0,
+    "accounting_standard": "IFRS"
+  },
+  "gross_profit": {
+    "gross_profit": 1568659000000.0,
+    "method": "direct"
+  },
+  "balance_sheet": {
+    "total_assets": 5993657000000.0,
+    "current_assets": 2528681000000.0,
+    "non_current_assets": 3464976000000.0,
+    "current_liabilities": 1602557000000.0,
+    "non_current_liabilities": 703029000000.0,
+    "net_assets": 3688070000000.0,
+    "accounting_standard": "IFRS"
+  },
+  "interest_bearing_debt": {
+    "total": 757838000000.0,
+    "method": "field_parser+lease_textblock"
+  },
+  "cash_flow": {
+    "cfo": 669784000000.0,
+    "cfi": -475605000000.0
+  },
+  "employees": {
+    "current": 74077.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 249856000000.0
+  },
+  "interest_expense": {
+    "current": 13321000000.0
+  },
+  "tax_expense": {
+    "pretax_income": 730220000000.0,
+    "income_tax": 200503000000.0,
+    "effective_tax_rate": 0.2745788940319356
+  },
+  "tangible_fixed_assets": {
+    "total": 1673471000000.0,
+    "buildings": 374598000000.0,
+    "land": 410723000000.0,
+    "machinery": 537374000000.0,
+    "tools": 127716000000.0,
+    "construction_in_progress": 223058000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

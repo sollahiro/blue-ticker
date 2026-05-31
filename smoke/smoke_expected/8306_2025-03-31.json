@@ -1,0 +1,66 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "8306",
+  "name": "三菱UFJ",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 13629997000000.0,
+    "operating_profit": 2669483000000.0,
+    "net_profit": 1862946000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 4819211000000.0,
+    "method": "business_gross_profit"
+  },
+  "balance_sheet": {
+    "total_assets": 413113501000000.0,
+    "current_assets": null,
+    "non_current_assets": null,
+    "current_liabilities": null,
+    "non_current_liabilities": null,
+    "net_assets": 21728132000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 286855946000000.0,
+    "method": "bank_components"
+  },
+  "cash_flow": {
+    "cfo": 6415000000.0,
+    "cfi": -186948000000.0
+  },
+  "employees": {
+    "current": 156253.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 378476000000.0
+  },
+  "interest_expense": {
+    "current": null
+  },
+  "tax_expense": {
+    "pretax_income": 2550634000000.0,
+    "income_tax": 609156000000.0,
+    "effective_tax_rate": 0.23882532734998435
+  },
+  "tangible_fixed_assets": {
+    "total": 1240104000000.0,
+    "buildings": 285624000000.0,
+    "land": 600852000000.0,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": 33974000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": 228512749000000.0,
+    "loans": 121436133000000.0,
+    "cash_due_from_banks": 109095437000000.0,
+    "negotiable_cds": 17374010000000.0
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "4901",
+  "name": "富士フイルム",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 3195828000000.0,
+    "operating_profit": 330155000000.0,
+    "net_profit": 260951000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 1300079000000.0,
+    "method": "usgaap_html"
+  },
+  "balance_sheet": {
+    "total_assets": 5249908000000.0,
+    "current_assets": 1581681000000.0,
+    "non_current_assets": 3668227000000.0,
+    "current_liabilities": 1125940000000.0,
+    "non_current_liabilities": 771286000000.0,
+    "net_assets": 3352682000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 802285000000.0,
+    "method": "field_parser+lease_html"
+  },
+  "cash_flow": {
+    "cfo": 428162000000.0,
+    "cfi": -541953000000.0
+  },
+  "employees": {
+    "current": 72593.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 163567000000.0
+  },
+  "interest_expense": {
+    "current": 8752000000.0
+  },
+  "tax_expense": {
+    "pretax_income": 340594000000.0,
+    "income_tax": 77595000000.0,
+    "effective_tax_rate": 0.227822568806262
+  },
+  "tangible_fixed_assets": {
+    "total": 1786475000000.0,
+    "buildings": 934470000000.0,
+    "land": 110067000000.0,
+    "machinery": 1717518000000.0,
+    "tools": null,
+    "construction_in_progress": 888245000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

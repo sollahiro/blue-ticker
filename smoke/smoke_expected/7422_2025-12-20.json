@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "7422",
+  "name": "東邦レマック",
+  "fy_end": "2025-12-20",
+  "income_statement": {
+    "sales": 4547599000.0,
+    "operating_profit": -120634000.0,
+    "net_profit": 17478000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 1313391000.0,
+    "method": "direct"
+  },
+  "balance_sheet": {
+    "total_assets": 6705070000.0,
+    "current_assets": 4364732000.0,
+    "non_current_assets": 2340337000.0,
+    "current_liabilities": 1394932000.0,
+    "non_current_liabilities": 788442000.0,
+    "net_assets": 4521695000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 1529999000.0,
+    "method": "field_parser"
+  },
+  "cash_flow": {
+    "cfo": -482098000.0,
+    "cfi": -306697000.0
+  },
+  "employees": {
+    "current": 74.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 51445000.0
+  },
+  "interest_expense": {
+    "current": 7413000.0
+  },
+  "tax_expense": {
+    "pretax_income": 50927000.0,
+    "income_tax": 33449000.0,
+    "effective_tax_rate": 0.6568028747030062
+  },
+  "tangible_fixed_assets": {
+    "total": 1782608000.0,
+    "buildings": 408929000.0,
+    "land": 1301925000.0,
+    "machinery": 56536000.0,
+    "tools": 5215000.0,
+    "construction_in_progress": 10000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

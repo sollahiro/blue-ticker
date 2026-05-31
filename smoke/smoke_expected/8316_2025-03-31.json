@@ -1,0 +1,66 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "8316",
+  "name": "三井住友",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 10174894000000.0,
+    "operating_profit": 1719482000000.0,
+    "net_profit": 1177996000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 4126745000000.0,
+    "method": "business_gross_profit"
+  },
+  "balance_sheet": {
+    "total_assets": 306282015000000.0,
+    "current_assets": null,
+    "non_current_assets": null,
+    "current_liabilities": null,
+    "non_current_liabilities": null,
+    "net_assets": 14841509000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 216796326000000.0,
+    "method": "bank_components"
+  },
+  "cash_flow": {
+    "cfo": 4848464000000.0,
+    "cfi": -4512943000000.0
+  },
+  "employees": {
+    "current": 122978.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 247868000000.0
+  },
+  "interest_expense": {
+    "current": null
+  },
+  "tax_expense": {
+    "pretax_income": 1699943000000.0,
+    "income_tax": 513065000000.0,
+    "effective_tax_rate": 0.3018130607908618
+  },
+  "tangible_fixed_assets": {
+    "total": 1006556000000.0,
+    "buildings": 329897000000.0,
+    "land": 409805000000.0,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": 48832000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": 171498651000000.0,
+    "loans": 111136239000000.0,
+    "cash_due_from_banks": 75590583000000.0,
+    "negotiable_cds": 17175391000000.0
+  }
+}

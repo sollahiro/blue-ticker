@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "7751",
+  "name": "キヤノン",
+  "fy_end": "2025-12-31",
+  "income_statement": {
+    "sales": 4624727000000.0,
+    "operating_profit": 455390000000.0,
+    "net_profit": 332053000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 2161955000000.0,
+    "method": "usgaap_html"
+  },
+  "balance_sheet": {
+    "total_assets": 6135044000000.0,
+    "current_assets": 2617021000000.0,
+    "non_current_assets": 3518023000000.0,
+    "current_liabilities": 1704060000000.0,
+    "non_current_liabilities": 656856000000.0,
+    "net_assets": 3774128000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 946159000000.0,
+    "method": "field_parser+lease_html"
+  },
+  "cash_flow": {
+    "cfo": 475903000000.0,
+    "cfi": -237450000000.0
+  },
+  "employees": {
+    "current": 165547.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 239236000000.0
+  },
+  "interest_expense": {
+    "current": 7305000000.0
+  },
+  "tax_expense": {
+    "pretax_income": 482059000000.0,
+    "income_tax": 123906000000.0,
+    "effective_tax_rate": 0.2570349272599412
+  },
+  "tangible_fixed_assets": {
+    "total": 1190682000000.0,
+    "buildings": 1985101000000.0,
+    "land": 287167000000.0,
+    "machinery": 2121606000000.0,
+    "tools": null,
+    "construction_in_progress": 91613000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

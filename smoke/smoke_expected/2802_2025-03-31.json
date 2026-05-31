@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "2802",
+  "name": "味の素",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 1530556000000.0,
+    "operating_profit": 113968000000.0,
+    "net_profit": 70272000000.0,
+    "accounting_standard": "IFRS"
+  },
+  "gross_profit": {
+    "gross_profit": 550764000000.0,
+    "method": "direct"
+  },
+  "balance_sheet": {
+    "total_assets": 1721131000000.0,
+    "current_assets": 701298000000.0,
+    "non_current_assets": 1019833000000.0,
+    "current_liabilities": 384588000000.0,
+    "non_current_liabilities": 523270000000.0,
+    "net_assets": 813273000000.0,
+    "accounting_standard": "IFRS"
+  },
+  "interest_bearing_debt": {
+    "total": 496059000000.0,
+    "method": "field_parser+lease_textblock"
+  },
+  "cash_flow": {
+    "cfo": 209898000000.0,
+    "cfi": -77382000000.0
+  },
+  "employees": {
+    "current": 34860.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 86461000000.0
+  },
+  "interest_expense": {
+    "current": 8624000000.0
+  },
+  "tax_expense": {
+    "pretax_income": 108330000000.0,
+    "income_tax": 27556000000.0,
+    "effective_tax_rate": 0.25437090372011445
+  },
+  "tangible_fixed_assets": {
+    "total": 581330000000.0,
+    "buildings": 244337000000.0,
+    "land": 46252000000.0,
+    "machinery": 212696000000.0,
+    "tools": 23870000000.0,
+    "construction_in_progress": 54172000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  }
+}

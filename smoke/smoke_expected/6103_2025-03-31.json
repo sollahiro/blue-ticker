@@ -1,0 +1,60 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "code": "6103",
+  "name": "オークマ",
+  "fy_end": "2025-03-31",
+  "income_statement": {
+    "sales": 206822000000.0,
+    "operating_profit": 14651000000.0,
+    "net_profit": 9590000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 65636000000.0,
+    "method": "direct"
+  },
+  "balance_sheet": {
+    "total_assets": 298168000000.0,
+    "current_assets": 184600000000.0,
+    "non_current_assets": 113568000000.0,
+    "current_liabilities": 42737000000.0,
+    "non_current_liabilities": 17365000000.0,
+    "net_assets": 238065000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 10000000000.0,
+    "method": "field_parser"
+  },
+  "cash_flow": {
+    "cfo": 17802000000.0,
+    "cfi": -15257000000.0
+  },
+  "employees": {
+    "current": 4071.0,
+    "method": "direct"
+  },
+  "depreciation": {
+    "current": 9209000000.0
+  },
+  "interest_expense": {
+    "current": 89000000.0
+  },
+  "tax_expense": {
+    "pretax_income": 15039000000.0,
+    "income_tax": 5277000000.0,
+    "effective_tax_rate": 0.35088769200079795
+  },
+  "tangible_fixed_assets": {
+    "total": 54419000000.0,
+    "buildings": 28394000000.0,
+    "land": 10116000000.0,
+    "machinery": 7947000000.0,
+    "tools": null,
+    "construction_in_progress": 2960000000.0
+  },
+  "order_book": {
+    "order_intake": 215627000000.0,
+    "order_backlog": 96452000000.0
+  }
+}
