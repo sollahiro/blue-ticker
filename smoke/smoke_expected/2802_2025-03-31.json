@@ -23,7 +23,7 @@
     "accounting_standard": "IFRS"
   },
   "interest_bearing_debt": {
-    "total": 496059000000.0,
+    "total": 496060000000.0,
     "method": "field_parser+lease_textblock"
   },
   "cash_flow": {
