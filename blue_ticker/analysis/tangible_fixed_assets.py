@@ -131,12 +131,14 @@ def extract_tangible_fixed_assets(section: BalanceSheetSection) -> TangibleFixed
         tools = _resolve_ppe_item(section, PPE_TOOLS_JGAAP_DIRECT)
         construction = _resolve_ppe_item(section, PPE_CONSTRUCTION_JGAAP_DIRECT)
 
-    else:
+    else:  # US-GAAP
+        # 建物・機械は取得原価のみ開示（per-item 減価償却不明）のため null
+        # 土地・建設仮勘定は非償却資産のため取得原価 = 帳簿価額
         buildings = None
-        land = None
+        land = section.resolve(["USGAAP_HTML_Land"])["current"]
         machinery = None
         tools = None
-        construction = None
+        construction = section.resolve(["USGAAP_HTML_ConstructionInProgress"])["current"]
 
     known = [v for v in (buildings, land, machinery, tools, construction) if v is not None]
     others: float | None = total - sum(known) if known else None

@@ -24,13 +24,17 @@ from blue_ticker.constants.financial import MILLION_YEN
 # US-GAAP 連結財政状態計算書 HTML → 仮想タグマッピング
 _USGAAP_BS_HTML_LABEL_MAP: dict[str, str] = {
     "流動資産合計":                             "USGAAP_HTML_CurrentAssets",
-    "有形固定資産合計":                         "USGAAP_HTML_PPENet",
+    "有形固定資産合計":                         "USGAAP_HTML_PPENet",   # 富士フイルム形式
+    "有形固定資産":                             "USGAAP_HTML_PPENet",   # キヤノン形式（節番号付き「Ⅳ　有形固定資産」）
     "投資及び長期債権合計":                     "USGAAP_HTML_InvestmentsLTReceivables",
     "その他の資産合計":                         "USGAAP_HTML_OtherNCA",
     "流動負債合計":                             "USGAAP_HTML_CurrentLiabilities",
     "固定負債合計":                             "USGAAP_HTML_NonCurrentLiabilities",
     "負債合計":                                 "USGAAP_HTML_TotalLiabilities",
     "純資産合計":                               "USGAAP_HTML_NetAssets",
+    # PPE 内訳（取得原価ゼロ確定項目のみ。建物・機械は取得原価のみ開示のため除外）
+    "土地":                                     "USGAAP_HTML_Land",
+    "建設仮勘定":                               "USGAAP_HTML_ConstructionInProgress",
     # 富士フイルム形式 IBD ラベル
     "社債及び短期借入金":                       "USGAAP_HTML_IBDCurrent",
     "社債及び長期借入金":                       "USGAAP_HTML_IBDNonCurrent",
