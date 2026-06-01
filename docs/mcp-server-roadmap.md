@@ -1,7 +1,7 @@
 # MCP サーバーと backend 移行ロードマップ
 
 作成日: 2026-05-06
-最終更新: 2026-05-30
+最終更新: 2026-06-01
 
 blue-ticker は **3 つのデプロイモード**を持つ。EDINET データを誰が取得するかが主な違い。
 
@@ -11,7 +11,7 @@ blue-ticker は **3 つのデプロイモード**を持つ。EDINET データを
 | **remote (self-host)** | 同一マシン | blt-server | CLI | Phase 2/3 以降 |
 | **remote (cloud)** | リモートサーバー | blt-server | CLI・MCP | 将来検討 |
 
-**Phase 4（進行中）**: remote (self-host) 上で blt-server を起動し、MCP クライアント（Claude.ai 等）から接続する形で暫定稼働中。MCP の本番形態は remote (cloud) を想定。
+**Phase 4（完了）**: remote (self-host) 上で blt-server を起動し、MCP クライアント（Claude.ai 等）から接続する形で稼働中。MCP の本番形態は remote (cloud) を想定。
 
 ---
 
@@ -23,7 +23,7 @@ flowchart TD
     Chatbot["AI チャットボット\n(Claude.ai 等)"]
 
     Agent -->|"local CLI（現行）"| EdinetAPI["EDINET API"]
-    Agent -->|"remote self-host\n（Phase 2/3）"| SelfServer["blt-server\n（同一マシン）"]
+    Agent -->|"remote self-host\n（Phase 3）"| SelfServer["blt-server\n（同一マシン）"]
     Agent -->|"remote cloud\n（将来）"| CloudServer["blt-server\n（リモート）"]
 
     Chatbot -->|"MCP（Phase 4 暫定）"| SelfServer
@@ -122,7 +122,7 @@ server = [
 | `blue_ticker/api/edinet_client.py` | 具象 `EdinetCacheStore` ではなく `EdinetCacheBackend` を受け取る |
 | `tests/test_edinet_client.py` | メモリ backend を差し込み、抽象境界で動くことを確認 |
 
-### Phase 4: MCP サーバー初期実装（進行中）
+### Phase 4: MCP サーバー初期実装（完了）
 
 自己ホスト・認証なし・共有データストア方式で `mcp_server/` モジュールを新設した。
 
@@ -173,7 +173,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 | Stage 1 | **実装済み** | `sync/document_list.py`。既存 `cache catchup` と同等ロジック |
 | Stage 2 | 未実装 | 将来拡張 |
 | Stage 3 | 未実装 | 将来拡張 |
-| Stage 4 | バッチ未実装（オンデマンドで代替中） | `get_financial_summary` 呼び出し時にオンデマンドで実行・キャッシュ |
+| Stage 4 | バッチ未実装（オンデマンドで代替中） | `get_financial_summary` 呼び出し時にオンデマンドで XBRL 取得・解析・計算を実行してキャッシュ。キャッシュ未ヒット時は応答が数十秒かかる場合がある |
 
 #### MCP ツール一覧
 
@@ -207,6 +207,17 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 ##### `get_financial_summary` レスポンス例
 
 金額は百万円（JPY）、比率は %、株主指標は円。
+
+`financial_period` の値域: `"FY"`（通期）/ `"HY"`（半期）。
+
+主なフィールドの定義:
+
+| フィールド | 定義 |
+|---|---|
+| `cfo` | 営業キャッシュフロー |
+| `cfi` | 投資キャッシュフロー |
+| `cfc` | フリーキャッシュフロー近似値（= CFO + CFI） |
+| `wacc` | 加重平均資本コスト（%）。無リスク金利は MOF 公表データを使用。算出不能な場合は `null` |
 
 ```json
 {
@@ -296,7 +307,7 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 - remote backend では CLI から EDINET API キーを使わない。
 - remote cache の TTL や更新方針はサーバー側で管理する。
 
-### Phase 4: self-hosted MCP 暫定稼働（進行中）
+### Phase 4: self-hosted MCP 暫定稼働（完了）
 
 目的: remote (self-host) 上で MCP を先行稼働させ、AI チャットボットからの財務データアクセスを実現する。本番形態は remote (cloud) への移行を想定。
 
@@ -339,18 +350,19 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ### 必須（blt-server を使い始める前に）
 
-- [ ] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
-- [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key`）
+- [x] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
+- [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key <KEY>`）
 - [ ] `blt-server` で起動確認し、`sync_document_list` ツールで書類一覧を初回同期する
 
 ### 近期（Stage 1 安定化）
 
-- [ ] `sync_document_list` の定期実行を cron または launchd で設定する（例: 毎朝 7:00）
-- [ ] Stage 1 に `status.json` を追加する（同期済み日付・最終実行日時を記録。Stage 2 実装前の前提）
+- [ ] `sync_document_list` の定期実行を launchd で設定する（plist: `blue_ticker/mcp_server/sync/com.blue-ticker.sync-document-list.plist`。plist 内のコメントを参照）
+- [x] Stage 1 に `status.json` を追加する（`blue_ticker/mcp_server/sync/document_list.py` の `_write_stage1_status()` で実装済み。実行時に `analysis_cache/external/edinet/stage1_status.json` へ書き込む）
+- [x] local CLI と blt-server が同一マシンで並走した場合の `CacheManager.set()` 同時書き込み問題を修正した（`blue_ticker/utils/cache.py` の `set()` を temp file + rename による atomic write に変更済み）
 
 ### 中期（remote CLI 採用を決断した場合）
 
-- [ ] Phase 2: `ticker config set edinet-backend remote` のサポートを実装する
+- [x] Phase 2: `ticker config set edinet-backend remote` のサポートを実装する（`SettingsStore.edinet_backend` プロパティ追加・`config set` / `config check` 対応済み。remote は現状 local と同動作で「未対応」を通知）
 - [ ] `services/data_service.py` の「取得部分」と「計算部分」を分割する（Phase 3 の前提）
   - 取得部分（EDINET 通信・XBRL 展開）: サーバー側で完結
   - 計算部分（YoY 差分・比率計算）: `data_service` / `analyzer.py` が担う（`get_financial_summary` ツールはその結果を整形して返す薄い公開境界）

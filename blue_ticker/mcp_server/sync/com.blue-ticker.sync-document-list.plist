@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd plist for sync_document_list daily batch.
+
+  Usage:
+    cp com.blue-ticker.sync-document-list.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.blue-ticker.sync-document-list.plist
+
+  The job runs daily at 07:00 and syncs 3 years of EDINET document indexes.
+  Logs are written to ~/Library/Logs/blue-ticker/.
+
+  To unload:
+    launchctl unload ~/Library/LaunchAgents/com.blue-ticker.sync-document-list.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.blue-ticker.sync-document-list</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Replace with the absolute path to the poetry-managed python, e.g.:
+             $(poetry env info --path)/bin/python -->
+        <string>/usr/bin/env</string>
+        <string>python</string>
+        <string>-c</string>
+        <string>
+import asyncio
+from blue_ticker.mcp_server.sync.document_list import sync_document_list
+result = asyncio.run(sync_document_list(years=3))
+print(result)
+        </string>
+    </array>
+
+    <!-- Run daily at 07:00 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/shutosorahiro/Library/Logs/blue-ticker/sync-document-list.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/shutosorahiro/Library/Logs/blue-ticker/sync-document-list.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

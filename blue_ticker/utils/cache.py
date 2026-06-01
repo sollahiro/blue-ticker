@@ -210,13 +210,19 @@ class CacheManager:
         cache_file = self._get_cache_file_path(key)
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         
-        # データを保存
+        # データを atomic write で保存（同一ファイルシステム上の rename はアトミック）
+        tmp = cache_file.with_name(f".{cache_file.name}.{uuid.uuid4().hex}.tmp")
         try:
-            with open(cache_file, "w", encoding="utf-8") as f:
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(value, f, ensure_ascii=False, cls=_NumpyEncoder)
+            tmp.replace(cache_file)
         except (TypeError, IOError) as e:
             # キャッシュ保存に失敗しても処理は続行
             logger.warning(f"キャッシュの保存に失敗しました: {e}")
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
             return
 
         # メタデータを更新

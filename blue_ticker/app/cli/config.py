@@ -38,6 +38,8 @@ def cmd_config(args, parser):
         key_map = {
             "edinetApiKey": "edinetApiKey",
             "edinet-key": "edinetApiKey",
+            "edinetBackend": "edinetBackend",
+            "edinet-backend": "edinetBackend",
         }
 
         raw_key: str = args.key or ""
@@ -48,14 +50,23 @@ def cmd_config(args, parser):
         target_key: str = key_map[raw_key]
         target_value = args.value
 
+        if target_key == "edinetBackend" and target_value not in ("local", "remote"):
+            print(f"エラー: edinet-backend の値は 'local' または 'remote' を指定してください。", file=sys.stderr)
+            return
+
+        if target_key == "edinetBackend" and target_value == "remote":
+            print("注意: remote バックエンドは未対応です（Phase 3 未実装）。設定は保存しますが、動作は local と同じになります。", file=sys.stderr)
+
         settings_store.update({target_key: target_value}, save=True)
-        print(f"設定を更新しました: {target_key}", file=sys.stderr)
+        print(f"設定を更新しました: {target_key} = {target_value}", file=sys.stderr)
 
     elif args.config_subcommand == "check":
         e_key = settings_store.edinet_api_key
+        backend = settings_store.edinet_backend
         print("\nAPI設定チェック:", file=sys.stderr)
         print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}", file=sys.stderr)
-        if not e_key:
+        print(f"  EDINET バックエンド: {backend}", file=sys.stderr)
+        if not e_key and backend == "local":
             print("\n未設定のキーは以下のコマンドで設定できます:", file=sys.stderr)
             print("  ticker config set edinet-key <KEY>", file=sys.stderr)
 

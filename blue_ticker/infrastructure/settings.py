@@ -38,6 +38,7 @@ class SettingsStore:
             "edinetApiKey": "",
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
+            "edinetBackend": "local",
         }
         
         self.config_path = self.user_data_path / "config.json"
@@ -63,6 +64,13 @@ class SettingsStore:
             for key in ["edinetApiKey"]:
                 if key in config_data:
                     self._settings[key] = config_data[key]
+
+            if "edinetBackend" in config_data:
+                val = config_data["edinetBackend"]
+                if val in ("local", "remote"):
+                    self._settings["edinetBackend"] = val
+                else:
+                    logger.warning(f"edinetBackend の値が不正です ({val!r})。デフォルト値 'local' を使用します。")
 
             if "cacheEnabled" in config_data:
                 val = config_data["cacheEnabled"]
@@ -93,7 +101,9 @@ class SettingsStore:
             
             # APIキーは空文字にしておく（キーチェーン優先のため）
             save_data["edinetApiKey"] = ""
-            
+            # 保存対象フィールドを明示（不要フィールドの混入を防ぐ）
+            save_data = {k: save_data[k] for k in ("cacheDir", "cacheEnabled", "edinetBackend") if k in save_data}
+
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(save_data, f, indent=2, ensure_ascii=False)
             return True
@@ -206,6 +216,11 @@ class SettingsStore:
     @property
     def cache_enabled(self) -> bool:
         return self._settings.get("cacheEnabled", True)
+
+    @property
+    def edinet_backend(self) -> str:
+        """EDINET バックエンド種別。"local"（直接アクセス）または "remote"（blt-server 経由）。"""
+        return self._settings.get("edinetBackend", "local")
 
 
 # グローバル設定インスタンス
