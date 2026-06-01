@@ -38,6 +38,7 @@ from blue_ticker.analysis.usgaap.html_fields import (
 )
 from blue_ticker.constants.xbrl import (
     ALL_STANDARD_BS_ITEMS,
+    BANK_BORROWED_MONEY_TAGS,
     BANK_CASH_DUE_FROM_BANKS_TAGS,
     BANK_DEPOSITS_TAGS,
     BANK_LOANS_TAGS,
@@ -291,6 +292,7 @@ def _bs_all_tags() -> frozenset[str]:
     tags += BANK_LOANS_TAGS
     tags += BANK_CASH_DUE_FROM_BANKS_TAGS
     tags += BANK_NEGOTIABLE_CD_TAGS
+    tags += BANK_BORROWED_MONEY_TAGS
     return frozenset(tags)
 
 

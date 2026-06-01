@@ -961,6 +961,10 @@ BANK_NEGOTIABLE_CD_TAGS: list[str] = [
     "NegotiableCertificatesOfDepositLiabilitiesBNK",  # J-GAAP 譲渡性預金（負債）
 ]
 
+BANK_BORROWED_MONEY_TAGS: list[str] = [
+    "BorrowedMoneyLiabilitiesBNK",  # J-GAAP 借用金（負債）
+]
+
 # 銀行業 有利子負債コンポーネント定義
 # analysis/interest_bearing_debt.py で使用
 # DepositsLiabilitiesBNK の存在を銀行業判定マーカーとする
