@@ -32,21 +32,18 @@ def test_calculate_metrics_preserves_sales_label_from_xbrl_record():
 
 
 def test_annual_financial_period():
-    print("Testing annual financial period calculation...")
     annual_data = [
         {"CurFYEn": "20240331", "CurPerType": "FY", "Sales": 1000000000, "ShOutFY": 1000},
         {"CurFYEn": "20230331", "CurPerType": "FY", "Sales": 900000000, "ShOutFY": 1000}
     ]
-    
+
     metrics = calculate_metrics_flexible(annual_data, analysis_years=2)
-    
+
     years = metrics.get("years")
     assert years is not None
     assert len(years) == 2
-
     assert years[0]["FinancialPeriod"] == "2024年03月期"
     assert years[1]["FinancialPeriod"] == "2023年03月期"
-    print("Annual test passed!")
 
 
 def test_eps_bps_remain_raw_values_without_share_adjustment():
