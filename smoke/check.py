@@ -208,6 +208,7 @@ async def _main() -> int:
         return 1
 
     total_diffs = 0
+    total_compared = 0
     for fixture_id, fixture in fixtures:
         if not has_any_expected_value(fixture):
             print(f"SKIP  {fixture_id}: 全フィールドが null")
@@ -222,6 +223,7 @@ async def _main() -> int:
             print(f"SKIP  {fixture_id}: キャッシュなし")
             continue
 
+        total_compared += 1
         diffs = _compare(fixture, actuals)
         if diffs:
             print(f"\nDIFF  {name} ({fy_end})")
@@ -239,6 +241,9 @@ async def _main() -> int:
         else:
             print(f"OK    {name} ({fy_end})")
 
+    if total_compared == 0:
+        print("\nERROR: 比較できたフィクスチャが0件です。XBRLキャッシュを確認してください。", file=sys.stderr)
+        return 1
     if total_diffs > 0:
         print(f"\n{total_diffs} 件の差分があります。意図的な変更なら update_fixtures.py を実行してください。")
         return 1
