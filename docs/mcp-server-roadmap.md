@@ -1,7 +1,7 @@
 # MCP サーバーと backend 移行ロードマップ
 
 作成日: 2026-05-06
-最終更新: 2026-06-01
+最終更新: 2026-06-03
 
 blue-ticker は **3 つのデプロイモード**を持つ。EDINET データを誰が取得するかが主な違い。
 
@@ -11,7 +11,9 @@ blue-ticker は **3 つのデプロイモード**を持つ。EDINET データを
 | **remote (self-host)** | 同一マシン | blt-server | CLI | Phase 2/3 以降 |
 | **remote (cloud)** | リモートサーバー | blt-server | CLI・MCP | 将来検討 |
 
-**Phase 4（完了）**: remote (self-host) 上で blt-server を起動し、MCP クライアント（Claude.ai 等）から接続する形で稼働中。MCP の本番形態は remote (cloud) を想定。
+**Phase 4（完了）**: `blt-server` の実装・起動確認済み。MCP の本番形態は remote (cloud) を想定。
+
+**Claude.ai カスタムコネクタからの接続について**: Claude.ai はクラウドサービスのため、`127.0.0.1`（localhost）には到達できない。Claude.ai から接続するには外部公開が必要（後述の「外部公開」セクションを参照）。Claude Code（ローカル CLI）からは `127.0.0.1:8000` で接続可能。
 
 ---
 
@@ -346,13 +348,61 @@ Stage 4  財務指標計算   xbrl_numeric_index → analysis_cache/derived/anal
 
 ---
 
+## 外部公開（Claude.ai から接続する場合）
+
+Claude.ai のカスタムコネクタは Anthropic のクラウドサーバーから接続するため、`127.0.0.1` には到達できない。外部公開には以下の方法がある。
+
+### Cloudflare Tunnel（推奨）
+
+ポート開放・固定IP不要でローカルの blt-server をインターネット公開できる。
+
+```
+Claude.ai (クラウド)
+    ↓ HTTPS
+Cloudflare エッジサーバー
+    ↓ 暗号化トンネル
+cloudflared（ローカルデーモン）
+    ↓
+blt-server (127.0.0.1:8000)
+```
+
+**一時トンネル**（試用・毎回 URL が変わる）:
+```bash
+cloudflared tunnel --url http://localhost:8000
+# => https://xxxx-xxxx.trycloudflare.com/mcp を Claude.ai に設定
+```
+
+**固定URLトンネル**（Cloudflare アカウント＋独自ドメイン必要）:
+```bash
+cloudflared tunnel create blue-ticker
+cloudflared tunnel route dns blue-ticker mcp.yourdomain.com
+cloudflared tunnel run blue-ticker
+```
+
+### セキュリティ上の注意
+
+現在の blt-server は**認証なし**（ローカルネットワーク前提の設計）。外部公開する場合のリスク：
+
+| リスク | 内容 |
+|---|---|
+| API クォータ消費 | `get_financial_summary` 等で EDINET API を外部から叩かれる |
+| データ抽出 | 有報テキストを無制限に取得される |
+| 負荷 | `sync_document_list` への大量リクエスト |
+
+**最低限の対策**: Cloudflare Access（無料）でメール OTP 認証を追加する。指定メールアドレスのみ通過させられる。
+
+OAuth の本格実装はロードマップの「将来」フェーズ。
+
+---
+
 ## TODO
 
 ### 必須（blt-server を使い始める前に）
 
 - [x] `poetry install --with server` を実行する（`mcp` は server group のため通常インストールには含まれない）
+- [x] `blt-server` 起動確認済み（2026-06-03）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する（`ticker config set edinet-key <KEY>`）
-- [ ] `blt-server` で起動確認し、`sync_document_list` ツールで書類一覧を初回同期する
+- [ ] `sync_document_list` ツールで書類一覧を初回同期する
 
 ### 近期（Stage 1 安定化）
 
