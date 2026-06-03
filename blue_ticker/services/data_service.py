@@ -10,12 +10,6 @@ from typing import Any
 from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.infrastructure.settings import settings_store
-from blue_ticker.constants.financial import (
-    PERCENT,
-    WACC_DEFAULT_BETA,
-    WACC_MARKET_RISK_PREMIUM,
-    WACC_RF_FALLBACK,
-)
 from blue_ticker.utils.cache import CacheManager
 from blue_ticker.utils.cache_paths import edinet_cache_dir
 from blue_ticker.utils.fiscal_year import parse_date_string
@@ -92,36 +86,6 @@ def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
             return True
     return False
 
-
-def _has_fallback_mof_metrics(cached: dict[str, Any]) -> bool:
-    """MOF 金利取得失敗時のフォールバック Rf で作られた分析キャッシュを検出する。"""
-    metrics = cached.get("metrics")
-    if not isinstance(metrics, dict):
-        return False
-    years = metrics.get("years")
-    if not isinstance(years, list):
-        return False
-
-    fallback_cost_of_equity = (WACC_RF_FALLBACK + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM) * PERCENT
-    for year in years:
-        if not isinstance(year, dict):
-            continue
-        calculated = year.get("CalculatedData")
-        if not isinstance(calculated, dict):
-            continue
-        sources = calculated.get("MetricSources")
-        cost_of_equity_source = sources.get("CostOfEquity") if isinstance(sources, dict) else None
-        if not isinstance(cost_of_equity_source, dict) or cost_of_equity_source.get("source") != "mof":
-            continue
-        rf_source = cost_of_equity_source.get("rf_source")
-        if rf_source == "fallback":
-            return True
-        if rf_source is not None:
-            continue
-        cost_of_equity = calculated.get("CostOfEquity")
-        if isinstance(cost_of_equity, float) and cost_of_equity == fallback_cost_of_equity:
-            return True
-    return False
 
 
 def _latest_doc_id_from_analysis_cache(cached: dict[str, Any]) -> str | None:
@@ -315,7 +279,6 @@ class DataService:
                 cached
                 and cached.get("_cache_version") == _CACHE_VERSION
                 and not _has_incomplete_edinet_metrics(cached)
-                and not _has_fallback_mof_metrics(cached)
                 and (analysis_years is None or _analysis_year_count(cached) >= analysis_years)
             ):
                 result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}

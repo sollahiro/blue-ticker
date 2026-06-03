@@ -21,7 +21,6 @@ from blue_ticker.services.analyzer import (
     _apply_depreciation,
     _apply_cash_conversion_analysis,
     _apply_order_book,
-    _apply_wacc,
     _resolve_tax_rate,
 )
 from blue_ticker.utils.metrics_types import YearEntry
@@ -30,10 +29,6 @@ from blue_ticker.constants.financial import (
     MILLION_YEN,
     NOPAT_FALLBACK_TAX_RATE,
     PERCENT,
-    WACC_DEFAULT_BETA,
-    WACC_LABEL_MISSING_INPUT,
-    WACC_MARKET_RISK_PREMIUM,
-    WACC_RF_FALLBACK,
 )
 
 
@@ -511,106 +506,6 @@ class TestApplyEmployees:
         years = [_make_year("2024-03-31")]
         _apply_employees(years, {"20240331": {"current": None}})
         assert "Employees" not in years[0]["CalculatedData"]
-
-
-# ──────────────────────────────────────────────────────────────
-# _apply_wacc
-# ──────────────────────────────────────────────────────────────
-
-class TestApplyWacc:
-    # rf_rates={} → get_rf_for_date がフォールバック値 WACC_RF_FALLBACK を使う
-    _RF = WACC_RF_FALLBACK
-    _RE = (_RF + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM) * PERCENT
-
-    def test_sets_cost_of_equity(self):
-        years = [_make_year("2024-03-31", NetAssets=800.0)]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        assert cd["CostOfEquity"] == pytest.approx(self._RE)
-        assert cd["MetricSources"]["CostOfEquity"]["rf"] == WACC_RF_FALLBACK
-        assert cd["MetricSources"]["CostOfEquity"]["rf_source"] == "fallback"
-
-    def test_sets_mof_rf_source(self):
-        years = [_make_year("2024-03-31", NetAssets=800.0)]
-        _apply_wacc(years, {"2024-03-31": 0.01})
-        cd = years[0]["CalculatedData"]
-        assert cd["CostOfEquity"] == pytest.approx(self._RE)
-        assert cd["MetricSources"]["CostOfEquity"]["rf"] == 0.01
-        assert cd["MetricSources"]["CostOfEquity"]["rf_source"] == "mof"
-
-    def test_no_ibd_wacc_equals_cost_of_equity(self):
-        """無借金: WACC = CostOfEquity"""
-        years = [_make_year("2024-03-31", NetAssets=800.0)]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        assert cd["WACC"] == pytest.approx(self._RE)
-
-    def test_full_wacc_calculation(self):
-        """IBD・IE・ETRが揃っている場合のWACC"""
-        years = [_make_year("2024-03-31", NetAssets=800.0, InterestBearingDebt=200.0, InterestExpense=5.0, EffectiveTaxRate=30.0)]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        rf = self._RF
-        re_ = rf + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM
-        rd = 5.0 / 200.0
-        tc = 30.0 / PERCENT
-        v = 800.0 + 200.0
-        expected_wacc = (800.0 / v * re_ + 200.0 / v * rd * (1 - tc)) * PERCENT
-        assert cd["WACC"] == pytest.approx(expected_wacc)
-        assert cd["MetricSources"]["WACC"]["source"] == "derived"
-
-    def test_wacc_none_when_ie_missing(self):
-        """IE がなければ WACC = None（CostOfEquity はセットされる）"""
-        years = [_make_year("2024-03-31", NetAssets=800.0, InterestBearingDebt=200.0, EffectiveTaxRate=30.0)]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        assert cd["WACC"] is None
-        assert cd["WACCLabel"] == WACC_LABEL_MISSING_INPUT
-        assert cd["CostOfEquity"] == pytest.approx(self._RE)
-
-    def test_wacc_uses_fallback_tax_rate_when_out_of_range(self):
-        """異常税率（50%超）ではフォールバック税率（35%）でWACCを計算する"""
-        years = [
-            _make_year(
-                "2024-03-31",
-                NetAssets=800.0,
-                InterestBearingDebt=200.0,
-                InterestExpense=5.0,
-                EffectiveTaxRate=249.0,
-            )
-        ]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        rf = WACC_RF_FALLBACK
-        re_ = rf + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM
-        rd = 5.0 / 200.0
-        tc = NOPAT_FALLBACK_TAX_RATE
-        v = 800.0 + 200.0
-        expected_wacc = ((800.0 / v) * re_ + (200.0 / v) * rd * (1 - tc)) * PERCENT
-        assert cd["CostOfDebt"] == pytest.approx(2.5)
-        assert cd["WACC"] == pytest.approx(expected_wacc)
-        assert cd["WACCLabel"] is None
-
-    def test_applies_to_multiple_years(self):
-        years = [_make_year("2024-03-31", NetAssets=800.0), _make_year("2023-03-31", NetAssets=700.0)]
-        _apply_wacc(years, {})
-        assert "CostOfEquity" in years[0]["CalculatedData"]
-        assert "CostOfEquity" in years[1]["CalculatedData"]
-
-    def test_wacc_missing_input_when_tax_rate_absent(self):
-        """税率未取得（EffectiveTaxRate=None）かつ負債ありの場合は算出不可"""
-        years = [
-            _make_year(
-                "2024-03-31",
-                NetAssets=800.0,
-                InterestBearingDebt=200.0,
-                InterestExpense=5.0,
-            )
-        ]
-        _apply_wacc(years, {})
-        cd = years[0]["CalculatedData"]
-        assert cd["WACC"] is None
-        assert cd["WACCLabel"] == WACC_LABEL_MISSING_INPUT
 
 
 # ──────────────────────────────────────────────────────────────

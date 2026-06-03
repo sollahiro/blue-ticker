@@ -1,5 +1,4 @@
 import asyncio
-from unittest.mock import patch
 
 import pytest
 
@@ -196,14 +195,13 @@ async def test_fetch_analysis_data_fetches_edinet_metadata_in_parallel_with_pred
         "NetAssets": 500_000_000,
     }]
 
-    with patch("blue_ticker.services.analyzer._apply_wacc"):
-        result = await analyzer.fetch_analysis_data(
-            "7203",
-            analysis_years=1,
-            max_documents=3,
-            prefetched_stock_info={"Code": "7203"},
-            prefetched_financial_data=financial_data,
-        )
+    result = await analyzer.fetch_analysis_data(
+        "7203",
+        analysis_years=1,
+        max_documents=3,
+        prefetched_stock_info={"Code": "7203"},
+        prefetched_financial_data=financial_data,
+    )
 
     assert result["edinet_data"] == {"documents": [{"docID": "S100TEST"}]}
     assert edinet_fetcher.fetch_max_documents == 3
@@ -218,8 +216,7 @@ async def test_fetch_analysis_data_uses_edinet_annual_records_without_prefetched
     analyzer = IndividualAnalyzer(edinet_client=None)
     analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
 
-    with patch("blue_ticker.services.analyzer._apply_wacc"):
-        result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
+    result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
 
     assert result["edinet_data"] == {}
     assert result["metrics"]["analysis_years"] == 1
@@ -234,8 +231,7 @@ async def test_fetch_analysis_data_reuses_annual_context_preparsed_map() -> None
     analyzer = IndividualAnalyzer(edinet_client=None)
     analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
 
-    with patch("blue_ticker.services.analyzer._apply_wacc"):
-        result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
+    result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
 
     assert result["annual_data"][0]["_xbrl_source"] is True
     assert edinet_fetcher.predownload_called is False

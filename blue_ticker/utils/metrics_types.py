@@ -33,8 +33,6 @@ class MetricSource(TypedDict, total=False):
     label: str
     statement: str
     confidence: float
-    rf: float
-    rf_source: str
 
 
 class StockSplitEvent(TypedDict, total=False):
@@ -166,11 +164,6 @@ class CalculatedData(TypedDict, total=False):
     # ── analyzer.py: _apply_ibd / half_year_data_service.py ──
     DocID: str | None
     AmendmentDocID: str | None
-    # ── wacc.py: calculate_wacc ──
-    CostOfEquity: float | None
-    CostOfDebt: float | None
-    WACC: float | None
-    WACCLabel: str | None
     # ── roic_waterfall.py ──
     NOPATMargin: float | None
     InvestedCapitalTurnover: float | None

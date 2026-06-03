@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="分析結果キャッシュを使用せず再計算する。最新の財務省金利を反映したWACCを確認したい場合も指定",
+        help="分析結果キャッシュを使用せず再計算する",
     )
     analyze_parser.add_argument(
         "--half", action="store_true",

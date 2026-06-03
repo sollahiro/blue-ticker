@@ -7,13 +7,6 @@ MILLION_YEN = 1_000_000  # 百万円換算
 # 場合だけ採用するための下限値。0.x は自己資本比率として扱う。
 BPS_PER_SHARE_MIN_VALUE = 1.0
 
-# WACC 計算用定数（暫定値）
-WACC_MARKET_RISK_PREMIUM = 0.055   # 日本株MRP標準値 5.5%
-WACC_DEFAULT_BETA        = 1.0     # 暫定β（市場平均）
-WACC_RF_FALLBACK         = 0.010   # MOF CSV 取得失敗時フォールバック 1.0%
-WACC_LABEL_COST_OF_DEBT_OUT_OF_RANGE = "負債コスト異常"
-WACC_LABEL_MISSING_INPUT = "算出不可"
-
 # NOPAT 計算用定数
 NOPAT_FALLBACK_TAX_RATE  = 0.35  # 異常税率時フォールバック（35%）
 NOPAT_MIN_NORMAL_TAX_RATE = 0.0  # 正常税率の下限

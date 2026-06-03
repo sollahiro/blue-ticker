@@ -47,9 +47,6 @@ PUBLIC_CALCULATED_DATA_KEYS = {
     "SGAChangeImpact",
     "Employees",
     "DocID",
-    "CostOfEquity",
-    "CostOfDebt",
-    "WACC",
 }
 
 HALF_YEAR_PUBLIC_DATA_KEYS = {
@@ -118,9 +115,6 @@ def _complete_calculated_data():
         "OperatingProfitChangeReconciliationDiff": 0.0,
         "Employees": 1,
         "DocID": "S100TEST",
-        "CostOfEquity": 1.0,
-        "CostOfDebt": 1.0,
-        "WACC": 1.0,
         "CalculatedEPS": 1.0,
         "CalculatedBPS": 1.0,
         "EPSDirectDiff": 0.0,

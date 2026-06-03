@@ -50,8 +50,6 @@ class CacheStats:
     individual_analysis_bytes: int = 0
     half_year_analysis_files: int = 0
     half_year_analysis_bytes: int = 0
-    mof_cache_files: int = 0
-    mof_cache_bytes: int = 0
     unknown_root_json_files: int = 0
 
     def to_dict(self) -> dict[str, int | str]:
@@ -70,7 +68,6 @@ class CacheAudit:
     xbrl_parse_cache_files: list[str]
     individual_analysis_files: list[str]
     half_year_analysis_files: list[str]
-    mof_cache_files: list[str]
 
     def to_dict(self) -> dict[str, str | list[str]]:
         return asdict(self)
@@ -128,7 +125,6 @@ class CachePruner:
             "half_year_periods_",
             "edinet_docs_",
             "xbrl_parsed_",
-            "mof_",
         )
         edinet_search_files = _edinet_search_files(self.edinet_dir)
         edinet_doc_index_files = _edinet_doc_index_files(self.edinet_dir)
@@ -137,7 +133,6 @@ class CachePruner:
         xbrl_parse_cache_files = _category_files(self.derived_dir / "xbrl_numeric_index", root_json_files, "xbrl_parsed_")
         individual_analysis_files = _category_files(self.derived_dir / "analysis", root_json_files, "individual_analysis_")
         half_year_analysis_files = _category_files(self.derived_dir / "half_year", root_json_files, "half_year_periods_")
-        mof_cache_files = _category_files(self.derived_dir / "mof", root_json_files, "mof_")
         unknown_root_json_files = [
             path
             for path in root_json_files + [p for p in derived_json_files if p.parent.name == "misc"]
@@ -165,8 +160,6 @@ class CachePruner:
             individual_analysis_bytes=sum(path.stat().st_size for path in individual_analysis_files),
             half_year_analysis_files=len(half_year_analysis_files),
             half_year_analysis_bytes=sum(path.stat().st_size for path in half_year_analysis_files),
-            mof_cache_files=len(mof_cache_files),
-            mof_cache_bytes=sum(path.stat().st_size for path in mof_cache_files),
             unknown_root_json_files=len(unknown_root_json_files),
         )
 
@@ -180,7 +173,6 @@ class CachePruner:
             "half_year_periods_",
             "edinet_docs_",
             "xbrl_parsed_",
-            "mof_",
         )
         existing_cache_stems = {path.stem for path in root_json_files + derived_json_files}
         return CacheAudit(
@@ -197,7 +189,6 @@ class CachePruner:
             xbrl_parse_cache_files=_names(_category_files(self.derived_dir / "xbrl_numeric_index", root_json_files, "xbrl_parsed_")),
             individual_analysis_files=_names(_category_files(self.derived_dir / "analysis", root_json_files, "individual_analysis_")),
             half_year_analysis_files=_names(_category_files(self.derived_dir / "half_year", root_json_files, "half_year_periods_")),
-            mof_cache_files=_names(_category_files(self.derived_dir / "mof", root_json_files, "mof_")),
         )
 
     def _prune_edinet_search(self, *, days: int, dry_run: bool) -> PruneSummary:

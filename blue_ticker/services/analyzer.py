@@ -24,7 +24,6 @@ from blue_ticker.utils.roic_waterfall import (
     apply_roic_waterfall_from_xbrl,
     apply_roic_waterfall_to_years,
 )
-from blue_ticker.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from blue_ticker.utils.metrics_access import year_metric_value
 from blue_ticker.utils.metrics_types import CalculatedData, MetricSource, RawXbrlExtraction, YearEntry
 
@@ -659,35 +658,6 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]],
 ]
 
 
-def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
-    for year in years:
-        cd = year["CalculatedData"]
-        fy_end = year.get("fy_end") or ""
-        rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
-        tax_rate, _ = _resolve_tax_rate(cd)
-        tc_pct = tax_rate * PERCENT if tax_rate is not None else None
-        wacc = calculate_wacc(
-            eq=_year_metric_float(year, "NetAssets"),
-            ibd=cd.get("InterestBearingDebt"),
-            ie=cd.get("InterestExpense"),
-            tc_pct=tc_pct,
-            rf=rf,
-        )
-        cost_of_equity = wacc["CostOfEquity"]
-        cost_of_debt = wacc["CostOfDebt"]
-        wacc_value = wacc["WACC"]
-        wacc_label = wacc["WACCLabel"]
-        cd["CostOfEquity"] = cost_of_equity if isinstance(cost_of_equity, float) else None
-        cd["CostOfDebt"] = cost_of_debt if isinstance(cost_of_debt, float) else None
-        cd["WACC"] = wacc_value if isinstance(wacc_value, float) else None
-        cd["WACCLabel"] = wacc_label if isinstance(wacc_label, str) else None
-        _set_metric_source(cd, "CostOfEquity", source="mof", unit="percent", method="Rf + beta * MRP")
-        sources = cd.setdefault("MetricSources", {})
-        sources["CostOfEquity"]["rf"] = rf
-        sources["CostOfEquity"]["rf_source"] = rf_source
-        _set_metric_source(cd, "CostOfDebt", source="derived", unit="percent", method="InterestExpense / InterestBearingDebt")
-        _set_metric_source(cd, "WACC", source="derived", unit="percent", method="weighted average cost of capital")
-
 
 class IndividualAnalyzer:
     """個別詳細分析クラス"""
@@ -812,7 +782,6 @@ class IndividualAnalyzer:
             all_metrics.get("bs", {}),
         )
         apply_roic_waterfall_to_years(years)
-        _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {
             "stock_info": stock_info,

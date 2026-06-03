@@ -82,7 +82,6 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     from blue_ticker.utils.cache import CacheManager
 
     cache = CacheManager(cache_dir=str(tmp_path))
-    cache.set("mof_rf_rates", {"rates": {}})
     cache.set("edinet_docs_72030_1", {"docs": []})
     cache.set("xbrl_parsed_S100TEST", {"data": {}})
     cache.set("individual_analysis_72030", {"metrics": {}})
@@ -100,7 +99,7 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     pruner = CachePruner(tmp_path)
     stats = pruner.stats()
 
-    assert stats.total_files == 10
+    assert stats.total_files == 9
     assert stats.edinet_search_files == 1
     assert stats.edinet_search_bytes > 0
     assert stats.edinet_doc_index_files == 1
@@ -110,7 +109,6 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     assert stats.xbrl_parse_cache_files == 1
     assert stats.individual_analysis_files == 1
     assert stats.half_year_analysis_files == 1
-    assert stats.mof_cache_files == 1
     assert stats.unknown_root_json_files == 1
 
 
@@ -122,8 +120,6 @@ def test_audit_lists_cache_categories(tmp_path) -> None:
     cache.set("xbrl_parsed_S100TEST", {"data": {}})
     cache.set("individual_analysis_72030", {"metrics": {}})
     cache.set("half_year_periods_72030_3", [])
-    cache.set("mof_rf_rates", {"rates": {}})
-    cache.clear("mof_rf_rates")
     (tmp_path / "manual_dump.json").write_text("{}", encoding="utf-8")
 
     edinet_dir = tmp_path / "edinet"

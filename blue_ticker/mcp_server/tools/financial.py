@@ -35,7 +35,6 @@ def _flatten_year(year: dict[str, Any]) -> dict[str, Any]:
         # 収益性・資本効率（%）
         "roe": calc.get("ROE"),
         "roic": calc.get("ROIC"),
-        "wacc": calc.get("WACC"),
         # 規模
         "employees": calc.get("Employees"),
     }
