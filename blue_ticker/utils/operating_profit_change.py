@@ -14,8 +14,8 @@ from blue_ticker.utils.metrics_types import YearEntry
 
 
 _SGA_KEY = "SellingGeneralAdministrativeExpenses"
-_ADJUSTED_OP_KEY = "AdjustedOperatingProfit"
-_ADJUSTED_OP_MARGIN_KEY = "AdjustedOperatingMargin"
+_ADJUSTED_OP_KEY = "BusinessProfit"
+_ADJUSTED_OP_MARGIN_KEY = "BusinessProfitMargin"
 _OP_CHANGE_KEY = "OperatingProfitChange"
 _SALES_IMPACT_KEY = "SalesChangeImpact"
 _GM_IMPACT_KEY = "GrossMarginChangeImpact"
@@ -118,7 +118,7 @@ def _apply_sga(data: dict[str, Any]) -> None:
     _set_source(data, _SGA_KEY, method=f"{base_label} - OP")
 
 
-def _apply_adjusted_operating_profit(data: dict[str, Any]) -> None:
+def _apply_business_profit(data: dict[str, Any]) -> None:
     if data.get(_ADJUSTED_OP_KEY) is not None:
         return
 
@@ -133,7 +133,7 @@ def _apply_adjusted_operating_profit(data: dict[str, Any]) -> None:
     sales = data.get("Sales")
     if sales is not None and sales != 0 and data.get(_ADJUSTED_OP_MARGIN_KEY) is None:
         data[_ADJUSTED_OP_MARGIN_KEY] = data[_ADJUSTED_OP_KEY] / sales * PERCENT
-        _set_source(data, _ADJUSTED_OP_MARGIN_KEY, method="AdjustedOperatingProfit / Sales", unit="percent")
+        _set_source(data, _ADJUSTED_OP_MARGIN_KEY, method="BusinessProfit / Sales", unit="percent")
 
 
 def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
@@ -177,7 +177,7 @@ def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
     current[_SGA_IMPACT_KEY] = sga_impact
     current[_RECONCILIATION_DIFF_KEY] = op_change - total_impact
 
-    _set_source(current, _OP_CHANGE_KEY, method="current AdjustedOperatingProfit - prior AdjustedOperatingProfit")
+    _set_source(current, _OP_CHANGE_KEY, method="current BusinessProfit - prior BusinessProfit")
     _set_source(
         current,
         _SALES_IMPACT_KEY,
@@ -202,7 +202,7 @@ def apply_operating_profit_change_to_years(years: list[YearEntry]) -> None:
     for year in years:
         view = metric_view(year)
         _apply_sga(view)
-        _apply_adjusted_operating_profit(view)
+        _apply_business_profit(view)
         views_by_fy_end[str(year.get("fy_end") or "")] = view
 
     chronological = sorted(
@@ -231,7 +231,7 @@ def apply_operating_profit_change_to_periods(periods: list[dict[str, Any]]) -> N
     for period in sorted(periods, key=lambda item: str(item.get("fy_end") or "")):
         data = period.get("data") or {}
         _apply_sga(data)
-        _apply_adjusted_operating_profit(data)
+        _apply_business_profit(data)
 
         half = period.get("half")
         comparison_key = half if isinstance(half, str) else "FY"
@@ -281,7 +281,7 @@ def _synthetic_prior_period_from_xbrl(gp: Mapping[str, Any], op: Mapping[str, An
         prior[_SGA_KEY] = prior_sga_raw / MILLION_YEN
         _set_source(prior, _SGA_KEY, method="SGA(XBRL)")
     _apply_sga(prior)
-    _apply_adjusted_operating_profit(prior)
+    _apply_business_profit(prior)
     return prior
 
 
@@ -329,7 +329,7 @@ def _synthetic_prior_h2_from_xbrl(
         prior[_SGA_KEY] = prior_sga_raw / MILLION_YEN
         _set_source(prior, _SGA_KEY, method="FY SGA(XBRL) - H1 SGA(XBRL)")
     _apply_sga(prior)
-    _apply_adjusted_operating_profit(prior)
+    _apply_business_profit(prior)
     return prior
 
 
@@ -345,7 +345,7 @@ def apply_operating_profit_change_to_periods_from_xbrl(
         fy_end = str(period.get("fy_end") or "").replace("-", "")
         data = period.get("data") or {}
         _apply_sga(data)
-        _apply_adjusted_operating_profit(data)
+        _apply_business_profit(data)
 
         half = period.get("half")
         prior: dict[str, Any] | None
@@ -419,7 +419,7 @@ def apply_operating_profit_change_from_xbrl(
         else:
             current_base_m = current_op_m = None
 
-        _apply_adjusted_operating_profit(cd)
+        _apply_business_profit(cd)
 
         if (
             current_base_m is None
@@ -462,8 +462,8 @@ def apply_operating_profit_change_from_xbrl(
         cd[_RECONCILIATION_DIFF_KEY] = op_change - total_impact
 
         _set_source(cd, _ADJUSTED_OP_KEY, method=f"{current_base_label} - SGA(XBRL)")
-        _set_source(cd, _ADJUSTED_OP_MARGIN_KEY, method="AdjustedOperatingProfit / Sales", unit="percent")
-        _set_source(cd, _OP_CHANGE_KEY, method="current AdjustedOperatingProfit - prior AdjustedOperatingProfit (XBRL)")
+        _set_source(cd, _ADJUSTED_OP_MARGIN_KEY, method="BusinessProfit / Sales", unit="percent")
+        _set_source(cd, _OP_CHANGE_KEY, method="current BusinessProfit - prior BusinessProfit (XBRL)")
         _set_source(
             cd,
             _SALES_IMPACT_KEY,
