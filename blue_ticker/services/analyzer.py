@@ -643,6 +643,17 @@ def _apply_roic(years: list[YearEntry]) -> None:
         _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NOPAT / (NetAssets + InterestBearingDebt)")
 
 
+def _apply_net_cash(years: list[YearEntry]) -> None:
+    for year in years:
+        cd = year["CalculatedData"]
+        cash_eq_m = _year_metric_float(year, "CashEq")
+        ibd_m = cd.get("InterestBearingDebt")
+        if cash_eq_m is None or ibd_m is None:
+            continue
+        cd["NetCash"] = cash_eq_m - ibd_m
+        _set_metric_source(cd, "NetCash", source="derived", unit="million_yen", method="CashEq - InterestBearingDebt")
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
     _apply_ibd,
     _apply_balance_sheet,
@@ -774,6 +785,7 @@ class IndividualAnalyzer:
         apply_operating_profit_change_to_years(years)
         _apply_nopat(years)
         _apply_roic(years)
+        _apply_net_cash(years)
         apply_roic_waterfall_from_xbrl(
             years,
             all_metrics.get("gp", {}),

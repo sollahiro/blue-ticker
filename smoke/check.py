@@ -156,6 +156,10 @@ def _compare(fixture: dict[str, Any], actuals: dict[str, Any]) -> list[str]:
     chk("bank_financials.cash_due_from_banks",act_bank.get("cash_due_from_banks"),exp_bank.get("cash_due_from_banks"))
     chk("bank_financials.negotiable_cds",     act_bank.get("negotiable_cds"),     exp_bank.get("negotiable_cds"))
 
+    exp_cash_eq = fixture.get("cash_eq") or {}
+    act_cash_eq = actuals.get("cash_eq") or {}
+    chk("cash_eq.current", act_cash_eq.get("current"), exp_cash_eq.get("current"))
+
     return diffs
 
 

@@ -115,6 +115,8 @@ class CalculatedData(TypedDict, total=False):
     IBDComponents: list[IBDComponent]
     IBDAccountingStandard: str
     ROIC: float | None
+    # ── analyzer.py: _apply_net_cash ──
+    NetCash: float | None
     # ── analyzer.py: _apply_balance_sheet ──
     TotalAssets: float | None
     CurrentAssets: float | None

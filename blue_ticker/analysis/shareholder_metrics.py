@@ -16,10 +16,10 @@ from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 _CASH_EQ_TAGS: list[str] = [
     "CashAndCashEquivalentsIFRS",
+    "CashAndCashEquivalents",
     "CashAndCashEquivalentsIFRSSummaryOfBusinessResults",
     "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
     "CashAndCashEquivalentsSummaryOfBusinessResults",
-    "CashAndCashEquivalents",
 ]
 
 _EPS_TAGS: list[str] = [

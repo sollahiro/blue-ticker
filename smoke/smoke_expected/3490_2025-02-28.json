@@ -65,5 +65,8 @@
     "loans": null,
     "cash_due_from_banks": null,
     "negotiable_cds": null
+  },
+  "cash_eq": {
+    "current": 3376593000.0
   }
 }

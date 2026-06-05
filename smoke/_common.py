@@ -23,6 +23,7 @@ from blue_ticker.analysis.sections import (
     IncomeStatementSection,
     detect_accounting_standard,
 )
+from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
 from blue_ticker.analysis.tangible_fixed_assets import extract_tangible_fixed_assets
 from blue_ticker.analysis.tax_expense import extract_tax_expense
 from blue_ticker.services.edinet_fetcher import EdinetFetcher
@@ -137,6 +138,7 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
     bank = extract_bank_financials(bs_section)
     ibd = extract_interest_bearing_debt(bs_section)
     cf = extract_cash_flow(cf_section)
+    sh = extract_shareholder_metrics(xbrl_dir or Path(), pre_parsed=pre_parsed, net_profit=income.get("net_profit"))
     dep = extract_depreciation(cf_section)
     ie = extract_interest_expense(is_section)
     emp = extract_employees(emp_section)
@@ -208,6 +210,9 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
             "cash_due_from_banks": bank.get("cash_due_from_banks"),
             "negotiable_cds": bank.get("negotiable_cds"),
         },
+        "cash_eq": {
+            "current": sh.get("CashEq"),
+        },
         "_debug": {
             "ibd": {
                 "method": ibd.get("method"),
@@ -246,6 +251,7 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
     tax = a["tax_expense"]
     ppe = a["tangible_fixed_assets"]
     ob = a["order_book"]
+    cash_eq = a.get("cash_eq") or {}
     std = is_.get("accounting_standard", "—")
     print(f"\n{'='*60}")
     print(f"  {name}  ({fy_end})  [{std}]")
@@ -283,6 +289,7 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
         ("貸出金",               fmt(bank.get("loans"))),
         ("現金預け金",           fmt(bank.get("cash_due_from_banks"))),
         ("譲渡性預金",           fmt(bank.get("negotiable_cds"))),
+        ("現金及び現金同等物",   fmt(cash_eq.get("current"))),
     ]
     for label, val in rows:
         print(f"  {label:<18}  {val}")
