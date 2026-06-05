@@ -15,8 +15,28 @@ from blue_ticker.constants.xbrl import (
     ORDINARY_INCOME_TAGS,
     ORDINARY_REVENUE_TAGS,
     SGA_DIRECT_TAGS,
+    SGA_GA_IFRS_TAGS,
+    SGA_SELLING_IFRS_TAGS,
 )
 from blue_ticker.utils.xbrl_result_types import OperatingProfitResult
+
+
+def _resolve_sga(
+    section: IncomeStatementSection,
+) -> tuple[float | None, float | None]:
+    """SGA を解決する。結合タグ優先、なければ販売費＋一般管理費を合算。"""
+    combined = section.resolve(SGA_DIRECT_TAGS)
+    if combined["tag"] is not None:
+        return combined["current"], combined["prior"]
+    selling = section.resolve(SGA_SELLING_IFRS_TAGS)
+    ga = section.resolve(SGA_GA_IFRS_TAGS)
+    s_cur, g_cur = selling["current"], ga["current"]
+    if s_cur is not None or g_cur is not None:
+        cur = (s_cur or 0.0) + (g_cur or 0.0)
+        s_pri, g_pri = selling["prior"], ga["prior"]
+        pri = ((s_pri or 0.0) + (g_pri or 0.0)) if (s_pri is not None or g_pri is not None) else None
+        return cur, pri
+    return None, None
 
 
 def extract_operating_profit(section: IncomeStatementSection) -> OperatingProfitResult:
@@ -60,29 +80,29 @@ def extract_operating_profit(section: IncomeStatementSection) -> OperatingProfit
     # 直接法: OPERATING_PROFIT_DIRECT_TAGS
     op_item = section.resolve(OPERATING_PROFIT_DIRECT_TAGS)
     if op_item["tag"] is not None:
-        sga_item = section.resolve(SGA_DIRECT_TAGS)
+        sga_cur, sga_pri = _resolve_sga(section)
         result: OperatingProfitResult = {
             "current": op_item["current"], "prior": op_item["prior"],
             "method": "direct", "label": "営業利益",
             "accounting_standard": accounting_standard,
         }
-        if sga_item["tag"] is not None:
-            result["current_sga"] = sga_item["current"]
-            result["prior_sga"] = sga_item["prior"]
+        if sga_cur is not None:
+            result["current_sga"] = sga_cur
+            result["prior_sga"] = sga_pri
         return result
 
     # 計算法: GrossProfit - SGA（OperatingProfitLossIFRS が存在しない IFRS 企業向け）
     computed = section.derive_subtraction(GROSS_PROFIT_DIRECT_TAGS, SGA_DIRECT_TAGS)
     if computed["current"] is not None or computed["prior"] is not None:
-        sga_item = section.resolve(SGA_DIRECT_TAGS)
+        sga_cur, sga_pri = _resolve_sga(section)
         result = {
             "current": computed["current"], "prior": computed["prior"],
             "method": "computed", "label": "営業利益",
             "accounting_standard": accounting_standard,
         }
-        if sga_item["tag"] is not None:
-            result["current_sga"] = sga_item["current"]
-            result["prior_sga"] = sga_item["prior"]
+        if sga_cur is not None:
+            result["current_sga"] = sga_cur
+            result["prior_sga"] = sga_pri
         return result
 
     # 経常利益フォールバック（J-GAAP 金融機関向け）

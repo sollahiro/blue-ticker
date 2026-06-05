@@ -92,6 +92,10 @@ def _compare(fixture: dict[str, Any], actuals: dict[str, Any]) -> list[str]:
     chk("gross_profit.gross_profit", act_gp.get("gross_profit"), exp_gp.get("gross_profit"))
     chk("gross_profit.method",       act_gp.get("method"),       exp_gp.get("method"))
 
+    exp_sga = fixture.get("sga") or {}
+    act_sga = actuals.get("sga") or {}
+    chk("sga.current", act_sga.get("current"), exp_sga.get("current"))
+
     exp_bs = fixture.get("balance_sheet") or {}
     act_bs = actuals.get("balance_sheet") or {}
     chk("balance_sheet.total_assets",            act_bs.get("total_assets"),            exp_bs.get("total_assets"))

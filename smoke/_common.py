@@ -14,6 +14,7 @@ from blue_ticker.analysis.gross_profit import extract_gross_profit
 from blue_ticker.analysis.income_statement import extract_income_statement
 from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
 from blue_ticker.analysis.interest_expense import extract_interest_expense
+from blue_ticker.analysis.operating_profit import extract_operating_profit
 from blue_ticker.analysis.order_book import extract_order_book
 from blue_ticker.analysis.sections import (
     BalanceSheetSection,
@@ -131,6 +132,7 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
 
     income = extract_income_statement(is_section)
     gp = extract_gross_profit(is_section)
+    op = extract_operating_profit(is_section)
     bs = extract_balance_sheet(bs_section)
     bank = extract_bank_financials(bs_section)
     ibd = extract_interest_bearing_debt(bs_section)
@@ -152,6 +154,9 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
         "gross_profit": {
             "gross_profit": gp.get("current"),
             "method": gp.get("method"),
+        },
+        "sga": {
+            "current": op.get("current_sga"),
         },
         "balance_sheet": {
             "total_assets": bs.get("total_assets"),
@@ -230,6 +235,7 @@ def fmt(v: object) -> str:
 def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
     is_ = a["income_statement"]
     gp = a["gross_profit"]
+    sga = a.get("sga") or {}
     bs = a["balance_sheet"]
     bank = a.get("bank_financials") or {}
     ibd = a["interest_bearing_debt"]
@@ -249,6 +255,7 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
         ("営業利益",             fmt(is_.get("operating_profit"))),
         ("純利益",               fmt(is_.get("net_profit"))),
         ("売上総利益",           f"{fmt(gp.get('gross_profit'))}  [{gp.get('method','—')}]"),
+        ("販管費",               fmt(sga.get("current"))),
         ("総資産",               fmt(bs.get("total_assets"))),
         ("流動資産",             fmt(bs.get("current_assets"))),
         ("固定資産",             fmt(bs.get("non_current_assets"))),

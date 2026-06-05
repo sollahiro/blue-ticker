@@ -13,6 +13,9 @@
     "gross_profit": 65636000000.0,
     "method": "direct"
   },
+  "sga": {
+    "current": 50985000000.0
+  },
   "balance_sheet": {
     "total_assets": 298168000000.0,
     "current_assets": 184600000000.0,
@@ -30,15 +33,15 @@
     "cfo": 17802000000.0,
     "cfi": -15257000000.0
   },
-  "employees": {
-    "current": 4071.0,
-    "method": "direct"
-  },
   "depreciation": {
     "current": 9209000000.0
   },
   "interest_expense": {
     "current": 89000000.0
+  },
+  "employees": {
+    "current": 4071.0,
+    "method": "direct"
   },
   "tax_expense": {
     "pretax_income": 15039000000.0,
@@ -56,5 +59,11 @@
   "order_book": {
     "order_intake": 215627000000.0,
     "order_backlog": 96452000000.0
+  },
+  "bank_financials": {
+    "deposits": null,
+    "loans": null,
+    "cash_due_from_banks": null,
+    "negotiable_cds": null
   }
 }

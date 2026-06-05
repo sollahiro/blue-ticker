@@ -618,6 +618,10 @@ SGA_DIRECT_TAGS: list[str] = [
     "SellingGeneralAndAdministrativeExpenses",       # J-GAAP連結
 ]
 
+# 販売費・一般管理費が分離開示されている場合の合算用タグ（IFRS企業向け）
+SGA_SELLING_IFRS_TAGS: list[str] = ["SellingExpensesIFRS"]
+SGA_GA_IFRS_TAGS: list[str] = ["GeneralAndAdministrativeExpensesIFRS"]
+
 # 支払利息（IE）タグ定義
 # analysis/interest_expense.py で使用
 
