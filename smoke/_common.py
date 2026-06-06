@@ -26,10 +26,12 @@ from blue_ticker.analysis.sections import (
 from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
 from blue_ticker.analysis.tangible_fixed_assets import extract_tangible_fixed_assets
 from blue_ticker.analysis.tax_expense import extract_tax_expense
+from blue_ticker.constants.api import EDINET_DOC_TYPE_HALF_YEAR_REPORT
 from blue_ticker.services.edinet_fetcher import EdinetFetcher
 from blue_ticker.utils.fiscal_year import normalize_date_format
 
 FIXTURE_DIR = Path(__file__).parent / "smoke_expected"
+HALF_FIXTURE_DIR = Path(__file__).parent / "smoke_half_expected"
 _DEFAULT_CACHE_DIR = Path("tmp_cache") / "edinet"
 
 
@@ -47,6 +49,15 @@ def load_fixtures() -> list[tuple[str, dict[str, Any]]]:
     return [
         (path.stem, json.loads(path.read_text(encoding="utf-8")))
         for path in sorted(f for f in FIXTURE_DIR.glob("*.json") if not f.name.startswith("."))
+    ]
+
+
+def load_half_fixtures() -> list[tuple[str, dict[str, Any]]]:
+    if not HALF_FIXTURE_DIR.is_dir():
+        return []
+    return [
+        (path.stem, json.loads(path.read_text(encoding="utf-8")))
+        for path in sorted(f for f in HALF_FIXTURE_DIR.glob("*.json") if not f.name.startswith("."))
     ]
 
 
@@ -103,28 +114,28 @@ def find_cached_doc(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] |
     return None
 
 
-async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
-    doc = find_cached_doc(code, fy_end, cache_dir)
-    if doc is None:
-        return None
+def find_cached_half_doc(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
+    sec_code = f"{code}0"
+    for doc in _load_search_cache_docs(cache_dir):
+        if doc.get("secCode") != sec_code:
+            continue
+        if doc.get("docTypeCode") != EDINET_DOC_TYPE_HALF_YEAR_REPORT:
+            continue
+        doc_id = doc.get("docID")
+        period_end = doc.get("periodEnd")
+        if not isinstance(doc_id, str) or not isinstance(period_end, str):
+            continue
+        if (normalize_date_format(period_end) or period_end) != fy_end:
+            continue
+        if not (cache_dir / f"{doc_id}_xbrl").is_dir():
+            continue
+        result = doc.copy()
+        result["edinet_fy_end"] = normalize_date_format(period_end) or period_end
+        return result
+    return None
 
-    client = _CachedXbrlClient(cache_dir)
-    # cache_manager=None: smoke は常に XBRL ソースから再計算し、derived キャッシュを参照・書込みしない
-    fetcher = EdinetFetcher(edinet_client=client, cache_manager=None)  # type: ignore[arg-type]
-    financial_record = {
-        "CurPerType": "FY",
-        "CurFYEn": fy_end,
-        "DiscDate": normalize_date_format(str(doc.get("submitDateTime") or "")) or "",
-        "_docID": doc["docID"],
-    }
-    pre_parsed_map = await fetcher.predownload_and_parse(code, [financial_record], max_years=1)
-    fy_key = fy_end.replace("-", "")
-    if fy_key not in pre_parsed_map:
-        return None
 
-    xbrl_dir_str, pre_parsed, facts = pre_parsed_map[fy_key]
-    xbrl_dir = Path(xbrl_dir_str) if xbrl_dir_str else None
-
+def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str, Any]:
     std = detect_accounting_standard(pre_parsed)
     is_section = IncomeStatementSection.from_pre_parsed(pre_parsed, std, xbrl_dir)
     bs_section = BalanceSheetSection.from_pre_parsed(pre_parsed, std, xbrl_dir)
@@ -225,6 +236,45 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
             },
         },
     }
+
+
+async def _fetch_and_extract(
+    code: str,
+    fy_end: str,
+    cache_dir: Path,
+    doc: dict[str, Any],
+    cur_per_type: str,
+) -> dict[str, Any] | None:
+    client = _CachedXbrlClient(cache_dir)
+    # cache_manager=None: smoke は常に XBRL ソースから再計算し、derived キャッシュを参照・書込みしない
+    fetcher = EdinetFetcher(edinet_client=client, cache_manager=None)  # type: ignore[arg-type]
+    financial_record = {
+        "CurPerType": cur_per_type,
+        "CurFYEn": fy_end,
+        "DiscDate": normalize_date_format(str(doc.get("submitDateTime") or "")) or "",
+        "_docID": doc["docID"],
+    }
+    pre_parsed_map = await fetcher.predownload_and_parse(code, [financial_record], max_years=1)
+    fy_key = fy_end.replace("-", "")
+    if fy_key not in pre_parsed_map:
+        return None
+    xbrl_dir_str, pre_parsed, _facts = pre_parsed_map[fy_key]
+    xbrl_dir = Path(xbrl_dir_str) if xbrl_dir_str else None
+    return _build_result(xbrl_dir, pre_parsed)
+
+
+async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
+    doc = find_cached_doc(code, fy_end, cache_dir)
+    if doc is None:
+        return None
+    return await _fetch_and_extract(code, fy_end, cache_dir, doc, "FY")
+
+
+async def extract_half_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
+    doc = find_cached_half_doc(code, fy_end, cache_dir)
+    if doc is None:
+        return None
+    return await _fetch_and_extract(code, fy_end, cache_dir, doc, "2Q")
 
 
 def fmt(v: object) -> str:
