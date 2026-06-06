@@ -23,6 +23,7 @@ from blue_ticker.analysis.field_parser import (
     FieldSet,
     FieldValue,
     ResolvedItem,
+    build_nc_duration_field_set,
     derive_subtraction,
     field_set_from_pre_parsed,
     field_set_from_pre_parsed_duration,
@@ -34,6 +35,7 @@ from blue_ticker.analysis.field_parser import (
 )
 from blue_ticker.analysis.usgaap.html_fields import (
     parse_usgaap_html_bs_fields,
+    parse_usgaap_html_equity_cf_fields,
     parse_usgaap_html_pl_fields,
 )
 from blue_ticker.constants.xbrl import (
@@ -99,6 +101,7 @@ from blue_ticker.constants.xbrl import (
     SGA_DIRECT_TAGS,
     SHARE_BUYBACK_IFRS_TAGS,
     SHARE_BUYBACK_JGAAP_TAGS,
+    SHARE_BUYBACK_SS_JGAAP_TAGS,
     USGAAP_MARKER_TAGS,
     USGAAP_XBRL_NCA_COMPONENTS,
 )
@@ -223,6 +226,7 @@ _CF_TAGS: frozenset[str] = frozenset(
     + CAPEX_OVERVIEW_TAGS
     + CAPEX_CF_JGAAP_TAGS
     + CAPEX_CF_IFRS_TAGS
+    + SHARE_BUYBACK_SS_JGAAP_TAGS
     + SHARE_BUYBACK_JGAAP_TAGS
     + SHARE_BUYBACK_IFRS_TAGS
 )
@@ -231,16 +235,40 @@ _CF_TAGS: frozenset[str] = frozenset(
 class CashFlowSection(Section):
     """CF計算書セクション（Duration コンテキスト）。
 
-    対象: 営業CF・投資CF・減価償却費
+    対象: 営業CF・投資CF・減価償却費・自己株式取得
     """
 
     _TAGS = _CF_TAGS
 
+    def __init__(
+        self,
+        field_set: FieldSet,
+        accounting_standard: str,
+        xbrl_dir: Path | None = None,
+        nc_field_set: FieldSet | None = None,
+    ) -> None:
+        super().__init__(field_set, accounting_standard, xbrl_dir)
+        self._nc_field_set: FieldSet = nc_field_set or {}
+
+    def resolve_nonconsolidated(self, candidate_tags: list[str]) -> ResolvedItem:
+        """NonConsolidated コンテキストの値を解決する（連結企業でも有効）。"""
+        return resolve_item(self._nc_field_set, candidate_tags)
+
     @classmethod
     def from_xbrl(cls, xbrl_dir: Path, accounting_standard: str | None = None) -> "CashFlowSection":
-        field_set = parse_duration_fields(xbrl_dir, allowed_tags=cls._TAGS)
+        from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+        tag_elements: XbrlTagElements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=cls._TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
+        field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         std = accounting_standard or detect_accounting_standard(field_set)
-        return cls(field_set, std, xbrl_dir)
+        nc_field_set = build_nc_duration_field_set(tag_elements)
+        if std == "US-GAAP":
+            field_set.update(parse_usgaap_html_equity_cf_fields(xbrl_dir))
+        return cls(field_set, std, xbrl_dir, nc_field_set)
 
     @classmethod
     def from_pre_parsed(
@@ -250,7 +278,10 @@ class CashFlowSection(Section):
         xbrl_dir: Path | None = None,
     ) -> "CashFlowSection":
         field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
-        return cls(field_set, accounting_standard, xbrl_dir)
+        nc_field_set = build_nc_duration_field_set(tag_elements)
+        if accounting_standard == "US-GAAP" and xbrl_dir is not None:
+            field_set.update(parse_usgaap_html_equity_cf_fields(xbrl_dir))
+        return cls(field_set, accounting_standard, xbrl_dir, nc_field_set)
 
 
 # ── 貸借対照表 ──────────────────────────────────────────────────────────────

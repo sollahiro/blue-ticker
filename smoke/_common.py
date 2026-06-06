@@ -7,6 +7,7 @@ from typing import Any
 
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.bank_financials import extract_bank_financials
+from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
 from blue_ticker.analysis.cash_flow import extract_cash_flow
 from blue_ticker.analysis.depreciation import extract_depreciation
 from blue_ticker.analysis.employees import extract_employees
@@ -16,6 +17,7 @@ from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_
 from blue_ticker.analysis.interest_expense import extract_interest_expense
 from blue_ticker.analysis.operating_profit import extract_operating_profit
 from blue_ticker.analysis.order_book import extract_order_book
+from blue_ticker.analysis.research_development import extract_research_development
 from blue_ticker.analysis.sections import (
     BalanceSheetSection,
     CashFlowSection,
@@ -23,6 +25,7 @@ from blue_ticker.analysis.sections import (
     IncomeStatementSection,
     detect_accounting_standard,
 )
+from blue_ticker.analysis.share_buyback import extract_share_buyback
 from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
 from blue_ticker.analysis.tangible_fixed_assets import extract_tangible_fixed_assets
 from blue_ticker.analysis.tax_expense import extract_tax_expense
@@ -156,6 +159,9 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str
     tax = extract_tax_expense(is_section)
     ppe = extract_tangible_fixed_assets(bs_section)
     ob = extract_order_book(xbrl_dir or Path(), pre_parsed=pre_parsed)
+    capex = extract_capital_expenditure(cf_section)
+    rd = extract_research_development(is_section)
+    buyback = extract_share_buyback(cf_section)
 
     return {
         "income_statement": {
@@ -223,6 +229,15 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str
         },
         "cash_eq": {
             "current": sh.get("CashEq"),
+        },
+        "capital_expenditure": {
+            "current": capex.get("current"),
+        },
+        "research_development": {
+            "current": rd.get("current"),
+        },
+        "share_buyback": {
+            "current": buyback.get("current"),
         },
         "_debug": {
             "ibd": {
@@ -302,6 +317,9 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
     ppe = a["tangible_fixed_assets"]
     ob = a["order_book"]
     cash_eq = a.get("cash_eq") or {}
+    capex = a.get("capital_expenditure") or {}
+    rd = a.get("research_development") or {}
+    buyback = a.get("share_buyback") or {}
     std = is_.get("accounting_standard", "—")
     print(f"\n{'='*60}")
     print(f"  {name}  ({fy_end})  [{std}]")
@@ -340,6 +358,9 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
         ("現金預け金",           fmt(bank.get("cash_due_from_banks"))),
         ("譲渡性預金",           fmt(bank.get("negotiable_cds"))),
         ("現金及び現金同等物",   fmt(cash_eq.get("current"))),
+        ("設備投資",             fmt(capex.get("current"))),
+        ("研究開発費",           fmt(rd.get("current"))),
+        ("自己株式取得",         fmt(buyback.get("current"))),
     ]
     for label, val in rows:
         print(f"  {label:<18}  {val}")

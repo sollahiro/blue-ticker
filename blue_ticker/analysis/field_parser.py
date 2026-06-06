@@ -197,6 +197,16 @@ def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
     return field_set
 
 
+def build_nc_duration_field_set(tag_elements: XbrlTagElements) -> FieldSet:
+    """連結企業でも NonConsolidated コンテキストを強制的に正規化して返す。
+
+    通常の field_set_from_pre_parsed_duration は連結企業の NonConsolidated フォールバックを
+    抑制するが、本関数は抑制なしに単体コンテキストの値を返す。
+    SS単体フォールバックが必要な自己株式取得等の用途に使う。
+    """
+    return _normalize_duration_nonconsolidated(tag_elements)
+
+
 def _normalize_duration_nonconsolidated(tag_elements: XbrlTagElements) -> FieldSet:
     """個別財務諸表のみの企業向け: _NonConsolidated コンテキストを当期/前期に正規化する（Duration版）。"""
     exact_current: frozenset[str] = frozenset(DURATION_CONTEXT_PATTERNS)

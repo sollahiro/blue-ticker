@@ -160,6 +160,18 @@ def _compare(fixture: dict[str, Any], actuals: dict[str, Any]) -> list[str]:
     act_cash_eq = actuals.get("cash_eq") or {}
     chk("cash_eq.current", act_cash_eq.get("current"), exp_cash_eq.get("current"))
 
+    exp_capex = fixture.get("capital_expenditure") or {}
+    act_capex = actuals.get("capital_expenditure") or {}
+    chk("capital_expenditure.current", act_capex.get("current"), exp_capex.get("current"))
+
+    exp_rd = fixture.get("research_development") or {}
+    act_rd = actuals.get("research_development") or {}
+    chk("research_development.current", act_rd.get("current"), exp_rd.get("current"))
+
+    exp_buyback = fixture.get("share_buyback") or {}
+    act_buyback = actuals.get("share_buyback") or {}
+    chk("share_buyback.current", act_buyback.get("current"), exp_buyback.get("current"))
+
     return diffs
 
 

@@ -68,5 +68,14 @@
   },
   "cash_eq": {
     "current": 1775032000.0
+  },
+  "capital_expenditure": {
+    "current": 474711000.0
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": null
   }
 }

@@ -531,16 +531,28 @@ CAPEX_CF_IFRS_TAGS: list[str] = [
 # 自己株式取得（Share Buyback）タグ定義
 # analysis/share_buyback.py で使用
 
+SHARE_BUYBACK_SS_JGAAP_TAGS: list[str] = [
+    "PurchaseOfTreasuryStock",                              # J-GAAP 株主資本等変動計算書 自己株式の取得
+]
+
 SHARE_BUYBACK_JGAAP_TAGS: list[str] = [
     "PurchaseOfTreasuryStockFinCF",                         # J-GAAP CF計算書 自己株式の取得
 ]
 
-SHARE_BUYBACK_IFRS_TAGS: list[str] = [
+SHARE_BUYBACK_IFRS_SS_TAGS: list[str] = [
+    "PurchaseOfTreasurySharesSSIFRS",                       # IFRS 株主資本等変動計算書
+]
+
+SHARE_BUYBACK_IFRS_CF_TAGS: list[str] = [
     "PaymentsForPurchaseOfTreasurySharesFinCFIFRS",         # IFRS CF計算書 自己株式の取得（jpigp_cor）
     "PurchaseOfTreasurySharesFinCFIFRS",                    # IFRS CF計算書 代替
     "AcquisitionOfTreasurySharesFinCFIFRS",                 # IFRS CF計算書 代替
     "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS",         # IFRS CF計算書 会社固有タグ（トヨタ等）
-    "PurchaseOfTreasurySharesSSIFRS",                       # IFRS 株主資本等変動計算書（最終フォールバック）
+]
+
+SHARE_BUYBACK_IFRS_TAGS: list[str] = [
+    *SHARE_BUYBACK_IFRS_CF_TAGS,
+    *SHARE_BUYBACK_IFRS_SS_TAGS,
 ]
 
 # 研究開発費（R&D Expenses）タグ定義

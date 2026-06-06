@@ -128,6 +128,50 @@ def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> "FieldSet":
     return _extract_html_labels(soup, _USGAAP_BS_HTML_LABEL_MAP)  # type: ignore[return-value]
 
 
+def parse_usgaap_html_equity_cf_fields(xbrl_dir: Path) -> "FieldSet":
+    """US-GAAP 連結株主資本等変動計算書 HTML から自己株式取得を抽出する。
+
+    「自己株式取得」行の自己株式列（△値）を正値に変換して返す。
+    株主資本等変動計算書は前期・当期の2セクション構成のため全マッチを収集し、
+    最後のマッチを当期、最初のマッチを前期とする。
+    返す値の単位は円。BS4 が未インストールの場合は空の FieldSet を返す。
+    """
+    if not _BS4_AVAILABLE:
+        return {}  # type: ignore[return-value]
+
+    equity_html = _find_html_by_prefix(xbrl_dir, "0105010")
+    if equity_html is None:
+        return {}  # type: ignore[return-value]
+
+    soup = BeautifulSoup(equity_html.read_text(encoding="utf-8", errors="ignore"), "html.parser")
+    matches: list[float] = []
+
+    for row in soup.find_all("tr"):
+        cells = row.find_all(["td", "th"])
+        if not cells:
+            continue
+        label = _strip_section_prefix(cells[0].get_text(" ", strip=True))
+        if label != "自己株式取得":
+            continue
+        nums = [parse_html_number(c.get_text(" ", strip=True)) for c in cells[1:]]
+        non_null = [n for n in nums if n is not None]
+        if non_null:
+            matches.append(non_null[-1])
+
+    if not matches:
+        return {}  # type: ignore[return-value]
+
+    # 最後のマッチ=当期、最初のマッチ=前期（2セクション構成）
+    current_raw = matches[-1]
+    prior_raw = matches[-2] if len(matches) >= 2 else None
+    return {  # type: ignore[return-value]
+        "USGAAP_HTML_ShareBuyback": {
+            "current": abs(current_raw) * MILLION_YEN,
+            "prior": abs(prior_raw) * MILLION_YEN if prior_raw is not None else None,
+        }
+    }
+
+
 def parse_usgaap_html_pl_fields(xbrl_dir: Path) -> "FieldSet":
     """US-GAAP 連結損益計算書 HTML から FieldSet を生成する。
 
