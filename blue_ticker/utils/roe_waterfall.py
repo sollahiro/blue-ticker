@@ -42,7 +42,7 @@ def _apply_dupont_components(year: YearEntry) -> None:
     total_assets_m = cd.get("TotalAssets")
     net_assets_m = cd.get("NetAssets")
 
-    if any(v is None for v in [np_m, sales_m, total_assets_m, net_assets_m]):
+    if np_m is None or sales_m is None or total_assets_m is None or net_assets_m is None:
         return
     if sales_m == 0 or total_assets_m == 0 or net_assets_m <= 0:
         return
@@ -72,7 +72,7 @@ def _apply_roe_change(
     at_curr = cd.get(_ASSET_TURNOVER_KEY)
     fl_curr = cd.get(_LEVERAGE_KEY)
 
-    if any(v is None for v in [roe_curr, nm_curr_pct, at_curr, fl_curr]):
+    if roe_curr is None or nm_curr_pct is None or at_curr is None or fl_curr is None:
         return
 
     nm_curr = nm_curr_pct / PERCENT
@@ -106,7 +106,7 @@ def apply_roe_waterfall_to_years(years: list[YearEntry]) -> None:
         fl_prev = prior_cd.get(_LEVERAGE_KEY)
         roe_prev = prior_cd.get("ROE")
 
-        if any(v is None for v in [nm_prev_pct, at_prev, fl_prev, roe_prev]):
+        if nm_prev_pct is None or at_prev is None or fl_prev is None or roe_prev is None:
             continue
 
         _apply_roe_change(current_cd, nm_prev_pct / PERCENT, at_prev, fl_prev, roe_prev)
