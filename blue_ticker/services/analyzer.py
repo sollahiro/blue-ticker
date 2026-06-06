@@ -20,6 +20,7 @@ from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_years,
 )
+from blue_ticker.utils.roe_waterfall import apply_roe_waterfall_to_years
 from blue_ticker.utils.roic_waterfall import (
     apply_roic_waterfall_from_xbrl,
     apply_roic_waterfall_to_years,
@@ -794,6 +795,7 @@ class IndividualAnalyzer:
             all_metrics.get("bs", {}),
         )
         apply_roic_waterfall_to_years(years)
+        apply_roe_waterfall_to_years(years)
 
         return {
             "stock_info": stock_info,

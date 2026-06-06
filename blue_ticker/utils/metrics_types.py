@@ -173,6 +173,15 @@ class CalculatedData(TypedDict, total=False):
     ROICMarginEffect: float | None
     ROICTurnoverEffect: float | None
     ROICWaterfallReconciliationDiff: float | None
+    # ── roe_waterfall.py ──
+    NetMargin: float | None
+    AssetTurnover: float | None
+    FinancialLeverage: float | None
+    ROEDelta: float | None
+    ROENetMarginEffect: float | None
+    ROEAssetTurnoverEffect: float | None
+    ROELeverageEffect: float | None
+    ROEWaterfallReconciliationDiff: float | None
 
 
 class YearEntry(TypedDict):
