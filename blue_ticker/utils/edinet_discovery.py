@@ -100,7 +100,7 @@ async def _fetch_date_range_cached(
         )
         for d, res in zip(batch, responses):
             docs_for_date: list[dict[str, Any]]
-            if isinstance(res, BaseException):
+            if isinstance(res, BaseException) or res is None:
                 docs_for_date = []
             else:
                 docs_for_date = res

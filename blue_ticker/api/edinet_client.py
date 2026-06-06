@@ -209,8 +209,13 @@ class EdinetAPIClient:
         """検索結果をキャッシュに保存"""
         self.cache_store.save_search_cache(filename, data)
 
-    async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]]:
-        """特定の日付のドキュメント一覧を取得（キャッシュ対応）"""
+    async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]] | None:
+        """特定の日付のドキュメント一覧を取得（キャッシュ対応）。
+
+        Returns:
+            取得成功（0件を含む）: list  ← キャッシュ保存済み
+            API失敗かつ stale なし: None ← キャッシュ未保存
+        """
         cache_key = self._get_search_cache_key(date_str)
         # TTL 尊重: 有効期限内ならそのまま返す（過去日付は TTL=3650日で実質永久）
         documents = self._load_search_cache(cache_key)
@@ -233,11 +238,12 @@ class EdinetAPIClient:
                         self._save_search_cache(cache_key, documents)
                         return documents
                     except Exception:
-                        # API 失敗時は期限切れキャッシュをフォールバックとして使う
-                        return self._load_stale_search_cache(cache_key) or []
+                        # API 失敗時は期限切れキャッシュをフォールバックとして使う。
+                        # stale もなければ None を返し、呼び出し元が「取得不能」と判断できるようにする。
+                        return self._load_stale_search_cache(cache_key)
         except TimeoutError as e:
             logger.warning(f"[EDINET] date cache lock timeout: date={date_str} error={e}")
-            return self._load_stale_search_cache(cache_key) or []
+            return self._load_stale_search_cache(cache_key)
 
     async def ensure_document_index_for_year(self, year: int) -> list[dict[str, Any]]:
         """指定年の日次書類一覧を束ねたローカルインデックスを返す。"""
@@ -279,8 +285,9 @@ class EdinetAPIClient:
                         return cached
 
                     docs = await self._build_document_index_for_year(year, required_through_date)
-                    self.cache_store.save_document_index(year, docs, built_through=required_through)
-                    return docs
+                    if docs is not None:
+                        self.cache_store.save_document_index(year, docs, built_through=required_through)
+                    return docs if docs is not None else []
             except TimeoutError as e:
                 logger.warning(f"[EDINET] document index lock timeout: year={year} error={e}")
                 cached = self.cache_store.load_document_index(
@@ -307,8 +314,9 @@ class EdinetAPIClient:
                 with self.cache_store.file_lock(f"document_index_{year}"):
                     self.cache_store.clear_document_index(year)
                     docs = await self._build_document_index_for_year(year, required_through_date)
-                    self.cache_store.save_document_index(year, docs, built_through=required_through)
-                    return docs
+                    if docs is not None:
+                        self.cache_store.save_document_index(year, docs, built_through=required_through)
+                    return docs if docs is not None else []
             except TimeoutError as e:
                 logger.warning(f"[EDINET] document index refresh lock timeout: year={year} error={e}")
                 cached = self.cache_store.load_document_index(
@@ -340,8 +348,9 @@ class EdinetAPIClient:
                     )
                     if cached_info is None:
                         docs = await self._build_document_index_for_year(year, required_through_date)
-                        self.cache_store.save_document_index(year, docs, built_through=required_through)
-                        return docs
+                        if docs is not None:
+                            self.cache_store.save_document_index(year, docs, built_through=required_through)
+                        return docs if docs is not None else []
 
                     documents = cached_info.get("documents")
                     existing_docs = list(documents) if isinstance(documents, list) else []
@@ -356,7 +365,10 @@ class EdinetAPIClient:
                         return existing_docs
 
                     docs_by_date = await self._get_documents_for_date_range_daily(start_date, required_through_date)
-                    merged = _merge_document_index_docs(existing_docs, docs_by_date)
+                    if any(v is None for v in docs_by_date.values()):
+                        return existing_docs
+                    docs_by_date_clean = {k: v for k, v in docs_by_date.items() if v is not None}
+                    merged = _merge_document_index_docs(existing_docs, docs_by_date_clean)
                     self.cache_store.save_document_index(year, merged, built_through=required_through)
                     return merged
             except TimeoutError as e:
@@ -386,19 +398,27 @@ class EdinetAPIClient:
             except Exception as e:
                 logger.warning(f"[EDINET] document index fallback to daily cache: {e}")
 
-        return await self._get_documents_for_date_range_daily(start, end)
+        docs_by_date = await self._get_documents_for_date_range_daily(start, end)
+        return {k: v or [] for k, v in docs_by_date.items()}
 
     async def _build_document_index_for_year(
         self,
         year: int,
         required_through: date,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | None:
+        """年次インデックスを構築する。
+
+        Returns:
+            成功（0件を含む）: list
+            いずれかの日のAPI取得が失敗（stale もなし）: None
+        """
         dates = [
             date(year, 1, 1) + timedelta(days=offset)
             for offset in range((required_through - date(year, 1, 1)).days + 1)
         ]
 
         documents: list[dict[str, Any]] = []
+        had_failure = False
         for i in range(0, len(dates), EDINET_DOCUMENT_INDEX_BATCH_SIZE):
             batch = dates[i: i + EDINET_DOCUMENT_INDEX_BATCH_SIZE]
             responses = await asyncio.gather(
@@ -406,14 +426,15 @@ class EdinetAPIClient:
                 return_exceptions=True,
             )
             for d, res in zip(batch, responses):
-                if isinstance(res, BaseException):
+                if isinstance(res, BaseException) or res is None:
+                    had_failure = True
                     continue
                 list_date = d.strftime("%Y-%m-%d")
                 for doc in res:
                     indexed_doc = dict(doc)
                     indexed_doc["_edinet_list_date"] = list_date
                     documents.append(indexed_doc)
-        return documents
+        return None if had_failure else documents
 
     async def _get_documents_for_date_range_from_index(
         self,
@@ -433,8 +454,8 @@ class EdinetAPIClient:
         self,
         start: date,
         end: date,
-    ) -> dict[str, list[dict[str, Any]]]:
-        result: dict[str, list[dict[str, Any]]] = {}
+    ) -> dict[str, list[dict[str, Any]] | None]:
+        result: dict[str, list[dict[str, Any]] | None] = {}
         curr = start
         while curr <= end:
             date_str = curr.strftime("%Y-%m-%d")

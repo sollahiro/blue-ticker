@@ -218,7 +218,7 @@ class EdinetFetcher:
                 )
 
             self._doc_cache[lock_key] = docs
-            if self.cache_manager is not None:
+            if self.cache_manager is not None and docs:
                 merged_not_found = sorted(known_not_found_fy_ends | set(not_found_fy_ends))
                 await self.cache_manager.async_set(
                     persistent_key,
