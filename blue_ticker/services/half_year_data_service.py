@@ -134,7 +134,7 @@ def _apply_nopat_and_roic(
 
 def _apply_bs_snapshot(
     data: dict[str, Any],
-    bs: dict[str, Any],
+    bs: Mapping[str, Any],
     ibd_m: float | None,
     cash_eq_raw: float | None,
 ) -> None:
