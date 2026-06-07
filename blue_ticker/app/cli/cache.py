@@ -146,6 +146,16 @@ def print_prepare_done(data: dict[str, Any]) -> None:
     print(f"Ready. EDINETキャッシュを準備しました: {data['prepared_years']}年分", file=sys.stderr)
 
 
+def print_catchup_loading(years: int) -> None:
+    """EDINETキャッシュ差分更新中の状態を表示する。"""
+    print(f"Now Loading... EDINET年次インデックスの不足分を取得しています（直近{years}年分）", file=sys.stderr)
+
+
+def print_catchup_done(data: dict[str, Any]) -> None:
+    """EDINETキャッシュ差分更新完了を表示する。"""
+    print(f"Ready. EDINETキャッシュを差分更新しました: {data['caught_up_years']}年分", file=sys.stderr)
+
+
 def cmd_cache(args, parser) -> None:
     """キャッシュ管理コマンド"""
     if args.cache_subcommand == "status":
@@ -249,7 +259,7 @@ def cmd_cache(args, parser) -> None:
             print("EDINET APIキーが未設定です。ticker config set edinet-key <KEY> を実行してください。", file=sys.stderr)
             return
         if args.format != "json":
-            print(f"Now Loading... EDINET年次インデックスの不足分を取得しています（直近{years}年分）", file=sys.stderr)
+            print_catchup_loading(years)
         data = asyncio.run(
             catchup_edinet_index_async(
                 settings_store.edinet_api_key,
@@ -260,7 +270,7 @@ def cmd_cache(args, parser) -> None:
         if args.format == "json":
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
-        print(f"Ready. EDINETキャッシュを差分更新しました: {data['caught_up_years']}年分", file=sys.stderr)
+        print_catchup_done(data)
         return
 
     if args.cache_subcommand == "clean":
