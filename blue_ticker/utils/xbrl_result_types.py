@@ -223,3 +223,4 @@ class HalfYearEdinetEntry(TypedDict):
     op: OperatingProfitResult
     cf: CashFlowResult
     ibd: InterestBearingDebtResult
+    tax: TaxExpenseResult

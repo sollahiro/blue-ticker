@@ -26,7 +26,7 @@ from blue_ticker.utils.operating_profit_change import (
 )
 from blue_ticker.utils.roic_waterfall import apply_roic_waterfall_to_periods
 from blue_ticker.utils.output_serializer import serialize_half_year_periods
-from blue_ticker.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry
+from blue_ticker.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, TaxExpenseResult
 
 from .edinet_fetcher import EdinetFetcher
 
@@ -127,11 +127,12 @@ def _apply_h1_edinet_data(
     data: dict[str, Any],
     edinet_q2: HalfYearEdinetEntry,
     q2_rec: dict[str, Any],
-) -> tuple[float | None, float | None, float | None]:
-    """H1期間のEDINET補完を適用。(gp_m, cfo_m, cfi_m) を返す（H2キャリーオーバー用）。"""
+) -> tuple[float | None, float | None, float | None, float | None, float | None]:
+    """H1期間のEDINET補完を適用。(gp_m, cfo_m, cfi_m, pretax_m, tax_m) を返す（H2キャリーオーバー用）。"""
     gp_result = edinet_q2["gp"]
     cf_result = edinet_q2["cf"]
     ibd_result = edinet_q2["ibd"]
+    tax_result = edinet_q2["tax"]
 
     h1_gp_m = None
     gp_current = gp_result.get("current")
@@ -168,19 +169,32 @@ def _apply_h1_edinet_data(
     q2_net_assets_m = q2_net_assets_raw / MILLION_YEN if q2_net_assets_raw is not None else None
     _apply_nopat_and_roic(data, q2_net_assets_m, h1_ibd_m)
 
-    return h1_gp_m, h1_cfo_m, h1_cfi_m
+    h1_pretax_m = h1_tax_m = None
+    pretax_raw = tax_result.get("pretax_income")
+    tax_raw = tax_result.get("income_tax")
+    if pretax_raw is not None:
+        h1_pretax_m = pretax_raw / MILLION_YEN
+        data["PreTaxIncome"] = h1_pretax_m
+        _set_metric_source(data, "PreTaxIncome", source="edinet", unit="million_yen", method=tax_result.get("method"))
+    if tax_raw is not None:
+        h1_tax_m = tax_raw / MILLION_YEN
+        data["IncomeTax"] = h1_tax_m
+        _set_metric_source(data, "IncomeTax", source="edinet", unit="million_yen", method=tax_result.get("method"))
+
+    return h1_gp_m, h1_cfo_m, h1_cfi_m, h1_pretax_m, h1_tax_m
 
 
 def _apply_h2_edinet_data(
     data: dict[str, Any],
     fy_rec: dict[str, Any],
-    h1_carry: tuple[float | None, float | None, float | None],
+    h1_carry: tuple[float | None, float | None, float | None, float | None, float | None],
     fy_gp_result: GrossProfitResult | None,
     ibd_by_year: dict[str, Any],
     fy_end_8: str,
+    fy_tax_by_year: dict[str, Any] | None = None,
 ) -> None:
     """H2期間の派生計算（FY - H1）と補完を適用。"""
-    h1_gp_m, h1_cfo_m, h1_cfi_m = h1_carry
+    h1_gp_m, h1_cfo_m, h1_cfi_m, h1_pretax_m, h1_tax_m = h1_carry
 
     fy_cfo = to_float(fy_rec.get("CFO"))
     fy_cfi = to_float(fy_rec.get("CFI"))
@@ -220,6 +234,19 @@ def _apply_h2_edinet_data(
     h2_net_assets_raw = to_float(fy_rec.get("NetAssets"))
     h2_net_assets_m = h2_net_assets_raw / MILLION_YEN if h2_net_assets_raw is not None else None
     _apply_nopat_and_roic(data, h2_net_assets_m, h2_ibd_m)
+
+    fy_tax = fy_tax_by_year.get(fy_end_8) if fy_tax_by_year else None
+    if fy_tax is not None:
+        fy_pretax_raw = fy_tax.get("pretax_income")
+        fy_income_tax_raw = fy_tax.get("income_tax")
+        fy_pretax_m = fy_pretax_raw / MILLION_YEN if fy_pretax_raw is not None else None
+        fy_tax_m = fy_income_tax_raw / MILLION_YEN if fy_income_tax_raw is not None else None
+        if fy_pretax_m is not None and h1_pretax_m is not None:
+            data["PreTaxIncome"] = fy_pretax_m - h1_pretax_m
+            _set_metric_source(data, "PreTaxIncome", source="derived", unit="million_yen", method="FY PreTaxIncome - H1 PreTaxIncome")
+        if fy_tax_m is not None and h1_tax_m is not None:
+            data["IncomeTax"] = fy_tax_m - h1_tax_m
+            _set_metric_source(data, "IncomeTax", source="derived", unit="million_yen", method="FY IncomeTax - H1 IncomeTax")
 
 
 def _apply_fy_only_edinet_data(
@@ -329,7 +356,7 @@ class HalfYearDataService:
         # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
         try:
-            half_edinet, fy_gp_all, ibd_all, fy_op_all = await asyncio.gather(
+            half_edinet, fy_gp_all, ibd_all, fy_op_all, fy_tax_all = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(
                     code,
                     financial_data,
@@ -358,11 +385,19 @@ class HalfYearDataService:
                     docs=annual_context["docs"],
                     pre_parsed_map=annual_context["pre_parsed_map"],
                 ),
+                edinet_fetcher.extract_tax_expense_by_year(
+                    code,
+                    financial_data,
+                    max_years=EDINET_DOC_DISCOVERY_LIMIT,
+                    docs=annual_context["docs"],
+                    pre_parsed_map=annual_context["pre_parsed_map"],
+                ),
             )
             # 選択済み年度のみにフィルタ
             fy_gp = {k: v for k, v in fy_gp_all.items() if k in selected_fy_ends}
             ibd_by_year = {k: v for k, v in ibd_all.items() if k in selected_fy_ends}
             fy_op = {k: v for k, v in fy_op_all.items() if k in selected_fy_ends}
+            fy_tax_by_year = {k: v for k, v in fy_tax_all.items() if k in selected_fy_ends}
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
             self.cache_manager.set(cache_key, {
@@ -413,8 +448,8 @@ class HalfYearDataService:
                 if fy_end_8:
                     q2_by_end[fy_end_8] = r
 
-        # H1 期間で確定した EDINET CF 値を H2 計算に引き継ぐ
-        h1_edinet_by_fy: dict[str, tuple[float | None, float | None, float | None]] = {}
+        # H1 期間で確定した EDINET 値を H2 計算に引き継ぐ
+        h1_edinet_by_fy: dict[str, tuple[float | None, float | None, float | None, float | None, float | None]] = {}
 
         for period in base_periods:
             fy_end_8 = _fy_end_key(period.get("fy_end"))
@@ -429,10 +464,11 @@ class HalfYearDataService:
                 _apply_h2_edinet_data(
                     data,
                     fy_by_end.get(fy_end_8, {}),
-                    h1_edinet_by_fy.get(fy_end_8, (None, None, None)),
+                    h1_edinet_by_fy.get(fy_end_8, (None, None, None, None, None)),
                     fy_gp_by_end.get(fy_end_8),
                     ibd_by_year,
                     fy_end_8,
+                    fy_tax_by_year=fy_tax_by_year,
                 )
             else:
                 _apply_fy_only_edinet_data(data, fy_gp_by_end.get(fy_end_8), fy_by_end.get(fy_end_8, {}), ibd_by_year, fy_end_8)

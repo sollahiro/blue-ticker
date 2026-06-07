@@ -34,6 +34,7 @@ from blue_ticker.utils.xbrl_result_types import (
     HalfYearEdinetEntry,
     InterestBearingDebtResult,
     OperatingProfitResult,
+    TaxExpenseResult,
     XbrlFactIndex,
 )
 from blue_ticker.services._edinet_doc_filter import (
@@ -801,6 +802,10 @@ class EdinetFetcher:
                 InterestBearingDebtResult,
                 _extract_with_statement_scope(entry, "ibd", _extract_ibd_compat),
             )
+            tax = cast(
+                TaxExpenseResult,
+                _extract_with_statement_scope(entry, "tax", _extract_tax_compat),
+            )
             gp["docID"] = doc["docID"]
             op["docID"] = doc["docID"]
             logger.info(
@@ -808,7 +813,7 @@ class EdinetFetcher:
                 f"gp={gp.get('current')}, op={op.get('current')}, cfo={cf['cfo'].get('current')}, "
                 f"cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
             )
-            out[fy_end_8] = {"gp": gp, "op": op, "cf": cf, "ibd": ibd}
+            out[fy_end_8] = {"gp": gp, "op": op, "cf": cf, "ibd": ibd, "tax": tax}
 
         logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(out)}件")
         return out
