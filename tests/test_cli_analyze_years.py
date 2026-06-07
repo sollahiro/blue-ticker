@@ -79,6 +79,7 @@ def test_table_output_contains_required_labels(capsys):
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_data,
         patch("blue_ticker.services.data_service.data_service.close", new_callable=AsyncMock),
+        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_data.return_value = _MOCK_RESULT
@@ -117,6 +118,7 @@ def test_table_output_labels_in_defined_order(capsys):
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_data,
         patch("blue_ticker.services.data_service.data_service.close", new_callable=AsyncMock),
+        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_data.return_value = _MOCK_RESULT

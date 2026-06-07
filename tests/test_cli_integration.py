@@ -88,7 +88,10 @@ def test_main_analyze_outputs_json_and_closes_service(monkeypatch, capsys) -> No
     })
     data_service.close = AsyncMock()
 
-    with patch("blue_ticker.services.data_service.data_service", data_service):
+    with (
+        patch("blue_ticker.services.data_service.data_service", data_service),
+        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
+    ):
         _run_cli(monkeypatch, ["analyze", "7203", "--years", "2", "--format", "json", "--no-cache"])
 
     captured = capsys.readouterr()
