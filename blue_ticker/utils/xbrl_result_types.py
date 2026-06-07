@@ -166,12 +166,6 @@ class IncomeStatementResult(TypedDict):
 class TangibleFixedAssetsResult(TypedDict):
     """有形固定資産（PPE）の帳簿価額。金額は円単位。"""
 
-    buildings: float | None           # 建物及び構築物
-    land: float | None                # 土地
-    machinery: float | None           # 機械装置及び運搬具
-    tools: float | None               # 工具器具及び備品
-    construction_in_progress: float | None  # 建設仮勘定
-    others: float | None              # その他（合計 − 5項目の差分。None は合計未取得時）
     total: float | None               # 有形固定資産合計
     method: str
     accounting_standard: str
@@ -224,3 +218,4 @@ class HalfYearEdinetEntry(TypedDict):
     cf: CashFlowResult
     ibd: InterestBearingDebtResult
     tax: TaxExpenseResult
+    bs: BalanceSheetResult

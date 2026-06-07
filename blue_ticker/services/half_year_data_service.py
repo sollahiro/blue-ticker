@@ -96,6 +96,15 @@ def _resolve_tax_rate(data: dict[str, Any]) -> tuple[float, bool]:
     return NOPAT_FALLBACK_TAX_RATE, True
 
 
+def _apply_effective_tax_rate(data: dict[str, Any]) -> None:
+    """PreTaxIncome / IncomeTax（百万円）からEffectiveTaxRate（%）を計算して格納する。"""
+    pretax_m = to_float(data.get("PreTaxIncome"))
+    income_tax_m = to_float(data.get("IncomeTax"))
+    if pretax_m is not None and pretax_m != 0 and income_tax_m is not None:
+        data["EffectiveTaxRate"] = income_tax_m / pretax_m * PERCENT
+        _set_metric_source(data, "EffectiveTaxRate", source="derived", unit="percent", method="IncomeTax / PreTaxIncome")
+
+
 def _apply_nopat_and_roic(
     data: dict[str, Any],
     net_assets_m: float | None,
@@ -123,6 +132,49 @@ def _apply_nopat_and_roic(
     _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NOPAT / (NetAssets + InterestBearingDebt)")
 
 
+def _apply_bs_snapshot(
+    data: dict[str, Any],
+    bs: dict[str, Any],
+    ibd_m: float | None,
+    cash_eq_raw: float | None,
+) -> None:
+    """BSスナップショットからBS・IBD・キャッシュ・ROE指標を格納する。"""
+    for data_key, bs_key in [
+        ("TotalAssets", "total_assets"),
+        ("CurrentAssets", "current_assets"),
+        ("NonCurrentAssets", "non_current_assets"),
+        ("CurrentLiabilities", "current_liabilities"),
+        ("NonCurrentLiabilities", "non_current_liabilities"),
+        ("NetAssets", "net_assets"),
+    ]:
+        raw = to_float(bs.get(bs_key))
+        if raw is not None:
+            data[data_key] = raw / MILLION_YEN
+            _set_metric_source(data, data_key, source="edinet", unit="million_yen")
+
+    if ibd_m is not None:
+        data["InterestBearingDebt"] = ibd_m
+        _set_metric_source(data, "InterestBearingDebt", source="edinet", unit="million_yen")
+
+    if cash_eq_raw is not None:
+        cash_eq_m = cash_eq_raw / MILLION_YEN
+        data["CashEq"] = cash_eq_m
+        _set_metric_source(data, "CashEq", source="edinet", unit="million_yen")
+        if ibd_m is not None:
+            data["NetCash"] = cash_eq_m - ibd_m
+            _set_metric_source(data, "NetCash", source="derived", unit="million_yen", method="CashEq - IBD")
+
+    net_assets_m = to_float(data.get("NetAssets"))
+    if ibd_m is not None and net_assets_m is not None and net_assets_m != 0:
+        data["NetDE"] = ibd_m / net_assets_m
+        _set_metric_source(data, "NetDE", source="derived", unit="times", method="IBD / NetAssets")
+
+    np_m = to_float(data.get("NP"))
+    if np_m is not None and net_assets_m is not None and net_assets_m != 0:
+        data["ROE"] = np_m / net_assets_m * PERCENT
+        _set_metric_source(data, "ROE", source="derived", unit="percent", method="NP / NetAssets")
+
+
 def _apply_h1_edinet_data(
     data: dict[str, Any],
     edinet_q2: HalfYearEdinetEntry,
@@ -133,6 +185,7 @@ def _apply_h1_edinet_data(
     cf_result = edinet_q2["cf"]
     ibd_result = edinet_q2["ibd"]
     tax_result = edinet_q2["tax"]
+    bs_result = edinet_q2["bs"]
 
     h1_gp_m = None
     gp_current = gp_result.get("current")
@@ -163,12 +216,7 @@ def _apply_h1_edinet_data(
         _set_metric_source(data, "CFC", source="derived", unit="million_yen", method="CFO + CFI")
         _set_metric_source(data, "FreeCF", source="derived", unit="million_yen", method="alias of CFC")
 
-    ibd_current = ibd_result.get("current")
-    h1_ibd_m = ibd_current / MILLION_YEN if ibd_current is not None else None
-    q2_net_assets_raw = to_float(q2_rec.get("NetAssets"))
-    q2_net_assets_m = q2_net_assets_raw / MILLION_YEN if q2_net_assets_raw is not None else None
-    _apply_nopat_and_roic(data, q2_net_assets_m, h1_ibd_m)
-
+    # PreTaxIncome / IncomeTax を先に設定してEffectiveTaxRateを確定させる（NOPATの税率に使用）
     h1_pretax_m = h1_tax_m = None
     pretax_raw = tax_result.get("pretax_income")
     tax_raw = tax_result.get("income_tax")
@@ -180,6 +228,19 @@ def _apply_h1_edinet_data(
         h1_tax_m = tax_raw / MILLION_YEN
         data["IncomeTax"] = h1_tax_m
         _set_metric_source(data, "IncomeTax", source="edinet", unit="million_yen", method=tax_result.get("method"))
+    _apply_effective_tax_rate(data)
+
+    ibd_current = ibd_result.get("current")
+    h1_ibd_m = ibd_current / MILLION_YEN if ibd_current is not None else None
+
+    # BS から NetAssets を優先取得（NOPAT/ROIC の分母に使用）
+    bs_net_assets_raw = to_float(bs_result.get("net_assets"))
+    q2_net_assets_raw = to_float(q2_rec.get("NetAssets"))
+    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else q2_net_assets_raw
+    q2_net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
+    _apply_nopat_and_roic(data, q2_net_assets_m, h1_ibd_m)
+
+    _apply_bs_snapshot(data, bs_result, h1_ibd_m, to_float(q2_rec.get("CashEq")))
 
     return h1_gp_m, h1_cfo_m, h1_cfi_m, h1_pretax_m, h1_tax_m
 
@@ -192,6 +253,7 @@ def _apply_h2_edinet_data(
     ibd_by_year: dict[str, Any],
     fy_end_8: str,
     fy_tax_by_year: dict[str, Any] | None = None,
+    fy_bs_by_year: dict[str, Any] | None = None,
 ) -> None:
     """H2期間の派生計算（FY - H1）と補完を適用。"""
     h1_gp_m, h1_cfo_m, h1_cfi_m, h1_pretax_m, h1_tax_m = h1_carry
@@ -229,12 +291,7 @@ def _apply_h2_edinet_data(
             _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
             _set_metric_source(data, "DocID", source="edinet", unit="id", doc_id=fy_gp_result.get("docID"))
 
-    h2_ibd = ibd_by_year.get(fy_end_8)
-    h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
-    h2_net_assets_raw = to_float(fy_rec.get("NetAssets"))
-    h2_net_assets_m = h2_net_assets_raw / MILLION_YEN if h2_net_assets_raw is not None else None
-    _apply_nopat_and_roic(data, h2_net_assets_m, h2_ibd_m)
-
+    # PreTaxIncome / IncomeTax（FY - H1）を先に設定してEffectiveTaxRateを確定させる
     fy_tax = fy_tax_by_year.get(fy_end_8) if fy_tax_by_year else None
     if fy_tax is not None:
         fy_pretax_raw = fy_tax.get("pretax_income")
@@ -247,6 +304,20 @@ def _apply_h2_edinet_data(
         if fy_tax_m is not None and h1_tax_m is not None:
             data["IncomeTax"] = fy_tax_m - h1_tax_m
             _set_metric_source(data, "IncomeTax", source="derived", unit="million_yen", method="FY IncomeTax - H1 IncomeTax")
+    _apply_effective_tax_rate(data)
+
+    h2_ibd = ibd_by_year.get(fy_end_8)
+    h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
+
+    fy_bs = fy_bs_by_year.get(fy_end_8) if fy_bs_by_year else None
+    bs_net_assets_raw = to_float(fy_bs.get("net_assets")) if fy_bs else None
+    fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
+    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else fy_net_assets_raw
+    h2_net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
+    _apply_nopat_and_roic(data, h2_net_assets_m, h2_ibd_m)
+
+    if fy_bs is not None:
+        _apply_bs_snapshot(data, fy_bs, h2_ibd_m, to_float(fy_rec.get("CashEq")))
 
 
 def _apply_fy_only_edinet_data(
@@ -255,6 +326,8 @@ def _apply_fy_only_edinet_data(
     fy_rec: dict[str, Any],
     ibd_by_year: dict[str, Any],
     fy_end_8: str,
+    fy_tax_by_year: dict[str, Any] | None = None,
+    fy_bs_by_year: dict[str, Any] | None = None,
 ) -> None:
     """FY-onlyエントリ（2Qデータなし）にFY EDINET GP + ROIC を補完。"""
     fy_gp_current = fy_gp_result.get("current") if fy_gp_result is not None else None
@@ -266,11 +339,31 @@ def _apply_fy_only_edinet_data(
         _set_metric_source(data, "GrossProfit", source="edinet", unit="million_yen", method=fy_gp_result.get("method"), doc_id=fy_gp_result.get("docID"))
         _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
 
+    # PreTaxIncome / IncomeTax を先に設定
+    fy_tax = fy_tax_by_year.get(fy_end_8) if fy_tax_by_year else None
+    if fy_tax is not None:
+        pretax_raw = fy_tax.get("pretax_income")
+        income_tax_raw = fy_tax.get("income_tax")
+        if pretax_raw is not None:
+            data["PreTaxIncome"] = pretax_raw / MILLION_YEN
+            _set_metric_source(data, "PreTaxIncome", source="edinet", unit="million_yen", method=fy_tax.get("method"))
+        if income_tax_raw is not None:
+            data["IncomeTax"] = income_tax_raw / MILLION_YEN
+            _set_metric_source(data, "IncomeTax", source="edinet", unit="million_yen", method=fy_tax.get("method"))
+    _apply_effective_tax_rate(data)
+
     fy_ibd = ibd_by_year.get(fy_end_8)
     fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
+
+    fy_bs = fy_bs_by_year.get(fy_end_8) if fy_bs_by_year else None
+    bs_net_assets_raw = to_float(fy_bs.get("net_assets")) if fy_bs else None
     fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
-    fy_net_assets_m = fy_net_assets_raw / MILLION_YEN if fy_net_assets_raw is not None else None
+    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else fy_net_assets_raw
+    fy_net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
     _apply_nopat_and_roic(data, fy_net_assets_m, fy_ibd_m)
+
+    if fy_bs is not None:
+        _apply_bs_snapshot(data, fy_bs, fy_ibd_m, to_float(fy_rec.get("CashEq")))
 
 
 def _trim_half_year_periods(
@@ -356,7 +449,7 @@ class HalfYearDataService:
         # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
         try:
-            half_edinet, fy_gp_all, ibd_all, fy_op_all, fy_tax_all = await asyncio.gather(
+            half_edinet, fy_gp_all, ibd_all, fy_op_all, fy_tax_all, fy_bs_all = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(
                     code,
                     financial_data,
@@ -392,12 +485,20 @@ class HalfYearDataService:
                     docs=annual_context["docs"],
                     pre_parsed_map=annual_context["pre_parsed_map"],
                 ),
+                edinet_fetcher.extract_bs_by_year(
+                    code,
+                    financial_data,
+                    max_years=EDINET_DOC_DISCOVERY_LIMIT,
+                    docs=annual_context["docs"],
+                    pre_parsed_map=annual_context["pre_parsed_map"],
+                ),
             )
             # 選択済み年度のみにフィルタ
             fy_gp = {k: v for k, v in fy_gp_all.items() if k in selected_fy_ends}
             ibd_by_year = {k: v for k, v in ibd_all.items() if k in selected_fy_ends}
             fy_op = {k: v for k, v in fy_op_all.items() if k in selected_fy_ends}
             fy_tax_by_year = {k: v for k, v in fy_tax_all.items() if k in selected_fy_ends}
+            fy_bs_by_year = {k: v for k, v in fy_bs_all.items() if k in selected_fy_ends}
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
             self.cache_manager.set(cache_key, {
@@ -469,9 +570,18 @@ class HalfYearDataService:
                     ibd_by_year,
                     fy_end_8,
                     fy_tax_by_year=fy_tax_by_year,
+                    fy_bs_by_year=fy_bs_by_year,
                 )
             else:
-                _apply_fy_only_edinet_data(data, fy_gp_by_end.get(fy_end_8), fy_by_end.get(fy_end_8, {}), ibd_by_year, fy_end_8)
+                _apply_fy_only_edinet_data(
+                    data,
+                    fy_gp_by_end.get(fy_end_8),
+                    fy_by_end.get(fy_end_8, {}),
+                    ibd_by_year,
+                    fy_end_8,
+                    fy_tax_by_year=fy_tax_by_year,
+                    fy_bs_by_year=fy_bs_by_year,
+                )
 
         apply_operating_profit_change_to_periods_from_xbrl(
             base_periods,

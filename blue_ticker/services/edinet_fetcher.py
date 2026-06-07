@@ -29,6 +29,7 @@ from blue_ticker.utils.edinet_discovery import (
 )
 from blue_ticker.utils.fiscal_year import format_document_date
 from blue_ticker.utils.xbrl_result_types import (
+    BalanceSheetResult,
     CashFlowResult,
     GrossProfitResult,
     HalfYearEdinetEntry,
@@ -756,6 +757,18 @@ class EdinetFetcher:
         """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["ibd"], code, financial_data, max_years, docs=docs, pre_parsed_map=pre_parsed_map)
 
+    async def extract_bs_by_year(
+        self,
+        code: str,
+        financial_data: list[dict[str, Any]],
+        max_years: int,
+        *,
+        docs: list[dict[str, Any]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
+    ) -> _MetricByYear:
+        """年度別に貸借対照表を抽出。Returns: { "YYYYMMDD": bs_result_dict }"""
+        return await self._extract_metric_by_year(_SPEC_BY_KEY["bs"], code, financial_data, max_years, docs=docs, pre_parsed_map=pre_parsed_map)
+
     async def extract_half_year_edinet_data(
         self,
         code: str,
@@ -806,6 +819,10 @@ class EdinetFetcher:
                 TaxExpenseResult,
                 _extract_with_statement_scope(entry, "tax", _extract_tax_compat),
             )
+            bs = cast(
+                BalanceSheetResult,
+                _extract_with_statement_scope(entry, "bs", _extract_bs_compat),
+            )
             gp["docID"] = doc["docID"]
             op["docID"] = doc["docID"]
             logger.info(
@@ -813,7 +830,7 @@ class EdinetFetcher:
                 f"gp={gp.get('current')}, op={op.get('current')}, cfo={cf['cfo'].get('current')}, "
                 f"cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
             )
-            out[fy_end_8] = {"gp": gp, "op": op, "cf": cf, "ibd": ibd, "tax": tax}
+            out[fy_end_8] = {"gp": gp, "op": op, "cf": cf, "ibd": ibd, "tax": tax, "bs": bs}
 
         logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(out)}件")
         return out
