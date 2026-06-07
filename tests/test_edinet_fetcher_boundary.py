@@ -41,7 +41,7 @@ async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() 
 
     assert docs == [{"docID": "S100TEST"}]
     # save_count = max(EDINET_DOC_DISCOVERY_LIMIT=10, max_years=1) = 10
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 10, known_not_found_fy_ends=frozenset())
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 10)
 
 
 @pytest.mark.asyncio
@@ -268,7 +268,7 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
 
     assert docs == [{"docID": "S100ANNUAL"}]
     # save_count = max(10, 5) = 10
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 10, known_not_found_fy_ends=frozenset())
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 10)
 
 
 @pytest.mark.asyncio
