@@ -3,14 +3,63 @@ import sys
 import logging
 from collections.abc import Mapping
 import aiohttp
+from blue_ticker import __version__
 from blue_ticker.infrastructure.helpers import validate_stock_code
 from blue_ticker.services.master_data import master_data_manager
 from blue_ticker.utils.converters import extract_year_month
 from blue_ticker.utils.metrics_access import metric_view
-from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_FILINGS_DEFAULT_YEARS
+from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
 from blue_ticker.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
+
+
+async def _ensure_edinet_index(years: int) -> bool:
+    """EDINETインデックスがなければprepare、古ければcatchupを自動実行する。
+
+    Returns:
+        True: 分析を続行してよい
+        False: インデックスが存在せず準備も失敗したため分析を中断すべき
+    """
+    from blue_ticker.infrastructure.settings import settings_store
+    from .cache import (
+        cache_status,
+        catchup_edinet_index_async,
+        prepare_edinet_index_async,
+        print_catchup_done,
+        print_catchup_loading,
+        print_prepare_done,
+        print_prepare_loading,
+    )
+
+    if not settings_store.edinet_api_key:
+        print("エラー: EDINET APIキーが未設定です。ticker config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+        return False
+
+    try:
+        status = cache_status(settings_store.cache_dir, years=years)
+    except Exception as e:
+        logger.warning(f"EDINETインデックス状態確認中にエラーが発生しました: {e}")
+        return True
+
+    index_status = status.get("edinet_index_status")
+    if index_status == "missing":
+        print_prepare_loading(years)
+        try:
+            data = await prepare_edinet_index_async(settings_store.edinet_api_key, settings_store.cache_dir, years)
+            print_prepare_done(data)
+        except Exception as e:
+            print(f"エラー: EDINETインデックスの準備に失敗しました（{e}）。", file=sys.stderr)
+            return False  # インデックスが存在しないまま失敗 → 分析しても結果が得られない
+    elif index_status == "stale":
+        print_catchup_loading(years)
+        try:
+            data = await catchup_edinet_index_async(settings_store.edinet_api_key, settings_store.cache_dir, years)
+            print_catchup_done(data)
+        except Exception as e:
+            print(f"警告: EDINETインデックスの更新に失敗しました（{e}）。古いキャッシュで続行します。", file=sys.stderr)
+            # stale なキャッシュが残っているため続行可能
+    return True
 
 
 def _gross_profit_labels(calculated_data: Mapping[str, object]) -> tuple[str, str, str]:
@@ -80,6 +129,19 @@ async def cmd_analyze(args):
                 return
 
             half_years = requested_years or 3
+
+            # キャッシュ確認：なければインデックスを自動準備
+            half_cache_key = f"half_year_periods_{code}"
+            half_cached = data_service.cache_manager.get(half_cache_key)
+            half_cache_valid = (
+                not args.no_cache
+                and isinstance(half_cached, dict)
+                and half_cached.get("_cache_version") == __version__
+            )
+            if not half_cache_valid:
+                if not await _ensure_edinet_index(max(half_years, EDINET_PREPARE_DEFAULT_YEARS)):
+                    return
+
             print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
             print(f"分析対象期間: 直近 {half_years} 年分 (上半期 / 下半期)", file=sys.stderr)
 
@@ -144,7 +206,6 @@ async def cmd_analyze(args):
                 ("純資産 (百万)",      lambda d: d.get("NetAssets")),
                 ("現金及び現金同等物 (百万)", lambda d: d.get("CashEq")),
                 ("ネットキャッシュ (百万)", lambda d: d.get("NetCash")),
-                ("ネットD/E (倍)",     lambda d: d.get("NetDE")),
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
                 ("フリーCF (百万)",    lambda d: d.get("CFC", d.get("FreeCF"))),
@@ -182,6 +243,18 @@ async def cmd_analyze(args):
 
         # 分析年数の決定
         years_to_analyze = requested_years or ANALYZE_DEFAULT_YEARS
+
+        # キャッシュ確認：なければインデックスを自動準備
+        analysis_cache_key = f"individual_analysis_{code}"
+        analysis_cached = data_service.cache_manager.get(analysis_cache_key)
+        analysis_cache_valid = (
+            not args.no_cache
+            and isinstance(analysis_cached, dict)
+            and analysis_cached.get("_cache_version") == __version__
+        )
+        if not analysis_cache_valid:
+            if not await _ensure_edinet_index(max(years_to_analyze, EDINET_PREPARE_DEFAULT_YEARS)):
+                return
 
         print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
         years_label = f"直近 {years_to_analyze} 年分" if years_to_analyze else "全期間"
@@ -298,8 +371,6 @@ async def cmd_analyze(args):
             ("ネットキャッシュ (百万)",   calculated_metric(lambda c: c.get("NetCash"))),
             ("ネットD/E (倍)",           calculated_metric(lambda c: c.get("NetDE"))),
             ("営業CF (百万)",          calculated_metric(lambda c: c.get("CFO"))),
-            ("減価償却費 (百万)",      calculated_metric(lambda c: c.get("DepreciationAmortization"))),
-            ("その他現金化差分 (百万)", calculated_metric(lambda c: c.get("OtherCashConversionGap"))),
             ("投資CF (百万)",          calculated_metric(lambda c: c.get("CFI"))),
             ("フリーCF (百万)",        calculated_metric(lambda c: c.get("CFC"))),
             ("設備投資 (百万)",        calculated_metric(lambda c: c.get("Capex"))),

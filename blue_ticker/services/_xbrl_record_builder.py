@@ -9,7 +9,6 @@ from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.bank_financials import extract_bank_financials
 from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
 from blue_ticker.analysis.cash_flow import extract_cash_flow
-from blue_ticker.analysis.depreciation import extract_depreciation
 from blue_ticker.analysis.employees import extract_employees
 from blue_ticker.analysis.gross_profit import extract_gross_profit
 from blue_ticker.analysis.income_statement import extract_income_statement
@@ -130,7 +129,6 @@ _extract_ie_compat = _make_section_wrapper(IncomeStatementSection, extract_inter
 _extract_tax_compat = _make_section_wrapper(IncomeStatementSection, extract_tax_expense)
 _extract_nr_compat = _make_section_wrapper(IncomeStatementSection, extract_net_revenue)
 _extract_cf_compat = _make_section_wrapper(CashFlowSection, extract_cash_flow)
-_extract_da_compat = _make_section_wrapper(CashFlowSection, extract_depreciation)
 _extract_capex_compat = _make_section_wrapper(CashFlowSection, extract_capital_expenditure)
 _extract_buyback_compat = _make_section_wrapper(CashFlowSection, extract_share_buyback)
 _extract_rd_compat = _make_section_wrapper(IncomeStatementSection, extract_research_development)

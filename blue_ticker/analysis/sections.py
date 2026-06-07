@@ -49,8 +49,6 @@ from blue_ticker.constants.xbrl import (
     CAPEX_CF_IFRS_TAGS,
     CAPEX_CF_JGAAP_TAGS,
     CAPEX_OVERVIEW_TAGS,
-    CF_DEPRECIATION_IFRS_TAGS,
-    CF_DEPRECIATION_JGAAP_TAGS,
     CF_INVESTING_TAGS,
     CF_OPERATING_TAGS,
     COMPONENT_DEFINITIONS,
@@ -60,7 +58,6 @@ from blue_ticker.constants.xbrl import (
     IBD_IFRS_CL_TAGS,
     IBD_IFRS_NCL_TAGS,
     IBD_NON_CURRENT_COMPONENTS,
-    IFRS_DEPRECIATION_MARKER_TAGS,
     IFRS_INTEREST_EXPENSE_MARKER_TAGS,
     IFRS_PL_MARKER_TAGS,
     IFRS_TAX_MARKER_TAGS,
@@ -203,9 +200,6 @@ class IncomeStatementSection(Section):
 _CF_TAGS: frozenset[str] = frozenset(
     CF_OPERATING_TAGS
     + CF_INVESTING_TAGS
-    + CF_DEPRECIATION_JGAAP_TAGS
-    + CF_DEPRECIATION_IFRS_TAGS
-    + IFRS_DEPRECIATION_MARKER_TAGS
     + USGAAP_MARKER_TAGS
     + IFRS_PL_MARKER_TAGS
     + CAPEX_OVERVIEW_TAGS
@@ -220,7 +214,7 @@ _CF_TAGS: frozenset[str] = frozenset(
 class CashFlowSection(Section):
     """CF計算書セクション（Duration コンテキスト）。
 
-    対象: 営業CF・投資CF・減価償却費・自己株式取得
+    対象: 営業CF・投資CF・自己株式取得
     """
 
     _TAGS = _CF_TAGS

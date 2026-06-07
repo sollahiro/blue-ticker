@@ -198,13 +198,6 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         raw["employees_method"] = str(emp.get("method", "unknown"))
         raw["employees_scope"] = str(emp.get("scope", "unknown"))
 
-    for fy_end_key, da in all_metrics.get("da", {}).items():
-        raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(da)) is not None and "doc_id" not in raw:
-            raw["doc_id"] = doc_id
-        raw["depreciation_amortization"] = da.get("current")
-        raw["depreciation_method"] = str(da.get("method", "unknown"))
-
     for fy_end_key, ob in all_metrics.get("ob", {}).items():
         raw = raw_for(fy_end_key)
         if (doc_id := _metric_doc_id(ob)) is not None and "doc_id" not in raw:
@@ -513,42 +506,6 @@ def _apply_employees(
             _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=raw.get("employees_method"), doc_id=raw.get("doc_id"), label=raw.get("employees_scope"))
 
 
-def _apply_depreciation(
-    years: list[YearEntry],
-    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
-) -> None:
-    for year, raw in _iter_raw(years, raw_by_year, "da"):
-        depreciation = raw.get("depreciation_amortization")
-        if depreciation is not None:
-            cd = year["CalculatedData"]
-            cd["DepreciationAmortization"] = depreciation / MILLION_YEN
-            _set_metric_source(
-                cd,
-                "DepreciationAmortization",
-                source="edinet",
-                unit="million_yen",
-                method=raw.get("depreciation_method"),
-            )
-
-
-def _apply_cash_conversion_analysis(years: list[YearEntry]) -> None:
-    for year in years:
-        cd = year["CalculatedData"]
-        cfo = _year_metric_float(year, "CFO")
-        op = _year_metric_float(year, "OP")
-        depreciation = cd.get("DepreciationAmortization")
-        if cfo is None or op is None or depreciation is None:
-            continue
-        cd["OtherCashConversionGap"] = cfo - op - depreciation
-        _set_metric_source(
-            cd,
-            "OtherCashConversionGap",
-            source="derived",
-            unit="million_yen",
-            method="CFO - OP - DepreciationAmortization",
-        )
-
-
 def _apply_order_book(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
@@ -660,7 +617,6 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]],
     _apply_operating_profit,
     _apply_net_revenue,
     _apply_employees,
-    _apply_depreciation,
     _apply_order_book,
 ]
 
@@ -775,8 +731,6 @@ class IndividualAnalyzer:
         raw_xbrl_by_year = _raw_by_year(all_metrics)
         for apply_fn in _METRIC_APPLIERS:
             apply_fn(years, raw_xbrl_by_year)
-        _apply_cash_conversion_analysis(years)
-
         apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         apply_operating_profit_change_to_years(years)
         _apply_nopat(years)

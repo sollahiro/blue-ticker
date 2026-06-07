@@ -60,7 +60,6 @@ from blue_ticker.services._xbrl_record_builder import (
     _extract_bank_compat,
     _extract_bs_compat,
     _extract_cf_compat,
-    _extract_da_compat,
     _extract_gp_compat,
     _extract_ibd_compat,
     _extract_ie_compat,
@@ -135,7 +134,6 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("emp", "EMP", _employees_compat),
     ExtractorSpec("nr", "NR", _extract_nr_compat, result_check=lambda r: bool(r.get("found"))),
     ExtractorSpec("op", "OP", _extract_op_compat),
-    ExtractorSpec("da", "DA", _extract_da_compat),
     ExtractorSpec(
         "ob",
         "OB",

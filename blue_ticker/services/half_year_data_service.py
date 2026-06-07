@@ -165,10 +165,6 @@ def _apply_bs_snapshot(
             _set_metric_source(data, "NetCash", source="derived", unit="million_yen", method="CashEq - IBD")
 
     net_assets_m = to_float(data.get("NetAssets"))
-    if ibd_m is not None and net_assets_m is not None and net_assets_m != 0:
-        data["NetDE"] = ibd_m / net_assets_m
-        _set_metric_source(data, "NetDE", source="derived", unit="times", method="IBD / NetAssets")
-
     np_m = to_float(data.get("NP"))
     if np_m is not None and net_assets_m is not None and net_assets_m != 0:
         data["ROE"] = np_m / net_assets_m * PERCENT

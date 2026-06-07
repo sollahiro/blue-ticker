@@ -63,8 +63,6 @@ _MOCK_RESULT = {
                     "CFO": 4_000_000.0,
                     "CFI": -2_000_000.0,
                     "CFC": 2_000_000.0,
-                    "DepreciationAmortization": 1_500_000.0,
-                    "OtherCashConversionGap": -2_852_934.0,
                     "PayoutRatio": 25.0,
                     "Employees": 100_000,
                     "DocID": "S100TEST",

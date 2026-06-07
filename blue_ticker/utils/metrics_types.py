@@ -149,9 +149,6 @@ class CalculatedData(TypedDict, total=False):
     OperatingProfitChangeReconciliationDiff: float | None
     # ── analyzer.py: _apply_employees ──
     Employees: int | None
-    # ── analyzer.py: _apply_depreciation ──
-    DepreciationAmortization: float | None
-    OtherCashConversionGap: float | None
     # ── analyzer.py: _apply_order_book ──
     OrderIntake: float | None
     OrderBacklog: float | None
@@ -226,8 +223,6 @@ class RawXbrlExtraction(TypedDict, total=False):
     employees: int | None
     employees_method: str
     employees_scope: str
-    depreciation_amortization: float | None
-    depreciation_method: str
     order_intake: float | None
     order_backlog: float | None
     order_book_method: str

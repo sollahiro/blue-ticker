@@ -729,23 +729,6 @@ NET_PROFIT_TAGS: list[str] = [
     "NetIncomeLossSummaryOfBusinessResults",                # J-GAAP 要約情報
 ]
 
-# 減価償却費（DA）タグ定義
-# analysis/depreciation.py で使用
-
-CF_DEPRECIATION_JGAAP_TAGS: list[str] = [
-    "DepreciationAndAmortizationOpeCF",      # J-GAAP CF計算書（間接法）調整項目
-]
-
-CF_DEPRECIATION_IFRS_TAGS: list[str] = [
-    "DepreciationAndAmortizationOpeCFIFRS",                   # IFRS CF計算書（一般的）
-    "DepreciationAndAmortizationOfIntangibleAssetsOpeCFIFRS", # IFRS CF計算書（日立等）
-]
-
-IFRS_DEPRECIATION_MARKER_TAGS: list[str] = (
-    IFRS_PL_MARKER_TAGS
-    + CF_DEPRECIATION_IFRS_TAGS
-)
-
 # ──────────────────────────────────────────────────────────────────────────────
 # field_parser ベース BS・IBD 項目定義
 # analysis/balance_sheet.py / interest_bearing_debt.py で使用
