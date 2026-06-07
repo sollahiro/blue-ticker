@@ -91,14 +91,18 @@ async def _fetch_date_range_cached(
     return result
 
 
-async def _find_most_recent_annual_report(
+_SEED_DOC_TYPES = frozenset({_ANNUAL_REPORT_DOC_TYPE}) | _HALF_YEAR_REPORT_DOC_TYPES
+
+
+async def _find_most_recent_filing(
     code: str,
     edinet_client: "EdinetAPIClient",
     scan_days: int,
 ) -> dict[str, Any] | None:
-    """EDINET を直近 scan_days 日スキャンして最新の有価証券報告書（120）を返す。
+    """EDINET を直近 scan_days 日スキャンして edinetCode 取得用の書類を1件返す。
 
-    periodEnd が設定されていないものは除外する（訂正書類等）。
+    有価証券報告書（120）・半期報告書（160）・四半期報告書（140）のいずれかを返す。
+    どの書類型でも edinetCode は共通のため、年次インデックス探索の起点として十分。
     日付ごとのレスポンスはキャッシュを利用するため、2回目以降は高速。
     """
     code_4digit = code[:4] if len(code) >= 4 else code
@@ -111,19 +115,19 @@ async def _find_most_recent_annual_report(
             sec = str(doc.get("secCode", "")).strip()
             if not sec.startswith(code_4digit):
                 continue
-            if doc.get("docTypeCode") != _ANNUAL_REPORT_DOC_TYPE:
+            if doc.get("docTypeCode") not in _SEED_DOC_TYPES:
                 continue
-            if not doc.get("periodEnd"):
+            if not doc.get("edinetCode"):
                 continue
             logger.info(
-                f"[EDINET Discovery] {code}: 直近有報発見 "
-                f"periodEnd={doc.get('periodEnd')} "
+                f"[EDINET Discovery] {code}: 直近書類発見 "
+                f"docType={doc.get('docTypeCode')} "
                 f"submit={format_document_date(doc.get('submitDateTime'))}"
             )
             return doc
 
     logger.warning(
-        f"[EDINET Discovery] {code}: {scan_days}日間スキャンで有価証券報告書が見つかりませんでした"
+        f"[EDINET Discovery] {code}: {scan_days}日間スキャンで書類が見つかりませんでした"
     )
     return None
 
@@ -251,8 +255,9 @@ async def build_document_index_for_code(
         (docs, []) のタプル。
         docs: 書類リスト（新しい年度順、末尾に訂正書類）。見つからない場合は空リスト。
     """
-    # ① 直近スキャンで最新有報を発見 → edinetCode を取得
-    recent = await _find_most_recent_annual_report(code, edinet_client, initial_scan_days)
+    # ① 直近スキャンで有報または半期報告書を1件発見 → edinetCode を取得
+    # 書類の型・periodEnd には依存しない（edinetCode の取得が目的）
+    recent = await _find_most_recent_filing(code, edinet_client, initial_scan_days)
     if not recent:
         return [], []
 
@@ -261,19 +266,11 @@ async def build_document_index_for_code(
         logger.warning(f"[EDINET Discovery] {code}: edinetCode が取得できません")
         return [], []
 
-    period_end_str = str(recent.get("periodEnd") or "")
-    period_end_dt = parse_date_string(period_end_str)
-    if not period_end_dt:
-        logger.warning(
-            f"[EDINET Discovery] {code}: periodEnd を解析できません: {period_end_str!r}"
-        )
-        return [], []
-
     # ② 年次インデックスを並列取得
-    # 提出日は periodEnd の翌期（最大6ヶ月後）になりうるため、
-    # scan_start_year から今年まで対象とすることで全提出年を網羅する
+    # scan_start_year は seed 書類の periodEnd に依存せず today.year を基点とする。
+    # これにより 9ヶ月・13ヶ月決算など不規則な移行期間でも過不足なくカバーできる。
     today = datetime.now().date()
-    scan_start_year = period_end_dt.year - analysis_years
+    scan_start_year = today.year - analysis_years
     year_doc_lists: list[list[dict[str, Any]]] = await asyncio.gather(
         *[edinet_client.ensure_document_index_for_year(y) for y in range(scan_start_year, today.year + 1)]
     )

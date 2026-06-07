@@ -518,6 +518,7 @@ class TestHalfYearDataService:
             fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
             fetcher.extract_ibd_by_year = AsyncMock(return_value={})
             fetcher.extract_operating_profit_by_year = AsyncMock(return_value={})
+            fetcher.extract_tax_expense_by_year = AsyncMock(return_value={})
 
             result = await service.get_half_year_periods("72030", years=1, use_cache=False)
 

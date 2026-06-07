@@ -98,26 +98,34 @@ def _make_amendment_doc(doc_id: str, edinet_code: str, parent_id: str, submit: s
 
 @pytest.mark.asyncio
 async def test_build_document_index_finds_docs_across_fiscal_year_change(monkeypatch) -> None:
-    """決算期変更（3月末→12月末）があっても edinetCode ベースで全履歴を取得できること。"""
+    """決算期変更（3月末→12月末）があっても edinetCode ベースで全履歴を取得できること。
+
+    scan_start_year = today.year(2026) - analysis_years(3) = 2023 なので、
+    年次インデックスは 2023〜2026 をスキャンする。旧3月末と新12月末が混在していても
+    edinetCode フィルタで全件取得できることを確認する。
+    """
     edinet_code = "E12345"
 
-    # 最新有報: 12月末決算に変更後の最初の年度（9ヶ月）
-    recent_doc = _make_annual_doc("S100NEW1", edinet_code, "2024-04-01", "2024-12-31", "2025-03-28 10:00")
+    # 最新: 12月末（9ヶ月移行期間）、提出 2026-03 → year index 2026
+    recent_doc = _make_annual_doc("S100NEW1", edinet_code, "2025-04-01", "2025-12-31", "2026-03-28 10:00")
+    # 旧3月末その1、提出 2024-06 → year index 2024
+    old1 = _make_annual_doc("S100OLD1", edinet_code, "2023-04-01", "2024-03-31", "2024-06-25 10:00")
+    # 旧3月末その2、提出 2023-06 → year index 2023
+    old2 = _make_annual_doc("S100OLD2", edinet_code, "2022-04-01", "2023-03-31", "2023-06-24 10:00")
 
-    # 年次インデックスに入っているドキュメント（旧3月末パターン2件 + 新12月末1件 + 訂正1件 + 別会社1件）
     year_index: dict[int, list[dict]] = {
-        2021: [_make_annual_doc("S100OLD1", edinet_code, "2020-04-01", "2021-03-31", "2021-06-25 10:00")],
-        2022: [_make_annual_doc("S100OLD2", edinet_code, "2021-04-01", "2022-03-31", "2022-06-24 10:00")],
-        2025: [
+        2023: [old2],
+        2024: [old1],
+        2026: [
             recent_doc,
-            _make_amendment_doc("S100AMEND", edinet_code, "S100NEW1", "2025-04-10 10:00"),
+            _make_amendment_doc("S100AMEND", edinet_code, "S100NEW1", "2026-04-10 10:00"),
             # 別会社: フィルタされるべき
-            _make_annual_doc("S100OTHER", "E99999", "2024-01-01", "2024-12-31", "2025-03-28 10:00"),
+            _make_annual_doc("S100OTHER", "E99999", "2025-04-01", "2025-12-31", "2026-03-28 10:00"),
         ],
     }
 
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=recent_doc)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=recent_doc)
     )
 
     mock_client = Mock()
@@ -135,9 +143,9 @@ async def test_build_document_index_finds_docs_across_fiscal_year_change(monkeyp
     # 旧3月末2件 + 新12月末1件 = 計3件取得できる
     assert len(annual) == 3
     fy_ends = {d["edinet_fy_end"] for d in annual}
-    assert "2024-12-31" in fy_ends
-    assert "2022-03-31" in fy_ends
-    assert "2021-03-31" in fy_ends
+    assert "2025-12-31" in fy_ends  # 変更後（9ヶ月）
+    assert "2024-03-31" in fy_ends  # 変更前
+    assert "2023-03-31" in fy_ends  # 変更前
 
     # 別会社はフィルタされる
     assert all(d.get("edinetCode") == edinet_code for d in annual)
@@ -145,7 +153,7 @@ async def test_build_document_index_finds_docs_across_fiscal_year_change(monkeyp
     # 訂正書類が正しくリンクされる
     assert len(amendments) == 1
     assert amendments[0]["docID"] == "S100AMEND"
-    assert amendments[0]["edinet_fy_end"] == "2024-12-31"
+    assert amendments[0]["edinet_fy_end"] == "2025-12-31"
 
     # not_found_fy_ends は常に空（旧インタフェース互換）
     assert not_found == []
@@ -154,7 +162,7 @@ async def test_build_document_index_finds_docs_across_fiscal_year_change(monkeyp
 @pytest.mark.asyncio
 async def test_build_document_index_returns_empty_when_no_recent_doc(monkeypatch) -> None:
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=None)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=None)
     )
     docs, not_found = await edinet_discovery.build_document_index_for_code("9999", Mock())
     assert docs == []
@@ -165,7 +173,7 @@ async def test_build_document_index_returns_empty_when_no_recent_doc(monkeypatch
 async def test_build_document_index_returns_empty_when_edinet_code_missing(monkeypatch) -> None:
     recent_doc = {"docID": "S100X", "secCode": "99990", "docTypeCode": "120", "periodEnd": "2025-03-31"}
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=recent_doc)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=recent_doc)
     )
     docs, not_found = await edinet_discovery.build_document_index_for_code("9999", Mock())
     assert docs == []
@@ -173,14 +181,31 @@ async def test_build_document_index_returns_empty_when_edinet_code_missing(monke
 
 
 @pytest.mark.asyncio
-async def test_build_document_index_returns_empty_when_period_end_unparseable(monkeypatch) -> None:
-    recent_doc = {"docID": "S100X", "edinetCode": "E12345", "docTypeCode": "120", "periodEnd": "invalid"}
+async def test_build_document_index_accepts_half_year_as_seed(monkeypatch) -> None:
+    """半期報告書（160）が seed になっても edinetCode を取得して年次探索できること。"""
+    edinet_code = "E12345"
+    half_year_seed = {
+        "docID": "S100HALF",
+        "edinetCode": edinet_code,
+        "secCode": "98430",
+        "docTypeCode": "160",  # 半期報告書
+        "periodEnd": "2025-09-30",
+        "submitDateTime": "2025-11-30 10:00",
+    }
+    annual_doc = _make_annual_doc("S100ANN1", edinet_code, "2024-04-01", "2025-03-31", "2025-06-25 10:00")
+
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=recent_doc)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=half_year_seed)
     )
-    docs, not_found = await edinet_discovery.build_document_index_for_code("9999", Mock())
-    assert docs == []
-    assert not_found == []
+    mock_client = Mock()
+    mock_client.ensure_document_index_for_year = AsyncMock(
+        side_effect=lambda y: [annual_doc] if y == 2025 else []
+    )
+
+    docs, _ = await edinet_discovery.build_document_index_for_code("9843", mock_client, analysis_years=1)
+    annual = [d for d in docs if d.get("docTypeCode") == "120"]
+    assert len(annual) == 1
+    assert annual[0]["edinet_fy_end"] == "2025-03-31"
 
 
 @pytest.mark.asyncio
@@ -196,7 +221,7 @@ async def test_build_document_index_uses_year_minus_1_when_period_start_missing(
         "submitDateTime": "2026-03-28 10:00",
     }
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=doc_no_start)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=doc_no_start)
     )
     mock_client = Mock()
     mock_client.ensure_document_index_for_year = AsyncMock(
@@ -225,7 +250,7 @@ async def test_build_document_index_slices_to_analysis_years(monkeypatch) -> Non
 
     recent = all_annual[-1]  # periodEnd = 2025-12-31, submit = 2026-03-01
     monkeypatch.setattr(
-        edinet_discovery, "_find_most_recent_annual_report", AsyncMock(return_value=recent)
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=recent)
     )
     mock_client = Mock()
     mock_client.ensure_document_index_for_year = AsyncMock(
