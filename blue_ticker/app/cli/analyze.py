@@ -289,6 +289,7 @@ async def cmd_analyze(args):
             ("純資産 (百万)",           calculated_metric(lambda c: c.get("NetAssets"))),
             ("現金及び現金同等物 (百万)", calculated_metric(lambda c: c.get("CashEq"))),
             ("ネットキャッシュ (百万)",   calculated_metric(lambda c: c.get("NetCash"))),
+            ("ネットD/E (倍)",           calculated_metric(lambda c: c.get("NetDE"))),
             ("営業CF (百万)",          calculated_metric(lambda c: c.get("CFO"))),
             ("減価償却費 (百万)",      calculated_metric(lambda c: c.get("DepreciationAmortization"))),
             ("その他現金化差分 (百万)", calculated_metric(lambda c: c.get("OtherCashConversionGap"))),

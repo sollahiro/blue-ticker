@@ -117,6 +117,7 @@ class CalculatedData(TypedDict, total=False):
     ROIC: float | None
     # ── analyzer.py: _apply_net_cash ──
     NetCash: float | None
+    NetDE: float | None
     # ── analyzer.py: _apply_balance_sheet ──
     TotalAssets: float | None
     CurrentAssets: float | None

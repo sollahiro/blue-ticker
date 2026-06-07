@@ -655,6 +655,17 @@ def _apply_net_cash(years: list[YearEntry]) -> None:
         _set_metric_source(cd, "NetCash", source="derived", unit="million_yen", method="CashEq - InterestBearingDebt")
 
 
+def _apply_net_de(years: list[YearEntry]) -> None:
+    for year in years:
+        cd = year["CalculatedData"]
+        net_cash = cd.get("NetCash")
+        net_assets = cd.get("NetAssets")
+        if net_cash is None or net_assets is None or net_assets == 0:
+            continue
+        cd["NetDE"] = -net_cash / net_assets
+        _set_metric_source(cd, "NetDE", source="derived", unit="ratio", method="-NetCash / NetAssets")
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
     _apply_ibd,
     _apply_balance_sheet,
@@ -787,6 +798,7 @@ class IndividualAnalyzer:
         _apply_nopat(years)
         _apply_roic(years)
         _apply_net_cash(years)
+        _apply_net_de(years)
         apply_roic_waterfall_from_xbrl(
             years,
             all_metrics.get("gp", {}),
