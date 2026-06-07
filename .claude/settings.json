@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.py ]] && poetry run pyright blue_ticker/ 2>&1; } || true",
+            "timeout": 60,
+            "statusMessage": "pyright..."
+          }
+        ]
+      }
+    ]
+  }
+}
