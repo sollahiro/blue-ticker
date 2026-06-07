@@ -152,7 +152,9 @@ def parse_usgaap_html_equity_cf_fields(xbrl_dir: Path) -> "FieldSet":
         if not cells:
             continue
         label = _strip_section_prefix(cells[0].get_text(" ", strip=True))
-        if label != "自己株式取得":
+        if "自己株式取得" not in label:
+            continue
+        if any(kw in label for kw in ["支払", "による", "収入"]):
             continue
         nums = [parse_html_number(c.get_text(" ", strip=True)) for c in cells[1:]]
         non_null = [n for n in nums if n is not None]

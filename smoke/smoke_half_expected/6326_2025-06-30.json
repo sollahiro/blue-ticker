@@ -26,8 +26,8 @@
     "accounting_standard": "IFRS"
   },
   "interest_bearing_debt": {
-    "total": 2083797000000.0,
-    "method": "field_parser"
+    "total": 2139926000000.0,
+    "method": "field_parser+lease_textblock"
   },
   "cash_flow": {
     "cfo": 142791000000.0,
@@ -76,6 +76,6 @@
     "current": null
   },
   "share_buyback": {
-    "current": 20002000000.0
+    "current": 19745000000.0
   }
 }

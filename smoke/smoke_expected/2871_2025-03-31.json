@@ -1,61 +1,60 @@
 {
   "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
-  "_reason": "決算期変更（3月末→12月末）の経過監視用。第109期は2026年4月1日〜2026年12月31日（9か月決算）。",
   "code": "2871",
   "name": "ニチレイ",
   "fy_end": "2025-03-31",
   "income_statement": {
-    "sales": null,
-    "operating_profit": null,
-    "net_profit": null,
-    "accounting_standard": null
+    "sales": 702080000000.0,
+    "operating_profit": 38315000000.0,
+    "net_profit": 24731000000.0,
+    "accounting_standard": "J-GAAP"
   },
   "gross_profit": {
-    "gross_profit": null,
-    "method": null
+    "gross_profit": 126228000000.0,
+    "method": "direct"
   },
   "sga": {
-    "current": null
+    "current": 87913000000.0
   },
   "balance_sheet": {
-    "total_assets": null,
-    "current_assets": null,
-    "non_current_assets": null,
-    "current_liabilities": null,
-    "non_current_liabilities": null,
-    "net_assets": null,
-    "accounting_standard": null
+    "total_assets": 499221000000.0,
+    "current_assets": 204925000000.0,
+    "non_current_assets": 294295000000.0,
+    "current_liabilities": 129083000000.0,
+    "non_current_liabilities": 94171000000.0,
+    "net_assets": 275966000000.0,
+    "accounting_standard": "J-GAAP"
   },
   "interest_bearing_debt": {
-    "total": null,
-    "method": null
+    "total": 106253000000.0,
+    "method": "field_parser"
   },
   "cash_flow": {
-    "cfo": null,
-    "cfi": null
+    "cfo": 53194000000.0,
+    "cfi": -32403000000.0
   },
   "depreciation": {
-    "current": null
+    "current": 24277000000.0
   },
   "interest_expense": {
-    "current": null
+    "current": 1151000000.0
   },
   "employees": {
-    "current": null,
-    "method": null
+    "current": 16626.0,
+    "method": "direct"
   },
   "tax_expense": {
-    "pretax_income": null,
-    "income_tax": null,
-    "effective_tax_rate": null
+    "pretax_income": 37835000000.0,
+    "income_tax": 10785000000.0,
+    "effective_tax_rate": 0.2850535218712832
   },
   "tangible_fixed_assets": {
-    "total": null,
-    "buildings": null,
-    "land": null,
-    "machinery": null,
+    "total": 219238000000.0,
+    "buildings": 100123000000.0,
+    "land": 46457000000.0,
+    "machinery": 48927000000.0,
     "tools": null,
-    "construction_in_progress": null
+    "construction_in_progress": 6027000000.0
   },
   "order_book": {
     "order_intake": null,
@@ -68,15 +67,15 @@
     "negotiable_cds": null
   },
   "cash_eq": {
-    "current": null
+    "current": 35935000000.0
   },
   "capital_expenditure": {
-    "current": null
+    "current": 34504000000.0
   },
   "research_development": {
-    "current": null
+    "current": 2206000000.0
   },
   "share_buyback": {
-    "current": null
+    "current": 10009000000.0
   }
 }

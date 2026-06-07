@@ -540,7 +540,8 @@ SHARE_BUYBACK_JGAAP_TAGS: list[str] = [
 ]
 
 SHARE_BUYBACK_IFRS_SS_TAGS: list[str] = [
-    "PurchaseOfTreasurySharesSSIFRS",                       # IFRS 株主資本等変動計算書
+    "PurchaseOfTreasurySharesSSIFRS",                       # IFRS 株主資本等変動計算書（取得のみ）
+    "PurchaseAndDisposalOfTreasurySharesSSIFRS",            # IFRS 株主資本等変動計算書（取得及び処分の純変動）
 ]
 
 SHARE_BUYBACK_IFRS_CF_TAGS: list[str] = [

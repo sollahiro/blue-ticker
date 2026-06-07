@@ -12,7 +12,7 @@ BalanceSheetSection（FieldSet を内包）からの3ステージ抽出:
 
 from blue_ticker.analysis.field_parser import ResolvedItem
 from blue_ticker.analysis.sections import BalanceSheetSection
-from blue_ticker.analysis.xbrl_utils import extract_ifrs_textblock_table, find_xbrl_files
+from blue_ticker.analysis.xbrl_utils import _find_html_by_prefix, extract_ifrs_textblock_table, find_xbrl_files, parse_html_number
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     BANK_IBD_COMPONENT_DEFINITIONS,
@@ -90,10 +90,107 @@ def _extract_ifrs_ibd_from_textblock(section: BalanceSheetSection) -> InterestBe
     }
 
 
+def _extract_ifrs_lease_from_html(
+    section: BalanceSheetSection,
+) -> tuple[float | None, float | None, list[MetricComponent]]:
+    """IFRS リース負債を HTML（財務諸表本文）から抽出する。
+
+    半期報告書では XBRL にリース注記テキストブロックが含まれない場合があるため、
+    BS の HTML 表から「リース負債」行を直接読む。
+    「リース負債の返済」等の CF 行は除外する。
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return None, None, []
+
+    if section.xbrl_dir is None:
+        return None, None, []
+
+    html_file = _find_html_by_prefix(section.xbrl_dir, "0105010") or _find_html_by_prefix(section.xbrl_dir, "0104010")
+    if html_file is None:
+        return None, None, []
+
+    soup = BeautifulSoup(html_file.read_text(encoding="utf-8", errors="ignore"), "html.parser")
+    _HEADER_MARKERS = ("前連結", "当連結", "前中間", "当中間", "前期", "当期", "第")
+
+    for table in soup.find_all("table"):
+        if "リース負債" not in table.get_text():
+            continue
+        rows = table.find_all("tr")
+
+        prior_col_idx = current_col_idx = None
+        for row in rows:
+            cells = row.find_all(["td", "th"])
+            texts = [c.get_text(strip=True) for c in cells]
+            if not any(any(m in t for m in _HEADER_MARKERS) for t in texts):
+                continue
+            col_offset = 0
+            import re
+            for cell in cells:
+                text = cell.get_text(strip=True)
+                from blue_ticker.analysis.xbrl_utils import parse_html_int_attribute
+                span = parse_html_int_attribute(cell, "colspan")
+                if "当連結" in text or "当中間" in text or ("当期" in text and "前期" not in text):
+                    current_col_idx = col_offset
+                elif "前連結" in text or "前中間" in text or "前期" in text:
+                    prior_col_idx = col_offset
+                elif re.search(r"第\d+期", text):
+                    if prior_col_idx is None:
+                        prior_col_idx = col_offset
+                    else:
+                        current_col_idx = col_offset
+                col_offset += span
+            if current_col_idx is not None:
+                break
+
+        for row in rows:
+            cells = row.find_all(["td", "th"])
+            if not cells:
+                continue
+            label = cells[0].get_text(strip=True)
+            if "リース負債" not in label:
+                continue
+            if any(kw in label for kw in ["返済", "支払", "残存", "増加", "減少"]):
+                continue
+
+            numerics = [(i, parse_html_number(c.get_text(strip=True))) for i, c in enumerate(cells) if i > 0]
+            numerics = [(i, v) for i, v in numerics if v is not None]
+            if not numerics:
+                continue
+
+            if prior_col_idx is not None and current_col_idx is not None:
+                def _nearest(target: int, nums: list[tuple[int, float]]) -> float | None:
+                    best_val, best_dist, best_idx = None, float("inf"), -1
+                    for i, v in nums:
+                        d = abs(i - target)
+                        if d < best_dist or (d == best_dist and i > best_idx):
+                            best_dist, best_val, best_idx = d, v, i
+                    return best_val if best_dist <= 2 else None
+                current_m = _nearest(current_col_idx, numerics)
+                prior_m = _nearest(prior_col_idx, numerics)
+            else:
+                prior_m = numerics[0][1] if len(numerics) >= 2 else None
+                current_m = numerics[-1][1]
+
+            if current_m is None:
+                continue
+
+            return (
+                current_m * MILLION_YEN,
+                prior_m * MILLION_YEN if prior_m is not None else None,
+                [{"label": "リース負債", "tag": None,
+                  "current": current_m * MILLION_YEN,
+                  "prior": prior_m * MILLION_YEN if prior_m is not None else None}],
+            )
+
+    return None, None, []
+
+
 def _extract_ifrs_lease_liabilities(
     section: BalanceSheetSection,
 ) -> tuple[float | None, float | None, list[MetricComponent]]:
-    """IFRS リース注記TextBlockからリース負債残高を抽出する。
+    """IFRS リース注記TextBlockからリース負債残高を抽出する。HTMLフォールバックあり。
 
     パターンA（支払期日が1年以内 / 1年超）: 流動・非流動を個別取得して積み上げ。
     パターンB（帳簿価額）: 合計のみ取得。
@@ -105,7 +202,8 @@ def _extract_ifrs_lease_liabilities(
         return None, None, []
     table = extract_ifrs_textblock_table(section.xbrl_dir, _IFRS_LEASE_TEXTBLOCK_TAG)
     if not table:
-        return None, None, []
+        # 半期報告書ではリース注記テキストブロックが XBRL に含まれない場合がある
+        return _extract_ifrs_lease_from_html(section)
 
     # パターンA: 「支払期日が1年以内」「支払期日が1年超」
     cl_vals = table.get("支払期日が1年以内")
