@@ -6,6 +6,7 @@ gross_profit / cash_flow / interest_bearing_debt 各モジュールで共有す�
 モジュール固有のロジックはここに置かない。
 """
 
+import functools
 import html as _html_module
 import re
 import warnings
@@ -116,8 +117,9 @@ def _linkbase_xml_files(xbrl_dir: Path, suffix: str) -> list[Path]:
     ]
 
 
+@functools.lru_cache(maxsize=64)
 def _load_labels_by_tag(xbrl_dir: Path) -> dict[str, str]:
-    """ラベルリンクベースから {local_tag: Japanese label} を作る。"""
+    """ラベルリンクベースから {local_tag: Japanese label} を作る。同一ディレクトリはキャッシュを返す。"""
     labels_by_tag: dict[str, str] = {}
     for xml_file in _linkbase_xml_files(xbrl_dir, "_lab"):
         try:
@@ -162,8 +164,9 @@ def _load_labels_by_tag(xbrl_dir: Path) -> dict[str, str]:
     return labels_by_tag
 
 
+@functools.lru_cache(maxsize=64)
 def _load_roles_by_tag(xbrl_dir: Path) -> dict[str, list[str]]:
-    """プレゼンテーションリンクベースから {local_tag: roleURI list} を作る。"""
+    """プレゼンテーションリンクベースから {local_tag: roleURI list} を作る。同一ディレクトリはキャッシュを返す。"""
     role_sets_by_tag: dict[str, set[str]] = {}
     for xml_file in _linkbase_xml_files(xbrl_dir, "_pre"):
         try:
