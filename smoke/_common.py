@@ -216,11 +216,6 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any], *, is_half:
         },
         "tangible_fixed_assets": {
             "total": ppe.get("total"),
-            "buildings": ppe.get("buildings"),
-            "land": ppe.get("land"),
-            "machinery": ppe.get("machinery"),
-            "tools": ppe.get("tools"),
-            "construction_in_progress": ppe.get("construction_in_progress"),
         },
         "order_book": {
             "order_intake": ob.get("order_intake"),
@@ -355,11 +350,6 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
         ("法人税等",             fmt(tax.get("income_tax"))),
         ("実効税率(比率)",       f"{tax.get('effective_tax_rate'):.4f}" if tax.get("effective_tax_rate") is not None else "—"),
         ("有形固定資産 合計",     fmt(ppe.get("total"))),
-        ("　建物及び構築物",     fmt(ppe.get("buildings"))),
-        ("　土地",               fmt(ppe.get("land"))),
-        ("　機械装置及び運搬具", fmt(ppe.get("machinery"))),
-        ("　工具器具及び備品",   fmt(ppe.get("tools"))),
-        ("　建設仮勘定",         fmt(ppe.get("construction_in_progress"))),
         ("受注高",               fmt(ob.get("order_intake"))),
         ("受注残高",             fmt(ob.get("order_backlog"))),
         ("預金",                 fmt(bank.get("deposits"))),

@@ -156,12 +156,6 @@ class CalculatedData(TypedDict, total=False):
     OrderIntake: float | None
     OrderBacklog: float | None
     # ── analyzer.py: _apply_ppe ──
-    PPEBuildings: float | None
-    PPELand: float | None
-    PPEMachinery: float | None
-    PPETools: float | None
-    PPEConstructionInProgress: float | None
-    PPEOthers: float | None
     PPETotal: float | None
     PPEAccountingStandard: str
     # ── analyzer.py: _apply_ibd / half_year_data_service.py ──
@@ -237,12 +231,6 @@ class RawXbrlExtraction(TypedDict, total=False):
     order_intake: float | None
     order_backlog: float | None
     order_book_method: str
-    ppe_buildings: float | None
-    ppe_land: float | None
-    ppe_machinery: float | None
-    ppe_tools: float | None
-    ppe_construction_in_progress: float | None
-    ppe_others: float | None
     ppe_total: float | None
     ppe_method: str
     ppe_accounting_standard: str

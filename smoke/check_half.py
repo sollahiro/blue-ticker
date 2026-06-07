@@ -132,12 +132,7 @@ def _compare(fixture: dict[str, Any], actuals: dict[str, Any]) -> list[str]:
 
     exp_ppe = fixture.get("tangible_fixed_assets") or {}
     act_ppe = actuals.get("tangible_fixed_assets") or {}
-    chk("tangible_fixed_assets.total",                    act_ppe.get("total"),                    exp_ppe.get("total"))
-    chk("tangible_fixed_assets.buildings",                act_ppe.get("buildings"),                exp_ppe.get("buildings"))
-    chk("tangible_fixed_assets.land",                     act_ppe.get("land"),                     exp_ppe.get("land"))
-    chk("tangible_fixed_assets.machinery",                act_ppe.get("machinery"),                exp_ppe.get("machinery"))
-    chk("tangible_fixed_assets.tools",                    act_ppe.get("tools"),                    exp_ppe.get("tools"))
-    chk("tangible_fixed_assets.construction_in_progress", act_ppe.get("construction_in_progress"), exp_ppe.get("construction_in_progress"))
+    chk("tangible_fixed_assets.total", act_ppe.get("total"), exp_ppe.get("total"))
 
     exp_ob = fixture.get("order_book") or {}
     act_ob = actuals.get("order_book") or {}

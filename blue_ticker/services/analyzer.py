@@ -217,12 +217,6 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         raw = raw_for(fy_end_key)
         if (doc_id := _metric_doc_id(ppe)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
-        raw["ppe_buildings"] = ppe.get("buildings")
-        raw["ppe_land"] = ppe.get("land")
-        raw["ppe_machinery"] = ppe.get("machinery")
-        raw["ppe_tools"] = ppe.get("tools")
-        raw["ppe_construction_in_progress"] = ppe.get("construction_in_progress")
-        raw["ppe_others"] = ppe.get("others")
         raw["ppe_total"] = ppe.get("total")
         raw["ppe_method"] = str(ppe.get("method", "unknown"))
         raw["ppe_accounting_standard"] = str(ppe.get("accounting_standard", "unknown"))
@@ -363,16 +357,6 @@ def _apply_ppe(
         cd["PPETotal"] = ppe_total / MILLION_YEN
         cd["PPEAccountingStandard"] = raw.get("ppe_accounting_standard", "unknown")
         _set_metric_source(cd, "PPETotal", source="edinet", unit="million_yen", method=raw.get("ppe_method"), doc_id=raw.get("doc_id"))
-        for raw_key, cd_key in (
-            ("ppe_buildings", "PPEBuildings"),
-            ("ppe_land", "PPELand"),
-            ("ppe_machinery", "PPEMachinery"),
-            ("ppe_tools", "PPETools"),
-            ("ppe_construction_in_progress", "PPEConstructionInProgress"),
-            ("ppe_others", "PPEOthers"),
-        ):
-            v = raw.get(raw_key)
-            cd[cd_key] = v / MILLION_YEN if v is not None else None
 
 
 def _apply_interest_expense(

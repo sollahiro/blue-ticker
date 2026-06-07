@@ -49,12 +49,7 @@
     "effective_tax_rate": -0.14181913682920425
   },
   "tangible_fixed_assets": {
-    "total": 1484057000.0,
-    "buildings": 430168000.0,
-    "land": 1037986000.0,
-    "machinery": null,
-    "tools": null,
-    "construction_in_progress": null
+    "total": 1484057000.0
   },
   "order_book": {
     "order_intake": null,
