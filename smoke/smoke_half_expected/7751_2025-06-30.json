@@ -37,7 +37,7 @@
     "current": 108743000000.0
   },
   "interest_expense": {
-    "current": 2990000000.0
+    "current": null
   },
   "employees": {
     "current": null,
@@ -76,6 +76,6 @@
     "current": null
   },
   "share_buyback": {
-    "current": 200011000000.0
+    "current": null
   }
 }

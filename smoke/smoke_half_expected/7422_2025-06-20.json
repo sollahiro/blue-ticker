@@ -37,7 +37,7 @@
     "current": 24141000.0
   },
   "interest_expense": {
-    "current": 3264000.0
+    "current": null
   },
   "employees": {
     "current": null,
@@ -70,7 +70,7 @@
     "current": null
   },
   "capital_expenditure": {
-    "current": 28118000.0
+    "current": null
   },
   "research_development": {
     "current": null

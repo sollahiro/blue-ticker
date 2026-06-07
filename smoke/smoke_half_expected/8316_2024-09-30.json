@@ -70,12 +70,12 @@
     "current": 67533995000000.0
   },
   "capital_expenditure": {
-    "current": 43348000000.0
+    "current": null
   },
   "research_development": {
     "current": null
   },
   "share_buyback": {
-    "current": 101576000000.0
+    "current": null
   }
 }

@@ -143,7 +143,7 @@ def find_cached_half_doc(code: str, fy_end: str, cache_dir: Path) -> dict[str, A
     return None
 
 
-def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str, Any]:
+def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any], *, is_half: bool = False) -> dict[str, Any]:
     std = detect_accounting_standard(pre_parsed)
     is_section = IncomeStatementSection.from_pre_parsed(pre_parsed, std, xbrl_dir)
     bs_section = BalanceSheetSection.from_pre_parsed(pre_parsed, std, xbrl_dir)
@@ -203,7 +203,7 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str
             "current": dep.get("current"),
         },
         "interest_expense": {
-            "current": ie.get("current"),
+            "current": None if is_half else ie.get("current"),
         },
         "employees": {
             "current": emp.get("current"),
@@ -236,13 +236,13 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any]) -> dict[str
             "current": sh.get("CashEq"),
         },
         "capital_expenditure": {
-            "current": capex.get("current"),
+            "current": None if is_half else capex.get("current"),
         },
         "research_development": {
-            "current": rd.get("current"),
+            "current": None if is_half else rd.get("current"),
         },
         "share_buyback": {
-            "current": buyback.get("current"),
+            "current": None if is_half else buyback.get("current"),
         },
         "_debug": {
             "ibd": {
@@ -263,6 +263,8 @@ async def _fetch_and_extract(
     fy_end: str,
     cache_dir: Path,
     doc: dict[str, Any],
+    *,
+    is_half: bool = False,
 ) -> dict[str, Any] | None:
     client = _CachedXbrlClient(cache_dir)
     # cache_manager=None: smoke は常に XBRL ソースから再計算し、derived キャッシュを参照・書込みしない
@@ -282,7 +284,7 @@ async def _fetch_and_extract(
         return None
     xbrl_dir_str, pre_parsed, _facts = pre_parsed_map[fy_key]
     xbrl_dir = Path(xbrl_dir_str) if xbrl_dir_str else None
-    return _build_result(xbrl_dir, pre_parsed)
+    return _build_result(xbrl_dir, pre_parsed, is_half=is_half)
 
 
 async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
@@ -296,7 +298,7 @@ async def extract_half_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[
     doc = find_cached_half_doc(code, fy_end, cache_dir)
     if doc is None:
         return None
-    return await _fetch_and_extract(code, fy_end, cache_dir, doc)
+    return await _fetch_and_extract(code, fy_end, cache_dir, doc, is_half=True)
 
 
 def fmt(v: object) -> str:
