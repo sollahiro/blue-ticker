@@ -8,6 +8,7 @@ XBRLの生XMLパース（collect_numeric_elements）とコンテキスト解釈�
 上位レイヤーが「どのタグを選ぶか」だけに集中できるようにする。
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
@@ -85,9 +86,7 @@ def parse_instant_fields(
     tag_elements: XbrlTagElements = {}
     for f in find_xbrl_files(xbrl_dir):
         for tag, ctx_map in collect_numeric_elements(f, allowed_tags=allowed_tags).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+            tag_elements.setdefault(tag, {}).update(ctx_map)
 
     field_set = _normalize_instant(tag_elements)
 
@@ -143,9 +142,7 @@ def parse_duration_fields(
     tag_elements: XbrlTagElements = {}
     for f in find_xbrl_files(xbrl_dir):
         for tag, ctx_map in collect_numeric_elements(f, allowed_tags=allowed_tags).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+            tag_elements.setdefault(tag, {}).update(ctx_map)
 
     field_set = _normalize_duration(tag_elements)
 
@@ -164,15 +161,14 @@ def parse_duration_fields(
     return field_set
 
 
-def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
-    """XbrlTagElements → FieldSet（Duration コンテキスト用）。
-
-    完全一致コンテキスト（CurrentYearDuration 等）を最優先し、
-    前方一致パターン（_is_consolidated_duration 等）をフォールバックにする。
-    """
-    exact_current: frozenset[str] = frozenset(DURATION_CONTEXT_PATTERNS)
-    exact_prior: frozenset[str] = frozenset(PRIOR_DURATION_CONTEXT_PATTERNS)
-
+def _normalize_consolidated(
+    tag_elements: XbrlTagElements,
+    exact_current: frozenset[str],
+    exact_prior: frozenset[str],
+    is_current: Callable[[str], bool],
+    is_prior: Callable[[str], bool],
+) -> FieldSet:
+    """完全一致コンテキストを最優先し、述語関数でフォールバックする汎用正規化。"""
     field_set: FieldSet = {}
     for tag, ctx_map in tag_elements.items():
         current: float | None = None
@@ -186,15 +182,57 @@ def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
 
         if current is None or prior is None:
             for ctx, val in ctx_map.items():
-                if current is None and _is_consolidated_duration(ctx):
+                if current is None and is_current(ctx):
                     current = val
-                if prior is None and _is_consolidated_prior_duration(ctx):
+                if prior is None and is_prior(ctx):
                     prior = val
 
         if current is not None or prior is not None:
             field_set[tag] = {"current": current, "prior": prior}
 
     return field_set
+
+
+def _normalize_nonconsolidated(
+    tag_elements: XbrlTagElements,
+    exact_current: frozenset[str],
+    exact_prior: frozenset[str],
+    is_current: Callable[[str], bool],
+    is_prior: Callable[[str], bool],
+) -> FieldSet:
+    """_NonConsolidated コンテキストを当期/前期に正規化する汎用関数。"""
+    field_set: FieldSet = {}
+    for tag, ctx_map in tag_elements.items():
+        current: float | None = None
+        prior: float | None = None
+
+        for ctx, val in ctx_map.items():
+            if is_current(ctx):
+                if _is_pure_nonconsolidated_context(ctx, list(exact_current)):
+                    current = val
+                elif current is None:
+                    current = val
+            elif is_prior(ctx):
+                if _is_pure_nonconsolidated_context(ctx, list(exact_prior)):
+                    prior = val
+                elif prior is None:
+                    prior = val
+
+        if current is not None or prior is not None:
+            field_set[tag] = {"current": current, "prior": prior}
+
+    return field_set
+
+
+def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
+    """XbrlTagElements → FieldSet（Duration コンテキスト用）。"""
+    return _normalize_consolidated(
+        tag_elements,
+        frozenset(DURATION_CONTEXT_PATTERNS),
+        frozenset(PRIOR_DURATION_CONTEXT_PATTERNS),
+        _is_consolidated_duration,
+        _is_consolidated_prior_duration,
+    )
 
 
 def build_nc_duration_field_set(tag_elements: XbrlTagElements) -> FieldSet:
@@ -209,91 +247,35 @@ def build_nc_duration_field_set(tag_elements: XbrlTagElements) -> FieldSet:
 
 def _normalize_duration_nonconsolidated(tag_elements: XbrlTagElements) -> FieldSet:
     """個別財務諸表のみの企業向け: _NonConsolidated コンテキストを当期/前期に正規化する（Duration版）。"""
-    exact_current: frozenset[str] = frozenset(DURATION_CONTEXT_PATTERNS)
-    exact_prior: frozenset[str] = frozenset(PRIOR_DURATION_CONTEXT_PATTERNS)
-
-    field_set: FieldSet = {}
-    for tag, ctx_map in tag_elements.items():
-        current: float | None = None
-        prior: float | None = None
-
-        for ctx, val in ctx_map.items():
-            if _is_nonconsolidated_duration(ctx):
-                if _is_pure_nonconsolidated_context(ctx, list(exact_current)):
-                    current = val
-                elif current is None:
-                    current = val
-            elif _is_nonconsolidated_prior_duration(ctx):
-                if _is_pure_nonconsolidated_context(ctx, list(exact_prior)):
-                    prior = val
-                elif prior is None:
-                    prior = val
-
-        if current is not None or prior is not None:
-            field_set[tag] = {"current": current, "prior": prior}
-
-    return field_set
+    return _normalize_nonconsolidated(
+        tag_elements,
+        frozenset(DURATION_CONTEXT_PATTERNS),
+        frozenset(PRIOR_DURATION_CONTEXT_PATTERNS),
+        _is_nonconsolidated_duration,
+        _is_nonconsolidated_prior_duration,
+    )
 
 
 def _normalize_instant(tag_elements: XbrlTagElements) -> FieldSet:
-    """XbrlTagElements → FieldSet（Instant コンテキスト用）。
-
-    完全一致コンテキスト（CurrentYearInstant 等）を最優先し、
-    前方一致パターン（_is_consolidated_instant 等）をフォールバックにする。
-    """
-    exact_current: frozenset[str] = frozenset(INSTANT_CONTEXT_PATTERNS)
-    exact_prior: frozenset[str] = frozenset(PRIOR_INSTANT_CONTEXT_PATTERNS)
-
-    field_set: FieldSet = {}
-    for tag, ctx_map in tag_elements.items():
-        current: float | None = None
-        prior: float | None = None
-
-        for ctx, val in ctx_map.items():
-            if ctx in exact_current:
-                current = val
-            elif ctx in exact_prior:
-                prior = val
-
-        if current is None or prior is None:
-            for ctx, val in ctx_map.items():
-                if current is None and _is_consolidated_instant(ctx):
-                    current = val
-                if prior is None and _is_consolidated_prior_instant(ctx):
-                    prior = val
-
-        if current is not None or prior is not None:
-            field_set[tag] = {"current": current, "prior": prior}
-
-    return field_set
+    """XbrlTagElements → FieldSet（Instant コンテキスト用）。"""
+    return _normalize_consolidated(
+        tag_elements,
+        frozenset(INSTANT_CONTEXT_PATTERNS),
+        frozenset(PRIOR_INSTANT_CONTEXT_PATTERNS),
+        _is_consolidated_instant,
+        _is_consolidated_prior_instant,
+    )
 
 
 def _normalize_instant_nonconsolidated(tag_elements: XbrlTagElements) -> FieldSet:
     """個別財務諸表のみの企業向け: _NonConsolidated コンテキストを当期/前期に正規化する。"""
-    exact_current: frozenset[str] = frozenset(INSTANT_CONTEXT_PATTERNS)
-    exact_prior: frozenset[str] = frozenset(PRIOR_INSTANT_CONTEXT_PATTERNS)
-
-    field_set: FieldSet = {}
-    for tag, ctx_map in tag_elements.items():
-        current: float | None = None
-        prior: float | None = None
-
-        for ctx, val in ctx_map.items():
-            if _is_nonconsolidated_instant(ctx):
-                if _is_pure_nonconsolidated_context(ctx, list(exact_current)):
-                    current = val
-                elif current is None:
-                    current = val
-            elif _is_nonconsolidated_prior_instant(ctx):
-                if _is_pure_nonconsolidated_context(ctx, list(exact_prior)):
-                    prior = val
-                elif prior is None:
-                    prior = val
-
-        if current is not None or prior is not None:
-            field_set[tag] = {"current": current, "prior": prior}
-
-    return field_set
+    return _normalize_nonconsolidated(
+        tag_elements,
+        frozenset(INSTANT_CONTEXT_PATTERNS),
+        frozenset(PRIOR_INSTANT_CONTEXT_PATTERNS),
+        _is_nonconsolidated_instant,
+        _is_nonconsolidated_prior_instant,
+    )
 
 
 def resolve_item(field_set: FieldSet, candidate_tags: list[str]) -> ResolvedItem:
