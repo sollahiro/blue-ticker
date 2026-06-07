@@ -1,0 +1,82 @@
+{
+  "_comment": "金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。",
+  "_reason": "決算期変更の経過期間。第109期は2026年4月1日〜2026年12月31日（9か月決算）。",
+  "code": "2871",
+  "name": "ニチレイ",
+  "fy_end": "2026-12-31",
+  "income_statement": {
+    "sales": null,
+    "operating_profit": null,
+    "net_profit": null,
+    "accounting_standard": null
+  },
+  "gross_profit": {
+    "gross_profit": null,
+    "method": null
+  },
+  "sga": {
+    "current": null
+  },
+  "balance_sheet": {
+    "total_assets": null,
+    "current_assets": null,
+    "non_current_assets": null,
+    "current_liabilities": null,
+    "non_current_liabilities": null,
+    "net_assets": null,
+    "accounting_standard": null
+  },
+  "interest_bearing_debt": {
+    "total": null,
+    "method": null
+  },
+  "cash_flow": {
+    "cfo": null,
+    "cfi": null
+  },
+  "depreciation": {
+    "current": null
+  },
+  "interest_expense": {
+    "current": null
+  },
+  "employees": {
+    "current": null,
+    "method": null
+  },
+  "tax_expense": {
+    "pretax_income": null,
+    "income_tax": null,
+    "effective_tax_rate": null
+  },
+  "tangible_fixed_assets": {
+    "total": null,
+    "buildings": null,
+    "land": null,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": null,
+    "loans": null,
+    "cash_due_from_banks": null,
+    "negotiable_cds": null
+  },
+  "cash_eq": {
+    "current": null
+  },
+  "capital_expenditure": {
+    "current": null
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": null
+  }
+}

@@ -17,10 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _common import HALF_FIXTURE_DIR, load_half_fixtures
 from blue_ticker.api.edinet_cache_store import EdinetCacheStore
 from blue_ticker.api.edinet_client import EdinetAPIClient
-from blue_ticker.constants.api import EDINET_DOC_TYPE_HALF_YEAR_REPORT
 from blue_ticker.infrastructure.settings import SettingsStore as Settings
-from blue_ticker.utils.edinet_discovery import build_document_index_for_code
-from blue_ticker.utils.fiscal_year import normalize_date_format
+from blue_ticker.utils.edinet_discovery import build_half_year_document_index_for_code
 
 SMOKE_CACHE_DIR = Path("tmp_cache/edinet")
 SEARCH_JSON_PATH = SMOKE_CACHE_DIR / "search_half_smoke.json"
@@ -43,20 +41,15 @@ async def main(api_key: str) -> None:
 
         print(f"\n[{code}] {name}  fy_end={fy_end}")
         try:
-            docs, _ = await build_document_index_for_code(
+            half_docs = await build_half_year_document_index_for_code(
                 code,
                 client,
                 initial_scan_days=400,
-                analysis_years=3,
+                analysis_years=5,
             )
-            half_year = [
-                d for d in docs
-                if d.get("docTypeCode") == EDINET_DOC_TYPE_HALF_YEAR_REPORT
-                and not d.get("_is_amendment")
-            ]
 
             target = next(
-                (d for d in half_year if (normalize_date_format(str(d.get("periodEnd") or "")) or "") == fy_end),
+                (d for d in half_docs if d.get("edinet_period_end") == fy_end),
                 None,
             )
             if target is None:

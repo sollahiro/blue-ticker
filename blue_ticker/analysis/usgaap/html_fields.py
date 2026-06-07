@@ -120,7 +120,8 @@ def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> "FieldSet":
     if not _BS4_AVAILABLE:
         return {}  # type: ignore[return-value]
 
-    bs_html = _find_html_by_prefix(xbrl_dir, "0105010")
+    # 年次(asr)は 0105010＝第５経理の状況、半期(q2r)は 0104010＝第４経理の状況
+    bs_html = _find_html_by_prefix(xbrl_dir, "0105010") or _find_html_by_prefix(xbrl_dir, "0104010")
     if bs_html is None:
         return {}  # type: ignore[return-value]
 
@@ -139,7 +140,7 @@ def parse_usgaap_html_equity_cf_fields(xbrl_dir: Path) -> "FieldSet":
     if not _BS4_AVAILABLE:
         return {}  # type: ignore[return-value]
 
-    equity_html = _find_html_by_prefix(xbrl_dir, "0105010")
+    equity_html = _find_html_by_prefix(xbrl_dir, "0105010") or _find_html_by_prefix(xbrl_dir, "0104010")
     if equity_html is None:
         return {}  # type: ignore[return-value]
 
@@ -196,8 +197,8 @@ def parse_usgaap_html_pl_fields(xbrl_dir: Path) -> "FieldSet":
             if virtual_tag not in merged:
                 merged[virtual_tag] = fv
 
-    # 0105010（連結財務諸表）: 法人税等・営業利益等を取得
-    html_0105010 = _find_html_by_prefix(xbrl_dir, "0105010")
+    # 0105010（連結財務諸表）: 法人税等・営業利益等を取得。半期(q2r)では 0104010 にフォールバック
+    html_0105010 = _find_html_by_prefix(xbrl_dir, "0105010") or _find_html_by_prefix(xbrl_dir, "0104010")
     if html_0105010 is not None:
         soup = BeautifulSoup(html_0105010.read_text(encoding="utf-8", errors="ignore"), "html.parser")
         # 法人税はセクション特定で取得（ラベル部分マッチによる誤拾いを防ぐ）

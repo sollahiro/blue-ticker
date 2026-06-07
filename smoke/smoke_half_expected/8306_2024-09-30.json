@@ -1,0 +1,81 @@
+{
+  "_comment": "半期報告書。金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。CFは半期で省略される場合があり null になることがある。",
+  "code": "8306",
+  "name": "三菱UFJ",
+  "fy_end": "2024-09-30",
+  "income_statement": {
+    "sales": 6860277000000.0,
+    "operating_profit": 1756926000000.0,
+    "net_profit": 1258195000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 2911811000000.0,
+    "method": "business_gross_profit"
+  },
+  "sga": {
+    "current": null
+  },
+  "balance_sheet": {
+    "total_assets": 399058344000000.0,
+    "current_assets": null,
+    "non_current_assets": null,
+    "current_liabilities": null,
+    "non_current_liabilities": null,
+    "net_assets": 21678586000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 283556243000000.0,
+    "method": "bank_components"
+  },
+  "cash_flow": {
+    "cfo": -5956177000000.0,
+    "cfi": 4100422000000.0
+  },
+  "depreciation": {
+    "current": 187470000000.0
+  },
+  "interest_expense": {
+    "current": null
+  },
+  "employees": {
+    "current": 158132.0,
+    "method": "direct"
+  },
+  "tax_expense": {
+    "pretax_income": 1741849000000.0,
+    "income_tax": 429210000000.0,
+    "effective_tax_rate": 0.24641056716167706
+  },
+  "tangible_fixed_assets": {
+    "total": 1228738000000.0,
+    "buildings": null,
+    "land": null,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": 222446306000000.0,
+    "loans": 120588293000000.0,
+    "cash_due_from_banks": 108002412000000.0,
+    "negotiable_cds": 17398159000000.0
+  },
+  "cash_eq": {
+    "current": 108002412000000.0
+  },
+  "capital_expenditure": {
+    "current": 61337000000.0
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": 118406000000.0
+  }
+}

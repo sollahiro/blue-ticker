@@ -1,0 +1,81 @@
+{
+  "_comment": "半期報告書。金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。CFは半期で省略される場合があり null になることがある。",
+  "code": "6103",
+  "name": "オークマ",
+  "fy_end": "2024-09-30",
+  "income_statement": {
+    "sales": 95247000000.0,
+    "operating_profit": 5626000000.0,
+    "net_profit": 3580000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 30893000000.0,
+    "method": "direct"
+  },
+  "sga": {
+    "current": 25266000000.0
+  },
+  "balance_sheet": {
+    "total_assets": 300989000000.0,
+    "current_assets": 190192000000.0,
+    "non_current_assets": 110797000000.0,
+    "current_liabilities": 50834000000.0,
+    "non_current_liabilities": 15943000000.0,
+    "net_assets": 234212000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 10000000000.0,
+    "method": "field_parser"
+  },
+  "cash_flow": {
+    "cfo": 18504000000.0,
+    "cfi": -9286000000.0
+  },
+  "depreciation": {
+    "current": 4855000000.0
+  },
+  "interest_expense": {
+    "current": 32000000.0
+  },
+  "employees": {
+    "current": null,
+    "method": "not_found"
+  },
+  "tax_expense": {
+    "pretax_income": 5769000000.0,
+    "income_tax": 2191000000.0,
+    "effective_tax_rate": 0.3797885248743283
+  },
+  "tangible_fixed_assets": {
+    "total": 53735000000.0,
+    "buildings": 28707000000.0,
+    "land": null,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": null,
+    "loans": null,
+    "cash_due_from_banks": null,
+    "negotiable_cds": null
+  },
+  "cash_eq": {
+    "current": null
+  },
+  "capital_expenditure": {
+    "current": 3237000000.0
+  },
+  "research_development": {
+    "current": 1203000000.0
+  },
+  "share_buyback": {
+    "current": 1226000000.0
+  }
+}

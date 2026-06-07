@@ -9,7 +9,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.xbrl_utils import parse_html_int_attribute, parse_html_number
+from blue_ticker.analysis.xbrl_utils import _find_html_by_prefix, parse_html_int_attribute, parse_html_number
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.utils.xbrl_result_types import InterestExpenseResult
 
@@ -19,11 +19,8 @@ def extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
     if not _BS4_AVAILABLE:
         return None
 
-    target_file = None
-    for f in sorted(xbrl_dir.rglob("*.htm")) + sorted(xbrl_dir.rglob("*.html")):
-        if "0105010" in f.name:
-            target_file = f
-            break
+    # 年次(asr)は 0105010＝第５経理の状況、半期(q2r)は 0104010＝第４経理の状況
+    target_file = _find_html_by_prefix(xbrl_dir, "0105010") or _find_html_by_prefix(xbrl_dir, "0104010")
     if target_file is None:
         return None
 
@@ -32,7 +29,8 @@ def extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
         return None
 
     soup = BeautifulSoup(content, "html.parser")
-    _HEADER_MARKERS = ("前連結", "当連結", "前期", "当期", "第")
+    # 半期(q2r)は「前中間連結」「当中間連結」、年次(asr)は「前連結」「当連結」
+    _HEADER_MARKERS = ("前連結", "当連結", "前中間", "当中間", "前期", "当期", "第")
 
     for table in soup.find_all("table"):
         if "支払利息" not in table.get_text():
@@ -53,10 +51,10 @@ def extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
                 text = cell.get_text(strip=True)
                 span = parse_html_int_attribute(cell, "colspan")
                 last_col = col_offset + span - 1
-                if "当連結" in text or ("当期" in text and "前期" not in text):
-                    current_col_idx = last_col
-                elif "前連結" in text or "前期" in text:
-                    prior_col_idx = last_col
+                if "当連結" in text or "当中間" in text or ("当期" in text and "前期" not in text):
+                    current_col_idx = col_offset
+                elif "前連結" in text or "前中間" in text or "前期" in text:
+                    prior_col_idx = col_offset
                 elif re.search(r"第\d+期", text):
                     if prior_col_idx is None:
                         prior_col_idx = col_offset
@@ -86,11 +84,11 @@ def extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
 
             if prior_col_idx is not None and current_col_idx is not None:
                 def _find_nearest(target_col, _nums=numerics):
-                    best_val, best_dist = None, float("inf")
+                    best_val, best_dist, best_idx = None, float("inf"), -1
                     for i, v in _nums:
                         d = abs(i - target_col)
-                        if d < best_dist:
-                            best_dist, best_val = d, v
+                        if d < best_dist or (d == best_dist and i > best_idx):
+                            best_dist, best_val, best_idx = d, v, i
                     return best_val if best_dist <= 2 else None
                 prior_val = _find_nearest(prior_col_idx)
                 current_val = _find_nearest(current_col_idx)

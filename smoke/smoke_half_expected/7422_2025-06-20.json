@@ -1,0 +1,81 @@
+{
+  "_comment": "半期報告書。金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。CFは半期で省略される場合があり null になることがある。",
+  "code": "7422",
+  "name": "東邦レマック",
+  "fy_end": "2025-06-20",
+  "income_statement": {
+    "sales": 2392204000.0,
+    "operating_profit": -29508000.0,
+    "net_profit": -13043000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 707827000.0,
+    "method": "direct"
+  },
+  "sga": {
+    "current": 737335000.0
+  },
+  "balance_sheet": {
+    "total_assets": 6031108000.0,
+    "current_assets": 3815026000.0,
+    "non_current_assets": 2216082000.0,
+    "current_liabilities": 1070462000.0,
+    "non_current_liabilities": 369961000.0,
+    "net_assets": 4590684000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 800000000.0,
+    "method": "field_parser"
+  },
+  "cash_flow": {
+    "cfo": -133690000.0,
+    "cfi": -3391000.0
+  },
+  "depreciation": {
+    "current": 24141000.0
+  },
+  "interest_expense": {
+    "current": 3264000.0
+  },
+  "employees": {
+    "current": null,
+    "method": "not_found"
+  },
+  "tax_expense": {
+    "pretax_income": -11423000.0,
+    "income_tax": 1620000.0,
+    "effective_tax_rate": -0.14181913682920425
+  },
+  "tangible_fixed_assets": {
+    "total": 1484057000.0,
+    "buildings": 430168000.0,
+    "land": 1037986000.0,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": null,
+    "loans": null,
+    "cash_due_from_banks": null,
+    "negotiable_cds": null
+  },
+  "cash_eq": {
+    "current": null
+  },
+  "capital_expenditure": {
+    "current": 28118000.0
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": null
+  }
+}

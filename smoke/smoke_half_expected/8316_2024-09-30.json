@@ -1,0 +1,81 @@
+{
+  "_comment": "半期報告書。金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。CFは半期で省略される場合があり null になることがある。",
+  "code": "8316",
+  "name": "三井住友",
+  "fy_end": "2024-09-30",
+  "income_statement": {
+    "sales": 5276938000000.0,
+    "operating_profit": 1030472000000.0,
+    "net_profit": 725172000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 2045257000000.0,
+    "method": "business_gross_profit"
+  },
+  "sga": {
+    "current": null
+  },
+  "balance_sheet": {
+    "total_assets": 290022585000000.0,
+    "current_assets": null,
+    "non_current_assets": null,
+    "current_liabilities": null,
+    "non_current_liabilities": null,
+    "net_assets": 14892743000000.0,
+    "accounting_standard": "J-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 207271804000000.0,
+    "method": "bank_components"
+  },
+  "cash_flow": {
+    "cfo": 3341967000000.0,
+    "cfi": -1671192000000.0
+  },
+  "depreciation": {
+    "current": 122068000000.0
+  },
+  "interest_expense": {
+    "current": null
+  },
+  "employees": {
+    "current": 123326.0,
+    "method": "direct"
+  },
+  "tax_expense": {
+    "pretax_income": 1027400000000.0,
+    "income_tax": 297572000000.0,
+    "effective_tax_rate": 0.2896359743040685
+  },
+  "tangible_fixed_assets": {
+    "total": 996006000000.0,
+    "buildings": null,
+    "land": null,
+    "machinery": null,
+    "tools": null,
+    "construction_in_progress": null
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": 163541943000000.0,
+    "loans": 105037170000000.0,
+    "cash_due_from_banks": 73612647000000.0,
+    "negotiable_cds": 13336652000000.0
+  },
+  "cash_eq": {
+    "current": 67533995000000.0
+  },
+  "capital_expenditure": {
+    "current": 43348000000.0
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": 101576000000.0
+  }
+}

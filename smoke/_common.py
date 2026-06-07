@@ -119,21 +119,26 @@ def find_cached_doc(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] |
 
 def find_cached_half_doc(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
     sec_code = f"{code}0"
+    _HALF_DOC_TYPES = {EDINET_DOC_TYPE_HALF_YEAR_REPORT, "140"}
     for doc in _load_search_cache_docs(cache_dir):
         if doc.get("secCode") != sec_code:
             continue
-        if doc.get("docTypeCode") != EDINET_DOC_TYPE_HALF_YEAR_REPORT:
+        if doc.get("docTypeCode") not in _HALF_DOC_TYPES:
             continue
         doc_id = doc.get("docID")
-        period_end = doc.get("periodEnd")
-        if not isinstance(doc_id, str) or not isinstance(period_end, str):
+        if not isinstance(doc_id, str):
+            continue
+        # edinet_period_end = 半期末日（build_half_year_document_index_for_code が付与）
+        period_end = doc.get("edinet_period_end") or doc.get("periodEnd") or ""
+        if not isinstance(period_end, str):
             continue
         if (normalize_date_format(period_end) or period_end) != fy_end:
             continue
         if not (cache_dir / f"{doc_id}_xbrl").is_dir():
             continue
         result = doc.copy()
-        result["edinet_fy_end"] = normalize_date_format(period_end) or period_end
+        if "edinet_fy_end" not in result:
+            result["edinet_fy_end"] = normalize_date_format(period_end) or period_end
         return result
     return None
 
@@ -258,13 +263,15 @@ async def _fetch_and_extract(
     fy_end: str,
     cache_dir: Path,
     doc: dict[str, Any],
-    cur_per_type: str,
 ) -> dict[str, Any] | None:
     client = _CachedXbrlClient(cache_dir)
     # cache_manager=None: smoke は常に XBRL ソースから再計算し、derived キャッシュを参照・書込みしない
     fetcher = EdinetFetcher(edinet_client=client, cache_manager=None)  # type: ignore[arg-type]
     financial_record = {
-        "CurPerType": cur_per_type,
+        # CurPerType は "FY" に固定する。_get_annual_docs が _docs_from_xbrl_records を
+        # 経由させるために必要。"2Q" を渡すと _search_edinet_annual_docs が呼ばれ、
+        # _CachedXbrlClient が持たない _get_documents_for_date でエラーになる。
+        "CurPerType": "FY",
         "CurFYEn": fy_end,
         "DiscDate": normalize_date_format(str(doc.get("submitDateTime") or "")) or "",
         "_docID": doc["docID"],
@@ -282,14 +289,14 @@ async def extract_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, 
     doc = find_cached_doc(code, fy_end, cache_dir)
     if doc is None:
         return None
-    return await _fetch_and_extract(code, fy_end, cache_dir, doc, "FY")
+    return await _fetch_and_extract(code, fy_end, cache_dir, doc)
 
 
 async def extract_half_actuals(code: str, fy_end: str, cache_dir: Path) -> dict[str, Any] | None:
     doc = find_cached_half_doc(code, fy_end, cache_dir)
     if doc is None:
         return None
-    return await _fetch_and_extract(code, fy_end, cache_dir, doc, "2Q")
+    return await _fetch_and_extract(code, fy_end, cache_dir, doc)
 
 
 def fmt(v: object) -> str:

@@ -1,0 +1,81 @@
+{
+  "_comment": "半期報告書。金額は円単位。effective_tax_rate は比率（例: 0.254 = 25.4%）。CFは半期で省略される場合があり null になることがある。",
+  "code": "4901",
+  "name": "富士フイルム",
+  "fy_end": "2024-09-30",
+  "income_statement": {
+    "sales": 1514749000000.0,
+    "operating_profit": 135604000000.0,
+    "net_profit": 110300000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "gross_profit": {
+    "gross_profit": 621638000000.0,
+    "method": "usgaap_html"
+  },
+  "sga": {
+    "current": 405395000000.0
+  },
+  "balance_sheet": {
+    "total_assets": 4893993000000.0,
+    "current_assets": 1541089000000.0,
+    "non_current_assets": 3352904000000.0,
+    "current_liabilities": 1139829000000.0,
+    "non_current_liabilities": 593224000000.0,
+    "net_assets": 3160940000000.0,
+    "accounting_standard": "US-GAAP"
+  },
+  "interest_bearing_debt": {
+    "total": 714730000000.0,
+    "method": "field_parser+lease_html"
+  },
+  "cash_flow": {
+    "cfo": 204958000000.0,
+    "cfi": -274600000000.0
+  },
+  "depreciation": {
+    "current": 78232000000.0
+  },
+  "interest_expense": {
+    "current": 4275000000.0
+  },
+  "employees": {
+    "current": null,
+    "method": "not_found"
+  },
+  "tax_expense": {
+    "pretax_income": null,
+    "income_tax": 29921000000.0,
+    "effective_tax_rate": null
+  },
+  "tangible_fixed_assets": {
+    "total": 1554859000000.0,
+    "buildings": 816796000000.0,
+    "land": 112556000000.0,
+    "machinery": 1614564000000.0,
+    "tools": null,
+    "construction_in_progress": 859606000000.0
+  },
+  "order_book": {
+    "order_intake": null,
+    "order_backlog": null
+  },
+  "bank_financials": {
+    "deposits": null,
+    "loans": null,
+    "cash_due_from_banks": null,
+    "negotiable_cds": null
+  },
+  "cash_eq": {
+    "current": null
+  },
+  "capital_expenditure": {
+    "current": null
+  },
+  "research_development": {
+    "current": null
+  },
+  "share_buyback": {
+    "current": 10000000.0
+  }
+}
