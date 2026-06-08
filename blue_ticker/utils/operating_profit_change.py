@@ -16,11 +16,11 @@ from blue_ticker.utils.metrics_types import YearEntry
 _SGA_KEY = "SellingGeneralAdministrativeExpenses"
 _ADJUSTED_OP_KEY = "BusinessProfit"
 _ADJUSTED_OP_MARGIN_KEY = "BusinessProfitMargin"
-_OP_CHANGE_KEY = "OperatingProfitChange"
+_OP_CHANGE_KEY = "BusinessProfitChange"
 _SALES_IMPACT_KEY = "SalesChangeImpact"
 _GM_IMPACT_KEY = "GrossMarginChangeImpact"
 _SGA_IMPACT_KEY = "SGAChangeImpact"
-_RECONCILIATION_DIFF_KEY = "OperatingProfitChangeReconciliationDiff"
+_RECONCILIATION_DIFF_KEY = "BusinessProfitChangeReconciliationDiff"
 _FINANCIAL_OP_LABELS = frozenset(("経常利益", "事業利益"))
 _FINANCIAL_SALES_LABELS = frozenset(("経常収益",))
 _BUSINESS_GROSS_PROFIT_LABEL = "業務粗利益"
@@ -192,7 +192,7 @@ def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
     _set_source(
         current,
         _RECONCILIATION_DIFF_KEY,
-        method="OperatingProfitChange - (SalesChangeImpact + GrossMarginChangeImpact + SGAChangeImpact)",
+        method="BusinessProfitChange - (SalesChangeImpact + GrossMarginChangeImpact + SGAChangeImpact)",
     )
 
 
@@ -478,5 +478,5 @@ def apply_operating_profit_change_from_xbrl(
         _set_source(
             cd,
             _RECONCILIATION_DIFF_KEY,
-            method="OperatingProfitChange - (SalesChangeImpact + GrossMarginChangeImpact + SGAChangeImpact) (XBRL)",
+            method="BusinessProfitChange - (SalesChangeImpact + GrossMarginChangeImpact + SGAChangeImpact) (XBRL)",
         )

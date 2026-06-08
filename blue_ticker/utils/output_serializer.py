@@ -15,7 +15,7 @@ _DEBUG_FIELDS: frozenset[str] = frozenset({
     "IBDAccountingStandard",
     "BalanceSheetComponents",
     "BalanceSheetAccountingStandard",
-    "OperatingProfitChangeReconciliationDiff",
+    "BusinessProfitChangeReconciliationDiff",
     "ROICWaterfallReconciliationDiff",
     "CalculatedEPS",
     "CalculatedBPS",

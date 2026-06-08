@@ -45,7 +45,7 @@ _MOCK_RESULT = {
                     "NP": 4_944_933.0,
                     "EffectiveTaxRate": 30.1,
                     "NOPAT": 3_741_700.0,
-                    "OperatingProfitChange": 1_000.0,
+                    "BusinessProfitChange": 1_000.0,
                     "SalesChangeImpact": 2_000.0,
                     "GrossMarginChangeImpact": 3_000.0,
                     "SGAChangeImpact": -4_000.0,

@@ -61,11 +61,11 @@ def test_apply_operating_profit_change_to_years_decomposes_op_change() -> None:
 
     current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
-    assert current["OperatingProfitChange"] == pytest.approx(50.0)
+    assert current["BusinessProfitChange"] == pytest.approx(50.0)
     assert current["SalesChangeImpact"] == pytest.approx(70.0)
     assert current["GrossMarginChangeImpact"] == pytest.approx(60.0)
     assert current["SGAChangeImpact"] == pytest.approx(-80.0)
-    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert current["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0)
     assert current["MetricSources"]["SalesChangeImpact"]["source"] == "derived"
 
 
@@ -103,11 +103,11 @@ def test_apply_operating_profit_change_to_years_uses_adjusted_operating_profit()
 
     current = _cd(years[0])
     assert current["BusinessProfit"] == pytest.approx(61_418.0)
-    assert current["OperatingProfitChange"] == pytest.approx(-4_110.0)
+    assert current["BusinessProfitChange"] == pytest.approx(-4_110.0)
     assert current["SalesChangeImpact"] == pytest.approx(27_071.05581812017)
     assert current["GrossMarginChangeImpact"] == pytest.approx(-13_238.055818120169)
     assert current["SGAChangeImpact"] == pytest.approx(-17_943.0)
-    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+    assert current["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_apply_operating_profit_change_to_years_preserves_xbrl_change() -> None:
@@ -115,11 +115,11 @@ def test_apply_operating_profit_change_to_years_preserves_xbrl_change() -> None:
         _year("2024-03-31", 1_200.0, 480.0, 150.0),
         _year("2023-03-31", 1_000.0, 350.0, 100.0),
     ]
-    _cd(years[0])["OperatingProfitChange"] = 55.0
+    _cd(years[0])["BusinessProfitChange"] = 55.0
 
     apply_operating_profit_change_to_years(years)
 
-    assert _cd(years[0])["OperatingProfitChange"] == pytest.approx(55.0)
+    assert _cd(years[0])["BusinessProfitChange"] == pytest.approx(55.0)
 
 
 def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit_base() -> None:
@@ -136,11 +136,11 @@ def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit
 
     current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(1_050.0)
-    assert current["OperatingProfitChange"] == pytest.approx(50.0)
+    assert current["BusinessProfitChange"] == pytest.approx(50.0)
     assert current["SalesChangeImpact"] == pytest.approx(200.0)
     assert current["GrossMarginChangeImpact"] == pytest.approx(0.0)
     assert current["SGAChangeImpact"] == pytest.approx(-150.0)
-    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert current["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0)
 
 
 def test_apply_operating_profit_change_to_years_skips_ordinary_income_for_non_financial_sales() -> None:
@@ -157,7 +157,7 @@ def test_apply_operating_profit_change_to_years_skips_ordinary_income_for_non_fi
 
     current = _cd(years[0])
     assert "SellingGeneralAdministrativeExpenses" not in current
-    assert "OperatingProfitChange" not in current
+    assert "BusinessProfitChange" not in current
     assert "SalesChangeImpact" not in current
     assert "GrossMarginChangeImpact" not in current
     assert "SGAChangeImpact" not in current
@@ -175,11 +175,11 @@ def test_apply_operating_profit_change_to_years_uses_business_gross_profit_margi
 
     current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(450.0)
-    assert current["OperatingProfitChange"] == pytest.approx(50.0)
+    assert current["BusinessProfitChange"] == pytest.approx(50.0)
     assert current["SalesChangeImpact"] == pytest.approx(70.0)
     assert current["GrossMarginChangeImpact"] == pytest.approx(180.0)
     assert current["SGAChangeImpact"] == pytest.approx(-200.0)
-    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert current["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0)
     assert current["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "業務粗利益 - OP"
     assert (
         current["MetricSources"]["GrossMarginChangeImpact"]["method"]
@@ -194,7 +194,7 @@ def test_apply_operating_profit_change_to_years_skips_change_without_prior() -> 
 
     current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
-    assert "OperatingProfitChange" not in current
+    assert "BusinessProfitChange" not in current
 
 
 def test_apply_operating_profit_change_to_periods_compares_same_half() -> None:
@@ -209,12 +209,12 @@ def test_apply_operating_profit_change_to_periods_compares_same_half() -> None:
 
     h1 = periods[2]["data"]
     h2 = periods[3]["data"]
-    assert h1["OperatingProfitChange"] == pytest.approx(30.0)
+    assert h1["BusinessProfitChange"] == pytest.approx(30.0)
     assert h1["SalesChangeImpact"] == pytest.approx(35.0)
     assert h1["GrossMarginChangeImpact"] == pytest.approx(25.0)
     assert h1["SGAChangeImpact"] == pytest.approx(-30.0)
-    assert h1["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
-    assert h2["OperatingProfitChange"] == pytest.approx(20.0)
+    assert h1["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert h2["BusinessProfitChange"] == pytest.approx(20.0)
     assert h2["SalesChangeImpact"] == pytest.approx(35.0)
 
 
@@ -266,11 +266,11 @@ def test_apply_operating_profit_change_to_periods_from_xbrl_completes_single_yea
 
     h1 = periods[0]["data"]
     h2 = periods[1]["data"]
-    assert h1["OperatingProfitChange"] == pytest.approx(30.0)
+    assert h1["BusinessProfitChange"] == pytest.approx(30.0)
     assert h1["SalesChangeImpact"] == pytest.approx(35.0)
     assert h1["GrossMarginChangeImpact"] == pytest.approx(25.0)
     assert h1["SGAChangeImpact"] == pytest.approx(-30.0)
-    assert h2["OperatingProfitChange"] == pytest.approx(20.0)
+    assert h2["BusinessProfitChange"] == pytest.approx(20.0)
     assert h2["SalesChangeImpact"] == pytest.approx(35.0)
     assert h2["GrossMarginChangeImpact"] == pytest.approx(35.0)
     assert h2["SGAChangeImpact"] == pytest.approx(-50.0)
@@ -333,14 +333,14 @@ def test_apply_operating_profit_change_from_xbrl_uses_filing_prior_values() -> N
     apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
 
     cd_2022 = _cd(years[0])
-    assert cd_2022["OperatingProfitChange"] == pytest.approx(50.0)
+    assert cd_2022["BusinessProfitChange"] == pytest.approx(50.0)
     assert cd_2022["SalesChangeImpact"] == pytest.approx(70.0)
     assert cd_2022["GrossMarginChangeImpact"] == pytest.approx(60.0)
     assert cd_2022["SGAChangeImpact"] == pytest.approx(-80.0)
-    assert cd_2022["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert cd_2022["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0)
 
     cd_2023 = _cd(years[1])
-    assert cd_2023["OperatingProfitChange"] == pytest.approx(50.0)
+    assert cd_2023["BusinessProfitChange"] == pytest.approx(50.0)
 
 
 def test_apply_operating_profit_change_from_xbrl_uses_direct_sga_values() -> None:
@@ -387,11 +387,11 @@ def test_apply_operating_profit_change_from_xbrl_uses_adjusted_operating_profit(
     cd = _cd(years[0])
     assert cd["BusinessProfit"] == pytest.approx(61_418.0)
     assert cd["BusinessProfitMargin"] == pytest.approx(61_418.0 / 284_900.0 * PERCENT)
-    assert cd["OperatingProfitChange"] == pytest.approx(-4_110.0)
+    assert cd["BusinessProfitChange"] == pytest.approx(-4_110.0)
     assert cd["SalesChangeImpact"] == pytest.approx(27_071.05581812017)
     assert cd["GrossMarginChangeImpact"] == pytest.approx(-13_238.055818120169)
     assert cd["SGAChangeImpact"] == pytest.approx(-17_943.0)
-    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+    assert cd["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_values() -> None:
@@ -410,11 +410,11 @@ def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_val
 
     cd = _cd(years[0])
     assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(4_989_166.0)
-    assert cd["OperatingProfitChange"] == pytest.approx(229_759.0)
+    assert cd["BusinessProfitChange"] == pytest.approx(229_759.0)
     assert cd["SalesChangeImpact"] == pytest.approx(1_815_681.0)
     assert cd["GrossMarginChangeImpact"] == pytest.approx(0.0)
     assert cd["SGAChangeImpact"] == pytest.approx(-1_585_922.0)
-    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+    assert cd["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_apply_operating_profit_change_from_xbrl_uses_business_gross_profit_margin() -> None:
@@ -439,11 +439,11 @@ def test_apply_operating_profit_change_from_xbrl_uses_business_gross_profit_marg
 
     cd = _cd(years[0])
     assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(399_505.0)
-    assert cd["OperatingProfitChange"] == pytest.approx(69_198.0)
+    assert cd["BusinessProfitChange"] == pytest.approx(69_198.0)
     assert cd["SalesChangeImpact"] == pytest.approx(117_161.46788394575)
     assert cd["GrossMarginChangeImpact"] == pytest.approx(-52_965.46788394579)
     assert cd["SGAChangeImpact"] == pytest.approx(5_002.0)
-    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+    assert cd["BusinessProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
     assert cd["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "業務粗利益(XBRL) - OP(XBRL)"
     assert (
         cd["MetricSources"]["GrossMarginChangeImpact"]["method"]
@@ -455,7 +455,7 @@ def test_apply_operating_profit_change_from_xbrl_skips_when_xbrl_missing() -> No
     """XBRLデータがない年度はスキップされる。"""
     years = [_blank_year("2022-03-31")]
     apply_operating_profit_change_from_xbrl(years, {}, {})
-    assert "OperatingProfitChange" not in _cd(years[0])
+    assert "BusinessProfitChange" not in _cd(years[0])
 
 
 def test_apply_operating_profit_change_from_xbrl_sga_without_prior() -> None:
@@ -480,4 +480,4 @@ def test_apply_operating_profit_change_from_xbrl_sga_without_prior() -> None:
 
     cd = _cd(years[0])
     assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
-    assert "OperatingProfitChange" not in cd
+    assert "BusinessProfitChange" not in cd

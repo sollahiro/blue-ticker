@@ -142,11 +142,11 @@ class CalculatedData(TypedDict, total=False):
     SellingGeneralAdministrativeExpenses: float | None
     BusinessProfit: float | None
     BusinessProfitMargin: float | None
-    OperatingProfitChange: float | None
+    BusinessProfitChange: float | None
     SalesChangeImpact: float | None
     GrossMarginChangeImpact: float | None
     SGAChangeImpact: float | None
-    OperatingProfitChangeReconciliationDiff: float | None
+    BusinessProfitChangeReconciliationDiff: float | None
     # ── analyzer.py: _apply_employees ──
     Employees: int | None
     # ── analyzer.py: _apply_order_book ──

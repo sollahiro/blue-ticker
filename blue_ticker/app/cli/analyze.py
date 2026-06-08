@@ -168,20 +168,24 @@ async def cmd_analyze(args):
             gross_profit_label, gross_profit_margin_label, gross_margin_change_label = (
                 _gross_profit_labels(latest_period_data)
             )
+            half_op_label = latest_period_data.get("OPLabel", "営業利益")
+            half_op_is_financial = half_op_label in ("事業利益", "経常利益")
 
             half_metrics_to_show = [
                 ("売上高 (百万)",      lambda d: d.get("Sales")),
                 (gross_profit_label,   lambda d: d.get("GrossProfit")),
                 (gross_profit_margin_label, lambda d: d.get("GrossProfitMargin")),
                 ("販管費 (百万)",      lambda d: d.get("SellingGeneralAdministrativeExpenses")),
-                ("事業利益 (百万)",    lambda d: d.get("BusinessProfit")),
-                ("事業利益率 (%)",     lambda d: d.get("BusinessProfitMargin")),
-                ("営業利益 (百万)",    lambda d: d.get("OP")),
-                ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
+                *([] if half_op_is_financial else [
+                    ("事業利益 (百万)",    lambda d: d.get("BusinessProfit")),
+                    ("事業利益率 (%)",     lambda d: d.get("BusinessProfitMargin")),
+                ]),
+                (half_op_label + " (百万)", lambda d: d.get("OP")),
+                (half_op_label + "率 (%)",   lambda d: d.get("OperatingMargin")),
                 ("NOPAT (百万)",       lambda d: d.get("NOPAT")),
                 ("純利益 (百万)",      lambda d: d.get("NP")),
                 ("実効税率 (%)",       lambda d: d.get("EffectiveTaxRate")),
-                ("事業利益前年差",     lambda d: d.get("OperatingProfitChange")),
+                ("事業利益前年差",     lambda d: d.get("BusinessProfitChange")),
                 ("  売上差影響",       lambda d: d.get("SalesChangeImpact")),
                 (f"  {gross_margin_change_label}", lambda d: d.get("GrossMarginChangeImpact")),
                 ("  販管費差影響",     lambda d: d.get("SGAChangeImpact")),
@@ -325,8 +329,10 @@ async def cmd_analyze(args):
         gross_profit_label, gross_profit_margin_label, gross_margin_change_label = (
             _gross_profit_labels(latest_display_data)
         )
-        op_label = latest_display_data.get("OPLabel", "営業利益") + " (百万)"
-        op_margin_label = latest_display_data.get("OPLabel", "営業利益") + "率 (%)"
+        op_label_base = latest_display_data.get("OPLabel", "営業利益")
+        op_label = op_label_base + " (百万)"
+        op_margin_label = op_label_base + "率 (%)"
+        op_is_financial = op_label_base in ("事業利益", "経常利益")
 
         metrics_to_show = [
             (sales_label,             calculated_metric(lambda c: c.get("Sales"))),
@@ -335,14 +341,16 @@ async def cmd_analyze(args):
             (gross_profit_label,       calculated_metric(lambda c: c.get("GrossProfit"))),
             (gross_profit_margin_label, calculated_metric(lambda c: c.get("GrossProfitMargin"))),
             ("販管費 (百万)",          calculated_metric(lambda c: c.get("SellingGeneralAdministrativeExpenses"))),
-            ("事業利益 (百万)",         calculated_metric(lambda c: c.get("BusinessProfit"))),
-            ("事業利益率 (%)",          calculated_metric(lambda c: c.get("BusinessProfitMargin"))),
+            *([] if op_is_financial else [
+                ("事業利益 (百万)",     calculated_metric(lambda c: c.get("BusinessProfit"))),
+                ("事業利益率 (%)",      calculated_metric(lambda c: c.get("BusinessProfitMargin"))),
+            ]),
             (op_label,                calculated_metric(lambda c: c.get("OP"))),
             (op_margin_label,         calculated_metric(get_op_margin)),
             ("NOPAT (百万)",           calculated_metric(lambda c: c.get("NOPAT"))),
             ("純利益 (百万)",          calculated_metric(lambda c: c.get("NP"))),
             ("実効税率 (%)",            calculated_metric(lambda c: c.get("EffectiveTaxRate"))),
-            ("事業利益前年差",          calculated_metric(lambda c: c.get("OperatingProfitChange"))),
+            ("事業利益前年差",          calculated_metric(lambda c: c.get("BusinessProfitChange"))),
             ("  売上差影響",           calculated_metric(lambda c: c.get("SalesChangeImpact"))),
             (f"  {gross_margin_change_label}", calculated_metric(lambda c: c.get("GrossMarginChangeImpact"))),
             ("  販管費差影響",          calculated_metric(lambda c: c.get("SGAChangeImpact"))),
