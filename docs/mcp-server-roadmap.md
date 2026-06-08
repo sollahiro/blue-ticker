@@ -51,6 +51,7 @@ Phase 4（self-hosted MCP 暫定稼働）完了。`blt-server` は `poetry insta
 - [ ] Stage 4: 財務指標計算の事前取得バッチ
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
+- [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
 - [ ] OAuth 認証の追加
 
 ---
