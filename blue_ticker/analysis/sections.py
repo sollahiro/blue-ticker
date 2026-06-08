@@ -239,9 +239,7 @@ class CashFlowSection(Section):
         tag_elements: XbrlTagElements = {}
         for f in find_xbrl_files(xbrl_dir):
             for tag, ctx_map in collect_numeric_elements(f, allowed_tags=cls._TAGS).items():
-                if tag not in tag_elements:
-                    tag_elements[tag] = {}
-                tag_elements[tag].update(ctx_map)
+                tag_elements.setdefault(tag, {}).update(ctx_map)
         field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         std = accounting_standard or detect_accounting_standard(field_set)
         nc_field_set = build_nc_duration_field_set(tag_elements)
@@ -483,9 +481,7 @@ class EmployeeSection(Section):
         tag_elements: XbrlTagElements = {}
         for f in find_xbrl_files(xbrl_dir):
             for tag, ctx_map in collect_numeric_elements(f, allowed_tags=cls._TAGS).items():
-                if tag not in tag_elements:
-                    tag_elements[tag] = {}
-                tag_elements[tag].update(ctx_map)
+                tag_elements.setdefault(tag, {}).update(ctx_map)
         field_set = field_set_from_pre_parsed(tag_elements)
         std = accounting_standard or detect_accounting_standard(tag_elements)
         return cls(field_set, std, tag_elements)

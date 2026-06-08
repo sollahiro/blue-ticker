@@ -333,9 +333,7 @@ def collect_all_numeric_facts(
             labels_by_tag=labels_by_tag,
             roles_by_tag=roles_by_tag,
         ).items():
-            if tag not in all_facts:
-                all_facts[tag] = {}
-            all_facts[tag].update(ctx_map)
+            all_facts.setdefault(tag, {}).update(ctx_map)
     return all_facts
 
 
