@@ -24,49 +24,18 @@ normalize_date_format("2023-12-31") # => "2023-12-31"（冪等）
 normalize_date_format(None)         # => None（安全）
 
 parse_date_string("20231231")       # => datetime(2023, 12, 31)
-parse_date_string(None)             # => None（安全）
-
 extract_year_month("20231231")      # => (2023, 12)
-extract_year_month(None)            # => (None, None)（安全）
 ```
 
-## やってはいけないパターン
+## 日付長定数
+
+マジックナンバー `8` や `10` は使わず `blue_ticker/constants/formats.py` の定数を使う。
 
 ```python
-# ❌ インライン文字列スライス変換
-f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-
-# ❌ 独自の dual-format strptime
-if len(date_str) == 8:
-    dt = datetime.strptime(date_str, "%Y%m%d")
-
-# ❌ マジックナンバー
-if len(date_str) == 8:  # DATE_LEN_COMPACT を使うこと
-
-# ✅ 正しい書き方
-from blue_ticker.constants.formats import DATE_LEN_COMPACT
-if len(date_str) == DATE_LEN_COMPACT:
-    ...
-```
-
-## 日付長定数（`blue_ticker/constants/formats.py`）
-
-```python
-DATE_LEN_COMPACT    = 8   # YYYYMMDD 形式
-DATE_LEN_HYPHENATED = 10  # YYYY-MM-DD 形式
+from blue_ticker.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+# DATE_LEN_COMPACT = 8、DATE_LEN_HYPHENATED = 10
 ```
 
 ## filing コマンドの期末日フォーマット（fy_end）
 
-`filing` コマンドの JSON 出力では、期末日を `fy_end` フィールドに **YYYY-MM** 形式で表示する。
-
-```json
-{"doc_id": "S100VXJA", "fy_end": "2025-03", ...}
-```
-
-`edinet_fy_end`（YYYY-MM-DD）の先頭 7 文字を使用する。これはフォーマット変換ではなく単純な切り詰めであり、`[:7]` スライスが許容される唯一の例外。
-
-```python
-raw_fy_end: str = doc.get("edinet_fy_end") or ""
-fy_end: str | None = raw_fy_end[:7] if raw_fy_end else None
-```
+`filing` コマンドの JSON 出力では期末日を `fy_end` フィールドに **YYYY-MM** 形式で表示する。`edinet_fy_end`（YYYY-MM-DD）の先頭 7 文字をそのまま使う。これはフォーマット変換ではなく単純な切り詰めであり、`[:7]` スライスが許容される唯一の例外。

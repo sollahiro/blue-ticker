@@ -110,7 +110,7 @@ poetry run pytest
 poetry run pyright blue_ticker/
 ```
 
-アーキテクチャ、キャッシュ、XBRL解析の詳細は `docs/architecture-review.md` と `docs/xbrl-parsing.md` を参照してください。
+XBRL解析のタグ体系・コンテキスト仕様は `docs/xbrl-parsing.md` を参照してください。
 
 ## 免責事項
 

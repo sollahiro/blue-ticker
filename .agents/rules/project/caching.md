@@ -28,27 +28,11 @@ analysis_cache/
 
 ## バージョン埋め込み
 
-derived キャッシュには必ず `_cache_version` フィールドを埋め込み、読み込み時に `__version__` 全体と照合する。
+derived キャッシュには必ず `_cache_version` フィールドを埋め込み、読み込み時に `__version__` 全体と照合する。バージョン不一致はフォールスルーして再取得する。
 
 external キャッシュは原則としてグローバルバージョンに連動させない。TTL、取得日、または外部API用の個別バージョンで管理する。
 
-```python
-from blue_ticker import __version__
-
-_CACHE_VERSION = __version__  # 例: "26.5.0"
-
-# 保存
-self.cache_manager.set(cache_key, {
-    "_cache_version": _CACHE_VERSION,
-    "data": ...,
-})
-
-# 読み込み
-cached = self.cache_manager.get(cache_key)
-if cached and cached.get("_cache_version") == _CACHE_VERSION:
-    return cached["data"]
-# バージョン不一致 → フォールスルーして再取得
-```
+バージョン照合で一致したときは `_cache_version` を除いて返す（呼び出し元に露出させない）。
 
 バージョン管理の詳細は `versioning.md` を参照。
 
@@ -57,38 +41,10 @@ if cached and cached.get("_cache_version") == _CACHE_VERSION:
 `{機能}_{識別子}_{パラメーター}` の形式で命名する。
 
 ```python
-# ✅ 良い例
 f"individual_analysis_{code}"
 f"half_year_periods_{code}_{years}"
-f"edinet_docs_{code}_{years}"
 f"xbrl_parsed_{doc_id}"
 "mof_rf_rates"
-
-# ❌ 避ける（衝突リスク）
-f"{code}"
-"data"
 ```
 
-## バージョン照合で一致したときの返し方
-
-`_cache_version` フィールドは呼び出し元に露出させない。
-
-```python
-# ✅ _cache_version を除いて返す
-return {k: v for k, v in cached.items() if k != "_cache_version"}
-
-# ❌ そのまま返す（呼び出し元に _cache_version が漏れる）
-return cached
-```
-
-## やってはいけないパターン
-
-```python
-# ❌ _cache_version なしで保存（古いキャッシュを検知できない）
-self.cache_manager.set(key, {"data": ...})
-
-# ❌ バージョン照合なしで読み込む
-cached = self.cache_manager.get(key)
-if cached:
-    return cached
-```
+短すぎるキー（`f"{code}"` や `"data"` など）は衝突リスクがあるため使わない。

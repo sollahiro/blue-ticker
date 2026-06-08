@@ -1,27 +1,12 @@
 # 依存関係の管理方針
 
-このファイルでは、外部パッケージ依存とアーキテクチャ上のレイヤー依存を扱う。
-
-## アーキテクチャ依存ルール
-
-依存方向は以下を基本とする。
-
-```text
-blue_ticker.app -> blue_ticker.services -> blue_ticker.analysis | blue_ticker.api | blue_ticker.infrastructure | blue_ticker.utils
-```
-
-禁止ルール:
-
-- `services/` は `blue_ticker.app` をインポートしてはならない
-- `infrastructure/` は `blue_ticker.app` および `blue_ticker.services` をインポートしてはならない
-
-このルールは `tests/test_dependency_rules.py` で自動検証する。
+アーキテクチャ依存ルール（レイヤー間の import 方向）は `AGENTS.md` を参照。
 
 ## 外部パッケージ依存
 
-外部パッケージの追加は最小限に抑える。理由は以下の2点：
+外部パッケージの追加は最小限に抑える。
 
-- **セキュリティ**: 依存パッケージはサプライチェーン攻撃の攻撃面になる。パッケージが増えるほど脆弱性混入リスクが上がる。
+- **セキュリティ**: 依存パッケージはサプライチェーン攻撃の攻撃面になる。
 - **容量**: インストールサイズ・`poetry.lock` の肥大化を防ぐ。
 
 標準ライブラリで賄えるものは外部パッケージを追加しない。
@@ -37,37 +22,8 @@ blue_ticker.app -> blue_ticker.services -> blue_ticker.analysis | blue_ticker.ap
 
 以下をすべて満たす場合のみ追加を検討する。
 
-1. **標準ライブラリで実現不可能**である
-2. **既存の依存パッケージでも実現不可能**である
-3. メンテナンスが継続されている実績あるパッケージである
+1. 標準ライブラリで実現不可能
+2. 既存の依存パッケージでも実現不可能
+3. メンテナンスが継続されている実績あるパッケージ
 
-## 追加が必要な場合は必ず事前に確認する
-
-上記基準を満たすと判断した場合でも、`pyproject.toml` を変更する前にユーザーへ確認を取ること。
-
-確認時に伝える内容：
-- 追加しようとするパッケージ名とバージョン
-- なぜ標準ライブラリ・既存依存で代替できないか
-- そのパッケージを使う箇所
-
-## やってはいけないパターン
-
-```python
-# ❌ 標準ライブラリで書けるものに外部パッケージを使う
-import arrow          # → datetime で足りる
-import click          # → argparse で足りる
-import pydantic       # → dataclass / TypedDict で足りる
-import requests       # → aiohttp（既存）または urllib で足りる
-import python-dotenv  # → os.environ で足りる
-```
-
-## やるべきこと
-
-```python
-# ✅ 標準ライブラリを使う
-import datetime
-import argparse
-import json
-import pathlib
-import xml.etree.ElementTree as ET
-```
+基準を満たすと判断した場合でも、`pyproject.toml` を変更する前にユーザーへ確認を取ること。確認時は追加パッケージ名・代替不可の理由・使用箇所を伝える。
