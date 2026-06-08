@@ -10,10 +10,17 @@
 
 `blt-server` は `poetry install --with server && blt-server` で起動。self-hosted MCP の基盤実装は完了済み。
 
+blt-server には 2 種類のクライアントが接続できる。デプロイモード（上表）はサーバーの配置場所を表すもので、クライアント種別とは独立した軸。
+
+| クライアント | 接続方法 | ユースケース |
+|---|---|---|
+| **remote CLI** | HTTP API（`edinet-backend remote`） | 別マシンからの `blt` 利用、EDINET API キーの一元管理 |
+| **AI チャット（MCP）** | MCP プロトコル | Claude.ai 等の AI ツールから財務データをツール呼び出し |
+
 ## ゴール
 
 - local CLI は blt-server 不要の独立モードとして維持する。
-- remote (cloud) により AI チャットボットおよび CLI が共通の blt-server を通じて財務データにアクセスできるようにする。
+- remote デプロイにより、remote CLI と AI チャット（MCP）が共通の blt-server を通じて財務データにアクセスできるようにする。
 
 ## 非ゴール
 
