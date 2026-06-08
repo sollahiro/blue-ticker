@@ -194,14 +194,33 @@ def _extract_ifrs_lease_from_html(
 def _extract_ifrs_lease_liabilities(
     section: BalanceSheetSection,
 ) -> tuple[float | None, float | None, list[MetricComponent]]:
-    """IFRS リース注記TextBlockからリース負債残高を抽出する。HTMLフォールバックあり。
+    """IFRS リース負債残高を抽出する。XBRLタグ → TextBlock → HTML の優先順。
 
-    パターンA（支払期日が1年以内 / 1年超）: 流動・非流動を個別取得して積み上げ。
-    パターンB（帳簿価額）: 合計のみ取得。
+    パターンA（XBRLタグ直接）: LeaseLiabilitiesCLIFRS / LeaseLiabilitiesNCLIFRS
+    パターンB（TextBlock 支払期日が1年以内 / 1年超）: 流動・非流動を個別取得して積み上げ。
+    パターンC（TextBlock 帳簿価額）: 合計のみ取得。
 
     Returns:
         (current_yen, prior_yen, components)。取得できない場合は (None, None, [])。
     """
+    # パターンA: XBRL タグから直接解決（TextBlock/HTML より確実）
+    cl_fv = section.resolve(["LeaseLiabilitiesCLIFRS"])
+    ncl_fv = section.resolve(["LeaseLiabilitiesNCLIFRS"])
+    cl_c = cl_fv["current"] if cl_fv["tag"] else None
+    cl_p = cl_fv["prior"] if cl_fv["tag"] else None
+    ncl_c = ncl_fv["current"] if ncl_fv["tag"] else None
+    ncl_p = ncl_fv["prior"] if ncl_fv["tag"] else None
+    if cl_c is not None or ncl_c is not None:
+        components: list[MetricComponent] = []
+        total_c = (cl_c or 0.0) + (ncl_c or 0.0)
+        has_p = cl_p is not None or ncl_p is not None
+        total_p = ((cl_p or 0.0) + (ncl_p or 0.0)) if has_p else None
+        if cl_c is not None:
+            components.append({"label": "リース負債（流動）", "tag": "LeaseLiabilitiesCLIFRS", "current": cl_c, "prior": cl_p})
+        if ncl_c is not None:
+            components.append({"label": "リース負債（非流動）", "tag": "LeaseLiabilitiesNCLIFRS", "current": ncl_c, "prior": ncl_p})
+        return total_c, total_p, components
+
     if section.xbrl_dir is None:
         return None, None, []
     table = extract_ifrs_textblock_table(section.xbrl_dir, _IFRS_LEASE_TEXTBLOCK_TAG)
