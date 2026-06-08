@@ -4,11 +4,11 @@
 
 | モード | blt-server | EDINET を叩くのは | 状態 |
 |---|---|---|---|
-| **local CLI** | なし | CLI | 現行 |
-| **remote (self-host)** | 同一マシン | blt-server | Phase 2/3 以降 |
+| **local CLI** | なし | CLI | 現行稼働中 |
+| **remote (self-host)** | 同一マシン | blt-server | 基盤実装済み・設定待ち |
 | **remote (cloud)** | リモートサーバー | blt-server | 将来検討 |
 
-Phase 4（self-hosted MCP 暫定稼働）完了。`blt-server` は `poetry install --with server && blt-server` で起動。
+`blt-server` は `poetry install --with server && blt-server` で起動。self-hosted MCP の基盤実装は完了済み。
 
 ## ゴール
 
@@ -20,6 +20,19 @@ Phase 4（self-hosted MCP 暫定稼働）完了。`blt-server` は `poetry insta
 - `ticker analyze` 等の各サブコマンドに backend 選択オプションを増やさない。
 - `CacheManager` と EDINET external cache を無理に単一抽象へ統合しない。
 - ローカルキャッシュを「レガシー」として扱わない。
+
+---
+
+## データパイプライン
+
+blt-server 上で書類一覧取得から財務指標計算まで段階的に事前処理を行う構成。
+
+| ステージ | 処理内容 | 状態 |
+|---|---|---|
+| Stage 1 | 書類一覧取得（`sync_document_list`） | 実装済み・設定待ち |
+| Stage 2 | XBRL ダウンロードの事前取得バッチ | 未着手 |
+| Stage 3 | XBRL 数値抽出の事前取得バッチ | 未着手 |
+| Stage 4 | 財務指標計算の事前取得バッチ | 未着手 |
 
 ---
 
@@ -35,20 +48,18 @@ Phase 4（self-hosted MCP 暫定稼働）完了。`blt-server` は `poetry insta
 ### 近期（Stage 1 安定化）
 
 - [ ] `sync_document_list` の定期実行を launchd で設定する
-- [x] Stage 1 に `status.json` を追加（`analysis_cache/external/edinet/stage1_status.json`）
+- [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
 
 ### 中期（remote CLI 採用を決断した場合）
 
-- [x] Phase 2: `ticker config set edinet-backend remote` のサポート実装済み
-- [ ] `services/data_service.py` の取得部分と計算部分を分割する（Phase 3 の前提）
-- [ ] CLI を `get_financial_summary` / `get_filings` の薄いレンダラーへ移行する（Phase 3）
+- [x] `ticker config set edinet-backend remote` のサポート実装済み
+- [ ] `services/data_service.py` の取得部分と計算部分を分割する
+- [ ] CLI を `get_financial_summary` / `get_filings` の薄いレンダラーへ移行する
 
-### 将来（パイプライン拡張）
+### 将来
 
-- [ ] Stage 2: XBRL ダウンロードの事前取得バッチ
-- [ ] Stage 3: XBRL 数値抽出の事前取得バッチ
-- [ ] Stage 4: 財務指標計算の事前取得バッチ
+- [ ] Stage 2〜4 実装（データパイプライン拡張、上表参照）
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
 - [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
