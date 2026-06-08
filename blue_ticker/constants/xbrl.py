@@ -155,6 +155,8 @@ BALANCE_SHEET_COMPONENT_DEFINITIONS: list[_BalanceSheetComponentDef] = [
             "Assets",                              # J-GAAP BS
             "TotalAssetsIFRS",                     # IFRS
             "AssetsIFRS",                          # IFRS 代替
+            "TotalAssetsIFRSSummaryOfBusinessResults",
+            "TotalAssetsJMISSummaryOfBusinessResults",
             "TotalAssetsUSGAAP",                   # US-GAAP
             "TotalAssetsUSGAAPSummaryOfBusinessResults",
             "TotalAssetsSummaryOfBusinessResults", # J-GAAP 要約情報
@@ -209,6 +211,8 @@ BALANCE_SHEET_COMPONENT_DEFINITIONS: list[_BalanceSheetComponentDef] = [
             "TotalEquityIFRS",                                        # IFRS 代替
             "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentIFRS",                 # IFRS 親会社所有者帰属持分
+            "EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+            "EquityAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
             "NetAssetsUSGAAP",                                        # US-GAAP
             "TotalEquityUSGAAP",                                      # US-GAAP 代替
             "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
@@ -349,7 +353,8 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
         "tags": [
             "CurrentPortionOfBonds",                    # J-GAAP
             "RedeemableBondsWithinOneYear",             # J-GAAP 別名
-            "CurrentPortionOfBondsCLIFRS",              # IFRS
+            "BondsPayableCLIFRS",                       # IFRS 2026タクソノミ
+            "CurrentPortionOfBondsCLIFRS",              # IFRS 旧タグ（後方互換）
         ],
     },
     {
@@ -379,12 +384,14 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
         "label": "リース負債（流動）",
         "tags": [
             "LeaseObligationsCL",           # J-GAAP 流動リース負債
+            "LeaseLiabilitiesCLIFRS",       # IFRS 流動リース負債
         ],
     },
     {
         "label": "リース負債（非流動）",
         "tags": [
             "LeaseObligationsNCL",          # J-GAAP 非流動リース負債
+            "LeaseLiabilitiesNCLIFRS",      # IFRS 非流動リース負債
         ],
     },
 ]
@@ -496,6 +503,7 @@ CF_OPERATING_TAGS: list[str] = [
     "CashFlowsFromUsedInOperationsIFRS",                                # IFRS（間接法）
     "CashFlowsFromUsedInOperatingActivitiesIFRS",                       # IFRS（直接法）
     "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+    "CashFlowsFromUsedInOperatingActivitiesJMISSummaryOfBusinessResults", # JMIS（決算短信）
     "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
     "NetCashProvidedByUsedInOperatingActivities",                       # J-GAAP 連結（CF計算書）
     "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
@@ -506,6 +514,7 @@ CF_INVESTING_TAGS: list[str] = [
     "CashFlowsUsedInInvestingActivitiesIFRS",                           # IFRS
     "CashFlowsFromUsedInInvestingActivitiesIFRS",                       # IFRS（代替）
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+    "CashFlowsFromUsedInInvestingActivitiesJMISSummaryOfBusinessResults", # JMIS（決算短信）
     "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
     "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
     "NetCashProvidedByUsedInInvestmentActivities",                      # J-GAAP 連結（表記ゆれ）
@@ -644,12 +653,14 @@ INTEREST_EXPENSE_JGAAP_TAGS: list[str] = [
 ]
 
 # IFRS: 支払利息タグ優先順
-# InterestExpensesIFRS → IFRS 7注記の償却原価測定負債利息 → 同資産変形 → 金融費用合計（最終フォールバック）
+# InterestExpensesIFRS → IFRS 7注記の償却原価測定負債利息 → 金融費用合計（最終フォールバック）
 # FinanceCostsIFRS は金融費用合計（支払利息＋その他）のため過大になることがある
+# FinancialAssetsMeasuredAtAmortizedCostInterestExpensesIFRS はスズキ等が使った会社固有拡張タグ
+# （標準タクソノミ外・Assets/Liabilities の取り違い）。将来のファイリングには出現しないが後方互換で残す。
 INTEREST_EXPENSE_IFRS_TAGS: list[str] = [
     "InterestExpensesIFRS",                                              # 支払利息（P&L直接タグ）
     "FinancialLiabilitiesMeasuredAtAmortizedCostInterestExpensesIFRS",  # 償却原価測定金融負債の利息（クボタ等）
-    "FinancialAssetsMeasuredAtAmortizedCostInterestExpensesIFRS",       # 同上（スズキ等の表記ゆれ）
+    "FinancialAssetsMeasuredAtAmortizedCostInterestExpensesIFRS",       # 会社固有拡張（スズキ等）・後方互換
     "FinanceCostsIFRS",                                                  # 金融費用合計（最終フォールバック）
 ]
 
@@ -704,6 +715,7 @@ NET_SALES_TAGS: list[str] = [
     "NetSalesIFRS",                             # IFRS連結
     "RevenueIFRS",                              # IFRS連結（日立等の売上収益）
     "RevenueIFRSSummaryOfBusinessResults",      # IFRS 要約情報（味の素等）
+    "RevenueJMISSummaryOfBusinessResults",      # JMIS 要約情報
     "Revenue",                                  # IFRS代替
     "OperatingRevenuesIFRSKeyFinancialData",    # IFRS 要約情報（スズキ等）
     "OperatingRevenuesIFRSSummaryOfBusinessResults", # IFRS 要約情報
@@ -721,6 +733,7 @@ NET_SALES_TAGS: list[str] = [
 NET_PROFIT_TAGS: list[str] = [
     "ProfitLossAttributableToOwnersOfParentIFRS",          # IFRS連結 親会社帰属
     "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults", # IFRS 要約情報
+    "ProfitLossAttributableToOwnersOfParentJMISSummaryOfBusinessResults", # JMIS 要約情報
     "NetIncomeLossAttributableToOwnersOfParentUSGAAP",      # US-GAAP 親会社帰属
     "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
     "NetIncomeLoss",                                        # US-GAAP 代替
@@ -744,6 +757,7 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
             "TotalAssets", "Assets",
             "TotalAssetsIFRS", "AssetsIFRS",
             "TotalAssetsIFRSSummaryOfBusinessResults",
+            "TotalAssetsJMISSummaryOfBusinessResults",
             "TotalAssetsUSGAAP",
             "TotalAssetsSummaryOfBusinessResults",
             "TotalAssetsUSGAAPSummaryOfBusinessResults",
@@ -827,6 +841,8 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
             "USGAAP_HTML_NetAssets",
             "NetAssetsSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentIFRS",
+            "EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+            "EquityAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentUSGAAP",
             "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
         ],
@@ -853,14 +869,14 @@ IBD_CURRENT_COMPONENTS: list[list[str]] = [
     ["ShortTermLoansPayable", "BorrowingsCLIFRS"],
     ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],
     ["ShortTermBondsPayable"],
-    ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "CurrentPortionOfBondsCLIFRS"],
+    ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"],
     ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"],
-    ["LeaseObligationsCL"],
+    ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"],
 ]
 IBD_NON_CURRENT_COMPONENTS: list[list[str]] = [
     ["BondsPayable", "BondsPayableNCLIFRS"],
     ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"],
-    ["LeaseObligationsNCL"],
+    ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"],
 ]
 
 # IFRS 集約タグ（流動・非流動それぞれ1タグで全コンポーネントを集約）
