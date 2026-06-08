@@ -34,6 +34,10 @@ _TAG_TO_LABEL: dict[str, str] = {
 _IFRS_BS_TEXTBLOCK_TAG = "ConsolidatedStatementOfFinancialPositionIFRSTextBlock"
 _IFRS_LEASE_TEXTBLOCK_TAG = "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock"
 
+# IBD_CURRENT/NON_CURRENT_COMPONENTS に含まれるIFRSリースXBRLタグ
+# これらが resolve_ibd() で既に取得された場合はノート抽出をスキップする
+_IFRS_LEASE_XBRL_TAGS: frozenset[str] = frozenset({"LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS"})
+
 # IFRS連結財政状態計算書 TextBlock から集計する有利子負債コンポーネント定義
 # (HTMLラベル, 表示ラベル) のリスト。HTMLの表示順（流動→非流動）で定義する。
 _IFRS_TEXTBLOCK_IBD_LABELS: list[tuple[str, str]] = [
@@ -439,8 +443,11 @@ def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBeari
             "components": components,
         }
 
-    # IFRS適用企業: リース負債を追加
+    # IFRS適用企業: リース負債を追加（XBRLタグで既に取得済みの場合はスキップ）
     if accounting_standard == "IFRS":
+        resolved_tags = frozenset(tag.split("+")) if tag else frozenset()
+        if resolved_tags & _IFRS_LEASE_XBRL_TAGS:
+            return result
         lease_c, lease_p, lease_comps = _extract_ifrs_lease_liabilities(section)
         if lease_c is not None or lease_p is not None:
             existing_c = result["current"]
