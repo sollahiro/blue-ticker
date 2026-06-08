@@ -131,14 +131,6 @@ class CashFlowResult(TypedDict):
     accounting_standard: str
 
 
-class DepreciationResult(TypedDict):
-    current: float | None
-    prior: float | None
-    accounting_standard: str
-    method: str
-    reason: NotRequired[str]
-
-
 class OrderBookResult(TypedDict):
     order_intake: float | None
     order_backlog: float | None

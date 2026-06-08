@@ -111,10 +111,6 @@ def _compare(fixture: dict[str, Any], actuals: dict[str, Any]) -> list[str]:
     chk("cash_flow.cfo", act_cf.get("cfo"), exp_cf.get("cfo"))
     chk("cash_flow.cfi", act_cf.get("cfi"), exp_cf.get("cfi"))
 
-    exp_dep = fixture.get("depreciation") or {}
-    act_dep = actuals.get("depreciation") or {}
-    chk("depreciation.current", act_dep.get("current"), exp_dep.get("current"))
-
     exp_ie = fixture.get("interest_expense") or {}
     act_ie = actuals.get("interest_expense") or {}
     chk("interest_expense.current", act_ie.get("current"), exp_ie.get("current"))

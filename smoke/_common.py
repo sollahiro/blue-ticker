@@ -9,7 +9,6 @@ from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.bank_financials import extract_bank_financials
 from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
 from blue_ticker.analysis.cash_flow import extract_cash_flow
-from blue_ticker.analysis.depreciation import extract_depreciation
 from blue_ticker.analysis.employees import extract_employees
 from blue_ticker.analysis.gross_profit import extract_gross_profit
 from blue_ticker.analysis.income_statement import extract_income_statement
@@ -158,7 +157,6 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any], *, is_half:
     ibd = extract_interest_bearing_debt(bs_section)
     cf = extract_cash_flow(cf_section)
     sh = extract_shareholder_metrics(xbrl_dir or Path(), pre_parsed=pre_parsed, net_profit=income.get("net_profit"))
-    dep = extract_depreciation(cf_section)
     ie = extract_interest_expense(is_section)
     emp = extract_employees(emp_section)
     tax = extract_tax_expense(is_section)
@@ -198,9 +196,6 @@ def _build_result(xbrl_dir: Path | None, pre_parsed: dict[str, Any], *, is_half:
         "cash_flow": {
             "cfo": cf.get("cfo", {}).get("current"),
             "cfi": cf.get("cfi", {}).get("current"),
-        },
-        "depreciation": {
-            "current": dep.get("current"),
         },
         "interest_expense": {
             "current": None if is_half else ie.get("current"),
@@ -314,7 +309,6 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
     bank = a.get("bank_financials") or {}
     ibd = a["interest_bearing_debt"]
     cf = a["cash_flow"]
-    dep = a["depreciation"]
     ie = a["interest_expense"]
     emp = a["employees"]
     tax = a["tax_expense"]
@@ -343,7 +337,6 @@ def print_table(name: str, fy_end: str, a: dict[str, Any]) -> None:
         ("有利子負債",           f"{fmt(ibd.get('total'))}  [{ibd.get('method','—')}]"),
         ("営業CF",               fmt(cf.get("cfo"))),
         ("投資CF",               fmt(cf.get("cfi"))),
-        ("減価償却費",           fmt(dep.get("current"))),
         ("支払利息",             fmt(ie.get("current"))),
         ("従業員数",             f"{fmt(emp.get('current'))}  [{emp.get('method','—')}]"),
         ("税引前利益",           fmt(tax.get("pretax_income"))),

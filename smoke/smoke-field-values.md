@@ -41,7 +41,6 @@ tests/
 | `interest_bearing_debt.method` | 取得方法 | 文字列 | 同上 |
 | `cash_flow.cfo` | 営業CF | 円 | `extract_cash_flow` |
 | `cash_flow.cfi` | 投資CF | 円 | 同上 |
-| `depreciation.current` | 減価償却費 | 円 | `extract_depreciation` |
 | `interest_expense.current` | 支払利息 | 円 | `extract_interest_expense` |
 | `employees.current` | 従業員数 | 人（整数） | `extract_employees` |
 | `employees.method` | 取得方法 | 文字列 | 同上 |
