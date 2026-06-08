@@ -141,10 +141,6 @@ def _apply_bs_snapshot(
     """BSスナップショットからBS・IBD・キャッシュ・ROE指標を格納する。"""
     for data_key, bs_key in [
         ("TotalAssets", "total_assets"),
-        ("CurrentAssets", "current_assets"),
-        ("NonCurrentAssets", "non_current_assets"),
-        ("CurrentLiabilities", "current_liabilities"),
-        ("NonCurrentLiabilities", "non_current_liabilities"),
         ("NetAssets", "net_assets"),
     ]:
         raw = to_float(bs.get(bs_key))
