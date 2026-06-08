@@ -414,7 +414,7 @@ class EdinetFetcher:
                 download_start = time.perf_counter()
                 xbrl_dir = await asyncio.wait_for(
                     client.download_document(doc_id, 1),
-                    timeout=30.0,
+                    timeout=120.0,
                 )
                 download_elapsed = time.perf_counter() - download_start
                 if not xbrl_dir:
@@ -455,7 +455,7 @@ class EdinetFetcher:
                 log_profile("cache_miss" if self.cache_manager is not None else "cache_disabled")
                 return fy_end_8, (xbrl_path, pre_parsed, pre_parsed_facts)
             except asyncio.TimeoutError:
-                logger.warning(f"[PARSE] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                logger.warning(f"[PARSE] {code} {fy_end_8}: XBRLダウンロードタイムアウト(120s)")
                 return fy_end_8, None
             except Exception as e:
                 logger.warning(f"[PARSE] {code} {fy_end_8}: パースエラー - {e}")
@@ -499,7 +499,7 @@ class EdinetFetcher:
             else:
                 xbrl_dir = await asyncio.wait_for(
                     client.download_document(doc["docID"], 1),
-                    timeout=30.0,
+                    timeout=120.0,
                 )
                 if not xbrl_dir:
                     logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロード失敗")
@@ -511,7 +511,7 @@ class EdinetFetcher:
             logger.info(f"[{prefix}] {code} {fy_end_8}: docID={doc['docID']}")
             return fy_end_8, result
         except asyncio.TimeoutError:
-            logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+            logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロードタイムアウト(120s)")
             return fy_end_8, None
         except Exception as e:
             logger.warning(f"[{prefix}] {code} {fy_end_8}: 抽出エラー - {e}")

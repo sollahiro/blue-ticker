@@ -682,11 +682,10 @@ class IndividualAnalyzer:
                 return {}
 
         if not annual_data:
-            from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_BUFFER
             fallback_years = analysis_years or max_documents
             annual_context = await self._edinet_fetcher.build_xbrl_annual_context(
                 code,
-                fallback_years + EDINET_DOC_DISCOVERY_BUFFER,
+                fallback_years,
             )
             annual_data = annual_context["records"]
             if not annual_data:

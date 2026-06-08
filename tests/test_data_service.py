@@ -526,9 +526,9 @@ class TestHalfYearDataService:
         assert [p["label"] for p in result] == ["24H1", "24H2"]
         assert result[0]["data"]["Sales"] == 45.0
         assert result[1]["data"]["Sales"] == 55.0
-        # fetch_years = EDINET_DOC_DISCOVERY_LIMIT(10) + BUFFER(2) = 12
-        fetcher.build_xbrl_annual_context.assert_awaited_once_with("72030", 12)
-        fetcher.build_xbrl_half_year_context.assert_awaited_once_with("72030", 12)
+        # fetch_years = EDINET_DOC_DISCOVERY_LIMIT(10)
+        fetcher.build_xbrl_annual_context.assert_awaited_once_with("72030", 10)
+        fetcher.build_xbrl_half_year_context.assert_awaited_once_with("72030", 10)
         assert fetcher.extract_half_year_edinet_data.await_args is not None
         _, half_kwargs = fetcher.extract_half_year_edinet_data.await_args
         assert half_kwargs["docs"] == half_docs

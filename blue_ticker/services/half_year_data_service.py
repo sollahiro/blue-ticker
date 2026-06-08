@@ -9,7 +9,7 @@ from typing import Any
 
 from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
-from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_BUFFER, EDINET_DOC_DISCOVERY_LIMIT
+from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_LIMIT
 from blue_ticker.constants.financial import (
     MILLION_YEN,
     NOPAT_FALLBACK_TAX_RATE,
@@ -416,7 +416,7 @@ class HalfYearDataService:
                     trimmed = _trim_half_year_periods(cached["periods"], years)
                     return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)
 
-        fetch_years = max(EDINET_DOC_DISCOVERY_LIMIT, years) + EDINET_DOC_DISCOVERY_BUFFER
+        fetch_years = max(EDINET_DOC_DISCOVERY_LIMIT, years)
         edinet_fetcher = EdinetFetcher(
             self.edinet_client,
             cache_manager=self.cache_manager,
