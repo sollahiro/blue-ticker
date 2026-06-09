@@ -2,6 +2,16 @@
 
 作成日: 2026-06-09
 
+## 対象プラットフォーム
+
+| プラットフォーム | 方針 |
+|---|---|
+| macOS | 主ターゲット |
+| Linux | 互換維持（現状と同等の動作を保つ） |
+| Windows | **対象外** |
+
+Linux では現状でも Keystore がシステムキーチェーンに対応していない（`secrets.json` フォールバック）が、その動作は Swift でも同等に再現できる。
+
 ## 現状サマリー
 
 | 項目 | 値 |
@@ -67,7 +77,22 @@ BeautifulSoup4 の柔軟な検索は `Foundation.XMLParser`（SAX）では再現
 
 ---
 
-### 4. キャッシング (`utils/cache.py`, `api/edinet_cache_store.py`) — 難易度: 中
+### 4. インフラ・キーストア (`infrastructure/`) — 難易度: 低
+
+現在の `keystore.py` は macOS と非 macOS で実装を分岐している。
+
+| Python (現状) | Swift での対応 |
+|---|---|
+| macOS: `subprocess.run(["security", ...])` | macOS: `Security.framework` を直接呼び出し（subprocess 不要、より堅牢） |
+| Linux: `secrets.json` + `chmod 0600` | Linux: `FileManager` + `try fileManager.setAttributes([.posixPermissions: 0o600], ...)` |
+
+Linux では現状のファイルベース実装と **機能的に同等**。むしろ macOS 側は subprocess 経由ではなく `Security.framework` を直接使えるため改善になる。
+
+`user_paths.py`（XDG / `~/.config` など）は `FileManager.urls(for:in:)` + `#if os(macOS)` / `#if os(Linux)` の条件コンパイルで同等に実装できる。
+
+---
+
+### 5. キャッシング (`utils/cache.py`, `api/edinet_cache_store.py`) — 難易度: 中
 
 | Python | Swift |
 |---|---|
@@ -81,7 +106,7 @@ BeautifulSoup4 の柔軟な検索は `Foundation.XMLParser`（SAX）では再現
 
 ---
 
-### 5. 型定義 (`utils/metrics_types.py` など) — 難易度: 低
+### 6. 型定義 (`utils/metrics_types.py` など) — 難易度: 低
 
 | Python | Swift |
 |---|---|
@@ -93,7 +118,7 @@ Python の `total=False` による段階的辞書組み立てパターンは、S
 
 ---
 
-### 6. MCP サーバー (`mcp_server/`) — 難易度: 高
+### 7. MCP サーバー (`mcp_server/`) — 難易度: 高
 
 現在 `FastMCP`（Python）を使用。Swift 向けの MCP SDK は 2026 年 6 月時点で **非公式実装のみ**。
 
@@ -104,7 +129,7 @@ MCP サーバー機能は移行対象から**一時的に除外**するか、Pyt
 
 ---
 
-### 7. テスト (`tests/` 46 ファイル) — 難易度: 中
+### 8. テスト (`tests/` 46 ファイル) — 難易度: 中
 
 | Python | Swift |
 |---|---|
@@ -148,9 +173,15 @@ XML フィクスチャファイルは Swift プロジェクトにそのまま移
 
 公式 Swift MCP SDK が未存在のため、MCP サーバー機能（`blt-server`）の移行は現時点で不確実。
 
-### リスク D（低）: プラットフォーム
+### リスク D（低）: Linux ツールチェーン
 
-Swift は Linux でも動作するが、macOS ほどツールチェーンが成熟していない。CI/CD の再構築が必要。
+Swift の Linux サポート（swift-corelibs-foundation）は CLI ツールとして必要な機能を網羅している。
+
+- `URLSession`・`FileManager`・`JSONEncoder`・`Process`・`XMLParser` はすべて Linux で動作
+- GitHub Actions に公式 Swift セットアップアクションあり（CI/CD 再構築は軽微）
+- `Security.framework`（Keychain）は macOS 専用だが、Linux では `FileManager` + `chmod` フォールバックで現状と同等
+
+Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが数箇所必要になるが、既存 Python コードの `platform.system()` 分岐と対応関係は明確で複雑でない。
 
 ---
 
@@ -158,10 +189,10 @@ Swift は Linux でも動作するが、macOS ほどツールチェーンが成�
 
 | フェーズ | 内容 | 概算工数 |
 |---|---|---|
-| Phase 1 | プロジェクト設定・CLI・インフラ・HTTP クライアント・キャッシュ | 2〜3 週 |
+| Phase 1 | プロジェクト設定・CLI・インフラ（Keystore macOS/Linux 分岐含む）・HTTP クライアント・キャッシュ | 2〜3 週 |
 | Phase 2 | XBRL 解析 22 モジュール（analysis/） | 4〜6 週 |
 | Phase 3 | サービス層・データ集計・ウォーターフォール計算 | 2〜3 週 |
-| Phase 4 | テスト移植・Smoke テスト検証 | 2〜3 週 |
+| Phase 4 | テスト移植・Smoke テスト検証（macOS + Linux CI） | 2〜3 週 |
 | Phase 5 | MCP サーバー（保留または別途） | 未定 |
 | **合計** | MCP 除く | **10〜15 週** |
 
