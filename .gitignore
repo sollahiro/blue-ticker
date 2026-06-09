@@ -103,8 +103,13 @@ mebuki_startup.log
 ._*
 
 # ==========================================
-# Internal / non-public development docs and fixtures
+# Swift / SPM
 # ==========================================
+.build/
+.swiftpm/
+*.o
+*.d
+
 tests/fixtures/
 
 # ==========================================
