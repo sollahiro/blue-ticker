@@ -1,7 +1,6 @@
 import ArgumentParser
 import Foundation
 
-@main
 struct Ticker: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "ticker",
@@ -18,3 +17,5 @@ struct Ticker: AsyncParsableCommand {
         ]
     )
 }
+
+Ticker.main()
