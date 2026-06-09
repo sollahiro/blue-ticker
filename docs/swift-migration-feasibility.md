@@ -226,7 +226,7 @@ Phase 5: MCP サーバー（公式 SDK の状況次第）
 ```
 
 **利点**:
-- Phase 1 完了時点で `ticker search` / `ticker config` 等の基本コマンドは真の Swift 単一バイナリになる
+- Phase 1〜2 完了時点で `ticker search` / `ticker config` 等が真の Swift 単一バイナリになる（Phase 1 単体では `config` 程度しか完結しない点に注意）
 - 最高リスクの XBRL 解析（Phase 3）は最後に集中でき、既存 Python 版を並走させて出力比較ができる
 - MCP サーバーは Python 版を維持したまま他を先行移行できる
 
