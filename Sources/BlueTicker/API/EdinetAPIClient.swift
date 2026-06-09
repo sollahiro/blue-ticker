@@ -313,7 +313,10 @@ actor EdinetAPIClient {
                 else { continue }
                 let ds = isoDate(docDate)
                 doc.removeValue(forKey: "_edinet_list_date")
-                result[ds]?.append(doc)
+                if var arr = result[ds] ?? nil {
+                    arr.append(doc)
+                    result[ds] = arr
+                }
             }
         }
         return result
