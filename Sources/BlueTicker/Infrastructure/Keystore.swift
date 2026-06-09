@@ -29,12 +29,11 @@ enum Keystore {
 
 #if canImport(Security)
 private func macSetPassword(service: String, key: String, value: String) throws {
-    let account = "\(service).\(key)"
     // 既存エントリを削除
     let deleteQuery: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: account,
-        kSecAttrAccount: service,
+        kSecAttrService: service,
+        kSecAttrAccount: key,
     ]
     SecItemDelete(deleteQuery as CFDictionary)
 
@@ -43,8 +42,8 @@ private func macSetPassword(service: String, key: String, value: String) throws 
     }
     let addQuery: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: account,
-        kSecAttrAccount: service,
+        kSecAttrService: service,
+        kSecAttrAccount: key,
         kSecValueData: data,
     ]
     let status = SecItemAdd(addQuery as CFDictionary, nil)
@@ -54,11 +53,10 @@ private func macSetPassword(service: String, key: String, value: String) throws 
 }
 
 private func macGetPassword(service: String, key: String) -> String? {
-    let account = "\(service).\(key)"
     let query: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: account,
-        kSecAttrAccount: service,
+        kSecAttrService: service,
+        kSecAttrAccount: key,
         kSecReturnData: true,
         kSecMatchLimit: kSecMatchLimitOne,
     ]

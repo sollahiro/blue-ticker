@@ -338,12 +338,16 @@ actor EdinetAPIClient {
 
 // MARK: - Helpers
 
-private func isoDate(_ date: Date) -> String {
+private nonisolated(unsafe) let _isoDateFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
     f.locale = Locale(identifier: "en_US_POSIX")
     f.timeZone = TimeZone(secondsFromGMT: 0)
-    return f.string(from: date)
+    return f
+}()
+
+private func isoDate(_ date: Date) -> String {
+    _isoDateFormatter.string(from: date)
 }
 
 private func documentListDate(_ doc: [String: Any]) -> Date? {

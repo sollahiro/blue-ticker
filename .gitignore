@@ -109,7 +109,6 @@ mebuki_startup.log
 .swiftpm/
 *.o
 *.d
-Package.resolved
 
 tests/fixtures/
 

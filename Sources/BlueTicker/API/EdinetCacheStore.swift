@@ -88,13 +88,12 @@ final class EdinetCacheStore: Sendable {
     func saveDocumentIndex(_ year: Int, documents: [[String: Any]], builtThrough: String) {
         let path = documentIndexesDir.appendingPathComponent(documentIndexCacheKey(year))
         try? fm.createDirectory(at: documentIndexesDir, withIntermediateDirectories: true)
-        var payload: [String: Any] = [
+        let payload: [String: Any] = [
             "_cache_version": Api.documentIndexVersion,
             "year": year,
             "built_through": builtThrough,
             "documents": documents,
         ]
-        _ = payload // suppress warning
         guard let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return }
         try? encoded.write(to: path, options: .atomic)
     }

@@ -24,7 +24,8 @@ actor CacheManager {
 
     // MARK: - Get / Set
 
-    func get(_ key: String) -> (any Decodable & Encodable)? { nil } // 型消去版は下記 JSON 版を使う
+    @available(*, unavailable, message: "Use getJSON(_:) or decode(_:as:) instead")
+    func get(_ key: String) -> (any Decodable & Encodable)? { nil }
 
     func getJSON(_ key: String) -> [String: Any]? {
         guard enabled else { return nil }
