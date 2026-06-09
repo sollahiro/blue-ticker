@@ -79,10 +79,10 @@ actor MasterDataManager {
             fputs("[blue-ticker] Warning: data_j.csv のヘッダー形式が不正です。\n", stderr)
             return
         }
-        let s33idx = cols.firstIndex(of: "33業種区分")
-        let s33nmIdx = cols.firstIndex(of: "33業種名称")
-        let s17idx = cols.firstIndex(of: "17業種区分")
-        let s17nmIdx = cols.firstIndex(of: "17業種名称")
+        let s33idx = cols.firstIndex(of: "33業種コード")
+        let s33nmIdx = cols.firstIndex(of: "33業種区分")
+        let s17idx = cols.firstIndex(of: "17業種コード")
+        let s17nmIdx = cols.firstIndex(of: "17業種区分")
         let mktIdx = cols.firstIndex(of: "市場・商品区分")
 
         var loaded: [MasterStock] = []
@@ -142,14 +142,17 @@ actor MasterDataManager {
             let url = URL(fileURLWithPath: d).appendingPathComponent("data_j.csv")
             if FileManager.default.fileExists(atPath: url.path) { return url }
         }
-        // デフォルト: バイナリ横の assets/
-        if let execURL = Bundle.main.executableURL {
-            let candidate = execURL
+        let fm = FileManager.default
+        let candidates: [URL] = [
+            // カレントディレクトリ相対（Python版と同じ）
+            URL(fileURLWithPath: fm.currentDirectoryPath)
+                .appendingPathComponent("assets/data_j.csv"),
+            // バイナリ横の assets/
+            Bundle.main.executableURL?
                 .deletingLastPathComponent()
-                .appendingPathComponent("assets/data_j.csv")
-            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
-        }
-        return nil
+                .appendingPathComponent("assets/data_j.csv"),
+        ].compactMap { $0 }
+        return candidates.first { fm.fileExists(atPath: $0.path) }
     }
 }
 
