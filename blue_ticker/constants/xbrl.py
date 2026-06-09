@@ -884,11 +884,13 @@ IBD_IFRS_CL_TAGS: list[str] = [
     "InterestBearingLiabilitiesCLIFRS",
     "BondsAndBorrowingsCLIFRS",
     "BondsBorrowingsAndLeaseLiabilitiesCLIFRS",
+    "ShortTermDebtCLIFRS",              # NTT固有拡張（借入金のみ、リース別計上）
 ]
 IBD_IFRS_NCL_TAGS: list[str] = [
     "InterestBearingLiabilitiesNCLIFRS",
     "BondsAndBorrowingsNCLIFRS",
     "BondsBorrowingsAndLeaseLiabilitiesNCLIFRS",
+    "LongTermDebtIFRSNCLIFRS",          # NTT固有拡張（借入金のみ、リース別計上）
 ]
 
 # 有形固定資産（PPE）タグ定義
