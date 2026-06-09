@@ -1,0 +1,272 @@
+import Foundation
+
+// MARK: - IndividualAnalyzer
+// Python の blue_ticker/services/analyzer.py 相当
+// 個別銘柄の EDINET 書類から財務指標を抽出してメトリクスを組み立てる。
+
+private let _cacheVersion = "26.6.0"
+private let millionYen = 1_000_000.0
+private let percent = 100.0
+
+struct IndividualAnalyzer {
+    let edinetClient: EdinetAPIClient
+    let cacheManager: CacheManager
+
+    // MARK: - Public Entry Point
+
+    /// 銘柄コードの財務指標を取得する。キャッシュがあればそれを返す。
+    func analyze(
+        code: String,
+        analysisYears: Int = Api.analyzeDefaultYears,
+        useCache: Bool = true
+    ) async -> MetricsResult? {
+        let cacheKey = "individual_analysis_\(code)"
+
+        if useCache {
+            let cached = await cacheManager.getJSON(cacheKey)
+            if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
+                if let result = decodeMetricsResult(c) {
+                    return trimMetrics(result, to: analysisYears)
+                }
+            }
+        }
+
+        let result = await fetchAndBuild(code: code, analysisYears: analysisYears)
+        if let r = result {
+            if var dict = encodeMetricsResult(r) {
+                dict["_cache_version"] = _cacheVersion
+                await cacheManager.setJSON(cacheKey, value: dict)
+            }
+        }
+        return result
+    }
+
+    // MARK: - Fetch and Build
+
+    private func fetchAndBuild(code: String, analysisYears: Int) async -> MetricsResult? {
+        let docs = await EdinetDiscovery.buildDocumentIndexForCode(
+            code: code,
+            client: edinetClient,
+            analysisYears: analysisYears
+        )
+        guard !docs.isEmpty else { return nil }
+
+        // 最新 analysisYears 件に絞る（EdinetDiscovery は最大件数を返すが多い場合もある）
+        let targetDocs = Array(docs.prefix(analysisYears))
+
+        // 並列で XBRL ダウンロード + 抽出
+        var yearEntries: [YearEntry] = []
+        await withTaskGroup(of: YearEntry?.self) { group in
+            for doc in targetDocs {
+                let d = doc
+                group.addTask {
+                    await self.processDocument(d)
+                }
+            }
+            for await entry in group {
+                if let e = entry { yearEntries.append(e) }
+            }
+        }
+
+        guard !yearEntries.isEmpty else { return nil }
+
+        // fyEnd 降順ソート（最新が先頭）
+        yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
+
+        var result = MetricsResult()
+        result.code = code
+        result.latestFyEnd = yearEntries.first?.fyEnd
+        result.analysisYears = yearEntries.count
+        result.availableYears = yearEntries.count
+        result.years = yearEntries
+        result.dataValid = !yearEntries.isEmpty
+        return result
+    }
+
+    // MARK: - Document Processing
+
+    private func processDocument(_ doc: [String: Any]) async -> YearEntry? {
+        guard let docID = doc["docID"] as? String,
+              let fyEnd = doc["edinet_fy_end"] as? String else { return nil }
+
+        // XBRL ダウンロード（キャッシュ済みなら即返す）
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+
+        // XBRL 全数値要素を収集
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        guard !allTagElements.isEmpty else { return nil }
+
+        let accountingStandard = detectAccountingStandard(allTagElements)
+
+        // Duration FieldSet（損益計算書・CF用）
+        let durationFS = fieldSetFromDuration(allTagElements)
+        // Instant FieldSet（貸借対照表・有利子負債用）
+        let instantFS = fieldSetFromInstant(allTagElements)
+
+        // 各抽出器を実行
+        let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let bs = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTagElements)
+        let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+
+        // 現金及び現金同等物
+        let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
+
+        // RawData 組み立て
+        var raw = RawData()
+        raw.curFYEn = fyEnd
+        raw.curPerType = doc["period_type"] as? String ?? "FY"
+        raw.discDate = doc["submitDateTime"] as? String
+        // 売上高・営業利益・純利益（百万円単位に変換）
+        raw.sales = is_.sales.map { $0 / millionYen }
+        raw.op = (op.operatingProfit ?? is_.operatingProfit).map { $0 / millionYen }
+        raw.np = is_.netProfit.map { $0 / millionYen }
+        raw.netAssets = bs.netAssets.map { $0 / millionYen }
+        raw.cfo = cf.cfo.map { $0 / millionYen }
+        raw.cfi = cf.cfi.map { $0 / millionYen }
+        raw.capex = capex.current.map { $0 / millionYen }
+        raw.rd = rd.current.map { $0 / millionYen }
+        raw.salesLabel = is_.salesLabel
+        raw.cashEq = cashItem.current.map { $0 / millionYen }
+
+        // CalculatedData 組み立て
+        var calc = CalculatedData()
+        calc.docID = docID
+        calc.grossProfit = gp.grossProfit.map { $0 / millionYen }
+        calc.grossProfitLabel = gp.grossProfitLabel
+        calc.grossProfitMethod = gp.method
+        if let gp_ = gp.grossProfit, let s = is_.sales, s > 0 {
+            calc.grossProfitMargin = (gp_ / s) * percent
+        }
+        calc.sellingGeneralAdministrativeExpenses = op.sga.map { $0 / millionYen }
+        calc.opLabel = op.label
+
+        // BS 項目
+        calc.totalAssets = bs.totalAssets.map { $0 / millionYen }
+        calc.currentAssets = bs.currentAssets.map { $0 / millionYen }
+        calc.nonCurrentAssets = bs.nonCurrentAssets.map { $0 / millionYen }
+        calc.currentLiabilities = bs.currentLiabilities.map { $0 / millionYen }
+        calc.nonCurrentLiabilities = bs.nonCurrentLiabilities.map { $0 / millionYen }
+        calc.netAssets = bs.netAssets.map { $0 / millionYen }
+        calc.balanceSheetAccountingStandard = bs.accountingStandard
+
+        // 有利子負債
+        calc.interestBearingDebt = ibd.total.map { $0 / millionYen }
+        calc.ibdAccountingStandard = ibd.accountingStandard
+
+        // 従業員数
+        if let e = emp.current { calc.employees = Int(e) }
+
+        // 税金・支払利息
+        calc.pretaxIncome = tax.pretaxIncome.map { $0 / millionYen }
+        calc.incomeTax = tax.incomeTax.map { $0 / millionYen }
+        calc.effectiveTaxRate = tax.effectiveTaxRate.map { $0 * percent }
+        calc.interestExpense = ie.current.map { $0 / millionYen }
+
+        // 有形固定資産
+        calc.ppeTotal = ppe.total.map { $0 / millionYen }
+        calc.ppeAccountingStandard = ppe.accountingStandard
+
+        // 営業利益率
+        if let op_ = calc.totalAssets, op_ > 0, let rawOP = raw.op {
+            calc.operatingMargin = (rawOP / (raw.sales ?? 1)) * percent
+        }
+        if let s = raw.sales, s > 0, let rawOP = raw.op {
+            calc.operatingMargin = (rawOP / s) * percent
+        }
+
+        // NOPAT
+        if let op_ = raw.op, let taxRate = tax.effectiveTaxRate {
+            let clampedTax = min(max(taxRate, 0.2), 0.45)
+            calc.nopat = op_ * (1.0 - clampedTax)
+        } else if let op_ = raw.op {
+            calc.nopat = op_ * (1.0 - 0.3)
+        }
+
+        // ネットキャッシュ・ネットD/E
+        if let cash = raw.cashEq {
+            let ibdM = calc.interestBearingDebt ?? 0
+            calc.netCash = cash - ibdM
+            if let na = calc.netAssets, na > 0 {
+                calc.netDE = (ibdM - cash) / na
+            }
+        }
+
+        // FCF
+        if let cfo = raw.cfo, let cfi = raw.cfi {
+            calc.cfc = cfo + cfi
+        }
+
+        // ROE
+        if let np = raw.np, let eq = raw.netAssets, eq > 0 {
+            calc.roe = (np / eq) * percent
+        }
+
+        // ROIC (NOPAT / 投下資本)
+        if let nopat = calc.nopat,
+           let ibd = calc.interestBearingDebt,
+           let na = calc.netAssets {
+            let investedCapital = ibd + na
+            if investedCapital > 0 {
+                calc.roic = (nopat / investedCapital) * percent
+                calc.nopatMargin = raw.sales.map { $0 > 0 ? (nopat / $0) * percent : nil } ?? nil
+                calc.investedCapitalTurnover = raw.sales.map { $0 / investedCapital }
+            }
+        }
+
+        // 配当性向
+        if let payout = doc["PayoutRatioAnn"] as? Double {
+            calc.payoutRatio = payout * percent
+        }
+
+        let period = formatFinancialPeriod(fyEnd: fyEnd, perType: raw.curPerType ?? "FY")
+
+        return YearEntry(
+            fyEnd: fyEnd,
+            financialPeriod: period,
+            rawData: raw,
+            calculatedData: calc
+        )
+    }
+
+    // MARK: - Helpers
+
+    private func formatFinancialPeriod(fyEnd: String, perType: String) -> String {
+        let (year, month) = extractYearMonth(fyEnd)
+        var period = ""
+        if let y = year, let m = month {
+            period = "\(y)年\(String(format: "%02d", m))月期"
+        }
+        if perType == "2Q" { period += " (2Q)" }
+        return period
+    }
+
+    private func trimMetrics(_ result: MetricsResult, to years: Int) -> MetricsResult {
+        guard let ys = result.years, ys.count > years else { return result }
+        var r = result
+        r.years = Array(ys.prefix(years))
+        r.analysisYears = years
+        r.availableYears = years
+        return r
+    }
+
+    private func decodeMetricsResult(_ dict: [String: Any]) -> MetricsResult? {
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let result = try? JSONDecoder().decode(MetricsResult.self, from: data) else { return nil }
+        return result
+    }
+
+    private func encodeMetricsResult(_ result: MetricsResult) -> [String: Any]? {
+        guard let data = try? JSONEncoder().encode(result),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return dict
+    }
+}
