@@ -138,49 +138,57 @@ final class EdinetCacheStore: Sendable {
     }
 
     // MARK: - ファイルロック（マルチプロセス間）
+    // Task.sleep でポーリングするため async。
+    // クロージャも async にすることで EdinetAPIClient 側が
+    // ロック保持中にセマフォ取得・API 呼び出しを行える。
 
-    func withFileLock<T>(_ name: String, work: () throws -> T) throws -> T {
-        let safe = name.map { $0.isLetter || $0.isNumber || "-_.".contains($0) ? $0 : "_" }
-        let lockPath = locksDir.appendingPathComponent("\(String(safe)).lock")
+    func withFileLock<T>(_ name: String, work: () async throws -> T) async throws -> T {
+        let safe = String(name.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "." ? $0 : Character("_") })
+        let lockPath = locksDir.appendingPathComponent("\(safe).lock")
         try? fm.createDirectory(at: locksDir, withIntermediateDirectories: true)
 
         let start = Date()
         var noticeShown = false
+
+        // 非同期ポーリングでロック取得
         while true {
-            do {
-                // O_CREAT|O_EXCL で排他
-                let fd = try lockPath.path.withCString { path in
-                    let fd = open(path, O_CREAT | O_EXCL | O_WRONLY, 0o644)
+            let acquired: Bool = {
+                guard let fd = try? lockPath.path.withCString({ ptr -> Int32 in
+                    let fd = open(ptr, O_CREAT | O_EXCL | O_WRONLY, 0o644)
                     if fd < 0 { throw LockError.busy }
                     return fd
-                }
+                }) else { return false }
                 let payload = "pid=\(ProcessInfo.processInfo.processIdentifier)\n"
                 _ = payload.withCString { write(fd, $0, strlen($0)) }
                 close(fd)
-            } catch LockError.busy {
-                if let age = try? fm.attributesOfItem(atPath: lockPath.path)[.modificationDate] as? Date,
-                   Date().timeIntervalSince(age) >= Api.cacheLockStaleSeconds {
-                    try? fm.removeItem(at: lockPath)
-                    continue
-                }
-                let elapsed = Date().timeIntervalSince(start)
-                if !noticeShown && elapsed >= Api.cacheLockNoticeSeconds {
-                    fputs("EDINETキャッシュを準備中です。別のblue-tickerプロセスの完了を待っています...\n", stderr)
-                    noticeShown = true
-                }
-                if elapsed >= Api.cacheLockTimeoutSeconds {
-                    throw LockError.timeout(name)
-                }
-                Thread.sleep(forTimeInterval: Api.cacheLockPollSeconds)
+                return true
+            }()
+
+            if acquired { break }
+
+            // ステールロック（プロセスがクラッシュして残ったもの）を除去して即リトライ
+            if let mtime = (try? fm.attributesOfItem(atPath: lockPath.path))?[.modificationDate] as? Date,
+               Date().timeIntervalSince(mtime) >= Api.cacheLockStaleSeconds {
+                try? fm.removeItem(at: lockPath)
                 continue
             }
-            break
+
+            let elapsed = Date().timeIntervalSince(start)
+            if !noticeShown && elapsed >= Api.cacheLockNoticeSeconds {
+                fputs("EDINETキャッシュを準備中です。別のblue-tickerプロセスの完了を待っています...\n", stderr)
+                noticeShown = true
+            }
+            if elapsed >= Api.cacheLockTimeoutSeconds {
+                throw LockError.timeout(name)
+            }
+            try await Task.sleep(nanoseconds: UInt64(Api.cacheLockPollSeconds * 1_000_000_000))
         }
+
         if noticeShown {
             fputs("EDINETキャッシュの準備が完了しました。処理を続行します。\n", stderr)
         }
         defer { try? fm.removeItem(at: lockPath) }
-        return try work()
+        return try await work()
     }
 
     // MARK: - Private helpers

@@ -32,17 +32,18 @@ actor EdinetAPIClient {
         let cacheKey = cacheStore.searchCacheKey(dateStr)
         if let cached = cacheStore.loadSearchCache(cacheKey) { return cached }
 
-        // セマフォで並列数を制限し、取得後に再確認して重複リクエストを回避する
-        await dateFetchSemaphore.wait()
-        defer { dateFetchSemaphore.signal() }
-
-        if let cached = cacheStore.loadSearchCache(cacheKey) { return cached }
-
+        // ファイルロックでプロセス間の重複取得を防ぎ、セマフォで並列API呼び出し数を制限する
         do {
-            let data = try await request("/documents.json", params: ["date": dateStr, "type": "2"])
-            let docs = data["results"] as? [[String: Any]] ?? []
-            cacheStore.saveSearchCache(cacheKey, data: docs)
-            return docs
+            return try await cacheStore.withFileLock("search_\(dateStr)") {
+                if let cached = self.cacheStore.loadSearchCache(cacheKey) { return cached }
+                await self.dateFetchSemaphore.wait()
+                defer { self.dateFetchSemaphore.signal() }
+                if let cached = self.cacheStore.loadSearchCache(cacheKey) { return cached }
+                let data = try await self.request("/documents.json", params: ["date": dateStr, "type": "2"])
+                let docs = data["results"] as? [[String: Any]] ?? []
+                self.cacheStore.saveSearchCache(cacheKey, data: docs)
+                return docs
+            }
         } catch {
             return cacheStore.loadSearchCache(cacheKey, allowExpired: true)
         }
@@ -59,20 +60,26 @@ actor EdinetAPIClient {
             return cached
         }
 
-        let lock = documentIndexLock(for: year)
-        await lock.lock()
-        defer { lock.unlock() }
-
-        // AsyncLock 取得後に再確認してから構築する（ダブルチェックロッキング）
-        if let cached = cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
-            return cached
+        do {
+            return try await cacheStore.withFileLock("doc_index_\(year)") {
+                if let cached = self.cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
+                    return cached
+                }
+                let lock = self.documentIndexLock(for: year)
+                await lock.lock()
+                defer { lock.unlock() }
+                if let cached = self.cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
+                    return cached
+                }
+                guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today)) else {
+                    return []
+                }
+                self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                return docs
+            }
+        } catch {
+            return cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) ?? []
         }
-
-        if let docs = await buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today)) {
-            cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
-            return docs
-        }
-        return []
     }
 
     func refreshDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
@@ -80,15 +87,20 @@ actor EdinetAPIClient {
         let yearEnd = Calendar.current.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
 
-        let lock = documentIndexLock(for: year)
-        await lock.lock()
-        defer { lock.unlock() }
-
-        cacheStore.clearDocumentIndex(year)
-        guard let docs = await buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today))
-        else { return [] }
-        cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
-        return docs
+        do {
+            return try await cacheStore.withFileLock("doc_index_\(year)") {
+                let lock = self.documentIndexLock(for: year)
+                await lock.lock()
+                defer { lock.unlock() }
+                self.cacheStore.clearDocumentIndex(year)
+                guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today))
+                else { return [] }
+                self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                return docs
+            }
+        } catch {
+            return []
+        }
     }
 
     func catchupDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
@@ -97,34 +109,39 @@ actor EdinetAPIClient {
         let requiredThrough = isoDate(min(yearEnd, today))
         let requiredDate = min(yearEnd, today)
 
-        let lock = documentIndexLock(for: year)
-        await lock.lock()
-        defer { lock.unlock() }
+        do {
+            return try await cacheStore.withFileLock("doc_index_\(year)") {
+                let lock = self.documentIndexLock(for: year)
+                await lock.lock()
+                defer { lock.unlock() }
 
-        guard let info = cacheStore.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
-            guard let docs = await buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
-            cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
-            return docs
+                guard let info = self.cacheStore.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
+                    guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
+                    self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                    return docs
+                }
+
+                let existingDocs = info["documents"] as? [[String: Any]] ?? []
+                guard let builtStr = info["built_through"] as? String,
+                      let builtDate = parseDateString(builtStr),
+                      builtDate < requiredDate
+                else { return existingDocs }
+
+                let startDate = Calendar.current.date(byAdding: .day, value: 1, to: builtDate)!
+                if startDate > requiredDate {
+                    self.cacheStore.saveDocumentIndex(year, documents: existingDocs, builtThrough: requiredThrough)
+                    return existingDocs
+                }
+
+                let newByDate = await self.getDocumentsForDateRange(start: startDate, end: requiredDate, useIndex: false)
+                if newByDate.values.contains(where: { $0 == nil }) { return existingDocs }
+                let merged = mergeDocumentIndexDocs(existing: existingDocs, byDate: newByDate.compactMapValues { $0 })
+                self.cacheStore.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
+                return merged
+            }
+        } catch {
+            return cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) ?? []
         }
-
-        let existingDocs = info["documents"] as? [[String: Any]] ?? []
-        guard let builtStr = info["built_through"] as? String,
-              let builtDate = parseDateString(builtStr),
-              builtDate < requiredDate
-        else { return existingDocs }
-
-        let startDate = Calendar.current.date(byAdding: .day, value: 1, to: builtDate)!
-        if startDate > requiredDate {
-            cacheStore.saveDocumentIndex(year, documents: existingDocs, builtThrough: requiredThrough)
-            return existingDocs
-        }
-
-        // catchup は既存インデックスを経由せず日次取得で差分を埋める
-        let newByDate = await getDocumentsForDateRange(start: startDate, end: requiredDate, useIndex: false)
-        if newByDate.values.contains(where: { $0 == nil }) { return existingDocs }
-        let merged = mergeDocumentIndexDocs(existing: existingDocs, byDate: newByDate.compactMapValues { $0 })
-        cacheStore.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
-        return merged
     }
 
     // MARK: - 日付範囲
