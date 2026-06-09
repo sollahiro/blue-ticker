@@ -30,7 +30,7 @@ let package = Package(
         .testTarget(
             name: "BlueTickerTests",
             dependencies: ["BlueTicker"],
-            path: "Tests/BlueTickerTests"
+            path: "SwiftTests/BlueTickerTests"
         ),
     ]
 )
