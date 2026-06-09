@@ -14,8 +14,10 @@ blt-server には 2 種類のクライアントが接続できる。デプロイ
 
 | クライアント | 接続方法 | ユースケース |
 |---|---|---|
-| **remote CLI** | HTTP API（`edinet-backend remote`） | OAuth 認証のみで利用可能・EDINET API キー管理不要 |
-| **AI チャット（MCP）** | MCP プロトコル | Claude.ai 等の AI ツールから財務データをツール呼び出し |
+| **remote CLI** | MCP プロトコル（HTTP transport） | OAuth 認証のみで利用可能・EDINET API キー管理不要 |
+| **AI チャット（MCP）** | MCP プロトコル（HTTP transport） | Claude.ai 等の AI ツールから財務データをツール呼び出し |
+
+remote CLI と AI チャットはどちらも MCP プロトコルで統一する。カスタム REST API は実装しない。
 
 ## ゴール
 
@@ -24,6 +26,8 @@ blt-server には 2 種類のクライアントが接続できる。デプロイ
 
 ## 非ゴール
 
+- **ローカル MCP サーバーは実装しない。** AI エージェントは Skills 経由で CLI を直接操作する。
+- **カスタム REST API は実装しない。** remote CLI も MCP プロトコルで統一する。
 - `ticker analyze` 等の各サブコマンドに backend 選択オプションを増やさない。
 - `CacheManager` と EDINET external cache を無理に単一抽象へ統合しない。
 - ローカルキャッシュを「レガシー」として扱わない。
@@ -62,7 +66,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
 - [ ] `services/data_service.py` の取得部分と計算部分を分割する
-- [ ] CLI を `get_financial_summary` / `get_filings` の薄いレンダラーへ移行する
+- [ ] CLI を MCP ツール呼び出しの薄いレンダラーへ移行する（カスタム REST API は作らない）
 
 ### 将来
 
@@ -84,7 +88,16 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ---
 
+## 将来: Python blt-server → Swift への置き換え
+
+Swift 移行 Phase 5 で、Python `blt-server`（FastMCP）を Swift MCP サーバー（HTTP transport）に置き換える予定。  
+実装言語が変わるだけで、このドキュメントのデプロイモード・データパイプライン・未決事項はそのまま引き継ぐ。  
+詳細: `docs/swift-migration-feasibility.md` の Phase 5。
+
+---
+
 ## 関連ドキュメント
 
+- `docs/swift-migration-feasibility.md` — Swift 移行計画（Phase 5 で blt-server を置き換え）
 - `.agents/rules/project/caching.md` — キャッシュ設計規約
 - `.agents/rules/project/dependencies.md` — アーキテクチャ依存ルール

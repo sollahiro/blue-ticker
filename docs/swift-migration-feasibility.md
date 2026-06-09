@@ -120,12 +120,15 @@ Python の `total=False` による段階的辞書組み立てパターンは、S
 
 ### 7. MCP サーバー (`mcp_server/`) — 難易度: 中
 
-現在 `FastMCP`（Python）を使用。Swift 向けの MCP SDK は 2026 年 6 月時点で **公式 SDK が利用可能**。
+**ローカル MCP は実装しない。** AI エージェントは Skills 経由で CLI を直接操作する。  
+MCP サーバーは **リモート（HTTP transport）専用** として実装する。
 
-- 公式 Swift MCP SDK: [modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)（`modelcontextprotocol` 組織が管理、最新リリース 0.12.1 / 2026-05-07）
-- MCP spec 2025-11-25（最新）準拠、クライアント・サーバー両対応
+現在 `FastMCP`（Python）でリモート MCP を提供中。Swift 向けの公式 SDK が利用可能になったため、Phase 5 で Python `blt-server` を Swift 実装に置き換える。
 
-Python `FastMCP` との機能差分の確認は必要だが、移行の障壁は大幅に下がった。
+- 公式 Swift MCP SDK: [modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)（最新リリース 0.12.1 / 2026-05-07）
+- MCP spec 2025-11-25 準拠、HTTP transport（Streamable HTTP）対応
+
+Python `FastMCP` との API 差分・エンドポイント互換性の検証が必要。
 
 ---
 
@@ -171,7 +174,7 @@ XML フィクスチャファイルは Swift プロジェクトにそのまま移
 
 ### リスク C（低〜中）: MCP サーバー
 
-公式 Swift MCP SDK（0.12.1）が利用可能になったため、移行の不確実性は大幅に低下した。ただし Python `FastMCP` との API 差分・transport 互換性の検証は必要。
+公式 Swift MCP SDK（0.12.1）が利用可能になったため、移行の不確実性は大幅に低下した。ローカル MCP は実装しない（AI エージェントは Skills 経由で CLI 操作）ため、HTTP transport のリモートサーバー実装のみが対象。Python `FastMCP` との API 差分の検証は必要。
 
 ### リスク D（低）: Linux ツールチェーン
 
@@ -185,15 +188,36 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 ---
 
+## 実装進捗（2026-06-09 時点）
+
+| フェーズ | 状態 | 実装済みファイル |
+|---|---|---|
+| Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
+| Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
+| Phase 3 | 未着手 | XBRL 解析（`analysis/` 25 モジュール相当）、`AnalyzeCommand` 実装、`FilingCommand`（filing 内容）|
+| Phase 4 | 未着手 | XCTest 移行（Python 44 件）|
+| Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
+
+### Phase 2 実装範囲の補足
+
+当初の Phase 2 想定（「データ集計・ウォーターフォール計算」）は XBRL 依存が判明したため Phase 3 へ移動。  
+実際に Phase 2 で実装したのは XBRL 不要のサービス層のみ:
+
+- `EdinetDiscovery`: 書類インデックス構築（`edinet_discovery.py` 相当）
+- `FilingService`: 書類一覧検索（`filing_service.py` の EDINET 検索部分）
+- `CachePruner`: キャッシュ整理（`cache_pruner.py` 相当）
+
+---
+
 ## 移行コスト見積もり
 
 | フェーズ | 内容 | 概算工数 |
 |---|---|---|
 | Phase 1 | プロジェクト設定・CLI・インフラ（Keystore macOS/Linux 分岐含む）・キャッシュ | 1〜2 週 |
 | Phase 2 | HTTP クライアント（EDINET API）・サービス層・データ集計・ウォーターフォール計算 | 2〜3 週 |
-| Phase 3 | XBRL 解析 22 モジュール（analysis/） | 4〜6 週 |
+| Phase 3 | XBRL 解析 25 モジュール（analysis/）・AnalyzeCommand・FilingCommand | 4〜6 週 |
 | Phase 4 | テスト移植・Smoke テスト検証（macOS + Linux CI） | 2〜3 週 |
-| Phase 5 | MCP サーバー（公式 Swift SDK 利用） | 1〜2 週 |
+| Phase 5 | リモート MCP サーバー（HTTP transport・公式 Swift SDK、Python blt-server を置き換え、remote CLI も MCP 統一） | 1〜2 週 |
 | **合計** | MCP 含む全 Phase | **11〜17 週** |
 
 ---
@@ -228,14 +252,15 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 リスクの低いレイヤーから順に Swift 化し、フェーズごとに動作確認しながら進める。
 
 ```
-Phase 1: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
-Phase 2: HTTP クライアント + サービス層 + データ集計・ウォーターフォール計算
-Phase 3: XBRL 解析 22 モジュール（Smoke テストをゴールデンファイルとして逐次検証）
-Phase 4: テスト移植・CI（macOS + Linux）整備
-Phase 5: MCP サーバー（公式 SDK の状況次第）
+Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
+Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
+Phase 3  : XBRL 解析 25 モジュール（Smoke テストをゴールデンファイルとして逐次検証）
+Phase 4  : テスト移植・CI（macOS + Linux）整備
+Phase 5  : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
-Phase 1 単体では `config` 程度しか完結しない。`ticker search` が純 Swift になるのは Phase 2 完了後、`ticker analyze` は Phase 3 完了後。
+Phase 2 完了時点で `ticker search`・`ticker filings`・`ticker cache`・`ticker config` が純 Swift で動作する。  
+`ticker analyze` と `ticker filing`（内容抽出）は Phase 3 完了後。
 
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる

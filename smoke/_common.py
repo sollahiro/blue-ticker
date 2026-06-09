@@ -40,7 +40,6 @@ _DEFAULT_CACHE_DIR = Path("tmp_cache") / "edinet"
 def edinet_cache_dir() -> Path:
     return Path(
         os.environ.get("BLUE_TICKER_EDINET_SMOKE_CACHE_DIR")
-        or os.environ.get("MEBUKI_EDINET_SMOKE_CACHE_DIR")
         or str(_DEFAULT_CACHE_DIR)
     )
 

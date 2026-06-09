@@ -13,7 +13,6 @@ from blue_ticker.utils.master_types import MasterStock, SectorSummary, StockSear
 logger = logging.getLogger(__name__)
 
 ASSETS_PATH_ENV = "BLUE_TICKER_ASSETS_PATH"
-LEGACY_ASSETS_PATH_ENV = "MEBUKI_ASSETS_PATH"
 
 
 class MasterDataManager:
@@ -57,7 +56,7 @@ class MasterDataManager:
               data_j.csv という名前で assets/ に配置する）
         """
         # 1. パスの決定
-        assets_dir = os.environ.get(ASSETS_PATH_ENV) or os.environ.get(LEGACY_ASSETS_PATH_ENV)
+        assets_dir = os.environ.get(ASSETS_PATH_ENV)
         if assets_dir:
             csv_path = Path(assets_dir) / "data_j.csv"
         else:

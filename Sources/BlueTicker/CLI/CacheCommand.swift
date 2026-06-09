@@ -147,20 +147,38 @@ struct CacheRefresh: AsyncParsableCommand {
 struct CacheClean: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "clean",
-        abstract: "derived キャッシュを削除します"
+        abstract: "EDINET キャッシュを整理します"
     )
 
-    @Flag(name: .long, help: "実際には削除せず内容を表示")
+    @Flag(name: .long, help: "実際には削除せず対象を表示")
     var dryRun = false
+
+    @Option(name: .long, help: "指定日数より古い EDINET 検索キャッシュを削除")
+    var edinetSearchDays: Int? = nil
+
+    @Option(name: .long, help: "指定日数より古い XBRL ディレクトリを削除")
+    var edinetXbrlDays: Int? = nil
+
+    @Option(name: .long, help: "保持する年次インデックスの年数（デフォルト: \(Api.documentIndexKeepYears)、0 で全削除）")
+    var edinetDocIndexYears: Int = Api.documentIndexKeepYears
 
     func run() async throws {
         let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
-        let derived = derivedCacheDir(cacheDir)
+        let pruner = CachePruner(cacheDir: cacheDir)
+
+        let summary = pruner.prune(
+            dryRun: dryRun,
+            edinetSearchDays: edinetSearchDays,
+            edinetXbrlDays: edinetXbrlDays,
+            edinetDocIndexYears: edinetDocIndexYears
+        )
+
+        let mb = Double(summary.freedBytes) / 1_000_000
         if dryRun {
-            print("削除対象: \(derived.path)")
+            print("[dry-run] 削除対象: ファイル \(summary.scannedFiles) 件, ディレクトリ \(summary.scannedDirs) 件 (\(String(format: "%.1f", mb)) MB)")
         } else {
-            try? FileManager.default.removeItem(at: derived)
-            print("derived キャッシュを削除しました。")
+            print("[実行] 削除: ファイル \(summary.removedFiles) 件, ディレクトリ \(summary.removedDirs) 件")
+            print("[実行] 解放: \(String(format: "%.1f", mb)) MB")
         }
     }
 }

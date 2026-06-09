@@ -253,17 +253,28 @@ ticker cache catchup --years 5
 ticker cache refresh --years 5
 ```
 
-不要キャッシュを確認する。削除は dry-run が基本。
+不要キャッシュの削除対象を確認する（dry-run）。
+
+```bash
+ticker cache clean --dry-run
+ticker cache clean --dry-run --edinet-doc-index-years 3
+```
+
+確認後に実際に削除する（`--dry-run` を外すと実行される）。
 
 ```bash
 ticker cache clean
+ticker cache clean --edinet-xbrl-days 30
+ticker cache clean --edinet-search-days 90 --edinet-doc-index-years 3
 ```
 
-実際に削除するときだけ `--execute` を付ける。
+主なオプション:
 
-```bash
-ticker cache clean --execute --edinet-xbrl-days 30
-```
+| オプション | 意味 |
+|---|---|
+| `--edinet-search-days N` | N 日より古い検索キャッシュを削除 |
+| `--edinet-xbrl-days N` | N 日より古い XBRL ディレクトリを削除 |
+| `--edinet-doc-index-years N` | 年次インデックスを直近 N 年分だけ残す（デフォルト: 6） |
 
 ## トラブル時
 

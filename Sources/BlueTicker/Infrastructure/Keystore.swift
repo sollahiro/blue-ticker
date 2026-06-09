@@ -28,12 +28,18 @@ enum Keystore {
 // MARK: - macOS Keychain
 
 #if canImport(Security)
+// Python の keystore.py と互換: kSecAttrService = "\(service).\(key)", kSecAttrAccount = service
+private func macAttrService(_ service: String, _ key: String) -> String { "\(service).\(key)" }
+private func macAttrAccount(_ service: String) -> String { service }
+
 private func macSetPassword(service: String, key: String, value: String) throws {
+    let attrService = macAttrService(service, key)
+    let attrAccount = macAttrAccount(service)
     // 既存エントリを削除
     let deleteQuery: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: service,
-        kSecAttrAccount: key,
+        kSecAttrService: attrService,
+        kSecAttrAccount: attrAccount,
     ]
     SecItemDelete(deleteQuery as CFDictionary)
 
@@ -42,8 +48,8 @@ private func macSetPassword(service: String, key: String, value: String) throws 
     }
     let addQuery: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: service,
-        kSecAttrAccount: key,
+        kSecAttrService: attrService,
+        kSecAttrAccount: attrAccount,
         kSecValueData: data,
     ]
     let status = SecItemAdd(addQuery as CFDictionary, nil)
@@ -55,8 +61,8 @@ private func macSetPassword(service: String, key: String, value: String) throws 
 private func macGetPassword(service: String, key: String) -> String? {
     let query: [CFString: Any] = [
         kSecClass: kSecClassGenericPassword,
-        kSecAttrService: service,
-        kSecAttrAccount: key,
+        kSecAttrService: macAttrService(service, key),
+        kSecAttrAccount: macAttrAccount(service),
         kSecReturnData: true,
         kSecMatchLimit: kSecMatchLimitOne,
     ]

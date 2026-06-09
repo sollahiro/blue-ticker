@@ -1,7 +1,6 @@
 import Foundation
 
 private let assetsPathEnv = "BLUE_TICKER_ASSETS_PATH"
-private let legacyAssetsPathEnv = "MEBUKI_ASSETS_PATH"
 
 // MARK: - MasterDataManager
 
@@ -137,7 +136,7 @@ actor MasterDataManager {
 
     private func resolveAssetsPath() -> URL? {
         let env = ProcessInfo.processInfo.environment
-        let dir: String? = env[assetsPathEnv] ?? env[legacyAssetsPathEnv]
+        let dir: String? = env[assetsPathEnv]
         if let d = dir, !d.isEmpty {
             let url = URL(fileURLWithPath: d).appendingPathComponent("data_j.csv")
             if FileManager.default.fileExists(atPath: url.path) { return url }
