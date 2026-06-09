@@ -32,14 +32,7 @@ actor EdinetAPIClient {
         let cacheKey = cacheStore.searchCacheKey(dateStr)
         if let cached = cacheStore.loadSearchCache(cacheKey) { return cached }
 
-        do {
-            return try await cacheStore.withFileLock("documents_by_date_\(dateStr)") {
-                if let cached = self.cacheStore.loadSearchCache(cacheKey) { return cached }
-                return nil // ロック外で非同期取得
-            }
-        } catch { }
-
-        // セマフォで並列数を制限して API 取得
+        // セマフォで並列数を制限し、取得後に再確認して重複リクエストを回避する
         await dateFetchSemaphore.wait()
         defer { dateFetchSemaphore.signal() }
 
@@ -70,18 +63,10 @@ actor EdinetAPIClient {
         await lock.lock()
         defer { lock.unlock() }
 
+        // AsyncLock 取得後に再確認してから構築する（ダブルチェックロッキング）
         if let cached = cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
             return cached
         }
-
-        do {
-            return try cacheStore.withFileLock("document_index_\(year)") {
-                if let cached = self.cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
-                    return cached
-                }
-                return nil
-            } ?? []
-        } catch { }
 
         if let docs = await buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today)) {
             cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
@@ -134,7 +119,8 @@ actor EdinetAPIClient {
             return existingDocs
         }
 
-        let newByDate = await getDocumentsForDateRange(start: startDate, end: requiredDate)
+        // catchup は既存インデックスを経由せず日次取得で差分を埋める
+        let newByDate = await getDocumentsForDateRange(start: startDate, end: requiredDate, useIndex: false)
         if newByDate.values.contains(where: { $0 == nil }) { return existingDocs }
         let merged = mergeDocumentIndexDocs(existing: existingDocs, byDate: newByDate.compactMapValues { $0 })
         cacheStore.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
