@@ -14,7 +14,7 @@ blt-server には 2 種類のクライアントが接続できる。デプロイ
 
 | クライアント | 接続方法 | ユースケース |
 |---|---|---|
-| **remote CLI** | HTTP API（`edinet-backend remote`） | 別マシンからの `blt` 利用、EDINET API キーの一元管理 |
+| **remote CLI** | HTTP API（`edinet-backend remote`） | OAuth 認証のみで利用可能・EDINET API キー管理不要 |
 | **AI チャット（MCP）** | MCP プロトコル | Claude.ai 等の AI ツールから財務データをツール呼び出し |
 
 ## ゴール
