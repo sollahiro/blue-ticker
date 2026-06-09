@@ -118,14 +118,14 @@ Python の `total=False` による段階的辞書組み立てパターンは、S
 
 ---
 
-### 7. MCP サーバー (`mcp_server/`) — 難易度: 高
+### 7. MCP サーバー (`mcp_server/`) — 難易度: 中
 
-現在 `FastMCP`（Python）を使用。Swift 向けの MCP SDK は 2026 年 6 月時点で **非公式実装のみ**。
+現在 `FastMCP`（Python）を使用。Swift 向けの MCP SDK は 2026 年 6 月時点で **公式 SDK が利用可能**。
 
-- 公式 Swift MCP SDK: 未存在（未リリース）
-- 非公式: [modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)（コミュニティ製、安定性不明）
+- 公式 Swift MCP SDK: [modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)（`modelcontextprotocol` 組織が管理、最新リリース 0.12.1 / 2026-05-07）
+- MCP spec 2025-11-25（最新）準拠、クライアント・サーバー両対応
 
-MCP サーバー機能は移行対象から**一時的に除外**するか、Python サイドカーとして残すことを推奨。
+Python `FastMCP` との機能差分の確認は必要だが、移行の障壁は大幅に下がった。
 
 ---
 
@@ -169,9 +169,9 @@ XML フィクスチャファイルは Swift プロジェクトにそのまま移
 
 `ZIPFoundation` と `SwiftSoup` は実績のある OSS だが、依存ポリシー（`dependencies.md`）との整合を確認する必要がある。
 
-### リスク C（高）: MCP サーバー
+### リスク C（低〜中）: MCP サーバー
 
-公式 Swift MCP SDK が未存在のため、MCP サーバー機能（`blt-server`）の移行は現時点で不確実。
+公式 Swift MCP SDK（0.12.1）が利用可能になったため、移行の不確実性は大幅に低下した。ただし Python `FastMCP` との API 差分・transport 互換性の検証は必要。
 
 ### リスク D（低）: Linux ツールチェーン
 
@@ -193,8 +193,8 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 2 | HTTP クライアント（EDINET API）・サービス層・データ集計・ウォーターフォール計算 | 2〜3 週 |
 | Phase 3 | XBRL 解析 22 モジュール（analysis/） | 4〜6 週 |
 | Phase 4 | テスト移植・Smoke テスト検証（macOS + Linux CI） | 2〜3 週 |
-| Phase 5 | MCP サーバー（保留または別途） | 未定 |
-| **合計** | MCP 除く | **10〜15 週** |
+| Phase 5 | MCP サーバー（公式 Swift SDK 利用） | 1〜2 週 |
+| **合計** | MCP 含む全 Phase | **11〜17 週** |
 
 ---
 
@@ -240,7 +240,7 @@ Phase 1 単体では `config` 程度しか完結しない。`ticker search` が�
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる
 - Phase 3 の XBRL 移植は既存 Python 版を並走させてモジュール単位で出力比較できる
-- MCP サーバーは Python 版を維持したまま先行移行できる
+- MCP サーバーは公式 Swift SDK（0.12.1）を用いて Phase 5 で Swift 化できる
 
 ---
 
@@ -258,7 +258,7 @@ Phase 1 単体では `config` 程度しか完結しない。`ticker search` が�
 |---|---|
 | CLI・HTTP・キャッシュ・インフラ層 | 移行容易（Swift の強みが活きる） |
 | XBRL 解析層 | 移行可能だが最大リスク（慎重な移植とテスト検証が必須） |
-| MCP サーバー | 現時点では移行困難（公式 SDK 待ち） |
-| 総合工数 | MCP 除き 10〜15 週 |
+| MCP サーバー | 公式 Swift SDK（0.12.1）利用可能、FastMCP との差分確認が必要 |
+| 総合工数 | MCP 含む全 Phase で 11〜17 週 |
 
-**推奨: 案 B（段階移行）**。目的（パフォーマンス・型安全性・Python 依存解消）をすべて達成するには Phase 3 まで完遂する必要があり、段階移行はそのリスクを分散する手段として機能する。XBRL 解析の移植は既存 Smoke テスト（10 社）をゴールデンファイルとして用い、モジュール単位で Python 版の出力と一致させながら進める。
+**推奨: 案 B（段階移行）**。目的（パフォーマンス・型安全性・Python 依存解消）をすべて達成するには Phase 3 まで完遂する必要があり、段階移行はそのリスクを分散する手段として機能する。XBRL 解析の移植は既存 Smoke テスト（10 社）をゴールデンファイルとして用い、モジュール単位で Python 版の出力と一致させながら進める。MCP サーバーは公式 Swift SDK（0.12.1）が利用可能になったため Phase 5 として全体計画に組み込める。
