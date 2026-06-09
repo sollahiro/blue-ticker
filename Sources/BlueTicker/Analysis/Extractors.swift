@@ -485,16 +485,21 @@ enum TangibleFixedAssetsExtractor {
 enum CapexExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> CapexResult {
-        let tags = accountingStandard == "IFRS" ? Xbrl.capexCFIFRSTags : Xbrl.capexCFJGAAPTags
-        let item = resolveItem(fieldSet, tags: tags)
-        if let v = item.current {
-            return CapexResult(current: abs(v), method: "cf")
+        // 設備投資等の概要タグを優先（正値）
+        let overview = resolveItem(fieldSet, tags: Xbrl.capexOverviewTags)
+        if let v = overview.current {
+            return CapexResult(current: v, method: "overview")
         }
-        // 会計基準不問でフォールバック
+        // CF計算書フォールバック（負値を正値へ変換）
+        let cfTags = accountingStandard == "IFRS" ? Xbrl.capexCFIFRSTags : Xbrl.capexCFJGAAPTags
+        let item = resolveItem(fieldSet, tags: cfTags)
+        if let v = item.current {
+            return CapexResult(current: abs(v), method: "cf_investing")
+        }
         let fallbackTags = accountingStandard == "IFRS" ? Xbrl.capexCFJGAAPTags : Xbrl.capexCFIFRSTags
         let fallback = resolveItem(fieldSet, tags: fallbackTags)
         if let v = fallback.current {
-            return CapexResult(current: abs(v), method: "cf_fallback")
+            return CapexResult(current: abs(v), method: "cf_investing_fallback")
         }
         return CapexResult(current: nil, method: "not_found")
     }
