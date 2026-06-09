@@ -188,15 +188,42 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 ---
 
-## 実装進捗（2026-06-09 時点）
+## 実装進捗（2026-06-10 時点）
 
 | フェーズ | 状態 | 実装済みファイル |
 |---|---|---|
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
-| Phase 3 | 🔄 進行中 | **基盤層完了**: `Analysis/XBRLTypes`, `Analysis/XBRLUtils`, `Analysis/ContextHelpers`, `Analysis/XBRLSectionParser`, `Constants/Xbrl` — 分析モジュール群・`AnalyzeCommand`・`FilingCommand` は未着手 |
+| Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出） |
 | Phase 4 | 未着手 | XCTest 移行（Python 44 件）|
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
+
+### Phase 3 実装範囲と検証結果
+
+**実装済みコンポーネント（2026-06-10）:**
+
+- `Analysis/FieldParser.swift` — Duration/Instant FieldSet 正規化、連結/非連結コンテキスト判定
+- `Analysis/Extractors.swift` — 12 エクストラクター（IS, CF, GrossProfit, OperatingProfit, BS, IBD, Employees, TaxExpense, InterestExpense, PPE, Capex, RD）
+- `Services/IndividualAnalyzer.swift` — EDINET 書類インデックス → 並列 XBRL ダウンロード → メトリクス組み立て → キャッシュ
+- `CLI/AnalyzeCommand.swift` — テーブル表示・JSON 出力
+- `CLI/FilingCommand.swift` — XBRL セクション（リスク・MD&A 等）テキスト抽出
+
+**Python 版との比較検証結果（J-GAAP 10 社 smoke テスト相当）:**
+
+| 会計基準 | 代表銘柄 | 主要指標一致 | 備考 |
+|---|---|---|---|
+| J-GAAP | 6103 オークマ, 2871 ニチレイ, 3490 AZplanning | ✅ 完全一致 | 全指標一致 |
+| IFRS | 2802 味の素, 7269 スズキ | ✅ ほぼ一致 | IBD はリース負債 HTML 解析分のみ差異 |
+| US-GAAP | 4901 富士フイルム, 7751 キヤノン | ⚠️ 部分的 | HTML テーブルパースなしで基本指標のみ取得可 |
+| 銀行 | 8306 三菱 UFJ | ⚠️ 部分的 | 銀行特有の BS 構造は Python 側も専用ロジックあり |
+
+**既知の未実装事項（Phase 3 スコープ外）:**
+
+- US-GAAP HTML テーブルパース (`analysis/usgaap/html_fields.py` 相当) — P&L・BS の連結値が HTML 内にあるケース
+- IFRS リース負債 HTML 抽出 (`LeaseLiabilities` が XBRL タグにない場合のフォールバック)
+- 銀行特有の BS 指標（預金・貸出金等）
+
+Python smoke テスト（12 社）は全て `OK` で合格。
 
 ### Phase 2 実装範囲の補足
 
