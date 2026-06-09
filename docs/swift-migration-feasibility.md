@@ -194,7 +194,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 |---|---|---|
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
-| Phase 3 | 未着手 | XBRL 解析（`analysis/` 25 モジュール相当）、`AnalyzeCommand` 実装、`FilingCommand`（filing 内容）|
+| Phase 3 | 🔄 進行中 | **基盤層完了**: `Analysis/XBRLTypes`, `Analysis/XBRLUtils`, `Analysis/ContextHelpers`, `Analysis/XBRLSectionParser`, `Constants/Xbrl` — 分析モジュール群・`AnalyzeCommand`・`FilingCommand` は未着手 |
 | Phase 4 | 未着手 | XCTest 移行（Python 44 件）|
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
