@@ -12,7 +12,7 @@ actor CacheManager {
     private var metadataCache: [String: String]?
 
     init(cacheDir: URL, enabled: Bool = true, ttlDays: Int = 7) {
-        self.dataDir = derivedCacheDir(cacheDir)
+        self.dataDir = cacheDir
         self.ttlDays = ttlDays
         self.enabled = enabled
     }
