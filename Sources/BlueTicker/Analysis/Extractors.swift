@@ -326,7 +326,7 @@ enum OperatingProfitExtractor {
             let sell = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
             let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
             if sell.current != nil || ga.current != nil {
-                let c: Double? = (sell.current ?? 0) + (ga.current ?? 0)
+                let c: Double = (sell.current ?? 0) + (ga.current ?? 0)
                 let p: Double? = (sell.prior != nil || ga.prior != nil)
                     ? (sell.prior ?? 0) + (ga.prior ?? 0) : nil
                 sgaItem = ResolvedItem(tag: "sell+ga", current: c, prior: p)
