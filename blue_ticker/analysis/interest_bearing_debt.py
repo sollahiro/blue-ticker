@@ -10,9 +10,17 @@ BalanceSheetSection（FieldSet を内包）からの3ステージ抽出:
   短期借入金 + CP + 短期社債 + 1年内社債 + 1年内長期借入金 + 社債 + 長期借入金 + リース負債（IFRS 16）
 """
 
+import re
+
 from blue_ticker.analysis.field_parser import ResolvedItem
 from blue_ticker.analysis.sections import BalanceSheetSection
-from blue_ticker.analysis.xbrl_utils import _find_html_by_prefix, extract_ifrs_textblock_table, find_xbrl_files, parse_html_number
+from blue_ticker.analysis.xbrl_utils import (
+    _find_html_by_prefix,
+    extract_ifrs_textblock_table,
+    find_xbrl_files,
+    parse_html_int_attribute,
+    parse_html_number,
+)
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     BANK_IBD_COMPONENT_DEFINITIONS,
@@ -130,10 +138,8 @@ def _extract_ifrs_lease_from_html(
             if not any(any(m in t for m in _HEADER_MARKERS) for t in texts):
                 continue
             col_offset = 0
-            import re
             for cell in cells:
                 text = cell.get_text(strip=True)
-                from blue_ticker.analysis.xbrl_utils import parse_html_int_attribute
                 span = parse_html_int_attribute(cell, "colspan")
                 if "当連結" in text or "当中間" in text or ("当期" in text and "前期" not in text):
                     current_col_idx = col_offset
