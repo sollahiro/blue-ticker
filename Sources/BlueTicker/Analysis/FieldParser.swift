@@ -109,19 +109,21 @@ private func normalizeNonConsolidated(
     isPrior: (String) -> Bool
 ) -> FieldSet {
     var fieldSet: FieldSet = [:]
+    let currentPatterns = Array(exactCurrent)
+    let priorPatterns = Array(exactPrior)
     for (tag, ctxMap) in tagElements {
         var current: Double?
         var prior: Double?
 
         for (ctx, val) in ctxMap {
             if isCurrent(ctx) {
-                if isPureNonConsolidated(ctx, patterns: Array(exactCurrent)) {
+                if isPureNonConsolidated(ctx, patterns: currentPatterns) {
                     current = val
                 } else if current == nil {
                     current = val
                 }
             } else if isPrior(ctx) {
-                if isPureNonConsolidated(ctx, patterns: Array(exactPrior)) {
+                if isPureNonConsolidated(ctx, patterns: priorPatterns) {
                     prior = val
                 } else if prior == nil {
                     prior = val
