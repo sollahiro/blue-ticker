@@ -19,6 +19,7 @@ SWIFT_ROOT = PROJECT_ROOT / "Sources" / "BlueTicker"
 
 _TYPE_DECL_RE = re.compile(r"\b(?:struct|class|enum|protocol|actor)\s+([A-Z]\w+)")
 _LINE_COMMENT_RE = re.compile(r"//.*")
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 
 def _swift_files(subdir: str) -> list[Path]:
@@ -33,7 +34,8 @@ def _declared_types(subdir: str) -> set[str]:
 
 
 def _code_without_comments(f: Path) -> str:
-    return _LINE_COMMENT_RE.sub("", f.read_text(encoding="utf-8"))
+    src = _BLOCK_COMMENT_RE.sub("", f.read_text(encoding="utf-8"))
+    return _LINE_COMMENT_RE.sub("", src)
 
 
 def test_swift_sources_exist():
