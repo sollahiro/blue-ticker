@@ -326,8 +326,7 @@ enum OperatingProfitExtractor {
             let sell = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
             let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
             if sell.current != nil || ga.current != nil {
-                let c: Double? = (sell.current ?? 0) + (ga.current ?? 0) > 0
-                    ? (sell.current ?? 0) + (ga.current ?? 0) : nil
+                let c: Double? = (sell.current ?? 0) + (ga.current ?? 0)
                 let p: Double? = (sell.prior != nil || ga.prior != nil)
                     ? (sell.prior ?? 0) + (ga.prior ?? 0) : nil
                 sgaItem = ResolvedItem(tag: "sell+ga", current: c, prior: p)
@@ -362,8 +361,8 @@ enum IBDExtractor {
 
         // 直接タグ
         let directItem = resolveItem(fieldSet, tags: Xbrl.ibdDirectTags)
-        if let total = directItem.current {
-            return IBDResult(total: total, priorTotal: directItem.prior,
+        if directItem.current != nil || directItem.prior != nil {
+            return IBDResult(total: directItem.current, priorTotal: directItem.prior,
                              components: [], method: "direct",
                              accountingStandard: accountingStandard)
         }
@@ -372,8 +371,10 @@ enum IBDExtractor {
         if accountingStandard == "IFRS" {
             let clItem = resolveItem(fieldSet, tags: Xbrl.ibdIFRSCLTags)
             let nclItem = resolveItem(fieldSet, tags: Xbrl.ibdIFRSNCLTags)
-            if clItem.current != nil || nclItem.current != nil {
-                let total = (clItem.current ?? 0) + (nclItem.current ?? 0)
+            if clItem.current != nil || nclItem.current != nil
+                || clItem.prior != nil || nclItem.prior != nil {
+                let total: Double? = (clItem.current != nil || nclItem.current != nil)
+                    ? (clItem.current ?? 0) + (nclItem.current ?? 0) : nil
                 let prior: Double? = (clItem.prior != nil || nclItem.prior != nil)
                     ? (clItem.prior ?? 0) + (nclItem.prior ?? 0) : nil
                 return IBDResult(total: total, priorTotal: prior,
