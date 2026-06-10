@@ -189,6 +189,22 @@ enum Xbrl {
         .init(label: "その他業務費用",   tags: ["OtherOrdinaryExpensesOEBNK"],        sign: -1),
     ]
 
+    struct BankIBDComponent {
+        let label: String
+        let tags: [String]
+    }
+
+    // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
+    // DepositsLiabilitiesBNK の存在が銀行業判定マーカーを兼ねる
+    static let bankIBDComponents: [BankIBDComponent] = [
+        .init(label: "預金",                   tags: ["DepositsLiabilitiesBNK"]),
+        .init(label: "譲渡性預金",             tags: ["NegotiableCertificatesOfDepositLiabilitiesBNK"]),
+        .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
+        .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
+        .init(label: "短期社債",               tags: ["ShortTermBondsPayable"]),
+        .init(label: "社債",                   tags: ["BondsPayable"]),
+    ]
+
     // MARK: - キャッシュフロータグ
 
     static let cfOperatingTags: [String] = [

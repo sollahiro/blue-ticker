@@ -43,9 +43,6 @@ final class SmokeTests: XCTestCase {
                              "grossProfit", "sga", "ibdTotal", "interestExpense",
                              "pretaxIncome", "incomeTax", "effectiveTaxRate",
                              "ppeTotal", "capex", "rd"],
-        // 銀行: grossProfit は銀行固有タグ（未実装）、ibdTotal は預金含む銀行固有定義（未実装）
-        "8306_2025-03-31": ["grossProfit", "ibdTotal"],
-        "8316_2025-03-31": ["grossProfit", "ibdTotal"],
     ]
 
     // MARK: - 相対誤差許容度

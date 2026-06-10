@@ -244,6 +244,11 @@ enum GrossProfitExtractor {
             )
         }
 
+        // 銀行業: 連結業務粗利益を構成要素から積み上げ
+        if let bankGP = extractBankBusinessGrossProfit(fieldSet: fieldSet, accountingStandard: accountingStandard) {
+            return bankGP
+        }
+
         // 計算法: 売上高 − 売上原価
         let salesItem = resolveItem(fieldSet, tags: Xbrl.grossProfitSalesTags)
         let costsItem = resolveItem(fieldSet, tags: Xbrl.grossProfitCostsTags)
@@ -263,6 +268,35 @@ enum GrossProfitExtractor {
         return GrossProfitResult(
             grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
             method: "not_found", accountingStandard: accountingStandard
+        )
+    }
+
+    private static func extractBankBusinessGrossProfit(fieldSet: FieldSet, accountingStandard: String) -> GrossProfitResult? {
+        var currentTotal = 0.0
+        var priorTotal = 0.0
+        var hasCurrentAny = false
+        var hasPriorAny = false
+
+        for comp in Xbrl.businessGrossProfitComponents {
+            let item = resolveItem(fieldSet, tags: comp.tags)
+            if let c = item.current {
+                currentTotal += Double(comp.sign) * c
+                hasCurrentAny = true
+            }
+            if let p = item.prior {
+                priorTotal += Double(comp.sign) * p
+                hasPriorAny = true
+            }
+        }
+
+        guard hasCurrentAny || hasPriorAny else { return nil }
+
+        return GrossProfitResult(
+            grossProfit: hasCurrentAny ? currentTotal : nil,
+            grossProfitPrior: hasPriorAny ? priorTotal : nil,
+            grossProfitLabel: "連結業務粗利益",
+            method: "business_gross_profit",
+            accountingStandard: accountingStandard
         )
     }
 }
@@ -321,6 +355,11 @@ enum OperatingProfitExtractor {
 enum IBDExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> IBDResult {
+        // 銀行業: DepositsLiabilitiesBNK が存在すれば銀行業コンポーネント積み上げ
+        if let bankResult = extractBankIBD(fieldSet: fieldSet, accountingStandard: accountingStandard) {
+            return bankResult
+        }
+
         // 直接タグ
         let directItem = resolveItem(fieldSet, tags: Xbrl.ibdDirectTags)
         if let total = directItem.current {
@@ -386,6 +425,34 @@ enum IBDExtractor {
 
         return IBDResult(total: nil, priorTotal: nil, components: [],
                          method: "not_found", accountingStandard: accountingStandard)
+    }
+
+    private static func extractBankIBD(fieldSet: FieldSet, accountingStandard: String) -> IBDResult? {
+        let marker = resolveItem(fieldSet, tags: ["DepositsLiabilitiesBNK"])
+        guard marker.current != nil || marker.prior != nil else { return nil }
+
+        var totalCurrent = 0.0
+        var totalPrior = 0.0
+        var hasCurrentAny = false
+        var hasPriorAny = false
+        var components: [(label: String, current: Double?, prior: Double?)] = []
+
+        for comp in Xbrl.bankIBDComponents {
+            let item = resolveItem(fieldSet, tags: comp.tags)
+            if let c = item.current { totalCurrent += c; hasCurrentAny = true }
+            if let p = item.prior { totalPrior += p; hasPriorAny = true }
+            if item.current != nil || item.prior != nil {
+                components.append((label: comp.label, current: item.current, prior: item.prior))
+            }
+        }
+
+        return IBDResult(
+            total: hasCurrentAny ? totalCurrent : nil,
+            priorTotal: hasPriorAny ? totalPrior : nil,
+            components: components,
+            method: "bank_components",
+            accountingStandard: accountingStandard
+        )
     }
 }
 
