@@ -194,8 +194,8 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 |---|---|---|
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
-| Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出） |
-| Phase 4 | 未着手 | XCTest 移行（Python 44 件）|
+| Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
+| Phase 4 | 🔲 一部完了 | Swift スモークテスト完了。残: HTML パース（IFRS リース負債・US-GAAP 連結 P/L・BS）、Python ユニットテスト移植（44 件）、CI 整備 |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
 ### Phase 3 実装範囲と検証結果
@@ -203,27 +203,27 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 **実装済みコンポーネント（2026-06-10）:**
 
 - `Analysis/FieldParser.swift` — Duration/Instant FieldSet 正規化、連結/非連結コンテキスト判定
-- `Analysis/Extractors.swift` — 12 エクストラクター（IS, CF, GrossProfit, OperatingProfit, BS, IBD, Employees, TaxExpense, InterestExpense, PPE, Capex, RD）
+- `Analysis/Extractors.swift` — 12 エクストラクター（IS, CF, GrossProfit, OperatingProfit, BS, IBD, Employees, TaxExpense, InterestExpense, PPE, Capex, RD）＋銀行固有（連結業務粗利益・銀行 IBD コンポーネント）
 - `Services/IndividualAnalyzer.swift` — EDINET 書類インデックス → 並列 XBRL ダウンロード → メトリクス組み立て → キャッシュ
 - `CLI/AnalyzeCommand.swift` — テーブル表示・JSON 出力
 - `CLI/FilingCommand.swift` — XBRL セクション（リスク・MD&A 等）テキスト抽出
+- `SwiftTests/BlueTickerTests/SmokeTests.swift` — 11 社全指標をキャッシュ済み XBRL から直接検証（Keychain 不要）
 
-**Python 版との比較検証結果（J-GAAP 10 社 smoke テスト相当）:**
+**Python 版との比較検証結果（Swift スモークテスト 11 社、全件 OK）:**
 
 | 会計基準 | 代表銘柄 | 主要指標一致 | 備考 |
 |---|---|---|---|
-| J-GAAP | 6103 オークマ, 2871 ニチレイ, 3490 AZplanning | ✅ 完全一致 | 全指標一致 |
-| IFRS | 2802 味の素, 7269 スズキ | ✅ ほぼ一致 | IBD はリース負債 HTML 解析分のみ差異 |
-| US-GAAP | 4901 富士フイルム, 7751 キヤノン | ⚠️ 部分的 | HTML テーブルパースなしで基本指標のみ取得可 |
-| 銀行 | 8306 三菱 UFJ | ⚠️ 部分的 | 銀行特有の BS 構造は Python 側も専用ロジックあり |
+| J-GAAP | 6103 オークマ, 2871 ニチレイ, 3490 AZplanning, 7422 東邦レマック | ✅ 完全一致 | 全指標一致 |
+| J-GAAP（銀行） | 8306 三菱 UFJ, 8316 三井住友 | ✅ 完全一致 | 連結業務粗利益・銀行 IBD コンポーネント積み上げ実装済み |
+| IFRS | 2802 味の素, 6326 クボタ, 7269 スズキ | ✅ ほぼ一致 | IBD はリース負債分のみ差異（knownGap） |
+| US-GAAP | 4901 富士フイルム, 7751 キヤノン | ⚠️ 部分的 | HTML テーブルパースなしで基本指標のみ（主要財務項目は knownGap） |
 
-**既知の未実装事項（Phase 3 スコープ外）:**
+**既知の未実装事項（Phase 4 スコープ）:**
 
-- US-GAAP HTML テーブルパース (`analysis/usgaap/html_fields.py` 相当) — P&L・BS の連結値が HTML 内にあるケース
-- IFRS リース負債 HTML 抽出 (`LeaseLiabilities` が XBRL タグにない場合のフォールバック)
-- 銀行特有の BS 指標（預金・貸出金等）
+- **IFRS リース負債**: XBRL 数値タグが連結財務諸表に存在しないことを確認済み（3 社調査: 味の素・クボタ・スズキ）。`LeaseObligationsCL`/`NCL` は個別財務諸表にのみ存在し、連結値は `NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock` の HTML テーブル内にのみ埋め込まれている。Python 抽出メソッド `field_parser+lease_textblock` がこの構造を示す。
+- **US-GAAP 連結 P/L・BS**: 連結値が HTML テーブル内にあり、XBRL タグ単独では取得不可（富士フイルム・キヤノン）。
 
-Python smoke テスト（12 社）は全て `OK` で合格。
+Swift スモークテスト（11 社）は全て `OK` で合格。
 
 ### Phase 2 実装範囲の補足
 
@@ -281,17 +281,17 @@ Python smoke テスト（12 社）は全て `OK` で合格。
 ```
 Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
-Phase 3  : XBRL 解析 25 モジュール（Smoke テストをゴールデンファイルとして逐次検証）
-Phase 4  : テスト移植・CI（macOS + Linux）整備
-Phase 5  : MCP サーバー（公式 Swift SDK 0.12.1）
+Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
+Phase 4   : HTML パース（IFRS リース負債・US-GAAP 連結）+ Python ユニットテスト移植（44 件）+ CI 整備
+Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
-Phase 2 完了時点で `ticker search`・`ticker filings`・`ticker cache`・`ticker config` が純 Swift で動作する。  
-`ticker analyze` と `ticker filing`（内容抽出）は Phase 3 完了後。
+Phase 3 完了時点で全コマンド（`ticker search`・`ticker filings`・`ticker cache`・`ticker config`・`ticker analyze`・`ticker filing`）が純 Swift で動作する。  
+Phase 4 の HTML パース完了後に IFRS リース負債・US-GAAP 連結財務諸表が完全対応となる。
 
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる
-- Phase 3 の XBRL 移植は既存 Python 版を並走させてモジュール単位で出力比較できる
+- Phase 3 の XBRL 移植は Swift スモークテスト（11 社）をゴールデンファイルとして常時検証できる
 - MCP サーバーは公式 Swift SDK（0.12.1）を用いて Phase 5 で Swift 化できる
 
 ---
