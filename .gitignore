@@ -67,15 +67,12 @@ reports/
 reports/*_edinet/
 data/
 
-# Local app state (when MEBUKI_USER_DATA_PATH points at the repo)
+# Local app state
 /config.json
 /config.json.bak
 
 # Application logs
 *.log
-mebuki_crash.log
-mebuki_main.log
-mebuki_startup.log
 
 # Temporary files
 *_dump_*.json

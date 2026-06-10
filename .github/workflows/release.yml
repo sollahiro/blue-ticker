@@ -103,7 +103,7 @@ jobs:
             sed "s|sha256 \".*\"|sha256 \"${SHA256}\"|" | \
             sed "s|version \".*\"|version \"${VERSION}\"|" > homebrew-tap/Formula/blue-ticker.rb
 
-          rm -f homebrew-tap/Formula/mebuki.rb homebrew-tap/formula_renames.json
+          rm -f homebrew-tap/formula_renames.json
           
           cd homebrew-tap
           git config user.name "github-actions[bot]"
