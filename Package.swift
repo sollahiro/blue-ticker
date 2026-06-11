@@ -29,7 +29,10 @@ let package = Package(
         ),
         .testTarget(
             name: "BlueTickerTests",
-            dependencies: ["BlueTicker"],
+            dependencies: [
+                "BlueTicker",
+                "ZIPFoundation",
+            ],
             path: "SwiftTests/BlueTickerTests"
         ),
     ]
