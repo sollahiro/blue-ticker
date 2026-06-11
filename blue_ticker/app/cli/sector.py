@@ -13,7 +13,7 @@ def cmd_sector(args):
         if fmt == "json":
             print(json.dumps(sectors, indent=2, ensure_ascii=False))
             return
-        print(f"\n東証33業種一覧 ({len(sectors)}業種):", file=sys.stderr)
+        print(f"\nEDINET業種一覧 ({len(sectors)}業種):", file=sys.stderr)
         print("-" * 50, file=sys.stderr)
         print(f"{'コード':<8} {'業種名':<20} {'銘柄数':>6}", file=sys.stderr)
         print("-" * 50, file=sys.stderr)

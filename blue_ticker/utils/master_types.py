@@ -8,15 +8,16 @@ from typing import TypedDict
 
 
 class MasterStock(TypedDict):
-    Code: str
-    CoName: str
-    CoNameUpper: str
-    CoNameNormalized: str
-    S33Nm: str
-    MktNm: str
-    S33: str
-    S17Nm: str
-    S17: str
+    Code: str               # 証券コード（4桁または5桁）。未上場は空文字
+    EdinetCode: str         # ＥＤＩＮＥＴコード（E00004 形式）
+    CoName: str             # 提出者名
+    CoNameEn: str           # 提出者名（英字）
+    CoNameKana: str         # 提出者名（ヨミ）
+    CoNameNormalized: str   # 検索用正規化名称
+    S33Nm: str              # 提出者業種
+    MktNm: str              # 上場区分（"上場" / "非上場"）
+    IsListed: bool          # 上場かどうか
+    HasConsolidated: bool   # 連結の有無
 
 
 class StockSearchResult(TypedDict):
