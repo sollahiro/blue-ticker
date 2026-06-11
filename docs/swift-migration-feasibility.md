@@ -188,15 +188,24 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 ---
 
-## 実装進捗（2026-06-10 時点）
+## 実装進捗（2026-06-11 時点）
 
 | フェーズ | 状態 | 実装済みファイル |
 |---|---|---|
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
-| Phase 4 | 🔲 一部完了 | Swift スモークテスト完了。残: HTML パース（IFRS リース負債・US-GAAP 連結 P/L・BS）、Python ユニットテスト移植（44 件）、CI 整備 |
+| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。残: Python ユニットテスト移植（44 件）、CI 整備 |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
+
+### Phase 4 HTML パース実装範囲（2026-06-11）
+
+- `Analysis/USGAAPHtmlFields.swift` — US-GAAP 連結 P/L・BS の iXBRL HTML テーブル抽出。`USGAAP_HTML_*` 仮想タグを FieldSet に注入（Python `usgaap/html_fields.py` 相当）。売上総利益・支払利息の直接 HTML 抽出（`usgaap/gross_profit.py`・`usgaap/interest_expense.py` 相当）。ヘッダー列検出ロジック（Python では 3 モジュールに重複）は `HtmlFinancialTable` に統合
+- `Analysis/IFRSLease.swift` — IFRS リース負債（XBRL タグ → リース注記 TextBlock → BS HTML の優先順）、IFRS 財政状態計算書 TextBlock からの IBD 積み上げ
+- `Extractors.swift` — IBDExtractor を Python `resolve_ibd` フローへ統一（直接法 → IFRS 集約 → コンポーネント積み上げ → US-GAAP HTML 仮想タグ → TextBlock / zero_debt）、GP・OP・税金・支払利息・PPE・BS に US-GAAP 分岐追加。PPE の IFRS フォールバックを取得原価 + 減価償却累計（負値）に修正
+- 検証: スモークテスト 11 社の knownGaps（IFRS 3 社の IBD、US-GAAP 2 社の全 19 フィールド）を全廃して全社 OK
+
+**未移植（Python 側にのみ存在）**: 株主資本等変動計算書 HTML からの自己株式取得（`parse_usgaap_html_equity_cf_fields`）、IFRS 注記文章からの支払利息抽出（`_extract_ifrs_ie_from_textblock`、トヨタ型）。Swift 側に自己株式取得の出力経路がまだないため、対応する機能追加時に移植する。
 
 ### Phase 3 実装範囲と検証結果
 
@@ -282,7 +291,7 @@ Swift スモークテスト（11 社）は全て `OK` で合格。
 Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
-Phase 4   : HTML パース（IFRS リース負債・US-GAAP 連結）+ Python ユニットテスト移植（44 件）+ CI 整備
+Phase 4 🔲: HTML パース ✅（IFRS リース負債・US-GAAP 連結）/ 残: Python ユニットテスト移植（44 件）+ CI 整備
 Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
