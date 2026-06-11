@@ -195,7 +195,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
-| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。残: Python ユニットテスト移植（44 件）、CI 整備 |
+| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト追加、全 170 テスト合格）。残: サービス層テスト移植（EdinetDiscovery 等）、CI 整備 |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
 ### Phase 4 HTML パース実装範囲（2026-06-11）
@@ -205,7 +205,26 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 - `Extractors.swift` — IBDExtractor を Python `resolve_ibd` フローへ統一（直接法 → IFRS 集約 → コンポーネント積み上げ → US-GAAP HTML 仮想タグ → TextBlock / zero_debt）、GP・OP・税金・支払利息・PPE・BS に US-GAAP 分岐追加。PPE の IFRS フォールバックを取得原価 + 減価償却累計（負値）に修正
 - 検証: スモークテスト 11 社の knownGaps（IFRS 3 社の IBD、US-GAAP 2 社の全 19 フィールド）を全廃して全社 OK
 
-**未移植（Python 側にのみ存在）**: 株主資本等変動計算書 HTML からの自己株式取得（`parse_usgaap_html_equity_cf_fields`）、IFRS 注記文章からの支払利息抽出（`_extract_ifrs_ie_from_textblock`、トヨタ型）。Swift 側に自己株式取得の出力経路がまだないため、対応する機能追加時に移植する。
+**未移植（Python 側にのみ存在）**: 株主資本等変動計算書 HTML からの自己株式取得（`parse_usgaap_html_equity_cf_fields`）。Swift 側に自己株式取得の出力経路がまだないため、対応する機能追加時に移植する。
+（IFRS 注記文章からの支払利息抽出（トヨタ型）と IFRS PL TextBlock からの粗利益抽出はユニットテスト移植時に Swift へ移植済み）
+
+### Phase 4 ユニットテスト移植（2026-06-12）
+
+Python 分析層テスト 13 ファイルを XCTest へ移植（`SwiftTests/BlueTickerTests/`、共通ヘルパー `XBRLTestSupport.swift`）。移植過程で判明した Swift 抽出器のパリティギャップも修正:
+
+- GrossProfit: 解決順序を Python 準拠化（direct → 銀行業務粗利益 → 営業総利益 → computed）、COGS タグ欠落時の 0 扱い、IFRS PL TextBlock フォールバック追加
+- OperatingProfit: GP−SGA computed パス追加、IFRS 企業での経常利益フォールバック抑止
+- TaxExpense: method フィールド・not_found 判定追加
+- InterestExpense: IFRS 注記テキストからの抽出（トヨタ型）追加
+
+**移植対象外としたもの**:
+
+| 対象 | 理由 |
+|---|---|
+| net_revenue / share_buyback / order_book / bank_financials / shareholder_metrics / segment_extractor 等のテスト | 対応モジュールが Swift 未実装（analyze 出力に未統合） |
+| analyzer / calculator / ROE・ROIC waterfall / half_year / output_serializer 等 | Python サービス層・出力層固有（Swift は IndividualAnalyzer に統合済み、スモークテストでカバー） |
+| EDINET API / discovery / cache 系・CLI 統合・dependency_rules 等 | サービス層テストとして次回移植（Phase 4 残） |
+| components のタグ名検証・税金の prior 系フィールド | Swift の結果構造体が未保持（必要になった時点で追加） |
 
 ### Phase 3 実装範囲と検証結果
 
