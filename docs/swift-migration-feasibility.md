@@ -188,14 +188,14 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 ---
 
-## 実装進捗（2026-06-11 時点）
+## 実装進捗（2026-06-12 時点）
 
 | フェーズ | 状態 | 実装済みファイル |
 |---|---|---|
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
-| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト追加、全 170 テスト合格）。残: サービス層テスト移植（EdinetDiscovery 等）、CI 整備 |
+| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。残: CI 整備 |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
 ### Phase 4 HTML パース実装範囲（2026-06-11）
@@ -207,6 +207,24 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 **未移植（Python 側にのみ存在）**: 株主資本等変動計算書 HTML からの自己株式取得（`parse_usgaap_html_equity_cf_fields`）。Swift 側に自己株式取得の出力経路がまだないため、対応する機能追加時に移植する。
 （IFRS 注記文章からの支払利息抽出（トヨタ型）と IFRS PL TextBlock からの粗利益抽出はユニットテスト移植時に Swift へ移植済み）
+
+### Phase 4 サービス層テスト移植（2026-06-12）
+
+Python サービス層テスト 5 ファイルを XCTest へ移植（共通ヘルパー `ServiceTestSupport.swift`、計 34 テスト）:
+
+| Python テスト | Swift テスト | 補足 |
+|---|---|---|
+| `test_edinet_cache_store.py` | `EdinetCacheStoreTests` | TTL は mtime 操作で再現。`max_xbrl_bytes` の途中書き換えは同一ディレクトリを指す別インスタンスで代替 |
+| `test_cache_pruner.py` | `CachePrunerTests` | prune 系のみ。stats / audit は Swift 未実装のため対象外 |
+| `test_edinet_client.py` | `EdinetClientTests` | キャッシュシード方式（下記） |
+| `test_edinet_discovery.py` | `EdinetDiscoveryTests` | キャッシュシード方式（下記） |
+| `test_user_paths.py` | `UserPathsTests` | 環境変数テストのみ。SettingsStore の Keychain テストは Keystore 静的依存のため対象外 |
+
+**キャッシュシード方式**: Python は monkeypatch でフェッチ関数をモックするが、Swift の `EdinetAPIClient` は actor（継承不可）のため、検索キャッシュ・年次インデックスを一時ディレクトリへ事前に書き込み、API キー未設定で HTTP を即時失敗させる。これによりキャッシュ優先・stale フォールバックの実コードパスをネットワークなしで検証できる。
+
+**移植過程で発見・修正したパリティバグ**: `EdinetAPIClient` が `Calendar.current`（ローカル TZ）と UTC の ISO フォーマッタを混在させており、JST 環境では年次インデックスの日付ラベルが Python 版と 1 日ずれていた（Python と共有するキャッシュの整合性に影響）。UTC カレンダーに統一して修正済み。
+
+**移植対象外（Swift に該当機構がないもの）**: `test_edinet_doc_filter` / `test_edinet_docs_cache_upgrade` / `test_edinet_fetcher_boundary` / `test_data_service` / `test_dup_deduplication`（Python 側のサーバー・DataService・doc_filter モジュール固有）、`file_lock` の待機通知テスト（time モック前提）、CA バンドル解決テスト（URLSession は OS に委譲）。
 
 ### Phase 4 ユニットテスト移植（2026-06-12）
 
@@ -223,7 +241,8 @@ Python 分析層テスト 13 ファイルを XCTest へ移植（`SwiftTests/Blue
 |---|---|
 | net_revenue / share_buyback / order_book / bank_financials / shareholder_metrics / segment_extractor 等のテスト | 対応モジュールが Swift 未実装（analyze 出力に未統合） |
 | analyzer / calculator / ROE・ROIC waterfall / half_year / output_serializer 等 | Python サービス層・出力層固有（Swift は IndividualAnalyzer に統合済み、スモークテストでカバー） |
-| EDINET API / discovery / cache 系・CLI 統合・dependency_rules 等 | サービス層テストとして次回移植（Phase 4 残） |
+| EDINET API / discovery / cache 系 | サービス層テストとして移植済み（上記 2026-06-12） |
+| CLI 統合・dependency_rules | dependency_rules は Python の import 規約固有。CLI 統合は Swift スモークテストでカバー |
 | components のタグ名検証・税金の prior 系フィールド | Swift の結果構造体が未保持（必要になった時点で追加） |
 
 ### Phase 3 実装範囲と検証結果
@@ -310,7 +329,7 @@ Swift スモークテスト（11 社）は全て `OK` で合格。
 Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
-Phase 4 🔲: HTML パース ✅（IFRS リース負債・US-GAAP 連結）/ 残: Python ユニットテスト移植（44 件）+ CI 整備
+Phase 4 🔲: HTML パース ✅ / 分析層テスト移植 ✅ / サービス層テスト移植 ✅（全 204 テスト）/ 残: CI 整備
 Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
