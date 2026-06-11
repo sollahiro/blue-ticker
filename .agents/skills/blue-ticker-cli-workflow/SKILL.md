@@ -19,7 +19,7 @@ BLUE TICKER CLIで日本株を調査するときの実行手順を定める。�
 
 - 売買推奨はしない。事実、指標、提出書類の内容を整理し、最終判断はユーザーに委ねる。
 - BLUE TICKER CLIの出力を主情報源にする。数値を勝手に補完したり、CLIにない結論を断定しない。
-- `ticker analyze`、`ticker filings`、`ticker filing` を使う調査では、原則としてWeb検索を使わない。ユーザーが「ニュースも検索して」「Webも見て」などと明示した場合だけ、CLI結果とは別枠で扱う。
+- `ticker summarize`、`ticker filings`、`ticker filing` を使う調査では、原則としてWeb検索を使わない。ユーザーが「ニュースも検索して」「Webも見て」などと明示した場合だけ、CLI結果とは別枠で扱う。
 - EDINET APIへの負荷を抑える。分析・書類抽出の前にはキャッシュ状態を確認し、必要な準備を先に済ませる。
 - 出力が長い場合は、重要な数値・変化・リスク記述を要約する。必要に応じて、実行したコマンドも明記する。
 
@@ -70,19 +70,19 @@ ticker search <社名またはコード> --format json
 年次推移を見る。
 
 ```bash
-ticker analyze <code> --years 6
+ticker summarize <code> --years 6
 ```
 
 半期の季節性や直近の変化を見る。
 
 ```bash
-ticker analyze <code> --half
+ticker summarize <code> --half
 ```
 
 キャッシュ済み分析ではなく再計算したい場合に使う。
 
 ```bash
-ticker analyze <code> --no-cache
+ticker summarize <code> --no-cache
 ```
 
 回答では、CLIの表やJSONをそのまま長く貼るより、ユーザーの問いに合わせて以下を中心に整理する。
@@ -185,7 +185,7 @@ ticker sector
 ticker sector <業種名>
 ```
 
-同業比較では、まず候補銘柄を確認し、各銘柄に同じ年数・同じ形式で `ticker analyze` を実行する。比較時は、売上成長、利益率、ROE/ROIC、キャッシュフロー、財務レバレッジなど、同じ観点で揃える。
+同業比較では、まず候補銘柄を確認し、各銘柄に同じ年数・同じ形式で `ticker summarize` を実行する。比較時は、売上成長、利益率、ROE/ROIC、キャッシュフロー、財務レバレッジなど、同じ観点で揃える。
 
 ## よく使うワークフロー
 
@@ -196,7 +196,7 @@ ticker config show
 ticker cache status
 ticker cache catchup --years 5
 ticker search <社名>
-ticker analyze <code> --years 6
+ticker summarize <code> --years 6
 ticker filing <code> --sections business_risks mda segments geography management_policy
 ```
 
@@ -206,13 +206,13 @@ ticker filing <code> --sections business_risks mda segments geography management
 
 ```bash
 ticker cache status
-ticker analyze <code> --years 6
+ticker summarize <code> --years 6
 ```
 
 必要に応じて、半期分析や有報抽出を追加する。
 
 ```bash
-ticker analyze <code> --half
+ticker summarize <code> --half
 ticker filing <code> --sections mda
 ```
 
@@ -222,8 +222,8 @@ ticker filing <code> --sections mda
 ticker cache status
 ticker search <社名A>
 ticker search <社名B>
-ticker analyze <codeA> --years 6
-ticker analyze <codeB> --years 6
+ticker summarize <codeA> --years 6
+ticker summarize <codeB> --years 6
 ```
 
 比較結果は、同じ指標を横並びで説明する。数値差だけでなく、推移の方向、安定性、キャッシュフローとの整合、有報に書かれた要因を分けて述べる。

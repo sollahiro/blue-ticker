@@ -14,21 +14,21 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query", help="検索クエリ（銘柄名またはコード）")
     search_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
-    # analyze
-    analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
-    analyze_parser.add_argument("code", help="銘柄コード")
-    analyze_parser.add_argument("--years", type=int, help=f"分析年数（デフォルト: {ANALYZE_DEFAULT_YEARS}）")
-    analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
-    analyze_parser.add_argument(
+    # summarize
+    summarize_parser = subparsers.add_parser("summarize", help="銘柄の財務指標サマリーを表示")
+    summarize_parser.add_argument("code", help="銘柄コード")
+    summarize_parser.add_argument("--years", type=int, help=f"分析年数（デフォルト: {ANALYZE_DEFAULT_YEARS}）")
+    summarize_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
+    summarize_parser.add_argument(
         "--no-cache",
         action="store_true",
         help="分析結果キャッシュを使用せず再計算する",
     )
-    analyze_parser.add_argument(
+    summarize_parser.add_argument(
         "--half", action="store_true",
         help="上半期(H1)・下半期(H2)の半期推移を表示する"
     )
-    analyze_parser.add_argument(
+    summarize_parser.add_argument(
         "--include-debug-fields", dest="include_debug_fields", action="store_true",
         help="MetricSources・IBDComponents 等のデバッグフィールドを JSON に含める"
     )

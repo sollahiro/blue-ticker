@@ -9,7 +9,7 @@ def test_cli_contract_subcommands_exist():
     commands = set(subparsers_action.choices.keys())
     assert {
         "search",
-        "analyze",
+        "summarize",
         "config",
         "cache",
         "filings",

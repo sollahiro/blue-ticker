@@ -9,7 +9,7 @@ struct Ticker: AsyncParsableCommand {
         version: "26.6.0",
         subcommands: [
             SearchCommand.self,
-            AnalyzeCommand.self,
+            SummarizeCommand.self,
             ConfigCommand.self,
             CacheCommand.self,
             FilingsCommand.self,

@@ -1,5 +1,5 @@
 """
-cmd_analyze の出力フォーマットテスト
+cmd_summarize の出力フォーマットテスト
 
 テーブル形式で出力されるフィールドラベルの網羅性と順序を検証する。
 """
@@ -7,7 +7,7 @@ cmd_analyze の出力フォーマットテスト
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from blue_ticker.app.cli import cmd_analyze
+from blue_ticker.app.cli import cmd_summarize
 
 
 class _Args:
@@ -79,11 +79,11 @@ def test_table_output_contains_required_labels(capsys):
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_data,
         patch("blue_ticker.services.data_service.data_service.close", new_callable=AsyncMock),
-        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
+        patch("blue_ticker.app.cli.summarize._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_data.return_value = _MOCK_RESULT
-        asyncio.run(cmd_analyze(_Args()))
+        asyncio.run(cmd_summarize(_Args()))
 
     err = capsys.readouterr().err
     required = [
@@ -118,11 +118,11 @@ def test_table_output_labels_in_defined_order(capsys):
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_data,
         patch("blue_ticker.services.data_service.data_service.close", new_callable=AsyncMock),
-        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
+        patch("blue_ticker.app.cli.summarize._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_data.return_value = _MOCK_RESULT
-        asyncio.run(cmd_analyze(_Args()))
+        asyncio.run(cmd_summarize(_Args()))
 
     err = capsys.readouterr().err
     ordered_labels = [

@@ -5,7 +5,7 @@ BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 Pytho
 ## 主な機能
 
 - **銘柄検索**: 社名・証券コードから日本株を検索
-- **財務分析**: EDINET XBRL/HTML から年次・半期の財務指標を取得
+- **財務サマリー**: EDINET XBRL/HTML から年次・半期の財務指標を取得
 - **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
 - **キャッシュ管理**: EDINET 年次インデックス、XBRL 展開、分析結果キャッシュを確認・準備・整理
 
@@ -41,14 +41,14 @@ ticker search トヨタ
 ticker search 7203 --format json
 ```
 
-### 財務分析
+### 財務サマリー
 
 ```bash
 ticker cache status
-ticker analyze 7203
-ticker analyze 7203 --years 6
-ticker analyze 7203 --half
-ticker analyze 7203 --no-cache
+ticker summarize 7203
+ticker summarize 7203 --years 6
+ticker summarize 7203 --half
+ticker summarize 7203 --no-cache
 ```
 
 - `--years N`: 通期分析はデフォルト6年、半期分析はデフォルト3年
@@ -56,7 +56,7 @@ ticker analyze 7203 --no-cache
 - `--no-cache`: 分析結果キャッシュを使わず再計算。最新の財務省10年国債利回りをWACCへ反映したい場合にも使用
 - `--include-debug-fields`: `--format json` で `MetricSources` や `IBDComponents` などの内部検証フィールドも出力
 
-分析では ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、WACC、営業利益増減分解などを確認できます。
+ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、WACC、営業利益増減分解などを確認できます。
 
 ### EDINET書類
 

@@ -1,10 +1,10 @@
 import ArgumentParser
 import Foundation
 
-struct AnalyzeCommand: AsyncParsableCommand {
+struct SummarizeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "analyze",
-        abstract: "銘柄の財務データを分析します"
+        commandName: "summarize",
+        abstract: "銘柄の財務指標サマリーを表示します"
     )
 
     @Argument(help: "銘柄コード")

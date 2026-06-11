@@ -16,7 +16,7 @@ def _run_cli(monkeypatch, argv: list[str]) -> None:
 def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
     monkeypatch.setattr(sys, "argv", ["ticker", "search", "トヨタ", "--format", "json"])
 
-    with patch("blue_ticker.app.cli.analyze.master_data_manager.search", side_effect=KeyboardInterrupt):
+    with patch("blue_ticker.app.cli.search.master_data_manager.search", side_effect=KeyboardInterrupt):
         exit_code = main()
 
     captured = capsys.readouterr()
@@ -60,7 +60,7 @@ def test_main_search_outputs_json(monkeypatch, capsys) -> None:
         {"code": "7203", "name": "トヨタ自動車", "market": "プライム", "sector": "輸送用機器"},
     ]
 
-    with patch("blue_ticker.app.cli.analyze.master_data_manager.search", return_value=results) as search:
+    with patch("blue_ticker.app.cli.search.master_data_manager.search", return_value=results) as search:
         _run_cli(monkeypatch, ["search", "トヨタ", "--format", "json"])
 
     captured = capsys.readouterr()
@@ -69,7 +69,7 @@ def test_main_search_outputs_json(monkeypatch, capsys) -> None:
     search.assert_called_once_with("トヨタ")
 
 
-def test_main_analyze_outputs_json_and_closes_service(monkeypatch, capsys) -> None:
+def test_main_summarize_outputs_json_and_closes_service(monkeypatch, capsys) -> None:
     data_service = Mock()
     data_service.fetch_stock_basic_info.return_value = {
         "name": "トヨタ自動車",
@@ -90,9 +90,9 @@ def test_main_analyze_outputs_json_and_closes_service(monkeypatch, capsys) -> No
 
     with (
         patch("blue_ticker.services.data_service.data_service", data_service),
-        patch("blue_ticker.app.cli.analyze._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
+        patch("blue_ticker.app.cli.summarize._ensure_edinet_index", new_callable=AsyncMock, return_value=True),
     ):
-        _run_cli(monkeypatch, ["analyze", "7203", "--years", "2", "--format", "json", "--no-cache"])
+        _run_cli(monkeypatch, ["summarize", "7203", "--years", "2", "--format", "json", "--no-cache"])
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["metrics"]["years"][0]["CalculatedData"]["Sales"] == 1_000.0

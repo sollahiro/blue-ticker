@@ -16,14 +16,14 @@ def main() -> int:
         args = parser.parse_args()
 
         if args.command == "search":
-            from .analyze import cmd_search
+            from .search import cmd_search
 
             cmd_search(args)
-        elif args.command == "analyze":
+        elif args.command == "summarize":
             import asyncio
-            from .analyze import cmd_analyze
+            from .summarize import cmd_summarize
 
-            asyncio.run(cmd_analyze(args))
+            asyncio.run(cmd_summarize(args))
         elif args.command == "config":
             from .config import cmd_config
 
@@ -34,12 +34,12 @@ def main() -> int:
             cmd_cache(args, parser)
         elif args.command == "filings":
             import asyncio
-            from .analyze import cmd_filings
+            from .filings import cmd_filings
 
             asyncio.run(cmd_filings(args))
         elif args.command == "filing":
             import asyncio
-            from .analyze import cmd_filing
+            from .filings import cmd_filing
 
             asyncio.run(cmd_filing(args))
         elif args.command == "sector":

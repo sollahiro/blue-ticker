@@ -5,10 +5,9 @@ from collections.abc import Mapping
 import aiohttp
 from blue_ticker import __version__
 from blue_ticker.infrastructure.helpers import validate_stock_code
-from blue_ticker.services.master_data import master_data_manager
 from blue_ticker.utils.converters import extract_year_month
 from blue_ticker.utils.metrics_access import metric_view
-from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
+from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
 from blue_ticker.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
@@ -80,32 +79,8 @@ def _gross_profit_labels(calculated_data: Mapping[str, object]) -> tuple[str, st
     return gross_profit_label, gross_profit_margin_label, gross_margin_change_label
 
 
-def cmd_search(args):
-    """銘柄検索コマンド"""
-    if not args.query:
-        print("検索クエリを指定してください。", file=sys.stderr)
-        return
-
-    results = master_data_manager.search(args.query)
-    if not results:
-        print(f"'{args.query}' に一致する銘柄は見つかりませんでした。", file=sys.stderr)
-        return
-
-    if getattr(args, 'format', 'table') == 'json':
-        print(json.dumps(results, indent=2, ensure_ascii=False))
-        return
-
-    print(f"\n'{args.query}' の検索結果 ({len(results)}件):", file=sys.stderr)
-    print("-" * 60, file=sys.stderr)
-    print(f"{'コード':<8} {'銘柄名':<20} {'市場':<15} {'業種'}", file=sys.stderr)
-    print("-" * 60, file=sys.stderr)
-    for item in results:
-        print(f"{item['code']:<8} {item['name']:<20} {item['market']:<15} {item['sector']}", file=sys.stderr)
-    print("-" * 60, file=sys.stderr)
-
-
-async def cmd_analyze(args):
-    """銘柄分析コマンド"""
+async def cmd_summarize(args):
+    """財務指標サマリー表示コマンド"""
     from blue_ticker.services.data_service import data_service
 
     try:
@@ -413,73 +388,6 @@ async def cmd_analyze(args):
 
         print("\n定性情報は ticker filing コマンドで抽出できます。", file=sys.stderr)
 
-    except ValueError as e:
-        print(f"エラー: {e}", file=sys.stderr)
-    except aiohttp.ClientError as e:
-        print(f"エラー: {e}", file=sys.stderr)
-        logger.exception(e)
-    finally:
-        await data_service.close()
-
-
-async def cmd_filings(args):
-    """EDINET書類一覧コマンド"""
-    from blue_ticker.services.data_service import data_service
-
-    try:
-        code = validate_stock_code(args.code)
-        years = getattr(args, "years", EDINET_FILINGS_DEFAULT_YEARS)
-        if years <= 0:
-            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
-            return
-        docs = await data_service.search_filings(
-            code,
-            max_years=years,
-            doc_types=["120", "130", "140", "150", "160", "170"],
-            max_documents=10,
-        )
-        if not docs:
-            print(f"書類が見つかりませんでした: {code}", file=sys.stderr)
-            return
-        if args.format == "json":
-            print(json.dumps(docs, indent=2, ensure_ascii=False))
-        else:
-            print(f"\n[EDINET書類一覧] {code} ({len(docs)}件)", file=sys.stderr)
-            print("-" * 80, file=sys.stderr)
-            print(f"{'書類ID':<16} {'種別':<6} {'提出日時':<20} {'書類名'}", file=sys.stderr)
-            print("-" * 80, file=sys.stderr)
-            for doc in docs:
-                print(
-                    f"{doc.get('docID',''):<16}"
-                    f" {doc.get('docTypeCode',''):<6}"
-                    f" {doc.get('submitDateTime',''):<20}"
-                    f" {doc.get('docDescription','')}",
-                    file=sys.stderr,
-                )
-            print("-" * 80, file=sys.stderr)
-    except ValueError as e:
-        print(f"エラー: {e}", file=sys.stderr)
-    except aiohttp.ClientError as e:
-        print(f"エラー: {e}", file=sys.stderr)
-        logger.exception(e)
-    finally:
-        await data_service.close()
-
-
-async def cmd_filing(args):
-    """EDINET書類抽出コマンド"""
-    from blue_ticker.services.data_service import data_service
-
-    try:
-        code = validate_stock_code(args.code)
-        doc_id = getattr(args, "doc_id", None)
-        sections = getattr(args, "sections", None) or []
-        result = await data_service.extract_filing_content(
-            code,
-            doc_id=doc_id or None,
-            sections=sections or None,
-        )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
     except ValueError as e:
         print(f"エラー: {e}", file=sys.stderr)
     except aiohttp.ClientError as e:
