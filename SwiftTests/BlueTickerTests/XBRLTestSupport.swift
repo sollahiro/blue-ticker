@@ -68,9 +68,7 @@ enum XBRLTestSupport {
         extraFiles: [String: String] = [:],
         _ body: (URL) throws -> Void
     ) rethrows {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blt-test-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let dir = try? ServiceTestSupport.makeTempDir() else { return }
         defer { try? FileManager.default.removeItem(at: dir) }
 
         if let xml = xml {

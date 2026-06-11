@@ -9,6 +9,8 @@
 // 移植対象外:
 // - test_client_accepts_cache_backend_boundary（Swift はバックエンド抽象を持たない）
 // - test_resolve_ca_bundle_*（URLSession は CA バンドル解決を OS に委ねるため該当コードなし）
+// - フェッチ回数のアサーション（fetch_dates カウント等）はフェッチをモックできないため検証不能。
+//   「キャッシュがあればリクエストを発行しない」は結果の正しさ（nil でないこと）で代替確認する
 
 import XCTest
 @testable import BlueTicker
@@ -81,6 +83,8 @@ final class EdinetClientTests: XCTestCase {
     }
 
     func testDocumentsForDatePrefersStaleSearchCache() async throws {
+        // Python は「リクエスト不発行」を検証するが、Swift では観測できないため
+        // 「取得失敗時に期限切れキャッシュへフォールバックする」ことを検証する
         // hit TTL 0 → 保存直後でも期限切れ。API キーなし → 取得失敗 → 期限切れキャッシュへフォールバック
         let staleStore = EdinetCacheStore(cacheDir: tmpDir, searchHitTTLDays: 0)
         let staleClient = EdinetAPIClient(apiKey: nil, cacheStore: staleStore)
