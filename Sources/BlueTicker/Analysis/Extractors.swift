@@ -2,6 +2,7 @@
 // Python の blue_ticker/analysis/{income_statement,cash_flow,balance_sheet,...}.py 相当
 
 import Foundation
+import SwiftSoup
 
 // MARK: - Result Types
 
@@ -76,6 +77,7 @@ struct TaxExpenseResult {
     var incomeTax: Double?
     var effectiveTaxRate: Double?
     var accountingStandard: String
+    var method: String
 }
 
 struct InterestExpenseResult {
@@ -240,9 +242,9 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 直接タグで試行
-        let directItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.grossProfitDirectTags)
-        if directItem.current != nil {
+        // 直接法: GrossProfit タグ
+        let directItem = resolveItem(fieldSet, tags: Xbrl.grossProfitDirectTags)
+        if directItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: directItem.current,
                 grossProfitPrior: directItem.prior,
@@ -252,9 +254,14 @@ enum GrossProfitExtractor {
             )
         }
 
+        // 銀行業: 連結業務粗利益を構成要素から積み上げ
+        if let bankGP = extractBankBusinessGrossProfit(fieldSet: fieldSet, accountingStandard: accountingStandard) {
+            return bankGP
+        }
+
         // 営業総利益（倉庫・運輸等）
-        let opGpItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
-        if opGpItem.current != nil {
+        let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
+        if opGpItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: opGpItem.current,
                 grossProfitPrior: opGpItem.prior,
@@ -264,30 +271,50 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 銀行業: 連結業務粗利益を構成要素から積み上げ
-        if let bankGP = extractBankBusinessGrossProfit(fieldSet: fieldSet, accountingStandard: accountingStandard) {
-            return bankGP
-        }
-
-        // 計算法: 売上高 − 売上原価
         let salesItem = resolveItem(fieldSet, tags: Xbrl.grossProfitSalesTags)
         let costsItem = resolveItem(fieldSet, tags: Xbrl.grossProfitCostsTags)
-        if let s = salesItem.current, let c = costsItem.current {
-            let gp = s - c
-            let gpPrior: Double? = salesItem.prior != nil && costsItem.prior != nil
-                ? salesItem.prior! - costsItem.prior! : nil
-            return GrossProfitResult(
-                grossProfit: gp,
-                grossProfitPrior: gpPrior,
-                grossProfitLabel: nil,
-                method: "derived",
-                accountingStandard: accountingStandard
-            )
+
+        // IFRS Summary型: 売上原価タグが存在しない場合、TextBlockから粗利益を抽出する
+        if accountingStandard == "IFRS", costsItem.tag == nil,
+           let dir = xbrlDir,
+           let textblockResult = extractIfrsGPFromTextblock(in: dir) {
+            return textblockResult
+        }
+
+        // 計算法: 売上高 − 売上原価（売上原価タグがない場合は 0 扱い）
+        if salesItem.tag != nil {
+            let gpCurrent: Double? = salesItem.current.map { $0 - (costsItem.current ?? 0.0) }
+            let gpPrior: Double? = salesItem.prior.map { $0 - (costsItem.prior ?? 0.0) }
+            if gpCurrent != nil || gpPrior != nil {
+                return GrossProfitResult(
+                    grossProfit: gpCurrent,
+                    grossProfitPrior: gpPrior,
+                    grossProfitLabel: nil,
+                    method: "computed",
+                    accountingStandard: accountingStandard
+                )
+            }
         }
 
         return GrossProfitResult(
             grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
             method: "not_found", accountingStandard: accountingStandard
+        )
+    }
+
+    /// IFRS連結損益計算書TextBlockから売上総利益を抽出する。
+    private static func extractIfrsGPFromTextblock(in xbrlDir: URL) -> GrossProfitResult? {
+        let table = XBRLUtils.extractIfrsTextblockTable(
+            in: xbrlDir,
+            textblockTag: "ConsolidatedStatementOfIncomeIFRSTextBlock"
+        )
+        guard let gp = table["売上総利益"], gp.current != nil || gp.prior != nil else { return nil }
+        return GrossProfitResult(
+            grossProfit: gp.current.map { $0 * Financial.millionYen },
+            grossProfitPrior: gp.prior.map { $0 * Financial.millionYen },
+            grossProfitLabel: nil,
+            method: "ifrs_textblock",
+            accountingStandard: "IFRS"
         )
     }
 
@@ -348,47 +375,76 @@ enum OperatingProfitExtractor {
             )
         }
 
-        var opItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.operatingProfitDirectTags)
-        var label = "営業利益"
-        var method = "direct"
-
-        if opItem.current == nil && opItem.prior == nil {
-            // 経常利益フォールバック（金融機関等）
-            opItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.ordinaryIncomeTags)
-            if opItem.current != nil || opItem.prior != nil {
-                label = "経常利益"
-                method = "ordinary_income"
-            }
+        // 直接法: OPERATING_PROFIT_DIRECT_TAGS
+        let opItem = resolveItem(fieldSet, tags: Xbrl.operatingProfitDirectTags)
+        if opItem.tag != nil {
+            let sga = resolveSGA(fieldSet)
+            return OperatingProfitResult(
+                operatingProfit: opItem.current,
+                operatingProfitPrior: opItem.prior,
+                sga: sga.current,
+                sgaPrior: sga.prior,
+                label: "営業利益",
+                method: "direct",
+                accountingStandard: accountingStandard
+            )
         }
 
-        // SGA
-        var sgaItem = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
-        if sgaItem.current == nil {
-            // 販売費 + 一般管理費で積み上げ
-            let sell = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
-            let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
-            if sell.current != nil || ga.current != nil {
-                let c: Double? = (sell.current ?? 0) + (ga.current ?? 0) > 0
-                    ? (sell.current ?? 0) + (ga.current ?? 0) : nil
-                let p: Double? = (sell.prior != nil || ga.prior != nil)
-                    ? (sell.prior ?? 0) + (ga.prior ?? 0) : nil
-                sgaItem = ResolvedItem(tag: "sell+ga", current: c, prior: p)
-            }
+        // 計算法: GrossProfit − SGA（OperatingProfitLossIFRS が存在しない IFRS 企業向け）
+        let computed = deriveSubtraction(
+            fieldSet,
+            minuendTags: Xbrl.grossProfitDirectTags,
+            subtrahendTags: Xbrl.sgaDirectTags
+        )
+        if computed.current != nil || computed.prior != nil {
+            let sga = resolveSGA(fieldSet)
+            return OperatingProfitResult(
+                operatingProfit: computed.current,
+                operatingProfitPrior: computed.prior,
+                sga: sga.current,
+                sgaPrior: sga.prior,
+                label: "営業利益",
+                method: "computed",
+                accountingStandard: accountingStandard
+            )
         }
 
-        if opItem.current == nil && opItem.prior == nil {
-            method = "not_found"
+        // 経常利益フォールバック（J-GAAP 金融機関向け）
+        // IFRS企業では連結コンテキストに経常利益タグが残存しても使わない。
+        if accountingStandard != "IFRS" {
+            let oiItem = resolveItem(fieldSet, tags: Xbrl.ordinaryIncomeTags)
+            if oiItem.tag != nil {
+                return OperatingProfitResult(
+                    operatingProfit: oiItem.current,
+                    operatingProfitPrior: oiItem.prior,
+                    sga: nil,
+                    sgaPrior: nil,
+                    label: "経常利益",
+                    method: "ordinary_income",
+                    accountingStandard: accountingStandard
+                )
+            }
         }
 
         return OperatingProfitResult(
-            operatingProfit: opItem.current,
-            operatingProfitPrior: opItem.prior,
-            sga: sgaItem.current,
-            sgaPrior: sgaItem.prior,
-            label: label,
-            method: method,
-            accountingStandard: accountingStandard
+            operatingProfit: nil, operatingProfitPrior: nil,
+            sga: nil, sgaPrior: nil,
+            label: "営業利益", method: "not_found", accountingStandard: accountingStandard
         )
+    }
+
+    /// SGA を解決する。結合タグ優先、なければ販売費＋一般管理費を合算。
+    private static func resolveSGA(_ fieldSet: FieldSet) -> (current: Double?, prior: Double?) {
+        let combined = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
+        if combined.tag != nil { return (combined.current, combined.prior) }
+
+        let selling = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
+        let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
+        guard selling.current != nil || ga.current != nil else { return (nil, nil) }
+        let current = (selling.current ?? 0.0) + (ga.current ?? 0.0)
+        let prior: Double? = (selling.prior != nil || ga.prior != nil)
+            ? (selling.prior ?? 0.0) + (ga.prior ?? 0.0) : nil
+        return (current, prior)
     }
 }
 
@@ -602,13 +658,20 @@ enum TaxExpenseExtractor {
                 }
             }
 
+            guard pretax.current != nil || tax.current != nil else {
+                return TaxExpenseResult(
+                    pretaxIncome: nil, incomeTax: nil, effectiveTaxRate: nil,
+                    accountingStandard: "US-GAAP", method: "not_found"
+                )
+            }
             let rate: Double? = (pretax.current != nil && tax.current != nil && pretax.current != 0)
                 ? tax.current! / pretax.current! : nil
             return TaxExpenseResult(
                 pretaxIncome: pretax.current,
                 incomeTax: tax.current,
                 effectiveTaxRate: rate,
-                accountingStandard: "US-GAAP"
+                accountingStandard: "US-GAAP",
+                method: "usgaap_html"
             )
         }
 
@@ -623,6 +686,13 @@ enum TaxExpenseExtractor {
             taxItem = resolveItem(fieldSet, tags: Xbrl.incomeTaxJGAAPTags)
         }
 
+        guard pretaxItem.tag != nil || taxItem.tag != nil else {
+            return TaxExpenseResult(
+                pretaxIncome: nil, incomeTax: nil, effectiveTaxRate: nil,
+                accountingStandard: accountingStandard, method: "not_found"
+            )
+        }
+
         let rate: Double?
         if let pt = pretaxItem.current, let tx = taxItem.current, pt != 0 {
             rate = tx / pt
@@ -634,7 +704,8 @@ enum TaxExpenseExtractor {
             pretaxIncome: pretaxItem.current,
             incomeTax: taxItem.current,
             effectiveTaxRate: rate,
-            accountingStandard: accountingStandard
+            accountingStandard: accountingStandard,
+            method: "computed"
         )
     }
 }
@@ -662,11 +733,60 @@ enum InterestExpenseExtractor {
             ? Xbrl.interestExpenseIFRSTags
             : Xbrl.interestExpenseJGAAPTags
         let item = resolveItem(fieldSet, tags: tags)
-        let method = item.tag != nil ? "direct" : "not_found"
+        if item.tag != nil {
+            return InterestExpenseResult(
+                current: item.current, prior: item.prior,
+                method: "direct", accountingStandard: accountingStandard
+            )
+        }
+
+        // IFRS注記の文章中に支払利息が出るケース（トヨタ型）を拾う
+        if let dir = xbrlDir, let textblock = extractIfrsIEFromTextblock(in: dir) {
+            return textblock
+        }
+
         return InterestExpenseResult(
-            current: item.current, prior: item.prior,
-            method: method, accountingStandard: accountingStandard
+            current: nil, prior: nil,
+            method: "not_found", accountingStandard: accountingStandard
         )
+    }
+
+    /// IFRS注記テキストブロックから支払利息を抽出する。
+    /// 「支払利息は、…それぞれ X百万円 および Y百万円」の文章パターン（前期・当期の順）。
+    private static func extractIfrsIEFromTextblock(in xbrlDir: URL) -> InterestExpenseResult? {
+        let pattern = try? NSRegularExpression(
+            pattern: "支払利息は、.*?それぞれ\\s*([0-9,]+)百万円\\s*および\\s*([0-9,]+)百万円",
+            options: [.dotMatchesLineSeparators]
+        )
+        guard let pattern = pattern,
+              let enumerator = FileManager.default.enumerator(at: xbrlDir, includingPropertiesForKeys: nil)
+        else { return nil }
+
+        let candidates = enumerator.compactMap { $0 as? URL }
+            .filter { ["htm", "html", "xbrl"].contains($0.pathExtension.lowercased()) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        for file in candidates {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let content = String(decoding: data, as: UTF8.self)
+            guard content.contains("支払利息"), content.contains("百万円") else { continue }
+
+            let text = (try? SwiftSoup.parse(content).text()) ?? content
+            guard let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let priorRange = Range(match.range(at: 1), in: text),
+                  let currentRange = Range(match.range(at: 2), in: text),
+                  let prior = Double(text[priorRange].replacingOccurrences(of: ",", with: "")),
+                  let current = Double(text[currentRange].replacingOccurrences(of: ",", with: ""))
+            else { continue }
+
+            return InterestExpenseResult(
+                current: current * Financial.millionYen,
+                prior: prior * Financial.millionYen,
+                method: "ifrs_textblock",
+                accountingStandard: "IFRS"
+            )
+        }
+        return nil
     }
 }
 
