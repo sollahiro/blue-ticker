@@ -224,6 +224,8 @@ Python サービス層テスト 5 ファイルを XCTest へ移植（共通ヘ�
 
 **移植過程で発見・修正したパリティバグ**: `EdinetAPIClient` が `Calendar.current`（ローカル TZ）と UTC の ISO フォーマッタを混在させており、JST 環境では年次インデックスの日付ラベルが Python 版と 1 日ずれていた（Python と共有するキャッシュの整合性に影響）。UTC カレンダーに統一して修正済み。
 
+**設計判断（2026-06-12）**: EDINET 日付処理は **UTC 固定を最終形**とする。UTC の「今日」は JST 0:00〜8:59 の間まだ前日のため当日提出分の取得が最大 1 日遅れるが、これは許容する（次回実行時に catchup で埋まる）。Asia/Tokyo 固定への一本化は行わない。`CachePruner` / `CacheCommand` 等に残る `Calendar.current` も影響は同じ日単位境界のみのため統一不要。
+
 **移植対象外（Swift に該当機構がないもの）**: `test_edinet_doc_filter` / `test_edinet_docs_cache_upgrade` / `test_edinet_fetcher_boundary` / `test_data_service` / `test_dup_deduplication`（Python 側のサーバー・DataService・doc_filter モジュール固有）、`file_lock` の待機通知テスト（time モック前提）、CA バンドル解決テスト（URLSession は OS に委譲）。
 
 ### Phase 4 ユニットテスト移植（2026-06-12）
