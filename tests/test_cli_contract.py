@@ -10,6 +10,7 @@ def test_cli_contract_subcommands_exist():
     assert {
         "search",
         "summarize",
+        "analyze",
         "config",
         "cache",
         "filings",

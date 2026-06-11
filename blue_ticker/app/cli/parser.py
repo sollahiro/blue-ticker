@@ -33,6 +33,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="MetricSources・IBDComponents 等のデバッグフィールドを JSON に含める"
     )
 
+    # analyze
+    analyze_parser = subparsers.add_parser("analyze", help="分析指標（ウォーターフォール分解等）を出力")
+    analyze_parser.add_argument("code", help="銘柄コード")
+    analyze_parser.add_argument("--years", type=int, help=f"分析年数（デフォルト: {ANALYZE_DEFAULT_YEARS}）")
+    analyze_parser.add_argument(
+        "--indicators",
+        nargs="+",
+        choices=["business-profit", "roic", "roe"],
+        help="出力する分析指標（省略時は全指標）",
+    )
+    analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
+    analyze_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="分析結果キャッシュを使用せず再計算する",
+    )
+
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
     filings_parser.add_argument("code", help="銘柄コード")

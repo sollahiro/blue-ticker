@@ -4,6 +4,7 @@ from .main import main
 
 if TYPE_CHECKING:
     from .parser import build_parser
+    from .analyze import cmd_analyze
     from .summarize import cmd_summarize
     from .search import cmd_search
     from .filings import cmd_filings, cmd_filing
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
 __all__ = [
     "main",
     "build_parser",
+    "cmd_analyze",
     "cmd_summarize",
     "cmd_search",
     "cmd_filings",
@@ -30,6 +32,10 @@ def __getattr__(name: str) -> object:
         from .parser import build_parser
 
         return build_parser
+    if name == "cmd_analyze":
+        from .analyze import cmd_analyze
+
+        return cmd_analyze
     if name == "cmd_summarize":
         from .summarize import cmd_summarize
 
@@ -42,6 +48,9 @@ def __getattr__(name: str) -> object:
         from . import filings
 
         return getattr(filings, name)
+    if name == "cmd_inspect":
+    
+        return cmd_inspect
     if name == "cmd_config":
         from .config import cmd_config
 

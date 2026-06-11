@@ -6,6 +6,7 @@ BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 Pytho
 
 - **銘柄検索**: 社名・証券コードから日本株を検索
 - **財務サマリー**: EDINET XBRL/HTML から年次・半期の財務指標を取得
+- **分析指標出力**: ROIC・ROE・事業利益前年差のウォーターフォール分解を出力
 - **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
 - **キャッシュ管理**: EDINET 年次インデックス、XBRL 展開、分析結果キャッシュを確認・準備・整理
 
@@ -57,6 +58,17 @@ ticker summarize 7203 --no-cache
 - `--include-debug-fields`: `--format json` で `MetricSources` や `IBDComponents` などの内部検証フィールドも出力
 
 ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、WACC、営業利益増減分解などを確認できます。
+
+### 分析指標（ウォーターフォール分解）
+
+```bash
+ticker analyze 7203
+ticker analyze 7203 --years 6
+ticker analyze 7203 --indicators roic roe
+ticker analyze 7203 --format table
+```
+
+- `--indicators`: `business-profit`（事業利益前年差分解）、`roic`（NOPATマージン×投下資本回転率）、`roe`（デュポン3要因）から選択。省略時は全指標
 
 ### EDINET書類
 

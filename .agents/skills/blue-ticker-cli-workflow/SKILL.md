@@ -19,7 +19,7 @@ BLUE TICKER CLIで日本株を調査するときの実行手順を定める。�
 
 - 売買推奨はしない。事実、指標、提出書類の内容を整理し、最終判断はユーザーに委ねる。
 - BLUE TICKER CLIの出力を主情報源にする。数値を勝手に補完したり、CLIにない結論を断定しない。
-- `ticker summarize`、`ticker filings`、`ticker filing` を使う調査では、原則としてWeb検索を使わない。ユーザーが「ニュースも検索して」「Webも見て」などと明示した場合だけ、CLI結果とは別枠で扱う。
+- `ticker summarize`、`ticker analyze`、`ticker filings`、`ticker filing` を使う調査では、原則としてWeb検索を使わない。ユーザーが「ニュースも検索して」「Webも見て」などと明示した場合だけ、CLI結果とは別枠で扱う。
 - EDINET APIへの負荷を抑える。分析・書類抽出の前にはキャッシュ状態を確認し、必要な準備を先に済ませる。
 - 出力が長い場合は、重要な数値・変化・リスク記述を要約する。必要に応じて、実行したコマンドも明記する。
 
@@ -93,6 +93,24 @@ ticker summarize <code> --no-cache
 - 有利子負債、投下資本、純資産などの財務構造
 - 配当性向や株主還元に関わる項目
 - `DocID` が出ている場合は、有報抽出に使えること
+
+### 要因分解（ウォーターフォール）を見る
+
+ROIC・ROE・事業利益の前年差が「何によって」動いたかを見るときは `ticker analyze` を使う。
+
+```bash
+ticker analyze <code> --years 6
+ticker analyze <code> --indicators roic roe
+ticker analyze <code> --indicators business-profit --format table
+```
+
+| indicator | 内容 |
+|---|---|
+| `business-profit` | 事業利益前年差を売上差影響・粗利率差影響・販管費差影響に分解 |
+| `roic` | ROIC前年差をNOPATマージン差影響・投下資本回転率差影響に分解 |
+| `roe` | ROE前年差をデュポン3要因（純利益率・総資産回転率・財務レバレッジ）に分解 |
+
+ウォーターフォールチャートを作る場合は、このコマンドのJSON出力をデータソースにする。
 
 #### 体系的な分析観点
 
