@@ -34,7 +34,9 @@ Linux では現状でも Keystore がシステムキーチェーンに対応し�
 | `asyncio.run(...)` | `Task.detached { }` + `RunLoop.main.run()` |
 | `print` / テーブル出力 | `Swift.print` / `String` フォーマット |
 
-コマンド体系（search / analyze / config / cache / filings / filing / sector）は `AsyncParsableCommand` で直接対応できる。
+コマンド体系（search / summarize / analyze / inspect / config / cache / filings / filing / sector）は `AsyncParsableCommand` で直接対応できる。
+
+> 注: Python 側で旧 `analyze`（全指標テーブル）は `summarize` にリネーム済みで、Swift 側も `SummarizeCommand` として同期済み。新 `analyze`（ウォーターフォール分解出力）と `inspect`（異常値候補スキャン）は Swift 未移植（TODO）。
 
 ---
 
@@ -286,7 +288,7 @@ Phase 4   : HTML パース（IFRS リース負債・US-GAAP 連結）+ Python �
 Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
-Phase 3 完了時点で全コマンド（`ticker search`・`ticker filings`・`ticker cache`・`ticker config`・`ticker analyze`・`ticker filing`）が純 Swift で動作する。  
+Phase 3 完了時点で全コマンド（`ticker search`・`ticker filings`・`ticker cache`・`ticker config`・`ticker summarize`（旧 `analyze`）・`ticker filing`）が純 Swift で動作する。  
 Phase 4 の HTML パース完了後に IFRS リース負債・US-GAAP 連結財務諸表が完全対応となる。
 
 **利点**:

@@ -11,6 +11,7 @@ def test_cli_contract_subcommands_exist():
         "search",
         "summarize",
         "analyze",
+        "inspect",
         "config",
         "cache",
         "filings",

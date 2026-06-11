@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="分析結果キャッシュを使用せず再計算する",
     )
 
+    # inspect
+    inspect_parser = subparsers.add_parser("inspect", help="分析キャッシュを走査して異常値候補を検出")
+    inspect_parser.add_argument("codes", nargs="*", help="銘柄コード（省略時はキャッシュ済み全銘柄）")
+    inspect_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
+
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
     filings_parser.add_argument("code", help="銘柄コード")

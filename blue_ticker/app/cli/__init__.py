@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .summarize import cmd_summarize
     from .search import cmd_search
     from .filings import cmd_filings, cmd_filing
+    from .inspect import cmd_inspect
     from .config import cmd_config
     from blue_ticker.infrastructure.settings import settings_store
 
@@ -19,6 +20,7 @@ __all__ = [
     "cmd_search",
     "cmd_filings",
     "cmd_filing",
+    "cmd_inspect",
     "cmd_config",
 ]
 
@@ -49,7 +51,8 @@ def __getattr__(name: str) -> object:
 
         return getattr(filings, name)
     if name == "cmd_inspect":
-    
+        from .inspect import cmd_inspect
+
         return cmd_inspect
     if name == "cmd_config":
         from .config import cmd_config

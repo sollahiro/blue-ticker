@@ -29,6 +29,10 @@ def main() -> int:
             from .analyze import cmd_analyze
 
             asyncio.run(cmd_analyze(args))
+        elif args.command == "inspect":
+            from .inspect import cmd_inspect
+
+            cmd_inspect(args)
         elif args.command == "config":
             from .config import cmd_config
 
