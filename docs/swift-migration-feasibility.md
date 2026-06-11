@@ -195,7 +195,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
-| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。残: CI 整備 |
+| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。macOS Swift CI ジョブ追加済み。残: Linux CI（下記） |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
 ### Phase 4 HTML パース実装範囲（2026-06-11）
@@ -207,6 +207,12 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 **未移植（Python 側にのみ存在）**: 株主資本等変動計算書 HTML からの自己株式取得（`parse_usgaap_html_equity_cf_fields`）。Swift 側に自己株式取得の出力経路がまだないため、対応する機能追加時に移植する。
 （IFRS 注記文章からの支払利息抽出（トヨタ型）と IFRS PL TextBlock からの粗利益抽出はユニットテスト移植時に Swift へ移植済み）
+
+### Phase 4 CI 整備（2026-06-12）
+
+- `ci.yml` に `swift-macos` ジョブ（`swift test`、SwiftPM キャッシュ付き）を追加。macOS では全 204 テスト合格
+- Linux ビルド互換対応を実施: `FoundationNetworking`（URLSession）・`FoundationXML`（XMLParser）の条件付き import、`KeystoreError.keychainError(OSStatus)` の `#if canImport(Security)` ガード。swift:6.1 コンテナ（aarch64）で**ビルド成功**を確認
+- **未解決**: Linux でテスト実行が開始直後にハングする（CPU ほぼ 0%）。actor / セマフォまわりの Linux 固有挙動差を調査中。解消後に `swift-linux` CI ジョブ（swift:6.1 コンテナ）を追加する
 
 ### Phase 4 サービス層テスト移植（2026-06-12）
 
