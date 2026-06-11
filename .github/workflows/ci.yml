@@ -31,3 +31,18 @@ jobs:
 
       - name: Test
         run: poetry run pytest tests/ -q
+
+  swift-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-macos-${{ hashFiles('Package.resolved') }}
+
+      - name: Test
+        run: swift test
