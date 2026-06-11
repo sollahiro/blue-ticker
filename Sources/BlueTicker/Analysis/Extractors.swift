@@ -178,9 +178,12 @@ enum BalanceSheetExtractor {
             if resolved.tag == nil, let d = item.deriveMinus {
                 resolved = deriveSubtraction(fieldSet, minuendTags: d.minuend, subtrahendTags: d.subtrahend)
             }
-            // US-GAAP 非流動資産: XBRL 積み上げフォールバック
+            // US-GAAP 非流動資産: HTML 仮想タグ積み上げ → XBRL 積み上げフォールバック
             if item.field == "NonCurrentAssets" && resolved.current == nil {
-                resolved = resolveAggregate(fieldSet, componentTagLists: Xbrl.usgaapXbrlNCAComponents)
+                resolved = resolveAggregate(fieldSet, componentTagLists: Xbrl.usgaapHtmlNCAComponents)
+                if resolved.current == nil {
+                    resolved = resolveAggregate(fieldSet, componentTagLists: Xbrl.usgaapXbrlNCAComponents)
+                }
             }
 
             components.append((label: item.label, current: resolved.current, prior: resolved.prior))
@@ -219,7 +222,24 @@ enum BalanceSheetExtractor {
 
 enum GrossProfitExtractor {
 
-    static func extract(fieldSet: FieldSet, accountingStandard: String) -> GrossProfitResult {
+    static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> GrossProfitResult {
+        // US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
+        if accountingStandard == "US-GAAP" {
+            if let dir = xbrlDir, let fv = USGAAPHtml.extractGrossProfit(in: dir) {
+                return GrossProfitResult(
+                    grossProfit: fv.current,
+                    grossProfitPrior: fv.prior,
+                    grossProfitLabel: nil,
+                    method: "usgaap_html",
+                    accountingStandard: "US-GAAP"
+                )
+            }
+            return GrossProfitResult(
+                grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
+                method: "not_found", accountingStandard: "US-GAAP"
+            )
+        }
+
         // 直接タグで試行
         let directItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.grossProfitDirectTags)
         if directItem.current != nil {
@@ -306,6 +326,28 @@ enum GrossProfitExtractor {
 enum OperatingProfitExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> OperatingProfitResult {
+        // US-GAAP 企業: HTML 仮想タグ（USGAAPHtml.parsePLFields が注入）を使用
+        if accountingStandard == "US-GAAP" {
+            let opItem = resolveItem(fieldSet, tags: ["USGAAP_HTML_OperatingIncome"])
+            if opItem.current != nil || opItem.prior != nil {
+                let sgaItem = resolveItem(fieldSet, tags: ["USGAAP_HTML_SGA"])
+                return OperatingProfitResult(
+                    operatingProfit: opItem.current,
+                    operatingProfitPrior: opItem.prior,
+                    sga: sgaItem.current,
+                    sgaPrior: sgaItem.current != nil ? sgaItem.prior : nil,
+                    label: "営業利益",
+                    method: "usgaap_html",
+                    accountingStandard: "US-GAAP"
+                )
+            }
+            return OperatingProfitResult(
+                operatingProfit: nil, operatingProfitPrior: nil,
+                sga: nil, sgaPrior: nil,
+                label: "営業利益", method: "not_found", accountingStandard: "US-GAAP"
+            )
+        }
+
         var opItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.operatingProfitDirectTags)
         var label = "営業利益"
         var method = "direct"
@@ -354,77 +396,145 @@ enum OperatingProfitExtractor {
 
 enum IBDExtractor {
 
-    static func extract(fieldSet: FieldSet, accountingStandard: String) -> IBDResult {
+    // コンポーネント表示用ラベル（Python: COMPONENT_DEFINITIONS）
+    private static let componentDefs: [(label: String, tags: [String])] = [
+        ("短期借入金", ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
+        ("コマーシャル・ペーパー", ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"]),
+        ("短期社債", ["ShortTermBondsPayable"]),
+        ("1年内償還予定の社債", ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear",
+                                 "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
+        ("1年内返済予定の長期借入金", ["CurrentPortionOfLongTermLoansPayable",
+                                      "CurrentPortionOfLongTermBorrowingsCLIFRS",
+                                      "CurrentPortionOfLongTermDebtCLIFRS"]),
+        ("リース負債（流動）", ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"]),
+        ("社債", ["BondsPayable", "BondsPayableNCLIFRS"]),
+        ("長期借入金", ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"]),
+        ("リース負債（非流動）", ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"]),
+    ]
+
+    private static let tagToLabel: [String: String] = {
+        var map: [String: String] = [:]
+        for (label, tags) in componentDefs {
+            for tag in tags { map[tag] = label }
+        }
+        return map
+    }()
+
+    static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> IBDResult {
         // 銀行業: DepositsLiabilitiesBNK が存在すれば銀行業コンポーネント積み上げ
         if let bankResult = extractBankIBD(fieldSet: fieldSet, accountingStandard: accountingStandard) {
             return bankResult
         }
 
-        // 直接タグ
-        let directItem = resolveItem(fieldSet, tags: Xbrl.ibdDirectTags)
-        if let total = directItem.current {
-            return IBDResult(total: total, priorTotal: directItem.prior,
-                             components: [], method: "direct",
-                             accountingStandard: accountingStandard)
-        }
+        let resolved = resolveIBD(fieldSet)
+        var result: IBDResult
 
-        // IFRS 集約タグ（流動 + 非流動）
-        if accountingStandard == "IFRS" {
-            let clItem = resolveItem(fieldSet, tags: Xbrl.ibdIFRSCLTags)
-            let nclItem = resolveItem(fieldSet, tags: Xbrl.ibdIFRSNCLTags)
-            if clItem.current != nil || nclItem.current != nil {
-                let total = (clItem.current ?? 0) + (nclItem.current ?? 0)
-                let prior: Double? = (clItem.prior != nil || nclItem.prior != nil)
-                    ? (clItem.prior ?? 0) + (nclItem.prior ?? 0) : nil
-                return IBDResult(total: total, priorTotal: prior,
-                                 components: [], method: "ifrs_aggregate",
-                                 accountingStandard: accountingStandard)
+        if let tag = resolved.tag {
+            let components: [IBDComponentEntry] = tag.split(separator: "+").map { t in
+                let tagName = String(t)
+                let fv = fieldSet[tagName]
+                return (label: tagToLabel[tagName] ?? tagName,
+                        current: fv?.current, prior: fv?.prior)
             }
-        }
-
-        // コンポーネント積み上げ（流動 + 非流動）
-        var totalCurrent = 0.0
-        var totalPrior = 0.0
-        var currentFound = false
-        var priorFound = false
-        var components: [(label: String, current: Double?, prior: Double?)] = []
-
-        let componentDefs: [(label: String, tags: [String])] = [
-            ("短期借入金", ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
-            ("コマーシャル・ペーパー", ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"]),
-            ("短期社債", ["ShortTermBondsPayable"]),
-            ("1年内償還予定の社債", ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear",
-                                     "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
-            ("1年内返済予定の長期借入金", ["CurrentPortionOfLongTermLoansPayable",
-                                          "CurrentPortionOfLongTermBorrowingsCLIFRS",
-                                          "CurrentPortionOfLongTermDebtCLIFRS"]),
-            ("リース負債（流動）", ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"]),
-            ("社債", ["BondsPayable", "BondsPayableNCLIFRS"]),
-            ("長期借入金", ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"]),
-            ("リース負債（非流動）", ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"]),
-        ]
-
-        for (label, tags) in componentDefs {
-            let item = resolveItem(fieldSet, tags: tags)
-            if item.current != nil || item.prior != nil {
-                components.append((label: label, current: item.current, prior: item.prior))
-                if let c = item.current { totalCurrent += c; currentFound = true }
-                if let p = item.prior { totalPrior += p; priorFound = true }
-            }
-        }
-
-        if currentFound {
-            return IBDResult(
-                total: totalCurrent,
-                priorTotal: priorFound ? totalPrior : nil,
+            result = IBDResult(
+                total: resolved.current,
+                priorTotal: resolved.prior,
                 components: components,
-                method: "components",
+                method: "field_parser",
                 accountingStandard: accountingStandard
             )
+        } else if accountingStandard == "IFRS",
+                  let dir = xbrlDir,
+                  let textblockResult = IFRSLease.extractIBDFromTextblock(xbrlDir: dir) {
+            // IFRS Summary型XBRLでは連結借入金タグが存在しないため、TextBlockから抽出する
+            result = textblockResult
+        } else if let dir = xbrlDir, hasLargeXbrlFile(in: dir) {
+            // インスタンス文書が十分大きいのにIBDタグが皆無 → 無借金企業とみなす
+            result = IBDResult(total: 0.0, priorTotal: 0.0, components: [],
+                               method: "zero_debt", accountingStandard: accountingStandard)
+            if accountingStandard != "IFRS" { return result }
+        } else {
+            return IBDResult(total: nil, priorTotal: nil, components: [],
+                             method: "not_found", accountingStandard: accountingStandard)
         }
 
-        return IBDResult(total: nil, priorTotal: nil, components: [],
-                         method: "not_found", accountingStandard: accountingStandard)
+        // IFRS適用企業: リース負債を追加（XBRLタグで既に取得済みの場合はスキップ）
+        if accountingStandard == "IFRS" {
+            let resolvedTags = Set((resolved.tag ?? "").split(separator: "+").map(String.init))
+            if !resolvedTags.isDisjoint(with: IFRSLease.leaseXbrlTags) {
+                return result
+            }
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fieldSet, xbrlDir: xbrlDir)
+            if lease.current != nil || lease.prior != nil {
+                result = IBDResult(
+                    total: (result.total ?? 0) + (lease.current ?? 0),
+                    priorTotal: (result.priorTotal ?? 0) + (lease.prior ?? 0),
+                    components: result.components + lease.components,
+                    method: result.method + "+lease_textblock",
+                    accountingStandard: accountingStandard
+                )
+            }
+        }
+
+        // US-GAAP適用企業: オペレーティング・リース負債を追加（ASC 842）
+        if accountingStandard == "US-GAAP" {
+            let lease = extractUSGAAPLeaseLiabilities(fieldSet: fieldSet)
+            if let leaseC = lease.current {
+                result = IBDResult(
+                    total: (result.total ?? 0) + leaseC,
+                    priorTotal: lease.prior != nil
+                        ? (result.priorTotal ?? 0) + lease.prior! : result.priorTotal,
+                    components: result.components + lease.components,
+                    method: result.method + "+lease_html",
+                    accountingStandard: accountingStandard
+                )
+            }
+        }
+
+        return result
+    }
+
+    /// 解決順: 直接法 → IFRS集約タグ → コンポーネント積み上げ → US-GAAP HTML仮想タグ。
+    private static func resolveIBD(_ fieldSet: FieldSet) -> ResolvedItem {
+        let direct = resolveItem(fieldSet, tags: Xbrl.ibdDirectTags)
+        if direct.tag != nil { return direct }
+
+        let ifrsAgg = resolveAggregate(fieldSet, componentTagLists: [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags])
+        if ifrsAgg.tag != nil { return ifrsAgg }
+
+        let comp = resolveAggregate(fieldSet, componentTagLists: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents)
+        if comp.tag != nil { return comp }
+
+        return resolveAggregate(fieldSet, componentTagLists: [["USGAAP_HTML_IBDCurrent"], ["USGAAP_HTML_IBDNonCurrent"]])
+    }
+
+    /// US-GAAP BS HTMLから取得済みのオペレーティング・リース負債残高を返す（ASC 842）。
+    private static func extractUSGAAPLeaseLiabilities(
+        fieldSet: FieldSet
+    ) -> (current: Double?, prior: Double?, components: [IBDComponentEntry]) {
+        let clFV = resolveItem(fieldSet, tags: ["USGAAP_HTML_LeaseLiabilitiesCurrent"])
+        let nclFV = resolveItem(fieldSet, tags: ["USGAAP_HTML_LeaseLiabilitiesNonCurrent"])
+        guard clFV.current != nil || nclFV.current != nil else { return (nil, nil, []) }
+
+        let totalC = (clFV.current ?? 0) + (nclFV.current ?? 0)
+        let hasP = clFV.prior != nil || nclFV.prior != nil
+        let totalP: Double? = hasP ? (clFV.prior ?? 0) + (nclFV.prior ?? 0) : nil
+        var components: [IBDComponentEntry] = []
+        if clFV.current != nil {
+            components.append((label: "リース負債（流動）", current: clFV.current, prior: clFV.prior))
+        }
+        if nclFV.current != nil {
+            components.append((label: "リース負債（非流動）", current: nclFV.current, prior: nclFV.prior))
+        }
+        return (totalC, totalP, components)
+    }
+
+    /// インスタンス文書に 100KB 超のファイルがあるか（zero_debt 判定）。
+    private static func hasLargeXbrlFile(in dir: URL) -> Bool {
+        XBRLUtils.findXbrlFiles(in: dir).contains { url in
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            return (size ?? 0) > 100_000
+        }
     }
 
     private static func extractBankIBD(fieldSet: FieldSet, accountingStandard: String) -> IBDResult? {
@@ -478,6 +588,30 @@ enum EmployeesExtractor {
 enum TaxExpenseExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> TaxExpenseResult {
+        // US-GAAP 企業: HTML 仮想タグ（USGAAPHtml.parsePLFields が注入）を使用
+        if accountingStandard == "US-GAAP" {
+            let pretax = resolveItem(fieldSet, tags: ["USGAAP_HTML_PreTaxIncome"])
+            var tax = resolveItem(fieldSet, tags: ["USGAAP_HTML_IncomeTax"])
+
+            // 合計行がない場合は個別成分（法人税・調整額）で補完する
+            if tax.current == nil {
+                let taxC = resolveItem(fieldSet, tags: ["USGAAP_HTML_IncomeTaxCurrent"])
+                let taxD = resolveItem(fieldSet, tags: ["USGAAP_HTML_IncomeTaxDeferred"])
+                if taxC.current != nil || taxD.current != nil {
+                    tax.current = (taxC.current ?? 0) + (taxD.current ?? 0)
+                }
+            }
+
+            let rate: Double? = (pretax.current != nil && tax.current != nil && pretax.current != 0)
+                ? tax.current! / pretax.current! : nil
+            return TaxExpenseResult(
+                pretaxIncome: pretax.current,
+                incomeTax: tax.current,
+                effectiveTaxRate: rate,
+                accountingStandard: "US-GAAP"
+            )
+        }
+
         let pretaxItem: ResolvedItem
         let taxItem: ResolvedItem
 
@@ -509,7 +643,21 @@ enum TaxExpenseExtractor {
 
 enum InterestExpenseExtractor {
 
-    static func extract(fieldSet: FieldSet, accountingStandard: String) -> InterestExpenseResult {
+    static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> InterestExpenseResult {
+        // US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
+        if accountingStandard == "US-GAAP" {
+            if let dir = xbrlDir, let fv = USGAAPHtml.extractInterestExpense(in: dir) {
+                return InterestExpenseResult(
+                    current: fv.current, prior: fv.prior,
+                    method: "usgaap_html", accountingStandard: "US-GAAP"
+                )
+            }
+            return InterestExpenseResult(
+                current: nil, prior: nil,
+                method: "not_found", accountingStandard: "US-GAAP"
+            )
+        }
+
         let tags = accountingStandard == "IFRS"
             ? Xbrl.interestExpenseIFRSTags
             : Xbrl.interestExpenseJGAAPTags
@@ -527,22 +675,29 @@ enum InterestExpenseExtractor {
 enum TangibleFixedAssetsExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> TangibleFixedAssetsResult {
-        // 直接タグ
-        let directItem = resolveItem(fieldSet, tags: Xbrl.ppeTotalTags)
-        if let v = directItem.current {
-            return TangibleFixedAssetsResult(total: v, method: "direct",
-                                              accountingStandard: accountingStandard)
+        let total: Double?
+        switch accountingStandard {
+        case "IFRS":
+            // 直接タグ → 取得原価 + 減価償却累計（負値）のフォールバック
+            if let direct = resolveItem(fieldSet, tags: Xbrl.ppeTotalIFRSDirectTags).current {
+                total = direct
+            } else if let cost = resolveItem(fieldSet, tags: Xbrl.ppeTotalCostTags).current {
+                let dep = resolveItem(fieldSet, tags: Xbrl.ppeTotalDepTags).current ?? 0.0
+                total = cost + dep
+            } else {
+                total = nil
+            }
+        case "J-GAAP":
+            total = resolveItem(fieldSet, tags: Xbrl.ppeTotalJGAAPDirectTags).current
+        default:
+            total = resolveItem(fieldSet, tags: Xbrl.ppeTagsUSGAAPTotal).current
         }
 
-        // IFRS: 取得原価 - 累計減価償却
-        let costItem = resolveItem(fieldSet, tags: Xbrl.ppeTotalCostTags)
-        let depItem = resolveItem(fieldSet, tags: Xbrl.ppeTotalDepTags)
-        if let c = costItem.current, let d = depItem.current {
-            return TangibleFixedAssetsResult(total: c - d, method: "cost_minus_dep",
+        guard let t = total else {
+            return TangibleFixedAssetsResult(total: nil, method: "not_found",
                                               accountingStandard: accountingStandard)
         }
-
-        return TangibleFixedAssetsResult(total: nil, method: "not_found",
+        return TangibleFixedAssetsResult(total: t, method: "field_parser",
                                           accountingStandard: accountingStandard)
     }
 }

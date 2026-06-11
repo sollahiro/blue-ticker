@@ -97,6 +97,24 @@ enum XBRLUtils {
 
     // MARK: File Discovery
 
+    /// xbrlDir 内で指定プレフィックス（0105010 等）で始まる HTML ファイルを返す。
+    /// PublicDoc 直下と XBRL/PublicDoc の両方を探索する。
+    static func findHtmlByPrefix(in dir: URL, prefix: String) -> URL? {
+        let fm = FileManager.default
+        let candidates = [dir, dir.appendingPathComponent("XBRL/PublicDoc")]
+        for searchDir in candidates {
+            guard let entries = try? fm.contentsOfDirectory(at: searchDir, includingPropertiesForKeys: nil) else { continue }
+            let files = entries
+                .filter {
+                    ["htm", "html"].contains($0.pathExtension.lowercased())
+                        && $0.lastPathComponent.hasPrefix(prefix)
+                }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            if let f = files.first { return f }
+        }
+        return nil
+    }
+
     /// XBRL ディレクトリからインスタンス文書（.xml / .xbrl）を返す。
     /// ラベル・プレゼンテーション・計算・定義リンクベースは除外する。
     static func findXbrlFiles(in dir: URL) -> [URL] {
@@ -339,8 +357,8 @@ enum XBRLUtils {
     static func extractHtmlLabels(
         from element: Element,
         labelMap: [String: String]
-    ) -> [String: [String: Double?]] {
-        var fieldSet: [String: [String: Double?]] = [:]
+    ) -> FieldSet {
+        var fieldSet: FieldSet = [:]
         var remaining = Set(labelMap.keys)
 
         // 仮想タグ → 対応ラベルの集合（一括除去用）
@@ -374,7 +392,7 @@ enum XBRLUtils {
             let current = found.last! * Financial.millionYen
             let prior: Double? = found.count >= 2 ? found[found.count - 2] * Financial.millionYen : nil
             let vtag = labelMap[lbl]!
-            fieldSet[vtag] = ["current": current, "prior": prior]
+            fieldSet[vtag] = FieldValue(current: current, prior: prior)
             remaining.subtract(tagToLabels[vtag] ?? [])
         }
         return fieldSet

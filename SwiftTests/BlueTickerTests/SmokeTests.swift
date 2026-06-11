@@ -25,25 +25,7 @@ final class SmokeTests: XCTestCase {
 
     // MARK: - 既知の実装ギャップ（対象フィールドの比較をスキップ）
     // fixtureID -> スキップするフィールド名のセット
-    private static let knownGaps: [String: Set<String>] = [
-        // IFRS: リース負債の HTML 解析未実装のため IBD が低くなる
-        "2802_2025-03-31": ["ibdTotal"],
-        "6326_2025-12-31": ["ibdTotal"],
-        "7269_2025-03-31": ["ibdTotal"],
-        // US-GAAP: 連結 PL/BS が HTML テーブルにあり Swift では未解析
-        "4901_2025-03-31": ["sales", "operatingProfit", "netProfit",
-                             "totalAssets", "currentAssets", "nonCurrentAssets",
-                             "currentLiabilities", "nonCurrentLiabilities", "netAssets",
-                             "grossProfit", "sga", "ibdTotal", "interestExpense",
-                             "pretaxIncome", "incomeTax", "effectiveTaxRate",
-                             "ppeTotal", "capex", "rd"],
-        "7751_2025-12-31": ["sales", "operatingProfit", "netProfit",
-                             "totalAssets", "currentAssets", "nonCurrentAssets",
-                             "currentLiabilities", "nonCurrentLiabilities", "netAssets",
-                             "grossProfit", "sga", "ibdTotal", "interestExpense",
-                             "pretaxIncome", "incomeTax", "effectiveTaxRate",
-                             "ppeTotal", "capex", "rd"],
-    ]
+    private static let knownGaps: [String: Set<String>] = [:]
 
     // MARK: - 相対誤差許容度
 
@@ -155,18 +137,24 @@ final class SmokeTests: XCTestCase {
     private func extractFromXBRL(xbrlDir: URL) -> Extracted {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let std = detectAccountingStandard(allTags)
-        let durationFS = fieldSetFromDuration(allTags)
-        let instantFS = fieldSetFromInstant(allTags)
+        var durationFS = fieldSetFromDuration(allTags)
+        var instantFS = fieldSetFromInstant(allTags)
+
+        // US-GAAP 企業: 連結 P/L・BS の値は HTML テーブルにのみ存在するため仮想タグで補完する
+        if std == "US-GAAP" {
+            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
+            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
+        }
 
         let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cf  = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let gp  = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let gp  = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
         let op  = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let bs  = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
         let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)

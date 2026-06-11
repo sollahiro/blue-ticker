@@ -99,20 +99,26 @@ struct IndividualAnalyzer {
         let accountingStandard = detectAccountingStandard(allTagElements)
 
         // Duration FieldSet（損益計算書・CF用）
-        let durationFS = fieldSetFromDuration(allTagElements)
+        var durationFS = fieldSetFromDuration(allTagElements)
         // Instant FieldSet（貸借対照表・有利子負債用）
-        let instantFS = fieldSetFromInstant(allTagElements)
+        var instantFS = fieldSetFromInstant(allTagElements)
+
+        // US-GAAP 企業: 連結 P/L・BS の値は HTML テーブルにのみ存在するため仮想タグで補完する
+        if accountingStandard == "US-GAAP" {
+            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
+            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
+        }
 
         // 各抽出器を実行
         let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let bs = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
-        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTagElements)
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)

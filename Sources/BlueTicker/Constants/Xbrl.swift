@@ -129,6 +129,7 @@ enum Xbrl {
         "OperatingProfitLossIFRS",
         "OperatingIncomeLoss",
         "OperatingIncome",
+        "USGAAP_HTML_OperatingIncome",   // US-GAAP HTML仮想タグ（USGAAPHtml.parsePLFields が生成）
     ]
 
     static let sgaDirectTags: [String] = [
@@ -255,6 +256,7 @@ enum Xbrl {
             "CurrentAssets",
             "CurrentAssetsIFRS",
             "CurrentAssetsUSGAAP",
+            "USGAAP_HTML_CurrentAssets",
         ]),
         .init(field: "NonCurrentAssets", label: "非流動資産", tags: [
             "NoncurrentAssets", "NonCurrentAssets",
@@ -264,22 +266,27 @@ enum Xbrl {
             minuend: ["TotalAssets", "Assets", "TotalAssetsIFRS", "AssetsIFRS",
                       "TotalAssetsIFRSSummaryOfBusinessResults", "TotalAssetsUSGAAP",
                       "TotalAssetsUSGAAPSummaryOfBusinessResults"],
-            subtrahend: ["CurrentAssets", "CurrentAssetsIFRS", "CurrentAssetsUSGAAP"]
+            subtrahend: ["CurrentAssets", "CurrentAssetsIFRS", "CurrentAssetsUSGAAP",
+                         "USGAAP_HTML_CurrentAssets"]
         )),
         .init(field: "CurrentLiabilities", label: "流動負債", tags: [
             "CurrentLiabilities",
             "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",
             "CurrentLiabilitiesUSGAAP",
+            "USGAAP_HTML_CurrentLiabilities",
         ]),
         .init(field: "NonCurrentLiabilities", label: "非流動負債", tags: [
             "NoncurrentLiabilities", "NonCurrentLiabilities",
             "NonCurrentLiabilitiesIFRS",
             "LongTermLiabilitiesUSGAAP", "NonCurrentLiabilitiesUSGAAP",
+            "USGAAP_HTML_NonCurrentLiabilities",
         ], deriveMinus: (
-            minuend: ["Liabilities", "LiabilitiesIFRS", "TotalLiabilitiesUSGAAP"],
+            minuend: ["Liabilities", "LiabilitiesIFRS", "TotalLiabilitiesUSGAAP",
+                      "USGAAP_HTML_TotalLiabilities"],
             subtrahend: ["CurrentLiabilities",
                          "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",
-                         "CurrentLiabilitiesUSGAAP"]
+                         "CurrentLiabilitiesUSGAAP",
+                         "USGAAP_HTML_CurrentLiabilities"]
         )),
         .init(field: "NetAssets", label: "純資産/資本合計", tags: [
             "EquityIFRS", "TotalEquityIFRS",
@@ -288,6 +295,7 @@ enum Xbrl {
             "NetAssets",
             "NetAssetsUSGAAP", "TotalEquityUSGAAP",
             "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
+            "USGAAP_HTML_NetAssets",
             "NetAssetsSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentIFRS",
             "EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
@@ -297,7 +305,14 @@ enum Xbrl {
         ]),
     ]
 
-    // US-GAAP 非流動資産コンポーネント（XBRL タグ）
+    // US-GAAP 非流動資産コンポーネント（HTML 仮想タグ積み上げ）
+    static let usgaapHtmlNCAComponents: [[String]] = [
+        ["USGAAP_HTML_PPENet"],
+        ["USGAAP_HTML_InvestmentsLTReceivables"],
+        ["USGAAP_HTML_OtherNCA"],
+    ]
+
+    // US-GAAP 非流動資産コンポーネント（XBRL タグ積み上げ — HTML が存在しない場合のフォールバック）
     static let usgaapXbrlNCAComponents: [[String]] = [
         ["InvestmentsAndLongTermReceivablesUSGAAP"],
         ["PropertyPlantAndEquipmentNetUSGAAP"],
@@ -366,9 +381,12 @@ enum Xbrl {
 
     // MARK: - 有形固定資産タグ
 
-    static let ppeTotalTags: [String] = [
-        "PropertyPlantAndEquipmentIFRS",
-        "PropertyPlantAndEquipment",
+    static let ppeTotalIFRSDirectTags: [String] = ["PropertyPlantAndEquipmentIFRS"]
+    static let ppeTotalJGAAPDirectTags: [String] = ["PropertyPlantAndEquipment"]
+
+    // US-GAAP 専用合計タグ（USGAAP_HTML_PPENet は USGAAPHtml.parseBSFields が生成する仮想タグ）
+    static let ppeTagsUSGAAPTotal: [String] = [
+        "USGAAP_HTML_PPENet",
         "PropertyPlantAndEquipmentNetUSGAAP",
         "PropertyPlantAndEquipmentUSGAAP",
     ]
