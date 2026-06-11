@@ -82,6 +82,7 @@ class RawData(TypedDict, total=False):
     DivAnn: float | None
     ShareholderMetricSources: dict[str, MetricSource]
     _xbrl_source: bool
+    ConsolidationScope: str  # "consolidated" | "nonconsolidated" | "" (XBRLソースのみ設定)
 
 
 class CalculatedData(TypedDict, total=False):

@@ -157,6 +157,7 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
             else {}
         ),
         '_xbrl_source': bool(year_data.get("_xbrl_source")),
+        'ConsolidationScope': str(year_data.get("_consolidation_scope", "")),
     }
 
 

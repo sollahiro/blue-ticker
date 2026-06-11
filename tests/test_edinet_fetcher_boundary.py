@@ -481,6 +481,7 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
         "Div2Q": 25.0,
         "_xbrl_source": True,
         "_accounting_standard": "J-GAAP",
+        "_consolidation_scope": "nonconsolidated",
         "_docID": "S100HALF",
     }]
 

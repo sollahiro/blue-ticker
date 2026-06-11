@@ -392,6 +392,7 @@ async def cmd_analyze(args):
             ("配当性向 (%)",           calculated_metric(lambda c: c.get("PayoutRatio"))),
             ("期末発行済株式数 (株)", raw_metric("ShOutFY"), "int"),
             ("従業員数 (人)",           calculated_metric(lambda c: c.get("Employees")), "int"),
+            ("連結区分",               raw_metric("ConsolidationScope")),
             ("DocID",                  calculated_metric(lambda c: c.get("DocID"))),
         ]
 

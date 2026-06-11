@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+from blue_ticker.analysis.context_helpers import has_nonconsolidated_contexts
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.bank_financials import extract_bank_financials
 from blue_ticker.analysis.capital_expenditure import extract_capital_expenditure
@@ -168,6 +169,7 @@ class _XbrlFinancials(TypedDict):
     buyback: float | None
     rd: float | None
     sh: ShareholderMetrics
+    consolidation_scope: str  # "consolidated" | "nonconsolidated"
 
 
 def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
@@ -227,6 +229,7 @@ def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
         buyback=buyback_result.get("current"),
         rd=rd_result.get("current"),
         sh=sh_result,
+        consolidation_scope="consolidated" if has_nonconsolidated_contexts(all_pre_parsed) else "nonconsolidated",
     )
 
 
@@ -270,6 +273,7 @@ def _build_xbrl_record(
         "Div2Q": sh.get("Div2Q"),
         "_xbrl_source": True,
         "_accounting_standard": fin["accounting_standard"],
+        "_consolidation_scope": fin["consolidation_scope"],
         "_docID": doc_id,
     }
     if period_start is not None:
