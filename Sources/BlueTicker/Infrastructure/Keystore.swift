@@ -112,5 +112,7 @@ private func fileGetPassword(key: String) -> String? {
 
 enum KeystoreError: Error {
     case encodingFailed
+#if canImport(Security)
     case keychainError(OSStatus)
+#endif
 }

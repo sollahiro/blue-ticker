@@ -2,6 +2,9 @@
 // Python の blue_ticker/analysis/xbrl_utils.py 相当
 
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 import SwiftSoup
 
 // MARK: - Module-level label/role cache
