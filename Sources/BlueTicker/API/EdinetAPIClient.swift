@@ -53,7 +53,7 @@ actor EdinetAPIClient {
 
     func ensureDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
         let today = Date()
-        let yearEnd = Calendar.current.date(from: DateComponents(year: year, month: 12, day: 31))!
+        let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
 
         if let cached = cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
@@ -84,7 +84,7 @@ actor EdinetAPIClient {
 
     func refreshDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
         let today = Date()
-        let yearEnd = Calendar.current.date(from: DateComponents(year: year, month: 12, day: 31))!
+        let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
 
         do {
@@ -105,7 +105,7 @@ actor EdinetAPIClient {
 
     func catchupDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
         let today = Date()
-        let yearEnd = Calendar.current.date(from: DateComponents(year: year, month: 12, day: 31))!
+        let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
         let requiredDate = min(yearEnd, today)
 
@@ -127,7 +127,7 @@ actor EdinetAPIClient {
                       builtDate < requiredDate
                 else { return existingDocs }
 
-                let startDate = Calendar.current.date(byAdding: .day, value: 1, to: builtDate)!
+                let startDate = utcCalendar.date(byAdding: .day, value: 1, to: builtDate)!
                 if startDate > requiredDate {
                     self.cacheStore.saveDocumentIndex(year, documents: existingDocs, builtThrough: requiredThrough)
                     return existingDocs
@@ -152,7 +152,7 @@ actor EdinetAPIClient {
         useIndex: Bool = true
     ) async -> [String: [[String: Any]]?] {
         guard start <= end else { return [:] }
-        let days = Calendar.current.dateComponents([.day], from: start, to: end).day! + 1
+        let days = utcCalendar.dateComponents([.day], from: start, to: end).day! + 1
         if useIndex && days >= Api.documentIndexMinRangeDays {
             return await getDocumentsFromIndex(start: start, end: end)
         }
@@ -270,12 +270,12 @@ actor EdinetAPIClient {
     // MARK: - Private helpers
 
     private func buildDocumentIndexForYear(_ year: Int, requiredThrough: Date) async -> [[String: Any]]? {
-        let start = Calendar.current.date(from: DateComponents(year: year, month: 1, day: 1))!
+        let start = utcCalendar.date(from: DateComponents(year: year, month: 1, day: 1))!
         var dates: [Date] = []
         var current = start
         while current <= requiredThrough {
             dates.append(current)
-            current = Calendar.current.date(byAdding: .day, value: 1, to: current)!
+            current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
         }
 
         var documents: [[String: Any]] = []
@@ -328,7 +328,7 @@ actor EdinetAPIClient {
         while current <= end {
             let ds = isoDate(current)
             result[ds] = await getDocumentsForDate(ds)
-            current = Calendar.current.date(byAdding: .day, value: 1, to: current)!
+            current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
         }
         return result
     }
@@ -340,6 +340,14 @@ actor EdinetAPIClient {
 }
 
 // MARK: - Helpers
+
+/// EDINET の日付ラベル（YYYY-MM-DD）は UTC で統一する。
+/// Calendar.current と混在させると JST 環境で年次インデックスのラベルが1日ずれる。
+private let utcCalendar: Calendar = {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(secondsFromGMT: 0)!
+    return cal
+}()
 
 private nonisolated(unsafe) let _isoDateFormatter: DateFormatter = {
     let f = DateFormatter()
@@ -364,7 +372,7 @@ private func emptyDateRange(start: Date, end: Date) -> [String: [[String: Any]]?
     var current = start
     while current <= end {
         result[isoDate(current)] = [] as [[String: Any]]
-        current = Calendar.current.date(byAdding: .day, value: 1, to: current)!
+        current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
     }
     return result
 }
@@ -394,8 +402,8 @@ private func mergeDocumentIndexDocs(
 }
 
 private func yearRange(start: Date, end: Date) -> [Int] {
-    let s = Calendar.current.component(.year, from: start)
-    let e = Calendar.current.component(.year, from: end)
+    let s = utcCalendar.component(.year, from: start)
+    let e = utcCalendar.component(.year, from: end)
     return Array(s...e)
 }
 
