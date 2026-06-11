@@ -34,6 +34,7 @@ class CompanyInfoService:
             "name": stock_info.get("CoName"),
             "name_en": stock_info.get("CoNameEn", ""),
             "industry": stock_info.get("S33Nm"),
+            "location": stock_info.get("Location", ""),
             "market": stock_info.get("MktNm", ""),
             "market_name": stock_info.get("MktNm", ""),
             "is_listed": stock_info.get("IsListed", False),

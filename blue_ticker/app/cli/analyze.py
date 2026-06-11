@@ -143,6 +143,8 @@ async def cmd_analyze(args):
                     return
 
             print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
+            if info.get("location"):
+                print(f"所在地: {info['location']}", file=sys.stderr)
             print(f"分析対象期間: 直近 {half_years} 年分 (上半期 / 下半期)", file=sys.stderr)
 
             periods = await data_service.get_half_year_periods(
@@ -257,6 +259,8 @@ async def cmd_analyze(args):
                 return
 
         print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
+        if info.get("location"):
+            print(f"所在地: {info['location']}", file=sys.stderr)
         years_label = f"直近 {years_to_analyze} 年分" if years_to_analyze else "全期間"
         print(f"分析対象期間: {years_label}", file=sys.stderr)
         # data_service を使って生の財務データを取得

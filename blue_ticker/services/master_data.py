@@ -92,6 +92,7 @@ class MasterDataManager:
                 co_name_en = row.get("提出者名（英字）", "").strip('"').strip()
                 co_name_kana = row.get("提出者名（ヨミ）", "").strip('"').strip()
                 industry = row.get("提出者業種", "").strip('"').strip()
+                location = row.get("所在地", "").strip('"').strip()
                 securities_code = row.get("証券コード", "").strip('"').strip()
 
                 # 証券コードは5桁（末尾0）で格納されている。4桁に正規化する
@@ -106,6 +107,7 @@ class MasterDataManager:
                     "CoNameNormalized": self._normalize_name(co_name),
                     "S33Nm": industry,
                     "MktNm": listing,
+                    "Location": location,
                     "IsListed": listing == "上場",
                     "HasConsolidated": consolidated == "有",
                 })

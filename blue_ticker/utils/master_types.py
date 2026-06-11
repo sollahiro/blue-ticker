@@ -16,6 +16,7 @@ class MasterStock(TypedDict):
     CoNameNormalized: str   # 検索用正規化名称
     S33Nm: str              # 提出者業種
     MktNm: str              # 上場区分（"上場" / "非上場"）
+    Location: str           # 所在地
     IsListed: bool          # 上場かどうか
     HasConsolidated: bool   # 連結の有無
 
