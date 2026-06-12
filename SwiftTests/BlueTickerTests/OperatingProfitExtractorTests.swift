@@ -1,10 +1,11 @@
 // Python tests/test_xbrl_operating_profit.py 相当
 // 営業利益の直接取得・GP−SGA 計算・経常利益フォールバック・連結優先を検証する。
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class OperatingProfitExtractorTests: XCTestCase {
+@Suite struct OperatingProfitExtractorTests {
 
     private func extract(in dir: URL) -> OperatingProfitResult {
         let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
@@ -13,7 +14,7 @@ final class OperatingProfitExtractorTests: XCTestCase {
 
     // MARK: - 直接法
 
-    func testDirectJgaap() {
+    @Test func testDirectJgaap() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">500000000000</jppfs_cor:OperatingIncomeLoss>
@@ -22,15 +23,15 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.label, "営業利益")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.operatingProfit, 500_000_000_000)
-            XCTAssertEqual(result.operatingProfitPrior, 450_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.label == "営業利益")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.operatingProfit == 500_000_000_000)
+            #expect(result.operatingProfitPrior == 450_000_000_000)
         }
     }
 
-    func testDirectIfrs() {
+    @Test func testDirectIfrs() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -41,16 +42,16 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.operatingProfit, 755_816_000_000)
-            XCTAssertEqual(result.operatingProfitPrior, 696_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.operatingProfit == 755_816_000_000)
+            #expect(result.operatingProfitPrior == 696_000_000_000)
         }
     }
 
     // MARK: - 計算法（GP − SGA）
 
-    func testComputedIfrsGpMinusSga() {
+    @Test func testComputedIfrsGpMinusSga() {
         let gpCurrent = 2_607_357_000_000.0
         let gpPrior = 2_434_185_000_000.0
         let sgaCurrent = 1_851_541_000_000.0
@@ -70,17 +71,17 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.label, "営業利益")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.operatingProfit, gpCurrent - sgaCurrent)
-            XCTAssertEqual(result.operatingProfitPrior, gpPrior - sgaPrior)
-            XCTAssertEqual(result.sga, sgaCurrent)
-            XCTAssertEqual(result.sgaPrior, sgaPrior)
+            #expect(result.method == "computed")
+            #expect(result.label == "営業利益")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.operatingProfit == gpCurrent - sgaCurrent)
+            #expect(result.operatingProfitPrior == gpPrior - sgaPrior)
+            #expect(result.sga == sgaCurrent)
+            #expect(result.sgaPrior == sgaPrior)
         }
     }
 
-    func testComputedIfrsPriorOnly() {
+    @Test func testComputedIfrsPriorOnly() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -91,13 +92,13 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertNil(result.operatingProfit)
-            XCTAssertEqual(result.operatingProfitPrior, 500_000_000_000)
+            #expect(result.method == "computed")
+            #expect(result.operatingProfit == nil)
+            #expect(result.operatingProfitPrior == 500_000_000_000)
         }
     }
 
-    func testComputedPrefersDirectOverGpSga() {
+    @Test func testComputedPrefersDirectOverGpSga() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -110,15 +111,15 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.operatingProfit, 800_000_000_000)
-            XCTAssertEqual(result.sga, 1_500_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.operatingProfit == 800_000_000_000)
+            #expect(result.sga == 1_500_000_000_000)
         }
     }
 
     // MARK: - フォールバック
 
-    func testOrdinaryIncomeFallback() {
+    @Test func testOrdinaryIncomeFallback() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">1200000000000</jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults>
@@ -131,13 +132,13 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "ordinary_income")
-            XCTAssertEqual(result.label, "経常利益")
-            XCTAssertEqual(result.operatingProfit, 300_000_000_000)
+            #expect(result.method == "ordinary_income")
+            #expect(result.label == "経常利益")
+            #expect(result.operatingProfit == 300_000_000_000)
         }
     }
 
-    func testConsolidatedPreferredOverNonconsolidated() {
+    @Test func testConsolidatedPreferredOverNonconsolidated() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">900000000000</jppfs_cor:OperatingIncomeLoss>
@@ -146,12 +147,12 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.operatingProfit, 900_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.operatingProfit == 900_000_000_000)
         }
     }
 
-    func testPureContextOverSegmentContext() {
+    @Test func testPureContextOverSegmentContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">900000000000</jppfs_cor:OperatingIncomeLoss>
@@ -164,25 +165,25 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.operatingProfit, 900_000_000_000)
-            XCTAssertEqual(result.operatingProfitPrior, 850_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.operatingProfit == 900_000_000_000)
+            #expect(result.operatingProfitPrior == 850_000_000_000)
         }
     }
 
-    func testSingleEntityUsesPlainContext() {
+    @Test func testSingleEntityUsesPlainContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.operatingProfit, 150_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.operatingProfit == 150_000_000_000)
         }
     }
 
-    func testSingleEntityPureContextOverSegmentContext() {
+    @Test func testSingleEntityPureContextOverSegmentContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
@@ -195,19 +196,19 @@ final class OperatingProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.operatingProfit, 150_000_000_000)
-            XCTAssertEqual(result.operatingProfitPrior, 140_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.operatingProfit == 150_000_000_000)
+            #expect(result.operatingProfitPrior == 140_000_000_000)
         }
     }
 
-    func testNotFound() {
+    @Test func testNotFound() {
         let xml = XBRLTestSupport.makeXbrlDuration("")
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.operatingProfit)
-            XCTAssertNil(result.operatingProfitPrior)
+            #expect(result.method == "not_found")
+            #expect(result.operatingProfit == nil)
+            #expect(result.operatingProfitPrior == nil)
         }
     }
 }

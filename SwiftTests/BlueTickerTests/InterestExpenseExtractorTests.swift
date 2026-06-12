@@ -2,10 +2,11 @@
 // 支払利息の抽出を検証する（J-GAAP / IFRS / IFRS注記テキスト / US-GAAP HTML）。
 // （XMLParsedAsHTMLWarning 抑止テストは bs4 固有のため対象外）
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class InterestExpenseExtractorTests: XCTestCase {
+@Suite struct InterestExpenseExtractorTests {
 
     private func extract(in dir: URL) -> InterestExpenseResult {
         let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
@@ -32,7 +33,7 @@ final class InterestExpenseExtractorTests: XCTestCase {
 
     // MARK: - J-GAAP
 
-    func testDirectJgaap() {
+    @Test func testDirectJgaap() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:InterestExpensesNOE contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">8752000000</jppfs_cor:InterestExpensesNOE>
@@ -41,14 +42,14 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.current, 8_752_000_000)
-            XCTAssertEqual(result.prior, 9_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.current == 8_752_000_000)
+            #expect(result.prior == 9_000_000_000)
         }
     }
 
-    func testConsolidatedOverNonconsolidated() {
+    @Test func testConsolidatedOverNonconsolidated() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:InterestExpensesNOE contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">8752000000</jppfs_cor:InterestExpensesNOE>
@@ -57,11 +58,11 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.current, 8_752_000_000)
+            #expect(result.current == 8_752_000_000)
         }
     }
 
-    func testNonconsolidatedFallback() {
+    @Test func testNonconsolidatedFallback() {
         // 連結値がなければ個別値にフォールバックする
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:InterestExpensesNOE contextRef="CurrentYearDuration_NonConsolidatedMember"
@@ -69,14 +70,14 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.current, 1_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.current == 1_000_000_000)
         }
     }
 
     // MARK: - IFRS
 
-    func testInterestExpensesIfrs() {
+    @Test func testInterestExpensesIfrs() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -87,14 +88,14 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.current, 5_000_000_000)
-            XCTAssertEqual(result.prior, 4_800_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.current == 5_000_000_000)
+            #expect(result.prior == 4_800_000_000)
         }
     }
 
-    func testFinanceCostsIfrsFallback() {
+    @Test func testFinanceCostsIfrsFallback() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -103,13 +104,13 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.current, 6_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.current == 6_000_000_000)
         }
     }
 
-    func testInterestExpenseNoteTextblockFallback() {
+    @Test func testInterestExpenseNoteTextblockFallback() {
         // IFRS: numeric タグがない場合、支払利息注記のテキストから取得する（トヨタ型）
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
@@ -124,14 +125,14 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """
         XBRLTestSupport.withXbrlDir(xml, extraFiles: ["note_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "ifrs_textblock")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.prior, 1_213_021_000_000)
-            XCTAssertEqual(result.current, 1_654_702_000_000)
+            #expect(result.method == "ifrs_textblock")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.prior == 1_213_021_000_000)
+            #expect(result.current == 1_654_702_000_000)
         }
     }
 
-    func testInterestExpenseXbrlTextblock() {
+    @Test func testInterestExpenseXbrlTextblock() {
         // XBRLファイル内のテキストブロックからも取得できる
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
@@ -143,66 +144,66 @@ final class InterestExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(nil, extraFiles: ["instance.xbrl": xml]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "ifrs_textblock")
-            XCTAssertEqual(result.prior, 1_213_021_000_000)
-            XCTAssertEqual(result.current, 1_654_702_000_000)
+            #expect(result.method == "ifrs_textblock")
+            #expect(result.prior == 1_213_021_000_000)
+            #expect(result.current == 1_654_702_000_000)
         }
     }
 
     // MARK: - US-GAAP HTML
 
-    func testExtractsPositiveValues() {
+    @Test func testExtractsPositiveValues() {
         let html = makeUsgaapHtml("""
             <tr><td>支払利息</td><td>9,000</td><td>8,752</td></tr>
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertEqual(result.current, 8_752_000_000)
-            XCTAssertEqual(result.prior, 9_000_000_000)
+            #expect(result.method == "usgaap_html")
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.current == 8_752_000_000)
+            #expect(result.prior == 9_000_000_000)
         }
     }
 
-    func testExtractsDeltaNotation() {
+    @Test func testExtractsDeltaNotation() {
         // △記法（負数）の支払利息も絶対値で返す
         let html = makeUsgaapHtml("""
             <tr><td>支払利息</td><td>△9,000</td><td>△8,752</td></tr>
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.current, 8_752_000_000)
-            XCTAssertEqual(result.prior, 9_000_000_000)
+            #expect(result.method == "usgaap_html")
+            #expect(result.current == 8_752_000_000)
+            #expect(result.prior == 9_000_000_000)
         }
     }
 
-    func testNoHtmlFileReturnsNotFound() {
+    @Test func testNoHtmlFileReturnsNotFound() {
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertNil(result.current)
+            #expect(result.method == "not_found")
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.current == nil)
         }
     }
 
     // MARK: - not_found
 
-    func testNoTagsReturnsNotFound() {
+    @Test func testNoTagsReturnsNotFound() {
         let xml = XBRLTestSupport.makeXbrlDuration("")
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.current)
-            XCTAssertNil(result.prior)
+            #expect(result.method == "not_found")
+            #expect(result.current == nil)
+            #expect(result.prior == nil)
         }
     }
 
-    func testEmptyDirectory() {
+    @Test func testEmptyDirectory() {
         XBRLTestSupport.withXbrlDir(nil) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.current)
+            #expect(result.method == "not_found")
+            #expect(result.current == nil)
         }
     }
 }

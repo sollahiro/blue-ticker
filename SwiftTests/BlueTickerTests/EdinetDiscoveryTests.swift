@@ -7,23 +7,24 @@
 // Python との相違:
 // - buildDocumentIndexForCode は not_found_fy_ends を返さない（Swift では戻り値が docs のみ）
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class EdinetDiscoveryTests: XCTestCase {
-    private var tmpDir: URL!
-    private var store: EdinetCacheStore!
-    private var client: EdinetAPIClient!
+@Suite final class EdinetDiscoveryTests {
+    private let tmpDir: URL
+    private let store: EdinetCacheStore
+    private let client: EdinetAPIClient
 
     private let support = ServiceTestSupport.self
 
-    override func setUpWithError() throws {
+    init() throws {
         tmpDir = try ServiceTestSupport.makeTempDir()
         store = EdinetCacheStore(cacheDir: tmpDir)
         client = EdinetAPIClient(apiKey: nil, cacheStore: store)
     }
 
-    override func tearDownWithError() throws {
+    deinit {
         try? FileManager.default.removeItem(at: tmpDir)
     }
 
@@ -77,7 +78,7 @@ final class EdinetDiscoveryTests: XCTestCase {
 
     // MARK: - buildDocumentIndexForCode
 
-    func testBuildDocumentIndexFindsDocsAcrossFiscalYearChange() async throws {
+    @Test func testBuildDocumentIndexFindsDocsAcrossFiscalYearChange() async throws {
         // 決算期変更（3月末→12月末）があっても edinetCode ベースで全履歴を取得できること
         let edinetCode = "E12345"
         let year = support.currentUTCYear()
@@ -124,31 +125,31 @@ final class EdinetDiscoveryTests: XCTestCase {
         let amendments = amendmentDocs(docs)
 
         // 旧3月末2件 + 新12月末1件 = 計3件取得できる
-        XCTAssertEqual(annual.count, 3)
+        #expect(annual.count == 3)
         let fyEnds = Set(annual.compactMap { $0["edinet_fy_end"] as? String })
-        XCTAssertTrue(fyEnds.contains("\(year - 1)-12-31"))  // 変更後（9ヶ月）
-        XCTAssertTrue(fyEnds.contains("\(year - 2)-03-31"))  // 変更前
-        XCTAssertTrue(fyEnds.contains("\(year - 3)-03-31"))  // 変更前
+        #expect(fyEnds.contains("\(year - 1)-12-31"))  // 変更後（9ヶ月）
+        #expect(fyEnds.contains("\(year - 2)-03-31"))  // 変更前
+        #expect(fyEnds.contains("\(year - 3)-03-31"))  // 変更前
 
         // 別会社はフィルタされる
-        XCTAssertTrue(annual.allSatisfy { $0["edinetCode"] as? String == edinetCode })
+        #expect(annual.allSatisfy { $0["edinetCode"] as? String == edinetCode })
 
         // 訂正書類が正しくリンクされる
-        XCTAssertEqual(amendments.count, 1)
-        XCTAssertEqual(amendments.first?["docID"] as? String, "S100AMEND")
-        XCTAssertEqual(amendments.first?["edinet_fy_end"] as? String, "\(year - 1)-12-31")
+        #expect(amendments.count == 1)
+        #expect(amendments.first?["docID"] as? String == "S100AMEND")
+        #expect(amendments.first?["edinet_fy_end"] as? String == "\(year - 1)-12-31")
     }
 
-    func testBuildDocumentIndexReturnsEmptyWhenNoRecentDoc() async throws {
+    @Test func testBuildDocumentIndexReturnsEmptyWhenNoRecentDoc() async throws {
         let year = support.currentUTCYear()
         seedIndexes((year - 1)...year, [:])
 
         let docs = await EdinetDiscovery.buildDocumentIndexForCode(code: "9999", client: client)
 
-        XCTAssertTrue(docs.isEmpty)
+        #expect(docs.isEmpty)
     }
 
-    func testBuildDocumentIndexReturnsEmptyWhenEdinetCodeMissing() async throws {
+    @Test func testBuildDocumentIndexReturnsEmptyWhenEdinetCodeMissing() async throws {
         let year = support.currentUTCYear()
         let todayStr = support.iso(support.utcToday())
         // edinetCode を持たない書類しか見つからない場合は空を返す
@@ -163,10 +164,10 @@ final class EdinetDiscoveryTests: XCTestCase {
 
         let docs = await EdinetDiscovery.buildDocumentIndexForCode(code: "9999", client: client)
 
-        XCTAssertTrue(docs.isEmpty)
+        #expect(docs.isEmpty)
     }
 
-    func testBuildDocumentIndexAcceptsHalfYearAsSeed() async throws {
+    @Test func testBuildDocumentIndexAcceptsHalfYearAsSeed() async throws {
         // 半期報告書（160）が seed になっても edinetCode を取得して年次探索できること
         let edinetCode = "E12345"
         let year = support.currentUTCYear()
@@ -194,11 +195,11 @@ final class EdinetDiscoveryTests: XCTestCase {
         )
 
         let annual = annualDocs(docs)
-        XCTAssertEqual(annual.count, 1)
-        XCTAssertEqual(annual.first?["edinet_fy_end"] as? String, "\(year - 1)-03-31")
+        #expect(annual.count == 1)
+        #expect(annual.first?["edinet_fy_end"] as? String == "\(year - 1)-03-31")
     }
 
-    func testBuildDocumentIndexUsesYearMinus1WhenPeriodStartMissing() async throws {
+    @Test func testBuildDocumentIndexUsesYearMinus1WhenPeriodStartMissing() async throws {
         // periodStart がない書類は fiscal_year = periodEnd の年 - 1 にフォールバックする
         let year = support.currentUTCYear()
         let todayStr = support.iso(support.utcToday())
@@ -214,11 +215,11 @@ final class EdinetDiscoveryTests: XCTestCase {
         )
 
         let annual = annualDocs(docs)
-        XCTAssertEqual(annual.count, 1)
-        XCTAssertEqual(annual.first?["fiscal_year"] as? Int, year - 2)
+        #expect(annual.count == 1)
+        #expect(annual.first?["fiscal_year"] as? Int == year - 2)
     }
 
-    func testBuildDocumentIndexSlicesToAnalysisYears() async throws {
+    @Test func testBuildDocumentIndexSlicesToAnalysisYears() async throws {
         // 年次インデックスに analysisYears を超える有報があっても上位 N 件に絞られる
         let edinetCode = "E12345"
         let year = support.currentUTCYear()
@@ -242,16 +243,16 @@ final class EdinetDiscoveryTests: XCTestCase {
         )
 
         let annual = annualDocs(docs)
-        XCTAssertEqual(annual.count, 3)
+        #expect(annual.count == 3)
         // 最新3件（periodEnd 降順）
-        XCTAssertEqual(annual[0]["edinet_fy_end"] as? String, "\(year - 1)-12-31")
-        XCTAssertEqual(annual[1]["edinet_fy_end"] as? String, "\(year - 2)-12-31")
-        XCTAssertEqual(annual[2]["edinet_fy_end"] as? String, "\(year - 3)-12-31")
+        #expect(annual[0]["edinet_fy_end"] as? String == "\(year - 1)-12-31")
+        #expect(annual[1]["edinet_fy_end"] as? String == "\(year - 2)-12-31")
+        #expect(annual[2]["edinet_fy_end"] as? String == "\(year - 3)-12-31")
     }
 
     // MARK: - 半期報告書探索（findHalfReportForFy 相当）
 
-    func testFindHalfReportAccepts160WithFyPeriodEnd() async throws {
+    @Test func testFindHalfReportAccepts160WithFyPeriodEnd() async throws {
         // 半期報告書（160）: periodEnd は通期期末・periodStart は期首
         let halfDoc: [String: Any] = [
             "docID": "S100UOCS",
@@ -280,15 +281,15 @@ final class EdinetDiscoveryTests: XCTestCase {
         )
 
         let doc = docs.first { $0["docID"] as? String == "S100UOCS" }
-        XCTAssertNotNil(doc)
-        XCTAssertEqual(doc?["edinet_fy_end"] as? String, "2025-03-31")
-        XCTAssertEqual(doc?["edinet_period_start"] as? String, "2024-04-01")
-        XCTAssertEqual(doc?["edinet_period_end"] as? String, "2024-09-30")
-        XCTAssertEqual(doc?["period_type"] as? String, "2Q")
-        XCTAssertEqual(doc?["fiscal_year"] as? Int, 2024)
+        #expect(doc != nil)
+        #expect(doc?["edinet_fy_end"] as? String == "2025-03-31")
+        #expect(doc?["edinet_period_start"] as? String == "2024-04-01")
+        #expect(doc?["edinet_period_end"] as? String == "2024-09-30")
+        #expect(doc?["period_type"] as? String == "2Q")
+        #expect(doc?["fiscal_year"] as? Int == 2024)
     }
 
-    func testFindHalfReportAcceptsLegacy140WithQ2PeriodEnd() async throws {
+    @Test func testFindHalfReportAcceptsLegacy140WithQ2PeriodEnd() async throws {
         // 旧2Q四半期報告書（140）: periodEnd は2Q末・説明文に「第2四半期」を含む
         let quarterDoc: [String: Any] = [
             "docID": "S100S3PK",
@@ -317,10 +318,10 @@ final class EdinetDiscoveryTests: XCTestCase {
         )
 
         let doc = docs.first { $0["docID"] as? String == "S100S3PK" }
-        XCTAssertNotNil(doc)
-        XCTAssertEqual(doc?["edinet_fy_end"] as? String, "2024-03-31")
-        XCTAssertEqual(doc?["edinet_period_start"] as? String, "2023-04-01")
-        XCTAssertEqual(doc?["edinet_period_end"] as? String, "2023-09-30")
-        XCTAssertEqual(doc?["period_type"] as? String, "2Q")
+        #expect(doc != nil)
+        #expect(doc?["edinet_fy_end"] as? String == "2024-03-31")
+        #expect(doc?["edinet_period_start"] as? String == "2023-04-01")
+        #expect(doc?["edinet_period_end"] as? String == "2023-09-30")
+        #expect(doc?["period_type"] as? String == "2Q")
     }
 }

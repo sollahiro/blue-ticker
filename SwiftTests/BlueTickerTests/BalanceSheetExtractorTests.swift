@@ -3,17 +3,18 @@
 // （_apply_balance_sheet は Python analyzer 固有のため対象外。
 //   components のタグ名検証は Swift の components がタグを保持しないため対象外）
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class BalanceSheetExtractorTests: XCTestCase {
+@Suite struct BalanceSheetExtractorTests {
 
     private func extract(in dir: URL) -> BalanceSheetResultValue {
         let (fs, std) = XBRLTestSupport.instantFieldSet(in: dir)
         return BalanceSheetExtractor.extract(fieldSet: fs, accountingStandard: std)
     }
 
-    func testExtractsJgaapBalanceSheetComponents() {
+    @Test func testExtractsJgaapBalanceSheetComponents() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:CurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">2923181000000</jppfs_cor:CurrentAssets>
             <jppfs_cor:NoncurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">3281728000000</jppfs_cor:NoncurrentAssets>
@@ -25,18 +26,18 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.method, "field_parser")
-            XCTAssertEqual(result.currentAssets, 2_923_181 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentAssets, 3_281_728 * Financial.millionYen)
-            XCTAssertEqual(result.totalAssets, 6_204_909 * Financial.millionYen)
-            XCTAssertEqual(result.currentLiabilities, 1_770_928 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentLiabilities, 1_560_957 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 2_873_024 * Financial.millionYen)
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.method == "field_parser")
+            #expect(result.currentAssets == 2_923_181 * Financial.millionYen)
+            #expect(result.nonCurrentAssets == 3_281_728 * Financial.millionYen)
+            #expect(result.totalAssets == 6_204_909 * Financial.millionYen)
+            #expect(result.currentLiabilities == 1_770_928 * Financial.millionYen)
+            #expect(result.nonCurrentLiabilities == 1_560_957 * Financial.millionYen)
+            #expect(result.netAssets == 2_873_024 * Financial.millionYen)
         }
     }
 
-    func testExtractsIfrsBalanceSheetComponents() {
+    @Test func testExtractsIfrsBalanceSheetComponents() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:CurrentAssetsIFRS contextRef="CurrentYearInstant" unitRef="JPY">6597843000000</jppfs_cor:CurrentAssetsIFRS>
             <jppfs_cor:NonCurrentAssetsIFRS contextRef="CurrentYearInstant" unitRef="JPY">6686970000000</jppfs_cor:NonCurrentAssetsIFRS>
@@ -46,17 +47,17 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.currentAssets, 6_597_843 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentAssets, 6_686_970 * Financial.millionYen)
-            XCTAssertEqual(result.currentLiabilities, 5_907_845 * Financial.millionYen)
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.currentAssets == 6_597_843 * Financial.millionYen)
+            #expect(result.nonCurrentAssets == 6_686_970 * Financial.millionYen)
+            #expect(result.currentLiabilities == 5_907_845 * Financial.millionYen)
             // 非流動負債 = LiabilitiesIFRS − TotalCurrentLiabilitiesIFRS
-            XCTAssertEqual(result.nonCurrentLiabilities, 1_345_551 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 6_031_417 * Financial.millionYen)
+            #expect(result.nonCurrentLiabilities == 1_345_551 * Financial.millionYen)
+            #expect(result.netAssets == 6_031_417 * Financial.millionYen)
         }
     }
 
-    func testPrefersIfrsSummaryBalanceSheetValuesOverJgaapSummary() {
+    @Test func testPrefersIfrsSummaryBalanceSheetValuesOverJgaapSummary() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults
                 contextRef="CurrentYearInstant" unitRef="JPY">1425859000000</jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults>
@@ -69,13 +70,13 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.totalAssets, 1_425_859 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 720_546 * Financial.millionYen)
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.totalAssets == 1_425_859 * Financial.millionYen)
+            #expect(result.netAssets == 720_546 * Financial.millionYen)
         }
     }
 
-    func testComputesUsgaapNonCurrentAssetsFromXbrlComponents() {
+    @Test func testComputesUsgaapNonCurrentAssetsFromXbrlComponents() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:CurrentAssetsUSGAAP contextRef="CurrentYearInstant" unitRef="JPY">1581681000000</jppfs_cor:CurrentAssetsUSGAAP>
             <jppfs_cor:InvestmentsAndLongTermReceivablesUSGAAP contextRef="CurrentYearInstant" unitRef="JPY">1398318000000</jppfs_cor:InvestmentsAndLongTermReceivablesUSGAAP>
@@ -87,17 +88,17 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertEqual(result.currentAssets, 1_581_681 * Financial.millionYen)
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.currentAssets == 1_581_681 * Financial.millionYen)
             // 非流動資産 = XBRL コンポーネント積み上げ: 1398318+1785062+484957
-            XCTAssertEqual(result.nonCurrentAssets, 3_668_337 * Financial.millionYen)
-            XCTAssertEqual(result.currentLiabilities, 1_125_940 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentLiabilities, 771_286 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 3_352_682 * Financial.millionYen)
+            #expect(result.nonCurrentAssets == 3_668_337 * Financial.millionYen)
+            #expect(result.currentLiabilities == 1_125_940 * Financial.millionYen)
+            #expect(result.nonCurrentLiabilities == 771_286 * Financial.millionYen)
+            #expect(result.netAssets == 3_352_682 * Financial.millionYen)
         }
     }
 
-    func testUsesUsgaapHtmlBalanceSheetRowsWhenXbrlHasOnlySummary() {
+    @Test func testUsesUsgaapHtmlBalanceSheetRowsWhenXbrlHasOnlySummary() {
         let html = """
         <html><body><table>
           <tr><td>流動資産合計</td><td>1,574,628</td><td>1,581,681</td></tr>
@@ -115,16 +116,16 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml, extraFiles: ["0105010_honbun_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.currentAssets, 1_581_681 * Financial.millionYen)
+            #expect(result.currentAssets == 1_581_681 * Financial.millionYen)
             // 非流動資産 = HTML 仮想タグ積み上げ: 1786475+209294+1672458
-            XCTAssertEqual(result.nonCurrentAssets, 3_668_227 * Financial.millionYen)
-            XCTAssertEqual(result.currentLiabilities, 1_125_940 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentLiabilities, 771_286 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 3_352_682 * Financial.millionYen)
+            #expect(result.nonCurrentAssets == 3_668_227 * Financial.millionYen)
+            #expect(result.currentLiabilities == 1_125_940 * Financial.millionYen)
+            #expect(result.nonCurrentLiabilities == 771_286 * Financial.millionYen)
+            #expect(result.netAssets == 3_352_682 * Financial.millionYen)
         }
     }
 
-    func testPrefersUsgaapTotalEquitySummaryOverParentEquitySummary() {
+    @Test func testPrefersUsgaapTotalEquitySummaryOverParentEquitySummary() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults
                 contextRef="CurrentYearInstant" unitRef="JPY">3352682000000</jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults>
@@ -133,11 +134,11 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.netAssets, 3_352_682 * Financial.millionYen)
+            #expect(result.netAssets == 3_352_682 * Financial.millionYen)
         }
     }
 
-    func testSingleEntityUsesPlainContext() {
+    @Test func testSingleEntityUsesPlainContext() {
         // 単体のみ企業（_NonConsolidatedMember なし）は plain context のBS値を返す
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:CurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">184600000000</jppfs_cor:CurrentAssets>
@@ -148,11 +149,11 @@ final class BalanceSheetExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.currentAssets, 184_600 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentAssets, 113_568 * Financial.millionYen)
-            XCTAssertEqual(result.currentLiabilities, 42_737 * Financial.millionYen)
-            XCTAssertEqual(result.nonCurrentLiabilities, 60_103 * Financial.millionYen)
-            XCTAssertEqual(result.netAssets, 238_065 * Financial.millionYen)
+            #expect(result.currentAssets == 184_600 * Financial.millionYen)
+            #expect(result.nonCurrentAssets == 113_568 * Financial.millionYen)
+            #expect(result.currentLiabilities == 42_737 * Financial.millionYen)
+            #expect(result.nonCurrentLiabilities == 60_103 * Financial.millionYen)
+            #expect(result.netAssets == 238_065 * Financial.millionYen)
         }
     }
 }

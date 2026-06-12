@@ -12,25 +12,26 @@
 // - フェッチ回数のアサーション（fetch_dates カウント等）はフェッチをモックできないため検証不能。
 //   「キャッシュがあればリクエストを発行しない」は結果の正しさ（nil でないこと）で代替確認する
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class EdinetClientTests: XCTestCase {
-    private var tmpDir: URL!
-    private var store: EdinetCacheStore!
-    private var client: EdinetAPIClient!
+@Suite final class EdinetClientTests {
+    private let tmpDir: URL
+    private let store: EdinetCacheStore
+    private let client: EdinetAPIClient
 
-    override func setUpWithError() throws {
+    init() throws {
         tmpDir = try ServiceTestSupport.makeTempDir()
         store = EdinetCacheStore(cacheDir: tmpDir)
         client = EdinetAPIClient(apiKey: nil, cacheStore: store)
     }
 
-    override func tearDownWithError() throws {
+    deinit {
         try? FileManager.default.removeItem(at: tmpDir)
     }
 
-    func testDocumentIndexBuildsYearCacheFromDailyCaches() async throws {
+    @Test func testDocumentIndexBuildsYearCacheFromDailyCaches() async throws {
         // 過去年（2024）の全日付に検索キャッシュをシード。1日だけ書類あり
         let support = ServiceTestSupport.self
         let start = support.utcCalendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
@@ -52,14 +53,14 @@ final class EdinetClientTests: XCTestCase {
         let docs = await client.ensureDocumentIndexForYear(2024)
         let cached = store.loadDocumentIndex(2024, requiredThrough: "2024-12-31")
 
-        XCTAssertEqual(docs.count, 1)
-        XCTAssertEqual(docs.first?["docID"] as? String, "S100TEST")
-        XCTAssertEqual(docs.first?["_edinet_list_date"] as? String, "2024-06-24")
-        XCTAssertEqual(cached?.count, 1)
-        XCTAssertEqual(cached?.first?["docID"] as? String, "S100TEST")
+        #expect(docs.count == 1)
+        #expect(docs.first?["docID"] as? String == "S100TEST")
+        #expect(docs.first?["_edinet_list_date"] as? String == "2024-06-24")
+        #expect(cached?.count == 1)
+        #expect(cached?.first?["docID"] as? String == "S100TEST")
     }
 
-    func testGetDocumentsForDateRangeUsesYearIndexForWideRanges() async throws {
+    @Test func testGetDocumentsForDateRangeUsesYearIndexForWideRanges() async throws {
         let support = ServiceTestSupport.self
         store.saveDocumentIndex(
             2024,
@@ -75,14 +76,14 @@ final class EdinetClientTests: XCTestCase {
             end: support.utcCalendar.date(from: DateComponents(year: 2024, month: 6, day: 30))!
         )
 
-        XCTAssertEqual(docsByDate["2024-06-24"]??.first?["docID"] as? String, "IN")
+        #expect(docsByDate["2024-06-24"]??.first?["docID"] as? String == "IN")
         let allDocIDs = docsByDate.values.flatMap { ($0 ?? []).compactMap { $0["docID"] as? String } }
-        XCTAssertFalse(allDocIDs.contains("OUT"))
+        #expect(!(allDocIDs.contains("OUT")))
         // API キーなしのため、インデックスを使わず日次フェッチに落ちていたら nil になる
-        XCTAssertFalse(docsByDate.values.contains { $0 == nil })
+        #expect(!(docsByDate.values.contains { $0 == nil }))
     }
 
-    func testDocumentsForDatePrefersStaleSearchCache() async throws {
+    @Test func testDocumentsForDatePrefersStaleSearchCache() async throws {
         // Python は「リクエスト不発行」を検証するが、Swift では観測できないため
         // 「取得失敗時に期限切れキャッシュへフォールバックする」ことを検証する
         // hit TTL 0 → 保存直後でも期限切れ。API キーなし → 取得失敗 → 期限切れキャッシュへフォールバック
@@ -91,14 +92,14 @@ final class EdinetClientTests: XCTestCase {
         let today = ServiceTestSupport.iso(Date())
         let filename = staleStore.searchCacheKey(today)
         staleStore.saveSearchCache(filename, data: [["docID": "S100STALE", "docTypeCode": "120"]])
-        XCTAssertNil(staleStore.loadSearchCache(filename))  // 通常読み込みでは期限切れ
+        #expect(staleStore.loadSearchCache(filename) == nil)  // 通常読み込みでは期限切れ
 
         let docs = await staleClient.getDocumentsForDate(today)
 
-        XCTAssertEqual(docs?.first?["docID"] as? String, "S100STALE")
+        #expect(docs?.first?["docID"] as? String == "S100STALE")
     }
 
-    func testDocumentIndexPrefersStaleIndex() async throws {
+    @Test func testDocumentIndexPrefersStaleIndex() async throws {
         let year = ServiceTestSupport.currentUTCYear()
         let documents: [[String: Any]] = [["docID": "S100STALE", "docTypeCode": "120"]]
         store.saveDocumentIndex(year, documents: documents, builtThrough: "\(year)-01-01")
@@ -107,11 +108,11 @@ final class EdinetClientTests: XCTestCase {
         // （API キーなしのため、再構築に走ると空配列になる）
         let docs = await client.ensureDocumentIndexForYear(year)
 
-        XCTAssertEqual(docs.count, 1)
-        XCTAssertEqual(docs.first?["docID"] as? String, "S100STALE")
+        #expect(docs.count == 1)
+        #expect(docs.first?["docID"] as? String == "S100STALE")
     }
 
-    func testDocumentIndexCatchupFetchesOnlyMissingDates() async throws {
+    @Test func testDocumentIndexCatchupFetchesOnlyMissingDates() async throws {
         let support = ServiceTestSupport.self
         let today = support.utcToday()
         let yesterday = support.addDays(today, -1)
@@ -130,7 +131,7 @@ final class EdinetClientTests: XCTestCase {
         let docs = await client.catchupDocumentIndexForYear(year)
         let cachedInfo = store.loadDocumentIndexInfo(year, allowStale: true)
 
-        XCTAssertEqual(docs.compactMap { $0["docID"] as? String }, ["OLD", "NEW"])
-        XCTAssertEqual(cachedInfo?["built_through"] as? String, support.iso(today))
+        #expect(docs.compactMap { $0["docID"] as? String } == ["OLD", "NEW"])
+        #expect(cachedInfo?["built_through"] as? String == support.iso(today))
     }
 }

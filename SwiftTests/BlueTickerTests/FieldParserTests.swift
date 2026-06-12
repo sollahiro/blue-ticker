@@ -2,140 +2,141 @@
 // resolveItem / resolveItemPreferCurrent / resolveAggregate / deriveSubtraction /
 // fieldSetFromDuration / fieldSetFromInstant を検証する。
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class FieldParserTests: XCTestCase {
+@Suite struct FieldParserTests {
 
     // MARK: - resolveItem
 
-    func testResolveItemReturnsFirstMatchingTag() {
+    @Test func testResolveItemReturnsFirstMatchingTag() {
         let fs = makeFieldSet(("TagA", 100.0, 90.0), ("TagB", 200.0, 180.0))
         let result = resolveItem(fs, tags: ["TagA", "TagB"])
-        XCTAssertEqual(result.tag, "TagA")
-        XCTAssertEqual(result.current, 100.0)
-        XCTAssertEqual(result.prior, 90.0)
+        #expect(result.tag == "TagA")
+        #expect(result.current == 100.0)
+        #expect(result.prior == 90.0)
     }
 
-    func testResolveItemSkipsTagWithBothNil() {
+    @Test func testResolveItemSkipsTagWithBothNil() {
         let fs = makeFieldSet(("TagA", nil, nil), ("TagB", 200.0, nil))
         let result = resolveItem(fs, tags: ["TagA", "TagB"])
-        XCTAssertEqual(result.tag, "TagB")
-        XCTAssertEqual(result.current, 200.0)
+        #expect(result.tag == "TagB")
+        #expect(result.current == 200.0)
     }
 
-    func testResolveItemReturnsTagWithOnlyPrior() {
+    @Test func testResolveItemReturnsTagWithOnlyPrior() {
         let fs = makeFieldSet(("TagA", nil, 90.0))
         let result = resolveItem(fs, tags: ["TagA"])
-        XCTAssertEqual(result.tag, "TagA")
-        XCTAssertNil(result.current)
-        XCTAssertEqual(result.prior, 90.0)
+        #expect(result.tag == "TagA")
+        #expect(result.current == nil)
+        #expect(result.prior == 90.0)
     }
 
-    func testResolveItemNotFoundReturnsNilTag() {
+    @Test func testResolveItemNotFoundReturnsNilTag() {
         let fs = makeFieldSet(("TagX", nil, nil))
         let result = resolveItem(fs, tags: ["TagA", "TagB"])
-        XCTAssertNil(result.tag)
-        XCTAssertNil(result.current)
-        XCTAssertNil(result.prior)
+        #expect(result.tag == nil)
+        #expect(result.current == nil)
+        #expect(result.prior == nil)
     }
 
-    func testResolveItemEmptyCandidates() {
+    @Test func testResolveItemEmptyCandidates() {
         let fs = makeFieldSet(("TagA", 100.0, nil))
         let result = resolveItem(fs, tags: [])
-        XCTAssertNil(result.tag)
+        #expect(result.tag == nil)
     }
 
     // MARK: - resolveItemPreferCurrent
 
-    func testPreferCurrentPrefersTagWithCurrentValue() {
+    @Test func testPreferCurrentPrefersTagWithCurrentValue() {
         let fs = makeFieldSet(("TagA", nil, 90.0), ("TagB", 200.0, nil))
         let result = resolveItemPreferCurrent(fs, tags: ["TagA", "TagB"])
-        XCTAssertEqual(result.tag, "TagB")
-        XCTAssertEqual(result.current, 200.0)
+        #expect(result.tag == "TagB")
+        #expect(result.current == 200.0)
     }
 
-    func testPreferCurrentFallsBackToPriorOnly() {
+    @Test func testPreferCurrentFallsBackToPriorOnly() {
         let fs = makeFieldSet(("TagA", nil, 90.0))
         let result = resolveItemPreferCurrent(fs, tags: ["TagA"])
-        XCTAssertEqual(result.tag, "TagA")
-        XCTAssertNil(result.current)
-        XCTAssertEqual(result.prior, 90.0)
+        #expect(result.tag == "TagA")
+        #expect(result.current == nil)
+        #expect(result.prior == 90.0)
     }
 
-    func testPreferCurrentReturnsFirstCurrentAmongCandidates() {
+    @Test func testPreferCurrentReturnsFirstCurrentAmongCandidates() {
         let fs = makeFieldSet(("TagA", 100.0, nil), ("TagB", 200.0, nil))
         let result = resolveItemPreferCurrent(fs, tags: ["TagA", "TagB"])
-        XCTAssertEqual(result.tag, "TagA")
+        #expect(result.tag == "TagA")
     }
 
-    func testPreferCurrentNotFoundReturnsNilTag() {
+    @Test func testPreferCurrentNotFoundReturnsNilTag() {
         let result = resolveItemPreferCurrent([:], tags: ["TagA"])
-        XCTAssertNil(result.tag)
+        #expect(result.tag == nil)
     }
 
     // MARK: - resolveAggregate
 
-    func testAggregateSumsAllComponents() {
+    @Test func testAggregateSumsAllComponents() {
         let fs = makeFieldSet(("TagA", 100.0, 90.0), ("TagB", 200.0, 180.0))
         let result = resolveAggregate(fs, componentTagLists: [["TagA"], ["TagB"]])
-        XCTAssertEqual(result.current!, 300.0, accuracy: 1e-9)
-        XCTAssertEqual(result.prior!, 270.0, accuracy: 1e-9)
+        #expect(abs((result.current!) - (300.0)) <= (1e-9))
+        #expect(abs((result.prior!) - (270.0)) <= (1e-9))
     }
 
-    func testAggregatePartialComponentsStillAggregate() {
+    @Test func testAggregatePartialComponentsStillAggregate() {
         let fs = makeFieldSet(("TagA", 100.0, nil))
         let result = resolveAggregate(fs, componentTagLists: [["TagA"], ["TagB"]])
-        XCTAssertEqual(result.current, 100.0)
-        XCTAssertNil(result.prior)
+        #expect(result.current == 100.0)
+        #expect(result.prior == nil)
     }
 
-    func testAggregateNoComponentsFound() {
+    @Test func testAggregateNoComponentsFound() {
         let result = resolveAggregate([:], componentTagLists: [["TagA"], ["TagB"]])
-        XCTAssertNil(result.tag)
-        XCTAssertNil(result.current)
-        XCTAssertNil(result.prior)
+        #expect(result.tag == nil)
+        #expect(result.current == nil)
+        #expect(result.prior == nil)
     }
 
-    func testAggregateTagIsJoinedWithPlus() {
+    @Test func testAggregateTagIsJoinedWithPlus() {
         let fs = makeFieldSet(("TagA", 100.0, nil), ("TagB", 200.0, nil))
         let result = resolveAggregate(fs, componentTagLists: [["TagA"], ["TagB"]])
-        XCTAssertTrue((result.tag ?? "").contains("TagA"))
-        XCTAssertTrue((result.tag ?? "").contains("TagB"))
+        #expect((result.tag ?? "").contains("TagA"))
+        #expect((result.tag ?? "").contains("TagB"))
     }
 
     // MARK: - deriveSubtraction
 
-    func testDeriveSubtractsValues() {
+    @Test func testDeriveSubtractsValues() {
         let fs = makeFieldSet(("Total", 500.0, 450.0), ("Cost", 200.0, 180.0))
         let result = deriveSubtraction(fs, minuendTags: ["Total"], subtrahendTags: ["Cost"])
-        XCTAssertEqual(result.current!, 300.0, accuracy: 1e-9)
-        XCTAssertEqual(result.prior!, 270.0, accuracy: 1e-9)
+        #expect(abs((result.current!) - (300.0)) <= (1e-9))
+        #expect(abs((result.prior!) - (270.0)) <= (1e-9))
     }
 
-    func testDeriveNilMinuendReturnsNil() {
+    @Test func testDeriveNilMinuendReturnsNil() {
         let fs = makeFieldSet(("Total", nil, nil), ("Cost", 200.0, 180.0))
         let result = deriveSubtraction(fs, minuendTags: ["Total"], subtrahendTags: ["Cost"])
-        XCTAssertNil(result.current)
-        XCTAssertNil(result.prior)
+        #expect(result.current == nil)
+        #expect(result.prior == nil)
     }
 
-    func testDeriveNilSubtrahendReturnsNil() {
+    @Test func testDeriveNilSubtrahendReturnsNil() {
         let fs = makeFieldSet(("Total", 500.0, 450.0))
         let result = deriveSubtraction(fs, minuendTags: ["Total"], subtrahendTags: ["Cost"])
-        XCTAssertNil(result.current)
-        XCTAssertNil(result.prior)
+        #expect(result.current == nil)
+        #expect(result.prior == nil)
     }
 
-    func testDeriveTagContainsMinusSeparator() {
+    @Test func testDeriveTagContainsMinusSeparator() {
         let fs = makeFieldSet(("Total", 500.0, nil), ("Cost", 200.0, nil))
         let result = deriveSubtraction(fs, minuendTags: ["Total"], subtrahendTags: ["Cost"])
-        XCTAssertTrue((result.tag ?? "").contains("-"))
+        #expect((result.tag ?? "").contains("-"))
     }
 
     // MARK: - fieldSetFromDuration
 
-    func testDurationExactCurrentYearDuration() {
+    @Test func testDurationExactCurrentYearDuration() {
         let tagElements: XbrlTagElements = [
             "Sales": [
                 "CurrentYearDuration": 1000.0,
@@ -143,46 +144,46 @@ final class FieldParserTests: XCTestCase {
             ]
         ]
         let fs = fieldSetFromDuration(tagElements)
-        XCTAssertEqual(fs["Sales"]?.current, 1000.0)
-        XCTAssertEqual(fs["Sales"]?.prior, 900.0)
+        #expect(fs["Sales"]?.current == 1000.0)
+        #expect(fs["Sales"]?.prior == 900.0)
     }
 
-    func testDurationConsolidatedMemberSuffixExcluded() {
+    @Test func testDurationConsolidatedMemberSuffixExcluded() {
         // Member 末尾はセグメント軸として連結コンテキストに認識されない
         // （存在記録として current=nil のマーカーにはなる）
         let tagElements: XbrlTagElements = [
             "Sales": ["CurrentYearDuration_ConsolidatedMember": 1000.0]
         ]
         let fs = fieldSetFromDuration(tagElements)
-        XCTAssertNil(fs["Sales"]?.current ?? nil)
+        #expect(fs["Sales"]?.current ?? nil == nil)
     }
 
-    func testDurationNonMemberSuffixAccepted() {
+    @Test func testDurationNonMemberSuffixAccepted() {
         // Member で終わらない連結コンテキストはフォールバックで拾われる
         let tagElements: XbrlTagElements = [
             "Sales": ["CurrentYearDuration_SomeSegment": 1000.0]
         ]
         let fs = fieldSetFromDuration(tagElements)
-        XCTAssertEqual(fs["Sales"]?.current, 1000.0)
+        #expect(fs["Sales"]?.current == 1000.0)
     }
 
-    func testDurationEmptyInputReturnsEmpty() {
-        XCTAssertTrue(fieldSetFromDuration([:]).isEmpty)
+    @Test func testDurationEmptyInputReturnsEmpty() {
+        #expect(fieldSetFromDuration([:]).isEmpty)
     }
 
-    func testDurationIncludesInstantOnlyTagsAsMarkers() {
+    @Test func testDurationIncludesInstantOnlyTagsAsMarkers() {
         // Instant のみのタグは存在記録として current=nil で含まれる
         let tagElements: XbrlTagElements = [
             "SomeMarker": ["CurrentYearInstant": 1.0]
         ]
         let fs = fieldSetFromDuration(tagElements)
-        XCTAssertNotNil(fs["SomeMarker"])
-        XCTAssertNil(fs["SomeMarker"]?.current ?? nil)
+        #expect(fs["SomeMarker"] != nil)
+        #expect(fs["SomeMarker"]?.current ?? nil == nil)
     }
 
     // MARK: - fieldSetFromInstant
 
-    func testInstantExactCurrentYearInstant() {
+    @Test func testInstantExactCurrentYearInstant() {
         let tagElements: XbrlTagElements = [
             "Assets": [
                 "CurrentYearInstant": 5000.0,
@@ -190,11 +191,11 @@ final class FieldParserTests: XCTestCase {
             ]
         ]
         let fs = fieldSetFromInstant(tagElements)
-        XCTAssertEqual(fs["Assets"]?.current, 5000.0)
-        XCTAssertEqual(fs["Assets"]?.prior, 4500.0)
+        #expect(fs["Assets"]?.current == 5000.0)
+        #expect(fs["Assets"]?.prior == 4500.0)
     }
 
-    func testInstantEmptyInputReturnsEmpty() {
-        XCTAssertTrue(fieldSetFromInstant([:]).isEmpty)
+    @Test func testInstantEmptyInputReturnsEmpty() {
+        #expect(fieldSetFromInstant([:]).isEmpty)
     }
 }

@@ -4,21 +4,22 @@
 // - test_stats_counts_cache_categories / test_audit_lists_cache_categories
 //   （stats / audit は Swift CachePruner 未実装。実装時に移植する）
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class CachePrunerTests: XCTestCase {
-    private var tmpDir: URL!
-    private var edinetDir: URL!
+@Suite final class CachePrunerTests {
+    private let tmpDir: URL
+    private let edinetDir: URL
 
-    override func setUpWithError() throws {
+    init() throws {
         tmpDir = try ServiceTestSupport.makeTempDir()
         // 旧形式レイアウト（cacheDir/edinet）。Python テストと同じ配置
         edinetDir = tmpDir.appendingPathComponent("edinet", isDirectory: true)
         try FileManager.default.createDirectory(at: edinetDir, withIntermediateDirectories: true)
     }
 
-    override func tearDownWithError() throws {
+    deinit {
         try? FileManager.default.removeItem(at: tmpDir)
     }
 
@@ -26,7 +27,7 @@ final class CachePrunerTests: XCTestCase {
         try Data(content.utf8).write(to: url)
     }
 
-    func testPruneEdinetByAge() throws {
+    @Test func testPruneEdinetByAge() throws {
         let fm = FileManager.default
         let oldSearch = edinetDir.appendingPathComponent("search_2024-01-01.json")
         let newSearch = edinetDir.appendingPathComponent("search_2024-02-01.json")
@@ -50,15 +51,15 @@ final class CachePrunerTests: XCTestCase {
             edinetXbrlDays: 30
         )
 
-        XCTAssertEqual(summary.removedFiles, 1)
-        XCTAssertEqual(summary.removedDirs, 1)
-        XCTAssertFalse(fm.fileExists(atPath: oldSearch.path))
-        XCTAssertTrue(fm.fileExists(atPath: newSearch.path))
-        XCTAssertFalse(fm.fileExists(atPath: oldXbrl.path))
-        XCTAssertTrue(fm.fileExists(atPath: newXbrl.path))
+        #expect(summary.removedFiles == 1)
+        #expect(summary.removedDirs == 1)
+        #expect(!(fm.fileExists(atPath: oldSearch.path)))
+        #expect(fm.fileExists(atPath: newSearch.path))
+        #expect(!(fm.fileExists(atPath: oldXbrl.path)))
+        #expect(fm.fileExists(atPath: newXbrl.path))
     }
 
-    func testPruneEdinetDocIndexesKeepsRecentYearsByDefault() throws {
+    @Test func testPruneEdinetDocIndexesKeepsRecentYearsByDefault() throws {
         let fm = FileManager.default
         let currentYear = Calendar.current.component(.year, from: Date())
         let oldIndex = edinetDir.appendingPathComponent("doc_index_\(currentYear - 6).json")
@@ -68,12 +69,12 @@ final class CachePrunerTests: XCTestCase {
 
         let summary = CachePruner(cacheDir: tmpDir).prune(dryRun: false)
 
-        XCTAssertEqual(summary.removedFiles, 1)
-        XCTAssertFalse(fm.fileExists(atPath: oldIndex.path))
-        XCTAssertTrue(fm.fileExists(atPath: keptIndex.path))
+        #expect(summary.removedFiles == 1)
+        #expect(!(fm.fileExists(atPath: oldIndex.path)))
+        #expect(fm.fileExists(atPath: keptIndex.path))
     }
 
-    func testPruneEdinetDocIndexesCanKeepCustomYears() throws {
+    @Test func testPruneEdinetDocIndexesCanKeepCustomYears() throws {
         let fm = FileManager.default
         let currentYear = Calendar.current.component(.year, from: Date())
         let oldIndex = edinetDir.appendingPathComponent("doc_index_\(currentYear - 3).json")
@@ -86,8 +87,8 @@ final class CachePrunerTests: XCTestCase {
             edinetDocIndexYears: 3
         )
 
-        XCTAssertEqual(summary.removedFiles, 1)
-        XCTAssertFalse(fm.fileExists(atPath: oldIndex.path))
-        XCTAssertTrue(fm.fileExists(atPath: keptIndex.path))
+        #expect(summary.removedFiles == 1)
+        #expect(!(fm.fileExists(atPath: oldIndex.path)))
+        #expect(fm.fileExists(atPath: keptIndex.path))
     }
 }

@@ -2,10 +2,11 @@
 // 単体のみ企業は plain context を使い、連結企業は連結タグ欠落時に単体へフォールバックしない
 // （nil を返す）ことを検証する。
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class NonconsolidatedFallbackTests: XCTestCase {
+@Suite struct NonconsolidatedFallbackTests {
 
     /// 連結グループあり企業の最小限 tagElements ベース。
     /// 同一財務タグに「純粋な連結コンテキスト」と「_NonConsolidatedMember コンテキスト」の両方を置く。
@@ -20,7 +21,7 @@ final class NonconsolidatedFallbackTests: XCTestCase {
 
     // MARK: - 単体のみ企業: plain context を使う
 
-    func testIncomeStatementSingleEntityUsesPlainContext() {
+    @Test func testIncomeStatementSingleEntityUsesPlainContext() {
         let tagElements: XbrlTagElements = [
             "NetSalesSummaryOfBusinessResults": ["CurrentYearDuration": 4_547_599_000.0],
             "OperatingIncomeLoss": ["CurrentYearDuration": -120_634_000.0],
@@ -28,57 +29,57 @@ final class NonconsolidatedFallbackTests: XCTestCase {
         ]
         let fs = fieldSetFromDuration(tagElements)
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertEqual(result.sales, 4_547_599_000.0)
-        XCTAssertEqual(result.operatingProfit, -120_634_000.0)
-        XCTAssertEqual(result.netProfit, 17_478_000.0)
+        #expect(result.sales == 4_547_599_000.0)
+        #expect(result.operatingProfit == -120_634_000.0)
+        #expect(result.netProfit == 17_478_000.0)
     }
 
-    func testCashFlowSingleEntityUsesPlainContext() {
+    @Test func testCashFlowSingleEntityUsesPlainContext() {
         let tagElements: XbrlTagElements = [
             "NetCashProvidedByUsedInOperatingActivities": ["CurrentYearDuration": -482_098_000.0],
             "NetCashProvidedByUsedInInvestmentActivities": ["CurrentYearDuration": -306_697_000.0],
         ]
         let fs = fieldSetFromDuration(tagElements)
         let result = CashFlowExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertEqual(result.cfo, -482_098_000.0)
-        XCTAssertEqual(result.cfi, -306_697_000.0)
+        #expect(result.cfo == -482_098_000.0)
+        #expect(result.cfi == -306_697_000.0)
     }
 
-    func testBalanceSheetSingleEntityUsesPlainContext() {
+    @Test func testBalanceSheetSingleEntityUsesPlainContext() {
         let tagElements: XbrlTagElements = [
             "NetAssets": ["CurrentYearInstant": 4_521_695_000.0],
             "TotalAssetsSummaryOfBusinessResults": ["CurrentYearInstant": 6_705_070_000.0],
         ]
         let fs = fieldSetFromInstant(tagElements)
         let result = BalanceSheetExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertEqual(result.totalAssets, 6_705_070_000.0)
-        XCTAssertEqual(result.netAssets, 4_521_695_000.0)
+        #expect(result.totalAssets == 6_705_070_000.0)
+        #expect(result.netAssets == 4_521_695_000.0)
     }
 
     // MARK: - 連結企業: 単体へフォールバックしない
 
-    func testIncomeStatementConsolidatedCompanyBlocksNonconsolidatedFallback() {
+    @Test func testIncomeStatementConsolidatedCompanyBlocksNonconsolidatedFallback() {
         var tagElements = consolidatedCompanyBase()
         tagElements["NetSalesSummaryOfBusinessResults"] = [
             "CurrentYearDuration_NonConsolidatedMember": 4_547_599_000.0
         ]
         let fs = fieldSetFromDuration(tagElements)
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertNil(result.sales)
+        #expect(result.sales == nil)
     }
 
-    func testCashFlowConsolidatedCompanyBlocksNonconsolidatedFallback() {
+    @Test func testCashFlowConsolidatedCompanyBlocksNonconsolidatedFallback() {
         var tagElements = consolidatedCompanyBase()
         tagElements["NetCashProvidedByUsedInOperatingActivities"] = [
             "CurrentYearDuration_NonConsolidatedMember": -482_098_000.0
         ]
         let fs = fieldSetFromDuration(tagElements)
         let result = CashFlowExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertNil(result.cfo)
-        XCTAssertNil(result.cfi)
+        #expect(result.cfo == nil)
+        #expect(result.cfi == nil)
     }
 
-    func testBalanceSheetConsolidatedCompanyBlocksNonconsolidatedFallback() {
+    @Test func testBalanceSheetConsolidatedCompanyBlocksNonconsolidatedFallback() {
         var tagElements = consolidatedCompanyBase()
         tagElements["NetAssets"] = [
             "CurrentYearInstant_NonConsolidatedMember": 4_521_695_000.0
@@ -88,7 +89,7 @@ final class NonconsolidatedFallbackTests: XCTestCase {
         ]
         let fs = fieldSetFromInstant(tagElements)
         let result = BalanceSheetExtractor.extract(fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
-        XCTAssertNil(result.netAssets)
-        XCTAssertNil(result.totalAssets)
+        #expect(result.netAssets == nil)
+        #expect(result.totalAssets == nil)
     }
 }

@@ -1,10 +1,11 @@
 // Python tests/test_xbrl_interest_bearing_debt.py 相当
 // IBDExtractor / IFRSLease.extractLeaseLiabilities の動作を検証する。
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class IBDExtractorTests: XCTestCase {
+@Suite struct IBDExtractorTests {
 
     private func extract(in dir: URL) -> IBDResult {
         let (fs, std) = XBRLTestSupport.instantFieldSet(in: dir)
@@ -32,7 +33,7 @@ final class IBDExtractorTests: XCTestCase {
 
     // MARK: - 直接タグ
 
-    func testDirectTag() {
+    @Test func testDirectTag() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:InterestBearingDebt contextRef="CurrentYearInstant"
                 unitRef="JPY">500000000000</jppfs_cor:InterestBearingDebt>
@@ -41,16 +42,16 @@ final class IBDExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "field_parser")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.total, 500_000_000_000)
-            XCTAssertEqual(result.priorTotal, 450_000_000_000)
+            #expect(result.method == "field_parser")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.total == 500_000_000_000)
+            #expect(result.priorTotal == 450_000_000_000)
         }
     }
 
     // MARK: - J-GAAP コンポーネント積み上げ
 
-    func testAllComponents() {
+    @Test func testAllComponents() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
                 unitRef="JPY">10000000000</jppfs_cor:ShortTermLoansPayable>
@@ -67,23 +68,23 @@ final class IBDExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "field_parser")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
+            #expect(result.method == "field_parser")
+            #expect(result.accountingStandard == "J-GAAP")
             // 合計: 10+5+3+8+50+30 = 106 十億円
-            XCTAssertEqual(result.total, 106_000_000_000)
+            #expect(result.total == 106_000_000_000)
             let labels = result.components.map(\.label)
-            XCTAssertTrue(labels.contains("短期借入金"))
-            XCTAssertTrue(labels.contains("コマーシャル・ペーパー"))
-            XCTAssertTrue(labels.contains("1年内償還予定の社債"))
-            XCTAssertTrue(labels.contains("1年内返済予定の長期借入金"))
-            XCTAssertTrue(labels.contains("社債"))
-            XCTAssertTrue(labels.contains("長期借入金"))
+            #expect(labels.contains("短期借入金"))
+            #expect(labels.contains("コマーシャル・ペーパー"))
+            #expect(labels.contains("1年内償還予定の社債"))
+            #expect(labels.contains("1年内返済予定の長期借入金"))
+            #expect(labels.contains("社債"))
+            #expect(labels.contains("長期借入金"))
         }
     }
 
     // MARK: - IFRS コンポーネント
 
-    func testIfrsTags() {
+    @Test func testIfrsTags() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:BorrowingsCLIFRS contextRef="CurrentYearInstant"
                 unitRef="JPY">5923000000</jppfs_cor:BorrowingsCLIFRS>
@@ -100,14 +101,14 @@ final class IBDExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "field_parser")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
+            #expect(result.method == "field_parser")
+            #expect(result.accountingStandard == "IFRS")
             // 合計: 5923+10000+24989+8234+204412+211795 = 465353 百万円
-            XCTAssertEqual(result.total, 465_353_000_000)
+            #expect(result.total == 465_353_000_000)
         }
     }
 
-    func testIfrsBondsBorrowingsAndLeaseLiabilitiesTags() {
+    @Test func testIfrsBondsBorrowingsAndLeaseLiabilitiesTags() {
         // 三菱電機形式: 社債、借入金及びリース負債の流動/非流動集約タグを使う
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesCLIFRS contextRef="Prior1YearInstant"
@@ -121,16 +122,16 @@ final class IBDExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "field_parser")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.total, 360_661_000_000)
-            XCTAssertEqual(result.priorTotal, 394_636_000_000)
+            #expect(result.method == "field_parser")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.total == 360_661_000_000)
+            #expect(result.priorTotal == 394_636_000_000)
         }
     }
 
     // MARK: - 連結優先
 
-    func testConsolidatedOverNonconsolidated() {
+    @Test func testConsolidatedOverNonconsolidated() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
                 unitRef="JPY">999000000000</jppfs_cor:ShortTermLoansPayable>
@@ -140,11 +141,11 @@ final class IBDExtractorTests: XCTestCase {
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
             let comp = result.components.first { $0.label == "短期借入金" }
-            XCTAssertEqual(comp?.current, 999_000_000_000)
+            #expect(comp?.current == 999_000_000_000)
         }
     }
 
-    func testIfrsTagPreferredOverJgaapNonconsolidated() {
+    @Test func testIfrsTagPreferredOverJgaapNonconsolidated() {
         // IFRS連結タグが J-GAAP 個別タグより優先される。
         // NetAssets を連結・個別両コンテキストに置いて非連結フォールバックを抑止する。
         let xml = XBRLTestSupport.makeXbrlInstant("""
@@ -160,13 +161,13 @@ final class IBDExtractorTests: XCTestCase {
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
             let comp = result.components.first { $0.label == "短期借入金" }
-            XCTAssertEqual(comp?.current, 5_923_000_000)
+            #expect(comp?.current == 5_923_000_000)
         }
     }
 
     // MARK: - not_found
 
-    func testNoDebtTags() {
+    @Test func testNoDebtTags() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jpcrp_cor:BusinessRisksTextBlock contextRef="CurrentYearInstant">
                 テキストのみ
@@ -174,14 +175,14 @@ final class IBDExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.total)
+            #expect(result.method == "not_found")
+            #expect(result.total == nil)
         }
     }
 
     // MARK: - IFRSLease.extractLeaseLiabilities
 
-    func testLeasePatternAClAndNcl() {
+    @Test func testLeasePatternAClAndNcl() {
         // パターンA: 流動（1年以内）と非流動（1年超）の両方がある場合
         let rows = "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,500&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
             + "&lt;tr&gt;&lt;td&gt;支払期日が1年超&lt;/td&gt;&lt;td&gt;28,000&lt;/td&gt;&lt;td&gt;32,000&lt;/td&gt;&lt;/tr&gt;"
@@ -189,54 +190,54 @@ final class IBDExtractorTests: XCTestCase {
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
-            XCTAssertEqual(lease.current, 37_000 * Financial.millionYen)
-            XCTAssertEqual(lease.prior, 32_500 * Financial.millionYen)
+            #expect(lease.current == 37_000 * Financial.millionYen)
+            #expect(lease.prior == 32_500 * Financial.millionYen)
             let labels = lease.components.map(\.label)
-            XCTAssertTrue(labels.contains("リース負債（流動）"))
-            XCTAssertTrue(labels.contains("リース負債（非流動）"))
+            #expect(labels.contains("リース負債（流動）"))
+            #expect(labels.contains("リース負債（非流動）"))
         }
     }
 
-    func testLeasePatternBBookValue() {
+    @Test func testLeasePatternBBookValue() {
         // パターンB: 「帳簿価額」行のみある場合
         let rows = "&lt;tr&gt;&lt;td&gt;帳簿価額&lt;/td&gt;&lt;td&gt;28,500&lt;/td&gt;&lt;td&gt;32,539&lt;/td&gt;&lt;/tr&gt;"
         let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
-            XCTAssertEqual(lease.current, 32_539 * Financial.millionYen)
-            XCTAssertEqual(lease.prior, 28_500 * Financial.millionYen)
-            XCTAssertEqual(lease.components.count, 1)
-            XCTAssertEqual(lease.components.first?.label, "リース負債")
+            #expect(lease.current == 32_539 * Financial.millionYen)
+            #expect(lease.prior == 28_500 * Financial.millionYen)
+            #expect(lease.components.count == 1)
+            #expect(lease.components.first?.label == "リース負債")
         }
     }
 
-    func testLeaseNoMatchingRowsReturnsNil() {
+    @Test func testLeaseNoMatchingRowsReturnsNil() {
         let rows = "&lt;tr&gt;&lt;td&gt;減価償却費&lt;/td&gt;&lt;td&gt;1,000&lt;/td&gt;&lt;td&gt;1,200&lt;/td&gt;&lt;/tr&gt;"
         let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
-            XCTAssertNil(lease.current)
-            XCTAssertNil(lease.prior)
-            XCTAssertTrue(lease.components.isEmpty)
+            #expect(lease.current == nil)
+            #expect(lease.prior == nil)
+            #expect(lease.components.isEmpty)
         }
     }
 
-    func testLeaseNoTextblockReturnsNil() {
+    @Test func testLeaseNoTextblockReturnsNil() {
         let xml = XBRLTestSupport.makeXbrlInstant(ifrsBorrowingsXml)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
-            XCTAssertNil(lease.current)
-            XCTAssertNil(lease.prior)
-            XCTAssertTrue(lease.components.isEmpty)
+            #expect(lease.current == nil)
+            #expect(lease.prior == nil)
+            #expect(lease.components.isEmpty)
         }
     }
 
     // MARK: - リース負債の IBD 加算
 
-    func testLeaseAddedToIfrsIbd() {
+    @Test func testLeaseAddedToIfrsIbd() {
         // IFRSで借入金タグ + リース注記が両方ある場合、リース負債が加算される
         let rows = "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
             + "&lt;tr&gt;&lt;td&gt;支払期日が1年超&lt;/td&gt;&lt;td&gt;28,000&lt;/td&gt;&lt;td&gt;32,000&lt;/td&gt;&lt;/tr&gt;"
@@ -244,15 +245,15 @@ final class IBDExtractorTests: XCTestCase {
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
             // 借入金合計: 5923+204412+211795 = 422130 百万円、リース負債: 5000+32000 = 37000 百万円
-            XCTAssertTrue(result.method.contains("lease_textblock"))
-            XCTAssertEqual(result.total, (422_130 + 37_000) * Financial.millionYen)
+            #expect(result.method.contains("lease_textblock"))
+            #expect(result.total == (422_130 + 37_000) * Financial.millionYen)
             let labels = result.components.map(\.label)
-            XCTAssertTrue(labels.contains("リース負債（流動）"))
-            XCTAssertTrue(labels.contains("リース負債（非流動）"))
+            #expect(labels.contains("リース負債（流動）"))
+            #expect(labels.contains("リース負債（非流動）"))
         }
     }
 
-    func testJgaapLeaseNotAdded() {
+    @Test func testJgaapLeaseNotAdded() {
         // J-GAAPではリース注記があってもリース負債は加算されない
         let rows = "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
         let jgaapXml = """
@@ -264,8 +265,8 @@ final class IBDExtractorTests: XCTestCase {
         let xml = makeXbrlWithLeaseTextblock(jgaapXml, leaseHtmlRows: rows)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertFalse(result.method.contains("lease_textblock"))
-            XCTAssertEqual(result.total, 60_000_000_000)
+            #expect(!(result.method.contains("lease_textblock")))
+            #expect(result.total == 60_000_000_000)
         }
     }
 }

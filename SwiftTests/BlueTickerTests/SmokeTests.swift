@@ -1,11 +1,12 @@
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
 /// Python smoke/check.py に相当する Swift 版スモークテスト。
 /// EDINET XBRL キャッシュ（ローカル）を直接読んで抽出器を動かし、
 /// smoke/smoke_expected/*.json の期待値と照合する。
 /// Keychain・API キー不要。
-final class SmokeTests: XCTestCase {
+@Suite struct SmokeTests {
 
     // MARK: - Fixture → docID マッピング
 
@@ -33,7 +34,7 @@ final class SmokeTests: XCTestCase {
 
     // MARK: - テスト本体
 
-    func testSmokeAll() throws {
+    @Test func testSmokeAll() throws {
         let sourceURL = URL(fileURLWithPath: #file)
         let projectRoot = sourceURL
             .deletingLastPathComponent()  // BlueTickerTests
@@ -44,7 +45,8 @@ final class SmokeTests: XCTestCase {
             .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            throw XCTSkip("smoke/smoke_expected が見つかりません")
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
         }
 
         let fixtures = try FileManager.default.contentsOfDirectory(at: fixtureDir, includingPropertiesForKeys: nil)
@@ -99,8 +101,7 @@ final class SmokeTests: XCTestCase {
         }
 
         let failures = results.filter { $0.status == "DIFF" }
-        XCTAssert(failures.isEmpty,
-                  "スモークテスト失敗:\n" + failures.map { "\($0.id): \($0.detail)" }.joined(separator: "\n"))
+        #expect(failures.isEmpty, Comment(rawValue: "スモークテスト失敗:\n" + failures.map { "\($0.id): \($0.detail)" }.joined(separator: "\n")))
     }
 
     // MARK: - XBRL 抽出

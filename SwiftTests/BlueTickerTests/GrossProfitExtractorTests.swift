@@ -2,10 +2,11 @@
 // 損益計算書（Duration コンテキスト）から売上総利益を抽出するロジックを検証する。
 // 抽出戦略: 直接法 → 銀行業務粗利益 → 営業総利益 → 計算法（売上高 − 売上原価）
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class GrossProfitExtractorTests: XCTestCase {
+@Suite struct GrossProfitExtractorTests {
 
     private func extract(in dir: URL) -> GrossProfitResult {
         let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
@@ -14,7 +15,7 @@ final class GrossProfitExtractorTests: XCTestCase {
 
     // MARK: - 直接法
 
-    func testDirectTagJgaap() {
+    @Test func testDirectTagJgaap() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">120000000000</jppfs_cor:GrossProfit>
@@ -23,14 +24,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.grossProfit, 120_000_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 110_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.grossProfit == 120_000_000_000)
+            #expect(result.grossProfitPrior == 110_000_000_000)
         }
     }
 
-    func testDirectTagIfrs() {
+    @Test func testDirectTagIfrs() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -41,16 +42,16 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.grossProfit, 550_764_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 520_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.grossProfit == 550_764_000_000)
+            #expect(result.grossProfitPrior == 520_000_000_000)
         }
     }
 
     // MARK: - 計算法
 
-    func testComputedJgaapNetsalesCostofsales() {
+    @Test func testComputedJgaapNetsalesCostofsales() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:NetSales contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">300000000000</jppfs_cor:NetSales>
@@ -63,14 +64,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.grossProfit, 120_000_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 110_000_000_000)
+            #expect(result.method == "computed")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.grossProfit == 120_000_000_000)
+            #expect(result.grossProfitPrior == 110_000_000_000)
         }
     }
 
-    func testDirectJgaapOperatingGrossProfit() {
+    @Test func testDirectJgaapOperatingGrossProfit() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">27840047000</jppfs_cor:OperatingRevenue1>
@@ -83,14 +84,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "operating_gross_profit")
-            XCTAssertEqual(result.grossProfit, 3_320_406_000)
-            XCTAssertEqual(result.grossProfitPrior, 2_932_980_000)
-            XCTAssertEqual(result.grossProfitLabel, "営業総利益")
+            #expect(result.method == "operating_gross_profit")
+            #expect(result.grossProfit == 3_320_406_000)
+            #expect(result.grossProfitPrior == 2_932_980_000)
+            #expect(result.grossProfitLabel == "営業総利益")
         }
     }
 
-    func testComputedJgaapOperatingRevenueOperatingCost() {
+    @Test func testComputedJgaapOperatingRevenueOperatingCost() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">27840047000</jppfs_cor:OperatingRevenue1>
@@ -99,12 +100,12 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.grossProfit, 3_320_407_000)
+            #expect(result.method == "computed")
+            #expect(result.grossProfit == 3_320_407_000)
         }
     }
 
-    func testComputedIfrsRevenueCostofsales() {
+    @Test func testComputedIfrsRevenueCostofsales() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -119,14 +120,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.grossProfit, 200_000_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 180_000_000_000)
+            #expect(result.method == "computed")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.grossProfit == 200_000_000_000)
+            #expect(result.grossProfitPrior == 180_000_000_000)
         }
     }
 
-    func testComputedNoCogsUsesSalesOnly() {
+    @Test func testComputedNoCogsUsesSalesOnly() {
         // 売上原価タグがない場合、売上高がそのまま売上総利益になる（COGS=0扱い）
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:NetSales contextRef="CurrentYearDuration"
@@ -134,14 +135,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.grossProfit, 100_000_000_000)
+            #expect(result.method == "computed")
+            #expect(result.grossProfit == 100_000_000_000)
         }
     }
 
     // MARK: - 銀行業務粗利益
 
-    func testComputedBankBusinessGrossProfit() {
+    @Test func testComputedBankBusinessGrossProfit() {
         // 三菱UFJ 2025年3月期相当
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OrdinaryIncomeBNK contextRef="CurrentYearDuration"
@@ -183,40 +184,40 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "business_gross_profit")
-            XCTAssertEqual(result.grossProfit, 4_819_211_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 4_732_215_000_000)
-            XCTAssertEqual(result.grossProfitLabel, "連結業務粗利益")
+            #expect(result.method == "business_gross_profit")
+            #expect(result.grossProfit == 4_819_211_000_000)
+            #expect(result.grossProfitPrior == 4_732_215_000_000)
+            #expect(result.grossProfitLabel == "連結業務粗利益")
         }
     }
 
-    func testBankBusinessGrossProfitAllowsTradingIncomeWithoutExpense() {
+    @Test func testBankBusinessGrossProfitAllowsTradingIncomeWithoutExpense() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:TradingIncomeOIBNK contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">454258000000</jppfs_cor:TradingIncomeOIBNK>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "business_gross_profit")
-            XCTAssertEqual(result.grossProfit, 454_258_000_000)
+            #expect(result.method == "business_gross_profit")
+            #expect(result.grossProfit == 454_258_000_000)
         }
     }
 
-    func testBankBusinessGrossProfitAllowsTradingExpenseWithoutIncome() {
+    @Test func testBankBusinessGrossProfitAllowsTradingExpenseWithoutIncome() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:TradingExpensesOEBNK contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">12000000000</jppfs_cor:TradingExpensesOEBNK>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "business_gross_profit")
-            XCTAssertEqual(result.grossProfit, -12_000_000_000)
+            #expect(result.method == "business_gross_profit")
+            #expect(result.grossProfit == -12_000_000_000)
         }
     }
 
     // MARK: - 連結優先
 
-    func testConsolidatedOverNonconsolidated() {
+    @Test func testConsolidatedOverNonconsolidated() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">200000000000</jppfs_cor:GrossProfit>
@@ -225,12 +226,12 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.grossProfit, 200_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == 200_000_000_000)
         }
     }
 
-    func testPureContextOverSegmentContext() {
+    @Test func testPureContextOverSegmentContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">200000000000</jppfs_cor:GrossProfit>
@@ -243,25 +244,25 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.grossProfit, 200_000_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 180_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == 200_000_000_000)
+            #expect(result.grossProfitPrior == 180_000_000_000)
         }
     }
 
-    func testSingleEntityUsesPlainContext() {
+    @Test func testSingleEntityUsesPlainContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.grossProfit, 50_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == 50_000_000_000)
         }
     }
 
-    func testSingleEntityPureContextOverSegmentContext() {
+    @Test func testSingleEntityPureContextOverSegmentContext() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
@@ -274,36 +275,36 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertEqual(result.grossProfit, 50_000_000_000)
-            XCTAssertEqual(result.grossProfitPrior, 45_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == 50_000_000_000)
+            #expect(result.grossProfitPrior == 45_000_000_000)
         }
     }
 
     // MARK: - not_found
 
-    func testNotFoundEmptyDir() {
+    @Test func testNotFoundEmptyDir() {
         XBRLTestSupport.withXbrlDir(nil) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.grossProfit)
-            XCTAssertNil(result.grossProfitPrior)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+            #expect(result.grossProfitPrior == nil)
         }
     }
 
-    func testNotFoundNoMatchingTags() {
+    @Test func testNotFoundNoMatchingTags() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:TotalAssets contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">999000000000</jppfs_cor:TotalAssets>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.grossProfit)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
         }
     }
 
-    func testUsgaapHtmlGrossProfit() {
+    @Test func testUsgaapHtmlGrossProfit() {
         // US-GAAP: 連結損益計算書 HTML から売上総利益を抽出する
         let html = """
         <html><body><table>
@@ -318,14 +319,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml, extraFiles: ["0105010.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertEqual(result.grossProfit, 1_137_928 * Financial.millionYen)
-            XCTAssertEqual(result.grossProfitPrior, 1_033_224 * Financial.millionYen)
+            #expect(result.method == "usgaap_html")
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.grossProfit == 1_137_928 * Financial.millionYen)
+            #expect(result.grossProfitPrior == 1_033_224 * Financial.millionYen)
         }
     }
 
-    func testIfrsTextblockFallbackWhenNoCogsTag() {
+    @Test func testIfrsTextblockFallbackWhenNoCogsTag() {
         // IFRS Summary型: 売上原価タグが存在しない場合、PL TextBlock から粗利益を抽出する
         // （売上高のみの computed で過大値を返さない）
         let tableHtml = "&lt;table&gt;"
@@ -340,14 +341,14 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "ifrs_textblock")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.grossProfit, 200_000 * Financial.millionYen)
-            XCTAssertEqual(result.grossProfitPrior, 180_000 * Financial.millionYen)
+            #expect(result.method == "ifrs_textblock")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.grossProfit == 200_000 * Financial.millionYen)
+            #expect(result.grossProfitPrior == 180_000 * Financial.millionYen)
         }
     }
 
-    func testPriorOnly() {
+    @Test func testPriorOnly() {
         // 前期値のみ存在する場合も direct で返す
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="Prior1YearDuration"
@@ -355,9 +356,9 @@ final class GrossProfitExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "direct")
-            XCTAssertNil(result.grossProfit)
-            XCTAssertEqual(result.grossProfitPrior, 100_000_000_000)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == nil)
+            #expect(result.grossProfitPrior == 100_000_000_000)
         }
     }
 }

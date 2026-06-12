@@ -2,10 +2,11 @@
 // 税引前利益・法人税等の抽出と実効税率計算を検証する（J-GAAP / IFRS / US-GAAP HTML）。
 // 前期側の値（prior_*）は Swift の TaxExpenseResult に未実装のため検証対象外。
 
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class TaxExpenseExtractorTests: XCTestCase {
+@Suite struct TaxExpenseExtractorTests {
 
     private func extract(in dir: URL) -> TaxExpenseResult {
         let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
@@ -32,7 +33,7 @@ final class TaxExpenseExtractorTests: XCTestCase {
 
     // MARK: - J-GAAP
 
-    func testBasicJgaap() {
+    @Test func testBasicJgaap() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:IncomeBeforeIncomeTaxes contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:IncomeBeforeIncomeTaxes>
@@ -45,15 +46,15 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.accountingStandard, "J-GAAP")
-            XCTAssertEqual(result.pretaxIncome, 100_000_000_000)
-            XCTAssertEqual(result.incomeTax, 25_000_000_000)
-            XCTAssertEqual(result.effectiveTaxRate!, 0.25, accuracy: 1e-9)
+            #expect(result.method == "computed")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.pretaxIncome == 100_000_000_000)
+            #expect(result.incomeTax == 25_000_000_000)
+            #expect(abs((result.effectiveTaxRate!) - (0.25)) <= (1e-9))
         }
     }
 
-    func testConsolidatedOverNonconsolidated() {
+    @Test func testConsolidatedOverNonconsolidated() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:IncomeBeforeIncomeTaxes contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:IncomeBeforeIncomeTaxes>
@@ -64,11 +65,11 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.pretaxIncome, 100_000_000_000)
+            #expect(result.pretaxIncome == 100_000_000_000)
         }
     }
 
-    func testEffectiveTaxRateZeroPretax() {
+    @Test func testEffectiveTaxRateZeroPretax() {
         // 税引前利益がゼロの場合、実効税率は nil を返す（ゼロ除算回避）
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:IncomeBeforeIncomeTaxes contextRef="CurrentYearDuration"
@@ -78,13 +79,13 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertNil(result.effectiveTaxRate)
+            #expect(result.effectiveTaxRate == nil)
         }
     }
 
     // MARK: - IFRS
 
-    func testBasicIfrs() {
+    @Test func testBasicIfrs() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">200000000000</jpifrs_cor:BorrowingsCLIFRS>
@@ -99,32 +100,32 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "computed")
-            XCTAssertEqual(result.accountingStandard, "IFRS")
-            XCTAssertEqual(result.pretaxIncome, 80_000_000_000)
-            XCTAssertEqual(result.incomeTax, 20_000_000_000)
-            XCTAssertEqual(result.effectiveTaxRate!, 0.25, accuracy: 1e-9)
+            #expect(result.method == "computed")
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.pretaxIncome == 80_000_000_000)
+            #expect(result.incomeTax == 20_000_000_000)
+            #expect(abs((result.effectiveTaxRate!) - (0.25)) <= (1e-9))
         }
     }
 
     // MARK: - US-GAAP HTML
 
-    func testAggregateTaxRow() {
+    @Test func testAggregateTaxRow() {
         let html = makeUsgaapHtml("""
             <tr><td>税引前当期純利益</td><td>36,000</td><td>38,440</td></tr>
             <tr><td>法人税等合計</td><td>9,000</td><td>8,757</td></tr>
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertEqual(result.pretaxIncome, 38_440_000_000)
-            XCTAssertEqual(result.incomeTax, 8_757_000_000)
-            XCTAssertEqual(result.effectiveTaxRate!, 8757.0 / 38440.0, accuracy: 1e-4)
+            #expect(result.method == "usgaap_html")
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.pretaxIncome == 38_440_000_000)
+            #expect(result.incomeTax == 8_757_000_000)
+            #expect(abs((result.effectiveTaxRate!) - (8757.0 / 38440.0)) <= (1e-4))
         }
     }
 
-    func testSumCurrentDeferredTax() {
+    @Test func testSumCurrentDeferredTax() {
         // 法人税等合計がなければ当期税 + 繰延税金を合算する
         let html = makeUsgaapHtml("""
             <tr><td>税引前当期純利益</td><td>36,000</td><td>38,440</td></tr>
@@ -133,12 +134,12 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.incomeTax, 8_757_000_000)  // 7000 + 1757
+            #expect(result.method == "usgaap_html")
+            #expect(result.incomeTax == 8_757_000_000)  // 7000 + 1757
         }
     }
 
-    func testDeltaNotation() {
+    @Test func testDeltaNotation() {
         // △記法の繰延税金も正しく処理する
         let html = makeUsgaapHtml("""
             <tr><td>税引前当期純利益</td><td>36,000</td><td>38,440</td></tr>
@@ -147,12 +148,12 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.incomeTax, 8_757_000_000)  // 9500 + (-743)
+            #expect(result.method == "usgaap_html")
+            #expect(result.incomeTax == 8_757_000_000)  // 9500 + (-743)
         }
     }
 
-    func testPartialAggregateUsesAggregateCurrent() {
+    @Test func testPartialAggregateUsesAggregateCurrent() {
         // 合計行に当期しかない場合も当期値は合計行から取得する
         // （Python は前期を個別成分から補完するが、Swift の TaxExpenseResult は前期未保持）
         let html = makeUsgaapHtml("""
@@ -163,37 +164,37 @@ final class TaxExpenseExtractorTests: XCTestCase {
         """)
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml, extraFiles: ["0105010_test_ixbrl.htm": html]) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "usgaap_html")
-            XCTAssertEqual(result.incomeTax, 8_757_000_000)
+            #expect(result.method == "usgaap_html")
+            #expect(result.incomeTax == 8_757_000_000)
         }
     }
 
-    func testNoHtmlReturnsNotFound() {
+    @Test func testNoHtmlReturnsNotFound() {
         XBRLTestSupport.withXbrlDir(usgaapMarkerXml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertEqual(result.accountingStandard, "US-GAAP")
-            XCTAssertNil(result.pretaxIncome)
+            #expect(result.method == "not_found")
+            #expect(result.accountingStandard == "US-GAAP")
+            #expect(result.pretaxIncome == nil)
         }
     }
 
     // MARK: - not_found
 
-    func testNoTagsReturnsNotFound() {
+    @Test func testNoTagsReturnsNotFound() {
         let xml = XBRLTestSupport.makeXbrlDuration("")
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.pretaxIncome)
-            XCTAssertNil(result.incomeTax)
+            #expect(result.method == "not_found")
+            #expect(result.pretaxIncome == nil)
+            #expect(result.incomeTax == nil)
         }
     }
 
-    func testEmptyDirectory() {
+    @Test func testEmptyDirectory() {
         XBRLTestSupport.withXbrlDir(nil) { dir in
             let result = extract(in: dir)
-            XCTAssertEqual(result.method, "not_found")
-            XCTAssertNil(result.pretaxIncome)
+            #expect(result.method == "not_found")
+            #expect(result.pretaxIncome == nil)
         }
     }
 }

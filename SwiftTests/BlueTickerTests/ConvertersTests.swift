@@ -1,32 +1,33 @@
-import XCTest
+import Testing
+import Foundation
 @testable import BlueTicker
 
-final class ConvertersTests: XCTestCase {
-    func testToFloatFromDouble() {
-        XCTAssertEqual(toFloat(1.5), 1.5)
+@Suite struct ConvertersTests {
+    @Test func testToFloatFromDouble() {
+        #expect(toFloat(1.5) == 1.5)
     }
 
-    func testToFloatFromString() {
-        XCTAssertEqual(toFloat("3.14"), 3.14)
+    @Test func testToFloatFromString() {
+        #expect(toFloat("3.14") == 3.14)
     }
 
-    func testToFloatNaN() {
-        XCTAssertNil(toFloat(Double.nan))
+    @Test func testToFloatNaN() {
+        #expect(toFloat(Double.nan) == nil)
     }
 
-    func testToFloatNil() {
-        XCTAssertNil(toFloat(nil))
+    @Test func testToFloatNil() {
+        #expect(toFloat(nil) == nil)
     }
 
-    func testIsValidValue() {
-        XCTAssertTrue(isValidValue(1.0))
-        XCTAssertFalse(isValidValue(nil))
-        XCTAssertFalse(isValidValue(Double.nan))
-        XCTAssertFalse(isValidValue(Double.infinity))
+    @Test func testIsValidValue() {
+        #expect(isValidValue(1.0))
+        #expect(!(isValidValue(nil)))
+        #expect(!(isValidValue(Double.nan)))
+        #expect(!(isValidValue(Double.infinity)))
     }
 
-    func testIsFutureDate() {
-        XCTAssertFalse(isFutureDate("2020-01-01"))
-        XCTAssertTrue(isFutureDate("2099-12-31"))
+    @Test func testIsFutureDate() {
+        #expect(!(isFutureDate("2020-01-01")))
+        #expect(isFutureDate("2099-12-31"))
     }
 }
