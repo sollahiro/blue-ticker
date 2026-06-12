@@ -8,7 +8,7 @@
 | **remote (self-host)** | 同一マシン | blt-server | 基盤実装済み・設定待ち |
 | **remote (cloud)** | リモートサーバー | blt-server | 将来検討 |
 
-`blt-server` は `poetry install --with server && blt-server` で起動。self-hosted MCP の基盤実装は完了済み。
+`blt-server` は `swift run blt-server`（または `swift build -c release` 後に `.build/release/blt-server`）で起動。self-hosted MCP の基盤実装は完了済み。Python `blt-server`（FastMCP）は Swift 実装（`modelcontextprotocol/swift-sdk` 0.12.1）に置き換え済み。
 
 blt-server には 2 種類のクライアントが接続できる。デプロイモード（上表）はサーバーの配置場所を表すもので、クライアント種別とは独立した軸。
 
@@ -88,11 +88,11 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ---
 
-## 将来: Python blt-server → Swift への置き換え
+## Python blt-server → Swift 置き換え（2026-06-12 完了）
 
-Swift 移行 Phase 5 で、Python `blt-server`（FastMCP）を Swift MCP サーバー（HTTP transport）に置き換える予定。  
-実装言語が変わるだけで、このドキュメントのデプロイモード・データパイプライン・未決事項はそのまま引き継ぐ。  
-詳細: `docs/swift-migration-feasibility.md` の Phase 5。
+Swift 移行 Phase 5 で、Python `blt-server`（FastMCP）を Swift MCP サーバー（HTTP transport）に置き換え済み。  
+実装言語が変わるだけで、このドキュメントのデプロイモード・データパイプライン・未決事項はそのまま引き継いでいる。  
+詳細: `docs/swift-migration-feasibility.md` の Phase 5 実装範囲。
 
 ---
 

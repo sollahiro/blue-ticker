@@ -196,7 +196,45 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
 | Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
-| Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
+| Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
+
+### Phase 5 実装範囲（2026-06-12）
+
+Python `blt-server`（FastMCP）を Swift 実装に完全置き換え。`swift build` で `blt-server` バイナリが生成される。
+
+**アーキテクチャ変更:**
+
+- `BlueTickerCore`（ライブラリターゲット）: `Sources/BlueTicker/` 全体（CLI・XBRL・サービス層・MCPサーバー実装を含む共有ライブラリ）
+- `BlueTicker`（実行ターゲット）: `Sources/BlueTickerMain/main.swift` のみ（`Task { await Ticker.main() }` + `RunLoop.main.run()`）
+- `BltServer`（実行ターゲット）: `Sources/BltServer/main.swift` のみ（`runBltServer(host:port:)` 呼び出し）
+
+**追加ファイル:**
+
+| ファイル | 役割 |
+|---|---|
+| `Sources/BlueTicker/MCPServer/HTTPApp.swift` | SwiftNIO ベース HTTP サーバー。`StatefulHTTPServerTransport` とセッション管理を実装（swift-sdk conformance server を参考に NIO で再実装） |
+| `Sources/BlueTicker/MCPServer/ServerSetup.swift` | `BltServerContext` actor（`EdinetAPIClient`・`CacheManager` 共有）と 6 MCP ツールのハンドラー |
+| `Sources/BlueTicker/MCPServer/BltServerEntry.swift` | `public func runBltServer(host:port:)` エントリポイント。`SettingsStore` から API キーを読み出し `HTTPApp` を起動 |
+| `Sources/BltServer/main.swift` | `runBltServer()` を呼ぶだけの薄いエントリポイント |
+| `Sources/BlueTickerMain/main.swift` | `ticker` CLI の async エントリポイント |
+
+**実装した MCP ツール（6 件）:**
+
+| ツール名 | 機能 |
+|---|---|
+| `search_companies` | 銘柄コード・企業名で検索 |
+| `search_by_sector` | セクターで銘柄一覧を取得 |
+| `get_filings` | 有価証券報告書一覧を取得 |
+| `get_financial_summary` | 財務指標サマリーを取得（キャッシュ優先） |
+| `get_filing_content` | 書類セクション（リスク・MD&A 等）テキストを抽出 |
+| `sync_document_list` | EDINET 書類一覧を同期 |
+
+**技術的知見:**
+
+- `JSONRPCMessageKind` は swift-sdk 内で `package enum` 宣言のため外部パッケージから参照不可。`isInitializeRequest(_ data: Data)` として `JSONSerialization` で代替実装
+- `AsyncParsableCommand.main()` を `main.swift` から呼ぶには `Task { await Ticker.main() }` + `RunLoop.main.run()` パターンが必要（`@main` なしで async エントリポイントを確立）
+- SwiftPM ライブラリターゲットの型はデフォルト `internal`。`Ticker` 構造体のみ `public` 化し、CLIサブコマンド群は `internal` のまま（`App.swift` が同一モジュール内のため）
+- `@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)` を `Ticker` に付与することで ArgumentParser のアベイラビリティチェックをパス
 
 ### Phase 4 HTML パース実装範囲（2026-06-11）
 
@@ -348,11 +386,12 @@ Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
 Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testing）/ CI 整備（macOS + Linux）
-Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
+Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完全置き換え）
 ```
 
 Phase 3 完了時点で全コマンド（`ticker search`・`ticker filings`・`ticker cache`・`ticker config`・`ticker analyze`・`ticker filing`）が純 Swift で動作する。  
-Phase 4 の HTML パース完了後に IFRS リース負債・US-GAAP 連結財務諸表が完全対応となる。
+Phase 4 の HTML パース完了後に IFRS リース負債・US-GAAP 連結財務諸表が完全対応となる。  
+Phase 5 完了後は Python `blt-server`（FastMCP）が Swift 実装に置き換わり、Python 依存が完全に解消される。
 
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる
