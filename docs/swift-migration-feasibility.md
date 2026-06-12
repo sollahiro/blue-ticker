@@ -197,6 +197,10 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
 | Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
 | Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
+| Phase A | 未着手 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
+| Phase B | 未着手 | 半期機能（`--half` フラグ・HalfYearDataService・FinancialData） |
+| Phase C | 未着手 | セグメント情報（`segment_extractor`・`ticker filing` セクション拡充） |
+| Phase D | 未着手 | Python 全廃（`blue_ticker/` 削除・CI 更新・Homebrew formula 更新） |
 
 ### Phase 5 実装範囲（2026-06-12）
 
@@ -387,11 +391,13 @@ Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
 Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testing）/ CI 整備（macOS + Linux）
 Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完全置き換え）
+Phase A  : 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
+Phase B  : 半期機能（--half フラグ・HalfYearDataService）
+Phase C  : セグメント情報（ticker filing 拡充）
+Phase D  : Python 全廃（blue_ticker/ 削除・CI・Homebrew 更新）
 ```
 
-Phase 3 完了時点で全コマンド（`ticker search`・`ticker filings`・`ticker cache`・`ticker config`・`ticker analyze`・`ticker filing`）が純 Swift で動作する。  
-Phase 4 の HTML パース完了後に IFRS リース負債・US-GAAP 連結財務諸表が完全対応となる。  
-Phase 5 完了後は Python `blt-server`（FastMCP）が Swift 実装に置き換わり、Python 依存が完全に解消される。
+Phase 3 完了時点で全コマンドが純 Swift で動作する。Phase 4 で IFRS リース負債・US-GAAP 連結財務諸表が完全対応。Phase 5 で Python blt-server を置き換え。Phase A〜D で残存 Python 機能を移植し Python 依存を完全に解消する。
 
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる
@@ -403,6 +409,162 @@ Phase 5 完了後は Python `blt-server`（FastMCP）が Swift 実装に置き�
 ### 案 C: 完全一括移行
 
 全レイヤーを同時に Swift 化。動作確認できる中間状態がなくリスクが最も高い。
+
+---
+
+---
+
+## Python 全廃フェーズ（Phase A〜D）
+
+Phase 1〜5 で Swift の全コマンドが動作しているが、Python `blue_ticker/` パッケージに残存する機能がある。Phase A〜D で移植を完遂し、Python 依存を完全に解消する。
+
+### 未移植機能の全体像
+
+| 機能 | Python モジュール | 規模 | `ticker analyze` への影響 |
+|---|---|---|---|
+| IFRS 純収益フォールバック | `analysis/net_revenue.py` | 35行 | IFRS 金融会社の粗利益・営業利益フィールドが欠落 |
+| 自己株式取得 | `analysis/share_buyback.py` | 121行 | 「自己株式取得 (百万)」フィールドが常に空 |
+| ROE ウォーターフォール | `utils/roe_waterfall.py` | 112行 | ROE前年差・3因子分解フィールドが空 |
+| ROIC ウォーターフォール | `utils/roic_waterfall.py` | 213行 | ROIC前年差・2因子分解フィールドが空 |
+| 営業利益ウォーターフォール | `utils/operating_profit_change.py` | 482行 | 営業利益前年差・4因子分解フィールドが空 |
+| 半期データサービス | `services/half_year_data_service.py` | 595行 | `--half` フラグ未実装 |
+| 半期レコード統合 | `utils/financial_data.py` | 372行 | 同上 |
+| 半期 JSON 出力 | `utils/output_serializer.py` | 68行 | 同上 |
+| セグメント情報抽出 | `analysis/segment_extractor.py` | 372行 | `ticker filing` でセグメントセクションが取得不可 |
+
+---
+
+### Phase A: 年次 analyze 不足フィールドの補完
+
+**対象**: `ticker analyze` の年次出力で現在空になっているフィールドを埋める。
+
+#### A-1: IFRS 純収益フォールバック（`net_revenue.py`、35行）
+
+Python の `net_revenue.py` は IFRS 金融会社（銀行・保険）向けに `NetRevenueIFRS` タグと `BusinessProfitIFRSSummaryOfBusinessResults` タグを XBRL から抽出する。現在の Swift Extractors では J-GAAP / US-GAAP 金融会社向けの専用パスはあるが IFRS 金融会社は未対応。
+
+- **実装箇所**: `Sources/BlueTicker/Analysis/Extractors.swift` の `GrossProfitExtractor` / `OperatingProfitExtractor` に IFRS 純収益フォールバック分岐を追加
+- **テスト**: IFRS 金融会社（例: 野村 HD、三菱 UFJ フィナンシャル・グループ）のフィクスチャでユニットテスト追加
+
+#### A-2: 自己株式取得（`share_buyback.py`、121行）
+
+Python の解決優先順位: 株主資本等変動計算書（SS連結）→ CF 計算書（直接タグ）→ SS 単体。値は負値を正値に変換して百万円で返す。
+
+- **実装箇所**: `Sources/BlueTicker/Analysis/Extractors.swift` に `ShareBuybackExtractor` を追加。`MetricsTypes.swift` の `ShareBuyback` フィールドへ値を設定
+- **テスト**: J-GAAP・IFRS・US-GAAP 各 1 社のフィクスチャでユニットテスト
+
+#### A-3: ROE ウォーターフォール（`roe_waterfall.py`、112行）
+
+DuPont 3因子分解: `ROE前年差 = 純利益率差影響 + 総資産回転率差影響 + 財務レバレッジ差影響`
+
+Python の計算式（連鎖法）:
+```
+Δ純利益率影響    = Δ(NI/Sales) × 前年総資産回転率 × 前年レバレッジ
+Δ総資産回転率影響 = 当年純利益率 × Δ(Sales/Assets) × 前年レバレッジ
+Δレバレッジ影響   = 当年純利益率 × 当年総資産回転率 × Δ(Assets/Equity)
+```
+
+- **実装箇所**: `Sources/BlueTicker/Utils/RoeWaterfall.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
+- **テスト**: 既知の入出力値でユニットテスト（Python 版の計算結果をゴールデン値として使用）
+
+#### A-4: ROIC ウォーターフォール（`roic_waterfall.py`、213行）
+
+2因子分解: `ROIC前年差 = NOPATマージン差影響 + 投下資本回転率差影響`
+
+```
+ROIC = (NOPAT / Sales) × (Sales / IC)
+Δ NOPATマージン影響    = Δ(NOPAT/Sales) × 前年投下資本回転率
+Δ 投下資本回転率影響   = 当年 NOPATマージン × Δ(Sales/IC)
+```
+
+NOPAT = 営業利益 × (1 - 実効税率)、IC = 有利子負債 + 株主資本。最古年度は XBRL の `Prior1Year` コンテキストから前期値を直接取得する（年リストから計算する年度より 1 年分多く遡れる）。
+
+- **実装箇所**: `Sources/BlueTicker/Utils/RoicWaterfall.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
+- **テスト**: ユニットテスト + スモークテスト 11 社で前年差フィールドの非 nil 検証
+
+#### A-5: 営業利益ウォーターフォール（`operating_profit_change.py`、482行）
+
+4因子分解: `営業利益前年差 = 売上差影響 + 粗利率差影響 + 販管費差影響 + 調整`
+
+```
+売上差影響    = Δ売上 × 前年粗利率
+粗利率差影響  = 当年売上 × Δ粗利率
+販管費差影響  = -(Δ販管費)
+調整         = 残差（IFRS 事業利益と OP の差など）
+```
+
+- **実装箇所**: `Sources/BlueTicker/Utils/OperatingProfitChange.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
+- **テスト**: ユニットテスト（Python 版の出力をゴールデン値として使用）
+
+---
+
+### Phase B: 半期機能（`--half` フラグ）
+
+**対象**: `ticker analyze --half` で H1/H2 期間ごとの財務指標を表示する機能。
+
+#### 実装スコープ
+
+| コンポーネント | Python 相当 | 概要 |
+|---|---|---|
+| 半期書類探索 | `edinet_discovery.build_half_year_document_index_for_code()` | 半期報告書（DocTypeCode=120）のインデックス構築 |
+| 半期レコード統合 | `financial_data.py` | H1 + H2 の期間レコード組み立て、前期 H2 の合成計算 |
+| 半期指標集計 | `half_year_data_service.py` | XBRL ダウンロード・フィールド抽出・ウォーターフォール適用 |
+| CLI フラグ | `--half` | `AnalyzeCommand` に `--half` オプションを追加 |
+| JSON 出力 | `output_serializer.py` | 半期形式の JSON 出力 |
+
+#### 設計方針
+
+- `EdinetDiscovery` に半期書類インデックス構築メソッドを追加
+- `HalfYearAnalyzer`（新規 actor）が H1/H2 期間の組み立てと XBRL 抽出を担当
+- 前期 H2 の合成計算（当年度全体 XBRL − H1 EDINET）は `HalfYearAnalyzer` 内に実装
+- `AnalyzeCommand` の `--half` フラグで `HalfYearAnalyzer` を呼び出す
+
+---
+
+### Phase C: セグメント情報（`ticker filing` 拡充）
+
+**対象**: `segment_extractor.py`（372行）の移植。`ticker filing --sections segment` でセグメント別売上・地域別売上を Markdown テーブルとして出力する。
+
+#### 実装スコープ
+
+Python の抽出優先順位:
+1. XBRL TextBlock HTML テーブル（期間判定付き）
+2. XBRL ディメンション付きファクト（フォールバック）
+
+- **実装箇所**: `Sources/BlueTicker/Analysis/SegmentExtractor.swift`（新規）、`FilingCommand` の `--sections` に `segment` を追加
+- **テスト**: フィクスチャ XML でユニットテスト（J-GAAP・IFRS 各 1 社）
+
+---
+
+### Phase D: Python 全廃
+
+Phase A〜C 完了後に実施。
+
+#### 削除対象
+
+| 対象 | 内容 |
+|---|---|
+| `blue_ticker/` | Python パッケージ本体（91 ファイル、約 17,500行） |
+| `tests/` | Python テスト（45 ファイル） |
+| `smoke/` | Python スモークスクリプト（7 ファイル） |
+| `pyproject.toml`, `poetry.lock`, `uv.lock` | Python プロジェクト設定 |
+| `pyrightconfig.json` | Python 型チェッカー設定 |
+| `blue_ticker.spec` | PyInstaller 設定 |
+| `dist/` | PyInstaller 生成バイナリ |
+
+#### CI 更新（`.github/workflows/`）
+
+- `ci.yml`: Python/Poetry/pyright/pytest ジョブを削除。Swift ジョブ（macOS + Linux）のみに整理
+- `release.yml`: PyInstaller ビルドを削除。`swift build -c release` でバイナリ生成に置き換え
+
+#### Homebrew formula 更新（`Formula/`）
+
+- インストール元を Python wheel / PyInstaller バイナリから Swift リリースバイナリに変更
+- `brew install` 時の Python ランタイム依存を削除
+
+#### CLAUDE.md 更新
+
+- Python アーキテクチャ依存ルール（`services/` は `blue_ticker.app` をインポートしてはならない、等）を削除
+- Swift 向けのアーキテクチャルールに書き換え
 
 ---
 
