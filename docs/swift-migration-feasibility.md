@@ -197,7 +197,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
 | Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
 | Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
-| Phase A | 未着手 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
+| Phase A | ✅ 完了 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
 | Phase B | 未着手 | 半期機能（`--half` フラグ・HalfYearDataService・FinancialData） |
 | Phase C | 未着手 | セグメント情報（`segment_extractor`・`ticker filing` セクション拡充） |
 | Phase D | 未着手 | Python 全廃（`blue_ticker/` 削除・CI 更新・Homebrew formula 更新） |
@@ -434,66 +434,19 @@ Phase 1〜5 で Swift の全コマンドが動作しているが、Python `blue_
 
 ---
 
-### Phase A: 年次 analyze 不足フィールドの補完
+### Phase A: 年次 analyze 不足フィールドの補完（2026-06-12 完了）
 
-**対象**: `ticker analyze` の年次出力で現在空になっているフィールドを埋める。
+commit `767a281`。`ticker analyze` の年次出力で空だったフィールドを補完。
 
-#### A-1: IFRS 純収益フォールバック（`net_revenue.py`、35行）
+| サブフェーズ | 実装内容 |
+|---|---|
+| A-1 | `NetRevenueExtractor`（`Extractors.swift`）— `NetRevenueIFRS` / `BusinessProfitIFRSSummaryOfBusinessResults` を抽出、Sales/OP が nil の場合フォールバック適用 |
+| A-2 | `ShareBuybackExtractor`（`Extractors.swift`）— SS連結 → CF → SS単体の優先順で自己株式取得額を抽出（J-GAAP / IFRS / US-GAAP 対応）。`RawData.Buyback` に格納 |
+| A-3 | `applyRoeWaterfallToYears`（`Waterfall.swift`）— DuPont 3因子分解（純利益率差・資産回転率差・レバレッジ差） |
+| A-4 | `applyRoicWaterfallToYears`（`Waterfall.swift`）— NOPATマージン差 + 投下資本回転率差の2因子分解 |
+| A-5 | `applyOperatingProfitChangeToYears`（`Waterfall.swift`）— 売上差影響・粗利率差影響・販管費差影響の3因子分解 |
 
-Python の `net_revenue.py` は IFRS 金融会社（銀行・保険）向けに `NetRevenueIFRS` タグと `BusinessProfitIFRSSummaryOfBusinessResults` タグを XBRL から抽出する。現在の Swift Extractors では J-GAAP / US-GAAP 金融会社向けの専用パスはあるが IFRS 金融会社は未対応。
-
-- **実装箇所**: `Sources/BlueTicker/Analysis/Extractors.swift` の `GrossProfitExtractor` / `OperatingProfitExtractor` に IFRS 純収益フォールバック分岐を追加
-- **テスト**: IFRS 金融会社（例: 野村 HD、三菱 UFJ フィナンシャル・グループ）のフィクスチャでユニットテスト追加
-
-#### A-2: 自己株式取得（`share_buyback.py`、121行）
-
-Python の解決優先順位: 株主資本等変動計算書（SS連結）→ CF 計算書（直接タグ）→ SS 単体。値は負値を正値に変換して百万円で返す。
-
-- **実装箇所**: `Sources/BlueTicker/Analysis/Extractors.swift` に `ShareBuybackExtractor` を追加。`MetricsTypes.swift` の `ShareBuyback` フィールドへ値を設定
-- **テスト**: J-GAAP・IFRS・US-GAAP 各 1 社のフィクスチャでユニットテスト
-
-#### A-3: ROE ウォーターフォール（`roe_waterfall.py`、112行）
-
-DuPont 3因子分解: `ROE前年差 = 純利益率差影響 + 総資産回転率差影響 + 財務レバレッジ差影響`
-
-Python の計算式（連鎖法）:
-```
-Δ純利益率影響    = Δ(NI/Sales) × 前年総資産回転率 × 前年レバレッジ
-Δ総資産回転率影響 = 当年純利益率 × Δ(Sales/Assets) × 前年レバレッジ
-Δレバレッジ影響   = 当年純利益率 × 当年総資産回転率 × Δ(Assets/Equity)
-```
-
-- **実装箇所**: `Sources/BlueTicker/Utils/RoeWaterfall.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
-- **テスト**: 既知の入出力値でユニットテスト（Python 版の計算結果をゴールデン値として使用）
-
-#### A-4: ROIC ウォーターフォール（`roic_waterfall.py`、213行）
-
-2因子分解: `ROIC前年差 = NOPATマージン差影響 + 投下資本回転率差影響`
-
-```
-ROIC = (NOPAT / Sales) × (Sales / IC)
-Δ NOPATマージン影響    = Δ(NOPAT/Sales) × 前年投下資本回転率
-Δ 投下資本回転率影響   = 当年 NOPATマージン × Δ(Sales/IC)
-```
-
-NOPAT = 営業利益 × (1 - 実効税率)、IC = 有利子負債 + 株主資本。最古年度は XBRL の `Prior1Year` コンテキストから前期値を直接取得する（年リストから計算する年度より 1 年分多く遡れる）。
-
-- **実装箇所**: `Sources/BlueTicker/Utils/RoicWaterfall.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
-- **テスト**: ユニットテスト + スモークテスト 11 社で前年差フィールドの非 nil 検証
-
-#### A-5: 営業利益ウォーターフォール（`operating_profit_change.py`、482行）
-
-4因子分解: `営業利益前年差 = 売上差影響 + 粗利率差影響 + 販管費差影響 + 調整`
-
-```
-売上差影響    = Δ売上 × 前年粗利率
-粗利率差影響  = 当年売上 × Δ粗利率
-販管費差影響  = -(Δ販管費)
-調整         = 残差（IFRS 事業利益と OP の差など）
-```
-
-- **実装箇所**: `Sources/BlueTicker/Utils/OperatingProfitChange.swift`（新規）、`IndividualAnalyzer.swift` から呼び出し
-- **テスト**: ユニットテスト（Python 版の出力をゴールデン値として使用）
+その他: `AnalyzeCommand.swift` に「自己株式取得」行を追加。`IndividualAnalyzer` の `operatingMargin` 二重計算バグを修正。
 
 ---
 
