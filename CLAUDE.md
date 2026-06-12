@@ -1,13 +1,27 @@
 # BLUE TICKER — Claude Code ガイド
 
-日本株の財務データCLIツール（Python / Poetry）。
+日本株の財務データCLIツール（Swift / SwiftPM）。
 
-## アーキテクチャ依存ルール
+## ビルド・テスト
 
-- `services/` は `blue_ticker.app` をインポートしてはならない
-- `infrastructure/` は `blue_ticker.app` および `blue_ticker.services` をインポートしてはならない
+```bash
+swift build                  # ticker / blt-server バイナリを生成
+swift test                   # 全テスト（Swift Testing）
+.build/debug/ticker --help   # ローカル実行
+```
 
-テストで自動検証: `tests/test_dependency_rules.py`
+## ターゲット構成と依存ルール
+
+| ターゲット | 内容 |
+|---|---|
+| `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・MCPサーバーを含む共有ライブラリ |
+| `BlueTicker`（`Sources/BlueTickerMain/`） | `ticker` CLI のエントリポイントのみ |
+| `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ |
+
+`BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
+
+- `Services/` は `CLI/` のコマンド型を参照してはならない
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`MCPServer/` を参照してはならない
 
 @.agents/rules/generic/commit-conventions.md
 @.agents/rules/project/date-conversion.md

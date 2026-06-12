@@ -1,35 +1,39 @@
 # エラーハンドリング規約
 
-分析・サービス層のエラー処理は**戻り値パターン**で統一する。例外クラスを新設して raise する設計は採用しない。
+分析・サービス層のエラー処理は**戻り値パターン**で統一する。エラー型を新設して `throw` する設計は採用しない。
 
 ## 正規パターン
 
-```python
-# ✅ 戻り値でエラー状態を返す
-def validate_metrics_for_analysis(metrics, required_years=2) -> tuple[bool, str | None]:
-    if available_years < required_years:
-        return False, "データが不足しています"
-    return True, None
+```swift
+// ✅ Optional・空コレクション・method フィールドでエラー状態を返す
+func fetchAndBuild(code: String, years: Int) async -> [YearEntry] {
+    guard let docs = ... else { return [] }  // 失敗は空配列
+    ...
+}
 
-is_valid, message = validate_metrics_for_analysis(metrics)
-if not is_valid:
-    print(message)
-    return
+// 抽出結果は「見つからなかった」を値で表現する
+SegmentResult(method: "not_found", tables: [], facts: [])
+```
+
+呼び出し元（CLI 層）が `nil` / 空を判定し、ユーザー向けメッセージを stderr へ出して `ExitCode.failure` を投げる。
+
+```swift
+guard !entries.isEmpty else {
+    fputs("エラー: 財務データの取得に失敗しました。\n", stderr)
+    throw ExitCode.failure
+}
 ```
 
 ## やってはいけないパターン
 
-```python
-# ❌ 例外クラスを新設して raise する
-class InsufficientDataError(Exception): ...
-raise InsufficientDataError(required_years=5, available_years=2)
+```swift
+// ❌ 分析・サービス層で独自エラー型を throw する
+enum AnalysisError: Error { case insufficientData(required: Int, available: Int) }
+throw AnalysisError.insufficientData(required: 5, available: 2)
 ```
 
-## 既存ユーティリティ（`blue_ticker/utils/errors.py`）
+## 例外（throws を使ってよい箇所）
 
-| 関数・クラス | 用途 |
-|---|---|
-| `DataAvailability` | データ充足状態の Enum（SUFFICIENT / INSUFFICIENT / NO_DATA / PARTIAL） |
-| `check_data_availability(metrics, required_years)` | Enum を返す充足チェック |
-| `get_data_availability_message(metrics, required_years)` | ユーザー向けメッセージ文字列を返す |
-| `validate_metrics_for_analysis(metrics, required_years)` | `(bool, message \| None)` を返す総合検証 |
+- `Infrastructure/Keystore.swift` の `KeystoreError`（OS キーチェーンの失敗は呼び出し元で分岐が必要）
+- `ArgumentParser` の `ExitCode`（CLI 終了コード）
+- SwiftSoup 等の外部ライブラリ境界（`try?` で Optional に落としてよい）

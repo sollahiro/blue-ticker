@@ -2,36 +2,36 @@
 
 ## 共通ユーティリティの使用
 
-XBRL解析モジュール（`blue_ticker/analysis/` 配下）では、以下の共通関数を必ず `xbrl_utils.py` からインポートして使うこと。各モジュールに同じ実装を書き直してはならない。
-
-```python
-from blue_ticker.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
-```
+XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以下の共通関数を必ず `XBRLUtils`（`Analysis/XBRLUtils.swift`）から使うこと。各モジュールに同じ実装を書き直してはならない。
 
 | 関数 | 用途 |
 |---|---|
-| `parse_xbrl_value(text)` | XBRL数値テキスト → `float \| None`（nil・空文字は None） |
-| `collect_numeric_elements(xml_file, allowed_tags)` | XMLファイル → `{local_tag: {contextRef: value}}` |
-| `find_xbrl_files(xbrl_dir)` | XBRLディレクトリ → インスタンス文書リスト（ラベル等を除外） |
+| `parseXbrlValue(_:)` | XBRL数値テキスト → `Double?`（nil・空文字は nil） |
+| `collectNumericElements(in:allowedTags:)` | XMLファイル → `{localTag: {contextRef: value}}` |
+| `collectAllNumericFacts(in:)` | XBRLディレクトリ → ラベル・unitRef 等メタ付き fact インデックス |
+| `findXbrlFiles(in:)` | XBRLディレクトリ → インスタンス文書リスト（ラベル等を除外） |
+| `parseHtmlNumber(_:)` / `parseHtmlIntAttribute(_:_:)` | HTML表セルの数値・属性の安全なパース |
+| `extractIfrsTextblockTable(in:textblockTag:)` | TextBlock 内 HTML テーブル → ラベル別 (当期, 前期) |
 
 ## モジュール固有のロジック（共通化しない）
 
-以下はモジュールごとに財務諸表の性質が異なるため、`xbrl_utils.py` には置かない。
+以下は財務諸表の性質が異なるため、`XBRLUtils` には置かない。
 
 | ロジック | 理由 |
 |---|---|
-| コンテキスト判定（`_is_consolidated_duration` 等） | Duration（損益計算書・CF）と Instant（貸借対照表）は別概念 |
-| 会計基準判定（`_detect_accounting_standard`） | IBD は IFRS/US-GAAP 混在判別など高度なロジックが必要 |
+| コンテキスト判定（`FieldParser` / `ContextHelpers` の連結・Duration/Instant 判定） | Duration（損益計算書・CF）と Instant（貸借対照表）は別概念 |
+| 会計基準判定 | IBD は IFRS/US-GAAP 混在判別など高度なロジックが必要 |
 
-## 現行モジュール構成
+## 現行モジュール構成（`Sources/BlueTicker/Analysis/`）
 
-| モジュール | コンテキスト種別 | 抽出対象 |
-|---|---|---|
-| `gross_profit.py` | Duration | 損益計算書（売上総利益） |
-| `cash_flow.py` | Duration | CF計算書（営業CF・投資CF） |
-| `interest_bearing_debt.py` | Instant | 貸借対照表（有利子負債） |
-| `employees.py` | Instant | 従業員数（連結優先・個別フォールバック） |
-| `net_revenue.py` | Duration | IFRS金融会社向け純収益・事業利益 |
+| ファイル | 役割 |
+|---|---|
+| `FieldParser.swift` | Duration/Instant FieldSet 正規化・連結/非連結コンテキスト判定 |
+| `Extractors.swift` | 12 エクストラクター（IS/CF/GP/OP/BS/IBD/従業員/税金/支払利息/PPE/Capex/RD）＋銀行固有 |
+| `USGAAPHtmlFields.swift` | US-GAAP 連結 P/L・BS の iXBRL HTML テーブル抽出 |
+| `IFRSLease.swift` | IFRS リース負債（XBRL タグ → 注記 TextBlock → BS HTML の優先順） |
+| `SegmentExtractor.swift` | セグメント・地域別情報（TextBlock HTML表 → dimension 付き fact） |
+| `XBRLSectionParser.swift` | 有価証券報告書セクション（リスク・MD&A 等）テキスト抽出 |
 
 ## 詳細リファレンス
 

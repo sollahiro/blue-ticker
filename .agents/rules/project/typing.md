@@ -1,48 +1,31 @@
-# 型アノテーション規約
+# 型・並行性の規約
 
-Python 3.11+ を前提とする。`from __future__ import annotations` は使わない。
+Swift 6 言語モードへの移行を見据え、`StrictConcurrency` を有効にしている。コンパイラ警告を増やさないこと。
 
-## pyrightに任せること
+## 設計ガイダンス
 
-以下は pyright が自動検知する。コードレビューでは指摘しない：
-
-- `Optional[X]` → `X | None`、`List[X]` → `list[X]` 等の旧記法
-- `typing` からの `Callable`・`Mapping` 等（`collections.abc` を使う）
-- 戻り値型の欠落
-- `None` を含む値の未ガード演算
-- TypedDict / dict 間の invariance 違反
-
-実行: `poetry run pyright blue_ticker/`（CI でも同じコマンドを実行）。エラーを残したまま完了扱いにしない。`cast` や `Any` で消すのは外部ライブラリ境界に限定する。
-
-## 設計ガイダンス（pyrightが検知しない）
-
-### TypedDict と dataclass の使い分け
+### struct / Codable と辞書の使い分け
 
 | ケース | 使うもの |
 |---|---|
-| JSON / キャッシュ / レイヤー間 dict | `TypedDict` |
-| ロジックを持つオブジェクト | `dataclass` |
-| 一時的な戻り値（2〜3フィールド） | `tuple[X, Y]` |
+| JSON / キャッシュ / レイヤー間のデータ | `Codable` struct（または `toDictionary()` で `[String: Any]` へ変換） |
+| ロジックを持つオブジェクト | `struct` + メソッド、共有可変状態は `actor` |
+| 一時的な戻り値（2〜3フィールド） | ラベル付きタプル `(current: Double?, prior: Double?)` |
+| EDINET API レスポンス等の動的 JSON | `[String: Any]`（外部境界に限定） |
 
-複数モジュールが共有するドメイン TypedDict は `blue_ticker/utils/` に独立ファイルとして置く。
+複数モジュールが共有するドメイン型は `Sources/BlueTicker/Models/` に独立ファイルとして置く。
 
-### 読み取り専用の引数は Mapping / Sequence
+### 並行性
 
-`list` は invariant なので `list[TypedDict]` を `list[dict[str, Any]]` に渡せない。読み取り専用なら `Sequence[T]` / `Mapping[str, Any]` を使う（pyright がエラーで気づかせてくれる）。
+- 共有可変状態（キャッシュ・HTTP クライアント）は `actor` で排他する（`CacheManager`・`EdinetAPIClient`）
+- モジュールレベルの可変グローバルは原則禁止。やむを得ない場合は `nonisolated(unsafe)` ＋ `NSLock` で直列化し、理由をコメントする
 
-### 段階的に組み立てる辞書には total=False
+### Optional の扱い
 
-```python
-class CalculatedData(TypedDict, total=False):  # 逐次追加
-    Sales: float | None
-
-class YearEntry(TypedDict):  # 常に全フィールドが揃う
-    fy_end: str | None
-    CalculatedData: CalculatedData
-```
-
-`total=False` / `NotRequired` のキーは `.get()` で読む。
+- 抽出失敗・データ欠落は `nil` で表現する（`error-handling.md` の戻り値パターン参照）
+- `try?` は外部ライブラリ境界（SwiftSoup 等）でのみ使い、自前ロジックの失敗を握りつぶさない
+- 強制アンラップ（`!`）は直前の構築から非 nil が自明な場合のみ
 
 ### Any の使用を最小限に
 
-使ってよい箇所：外部 API レスポンス（EDINET / MOF）の `dict[str, Any]`、全型を動的に処理する検証関数の引数。値が `float | None` 等に絞れる場合は `Any` を使わない。
+使ってよい箇所：外部 API レスポンス（EDINET / MOF）・JSONSerialization 境界の `[String: Any]`。値の型が絞れる場合は `Any` を使わない。

@@ -30,31 +30,31 @@ PublicDoc/
 
 ### 1.2 `.xbrl` インスタンス文書の役割
 
-`.xbrl` ファイルは、各 `.htm` ファイル内の `ix:nonFraction` タグで定義されたすべての数値を XML に集約したインスタンス文書です。`find_xbrl_files` および `collect_numeric_elements` はこのファイルを対象にします。
+`.xbrl` ファイルは、各 `.htm` ファイル内の `ix:nonFraction` タグで定義されたすべての数値を XML に集約したインスタンス文書です。`XBRLUtils.findXbrlFiles` および `XBRLUtils.collectNumericElements` はこのファイルを対象にします。
 
-**`find_xbrl_files` が返すファイル種別**
+**`findXbrlFiles` が返すファイル種別**
 
 | 種別 | 対象 | 除外 |
 |---|---|---|
 | `.xml` | マニフェスト等のXML | `_lab`, `_pre`, `_cal`, `_def` 付きファイル |
 | `.xbrl` | XBRLインスタンス文書 | なし |
-| `.htm` / `.html` | **対象外**（HTMLは別途BeautifulSoupでパース） | — |
+| `.htm` / `.html` | **対象外**（HTMLは別途SwiftSoupでパース） | — |
 
 ---
 
 ## 2. 会計基準の判定
 
-各モジュールは XBRL タグの有無から会計基準を推定します。`sections.py` の `Section` 基底クラスが構築時に判定し、モジュールに渡します。
+XBRL タグの有無から会計基準を推定します。`FieldParser.swift` の `detectAccountingStandard(_:)` が判定し、各エクストラクターに渡されます。
 
 ### 判定ロジック
 
 ```
-US-GAAP  ← USGAAP_MARKER_TAGS のいずれかが存在 かつ IFRS マーカーが不在
-IFRS     ← IFRS_BALANCE_SHEET_MARKER_TAGS または IFRS_PL_MARKER_TAGS が存在
+US-GAAP  ← Xbrl.usgaapMarkerTags のいずれかが存在 かつ IFRS マーカーが不在
+IFRS     ← Xbrl.ifrsBalanceSheetMarkerTags または Xbrl.ifrsPLMarkerTags が存在
 J-GAAP   ← 上記いずれにも該当しない
 ```
 
-### US-GAAP判定マーカータグ（`USGAAP_MARKER_TAGS`）
+### US-GAAP判定マーカータグ（`Xbrl.usgaapMarkerTags`）
 
 ```
 TotalAssetsUSGAAPSummaryOfBusinessResults
@@ -68,7 +68,7 @@ CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults
 
 > **注意**: IFRSへ移行済みの企業でも、過去比較データとして `*USGAAP*` タグが残存することがあります。「USGAAPタグが存在してもIFRSマーカーがあれば IFRS と判定」という 2 段階チェックを行っています。
 
-### IFRSマーカータグ（BS系: `IFRS_BALANCE_SHEET_MARKER_TAGS`）
+### IFRSマーカータグ（BS系: `Xbrl.ifrsBalanceSheetMarkerTags`）
 
 ```
 InterestBearingLiabilitiesCLIFRS / InterestBearingLiabilitiesNCLIFRS
@@ -78,9 +78,9 @@ BondsAndBorrowingsCLIFRS / BondsAndBorrowingsNCLIFRS
 BondsBorrowingsAndLeaseLiabilitiesCLIFRS / BondsBorrowingsAndLeaseLiabilitiesNCLIFRS
 ```
 
-### IFRSマーカータグ（PL系: `IFRS_PL_MARKER_TAGS`）
+### IFRSマーカータグ（PL系: `Xbrl.ifrsPLMarkerTags`）
 
-BS系より広く、PL/CF のデータタグ自体もマーカーとして機能します。これにより `pre_parsed` 経由で BS 側タグが収集対象に含まれない場合でも IFRS 判定を維持します。
+BS系より広く、PL/CF のデータタグ自体もマーカーとして機能します。これにより BS 側タグが収集対象に含まれない場合でも IFRS 判定を維持します。
 
 ```
 InterestBearingLiabilitiesCLIFRS / BorrowingsCLIFRS / BondsPayableNCLIFRS / BorrowingsNCLIFRS
@@ -107,17 +107,17 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 | **当期・前期** | `CurrentYear` / `Prior1Year`, `PriorYear` | 当期・前期 |
 | **期の形式** | `FYDuration` / `InterimDuration` / `YTDDuration` | 通期・中間期・累計 |
 
-### 3.2 コンテキストパターン（`constants/xbrl.py`）
+### 3.2 コンテキストパターン（`Constants/Xbrl.swift`）
 
 **Duration コンテキスト（損益計算書・CF計算書）**
 
 | 定数名 | パターン | 意味 |
 |---|---|---|
-| `DURATION_CONTEXT_PATTERNS` | `CurrentYearDuration` | 連結 当期（年次通期） |
+| `Xbrl.durationContextPatterns` | `CurrentYearDuration` | 連結 当期（年次通期） |
 | | `FilingDateDuration` | 連結 当期（提出日基準） |
 | | `InterimDuration` | 連結 当期（新形式 中間期） |
 | | `CurrentYTDDuration` | 連結 当期（旧形式 中間・四半期累計） |
-| `PRIOR_DURATION_CONTEXT_PATTERNS` | `Prior1YearDuration` | 連結 前期（年次） |
+| `Xbrl.priorDurationContextPatterns` | `Prior1YearDuration` | 連結 前期（年次） |
 | | `PriorYearDuration` | 連結 前期（年次 別名） |
 | | `Prior1InterimDuration` | 連結 前期（中間期） |
 | | `Prior1YTDDuration` | 連結 前期（累計） |
@@ -126,11 +126,11 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 
 | 定数名 | パターン | 意味 |
 |---|---|---|
-| `INSTANT_CONTEXT_PATTERNS` | `CurrentYearInstant` | 連結 当期末 |
+| `Xbrl.instantContextPatterns` | `CurrentYearInstant` | 連結 当期末 |
 | | `CurrentQuarterInstant` | 連結 当期末（四半期） |
 | | `InterimInstant` | 連結 当期末（中間期） |
 | | `FilingDateInstant` | 連結 当期末（提出日基準） |
-| `PRIOR_INSTANT_CONTEXT_PATTERNS` | `Prior1YearInstant` | 連結 前期末 |
+| `Xbrl.priorInstantContextPatterns` | `Prior1YearInstant` | 連結 前期末 |
 | | `PriorYearInstant` | 連結 前期末（別名） |
 | | `Prior1QuarterInstant` | 連結 前期末（四半期） |
 | | `Prior1InterimInstant` | 連結 前期末（中間期） |
@@ -141,87 +141,83 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 
 ## 4. 解析モジュール一覧
 
-### 4.1 セクション型アーキテクチャ
+### 4.1 FieldSet アーキテクチャ
 
-各 `extract_*` 関数は `Section` オブジェクトを受け取ります（`analysis/sections.py`）。`Section` は構築時に XBRL から関連タグを収集・正規化し、会計基準を判定した上で `FieldSet`（`{tag: value}` の辞書）を保持します。これにより各モジュールは会計基準判定・コンテキスト解決を意識せず、タグ名の優先順リストを渡すだけで値を取得できます。
+各エクストラクターは `FieldSet`（`[String: FieldValue]`、タグ名 → 当期/前期値）を受け取ります（`Analysis/FieldParser.swift`）。`FieldParser` が XBRL から関連タグを収集・正規化し（Duration / Instant / 非連結の各 FieldSet）、`detectAccountingStandard(_:)` が会計基準を判定した上でエクストラクターに渡します。これにより各エクストラクターはコンテキスト解決を意識せず、タグ名の優先順リストを渡すだけで値を取得できます。
 
-**Section の種別**
+**FieldSet の種別（`FieldParser.swift` のビルダー）**
 
-| クラス | 期間種別 | 主な用途 |
+| ビルダー | 期間種別 | 主な用途 |
 |---|---|---|
-| `IncomeStatementSection` | Duration | 損益計算書・CF内の損益系項目 |
-| `CashFlowSection` | Duration | CF計算書・株主資本変動計算書 |
-| `BalanceSheetSection` | Instant | 貸借対照表 |
-| `EquityStatementSection` | Duration | 株主資本等変動計算書（IFRS） |
-| `EmployeeSection` | Instant | 従業員の状況（連結優先・個別フォールバック） |
+| Duration FieldSet | Duration | 損益計算書・CF計算書・株主資本等変動計算書 |
+| Instant FieldSet | Instant | 貸借対照表・従業員数 |
+| 非連結 Duration / Instant FieldSet | — | 連結値がない場合の個別財務諸表フォールバック |
 
-### 4.2 モジュール一覧
+### 4.2 エクストラクター一覧（`Analysis/Extractors.swift`）
 
-| extract関数 | ファイル | Sectionの種別 | 抽出内容 |
-|---|---|---|---|
-| `extract_income_statement` | `income_statement.py` | IncomeStatement | 売上高・営業利益・純利益・会計基準 |
-| `extract_gross_profit` | `gross_profit.py` | IncomeStatement | 売上総利益（直接法→計算法のフォールバック） |
-| `extract_operating_profit` | `operating_profit.py` | IncomeStatement | 営業利益（直接法→GP-SGA計算法のフォールバック） |
-| `extract_interest_expense` | `interest_expense.py` | IncomeStatement | 支払利息 |
-| `extract_tax_expense` | `tax_expense.py` | IncomeStatement | 税引前利益・法人税等・実効税率 |
-| `extract_research_development` | `research_development.py` | IncomeStatement | 研究開発費 |
-| `extract_net_revenue` | `net_revenue.py` | IncomeStatement | IFRS金融会社向け純収益・事業利益 |
-| `extract_cash_flow` | `cash_flow.py` | CashFlow | 営業CF・投資CF |
-| `extract_capital_expenditure` | `capital_expenditure.py` | CashFlow | 設備投資額（設備投資等概要→CF順） |
-| `extract_share_buyback` | `share_buyback.py` | CashFlow | 自己株式取得額（CF→株主資本変動計算書順） |
-| `extract_balance_sheet` | `balance_sheet.py` | BalanceSheet | 総資産・流動/固定資産・流動/固定負債・純資産 |
-| `extract_interest_bearing_debt` | `interest_bearing_debt.py` | BalanceSheet | 有利子負債合計（直接法→積み上げ法のフォールバック） |
-| `extract_tangible_fixed_assets` | `tangible_fixed_assets.py` | BalanceSheet | 有形固定資産合計・内訳 |
-| `extract_bank_financials` | `bank_financials.py` | BalanceSheet | 銀行業固有BS項目（預金・貸出金等） |
-| `extract_employees` | `employees.py` | Employee | 従業員数（連結→個別フォールバック） |
-| `extract_order_book` | `order_book.py` | IncomeStatement | 受注高・受注残高 |
-| `extract_shareholder_metrics` | `shareholder_metrics.py` | （複合） | 株価・PBR・BPS・DPS等の株主指標 |
-| `extract_segment_info` / `extract_geography_info` | `segment_extractor.py` | — | セグメント情報・地域別情報（直接HTMLパース） |
+| エクストラクター | 抽出内容 |
+|---|---|
+| `IncomeStatementExtractor` | 売上高・営業利益・純利益・会計基準 |
+| `GrossProfitExtractor` | 売上総利益（直接法→計算法のフォールバック、銀行業務粗利益含む） |
+| `OperatingProfitExtractor` | 営業利益（直接法→GP-SGA計算法のフォールバック） |
+| `InterestExpenseExtractor` | 支払利息（IFRS 注記テキスト抽出含む） |
+| `TaxExpenseExtractor` | 税引前利益・法人税等・実効税率 |
+| `RDExtractor` | 研究開発費 |
+| `NetRevenueExtractor` | IFRS金融会社向け純収益・事業利益 |
+| `CashFlowExtractor` | 営業CF・投資CF |
+| `CapexExtractor` | 設備投資額（設備投資等概要→CF順） |
+| `ShareBuybackExtractor` | 自己株式取得額（株主資本変動計算書→CF順） |
+| `BalanceSheetExtractor` | 総資産・流動/固定資産・流動/固定負債・純資産 |
+| `IBDExtractor` | 有利子負債合計（直接法→積み上げ法のフォールバック、銀行固有コンポーネント含む） |
+| `TangibleFixedAssetsExtractor`（PPE） | 有形固定資産合計・内訳 |
+| `EmployeesExtractor` | 従業員数（連結→個別フォールバック） |
+| `SegmentExtractor`（`SegmentExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact） |
 
-### 4.3 売上総利益（`gross_profit.py`）
+### 4.3 売上総利益（`GrossProfitExtractor`）
 
 ```
-US-GAAP → usgaap/gross_profit.py の HTML パース（§5 参照）
+US-GAAP → USGAAPHtml.extractGrossProfit の HTML パース（§5 参照）
 
 J-GAAP / IFRS:
-  1. 直接法: GROSS_PROFIT_DIRECT_TAGS を検索
+  1. 直接法: Xbrl.grossProfitDirectTags を検索
      - GrossProfitIFRS（IFRS連結）
      - GrossProfit（J-GAAP連結）
      - GrossProfitOnCompletedConstructionContractsCNS（建設業）
      - OperatingGrossProfit（倉庫・運輸等 J-GAAP 営業総利益）
   2. 計算法: 売上高タグ − 売上原価タグ（直接法で取得できなかった場合）
-     - GROSS_PROFIT_COMPONENT_DEFINITIONS 参照
-  3. 銀行業: BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS（収益/費用の符号付き合算）
-  4. 連結値がなければ個別値にフォールバック
+     - Xbrl.grossProfitSalesTags / Xbrl.grossProfitCostsTags 参照
+  3. 銀行業: Xbrl.businessGrossProfitComponents（収益/費用の符号付き合算）
+  4. IFRS PL TextBlock フォールバック（連結PLがTextBlockのみの場合）
+  5. 連結値がなければ個別値にフォールバック
 ```
 
-### 4.4 有利子負債（`interest_bearing_debt.py`）
+### 4.4 有利子負債（`IBDExtractor`）
 
 ```
-US-GAAP → BalanceSheetSection 経由で USGAAP_HTML_IBDCurrent / IBDNonCurrent を取得（§5 参照）
-銀行業  → BANK_IBD_COMPONENT_DEFINITIONS（預金・借用金等の銀行固有コンポーネント）
+US-GAAP → USGAAP_HTML_IBDCurrent / IBDNonCurrent 仮想タグを取得（§5 参照）
+銀行業  → Xbrl.bankIBDComponents（預金・借用金等の銀行固有コンポーネント）
 
 J-GAAP / IFRS:
-  1. 直接法: INTEREST_BEARING_DEBT_TAGS（InterestBearingDebt / InterestBearingLiabilities）
-  2. 積み上げ法: IBD_CURRENT_COMPONENTS + IBD_NON_CURRENT_COMPONENTS（7〜9コンポーネント）
+  1. 直接法: Xbrl.ibdDirectTags（InterestBearingDebt / InterestBearingLiabilities）
+  2. 積み上げ法: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents（7〜9コンポーネント）
      - J-GAAP/IFRS 両タグを優先順で試行（ShortTermLoansPayable → BorrowingsCLIFRS 等）
-     - リース負債（LeaseObligationsCL / NCL）も含む
-  3. IFRS集約タグ: 粒度別タグ不在時は IBD_IFRS_CL_TAGS / IBD_IFRS_NCL_TAGS で代替
+     - リース負債（LeaseObligationsCL / NCL、IFRS は IFRSLease.swift の TextBlock 抽出含む）
+  3. IFRS集約タグ: 粒度別タグ不在時は Xbrl.ibdIFRSCLTags / Xbrl.ibdIFRSNCLTags で代替
      （BondsAndBorrowingsCLIFRS / BondsBorrowingsAndLeaseLiabilitiesCLIFRS 等）
   4. 連結値がなければ個別値にフォールバック
 ```
 
-### 4.5 営業利益（`operating_profit.py`）
+### 4.5 営業利益（`OperatingProfitExtractor`）
 
 ```
-1. 直接法: OPERATING_PROFIT_DIRECT_TAGS
+1. 直接法: Xbrl.operatingProfitDirectTags
    - OperatingProfitLossIFRS（IFRS）
    - OperatingIncomeLoss / OperatingIncome（J-GAAP）
    - USGAAP_HTML_OperatingIncome（US-GAAP仮想タグ、§5 参照）
 2. 計算法: GrossProfit − SGA（IFRS で OperatingProfitLossIFRS が存在しない日立等向け）
    - SGA は SellingGeneralAndAdministrativeExpensesIFRS / JGAAP を直接取得
    - または SellingExpensesIFRS + GeneralAndAdministrativeExpensesIFRS を合算
-3. 経常利益フォールバック: ORDINARY_INCOME_TAGS（J-GAAP 金融機関向け）
+3. 経常利益フォールバック: Xbrl.ordinaryIncomeTags（J-GAAP 金融機関向け。IFRS企業では抑止）
 ```
 
 ---
@@ -242,34 +238,33 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 
 ### 5.2 仮想タグアーキテクチャ（`USGAAP_HTML_*`）
 
-US-GAAP HTML パースの結果は **仮想タグ** として `FieldSet` に注入されます。仮想タグを受け取る各 `extract_*` 関数は、仮想タグを通常の XBRL タグと同列に扱うだけでよく、US-GAAP 固有の処理を意識しません。
+US-GAAP HTML パースの結果は **仮想タグ** として `FieldSet` に注入されます。仮想タグを受け取る各エクストラクターは、仮想タグを通常の XBRL タグと同列に扱うだけでよく、US-GAAP 固有の処理を意識しません。
 
 ```
-HTML パース（usgaap/html_fields.py）
+HTML パース（Analysis/USGAAPHtmlFields.swift）
   → USGAAP_HTML_CurrentAssets / CurrentLiabilities / ...
   → USGAAP_HTML_PPENet / BuildingsGross / MachineryGross / ...
   → USGAAP_HTML_IBDCurrent / IBDNonCurrent
   → USGAAP_HTML_OperatingIncome / SGA / PreTaxIncome / ...
 
-FieldSet に merge（Section の from_xbrl 内）
+FieldSet に merge
   ↓
-extract_balance_sheet / extract_interest_bearing_debt 等が
+BalanceSheetExtractor / IBDExtractor 等が
 通常の J-GAAP / IFRS タグと同じ優先順リストで解決
 ```
 
-注入は `sections.py` の各 `Section.from_xbrl` で行われます。US-GAAP と判定された場合に `parse_usgaap_html_bs_fields` / `parse_usgaap_html_pl_fields` / `parse_usgaap_html_equity_cf_fields` を呼び出して `FieldSet` に追記します。
+US-GAAP と判定された場合に `USGAAPHtml.parseBSFields` / `USGAAPHtml.parsePLFields` を呼び出して `FieldSet` に追記します。
 
-### 5.3 `usgaap/html_fields.py` のカバー範囲
+### 5.3 `USGAAPHtmlFields.swift` のカバー範囲
 
 | 関数 | 対象ファイル | 生成する仮想タグ（主要） |
 |---|---|---|
-| `parse_usgaap_html_bs_fields` | `0105010_*_ixbrl.htm` | CurrentAssets / NonCurrentLiabilities / PPENet / IBDCurrent / IBDNonCurrent / NetAssets 等 |
-| `parse_usgaap_html_pl_fields` | `0105010_*_ixbrl.htm` | OperatingIncome / SGA / PreTaxIncome / IncomeTax 等 |
-| `parse_usgaap_html_equity_cf_fields` | `0105010_*_ixbrl.htm` | 株主資本変動計算書の自己株式取得・処分等 |
+| `USGAAPHtml.parseBSFields` | `0105010_*_ixbrl.htm` | CurrentAssets / NonCurrentLiabilities / PPENet / IBDCurrent / IBDNonCurrent / NetAssets 等 |
+| `USGAAPHtml.parsePLFields` | `0105010_*_ixbrl.htm` | OperatingIncome / SGA / PreTaxIncome / IncomeTax 等 |
 
-HTMLテーブルのラベル文字列 → 仮想タグ名のマッピングは `html_fields.py` 冒頭の辞書（`_BS_LABEL_MAP` 等）で一元管理されています。
+HTMLテーブルのラベル文字列 → 仮想タグ名のマッピングは `USGAAPHtmlFields.swift` の辞書（`bsLabelMap` / `plLabelMap`）で一元管理されています。ヘッダー列検出（前期/当期の列インデックス特定）は `HtmlFinancialTable` に統合されています。
 
-### 5.4 売上総利益のHTMLパース（`usgaap/gross_profit.py`）
+### 5.4 売上総利益のHTMLパース（`USGAAPHtml.extractGrossProfit`）
 
 **対象ファイル**: `0105010_*_ixbrl.htm`（連結損益計算書）
 
@@ -286,31 +281,25 @@ HTMLテーブルのラベル文字列 → 仮想タグ名のマッピングは `
 - データ行は6列: `[ラベル, 注記, 前期サブ, 前期合計, 当期サブ, 当期合計]`
 - ヘッダーの `colspan` を展開して列インデックスを特定し、最近傍マッチで値を取り出す
 
-```python
-# colspan展開で物理列インデックスを算出（ヘッダーセルのspan-1が合計列）
-col_offset = 0
-for cell in header_cells:
-    span = int(cell.get("colspan", 1))
-    last_col = col_offset + span - 1   # colspan=2 なら offset+1 が合計列
-    if "当連結" in cell.get_text():
-        current_col_idx = last_col
-    elif "前連結" in cell.get_text():
-        prior_col_idx = last_col
-    col_offset += span
+```swift
+// colspan展開で物理列インデックスを算出（ヘッダーセルのspan-1が合計列）
+// HtmlFinancialTable.detectColumnIndexes(rows:) が実装
+var colOffset = 0
+for cell in headerCells {
+    let span = XBRLUtils.parseHtmlIntAttribute(cell, "colspan")
+    let lastCol = colOffset + span - 1   // colspan=2 なら offset+1 が合計列
+    if text.contains("当連結") { currentColIdx = lastCol }
+    else if text.contains("前連結") { priorColIdx = lastCol }
+    colOffset += span
+}
 
-# 最近傍マッチ（単純な「<=2」ではなく最小距離を選択）
-def _find_nearest(target_col):
-    best_val, best_dist = None, float("inf")
-    for i, v in numerics:
-        d = abs(i - target_col)
-        if d < best_dist:
-            best_dist, best_val = d, v
-    return best_val if best_dist <= 2 else None
+// 最近傍マッチ（単純な「<=2」ではなく最小距離を選択）
+// HtmlFinancialTable.nearestValue(to:in:) が実装。距離 2 以内のみ採用
 ```
 
-### 5.5 支払利息のHTMLパース（`usgaap/interest_expense.py`）
+### 5.5 支払利息のHTMLパース（`USGAAPHtml.extractInterestExpense`）
 
-US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計算書 HTML から支払利息を取得します。`parse_usgaap_html_pl_fields` が生成する `USGAAP_HTML_` 系仮想タグには支払利息が含まれないため、`extract_usgaap_ie_from_html` が個別に HTMLパースを行います（注記セクションを検索）。
+US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計算書 HTML から支払利息を取得します。`parsePLFields` が生成する `USGAAP_HTML_` 系仮想タグには支払利息が含まれないため、`USGAAPHtml.extractInterestExpense` が個別に HTMLパースを行います（注記セクションを検索）。
 
 ---
 
@@ -318,19 +307,23 @@ US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計
 
 ### 6.1 構成
 
-スモークテストは `smoke/` ディレクトリ以下で管理します（テストフレームワークとは独立）。
+スモークテストは Swift Testing の一部として実行されます（`swift test`）。期待値は `smoke/` ディレクトリで管理します。
 
 ```
 smoke/
-  _common.py             # 各企業のXBRLキャッシュから全抽出器を実行して結果を返す共通処理
-  check.py               # 年次スモーク実行スクリプト
-  check_half.py          # 半期スモーク実行スクリプト
-  smoke_expected/        # 年次期待値 JSON（{code}_{fy_end}.json）
-  smoke_half_expected/   # 半期期待値 JSON
-  smoke-field-values.md  # フィールド一覧とスモークテストの仕様説明
+  smoke_expected/         # 年次期待値 JSON（{code}_{fy_end}.json）
+  smoke_half_expected/    # 半期期待値 JSON
+  segment_expected.json   # セグメント・地域別抽出の期待値（書類ID別）
+  smoke-field-values.md   # フィールド一覧とスモークテストの仕様説明
 ```
 
-期待値 JSON を更新するには実際に実行して差分を確認し、正しければ上書きします。
+| テスト | 実装 | 照合対象 |
+|---|---|---|
+| 年次スモーク | `SwiftTests/BlueTickerTests/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
+| 半期スモーク | 同 `testHalfSmokeAll` | `smoke_half_expected/` |
+| セグメントパリティ | `SegmentExtractorTests.swift` `SegmentParityTests` | `segment_expected.json` |
+
+XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）が存在する環境でのみ実行され、ない環境ではスキップされます。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
 ### 6.2 対象企業
 

@@ -1,4 +1,4 @@
-BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 Python CLI ツールです。
+BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 CLI ツールです（Swift 製・単一バイナリ）。
 
 ---
 
@@ -53,10 +53,10 @@ ticker analyze 7203 --no-cache
 
 - `--years N`: 通期分析はデフォルト6年、半期分析はデフォルト3年
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示
-- `--no-cache`: 分析結果キャッシュを使わず再計算。最新の財務省10年国債利回りをWACCへ反映したい場合にも使用
+- `--no-cache`: 分析結果キャッシュを使わず再計算
 - `--include-debug-fields`: `--format json` で `MetricSources` や `IBDComponents` などの内部検証フィールドも出力
 
-分析では ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、WACC、営業利益増減分解などを確認できます。
+分析では ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、営業利益増減分解などを確認できます。
 
 ### EDINET書類
 
@@ -64,7 +64,7 @@ ticker analyze 7203 --no-cache
 ticker filings 7203
 ticker filings 7203 --years 6
 ticker filing 7203 --sections business_risks mda
-ticker filing 7203 --doc-id S100XXXX --sections management_policy
+ticker filing 7203 --doc-id S100XXXX --sections segments geography
 ```
 
 `ticker filing` の `--sections` には以下を指定できます。
@@ -73,7 +73,12 @@ ticker filing 7203 --doc-id S100XXXX --sections management_policy
 |---|---|
 | `business_risks` | 事業等のリスク |
 | `mda` | 経営者による財政状態・経営成績の分析 |
-| `management_policy` | 経営方針 |
+| `capex_overview` | 設備投資等の概要 |
+| `major_facilities` | 主要な設備の状況 |
+| `facility_plans` | 設備の新設・除却等の計画 |
+| `research_and_development` | 研究開発活動 |
+| `segments` | 報告セグメント別情報（Markdown 表または dimension 付きファクト） |
+| `geography` | 地域別情報（同上） |
 
 ### キャッシュ管理
 
@@ -105,9 +110,8 @@ ticker sector 情報・通信業 --format json
 ## 開発
 
 ```bash
-poetry install
-poetry run pytest
-poetry run pyright blue_ticker/
+swift build
+swift test
 ```
 
 XBRL解析のタグ体系・コンテキスト仕様は `docs/xbrl-parsing.md` を参照してください。

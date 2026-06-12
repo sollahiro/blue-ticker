@@ -51,7 +51,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ### 必須（blt-server を使い始める前に）
 
-- [x] `poetry install --with server` を実行する
+- [x] ~~`poetry install --with server` を実行する~~（Python 全廃により不要。`swift build` のみ）
 - [x] `blt-server` 起動確認済み（2026-06-03）
 - [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する
 - [ ] `sync_document_list` ツールで書類一覧を初回同期する
