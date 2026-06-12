@@ -1,66 +1,10 @@
 # ==========================================
-# Python
-# ==========================================
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Distribution / packaging
-build/
-dist/
-dist_backend/
-.eggs/
-# lib/ (削除: フロントエンドの src/lib を巻き込んでしまうため)
-wheels/
-*.egg-info/
-*.egg
-MANIFEST
-
-# PyInstaller build outputs
-*.manifest
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Testing
-.pytest_cache/
-.coverage
-.coverage.*
-coverage.xml
-.hypothesis/
-htmlcov/
-.tox/
-.nox/
-
-# Type checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
-.pytype/
-
-# Linting
-.ruff_cache/
-
-# ==========================================
 # Application-specific
 # ==========================================
 # Cache directories
 cache/
 analysis_cache/
 tmp_cache/
-*.pkl
-*.pickle
 
 # Reports and generated data
 reports/
@@ -76,6 +20,11 @@ data/
 mebuki_crash.log
 mebuki_main.log
 mebuki_startup.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # Temporary files
 *_dump_*.json
@@ -109,8 +58,6 @@ mebuki_startup.log
 .swiftpm/
 *.o
 *.d
-
-tests/fixtures/
 
 # ==========================================
 # Secrets and credentials

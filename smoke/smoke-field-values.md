@@ -84,7 +84,7 @@ tests/
 ticker analyze 4901 --years 1 --format json | python3 -m json.tool
 ```
 
-または XBRL 解析結果を直接確認する場合は、pytest の `-s` オプションで print デバッグを追加。
+または XBRL 解析結果を直接確認する場合は、`SmokeTests.swift` の比較出力（DIFF 行）を参照する。
 
 ### 2. JSON に値を入力する
 
@@ -105,11 +105,11 @@ ticker analyze 4901 --years 1 --format json | python3 -m json.tool
 ### 3. テストを実行する
 
 ```bash
-# 全スモークファイルを対象
-poetry run python smoke/check.py -v
+# スモークテストを含む全テスト
+swift test
 
-# 特定企業のみ
-poetry run python smoke/check.py -v -k "4901"
+# スモークテストのみ
+swift test --filter SmokeTests
 ```
 
 ## 新しい企業を追加する

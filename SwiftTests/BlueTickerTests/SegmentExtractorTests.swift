@@ -313,7 +313,7 @@ import SwiftSoup
             return
         }
         guard FileManager.default.fileExists(atPath: xbrlBase.path) else {
-            print("SKIP   tmp_cache/edinet が見つかりません（prepare_cache.py を実行してください）")
+            print("SKIP   tmp_cache/edinet が見つかりません（ローカル専用キャッシュ）")
             return
         }
 

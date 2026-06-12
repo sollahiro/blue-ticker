@@ -15,24 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
         with:
-          python-version: '3.12'
-
-      - uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Install dependencies
-        run: poetry install --no-interaction
-
-      - name: Type check
-        run: poetry run pyright blue_ticker/
+          path: .build
+          key: swiftpm-macos-${{ hashFiles('Package.resolved') }}
 
       - name: Test
-        run: poetry run pytest tests/ -q
+        run: swift test
 
   release:
     needs: [check]
@@ -44,31 +34,19 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
         with:
-          python-version: '3.12'
+          path: .build
+          key: swiftpm-macos-release-${{ hashFiles('Package.resolved') }}
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Install dependencies
-        run: poetry install --no-interaction
-
-      - name: Build CLI Binary (PyInstaller)
-        run: |
-          poetry run pip install pyinstaller
-          poetry run pyinstaller blue_ticker.spec
-        shell: bash
+      - name: Build CLI Binary
+        run: swift build -c release --product ticker
 
       - name: Package Binary
         run: |
           mkdir -p release
-          cp -r dist/ticker release/
+          cp .build/release/ticker release/
           cd release
           tar -czvf blue-ticker-macos-arm64.tar.gz ticker
         shell: bash
@@ -89,13 +67,13 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           SHA256=${{ env.SHA256 }}
-          
+
           # Clone the tap repository
           git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/sollahiro/homebrew-blue-ticker.git homebrew-tap
-          
+
           # Ensure Formula directory exists (handles empty repo)
           mkdir -p homebrew-tap/Formula
-          
+
           # Update the formula file in the tap repo
           # We use the template from the main repo
           cat Formula/blue-ticker.rb | \
@@ -104,7 +82,7 @@ jobs:
             sed "s|version \".*\"|version \"${VERSION}\"|" > homebrew-tap/Formula/blue-ticker.rb
 
           rm -f homebrew-tap/Formula/mebuki.rb homebrew-tap/formula_renames.json
-          
+
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

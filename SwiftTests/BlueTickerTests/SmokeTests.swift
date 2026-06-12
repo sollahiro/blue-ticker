@@ -2,9 +2,9 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-/// Python smoke/check.py に相当する Swift 版スモークテスト。
 /// EDINET XBRL キャッシュ（ローカル）を直接読んで抽出器を動かし、
-/// smoke/smoke_expected/*.json の期待値と照合する。
+/// smoke/smoke_expected/*.json の期待値と照合するスモークテスト。
+/// tmp_cache/edinet はローカル専用（git 管理外）。存在しない環境ではスキップする。
 /// Keychain・API キー不要。
 @Suite struct SmokeTests {
 
@@ -67,7 +67,7 @@ import Foundation
             return
         }
         guard FileManager.default.fileExists(atPath: xbrlBase.path) else {
-            print("SKIP   tmp_cache/edinet が見つかりません（prepare_half_cache.py を実行してください）")
+            print("SKIP   tmp_cache/edinet が見つかりません（ローカル専用キャッシュ）")
             return
         }
 
