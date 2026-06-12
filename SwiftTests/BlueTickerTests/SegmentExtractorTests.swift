@@ -1,17 +1,15 @@
 // SegmentExtractor のユニットテスト
 // Python tests/test_segment_extractor.py 相当＋TextBlock/dimension fact 統合テスト
 
+// 注意: このファイルで SwiftSoup を import しないこと。
+// SwiftSoup.Comment が #expect マクロ展開の生成する Comment と曖昧衝突し、
+// CI のツールチェーンでコンパイルエラーになる。HTML パースは XBRLTestSupport 経由で行う。
+
 import Testing
 import Foundation
-import SwiftSoup
 @testable import BlueTickerCore
 
 @Suite struct SegmentExtractorTests {
-
-    private func makeTable(_ html: String) throws -> Element {
-        let soup = try SwiftSoup.parse(html)
-        return try #require(try soup.select("table").first())
-    }
 
     // MARK: - gridToMarkdown
 
@@ -117,19 +115,19 @@ import SwiftSoup
     // MARK: - expandTable
 
     @Test func expandTableSimple() throws {
-        let table = try makeTable("<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>")
+        let table = try XBRLTestSupport.parseFirstTable("<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>")
         #expect(SegmentExtractor.expandTable(table) == [["A", "B"], ["1", "2"]])
     }
 
     @Test func expandTableColspanExpandsCell() throws {
-        let table = try makeTable("<table><tr><td colspan='2'>合計</td></tr><tr><td>事業A</td><td>100</td></tr></table>")
+        let table = try XBRLTestSupport.parseFirstTable("<table><tr><td colspan='2'>合計</td></tr><tr><td>事業A</td><td>100</td></tr></table>")
         let grid = SegmentExtractor.expandTable(table)
         #expect(grid[0] == ["合計", "合計"])
         #expect(grid[1] == ["事業A", "100"])
     }
 
     @Test func expandTableRowspanRepeatsCellDownward() throws {
-        let table = try makeTable("<table><tr><td rowspan='2'>期間</td><td>Q1</td></tr><tr><td>Q2</td></tr></table>")
+        let table = try XBRLTestSupport.parseFirstTable("<table><tr><td rowspan='2'>期間</td><td>Q1</td></tr><tr><td>Q2</td></tr></table>")
         let grid = SegmentExtractor.expandTable(table)
         #expect(grid[0][0] == "期間")
         #expect(grid[1][0] == "期間")
@@ -138,12 +136,12 @@ import SwiftSoup
     }
 
     @Test func expandTableEmptyTableReturnsEmpty() throws {
-        let table = try makeTable("<table></table>")
+        let table = try XBRLTestSupport.parseFirstTable("<table></table>")
         #expect(SegmentExtractor.expandTable(table).isEmpty)
     }
 
     @Test func expandTableStripsWhitespaceFromCells() throws {
-        let table = try makeTable("<table><tr><td>  事業A  </td><td>  100  </td></tr></table>")
+        let table = try XBRLTestSupport.parseFirstTable("<table><tr><td>  事業A  </td><td>  100  </td></tr></table>")
         #expect(SegmentExtractor.expandTable(table)[0] == ["事業A", "100"])
     }
 

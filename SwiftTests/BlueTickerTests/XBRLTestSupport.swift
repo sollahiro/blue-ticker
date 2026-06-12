@@ -2,9 +2,21 @@
 // Python tests/test_xbrl_*.py の _make_xbrl / _fs ヘルパー相当
 
 import Foundation
+import SwiftSoup
 @testable import BlueTickerCore
 
 enum XBRLTestSupport {
+
+    /// HTML 文字列から最初の <table> 要素を返す。
+    /// SwiftSoup はテストファイル側で import しないこと（SwiftSoup.Comment が
+    /// swift-testing の #expect マクロ展開が生成する Comment と曖昧衝突するため）。
+    static func parseFirstTable(_ html: String) throws -> Element {
+        guard let table = try SwiftSoup.parse(html).select("table").first() else {
+            throw NSError(domain: "XBRLTestSupport", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "<table> が見つかりません"])
+        }
+        return table
+    }
 
     static let nsXbrli = "http://www.xbrl.org/2003/instance"
     static let nsJppfs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
