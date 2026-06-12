@@ -4,7 +4,7 @@ import Foundation
 // Python の blue_ticker/services/analyzer.py 相当
 // 個別銘柄の EDINET 書類から財務指標を抽出してメトリクスを組み立てる。
 
-private let _cacheVersion = "26.6.0"
+private let _cacheVersion = blueTickerVersion
 private let millionYen = 1_000_000.0
 private let percent = 100.0
 

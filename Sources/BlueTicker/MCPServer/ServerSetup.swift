@@ -29,7 +29,7 @@ actor BltServerContext {
 func makeBltServer(context: BltServerContext, transport: StatefulHTTPServerTransport) async -> Server {
     let server = Server(
         name: "blt-server",
-        version: "26.6.0",
+        version: blueTickerVersion,
         capabilities: Server.Capabilities(
             tools: .init(listChanged: false)
         )

@@ -4,7 +4,7 @@ import Foundation
 // Python の blue_ticker/services/half_year_data_service.py 相当 (XBRL パスのみ)
 // FY / 2Q XBRL から H1/H2 の半期財務指標を構築する。
 
-private let _halfCacheVersion = "26.6.0"
+private let _halfCacheVersion = blueTickerVersion
 private let _halfDiscoveryYears = 5
 
 struct HalfYearAnalyzer {

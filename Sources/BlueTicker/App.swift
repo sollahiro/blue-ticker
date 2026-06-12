@@ -7,7 +7,7 @@ public struct Ticker: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "ticker",
         abstract: "BLUE TICKER — 日本株財務データ CLI",
-        version: "26.6.0",
+        version: blueTickerVersion,
         subcommands: [
             SearchCommand.self,
             AnalyzeCommand.self,
