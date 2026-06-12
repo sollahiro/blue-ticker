@@ -77,7 +77,7 @@ struct FilingCommand: AsyncParsableCommand {
     @Option(name: .long, help: "書類ID（省略時は最新の有価証券報告書）")
     var docId: String?
 
-    @Option(name: .long, help: "抽出セクション: business_risks/mda/capex_overview/major_facilities/facility_plans/research_and_development/segments/geography")
+    @Option(name: .long, parsing: .upToNextOption, help: "抽出セクション: business_risks/mda/capex_overview/major_facilities/facility_plans/research_and_development/segments/geography")
     var sections: [String] = []
 
     @Flag(name: .long, help: "JSON 形式で出力")
