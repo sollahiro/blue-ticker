@@ -200,7 +200,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase A | ✅ 完了 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
 | Phase B | ✅ 完了 | 半期機能（`--half` フラグ・`HalfYearAnalyzer`・`HalfPeriod` 型・`halfYearTrimPeriods`）＋半期スモークテスト（11 社全 OK） |
 | Phase C | ✅ 完了 | セグメント・地域別情報（`Analysis/SegmentExtractor`・`filing --sections segments/geography`・MCP `get_filing_content` 拡充）＋Python ゴールデンパリティテスト（26 書類完全一致） |
-| Phase D | 未着手 | Python 全廃（`blue_ticker/` 削除・CI 更新・Homebrew formula 更新） |
+| Phase D | ✅ 完了 | Python 全廃（`blue_ticker/`・`tests/`・Poetry 設定削除、CI を Swift のみに整理、CLAUDE.md / .agents/rules / README / docs を Swift 向けに書き換え） |
 
 ### Phase 5 実装範囲（2026-06-12）
 
@@ -394,7 +394,7 @@ Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完�
 Phase A ✅: 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
 Phase B ✅: 半期機能（--half フラグ・HalfYearAnalyzer）＋半期スモークテスト（11 社全 OK）
 Phase C ✅: セグメント・地域別情報（SegmentExtractor・filing/MCP セクション拡充）＋パリティテスト（26 書類）
-Phase D  : Python 全廃（blue_ticker/ 削除・CI・Homebrew 更新）
+Phase D ✅: Python 全廃（blue_ticker/ 削除・CI・ドキュメント更新）
 ```
 
 Phase 3 完了時点で全コマンドが純 Swift で動作する。Phase 4 で IFRS リース負債・US-GAAP 連結財務諸表が完全対応。Phase 5 で Python blt-server を置き換え。Phase A〜D で残存 Python 機能を移植し Python 依存を完全に解消する。
