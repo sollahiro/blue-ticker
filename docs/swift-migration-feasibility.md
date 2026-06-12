@@ -198,7 +198,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
 | Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
 | Phase A | ✅ 完了 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
-| Phase B | 未着手 | 半期機能（`--half` フラグ・HalfYearDataService・FinancialData） |
+| Phase B | ✅ 完了 | 半期機能（`--half` フラグ・`HalfYearAnalyzer`・`HalfPeriod` 型・`halfYearTrimPeriods`）＋半期スモークテスト（11 社全 OK） |
 | Phase C | 未着手 | セグメント情報（`segment_extractor`・`ticker filing` セクション拡充） |
 | Phase D | 未着手 | Python 全廃（`blue_ticker/` 削除・CI 更新・Homebrew formula 更新） |
 
@@ -300,7 +300,7 @@ Python 分析層テスト 13 ファイルを XCTest へ移植（`SwiftTests/Blue
 | 対象 | 理由 |
 |---|---|
 | net_revenue / share_buyback / order_book / bank_financials / shareholder_metrics / segment_extractor 等のテスト | 対応モジュールが Swift 未実装（analyze 出力に未統合） |
-| analyzer / calculator / ROE・ROIC waterfall / half_year / output_serializer 等 | Python サービス層・出力層固有（Swift は IndividualAnalyzer に統合済み、スモークテストでカバー） |
+| analyzer / calculator / ROE・ROIC waterfall / output_serializer 等 | Python サービス層・出力層固有（Swift は IndividualAnalyzer / HalfYearAnalyzer に統合済み、スモークテストでカバー） |
 | EDINET API / discovery / cache 系 | サービス層テストとして移植済み（上記 2026-06-12） |
 | CLI 統合・dependency_rules | dependency_rules は Python の import 規約固有。CLI 統合は Swift スモークテストでカバー |
 | components のタグ名検証・税金の prior 系フィールド | Swift の結果構造体が未保持（必要になった時点で追加） |
@@ -391,8 +391,8 @@ Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
 Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testing）/ CI 整備（macOS + Linux）
 Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完全置き換え）
-Phase A  : 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
-Phase B  : 半期機能（--half フラグ・HalfYearDataService）
+Phase A ✅: 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
+Phase B ✅: 半期機能（--half フラグ・HalfYearAnalyzer）＋半期スモークテスト（11 社全 OK）
 Phase C  : セグメント情報（ticker filing 拡充）
 Phase D  : Python 全廃（blue_ticker/ 削除・CI・Homebrew 更新）
 ```
@@ -427,9 +427,6 @@ Phase 1〜5 で Swift の全コマンドが動作しているが、Python `blue_
 | ROE ウォーターフォール | `utils/roe_waterfall.py` | 112行 | ROE前年差・3因子分解フィールドが空 |
 | ROIC ウォーターフォール | `utils/roic_waterfall.py` | 213行 | ROIC前年差・2因子分解フィールドが空 |
 | 営業利益ウォーターフォール | `utils/operating_profit_change.py` | 482行 | 営業利益前年差・4因子分解フィールドが空 |
-| 半期データサービス | `services/half_year_data_service.py` | 595行 | `--half` フラグ未実装 |
-| 半期レコード統合 | `utils/financial_data.py` | 372行 | 同上 |
-| 半期 JSON 出力 | `utils/output_serializer.py` | 68行 | 同上 |
 | セグメント情報抽出 | `analysis/segment_extractor.py` | 372行 | `ticker filing` でセグメントセクションが取得不可 |
 
 ---
@@ -450,26 +447,45 @@ commit `767a281`。`ticker analyze` の年次出力で空だったフィール�
 
 ---
 
-### Phase B: 半期機能（`--half` フラグ）
+### Phase B: 半期機能（`--half` フラグ）（2026-06-12 完了）
 
-**対象**: `ticker analyze --half` で H1/H2 期間ごとの財務指標を表示する機能。
+`ticker analyze --half` で H1/H2 期間ごとの財務指標を表示する機能。Python の `half_year_data_service.py`（XBRL パス）相当。
 
-#### 実装スコープ
+#### 実装ファイル
 
-| コンポーネント | Python 相当 | 概要 |
+| ファイル | 役割 |
+|---|---|
+| `Models/HalfYearTypes.swift` | `HalfPeriod`（label/half/fyEnd/yearEntry）Codable struct |
+| `Services/HalfYearAnalyzer.swift` | メインサービス（fetchAndBuild・buildH2Entry・キャッシュ）＋ `halfYearTrimPeriods` |
+| `CLI/AnalyzeCommand.swift` | `--half` フラグ追加・`printHalfYearTable` |
+| `SwiftTests/HalfYearTests.swift` | `halfYearTrimPeriods` を 5 ケースでテスト |
+| `SwiftTests/SmokeTests.swift`（更新） | `testHalfSmokeAll` を追加（11 社全 OK） |
+
+#### スモークテスト検証（11 社全 OK）
+
+`SmokeTests.testHalfSmokeAll()` を追加。`tmp_cache/edinet/` の 2Q XBRL（`prepare_half_cache.py` で展開済み）を直接読み、`smoke/smoke_half_expected/*.json` のゴールデンファイルと照合。
+
+| 会計基準 | 検証銘柄 | 結果 |
 |---|---|---|
-| 半期書類探索 | `edinet_discovery.build_half_year_document_index_for_code()` | 半期報告書（DocTypeCode=120）のインデックス構築 |
-| 半期レコード統合 | `financial_data.py` | H1 + H2 の期間レコード組み立て、前期 H2 の合成計算 |
-| 半期指標集計 | `half_year_data_service.py` | XBRL ダウンロード・フィールド抽出・ウォーターフォール適用 |
-| CLI フラグ | `--half` | `AnalyzeCommand` に `--half` オプションを追加 |
-| JSON 出力 | `output_serializer.py` | 半期形式の JSON 出力 |
+| J-GAAP | 2871 ニチレイ、3490 AZplanning、6103 オークマ、7422 東邦レマック、8306 三菱 UFJ、8316 三井住友 | ✅ 全件 OK |
+| IFRS | 2802 味の素、6326 クボタ、7269 スズキ | ✅ 全件 OK |
+| US-GAAP | 4901 富士フイルム、7751 キヤノン | ✅ 全件 OK |
 
-#### 設計方針
+半期ゴールデンファイルで `capital_expenditure` / `research_development` / `interest_expense` が null の場合は既存の `compare` ロジック（expected nil → skip）で自動除外されるため、`is_half` フラグの追加は不要。
 
-- `EdinetDiscovery` に半期書類インデックス構築メソッドを追加
-- `HalfYearAnalyzer`（新規 actor）が H1/H2 期間の組み立てと XBRL 抽出を担当
-- 前期 H2 の合成計算（当年度全体 XBRL − H1 EDINET）は `HalfYearAnalyzer` 内に実装
-- `AnalyzeCommand` の `--half` フラグで `HalfYearAnalyzer` を呼び出す
+#### 設計
+
+- **H1** = 2Q 書類を `IndividualAnalyzer.processDocument` で処理した `YearEntry`（XBRL extractor を完全再利用）
+- **H2** = FY YearEntry − H1 YearEntry（フロー）、BS は FY 期末スナップショット（Python `_apply_fy_bs_and_roic` と同設計）
+  - ROE は H2 純利益 / FY 期末純資産（H1 側は Q2 期末純資産）
+- **当期 H1**（FY 未公開）: Q2 書類のみ存在する場合も H1 として追加
+- ウォーターフォールは H1 系列・H2 系列を独立して適用（同一 half 間の年次比較）
+- **trim ロジック**（`halfYearTrimPeriods`）: 完結 H1+H2 ペア N 件 + 当期 H1（FY 未公開）を返す。Python `_trim_half_year_periods` と同ロジック。
+- キャッシュキー: `"half_year_periods_{code}"`、バージョン: `"26.6.0"`
+
+#### 未移植（Python との差分）
+
+Python の `half_year_data_service.py` には外部株価 API 経由の IBD・BS 補完パスがあるが、Swift 版では XBRL のみ（外部 API 連携なし）。
 
 ---
 
