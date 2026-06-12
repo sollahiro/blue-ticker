@@ -343,7 +343,8 @@ import SwiftSoup
 
         print("PARITY \(checked) docs checked, \(diffs.count) diffs")
         for d in diffs.prefix(20) { print("DIFF   \(d)") }
-        #expect(diffs.isEmpty, Comment(rawValue: "パリティ差分:\n" + diffs.joined(separator: "\n")))
+        // SwiftSoup.Comment との曖昧性を避けるためモジュール修飾する（CI の Xcode で曖昧エラー）
+        #expect(diffs.isEmpty, Testing.Comment(rawValue: "パリティ差分:\n" + diffs.joined(separator: "\n")))
         #expect(checked > 0 || golden.isEmpty)
     }
 
