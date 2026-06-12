@@ -195,7 +195,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 1 | ✅ 完了 | `App.swift`, `CLI/` 全コマンド骨格, `Infrastructure/Keystore`, `Infrastructure/Settings`, `Infrastructure/UserPaths`, `API/EdinetAPIClient`, `API/EdinetCacheStore`, `Utils/CacheManager`, `Utils/CachePaths`, `Utils/FiscalYear`, `Utils/Converters`, `Models/`, `Constants/`, `Services/MasterDataManager`, `Services/CompanyInfoService` |
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
-| Phase 4 | 🔲 一部完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。macOS Swift CI ジョブ追加済み。残: Linux CI（下記） |
+| Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
 | Phase 5 | 未着手 | MCP サーバー（`modelcontextprotocol/swift-sdk` 0.12.1）|
 
 ### Phase 4 HTML パース実装範囲（2026-06-11）
@@ -210,9 +210,19 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 
 ### Phase 4 CI 整備（2026-06-12）
 
-- `ci.yml` に `swift-macos` ジョブ（`swift test`、SwiftPM キャッシュ付き）を追加。macOS では全 204 テスト合格
-- Linux ビルド互換対応を実施: `FoundationNetworking`（URLSession）・`FoundationXML`（XMLParser）の条件付き import、`KeystoreError.keychainError(OSStatus)` の `#if canImport(Security)` ガード。swift:6.1 コンテナ（aarch64）で**ビルド成功**を確認
-- **未解決**: Linux でテスト実行が開始直後にハングする（CPU ほぼ 0%）。actor / セマフォまわりの Linux 固有挙動差を調査中。解消後に `swift-linux` CI ジョブ（swift:6.1 コンテナ）を追加する
+- `ci.yml` に `swift-macos` / `swift-linux`（swift:6.1 コンテナ、timeout 30 分）ジョブを追加（`swift test`、SwiftPM キャッシュ付き）
+- Linux ビルド互換対応を実施: `FoundationNetworking`（URLSession）・`FoundationXML`（XMLParser）の条件付き import、`KeystoreError.keychainError(OSStatus)` の `#if canImport(Security)` ガード
+
+#### XCTest → Swift Testing 移行（2026-06-12）
+
+Linux で XCTest のテスト実行が確率的にデッドロックする問題（10 回中 7 回ハング、swift:6.1 / 6.2 とも再現、`--parallel` でも回避不可）を調査した結果、corelibs-xctest の既知の未修正バグ [swiftlang/swift-corelibs-xctest#504](https://github.com/swiftlang/swift-corelibs-xctest/issues/504) と特定（teardown シーケンスの `XCTWaiter.wait()` が ppoll でハング。取得したスタックトレースと一致）。
+
+XCTest を使う限り回避不能のため、テスト全 24 ファイル・204 テストを Swift Testing（`import Testing`、`@Suite` / `@Test` / `#expect`）へ移行した。
+
+- `setUpWithError` / `tearDownWithError` は `init()` / `deinit`（`@Suite final class`）へ変換（4 ファイル）
+- `XCTSkip` は `.enabled(if:)` トレイト（XBRLUtilsTests）と早期 return（SmokeTests）へ置き換え
+- Swift Testing はスイート間並列実行がデフォルト。テストは temp ディレクトリ分離済みのため競合なし（環境変数を触るのは UserPathsTests の 1 件のみで、対象環境変数を読むテストは他にない）
+- 移行後の検証: macOS 全 204 テスト合格、Linux（swift:6.1 コンテナ）10 回連続全合格（ハング解消）
 
 ### Phase 4 サービス層テスト移植（2026-06-12）
 
@@ -337,7 +347,7 @@ Swift スモークテスト（11 社）は全て `OK` で合格。
 Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
-Phase 4 🔲: HTML パース ✅ / 分析層テスト移植 ✅ / サービス層テスト移植 ✅（全 204 テスト）/ 残: CI 整備
+Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testing）/ CI 整備（macOS + Linux）
 Phase 5   : MCP サーバー（公式 Swift SDK 0.12.1）
 ```
 
