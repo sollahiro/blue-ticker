@@ -24,10 +24,12 @@
 バージョン更新を依頼されたら、以下のステップをすべて実行すること。
 
 0. **バンプは機能コミットとは分離し、後続の独立コミットとして行う**
-1. `Sources/BlueTicker/Constants/Version.swift` の `blueTickerVersion` を更新する
-2. バンプコミットを作成する（`chore: bump version to YY.M.Micro`）
-3. タグを作成する（`git tag vYY.M.Micro`）
-4. コミットとタグをリモートへプッシュする
+1. **リリース対象のコミットを main へプッシュし、CI（macOS + Linux）がグリーンであることを確認する**
+   - ローカルの `swift test` 合格だけでタグを切らない。CI のツールチェーンはローカルより古く、ローカルで通るコードが CI で落ちることがある（実例: swift-testing マクロと SwiftSoup の `Comment` 型衝突で v26.6.1/26.6.2 を破棄）
+2. `Sources/BlueTicker/Constants/Version.swift` の `blueTickerVersion` を更新する
+3. バンプコミットを作成する（`chore: bump version to YY.M.Micro`）
+4. タグを作成する（`git tag vYY.M.Micro`）
+5. コミットとタグをリモートへプッシュする
 
 ```bash
 git push origin main

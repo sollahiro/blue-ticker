@@ -511,48 +511,62 @@ Python の `half_year_data_service.py` には外部株価 API 経由の IBD・BS
 
 ---
 
-### Phase D: Python 全廃
+### Phase D: Python 全廃（2026-06-13 完了）
 
-Phase A〜C 完了後に実施。
+#### 実 EDINET 動作検証（全廃前の最終確認）
 
-#### 削除対象
+クボタ（6326）の有価証券報告書を実 API 経由で取得し、`filing --sections segments geography` の出力が Python ゴールデンと完全一致することを確認。検証過程で実バグを 2 件発見・修正:
+
+| バグ | 修正 |
+|---|---|
+| 成功時に CLI プロセスが終了しない（`AsyncParsableCommand.main()` は成功時に exit せず return するため `RunLoop.main.run()` が回り続ける） | `BlueTickerMain/main.swift` に `exit(0)` 追加 |
+| `--sections` が 1 値ずつしか受け取れない（Python の `nargs="+"` と非互換） | `.upToNextOption` に変更 |
+
+#### 削除実績（158 ファイル・約 32,800 行）
 
 | 対象 | 内容 |
 |---|---|
 | `blue_ticker/` | Python パッケージ本体（91 ファイル、約 17,500行） |
 | `tests/` | Python テスト（45 ファイル） |
-| `smoke/` | Python スモークスクリプト（7 ファイル） |
-| `pyproject.toml`, `poetry.lock`, `uv.lock` | Python プロジェクト設定 |
+| `smoke/*.py` | Python スモークスクリプト（8 ファイル。ゴールデン JSON は凍結保持） |
+| `pyproject.toml`, `poetry.lock`, `poetry.toml`, `uv.lock` | Python プロジェクト設定 |
 | `pyrightconfig.json` | Python 型チェッカー設定 |
-| `blue_ticker.spec` | PyInstaller 設定 |
-| `dist/` | PyInstaller 生成バイナリ |
+| `blue_ticker.spec`, `dist/` | PyInstaller 設定・生成物 |
 
-#### CI 更新（`.github/workflows/`）
+スモークキャッシュ（`tmp_cache/edinet/`）の準備は Swift 製ユーティリティ `SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare` に置き換え（`smoke/segment_expected.json` の docID を正として全書類をダウンロード）。
+
+#### CI・配布
 
 - `ci.yml`: Python/Poetry/pyright/pytest ジョブを削除。Swift ジョブ（macOS + Linux）のみに整理
-- `release.yml`: PyInstaller ビルドを削除。`swift build -c release` でバイナリ生成に置き換え
+- `release.yml`: PyInstaller → `swift build -c release --product ticker` に置き換え
+- Homebrew formula: バイナリ名 `ticker` ＋ `blt` symlink 構成が Swift バイナリと互換のため変更不要（tarball 内容のみ Swift 製に）
+- **v26.6.3 として配布済み**（GitHub Release + Homebrew tap 自動更新を確認）
 
-#### Homebrew formula 更新（`Formula/`）
+#### ドキュメント・設定
 
-- インストール元を Python wheel / PyInstaller バイナリから Swift リリースバイナリに変更
-- `brew install` 時の Python ランタイム依存を削除
+- CLAUDE.md / `.agents/rules/project/*.md`（8 本）/ README / `docs/xbrl-parsing.md` / `.gitignore` を Swift 向けに書き換え
+- 陳腐化記述の除去: WACC・財務省国債利回り（削除前の Python にも実装が存在しなかった）、`.claude/settings.json` の pyright フック
+- バージョン定数を `Constants/Version.swift` の `blueTickerVersion` に一元化（CLI `--version`・MCP・derived キャッシュが参照）
 
-#### CLAUDE.md 更新
+#### リリースで得た教訓
 
-- Python アーキテクチャ依存ルール（`services/` は `blue_ticker.app` をインポートしてはならない、等）を削除
-- Swift 向けのアーキテクチャルールに書き換え
+v26.6.1 / v26.6.2 は CI 失敗で破棄（規約に従いタグ付け直しはせず番号を進めた）。原因は `import SwiftSoup` したテストファイルで swift-testing の `#expect` マクロが展開時に生成する非修飾 `Comment` が `SwiftSoup.Comment` と曖昧衝突するもので、CI のツールチェーン（ローカルより古い）でのみ発生。対策:
+
+- テストファイルで SwiftSoup を import しない（HTML パースは `XBRLTestSupport.parseFirstTable` 経由）
+- **タグはローカルテスト合格だけで切らず、main へプッシュして CI グリーンを確認してからバンプ＋タグする**（versioning.md に反映）
 
 ---
 
-## 結論と推奨
+## 結論（移行完了）
 
-**実現可能性: 中〜高**（ただし工数・リスクは大きい）
+**2026-06-13、案 B（段階移行）により Phase 1〜5・A〜D を完遂し、Python 依存を完全に解消した。** v26.6.3 以降は Swift 製単一バイナリのみを配布している。
 
-| 評価項目 | 評価 |
+| 当初の目的 | 達成状況 |
 |---|---|
-| CLI・HTTP・キャッシュ・インフラ層 | 移行容易（Swift の強みが活きる） |
-| XBRL 解析層 | 移行可能だが最大リスク（慎重な移植とテスト検証が必須） |
-| MCP サーバー | 公式 Swift SDK（0.12.1）利用可能、FastMCP との差分確認が必要 |
-| 総合工数 | MCP 含む全 Phase で 11〜17 週 |
+| 起動速度・実行パフォーマンス | ✅ Python インタープリタ起動オーバーヘッドを解消 |
+| 型安全性・保守性 | ✅ XBRL 層含む全コードが Swift コンパイラの静的検査下に |
+| Python 依存の解消 | ✅ ランタイム・Poetry・pyright・PyInstaller をすべて削除 |
 
-**推奨: 案 B（段階移行）**。目的（パフォーマンス・型安全性・Python 依存解消）をすべて達成するには Phase 3 まで完遂する必要があり、段階移行はそのリスクを分散する手段として機能する。XBRL 解析の移植は既存 Smoke テスト（10 社）をゴールデンファイルとして用い、モジュール単位で Python 版の出力と一致させながら進める。MCP サーバーは公式 Swift SDK（0.12.1）が利用可能になったため Phase 5 として全体計画に組み込める。
+検証はゴールデンファイル方式が機能した: 年次・半期スモーク（11 社）とセグメントパリティ（26 書類）を旧 Python 実装の出力と完全一致させたまま移行を完了。期待値 JSON は凍結ゴールデンとして回帰検知に使い続ける（`docs/xbrl-parsing.md` §6 参照）。
+
+本ドキュメントは移行計画・実施記録のアーカイブとして保持する。
