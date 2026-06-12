@@ -73,6 +73,11 @@ struct IndividualAnalyzer {
         // fyEnd 降順ソート（最新が先頭）
         yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
 
+        // ウォーターフォール分解（全年度揃ってから実行）
+        applyOperatingProfitChangeToYears(&yearEntries)
+        applyRoicWaterfallToYears(&yearEntries)
+        applyRoeWaterfallToYears(&yearEntries)
+
         var result = MetricsResult()
         result.code = code
         result.latestFyEnd = yearEntries.first?.fyEnd
@@ -100,6 +105,8 @@ struct IndividualAnalyzer {
 
         // Duration FieldSet（損益計算書・CF用）
         var durationFS = fieldSetFromDuration(allTagElements)
+        // 非連結 Duration FieldSet（自己株式取得の非連結フォールバック用）
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTagElements)
         // Instant FieldSet（貸借対照表・有利子負債用）
         var instantFS = fieldSetFromInstant(allTagElements)
 
@@ -122,6 +129,8 @@ struct IndividualAnalyzer {
         let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let nr = NetRevenueExtractor.extract(fieldSet: durationFS)
+        let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, accountingStandard: accountingStandard)
 
         // 現金及び現金同等物
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
@@ -140,6 +149,7 @@ struct IndividualAnalyzer {
         raw.cfi = cf.cfi.map { $0 / millionYen }
         raw.capex = capex.current.map { $0 / millionYen }
         raw.rd = rd.current.map { $0 / millionYen }
+        raw.buyback = bb.current.map { $0 / millionYen }
         raw.salesLabel = is_.salesLabel
         raw.cashEq = cashItem.current.map { $0 / millionYen }
 
@@ -181,10 +191,23 @@ struct IndividualAnalyzer {
         calc.ppeTotal = ppe.total.map { $0 / millionYen }
         calc.ppeAccountingStandard = ppe.accountingStandard
 
-        // 営業利益率
-        if let op_ = calc.totalAssets, op_ > 0, let rawOP = raw.op {
-            calc.operatingMargin = (rawOP / (raw.sales ?? 1)) * percent
+        // IFRS金融会社フォールバック: Sales が未取得の場合に純収益で補完する
+        if nr.found {
+            if raw.sales == nil, let netRevM = nr.netRevenue {
+                raw.sales = netRevM / millionYen
+                raw.salesLabel = "純収益"
+                // GrossProfitMargin を Sales 確定後に再計算
+                if let gp = calc.grossProfit, let s = raw.sales, s > 0 {
+                    calc.grossProfitMargin = (gp / s) * percent
+                }
+            }
+            if raw.op == nil, let bpM = nr.businessProfit {
+                raw.op = bpM / millionYen
+                calc.opLabel = "事業利益"
+            }
         }
+
+        // 営業利益率
         if let s = raw.sales, s > 0, let rawOP = raw.op {
             calc.operatingMargin = (rawOP / s) * percent
         }

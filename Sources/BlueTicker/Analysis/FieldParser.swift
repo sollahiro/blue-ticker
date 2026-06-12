@@ -68,6 +68,12 @@ func fieldSetFromInstant(
     return fieldSet
 }
 
+/// XbrlTagElements から非連結 Duration コンテキストのみを正規化して FieldSet を返す。
+/// 自己株式取得の非連結フォールバック解決に使用する。
+func fieldSetFromNonConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {
+    normalizeNonConsolidatedDuration(tagElements)
+}
+
 // MARK: - Normalization (private)
 
 private func normalizeConsolidated(

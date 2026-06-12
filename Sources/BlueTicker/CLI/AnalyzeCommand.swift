@@ -183,6 +183,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
             ("投資CF (百万)",             { $0.rawData.cfi }),
             ("フリーCF (百万)",           { $0.calculatedData.cfc }),
             ("設備投資 (百万)",           { $0.rawData.capex }),
+            ("自己株式取得 (百万)",       { $0.rawData.buyback }),
             ("研究開発費 (百万)",         { $0.rawData.rd }),
         ]
     }

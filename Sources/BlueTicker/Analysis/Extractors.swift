@@ -103,6 +103,17 @@ struct RDResult {
     var method: String
 }
 
+struct NetRevenueResult {
+    var netRevenue: Double?
+    var businessProfit: Double?
+    var found: Bool
+}
+
+struct ShareBuybackResult {
+    var current: Double?
+    var method: String
+}
+
 // MARK: - Income Statement Extractor
 
 enum IncomeStatementExtractor {
@@ -860,5 +871,67 @@ enum RDExtractor {
         if let v = specificItem.current { return RDResult(current: v, method: "specific") }
 
         return RDResult(current: nil, method: "not_found")
+    }
+}
+
+// MARK: - Net Revenue Extractor（IFRS金融会社向け純収益フォールバック）
+
+enum NetRevenueExtractor {
+
+    static func extract(fieldSet: FieldSet) -> NetRevenueResult {
+        let nrItem = resolveItem(fieldSet, tags: Xbrl.netRevenueIFRSTags)
+        let bpItem = resolveItem(fieldSet, tags: Xbrl.businessProfitIFRSSRTags)
+        let found = nrItem.current != nil || bpItem.current != nil
+        return NetRevenueResult(netRevenue: nrItem.current, businessProfit: bpItem.current, found: found)
+    }
+}
+
+// MARK: - Share Buyback Extractor
+
+enum ShareBuybackExtractor {
+
+    /// 自己株式取得額（正値、円単位）を抽出する。
+    ///
+    /// XBRL の SS・CF 値は負値（キャッシュアウトフロー）で報告されるため符号反転して返す。
+    /// US-GAAP HTML 仮想タグはすでに正値のためそのまま返す。
+    static func extract(
+        fieldSet: FieldSet,
+        ncFieldSet: FieldSet,
+        accountingStandard: String
+    ) -> ShareBuybackResult {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_ShareBuyback"])
+            if let v = item.current {
+                return ShareBuybackResult(current: v, method: "usgaap_html")
+            }
+            let ncItem = resolveItem(ncFieldSet, tags: Xbrl.shareBuybackSSJGAAPTags)
+            if ncItem.tag != nil, let v = ncItem.current {
+                return ShareBuybackResult(current: -v, method: "ss_nonconsolidated")
+            }
+            return ShareBuybackResult(current: nil, method: "not_found")
+        }
+
+        let ssTags = accountingStandard == "J-GAAP" ? Xbrl.shareBuybackSSJGAAPTags : Xbrl.shareBuybackSSIFRSTags
+        let cfTags = accountingStandard == "J-GAAP" ? Xbrl.shareBuybackCFJGAAPTags : Xbrl.shareBuybackCFIFRSTags
+
+        // 1. 株主資本等変動計算書・連結
+        let ssItem = resolveItem(fieldSet, tags: ssTags)
+        if ssItem.tag != nil, let v = ssItem.current {
+            return ShareBuybackResult(current: -v, method: "ss_consolidated")
+        }
+
+        // 2. CF計算書・財務活動
+        let cfItem = resolveItem(fieldSet, tags: cfTags)
+        if cfItem.tag != nil {
+            return ShareBuybackResult(current: cfItem.current.map { -$0 }, method: "cf_financing")
+        }
+
+        // 3. 株主資本等変動計算書・非連結（単独決算企業のフォールバック）
+        let ncItem = resolveItem(ncFieldSet, tags: ssTags)
+        if ncItem.tag != nil, let v = ncItem.current {
+            return ShareBuybackResult(current: -v, method: "ss_nonconsolidated")
+        }
+
+        return ShareBuybackResult(current: nil, method: "not_found")
     }
 }

@@ -441,6 +441,30 @@ enum Xbrl {
         "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
         "CashAndCashEquivalentsUSGAAP",
     ]
+
+    // MARK: - 純収益・事業利益（IFRS金融会社向けフォールバック）
+
+    static let netRevenueIFRSTags: [String] = ["NetRevenueIFRS"]
+    static let businessProfitIFRSSRTags: [String] = ["BusinessProfitIFRSSummaryOfBusinessResults"]
+
+    // MARK: - 自己株式取得
+
+    static let shareBuybackSSJGAAPTags: [String] = [
+        "PurchaseOfTreasuryStock",
+    ]
+    static let shareBuybackCFJGAAPTags: [String] = [
+        "PurchaseOfTreasuryStockFinCF",
+    ]
+    static let shareBuybackSSIFRSTags: [String] = [
+        "PurchaseOfTreasurySharesSSIFRS",
+        "PurchaseAndDisposalOfTreasurySharesSSIFRS",
+    ]
+    static let shareBuybackCFIFRSTags: [String] = [
+        "PaymentsForPurchaseOfTreasurySharesFinCFIFRS",
+        "PurchaseOfTreasurySharesFinCFIFRS",
+        "AcquisitionOfTreasurySharesFinCFIFRS",
+        "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS",
+    ]
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）
