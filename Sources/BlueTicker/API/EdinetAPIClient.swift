@@ -326,12 +326,25 @@ actor EdinetAPIClient {
     }
 
     private func getDocumentsDaily(start: Date, end: Date) async -> [String: [[String: Any]]?] {
-        var result: [String: [[String: Any]]?] = [:]
+        var dates: [String] = []
         var current = start
         while current <= end {
-            let ds = isoDate(current)
-            result[ds] = await getDocumentsForDate(ds)
+            dates.append(isoDate(current))
             current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
+        }
+
+        var result: [String: [[String: Any]]?] = [:]
+        let batchSize = Api.documentIndexBatchSize
+        for i in stride(from: 0, to: dates.count, by: batchSize) {
+            let batch = Array(dates[i..<min(i + batchSize, dates.count)])
+            await withTaskGroup(of: (String, [[String: Any]]?).self) { group in
+                for ds in batch {
+                    group.addTask { (ds, await self.getDocumentsForDate(ds)) }
+                }
+                for await (ds, docs) in group {
+                    result[ds] = docs
+                }
+            }
         }
         return result
     }

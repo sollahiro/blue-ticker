@@ -167,6 +167,31 @@ def _apply_bs_snapshot(
         _set_metric_source(data, "ROE", source="derived", unit="percent", method="NP / NetAssets")
 
 
+def _apply_fy_bs_and_roic(
+    data: dict[str, Any],
+    fy_rec: dict[str, Any],
+    ibd_by_year: dict[str, Any],
+    fy_end_8: str,
+    fy_bs_by_year: dict[str, Any] | None,
+) -> None:
+    """FY期末のIBD・NetAssetsを解決してNOPAT/ROICとBSスナップショットを適用する。
+
+    NetAssets は BS スナップショットを優先し、なければ FY レコードにフォールバック。
+    """
+    fy_ibd = ibd_by_year.get(fy_end_8)
+    ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
+
+    fy_bs = fy_bs_by_year.get(fy_end_8) if fy_bs_by_year else None
+    bs_net_assets_raw = to_float(fy_bs.get("net_assets")) if fy_bs else None
+    fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
+    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else fy_net_assets_raw
+    net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
+    _apply_nopat_and_roic(data, net_assets_m, ibd_m)
+
+    if fy_bs is not None:
+        _apply_bs_snapshot(data, fy_bs, ibd_m, to_float(fy_rec.get("CashEq")))
+
+
 def _apply_h1_edinet_data(
     data: dict[str, Any],
     edinet_q2: HalfYearEdinetEntry,
@@ -298,18 +323,7 @@ def _apply_h2_edinet_data(
             _set_metric_source(data, "IncomeTax", source="derived", unit="million_yen", method="FY IncomeTax - H1 IncomeTax")
     _apply_effective_tax_rate(data)
 
-    h2_ibd = ibd_by_year.get(fy_end_8)
-    h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
-
-    fy_bs = fy_bs_by_year.get(fy_end_8) if fy_bs_by_year else None
-    bs_net_assets_raw = to_float(fy_bs.get("net_assets")) if fy_bs else None
-    fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
-    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else fy_net_assets_raw
-    h2_net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
-    _apply_nopat_and_roic(data, h2_net_assets_m, h2_ibd_m)
-
-    if fy_bs is not None:
-        _apply_bs_snapshot(data, fy_bs, h2_ibd_m, to_float(fy_rec.get("CashEq")))
+    _apply_fy_bs_and_roic(data, fy_rec, ibd_by_year, fy_end_8, fy_bs_by_year)
 
 
 def _apply_fy_only_edinet_data(
@@ -344,18 +358,7 @@ def _apply_fy_only_edinet_data(
             _set_metric_source(data, "IncomeTax", source="edinet", unit="million_yen", method=fy_tax.get("method"))
     _apply_effective_tax_rate(data)
 
-    fy_ibd = ibd_by_year.get(fy_end_8)
-    fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
-
-    fy_bs = fy_bs_by_year.get(fy_end_8) if fy_bs_by_year else None
-    bs_net_assets_raw = to_float(fy_bs.get("net_assets")) if fy_bs else None
-    fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
-    net_assets_raw = bs_net_assets_raw if bs_net_assets_raw is not None else fy_net_assets_raw
-    fy_net_assets_m = net_assets_raw / MILLION_YEN if net_assets_raw is not None else None
-    _apply_nopat_and_roic(data, fy_net_assets_m, fy_ibd_m)
-
-    if fy_bs is not None:
-        _apply_bs_snapshot(data, fy_bs, fy_ibd_m, to_float(fy_rec.get("CashEq")))
+    _apply_fy_bs_and_roic(data, fy_rec, ibd_by_year, fy_end_8, fy_bs_by_year)
 
 
 def _trim_half_year_periods(

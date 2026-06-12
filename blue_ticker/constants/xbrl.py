@@ -902,33 +902,11 @@ PPE_TOTAL_TAGS: list[str] = [
     "PropertyPlantAndEquipmentNetUSGAAP",
     "PropertyPlantAndEquipmentUSGAAP",
 ]
-PPE_BUILDINGS_TAGS: list[str] = ["BuildingsAndStructuresIFRS", "BuildingsAndStructuresNet", "BuildingsNet", "StructuresNet"]
-PPE_LAND_TAGS: list[str] = ["LandIFRS", "Land"]
-PPE_MACHINERY_TAGS: list[str] = ["MachineryAndVehiclesIFRS", "MachineryAndEquipmentAndOthersIFRS", "MachineryEquipmentAndVehiclesNet", "MachineryAndEquipmentNet"]
-PPE_TOOLS_TAGS: list[str] = ["ToolsFurnitureAndFixturesIFRS", "ToolsFurnitureAndFixturesNet"]
-PPE_CONSTRUCTION_TAGS: list[str] = ["ConstructionInProgressIFRS", "ConstructionInProgress"]
-
 # IFRS 専用直接タグ（帳簿価額）
 PPE_TOTAL_IFRS_DIRECT: list[str] = ["PropertyPlantAndEquipmentIFRS"]
-PPE_BUILDINGS_IFRS_DIRECT: list[str] = ["BuildingsAndStructuresIFRS"]
-PPE_LAND_IFRS_DIRECT: list[str] = ["LandIFRS"]
-PPE_MACHINERY_IFRS_DIRECT: list[str] = [
-    "MachineryAndVehiclesIFRS",           # 一般（クボタ等は使わない）
-    "MachineryAndEquipmentAndOthersIFRS", # クボタ等「機械装置及びその他」
-]
-PPE_TOOLS_IFRS_DIRECT: list[str] = ["ToolsFurnitureAndFixturesIFRS"]
-PPE_CONSTRUCTION_IFRS_DIRECT: list[str] = ["ConstructionInProgressIFRS"]
 
 # J-GAAP 専用直接タグ（帳簿価額）
 PPE_TOTAL_JGAAP_DIRECT: list[str] = ["PropertyPlantAndEquipment"]
-PPE_BUILDINGS_JGAAP_DIRECT: list[str] = ["BuildingsAndStructuresNet"]
-# 建物のみ・構築物のみを個別報告する場合の合算用タグ
-PPE_BUILDINGS_ONLY_JGAAP_TAGS: list[str] = ["BuildingsNet"]
-PPE_STRUCTURES_JGAAP_TAGS: list[str] = ["StructuresNet"]
-PPE_LAND_JGAAP_DIRECT: list[str] = ["Land"]
-PPE_MACHINERY_JGAAP_DIRECT: list[str] = ["MachineryEquipmentAndVehiclesNet", "MachineryAndEquipmentNet"]
-PPE_TOOLS_JGAAP_DIRECT: list[str] = ["ToolsFurnitureAndFixturesNet"]
-PPE_CONSTRUCTION_JGAAP_DIRECT: list[str] = ["ConstructionInProgress"]
 
 # US-GAAP 専用合計タグ（内訳は未サポート）
 # USGAAP_HTML_PPENet は parse_usgaap_html_bs_fields が HTML 連結貸借対照表から生成する仮想タグ
@@ -941,23 +919,6 @@ PPE_TAGS_USGAAP_TOTAL: list[str] = [
 # 取得原価 - 累計減価償却・減損 による帳簿価額差引計算用（IFRS 直接タグが存在しない場合のフォールバック）
 PPE_TOTAL_COST_TAGS: list[str] = ["PropertyPlantAndEquipmentAcquisitionCostIFRS"]
 PPE_TOTAL_DEP_TAGS: list[str] = ["PropertyPlantAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS"]
-PPE_BUILDINGS_COST_TAGS: list[str] = ["BuildingsAcquisitionCostIFRS"]
-PPE_BUILDINGS_DEP_TAGS: list[str] = ["BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS"]
-PPE_LAND_COST_TAGS: list[str] = ["LandAcquisitionCostIFRS"]
-PPE_LAND_DEP_TAGS: list[str] = ["LandAccumulatedImpairmentLossesIFRS"]
-PPE_MACHINERY_COST_TAGS: list[str] = [
-    "MachineryAndEquipmentAcquisitionCostIFRS",
-    "MachineryAndEquipmentAndOthersAcquisitionCostIFRS",  # クボタ等「機械装置及びその他」
-]
-PPE_MACHINERY_DEP_TAGS: list[str] = [
-    "MachineryAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS",
-    "MachineryAndEquipmentAndOthersAccumulatedDepreciationAndImpairmentLossesIFRS",  # クボタ等
-]
-PPE_CONSTRUCTION_COST_TAGS: list[str] = ["ConstructionInProgressAcquisitionCostIFRS"]
-PPE_CONSTRUCTION_DEP_TAGS: list[str] = ["ConstructionInProgressAccumulatedImpairmentLossesIFRS"]
-# 賃貸用車両及び器具（IFRS tools フォールバック。ToolsFurnitureAndFixturesIFRS が存在しない場合に使用）
-PPE_LEASED_VEHICLES_COST_TAGS: list[str] = ["VehiclesAndEquipmentOnOperatingLeasesAcquisitionCostIFRS"]
-PPE_LEASED_VEHICLES_DEP_TAGS: list[str] = ["VehiclesAndEquipmentOnOperatingLeasesAccumulatedDepreciationAndImpairmentIFRS"]
 
 # 銀行業 貸借対照表固有タグ（_BNK suffix）
 # analysis/bank_financials.py で使用

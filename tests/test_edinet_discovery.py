@@ -263,3 +263,35 @@ async def test_build_document_index_slices_to_analysis_years(monkeypatch) -> Non
     assert annual[0]["edinet_fy_end"] == "2025-12-31"
     assert annual[1]["edinet_fy_end"] == "2024-12-31"
     assert annual[2]["edinet_fy_end"] == "2023-12-31"
+
+
+@pytest.mark.asyncio
+async def test_build_document_index_finds_delayed_filing_across_year_boundary(monkeypatch) -> None:
+    """提出が大幅に遅延して暦年をまたいだ有報も、提出年のインデックスから発見できること。
+
+    旧実装の Tier3（期末+185日窓）が担保していたケース。年次インデックスは提出日ベース
+    なので、期末 2024-09-30 の有報が 2025-04 に提出されても 2025 年インデックスに含まれ、
+    periodEnd 降順の選択で正しい年度に割り当てられる。
+    """
+    edinet_code = "E12345"
+    # 期末 2024-09-30、提出 2025-04-03（約185日遅延、暦年またぎ）
+    delayed = _make_annual_doc("S100DLAY", edinet_code, "2023-10-01", "2024-09-30", "2025-04-03 10:00")
+    # 期末 2025-09-30、提出 2025-12-20（通常提出）
+    recent = _make_annual_doc("S100RCNT", edinet_code, "2024-10-01", "2025-09-30", "2025-12-20 10:00")
+
+    year_index: dict[int, list[dict]] = {2025: [delayed, recent]}
+    monkeypatch.setattr(
+        edinet_discovery, "_find_most_recent_filing", AsyncMock(return_value=recent)
+    )
+    mock_client = Mock()
+    mock_client.ensure_document_index_for_year = AsyncMock(
+        side_effect=lambda y: year_index.get(y, [])
+    )
+
+    docs, _ = await edinet_discovery.build_document_index_for_code("9843", mock_client, analysis_years=2)
+    annual = [d for d in docs if d.get("docTypeCode") == "120"]
+    assert len(annual) == 2
+    assert {d["edinet_fy_end"] for d in annual} == {"2024-09-30", "2025-09-30"}
+    delayed_doc = next(d for d in annual if d["edinet_fy_end"] == "2024-09-30")
+    assert delayed_doc["docID"] == "S100DLAY"
+    assert delayed_doc["fiscal_year"] == 2023
