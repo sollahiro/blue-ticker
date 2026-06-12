@@ -3,8 +3,10 @@ import Foundation
 private let userDataEnv = "BLUE_TICKER_USER_DATA_PATH"
 private let configDirName = "blue-ticker"
 
-func defaultUserDataPath() -> URL {
-    if let override = ProcessInfo.processInfo.environment[userDataEnv] {
+func defaultUserDataPath(
+    environment: [String: String] = ProcessInfo.processInfo.environment
+) -> URL {
+    if let override = environment[userDataEnv] {
         return URL(fileURLWithPath: override, isDirectory: true)
     }
     return defaultConfigRoot().appendingPathComponent(configDirName, isDirectory: true)
