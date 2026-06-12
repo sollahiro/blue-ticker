@@ -90,7 +90,7 @@ struct IndividualAnalyzer {
 
     // MARK: - Document Processing
 
-    private func processDocument(_ doc: [String: Any]) async -> YearEntry? {
+    func processDocument(_ doc: [String: Any]) async -> YearEntry? {
         guard let docID = doc["docID"] as? String,
               let fyEnd = doc["edinet_fy_end"] as? String else { return nil }
 

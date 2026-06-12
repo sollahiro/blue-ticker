@@ -19,6 +19,9 @@ struct AnalyzeCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "キャッシュを使用しない")
     var noCache = false
 
+    @Flag(name: .long, help: "半期データを表示")
+    var half = false
+
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
@@ -47,6 +50,28 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
         fputs("\n分析中: \(codeTrimmed) \(name) (\(market)) ...\n", stderr)
         fputs("分析対象期間: 直近 \(years) 年分\n", stderr)
+
+        if half {
+            let halfAnalyzer = HalfYearAnalyzer(edinetClient: client, cacheManager: cacheManager)
+            guard let periods = await halfAnalyzer.analyze(code: codeTrimmed, analysisYears: years, useCache: !noCache) else {
+                fputs("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n", stderr)
+                throw ExitCode.failure
+            }
+
+            if json {
+                let opts: JSONSerialization.WritingOptions = [.prettyPrinted, .sortedKeys]
+                if let data = try? JSONEncoder().encode(periods),
+                   let arr = try? JSONSerialization.jsonObject(with: data),
+                   let outData = try? JSONSerialization.data(withJSONObject: arr, options: opts),
+                   let str = String(data: outData, encoding: .utf8) {
+                    print(str)
+                }
+                return
+            }
+
+            printHalfYearTable(periods: periods)
+            return
+        }
 
         let analyzer = IndividualAnalyzer(edinetClient: client, cacheManager: cacheManager)
         guard let result = await analyzer.analyze(code: codeTrimmed, analysisYears: years, useCache: !noCache) else {
@@ -133,6 +158,111 @@ struct AnalyzeCommand: AsyncParsableCommand {
             for val in vals {
                 row += padLeft(val ?? "-", width: colWidth)
             }
+            fputs(row + "\n", stderr)
+        }
+
+        fputs(sep + "\n", stderr)
+    }
+
+    // MARK: - Half-Year Table Display
+
+    private func printHalfYearTable(periods: [HalfPeriod]) {
+        guard !periods.isEmpty else {
+            fputs("半期データが見つかりませんでした。\n", stderr)
+            return
+        }
+
+        let labelWidth = 22
+        let colWidth = 11
+
+        fputs("\n[半期財務推移]\n", stderr)
+
+        var header = padRight("項目 \\ 期", width: labelWidth)
+        for p in periods { header += padLeft(p.label, width: colWidth) }
+
+        let sep = String(repeating: "-", count: labelWidth + colWidth * periods.count)
+        fputs(sep + "\n", stderr)
+        fputs(header + "\n", stderr)
+        fputs(sep + "\n", stderr)
+
+        let latest = periods.last?.yearEntry
+        let opLabel = latest?.calculatedData.opLabel ?? "営業利益"
+        let opIsFinancial = ["事業利益", "経常利益"].contains(opLabel)
+        let gpLabel = (latest?.calculatedData.grossProfitLabel ?? "売上総利益") + " (百万)"
+        let gpMarginLabel: String = {
+            let l = latest?.calculatedData.grossProfitLabel ?? "売上総利益"
+            return l == "売上総利益" ? "粗利率 (%)" : "\(l)率 (%)"
+        }()
+        let salesLabel = latest?.rawData.salesLabel.map { "\($0) (百万)" } ?? "売上高 (百万)"
+
+        var numMetrics: [(String, (HalfPeriod) -> Double?)] = [
+            (salesLabel,               { $0.yearEntry.rawData.sales }),
+            (gpLabel,                  { $0.yearEntry.calculatedData.grossProfit }),
+            (gpMarginLabel,            { $0.yearEntry.calculatedData.grossProfitMargin }),
+            ("販管費 (百万)",           { $0.yearEntry.calculatedData.sellingGeneralAdministrativeExpenses }),
+        ]
+        if !opIsFinancial {
+            numMetrics += [
+                ("事業利益 (百万)",     { $0.yearEntry.calculatedData.businessProfit }),
+                ("事業利益率 (%)",      { $0.yearEntry.calculatedData.businessProfitMargin }),
+            ]
+        }
+        numMetrics += [
+            (opLabel + " (百万)",      { $0.yearEntry.rawData.op }),
+            (opLabel + "率 (%)",       { $0.yearEntry.calculatedData.operatingMargin }),
+            ("NOPAT (百万)",           { $0.yearEntry.calculatedData.nopat }),
+            ("純利益 (百万)",           { $0.yearEntry.rawData.np }),
+            ("実効税率 (%)",            { $0.yearEntry.calculatedData.effectiveTaxRate }),
+            ("事業利益前年差",          { $0.yearEntry.calculatedData.businessProfitChange }),
+            ("  売上差影響",            { $0.yearEntry.calculatedData.salesChangeImpact }),
+            ("  粗利率差影響",          { $0.yearEntry.calculatedData.grossMarginChangeImpact }),
+            ("  販管費差影響",          { $0.yearEntry.calculatedData.sgaChangeImpact }),
+            ("ROE (%)",                { $0.yearEntry.calculatedData.roe }),
+            ("ROIC (%)",               { $0.yearEntry.calculatedData.roic }),
+            ("NOPATマージン (%)",       { $0.yearEntry.calculatedData.nopatMargin }),
+            ("投下資本回転率 (倍)",     { $0.yearEntry.calculatedData.investedCapitalTurnover }),
+            ("ROIC前年差 (%)",         { $0.yearEntry.calculatedData.roicDelta }),
+            ("  NOPATマージン差影響",   { $0.yearEntry.calculatedData.roicMarginEffect }),
+            ("  投下資本回転率差影響",  { $0.yearEntry.calculatedData.roicTurnoverEffect }),
+            ("ROE前年差 (%)",          { $0.yearEntry.calculatedData.roeDelta }),
+            ("  純利益率差影響",        { $0.yearEntry.calculatedData.roeNetMarginEffect }),
+            ("  総資産回転率差影響",    { $0.yearEntry.calculatedData.roeAssetTurnoverEffect }),
+            ("  財務レバレッジ差影響",  { $0.yearEntry.calculatedData.roeLeverageEffect }),
+            ("投下資本 (百万)", {
+                guard let ibd = $0.yearEntry.calculatedData.interestBearingDebt,
+                      let na = $0.yearEntry.calculatedData.netAssets else { return nil }
+                return ibd + na
+            }),
+            ("有利子負債合計 (百万)",   { $0.yearEntry.calculatedData.interestBearingDebt }),
+            ("総資産 (百万)",           { $0.yearEntry.calculatedData.totalAssets }),
+            ("純資産 (百万)",           { $0.yearEntry.calculatedData.netAssets }),
+            ("現金及び現金同等物 (百万)", { $0.yearEntry.rawData.cashEq }),
+            ("ネットキャッシュ (百万)", { $0.yearEntry.calculatedData.netCash }),
+            ("営業CF (百万)",           { $0.yearEntry.rawData.cfo }),
+            ("投資CF (百万)",           { $0.yearEntry.rawData.cfi }),
+            ("フリーCF (百万)",         { $0.yearEntry.calculatedData.cfc }),
+        ]
+
+        for (label, getter) in numMetrics {
+            let vals = periods.map { getter($0) }
+            if vals.allSatisfy({ $0 == nil }) { continue }
+            var row = padRight(label, width: labelWidth)
+            for val in vals {
+                row += val.map { padLeft(String(format: "%.2f", $0), width: colWidth) }
+                       ?? padLeft("-", width: colWidth)
+            }
+            fputs(row + "\n", stderr)
+        }
+
+        // 文字列: DocID
+        let strMetrics: [(String, (HalfPeriod) -> String?)] = [
+            ("DocID", { $0.yearEntry.calculatedData.docID }),
+        ]
+        for (label, getter) in strMetrics {
+            let vals = periods.map { getter($0) }
+            if vals.allSatisfy({ $0 == nil }) { continue }
+            var row = padRight(label, width: labelWidth)
+            for val in vals { row += padLeft(val ?? "-", width: colWidth) }
             fputs(row + "\n", stderr)
         }
 
