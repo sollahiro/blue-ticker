@@ -199,7 +199,7 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
 | Phase A | ✅ 完了 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
 | Phase B | ✅ 完了 | 半期機能（`--half` フラグ・`HalfYearAnalyzer`・`HalfPeriod` 型・`halfYearTrimPeriods`）＋半期スモークテスト（11 社全 OK） |
-| Phase C | 未着手 | セグメント情報（`segment_extractor`・`ticker filing` セクション拡充） |
+| Phase C | ✅ 完了 | セグメント・地域別情報（`Analysis/SegmentExtractor`・`filing --sections segments/geography`・MCP `get_filing_content` 拡充）＋Python ゴールデンパリティテスト（26 書類完全一致） |
 | Phase D | 未着手 | Python 全廃（`blue_ticker/` 削除・CI 更新・Homebrew formula 更新） |
 
 ### Phase 5 実装範囲（2026-06-12）
@@ -393,7 +393,7 @@ Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testin
 Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完全置き換え）
 Phase A ✅: 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
 Phase B ✅: 半期機能（--half フラグ・HalfYearAnalyzer）＋半期スモークテスト（11 社全 OK）
-Phase C  : セグメント情報（ticker filing 拡充）
+Phase C ✅: セグメント・地域別情報（SegmentExtractor・filing/MCP セクション拡充）＋パリティテスト（26 書類）
 Phase D  : Python 全廃（blue_ticker/ 削除・CI・Homebrew 更新）
 ```
 
@@ -489,18 +489,25 @@ Python の `half_year_data_service.py` には外部株価 API 経由の IBD・BS
 
 ---
 
-### Phase C: セグメント情報（`ticker filing` 拡充）
+### Phase C: セグメント情報（`ticker filing` 拡充）（2026-06-13 完了）
 
-**対象**: `segment_extractor.py`（372行）の移植。`ticker filing --sections segment` でセグメント別売上・地域別売上を Markdown テーブルとして出力する。
+`segment_extractor.py`（372行）を Swift へ移植。`ticker filing --sections segments geography` でセグメント別・地域別情報を取得できる（Python CLI と同じセクション名）。
 
-#### 実装スコープ
+#### 実装ファイル
 
-Python の抽出優先順位:
-1. XBRL TextBlock HTML テーブル（期間判定付き）
-2. XBRL ディメンション付きファクト（フォールバック）
+| ファイル | 役割 |
+|---|---|
+| `Analysis/SegmentExtractor.swift` | 抽出本体。XBRL TextBlock HTML テーブル（期間判定付き）優先 → dimension 付き fact フォールバック。SAX ベースの TextBlock 収集（エスケープ済み HTML 対応）と context dimension マップ収集 |
+| `Constants/Xbrl.swift` | セグメント・地域別の TextBlock タグ／dimension キーワード定数 |
+| `CLI/FilingsCommand.swift` | `--sections` に `segments` / `geography` を追加、セクション名バリデーション（Python 同様に不正名はエラー）、テキスト出力（Markdown 表） |
+| `MCPServer/ServerSetup.swift` | `get_filing_content` に `segments` / `geography` を追加（Python MCP とパリティ） |
+| `SwiftTests/BlueTickerTests/SegmentExtractorTests.swift` | ユニットテスト（Python `test_segment_extractor.py` 全ケース＋TextBlock/fact 統合テスト）＋パリティテスト |
 
-- **実装箇所**: `Sources/BlueTicker/Analysis/SegmentExtractor.swift`（新規）、`FilingCommand` の `--sections` に `segment` を追加
-- **テスト**: フィクスチャ XML でユニットテスト（J-GAAP・IFRS 各 1 社）
+#### 検証
+
+- **Python ゴールデンパリティ**: `smoke/segment_expected.json`（`smoke/update_segment_fixtures.py` で生成）と `tmp_cache/edinet/` の 26 書類で、Swift 出力が Python 出力と**完全一致**（テーブル Markdown 文字列・period ラベル・facts 全フィールド）。キャッシュ未準備の環境ではスキップ（既存スモークテストと同方式）
+- **bs4 セマンティクス再現**: `get_text(strip=True)`（各テキストノードを個別 strip して区切りなし連結）を `bs4Text` として実装し、Markdown のセル文字列・列幅まで Python と一致させた
+- facts の出力順は Swift Dictionary の走査順が不定のため (tag, contextRef) でソート（Python は dict 挿入順。JSON 配列の順序は契約に含めない）
 
 ---
 
