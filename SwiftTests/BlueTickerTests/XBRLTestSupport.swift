@@ -2,7 +2,7 @@
 // Python tests/test_xbrl_*.py の _make_xbrl / _fs ヘルパー相当
 
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 enum XBRLTestSupport {
 

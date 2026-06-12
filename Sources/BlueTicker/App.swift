@@ -1,9 +1,10 @@
 import ArgumentParser
 import Foundation
 
-@main
-struct Ticker: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
+// @main は Sources/BlueTickerMain/main.swift に移動
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public struct Ticker: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
         commandName: "ticker",
         abstract: "BLUE TICKER — 日本株財務データ CLI",
         version: "26.6.0",
@@ -17,4 +18,6 @@ struct Ticker: AsyncParsableCommand {
             SectorCommand.self,
         ]
     )
+
+    public init() {}
 }

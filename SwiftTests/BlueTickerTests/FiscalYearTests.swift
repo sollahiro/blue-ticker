@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 @Suite struct FiscalYearTests {
     @Test func testNormalizeDateFormatCompact() {

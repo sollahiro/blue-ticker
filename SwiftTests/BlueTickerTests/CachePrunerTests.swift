@@ -6,7 +6,7 @@
 
 import Testing
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 @Suite final class CachePrunerTests {
     private let tmpDir: URL

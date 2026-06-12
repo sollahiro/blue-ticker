@@ -47,6 +47,25 @@ actor MasterDataManager {
         return codeIndex[code]
     }
 
+    func searchBySector(_ sector: String, limit: Int = 20) async -> [StockSearchResult] {
+        await loadIfNeeded()
+        let q = sector.lowercased()
+        if q.isEmpty { return [] }
+        var results: [StockSearchResult] = []
+        for stock in stocks {
+            if stock.s33nm.lowercased().contains(q) {
+                results.append(StockSearchResult(
+                    code: stock.code,
+                    name: stock.coName,
+                    sector: stock.s33nm,
+                    market: stock.mktNm
+                ))
+                if results.count >= limit { break }
+            }
+        }
+        return results
+    }
+
     func allSectors() async -> [SectorSummary] {
         await loadIfNeeded()
         var counts: [String: (name: String, count: Int)] = [:]

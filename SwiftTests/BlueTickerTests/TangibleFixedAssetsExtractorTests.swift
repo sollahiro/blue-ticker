@@ -3,7 +3,7 @@
 
 import Testing
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 @Suite struct TangibleFixedAssetsExtractorTests {
 

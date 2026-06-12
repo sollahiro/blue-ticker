@@ -14,7 +14,7 @@
 
 import Testing
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 @Suite final class EdinetClientTests {
     private let tmpDir: URL

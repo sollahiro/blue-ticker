@@ -3,7 +3,7 @@
 
 import Foundation
 import ZIPFoundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 enum ServiceTestSupport {
 

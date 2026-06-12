@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import BlueTicker
+@testable import BlueTickerCore
 
 /// Python smoke/check.py に相当する Swift 版スモークテスト。
 /// EDINET XBRL キャッシュ（ローカル）を直接読んで抽出器を動かし、
