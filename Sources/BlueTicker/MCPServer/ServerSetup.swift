@@ -132,7 +132,7 @@ private func allTools() -> [Tool] {
                 EDINET 書類からセクションテキストを抽出します。
                 doc_id を省略すると最新の有価証券報告書を使用します。
                 sections を省略すると全セクションを返します。
-                利用可能なセクション: business_risks, mda, capex_overview, major_facilities, facility_plans, research_and_development
+                利用可能なセクション: business_risks, mda, capex_overview, major_facilities, facility_plans, research_and_development, segments, geography
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -335,11 +335,13 @@ private func toolGetFilingContent(args: [String: Value], context: BltServerConte
         return ["code": code, "doc_id": targetDocID, "error": "XBRLのダウンロードに失敗しました"]
     }
 
-    let targetSections = sectionsArg ?? Array(xbrlSections.keys)
+    let targetSections = sectionsArg ?? Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys
     let parser = XBRLParser()
-    var extracted: [String: String] = [:]
+    var extracted: [String: Any] = [:]
     for key in targetSections {
-        if let def = xbrlSections[key] {
+        if let seg = SegmentExtractor.extractSpecialSection(key, xbrlDir: xbrlDir) {
+            extracted[key] = seg.toDictionary()
+        } else if let def = xbrlSections[key] {
             extracted[key] = parser.extractSection(in: xbrlDir, sectionName: def.title) ?? ""
         }
     }

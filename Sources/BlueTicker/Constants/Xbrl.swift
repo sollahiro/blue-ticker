@@ -465,6 +465,47 @@ enum Xbrl {
         "AcquisitionOfTreasurySharesFinCFIFRS",
         "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS",
     ]
+
+    // MARK: - セグメント・地域別情報（segment_extractor 相当）
+
+    // 事業別セグメント
+    static let businessSegmentTextBlockTags: Set<String> = [
+        "SegmentInformationTextBlock",
+        "SegmentInformationIFRSTextBlock",
+        "SegmentInformationUSGAAPTextBlock",
+        "SegmentInformationByBusinessSegmentTextBlock",
+    ]
+    static let businessSegmentDimensionKeywords: [String] = [
+        "OperatingSegments",
+        "BusinessSegment",
+        "ReportableSegment",
+    ]
+
+    // 地域別
+    static let geographyTextBlockTags: Set<String> = [
+        "InformationAboutGeographicalAreasIFRSTextBlock",                  // IFRS
+        "InformationAboutGeographicalAreasTextBlock",                       // J-GAAP
+        "InformationAboutGeographicalAreasUSGAAPTextBlock",                 // US-GAAP
+        "RelatedInformationTextBlock",                                      // J-GAAP 関連情報（混在）
+        "RevenuesFromExternalCustomersInformationForEachRegionTextBlock",   // J-GAAP 地域ごとの外部顧客への売上収益
+        "PropertyPlantAndEquipmentInformationForEachRegionTextBlock",       // J-GAAP 地域ごとの有形固定資産
+    ]
+    static let geographyMixedTextBlockTags: Set<String> = [
+        "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
+        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  // US-GAAP 連結財務諸表注記（地域別を内包）
+    ]
+    static let geographyHeadingKeywords: [String] = [
+        "地域ごとの情報",
+        "地域別",
+        "所在地別",
+    ]
+    static let geographyDimensionKeywords: [String] = [
+        "GeographicArea",
+        "Geography",
+        "Country",
+        "Region",
+        "NoncurrentAssetsByLocation",
+    ]
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

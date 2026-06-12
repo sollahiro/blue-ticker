@@ -64,6 +64,7 @@ let package = Package(
             dependencies: [
                 "BlueTickerCore",
                 "ZIPFoundation",
+                "SwiftSoup",
             ],
             path: "SwiftTests/BlueTickerTests"
         ),

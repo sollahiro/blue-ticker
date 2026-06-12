@@ -77,13 +77,20 @@ struct FilingCommand: AsyncParsableCommand {
     @Option(name: .long, help: "書類ID（省略時は最新の有価証券報告書）")
     var docId: String?
 
-    @Option(name: .long, help: "抽出セクション: risks/mda/capex_overview/major_facilities/research_and_development")
+    @Option(name: .long, help: "抽出セクション: business_risks/mda/capex_overview/major_facilities/facility_plans/research_and_development/segments/geography")
     var sections: [String] = []
 
     @Flag(name: .long, help: "JSON 形式で出力")
     var json = false
 
     func run() async throws {
+        let validSections = Set(xbrlSections.keys).union(SegmentExtractor.specialSectionKeys)
+        let unknown = sections.filter { !validSections.contains($0) }
+        guard unknown.isEmpty else {
+            fputs("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n", stderr)
+            throw ExitCode.failure
+        }
+
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
             fputs("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n", stderr)
@@ -120,18 +127,26 @@ struct FilingCommand: AsyncParsableCommand {
         }
 
         // セクション抽出
-        let targetSections = sections.isEmpty ? Array(xbrlSections.keys) : sections
+        let targetSections = sections.isEmpty
+            ? Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys
+            : sections
         let parser = XBRLParser()
         var result: [String: Any] = ["docID": targetDocID, "code": codeTrimmed]
         var extracted: [String: String] = [:]
+        var segmentResults: [String: SegmentResult] = [:]
+        var sectionsOut: [String: Any] = [:]
 
         for sectionKey in targetSections {
-            if let sectionDef = xbrlSections[sectionKey] {
+            if let seg = SegmentExtractor.extractSpecialSection(sectionKey, xbrlDir: xbrlDir) {
+                segmentResults[sectionKey] = seg
+                sectionsOut[sectionKey] = seg.toDictionary()
+            } else if let sectionDef = xbrlSections[sectionKey] {
                 let text = parser.extractSection(in: xbrlDir, sectionName: sectionDef.title)
                 extracted[sectionKey] = text ?? ""
+                sectionsOut[sectionKey] = text ?? ""
             }
         }
-        result["sections"] = extracted
+        result["sections"] = sectionsOut
 
         if json {
             let opts: JSONSerialization.WritingOptions = [.prettyPrinted, .sortedKeys]
@@ -152,6 +167,30 @@ struct FilingCommand: AsyncParsableCommand {
                     fputs(truncated + "\n", stderr)
                 }
             }
+            for (key, seg) in segmentResults.sorted(by: { $0.key < $1.key }) {
+                let title = SegmentExtractor.specialSectionTitles[key] ?? key
+                fputs("\n## \(title)\n", stderr)
+                printSegmentResult(seg)
+            }
+        }
+    }
+
+    private func printSegmentResult(_ seg: SegmentResult) {
+        switch seg.method {
+        case "html_table":
+            for t in seg.tables {
+                let period = t.period.map { "（\($0)）" } ?? ""
+                fputs("\n### \(t.heading)\(period)\n\(t.markdown)\n", stderr)
+            }
+        case "xbrl_facts":
+            fputs("（HTML表なし: dimension付きファクト \(seg.facts.count) 件）\n", stderr)
+            for f in seg.facts {
+                let label = f.label ?? f.tag
+                let dims = f.dimensions.values.sorted().joined(separator: ", ")
+                fputs("\(label) [\(dims)] (\(f.contextRef)) = \(f.value)\n", stderr)
+            }
+        default:
+            fputs("（見つかりませんでした）\n", stderr)
         }
     }
 }
