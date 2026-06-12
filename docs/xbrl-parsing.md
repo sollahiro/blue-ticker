@@ -325,6 +325,14 @@ smoke/
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）が存在する環境でのみ実行され、ない環境ではスキップされます。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
+キャッシュを準備・再生成するには（EDINET API キー設定済みの環境で）:
+
+```bash
+SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare
+```
+
+`smoke/segment_expected.json` のキー（docID）を正として全書類をダウンロードします。展開済みの書類はスキップされます。
+
 ### 6.2 対象企業
 
 | コード | 企業 | 区分 | 確認内容 |
