@@ -55,12 +55,14 @@ struct IndividualAnalyzer {
         let targetDocs = Array(docs.prefix(analysisYears))
 
         // 並列で XBRL ダウンロード + 抽出
+        // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーでクロージャ境界を渡す
+        struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
         var yearEntries: [YearEntry] = []
         await withTaskGroup(of: YearEntry?.self) { group in
             for doc in targetDocs {
-                let d = doc
+                let d = SendableDoc(value: doc)
                 group.addTask {
-                    await self.processDocument(d)
+                    await self.processDocument(d.value)
                 }
             }
             for await entry in group {
@@ -131,6 +133,12 @@ struct IndividualAnalyzer {
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let nr = NetRevenueExtractor.extract(fieldSet: durationFS)
         let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, accountingStandard: accountingStandard)
+        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let ar = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
+        let ap = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
 
         // 現金及び現金同等物
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
@@ -190,6 +198,14 @@ struct IndividualAnalyzer {
         // 有形固定資産
         calc.ppeTotal = ppe.total.map { $0 / millionYen }
         calc.ppeAccountingStandard = ppe.accountingStandard
+
+        // CF自己株式・配当・BS運転資本
+        calc.cfTreasuryStock = cfTs.current.map { $0 / millionYen }
+        calc.dividendSS = divSS.current.map { $0 / millionYen }
+        calc.dividendPaidCF = divPaid.current.map { $0 / millionYen }
+        calc.accountsReceivable = ar.current.map { $0 / millionYen }
+        calc.inventory = inv.current.map { $0 / millionYen }
+        calc.accountsPayable = ap.current.map { $0 / millionYen }
 
         // IFRS金融会社フォールバック: Sales が未取得の場合に純収益で補完する
         if nr.found {

@@ -10,14 +10,28 @@ actor SettingsStore {
 
     init() {
         let base = defaultUserDataPath()
+        let cacheDir = base.appendingPathComponent("analysis_cache", isDirectory: true)
+        let configPath = base.appendingPathComponent("config.json")
+
+        // Swift 6: actor-isolated メソッドを init から呼べないため、ここに直接展開する
+        var v = SettingsValues(cacheDir: cacheDir.path)
+        if FileManager.default.fileExists(atPath: configPath.path),
+           let data = try? Data(contentsOf: configPath),
+           let file = try? JSONDecoder().decode(SettingsFile.self, from: data) {
+            v.cacheDir = file.cacheDir ?? v.cacheDir
+            v.cacheEnabled = file.cacheEnabled ?? v.cacheEnabled
+            if let backend = file.edinetBackend, backend == "local" || backend == "remote" {
+                v.edinetBackend = backend
+            }
+        }
+
         self.userDataPath = base
-        self.cacheDir = base.appendingPathComponent("analysis_cache", isDirectory: true)
-        self.configPath = base.appendingPathComponent("config.json")
-        self.values = SettingsValues(cacheDir: self.cacheDir.path)
+        self.cacheDir = cacheDir
+        self.configPath = configPath
+        self.values = v
 
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        try? FileManager.default.createDirectory(at: self.cacheDir, withIntermediateDirectories: true)
-        loadFromFile()
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
     }
 
     // MARK: - Public API
@@ -84,20 +98,6 @@ actor SettingsStore {
             : "****"
     }
 
-    // MARK: - Private
-
-    private func loadFromFile() {
-        guard FileManager.default.fileExists(atPath: configPath.path),
-              let data = try? Data(contentsOf: configPath),
-              let file = try? JSONDecoder().decode(SettingsFile.self, from: data)
-        else { return }
-
-        values.cacheDir = file.cacheDir ?? values.cacheDir
-        values.cacheEnabled = file.cacheEnabled ?? values.cacheEnabled
-        if let backend = file.edinetBackend, backend == "local" || backend == "remote" {
-            values.edinetBackend = backend
-        }
-    }
 }
 
 // MARK: - Supporting types

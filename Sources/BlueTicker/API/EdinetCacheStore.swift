@@ -142,7 +142,7 @@ final class EdinetCacheStore: Sendable {
     // クロージャも async にすることで EdinetAPIClient 側が
     // ロック保持中にセマフォ取得・API 呼び出しを行える。
 
-    func withFileLock<T>(_ name: String, work: () async throws -> T) async throws -> T {
+    func withFileLock<T>(_ name: String, work: @Sendable () async throws -> T) async throws -> sending T {
         let safe = String(name.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "." ? $0 : Character("_") })
         let lockPath = locksDir.appendingPathComponent("\(safe).lock")
         try? fm.createDirectory(at: locksDir, withIntermediateDirectories: true)

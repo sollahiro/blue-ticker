@@ -27,7 +27,7 @@ actor CacheManager {
     @available(*, unavailable, message: "Use getJSON(_:) or decode(_:as:) instead")
     func get(_ key: String) -> (any Decodable & Encodable)? { nil }
 
-    func getJSON(_ key: String) -> [String: Any]? {
+    func getJSON(_ key: String) -> sending [String: Any]? {
         guard enabled else { return nil }
         let file = cacheFilePath(key)
         guard fileExists(file) || fileExists(legacyCacheFilePath(key)) else { return nil }

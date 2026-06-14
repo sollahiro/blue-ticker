@@ -14,8 +14,11 @@ import MCP
 ///   - host: バインドアドレス（デフォルト 127.0.0.1）
 ///   - port: ポート番号（デフォルト 3000）
 public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async throws {
-    var logger = Logger(label: "blt-server", factory: { StreamLogHandler.standardError(label: $0) })
-    logger.logLevel = .info
+    let logger: Logger = {
+        var l = Logger(label: "blt-server", factory: { StreamLogHandler.standardError(label: $0) })
+        l.logLevel = .info
+        return l
+    }()
 
     let apiKey = await settingsStore.get(.edinetApiKey)
     guard let key = apiKey, !key.isEmpty else {

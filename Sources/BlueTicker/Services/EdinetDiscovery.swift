@@ -2,6 +2,12 @@ import Foundation
 
 // Port of blue_ticker/utils/edinet_discovery.py
 
+// withTaskGroup で [[String: Any]] を返すための @unchecked Sendable ラッパー。
+// JSON 値は actor 内で生成され、所有権転送で受け渡す。
+private struct YearDocs: @unchecked Sendable {
+    let docs: [[String: Any]]
+}
+
 enum EdinetDiscovery {
     private static let seedDocTypes: Set<String> = [
         Api.docTypeAnnualReport,
@@ -35,12 +41,12 @@ enum EdinetDiscovery {
         let todayYear = utcCalendar.component(.year, from: Date())
         let scanStartYear = todayYear - analysisYears
         var allDocs: [[String: Any]] = []
-        await withTaskGroup(of: [[String: Any]].self) { group in
+        await withTaskGroup(of: YearDocs.self) { group in
             for year in scanStartYear...todayYear {
-                group.addTask { await client.ensureDocumentIndexForYear(year) }
+                group.addTask { YearDocs(docs: await client.ensureDocumentIndexForYear(year)) }
             }
-            for await docs in group {
-                allDocs.append(contentsOf: docs)
+            for await r in group {
+                allDocs.append(contentsOf: r.docs)
             }
         }
 

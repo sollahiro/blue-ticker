@@ -61,13 +61,16 @@ struct HalfYearAnalyzer {
         }
 
         // FY / 2Q docs を並列処理
+        // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーでクロージャ境界を渡す
+        struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
+
         var fyEntries: [String: YearEntry] = [:]
         await withTaskGroup(of: (String, YearEntry)?.self) { group in
             for doc in fyDocs {
-                let d = doc
+                let d = SendableDoc(value: doc)
                 group.addTask {
-                    guard let fyEnd = d["edinet_fy_end"] as? String,
-                          let entry = await analyzer.processDocument(d) else { return nil }
+                    guard let fyEnd = d.value["edinet_fy_end"] as? String,
+                          let entry = await analyzer.processDocument(d.value) else { return nil }
                     return (fyEnd, entry)
                 }
             }
@@ -77,10 +80,10 @@ struct HalfYearAnalyzer {
         var q2Entries: [String: YearEntry] = [:]
         await withTaskGroup(of: (String, YearEntry)?.self) { group in
             for doc in halfDocs {
-                let d = doc
+                let d = SendableDoc(value: doc)
                 group.addTask {
-                    guard let fyEnd = d["edinet_fy_end"] as? String,
-                          let entry = await analyzer.processDocument(d) else { return nil }
+                    guard let fyEnd = d.value["edinet_fy_end"] as? String,
+                          let entry = await analyzer.processDocument(d.value) else { return nil }
                     return (fyEnd, entry)
                 }
             }

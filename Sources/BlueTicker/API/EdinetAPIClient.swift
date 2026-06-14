@@ -31,20 +31,23 @@ actor EdinetAPIClient {
 
     // MARK: - 日別ドキュメント取得
 
-    func getDocumentsForDate(_ dateStr: String) async -> [[String: Any]]? {
+    func getDocumentsForDate(_ dateStr: String) async -> sending [[String: Any]]? {
         let cacheKey = cacheStore.searchCacheKey(dateStr)
         if let cached = cacheStore.loadSearchCache(cacheKey) { return cached }
 
         // ファイルロックでプロセス間の重複取得を防ぎ、セマフォで並列API呼び出し数を制限する
+        // actor プロパティを @Sendable クロージャ境界を渡す前にキャプチャする
+        let cs = cacheStore
+        let semaphore = dateFetchSemaphore
         do {
             return try await cacheStore.withFileLock("search_\(dateStr)") {
-                if let cached = self.cacheStore.loadSearchCache(cacheKey) { return cached }
-                await self.dateFetchSemaphore.wait()
-                defer { self.dateFetchSemaphore.signal() }
-                if let cached = self.cacheStore.loadSearchCache(cacheKey) { return cached }
+                if let cached = cs.loadSearchCache(cacheKey) { return cached }
+                await semaphore.wait()
+                defer { semaphore.signal() }
+                if let cached = cs.loadSearchCache(cacheKey) { return cached }
                 let data = try await self.request("/documents.json", params: ["date": dateStr, "type": "2"])
                 let docs = data["results"] as? [[String: Any]] ?? []
-                self.cacheStore.saveSearchCache(cacheKey, data: docs)
+                cs.saveSearchCache(cacheKey, data: docs)
                 return docs
             }
         } catch {
@@ -54,7 +57,7 @@ actor EdinetAPIClient {
 
     // MARK: - 年次書類インデックス
 
-    func ensureDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
+    func ensureDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
@@ -63,21 +66,22 @@ actor EdinetAPIClient {
             return cached
         }
 
+        let cs = cacheStore
+        let lock = documentIndexLock(for: year)
         do {
             return try await cacheStore.withFileLock("doc_index_\(year)") {
-                if let cached = self.cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
+                if let cached = cs.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
                     return cached
                 }
-                let lock = self.documentIndexLock(for: year)
                 await lock.lock()
                 defer { lock.unlock() }
-                if let cached = self.cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
+                if let cached = cs.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
                     return cached
                 }
                 guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today)) else {
                     return []
                 }
-                self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
                 return docs
             }
         } catch {
@@ -85,20 +89,21 @@ actor EdinetAPIClient {
         }
     }
 
-    func refreshDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
+    func refreshDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
 
+        let cs = cacheStore
+        let lock = documentIndexLock(for: year)
         do {
             return try await cacheStore.withFileLock("doc_index_\(year)") {
-                let lock = self.documentIndexLock(for: year)
                 await lock.lock()
                 defer { lock.unlock() }
-                self.cacheStore.clearDocumentIndex(year)
+                cs.clearDocumentIndex(year)
                 guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today))
                 else { return [] }
-                self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
                 return docs
             }
         } catch {
@@ -106,21 +111,22 @@ actor EdinetAPIClient {
         }
     }
 
-    func catchupDocumentIndexForYear(_ year: Int) async -> [[String: Any]] {
+    func catchupDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredThrough = isoDate(min(yearEnd, today))
         let requiredDate = min(yearEnd, today)
 
+        let cs = cacheStore
+        let lock = documentIndexLock(for: year)
         do {
             return try await cacheStore.withFileLock("doc_index_\(year)") {
-                let lock = self.documentIndexLock(for: year)
                 await lock.lock()
                 defer { lock.unlock() }
 
-                guard let info = self.cacheStore.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
+                guard let info = cs.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
                     guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
-                    self.cacheStore.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
+                    cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
                     return docs
                 }
 
@@ -132,14 +138,14 @@ actor EdinetAPIClient {
 
                 let startDate = utcCalendar.date(byAdding: .day, value: 1, to: builtDate)!
                 if startDate > requiredDate {
-                    self.cacheStore.saveDocumentIndex(year, documents: existingDocs, builtThrough: requiredThrough)
+                    cs.saveDocumentIndex(year, documents: existingDocs, builtThrough: requiredThrough)
                     return existingDocs
                 }
 
                 let newByDate = await self.getDocumentsForDateRange(start: startDate, end: requiredDate, useIndex: false)
                 if newByDate.values.contains(where: { $0 == nil }) { return existingDocs }
                 let merged = mergeDocumentIndexDocs(existing: existingDocs, byDate: newByDate.compactMapValues { $0 })
-                self.cacheStore.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
+                cs.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
                 return merged
             }
         } catch {
@@ -153,7 +159,7 @@ actor EdinetAPIClient {
         start: Date,
         end: Date,
         useIndex: Bool = true
-    ) async -> [String: [[String: Any]]?] {
+    ) async -> sending [String: [[String: Any]]?] {
         guard start <= end else { return [:] }
         let days = utcCalendar.dateComponents([.day], from: start, to: end).day! + 1
         if useIndex && days >= Api.documentIndexMinRangeDays {
@@ -192,7 +198,7 @@ actor EdinetAPIClient {
 
     // MARK: - HTTP
 
-    private func request(_ endpoint: String, params: [String: String] = [:], maxRetries: Int = 3) async throws -> [String: Any] {
+    private func request(_ endpoint: String, params: [String: String] = [:], maxRetries: Int = 3) async throws -> sending [String: Any] {
         guard let key = apiKey, !key.isEmpty else { throw EdinetError.noApiKey }
         var allParams = params
         allParams["Subscription-Key"] = key
@@ -272,7 +278,7 @@ actor EdinetAPIClient {
 
     // MARK: - Private helpers
 
-    private func buildDocumentIndexForYear(_ year: Int, requiredThrough: Date) async -> [[String: Any]]? {
+    private func buildDocumentIndexForYear(_ year: Int, requiredThrough: Date) async -> sending [[String: Any]]? {
         let start = utcCalendar.date(from: DateComponents(year: year, month: 1, day: 1))!
         var dates: [Date] = []
         var current = start
@@ -287,27 +293,31 @@ actor EdinetAPIClient {
 
         for i in stride(from: 0, to: dates.count, by: batchSize) {
             let batch = Array(dates[i..<min(i + batchSize, dates.count)])
-            await withTaskGroup(of: (String, [[String: Any]]?).self) { group in
+            // 外部変数を @Sendable addTask クロージャ境界に渡さないよう結果をまとめて返す
+            let batchResults = await withTaskGroup(of: DateDocsResult.self, returning: [DateDocsResult].self) { group in
                 for date in batch {
                     let ds = isoDate(date)
-                    group.addTask { (ds, await self.getDocumentsForDate(ds)) }
+                    group.addTask { DateDocsResult(dateStr: ds, docs: await self.getDocumentsForDate(ds)) }
                 }
-                for await (ds, result) in group {
-                    if let docs = result {
-                        for var doc in docs {
-                            doc["_edinet_list_date"] = ds
-                            documents.append(doc)
-                        }
-                    } else {
-                        hadFailure = true
+                var results: [DateDocsResult] = []
+                for await r in group { results.append(r) }
+                return results
+            }
+            for r in batchResults {
+                if let docs = r.docs {
+                    for var doc in docs {
+                        doc["_edinet_list_date"] = r.dateStr
+                        documents.append(doc)
                     }
+                } else {
+                    hadFailure = true
                 }
             }
         }
         return hadFailure ? nil : documents
     }
 
-    private func getDocumentsFromIndex(start: Date, end: Date) async -> [String: [[String: Any]]?] {
+    private func getDocumentsFromIndex(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
         var result = emptyDateRange(start: start, end: end)
         for year in yearRange(start: start, end: end) {
             for var doc in await ensureDocumentIndexForYear(year) {
@@ -325,7 +335,7 @@ actor EdinetAPIClient {
         return result
     }
 
-    private func getDocumentsDaily(start: Date, end: Date) async -> [String: [[String: Any]]?] {
+    private func getDocumentsDaily(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
         var dates: [String] = []
         var current = start
         while current <= end {
@@ -337,14 +347,15 @@ actor EdinetAPIClient {
         let batchSize = Api.documentIndexBatchSize
         for i in stride(from: 0, to: dates.count, by: batchSize) {
             let batch = Array(dates[i..<min(i + batchSize, dates.count)])
-            await withTaskGroup(of: (String, [[String: Any]]?).self) { group in
+            let batchResults = await withTaskGroup(of: DateDocsResult.self, returning: [DateDocsResult].self) { group in
                 for ds in batch {
-                    group.addTask { (ds, await self.getDocumentsForDate(ds)) }
+                    group.addTask { DateDocsResult(dateStr: ds, docs: await self.getDocumentsForDate(ds)) }
                 }
-                for await (ds, docs) in group {
-                    result[ds] = docs
-                }
+                var results: [DateDocsResult] = []
+                for await r in group { results.append(r) }
+                return results
             }
+            for r in batchResults { result[r.dateStr] = r.docs }
         }
         return result
     }
@@ -365,7 +376,7 @@ private let utcCalendar: Calendar = {
     return cal
 }()
 
-private nonisolated(unsafe) let _isoDateFormatter: DateFormatter = {
+private let _isoDateFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
     f.locale = Locale(identifier: "en_US_POSIX")
@@ -421,6 +432,13 @@ private func yearRange(start: Date, end: Date) -> [Int] {
     let s = utcCalendar.component(.year, from: start)
     let e = utcCalendar.component(.year, from: end)
     return Array(s...e)
+}
+
+// withTaskGroup の子タスク結果を運ぶ型。[[String: Any]] は Sendable 非準拠のため
+// @unchecked Sendable でラップし、値が actor 内でのみ生成・消費されることを明示する。
+private struct DateDocsResult: @unchecked Sendable {
+    let dateStr: String
+    let docs: [[String: Any]]?
 }
 
 // MARK: - Concurrency helpers

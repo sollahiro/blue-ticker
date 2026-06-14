@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -34,7 +34,7 @@ let package = Package(
             ],
             path: "Sources/BlueTicker",
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
+                .swiftLanguageMode(.v6),
             ]
         ),
         // CLI 実行可能ターゲット（@main エントリポイントのみ）
@@ -45,7 +45,7 @@ let package = Package(
             ],
             path: "Sources/BlueTickerMain",
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
+                .swiftLanguageMode(.v6),
             ]
         ),
         // MCP サーバー実行可能ターゲット
@@ -56,7 +56,7 @@ let package = Package(
             ],
             path: "Sources/BltServer",
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
+                .swiftLanguageMode(.v6),
             ]
         ),
         .testTarget(
