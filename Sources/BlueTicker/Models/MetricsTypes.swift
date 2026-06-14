@@ -174,6 +174,14 @@ struct CalculatedData: Codable {
     var roeNetMarginEffect: Double?
     var roeAssetTurnoverEffect: Double?
     var roeLeverageEffect: Double?
+    // CF自己株式・配当
+    var cfTreasuryStock: Double?
+    var dividendSS: Double?
+    var dividendPaidCF: Double?
+    // BS運転資本
+    var accountsReceivable: Double?
+    var inventory: Double?
+    var accountsPayable: Double?
 
     enum CodingKeys: String, CodingKey {
         case payoutRatio = "PayoutRatio"; case cfc = "CFC"; case roe = "ROE"; case cfcvr = "CFCVR"
@@ -208,6 +216,10 @@ struct CalculatedData: Codable {
         case roeDelta = "ROEDelta"; case roeNetMarginEffect = "ROENetMarginEffect"
         case roeAssetTurnoverEffect = "ROEAssetTurnoverEffect"
         case roeLeverageEffect = "ROELeverageEffect"
+        case cfTreasuryStock = "CFTreasuryStock"
+        case dividendSS = "DividendSS"; case dividendPaidCF = "DividendPaidCF"
+        case accountsReceivable = "AccountsReceivable"
+        case inventory = "Inventory"; case accountsPayable = "AccountsPayable"
     }
 }
 

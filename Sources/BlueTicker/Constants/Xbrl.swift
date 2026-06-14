@@ -466,6 +466,56 @@ enum Xbrl {
         "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS",
     ]
 
+    // MARK: - 配当
+
+    static let dividendSSJGAAPTags: [String] = [
+        "DividendsCS",
+        "DividendsFromRetainedEarnings",
+    ]
+    static let dividendSSIFRSTags: [String] = [
+        "DividendsPaidToOwnersOfParentSSIFRS",
+        "DividendsPaidSSIFRS",
+    ]
+    static let dividendPaidCFJGAAPTags: [String] = [
+        "DividendsPaidFinCF",
+    ]
+    static let dividendPaidCFIFRSTags: [String] = [
+        "DividendsPaidToOwnersOfParentFinCFIFRS",
+        "DividendsPaidFinCFIFRS",
+    ]
+
+    // MARK: - 売掛金（BS, Instant）
+
+    static let accountsReceivableJGAAPTags: [String] = [
+        "NotesAndAccountsReceivableTrade",
+        "AccountsReceivableTrade",
+    ]
+    static let accountsReceivableIFRSTags: [String] = [
+        "TradeAndOtherReceivablesCurrentIFRS",
+        "TradeReceivablesCurrentIFRS",
+    ]
+
+    // MARK: - 棚卸資産（BS, Instant）
+
+    static let inventoryJGAAPTags: [String] = [
+        "Inventories",
+    ]
+    static let inventoryIFRSTags: [String] = [
+        "InventoriesIFRS",
+        "InventoriesCurrentIFRS",
+    ]
+
+    // MARK: - 買掛金（BS, Instant）
+
+    static let accountsPayableJGAAPTags: [String] = [
+        "NotesAndAccountsPayableTrade",
+        "AccountsPayableTrade",
+    ]
+    static let accountsPayableIFRSTags: [String] = [
+        "TradeAndOtherPayablesCurrentIFRS",
+        "TradePayablesCurrentIFRS",
+    ]
+
     // MARK: - セグメント・地域別情報（segment_extractor 相当）
 
     // 事業別セグメント

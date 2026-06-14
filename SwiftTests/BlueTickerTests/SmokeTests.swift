@@ -220,6 +220,12 @@ import Foundation
         var interestExpense: Double?
         var cfoRaw: Double?
         var cfiRaw: Double?
+        var cfTreasuryStock: Double?
+        var dividendSS: Double?
+        var dividendPaidCF: Double?
+        var accountsReceivable: Double?
+        var inventory: Double?
+        var accountsPayable: Double?
     }
 
     private func extractFromXBRL(xbrlDir: URL) -> Extracted {
@@ -247,6 +253,14 @@ import Foundation
         let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
+        let bb  = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, accountingStandard: std)
+        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ar  = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let ap  = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
 
         let opProfit = op.operatingProfit ?? is_.operatingProfit
 
@@ -274,7 +288,13 @@ import Foundation
             rd:                     rd.current,
             employees:              emp.current,
             cashEq:                 cashItem.current,
-            interestExpense:        ie.current
+            interestExpense:        ie.current,
+            cfTreasuryStock:        cfTs.current,
+            dividendSS:             divSS.current,
+            dividendPaidCF:         divPaid.current,
+            accountsReceivable:     ar.current,
+            inventory:              inv.current,
+            accountsPayable:        ap.current
         )
     }
 
@@ -347,6 +367,24 @@ import Foundation
 
         let ie = expected["interest_expense"] as? [String: Any] ?? [:]
         check("interestExpense", exp: dbl(ie["current"]), act: actual.interestExpense)
+
+        let cfTs = expected["cf_treasury_stock"] as? [String: Any] ?? [:]
+        check("cfTreasuryStock", exp: dbl(cfTs["current"]), act: actual.cfTreasuryStock)
+
+        let divSS = expected["dividend_ss"] as? [String: Any] ?? [:]
+        check("dividendSS", exp: dbl(divSS["current"]), act: actual.dividendSS)
+
+        let divCF = expected["dividend_paid_cf"] as? [String: Any] ?? [:]
+        check("dividendPaidCF", exp: dbl(divCF["current"]), act: actual.dividendPaidCF)
+
+        let ar = expected["accounts_receivable"] as? [String: Any] ?? [:]
+        check("accountsReceivable", exp: dbl(ar["current"]), act: actual.accountsReceivable)
+
+        let inv = expected["inventory"] as? [String: Any] ?? [:]
+        check("inventory", exp: dbl(inv["current"]), act: actual.inventory)
+
+        let ap = expected["accounts_payable"] as? [String: Any] ?? [:]
+        check("accountsPayable", exp: dbl(ap["current"]), act: actual.accountsPayable)
 
         return diffs
     }
