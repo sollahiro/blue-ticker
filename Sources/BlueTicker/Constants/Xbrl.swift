@@ -540,4 +540,8 @@ let xbrlSections: [String: XBRLSectionDef] = [
         title: "研究開発活動",
         xbrlElements: ["ResearchAndDevelopmentActivitiesTextBlock"]
     ),
+    "management_policy": XBRLSectionDef(
+        title: "経営方針、経営環境及び対処すべき課題等",
+        xbrlElements: ["BusinessPolicyBusinessEnvironmentIssuesToAddressEtcTextBlock"]
+    ),
 ]

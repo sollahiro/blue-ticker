@@ -77,7 +77,7 @@ struct FilingCommand: AsyncParsableCommand {
     @Option(name: .long, help: "書類ID（省略時は最新の有価証券報告書）")
     var docId: String?
 
-    @Option(name: .long, parsing: .upToNextOption, help: "抽出セクション: business_risks/mda/capex_overview/major_facilities/facility_plans/research_and_development/segments/geography")
+    @Option(name: .long, parsing: .upToNextOption, help: "抽出セクション: business_risks/mda/capex_overview/major_facilities/facility_plans/research_and_development/segments/geography/management_policy")
     var sections: [String] = []
 
     @Flag(name: .long, help: "JSON 形式で出力")
@@ -183,14 +183,134 @@ struct FilingCommand: AsyncParsableCommand {
                 fputs("\n### \(t.heading)\(period)\n\(t.markdown)\n", stderr)
             }
         case "xbrl_facts":
-            fputs("（HTML表なし: dimension付きファクト \(seg.facts.count) 件）\n", stderr)
-            for f in seg.facts {
-                let label = f.label ?? f.tag
-                let dims = f.dimensions.values.sorted().joined(separator: ", ")
-                fputs("\(label) [\(dims)] (\(f.contextRef)) = \(f.value)\n", stderr)
-            }
+            fputs("（HTML表未検出・dimensionファクト \(seg.facts.count) 件を集計）\n", stderr)
+            printSegmentFactsAsTable(seg.facts)
         default:
             fputs("（見つかりませんでした）\n", stderr)
+        }
+    }
+
+    private func printSegmentFactsAsTable(_ facts: [SegmentFact]) {
+        guard !facts.isEmpty else { return }
+
+        func periodOf(_ ctx: String) -> (label: String, order: Int) {
+            let patterns: [(String, String, Int)] = [
+                ("Prior1YearDuration",    "前期",    0),
+                ("Prior1InterimDuration", "前中間期", 1),
+                ("CurrentYearDuration",   "当期",    2),
+                ("CurrentYTDDuration",    "当期",    2),
+                ("InterimDuration",       "中間期",   3),
+                ("Prior1YearInstant",     "前期末",   4),
+                ("Prior1InterimInstant",  "前中間末", 5),
+                ("CurrentYearInstant",    "当期末",   6),
+                ("InterimInstant",        "中間末",   7),
+            ]
+            for (prefix, label, order) in patterns {
+                if ctx.hasPrefix(prefix) { return (label, order) }
+            }
+            return (ctx, 99)
+        }
+
+        func memberShortName(_ m: String) -> String {
+            switch m {
+            case "ReportableSegmentsMember": return "計"
+            case "ReconcilingItemsMember":   return "調整"
+            case "CorporateSharedMember":    return "全社"
+            case "NonConsolidatedMember":    return "単体"
+            default:
+                var n = m
+                for sfx in ["ReportableSegmentsMember", "ReportabelSegmentsMember",
+                             "SegmentsMember", "Member"] {
+                    if n.hasSuffix(sfx) { n = String(n.dropLast(sfx.count)); break }
+                }
+                if n.hasSuffix("BusinessUnit") { n = String(n.dropLast("BusinessUnit".count)) }
+                return n.isEmpty ? m : n
+            }
+        }
+
+        func memberSortOrder(_ m: String) -> Int {
+            if m == "ReportableSegmentsMember" { return 90 }
+            if m.contains("Corporate")         { return 91 }
+            if m.contains("Reconciling")       { return 92 }
+            if m.contains("NonConsolidated")   { return 95 }
+            return 0
+        }
+
+        // primary segment member: prefer OperatingSegments/BusinessSegment/ReportableSegment axis
+        let segAxisKeywords = ["OperatingSegments", "BusinessSegment", "ReportableSegment",
+                                "GeographicArea", "Geography", "Country", "Region"]
+        func primaryMember(_ f: SegmentFact) -> String? {
+            for (k, v) in f.dimensions {
+                if segAxisKeywords.contains(where: { k.contains($0) }) { return v }
+            }
+            return f.dimensions.values.first
+        }
+
+        func fmtValue(_ v: Double, _ unit: String?) -> String {
+            let u = (unit ?? "").uppercased()
+            let isMonetary = u.isEmpty || u == "JPY" || u.hasPrefix("JPY")
+            if isMonetary && abs(v) >= 1_000_000 {
+                let m = v / 1_000_000
+                return m == Double(Int(m))
+                    ? String(format: "%.0f", m)
+                    : String(format: "%.1f", m)
+            }
+            return String(format: "%.0f", v)
+        }
+
+        // Build pivot: periodLabel -> metricLabel -> member -> (value, unit)
+        struct PKey: Hashable { let label: String; let order: Int }
+        var memberSet = Set<String>()
+        var pivot: [PKey: [String: [String: (Double, String?)]]] = [:]
+        var allMetrics: [String] = []  // insertion-order unique
+
+        for f in facts {
+            guard let member = primaryMember(f) else { continue }
+            let (pLabel, pOrder) = periodOf(f.contextRef)
+            let pKey = PKey(label: pLabel, order: pOrder)
+            let metric = f.label ?? f.tag
+            memberSet.insert(member)
+            if pivot[pKey] == nil { pivot[pKey] = [:] }
+            if pivot[pKey]![metric] == nil {
+                pivot[pKey]![metric] = [:]
+                if !allMetrics.contains(metric) { allMetrics.append(metric) }
+            }
+            // first-write wins (prefer consolidated over non-consolidated)
+            if pivot[pKey]![metric]![member] == nil {
+                pivot[pKey]![metric]![member] = (f.value, f.unitRef)
+            }
+        }
+
+        guard !memberSet.isEmpty, !pivot.isEmpty else {
+            fputs("（ファクトを表形式に変換できませんでした）\n", stderr)
+            return
+        }
+
+        let sortedMembers = memberSet.sorted {
+            let oa = memberSortOrder($0), ob = memberSortOrder($1)
+            return oa != ob ? oa < ob : $0 < $1
+        }
+        let shortHeaders = sortedMembers.map { memberShortName($0) }
+        let hasMonetary = facts.contains { f in
+            let u = (f.unitRef ?? "").uppercased()
+            return (u.isEmpty || u == "JPY" || u.hasPrefix("JPY")) && abs(f.value) >= 1_000_000
+        }
+        if hasMonetary { fputs("（単位: 百万円）\n", stderr) }
+
+        for pKey in pivot.keys.sorted(by: { $0.order < $1.order }) {
+            guard let metrics = pivot[pKey], !metrics.isEmpty else { continue }
+            fputs("\n【\(pKey.label)】\n", stderr)
+            let header = "| 指標 | " + shortHeaders.joined(separator: " | ") + " |"
+            let sep    = "|---|" + shortHeaders.map { _ in "---:" }.joined(separator: "|") + "|"
+            fputs(header + "\n" + sep + "\n", stderr)
+            for metric in allMetrics {
+                guard let vals = metrics[metric] else { continue }
+                let cells = sortedMembers.map { m -> String in
+                    guard let (v, u) = vals[m] else { return "-" }
+                    return fmtValue(v, u)
+                }
+                fputs("| \(metric) | " + cells.joined(separator: " | ") + " |\n", stderr)
+            }
         }
     }
 }
