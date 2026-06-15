@@ -108,10 +108,18 @@ enum USGAAPHtml {
         // キヤノン形式 IBD ラベル（"長期債務" は CF 文中にも現れるため章番号付きで特定する）
         "短期借入金及び１年以内に返済する長期債務合計": "USGAAP_HTML_IBDCurrent",
         "Ⅱ　長期債務":                          "USGAAP_HTML_IBDNonCurrent",
+        // 売掛金（キヤノン形式: "売上債権"、富士フイルム形式: "(4)信用損失引当金" → 最長一致でヒット）
+        "売上債権":                              "USGAAP_HTML_AccountsReceivable",
+        "信用損失引当金":                        "USGAAP_HTML_AccountsReceivable",
+        "棚卸資産":                              "USGAAP_HTML_Inventory",
+        // 買掛金（キヤノン形式: "買入債務"、富士フイルム形式: "(3) 関連会社等に対する債務"）
+        "買入債務":                              "USGAAP_HTML_AccountsPayable",
+        "関連会社等に対する債務":                "USGAAP_HTML_AccountsPayable",
     ]
 
     // US-GAAP 連結損益計算書 HTML → 仮想タグマッピング（法人税を除く）
     // 法人税は「Ⅴ　法人税等」節ヘッダーを基準にセクション内検索で取得する（extractIncomeTaxSection）。
+    // CF計算書ラベル（財務活動）も同一ファイル 0105010 内に存在するためここで共に定義する。
     static let plLabelMap: [String: String] = [
         "販売費及び一般管理費":         "USGAAP_HTML_SGA",
         "営業利益":                    "USGAAP_HTML_OperatingIncome",
@@ -121,6 +129,11 @@ enum USGAAPHtml {
         "法人税等合計":                "USGAAP_HTML_IncomeTax",
         "法人税、住民税及び事業税":     "USGAAP_HTML_IncomeTaxCurrent",
         "法人税等調整額":              "USGAAP_HTML_IncomeTaxDeferred",
+        // CF計算書・財務活動
+        // 配当金: キヤノン形式 "配当金の支払額"、富士フイルム形式 "配当金支払額"（の なし）
+        "配当金の支払額":              "USGAAP_HTML_DividendPaidCF",
+        "配当金支払額":                "USGAAP_HTML_DividendPaidCF",
+        // 自己株式CF は株主資本変動計算書と同ラベルが衝突するため extractCFTreasuryStockFromCF で個別抽出
     ]
 
     private static let romanPrefixRegex = try! NSRegularExpression(
@@ -197,9 +210,66 @@ enum USGAAPHtml {
             for (vtag, fv) in XBRLUtils.extractHtmlLabels(from: soup, labelMap: plLabelMap) where merged[vtag] == nil {
                 merged[vtag] = fv
             }
+            // 自己株式CF: ローマ数字始まり（株主資本変動計算書）と衝突するため専用関数で抽出
+            if merged["USGAAP_HTML_CFTreasuryStock"] == nil, let cfts = extractCFTreasuryStockFromCF(soup) {
+                merged["USGAAP_HTML_CFTreasuryStock"] = cfts
+            }
+            // 株主資本等変動計算書から配当金SS（US-GAAP専用）
+            if merged["USGAAP_HTML_DividendSS"] == nil, let divFV = extractDividendSSFromEquityStatement(soup) {
+                merged["USGAAP_HTML_DividendSS"] = divFV
+            }
         }
 
         return merged
+    }
+
+    /// CF計算書の財務活動セクションから自己株式取得額を抽出する（US-GAAP専用）。
+    ///
+    /// 株主資本等変動計算書にも「自己株式取得」行が存在し、かつそちらが HTML 上で先に出現するため、
+    /// ローマ数字始まり行（株主資本変動計算書の節番号 Ⅳ, ⅩⅢ 等）をスキップして CF 行のみを対象にする。
+    private static func extractCFTreasuryStockFromCF(_ soup: Document) -> FieldValue? {
+        guard let rows = try? soup.select("tr") else { return nil }
+        for row in rows {
+            guard let cells = (try? row.select("td, th"))?.array(), !cells.isEmpty else { continue }
+            let first = (try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? ""
+            guard !startsWithRoman(first) else { continue }
+            let normalized = first
+                .replacingOccurrences(of: "\u{00A0}", with: " ")
+                .replacingOccurrences(of: "\u{3000}", with: " ")
+            guard normalized.contains("自己株式の取得及び売却") || normalized.contains("自己株式取得") else { continue }
+            let allNums = cells.dropFirst()
+                .compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
+                .compactMap { XBRLUtils.parseHtmlNumber($0) }
+            let financial = allNums.filter { abs($0) >= 200 }
+            let found = financial.isEmpty ? allNums : financial
+            guard !found.isEmpty else { continue }
+            return FieldValue(
+                current: found.last! * Financial.millionYen,
+                prior: found.count >= 2 ? found[found.count - 2] * Financial.millionYen : nil
+            )
+        }
+        return nil
+    }
+
+    /// 株主資本等変動計算書から「当社株主への配当金」を抽出する（US-GAAP専用）。
+    ///
+    /// 前期・当期それぞれの行が存在するため、最後の行の値（当期分）を採用する。
+    /// 値は百万円単位の負値（キャッシュアウト）で返す。
+    private static func extractDividendSSFromEquityStatement(_ soup: Document) -> FieldValue? {
+        var lastValue: Double? = nil
+        guard let rows = try? soup.select("tr") else { return nil }
+        for row in rows {
+            guard let cells = (try? row.select("td, th"))?.array(), !cells.isEmpty else { continue }
+            let first = (try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? ""
+            guard first.contains("当社株主への") else { continue }
+            let nums = cells.dropFirst()
+                .compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
+                .compactMap { XBRLUtils.parseHtmlNumber($0) }
+                .filter { abs($0) >= 200 }
+            if let v = nums.last { lastValue = v }
+        }
+        guard let v = lastValue else { return nil }
+        return FieldValue(current: v * Financial.millionYen, prior: nil)
     }
 
     /// 「Ⅴ　法人税等」節から法人税等合計（円）を抽出する。

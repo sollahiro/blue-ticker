@@ -469,15 +469,14 @@ enum Xbrl {
     // MARK: - 配当
 
     static let dividendSSJGAAPTags: [String] = [
-        "DividendsCS",
-        "DividendsFromRetainedEarnings",
+        "DividendsFromSurplus",
     ]
     static let dividendSSIFRSTags: [String] = [
-        "DividendsPaidToOwnersOfParentSSIFRS",
-        "DividendsPaidSSIFRS",
+        "DividendsToOwnersOfParentSSIFRS",
+        "DividendsSSIFRS",
     ]
     static let dividendPaidCFJGAAPTags: [String] = [
-        "DividendsPaidFinCF",
+        "CashDividendsPaidFinCF",
     ]
     static let dividendPaidCFIFRSTags: [String] = [
         "DividendsPaidToOwnersOfParentFinCFIFRS",
@@ -491,8 +490,11 @@ enum Xbrl {
         "AccountsReceivableTrade",
     ]
     static let accountsReceivableIFRSTags: [String] = [
-        "TradeAndOtherReceivablesCurrentIFRS",
-        "TradeReceivablesCurrentIFRS",
+        "TradeAndOtherReceivablesCAIFRS",
+        "TradeAndOtherReceivables2CAIFRS",
+        "TradeAndOtherReceivables3CAIFRS",
+        "TradeReceivablesCAIFRS",
+        "TradeReceivables2CAIFRS",
     ]
 
     // MARK: - 棚卸資産（BS, Instant）
@@ -501,8 +503,13 @@ enum Xbrl {
         "Inventories",
     ]
     static let inventoryIFRSTags: [String] = [
-        "InventoriesIFRS",
-        "InventoriesCurrentIFRS",
+        "InventoriesCAIFRS",
+    ]
+    // J-GAAP 企業別内訳タグ（Inventories 合算タグがない場合の積み上げフォールバック）
+    static let inventoryJGAAPComponents: [[String]] = [
+        ["MerchandiseAndFinishedGoods", "Merchandise", "FinishedGoods"],
+        ["WorkInProcess"],
+        ["RawMaterialsAndSupplies", "RawMaterials", "Supplies"],
     ]
 
     // MARK: - 買掛金（BS, Instant）
@@ -512,8 +519,12 @@ enum Xbrl {
         "AccountsPayableTrade",
     ]
     static let accountsPayableIFRSTags: [String] = [
-        "TradeAndOtherPayablesCurrentIFRS",
-        "TradePayablesCurrentIFRS",
+        "TradeAndOtherPayablesCLIFRS",
+        "TradeAndOtherPayables2CLIFRS",
+        "TradeAndOtherPayables3CLIFRS",
+        "TradePayablesCLIFRS",
+        "TradePayables2CLIFRS",
+        "TradePayables3CLIFRS",
     ]
 
     // MARK: - セグメント・地域別情報（segment_extractor 相当）

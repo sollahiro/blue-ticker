@@ -298,7 +298,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
             ("NOPATマージン (%)",         { $0.calculatedData.nopatMargin }),
             ("投下資本回転率 (倍)",       { $0.calculatedData.investedCapitalTurnover }),
             ("有利子負債合計 (百万)",     { $0.calculatedData.interestBearingDebt }),
-            ("支払利息 (百万)",           { $0.calculatedData.interestExpense }),
+            ("支払利息（P/L）(百万)",      { $0.calculatedData.interestExpense }),
             ("総資産 (百万)",             { $0.calculatedData.totalAssets }),
             ("流動資産 (百万)",           { $0.calculatedData.currentAssets }),
             ("  売掛金 (百万)",           { $0.calculatedData.accountsReceivable }),

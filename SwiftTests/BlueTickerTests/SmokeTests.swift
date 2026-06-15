@@ -54,11 +54,7 @@ import Foundation
     // MARK: - テスト本体
 
     @Test func testHalfSmokeAll() throws {
-        let sourceURL = URL(fileURLWithPath: #file)
-        let projectRoot = sourceURL
-            .deletingLastPathComponent()  // BlueTickerTests
-            .deletingLastPathComponent()  // SwiftTests
-            .deletingLastPathComponent()  // project root
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_half_expected")
         let xbrlBase = projectRoot.appendingPathComponent("tmp_cache/edinet")
 
@@ -122,11 +118,7 @@ import Foundation
     }
 
     @Test func testSmokeAll() throws {
-        let sourceURL = URL(fileURLWithPath: #file)
-        let projectRoot = sourceURL
-            .deletingLastPathComponent()  // BlueTickerTests
-            .deletingLastPathComponent()  // SwiftTests
-            .deletingLastPathComponent()  // project root
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
         let xbrlBase = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
@@ -254,9 +246,10 @@ import Foundation
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
-        let bb  = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, accountingStandard: std)
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
+        let bb  = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
         let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let ar  = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)

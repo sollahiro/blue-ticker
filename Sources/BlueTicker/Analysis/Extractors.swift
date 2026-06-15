@@ -912,6 +912,7 @@ enum ShareBuybackExtractor {
     static func extract(
         fieldSet: FieldSet,
         ncFieldSet: FieldSet,
+        equityAttributableFieldSet: FieldSet,
         accountingStandard: String
     ) -> ShareBuybackResult {
         if accountingStandard == "US-GAAP" {
@@ -929,10 +930,11 @@ enum ShareBuybackExtractor {
         let ssTags = accountingStandard == "J-GAAP" ? Xbrl.shareBuybackSSJGAAPTags : Xbrl.shareBuybackSSIFRSTags
         let cfTags = accountingStandard == "J-GAAP" ? Xbrl.shareBuybackCFJGAAPTags : Xbrl.shareBuybackCFIFRSTags
 
-        // 1. 株主資本等変動計算書・連結
-        let ssItem = resolveItem(fieldSet, tags: ssTags)
+        // 1. 株主資本等変動計算書（IFRS は親会社帰属持分コンテキストを優先）
+        let ssFieldSet = accountingStandard == "IFRS" ? equityAttributableFieldSet : fieldSet
+        let ssItem = resolveItem(ssFieldSet, tags: ssTags)
         if ssItem.tag != nil, let v = ssItem.current {
-            return ShareBuybackResult(current: -v, method: "ss_consolidated")
+            return ShareBuybackResult(current: -v, method: accountingStandard == "IFRS" ? "ss_equity_parent" : "ss_consolidated")
         }
 
         // 2. CF計算書・財務活動
@@ -956,7 +958,11 @@ enum ShareBuybackExtractor {
 enum CfTreasuryStockExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> CfTreasuryStockResult {
-        guard accountingStandard != "US-GAAP" else {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_CFTreasuryStock"])
+            if item.tag != nil {
+                return CfTreasuryStockResult(current: item.current.map { -$0 }, method: "usgaap_html")
+            }
             return CfTreasuryStockResult(current: nil, method: "not_found")
         }
         let cfTags = accountingStandard == "J-GAAP"
@@ -974,18 +980,43 @@ enum CfTreasuryStockExtractor {
 
 enum DividendSSExtractor {
 
-    static func extract(fieldSet: FieldSet, accountingStandard: String) -> DividendResult {
-        guard accountingStandard != "US-GAAP" else {
+    static func extract(
+        fieldSet: FieldSet,
+        ncFieldSet: FieldSet,
+        equityAttributableFieldSet: FieldSet,
+        accountingStandard: String
+    ) -> DividendResult {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_DividendSS"])
+            if item.tag != nil {
+                return DividendResult(current: item.current.map { -$0 }, method: "usgaap_html")
+            }
             return DividendResult(current: nil, method: "not_found")
         }
         let ssTags = accountingStandard == "J-GAAP"
             ? Xbrl.dividendSSJGAAPTags
             : Xbrl.dividendSSIFRSTags
-        let item = resolveItem(fieldSet, tags: ssTags)
-        guard item.tag != nil else {
-            return DividendResult(current: nil, method: "not_found")
+
+        // IFRS: 親会社帰属持分コンテキストを優先（NCI除外）
+        if accountingStandard == "IFRS" {
+            let item = resolveItem(equityAttributableFieldSet, tags: ssTags)
+            if item.tag != nil {
+                return DividendResult(current: item.current.map { -$0 }, method: "ss_equity_parent")
+            }
         }
-        return DividendResult(current: item.current.map { -$0 }, method: "ss_equity")
+
+        let item = resolveItem(fieldSet, tags: ssTags)
+        if item.tag != nil {
+            return DividendResult(current: item.current.map { -$0 }, method: "ss_equity")
+        }
+
+        // 非連結フォールバック（単体決算企業用）
+        let ncItem = resolveItem(ncFieldSet, tags: ssTags)
+        if ncItem.tag != nil {
+            return DividendResult(current: ncItem.current.map { -$0 }, method: "ss_nonconsolidated")
+        }
+
+        return DividendResult(current: nil, method: "not_found")
     }
 }
 
@@ -994,7 +1025,11 @@ enum DividendSSExtractor {
 enum DividendPaidExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> DividendResult {
-        guard accountingStandard != "US-GAAP" else {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_DividendPaidCF"])
+            if item.tag != nil {
+                return DividendResult(current: item.current.map { -$0 }, method: "usgaap_html")
+            }
             return DividendResult(current: nil, method: "not_found")
         }
         let cfTags = accountingStandard == "J-GAAP"
@@ -1013,6 +1048,10 @@ enum DividendPaidExtractor {
 enum AccountsReceivableExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> WorkingCapitalResult {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_AccountsReceivable"])
+            return WorkingCapitalResult(current: item.current, method: item.tag != nil ? "usgaap_html" : "not_found")
+        }
         let tags = accountingStandard == "IFRS"
             ? Xbrl.accountsReceivableIFRSTags
             : Xbrl.accountsReceivableJGAAPTags
@@ -1029,14 +1068,24 @@ enum AccountsReceivableExtractor {
 enum InventoryExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> WorkingCapitalResult {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_Inventory"])
+            return WorkingCapitalResult(current: item.current, method: item.tag != nil ? "usgaap_html" : "not_found")
+        }
         let tags = accountingStandard == "IFRS"
             ? Xbrl.inventoryIFRSTags
             : Xbrl.inventoryJGAAPTags
         let item = resolveItem(fieldSet, tags: tags)
-        guard item.tag != nil else {
-            return WorkingCapitalResult(current: nil, method: "not_found")
+        if item.tag != nil {
+            return WorkingCapitalResult(current: item.current, method: "direct")
         }
-        return WorkingCapitalResult(current: item.current, method: "direct")
+        if accountingStandard == "J-GAAP" {
+            let agg = resolveAggregate(fieldSet, componentTagLists: Xbrl.inventoryJGAAPComponents)
+            if agg.tag != nil {
+                return WorkingCapitalResult(current: agg.current, method: "aggregated")
+            }
+        }
+        return WorkingCapitalResult(current: nil, method: "not_found")
     }
 }
 
@@ -1045,6 +1094,10 @@ enum InventoryExtractor {
 enum AccountsPayableExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> WorkingCapitalResult {
+        if accountingStandard == "US-GAAP" {
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_AccountsPayable"])
+            return WorkingCapitalResult(current: item.current, method: item.tag != nil ? "usgaap_html" : "not_found")
+        }
         let tags = accountingStandard == "IFRS"
             ? Xbrl.accountsPayableIFRSTags
             : Xbrl.accountsPayableJGAAPTags

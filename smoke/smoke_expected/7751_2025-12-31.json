@@ -68,6 +68,24 @@
     "current": 339288000000.0
   },
   "share_buyback": {
-    "current": 300018000000.0
+    "current": 300019000000.0
+  },
+  "cf_treasury_stock": {
+    "current": 300019000000.0
+  },
+  "dividend_ss": {
+    "current": 147644000000.0
+  },
+  "dividend_paid_cf": {
+    "current": 147644000000.0
+  },
+  "accounts_receivable": {
+    "current": 733809000000.0
+  },
+  "inventory": {
+    "current": 840445000000.0
+  },
+  "accounts_payable": {
+    "current": 310832000000.0
   }
 }

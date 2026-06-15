@@ -107,8 +107,10 @@ struct IndividualAnalyzer {
 
         // Duration FieldSet（損益計算書・CF用）
         var durationFS = fieldSetFromDuration(allTagElements)
-        // 非連結 Duration FieldSet（自己株式取得の非連結フォールバック用）
+        // 非連結 Duration FieldSet（自己株式取得・配当金の非連結フォールバック用）
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTagElements)
+        // IFRS 親会社帰属持分 Duration FieldSet（SS配当・SS自己株の NCI除外用）
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTagElements)
         // Instant FieldSet（貸借対照表・有利子負債用）
         var instantFS = fieldSetFromInstant(allTagElements)
 
@@ -132,9 +134,9 @@ struct IndividualAnalyzer {
         let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let nr = NetRevenueExtractor.extract(fieldSet: durationFS)
-        let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, accountingStandard: accountingStandard)
+        let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
         let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let ar = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)

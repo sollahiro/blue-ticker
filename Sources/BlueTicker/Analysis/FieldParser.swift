@@ -74,6 +74,22 @@ func fieldSetFromNonConsolidatedDuration(_ tagElements: XbrlTagElements) -> Fiel
     normalizeNonConsolidatedDuration(tagElements)
 }
 
+/// IFRS株主資本等変動計算書の親会社帰属持分コンテキストから FieldSet を返す。
+/// 配当金・自己株式取得の親会社帰属分（NCI除外）の抽出に使用する。
+func fieldSetFromIFRSEquityAttributable(_ tagElements: XbrlTagElements) -> FieldSet {
+    let currentCtx = "CurrentYearDuration_EquityAttributableToOwnersOfParentIFRSMember"
+    let priorCtx = "Prior1YearDuration_EquityAttributableToOwnersOfParentIFRSMember"
+    var fieldSet: FieldSet = [:]
+    for (tag, ctxMap) in tagElements {
+        let current = ctxMap[currentCtx]
+        let prior = ctxMap[priorCtx]
+        if current != nil || prior != nil {
+            fieldSet[tag] = FieldValue(current: current, prior: prior)
+        }
+    }
+    return fieldSet
+}
+
 // MARK: - Normalization (private)
 
 private func normalizeConsolidated(
