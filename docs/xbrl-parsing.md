@@ -351,3 +351,154 @@ SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare
 スモークで必ず確認する抽出器は損益計算書・貸借対照表・売上総利益・有利子負債です。金融会社だけ GP・IBD の未検出を許容します。
 
 ---
+
+## 7. EDINETタクソノミ（`assets/taxonomy/`）
+
+`assets/taxonomy/` に格納されている EDINETタクソノミを使うと、標準タグの日本語ラベルや定義を一次資料として確認できます。新しい抽出フィールドの追加やタグ候補の調査時に参照してください。
+
+### 7.1 格納内容と構造
+
+```
+assets/taxonomy/
+├── GAAP/           # 日本基準（JPPFS タクソノミ）
+│   ├── 000_00001_cai*.zip         # 旧形式（〜2012年）
+│   └── JPPFS_YYYYMMDD.zip         # 現行形式（2015年〜）
+└── IFRS/           # IFRS（JPIGP タクソノミ）
+    └── JPIGP_YYYYMMDD.zip
+```
+
+ZIP の日付は「このタクソノミが有効になった日」です。企業が提出する `.xbrl` ファイルの `contextRef` に含まれる年度ではなく、EDINETが改訂・公開したタクソノミのバージョンを表します。各年度の有価証券報告書はその提出時点で最新のタクソノミに準拠しています。
+
+**タグのバージョン依存性について**: EDINET タクソノミはバージョン間で後方互換性が維持されており、`CashAndDeposits` や `GrossProfit` などのコアタグは最新版に収録されています。タグ調査には最新バージョン（ファイル名の日付が最も新しいもの）のみ確認すれば十分です。
+
+### 7.2 ZIP 内のファイル構成
+
+```
+JPPFS_20251101.zip
+├── samples/2025-11-01/
+│   └── entryPoint_jppfs_*.xsd       # 業種別エントリポイント（参照用）
+└── taxonomy/
+    ├── common/2013-08-31/           # 共通スキーマ
+    ├── jpdei/2013-08-31/            # 書類提出者情報タクソノミ
+    │   └── label/
+    │       ├── jpdei_*_lab.xml      # 日本語ラベル
+    │       └── jpdei_*_lab-en.xml   # 英語ラベル
+    └── jppfs/2025-11-01/
+        ├── jppfs_cor_2025-11-01.xsd # コア要素定義（全タグの型・属性を記述）
+        ├── jppfs_rt_2025-11-01.xsd  # ロールタイプ定義
+        ├── deprecated/              # 廃止タグのラベル（互換性参照用）
+        └── label/
+            ├── jppfs_2025-11-01_lab.xml     # 日本語ラベル（★主要参照ファイル）
+            ├── jppfs_2025-11-01_lab-en.xml  # 英語ラベル
+            └── jppfs_2025-11-01_gla.xml     # 汎用ラベル（Abstract/タイトル等）
+```
+
+IFRS ZIP（`JPIGP_20251101.zip`）も同構造で、`jppfs` が `jpigp` に置き換わります。
+
+### 7.3 ラベルリンクベース（`_lab.xml`）の読み方
+
+ラベルとタグ名の対応は 3 種類の要素で構成されます。
+
+```xml
+<!-- ① loc: タグ名（概念）への参照 -->
+<link:loc
+  xlink:label="CashAndDeposits"
+  xlink:href="../jppfs_cor_2025-11-01.xsd#jppfs_cor_CashAndDeposits"/>
+
+<!-- ② label: ラベルテキスト本体 -->
+<link:label
+  xlink:label="label_CashAndDeposits"
+  xlink:role="http://www.xbrl.org/2003/role/label"
+  xml:lang="ja">現金及び預金</link:label>
+
+<!-- ③ labelArc: loc と label を結ぶ弧 -->
+<link:labelArc
+  xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label"
+  xlink:from="CashAndDeposits"
+  xlink:to="label_CashAndDeposits"/>
+```
+
+| 属性 | 役割 |
+|---|---|
+| `loc/@xlink:label` | この linkbase 内でタグを識別するローカル ID（タグ名と一致） |
+| `loc/@xlink:href` | `{ファイル名}#{namespace_prefix}_{タグ名}` 形式で実体を指す |
+| `label/@xlink:role` | `role/label`（標準）/ `role/verboseLabel`（詳細名）/ `role/negativeLabel` 等 |
+| `label/@xml:lang` | `ja`（日本語）または `en`（英語） |
+| `labelArc/@xlink:from` | `loc/@xlink:label` と一致 → タグを特定 |
+| `labelArc/@xlink:to` | `label/@xlink:label` と一致 → ラベルテキストを取得 |
+
+`role/label` が「通常の表示名」、`role/verboseLabel` が「タイトル項目付きの詳細名」です。同一タグに複数のラベルが定義される場合は `role/label` を優先します（`LabelLinkbaseParser` の実装と同じ）。
+
+### 7.4 名前空間プレフィックスとタグ名の関係
+
+実際の `.xbrl` インスタンス文書内では名前空間プレフィックスが使われます。
+
+| プレフィックス | 名前空間 URI の特徴 | 対応タクソノミ |
+|---|---|---|
+| `jppfs_cor:` | `jppfs` を含む URI | JPPFS（日本基準）コアタクソノミ |
+| `jpigp_cor:` | `jpigp` を含む URI | JPIGP（IFRS）コアタクソノミ |
+| `jpcrp_cor:` | `jpcrp` を含む URI | 共通報告概念（業種横断タグ） |
+| `E12345:` | E番号（提出者コード）を含む URI | 企業独自拡張タグ |
+
+タクソノミの `loc/@xlink:href` に含まれる `jppfs_cor_CashAndDeposits` の `jppfs_cor_` 部分がこのプレフィックスに対応します。`LabelLinkbaseParser.conceptLocalName(from:)` は `#` 以降の文字列から最初の `_` までを除去してローカル名（`CashAndDeposits`）を取り出します。
+
+### 7.5 タグ候補の調査手順
+
+新しい抽出フィールドを追加するとき、タクソノミから適切なタグ名を特定する手順:
+
+**Step 1: ラベルで逆引き（日本語名 → タグ名）**
+
+```bash
+# ZIP を一時展開
+unzip -o assets/taxonomy/GAAP/JPPFS_20251101.zip -d /tmp/taxonomy
+
+# 日本語ラベルでグレップ
+grep -A3 "研究開発費" /tmp/taxonomy/taxonomy/jppfs/2025-11-01/label/jppfs_2025-11-01_lab.xml
+```
+
+出力例:
+```xml
+<link:label xlink:label="label_ResearchAndDevelopmentExpenses" ...>研究開発費</link:label>
+<link:labelArc xlink:from="ResearchAndDevelopmentExpenses" xlink:to="label_ResearchAndDevelopmentExpenses"/>
+```
+
+→ タグ名は `ResearchAndDevelopmentExpenses`、`.xbrl` 内では `jppfs_cor:ResearchAndDevelopmentExpenses`
+
+**Step 2: タグ名の確認（タグ名 → 日本語ラベル）**
+
+```bash
+grep -B3 'xlink:to="label_GrossProfit"' /tmp/taxonomy/taxonomy/jppfs/2025-11-01/label/jppfs_2025-11-01_lab.xml
+```
+
+**Step 3: 実際の提出書類での出現確認**
+
+```bash
+grep -r "GrossProfit" tmp_cache/edinet/*/XBRL/PublicDoc/*.xbrl | head -5
+```
+
+**Step 4: `Constants/Xbrl.swift` に追加**
+
+確認できたタグ名を適切な定数配列に追加します（`.agents/rules/project/constants.md` の「やってはいけないパターン」参照）。
+
+### 7.6 IFRS タグの調べ方
+
+IFRS タグ（`jpigp_cor:*`）は GAAP タクソノミには含まれません。`assets/taxonomy/IFRS/JPIGP_20251101.zip` の `taxonomy/jpigp/2025-11-01/label/jpigp_2025-11-01_lab.xml` を参照してください。
+
+```bash
+unzip -o assets/taxonomy/IFRS/JPIGP_20251101.zip -d /tmp/taxonomy_ifrs
+grep -A3 "営業利益" /tmp/taxonomy_ifrs/taxonomy/jpigp/2025-11-01/label/jpigp_2025-11-01_lab.xml
+```
+
+### 7.7 タクソノミカバレッジ（2025-11-01 版での調査結果）
+
+実際の提出書類（`tmp_cache/edinet/` 内の複数企業）で使用されている標準タグとタクソノミの収録状況:
+
+| 区分 | タグ数 |
+|---|---|
+| 提出書類で使用されている標準タグ（jppfs_cor / jpigp_cor） | 1,189 |
+| JPPFS タクソノミでカバー | 788 |
+| JPIGP タクソノミで補完 | 375 |
+| **両タクソノミに存在しないタグ** | **26** |
+
+26件の欠落は全件 `...TextBlock` 形式の**テキストブロック要素**（四半期IFRS財務諸表の注記テキスト格納タグ）です。数値 fact ではないため、ラベル引きや抽出ロジックへの影響はありません。
+
