@@ -74,18 +74,18 @@
     "current": null
   },
   "dividend_ss": {
-    "current": null
+    "current": 58005000.0
   },
   "dividend_paid_cf": {
-    "current": null
+    "current": 57903000.0
   },
   "accounts_receivable": {
-    "current": null
+    "current": 602778000.0
   },
   "inventory": {
-    "current": null
+    "current": 518879000.0
   },
   "accounts_payable": {
-    "current": null
+    "current": 53510000.0
   }
 }
