@@ -89,7 +89,7 @@ struct CachePrepare: AsyncParsableCommand {
 struct CacheCatchup: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "catchup",
-        abstract: "既存インデックスを最新日付まで追いつかせます"
+        abstract: "今日までの最新データを取得します"
     )
 
     @Option(name: .shortAndLong, help: "対象年数")
@@ -107,7 +107,7 @@ struct CacheCatchup: AsyncParsableCommand {
 
         let currentYear = Calendar.current.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
-            print("  \(year)年 を追いつかせています...")
+            print("  \(year)年のデータを取得中です。")
             let docs = await client.catchupDocumentIndexForYear(year)
             print("    → \(docs.count) 件")
         }
