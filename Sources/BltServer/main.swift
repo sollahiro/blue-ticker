@@ -33,6 +33,6 @@ let args = ServerArgs.parse()
 do {
     try await runBltServer(host: args.host, port: args.port)
 } catch {
-    fputs("blt-server error: \(error)\n", stderr)
+    printError("blt-server error: \(error)\n")
     exit(1)
 }

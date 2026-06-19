@@ -17,9 +17,11 @@ SegmentResult(method: "not_found", tables: [], facts: [])
 
 呼び出し元（CLI 層）が `nil` / 空を判定し、ユーザー向けメッセージを stderr へ出して `ExitCode.failure` を投げる。
 
+stderr への書き出しは必ず `printError(_:)`（`Utils/StandardError.swift`）を使う。C の `fputs(..., stderr)` は禁止。Glibc の `stderr` はグローバル `var` で Swift 6 言語モードの並行性チェックに通らないため、`FileHandle.standardError` ベースの `printError` に集約している。
+
 ```swift
 guard !entries.isEmpty else {
-    fputs("エラー: 財務データの取得に失敗しました。\n", stderr)
+    printError("エラー: 財務データの取得に失敗しました。\n")
     throw ExitCode.failure
 }
 ```

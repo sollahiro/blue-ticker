@@ -25,13 +25,13 @@ struct AnalyzeCommand: AsyncParsableCommand {
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n", stderr)
+            printError("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n")
             throw ExitCode.failure
         }
 
         let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
         guard !codeTrimmed.isEmpty else {
-            fputs("エラー: 銘柄コードを指定してください。\n", stderr)
+            printError("エラー: 銘柄コードを指定してください。\n")
             throw ExitCode.failure
         }
 
@@ -48,13 +48,13 @@ struct AnalyzeCommand: AsyncParsableCommand {
         let name = info?.coName ?? codeTrimmed
         let market = info?.mktNm ?? ""
 
-        fputs("\n分析中: \(codeTrimmed) \(name) (\(market)) ...\n", stderr)
-        fputs("分析対象期間: 直近 \(years) 年分\n", stderr)
+        printError("\n分析中: \(codeTrimmed) \(name) (\(market)) ...\n")
+        printError("分析対象期間: 直近 \(years) 年分\n")
 
         if half {
             let halfAnalyzer = HalfYearAnalyzer(edinetClient: client, cacheManager: cacheManager)
             guard let periods = await halfAnalyzer.analyze(code: codeTrimmed, analysisYears: years, useCache: !noCache) else {
-                fputs("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n", stderr)
+                printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
                 throw ExitCode.failure
             }
 
@@ -75,7 +75,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
         let analyzer = IndividualAnalyzer(edinetClient: client, cacheManager: cacheManager)
         guard let result = await analyzer.analyze(code: codeTrimmed, analysisYears: years, useCache: !noCache) else {
-            fputs("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n", stderr)
+            printError("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
             throw ExitCode.failure
         }
 
@@ -91,21 +91,21 @@ struct AnalyzeCommand: AsyncParsableCommand {
         }
 
         printTable(result: result)
-        fputs("\n定性情報は ticker filing コマンドで抽出できます。\n", stderr)
+        printError("\n定性情報は ticker filing コマンドで抽出できます。\n")
     }
 
     // MARK: - Table Display
 
     private func printTable(result: MetricsResult) {
         guard let yearsData = result.years, !yearsData.isEmpty else {
-            fputs("指標データが見つかりませんでした。\n", stderr)
+            printError("指標データが見つかりませんでした。\n")
             return
         }
 
         // 古い順に並べる（表示用）
         let periods = yearsData.reversed().map { $0 }
 
-        fputs("\n[主要財務指標の推移]\n", stderr)
+        printError("\n[主要財務指標の推移]\n")
 
         let labelWidth = 22
         let colWidth = 11
@@ -126,9 +126,9 @@ struct AnalyzeCommand: AsyncParsableCommand {
         }
 
         let sep = String(repeating: "-", count: labelWidth + colWidth * periods.count)
-        fputs(sep + "\n", stderr)
-        fputs(header + "\n", stderr)
-        fputs(sep + "\n", stderr)
+        printError(sep + "\n")
+        printError(header + "\n")
+        printError(sep + "\n")
 
         let metricsToShow: [(String, (YearEntry) -> Double?)] = buildMetricsToShow(periods: periods)
 
@@ -144,7 +144,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
                     row += padLeft("-", width: colWidth)
                 }
             }
-            fputs(row + "\n", stderr)
+            printError(row + "\n")
         }
 
         // 文字列メトリクス（DocID等）
@@ -158,32 +158,32 @@ struct AnalyzeCommand: AsyncParsableCommand {
             for val in vals {
                 row += padLeft(val ?? "-", width: colWidth)
             }
-            fputs(row + "\n", stderr)
+            printError(row + "\n")
         }
 
-        fputs(sep + "\n", stderr)
+        printError(sep + "\n")
     }
 
     // MARK: - Half-Year Table Display
 
     private func printHalfYearTable(periods: [HalfPeriod]) {
         guard !periods.isEmpty else {
-            fputs("半期データが見つかりませんでした。\n", stderr)
+            printError("半期データが見つかりませんでした。\n")
             return
         }
 
         let labelWidth = 22
         let colWidth = 11
 
-        fputs("\n[半期財務推移]\n", stderr)
+        printError("\n[半期財務推移]\n")
 
         var header = padRight("項目 \\ 期", width: labelWidth)
         for p in periods { header += padLeft(p.label, width: colWidth) }
 
         let sep = String(repeating: "-", count: labelWidth + colWidth * periods.count)
-        fputs(sep + "\n", stderr)
-        fputs(header + "\n", stderr)
-        fputs(sep + "\n", stderr)
+        printError(sep + "\n")
+        printError(header + "\n")
+        printError(sep + "\n")
 
         let latest = periods.last?.yearEntry
         let opLabel = latest?.calculatedData.opLabel ?? "営業利益"
@@ -251,7 +251,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
                 row += val.map { padLeft(String(format: "%.2f", $0), width: colWidth) }
                        ?? padLeft("-", width: colWidth)
             }
-            fputs(row + "\n", stderr)
+            printError(row + "\n")
         }
 
         // 文字列: DocID
@@ -263,10 +263,10 @@ struct AnalyzeCommand: AsyncParsableCommand {
             if vals.allSatisfy({ $0 == nil }) { continue }
             var row = padRight(label, width: labelWidth)
             for val in vals { row += padLeft(val ?? "-", width: colWidth) }
-            fputs(row + "\n", stderr)
+            printError(row + "\n")
         }
 
-        fputs(sep + "\n", stderr)
+        printError(sep + "\n")
     }
 
     private func buildMetricsToShow(periods: [YearEntry]) -> [(String, (YearEntry) -> Double?)] {

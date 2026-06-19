@@ -19,7 +19,7 @@ struct FilingsCommand: AsyncParsableCommand {
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n", stderr)
+            printError("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n")
             throw ExitCode.failure
         }
         let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
@@ -36,7 +36,7 @@ struct FilingsCommand: AsyncParsableCommand {
         )
 
         if docs.isEmpty {
-            fputs("書類が見つかりませんでした: \(code)\n", stderr)
+            printError("書類が見つかりませんでした: \(code)\n")
             throw ExitCode.failure
         }
 
@@ -87,13 +87,13 @@ struct FilingCommand: AsyncParsableCommand {
         let validSections = Set(xbrlSections.keys).union(SegmentExtractor.specialSectionKeys)
         let unknown = sections.filter { !validSections.contains($0) }
         guard unknown.isEmpty else {
-            fputs("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n", stderr)
+            printError("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n")
             throw ExitCode.failure
         }
 
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n", stderr)
+            printError("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n")
             throw ExitCode.failure
         }
 
@@ -113,16 +113,16 @@ struct FilingCommand: AsyncParsableCommand {
                 code: codeTrimmed, client: client, analysisYears: 1
             )
             guard let latest = docs.first, let dId = latest["docID"] as? String else {
-                fputs("書類が見つかりませんでした: \(codeTrimmed)\n", stderr)
+                printError("書類が見つかりませんでした: \(codeTrimmed)\n")
                 throw ExitCode.failure
             }
             targetDocID = dId
-            fputs("書類ID: \(targetDocID)\n", stderr)
+            printError("書類ID: \(targetDocID)\n")
         }
 
         // XBRL ダウンロード
         guard let xbrlDir = await client.downloadDocument(targetDocID) else {
-            fputs("XBRLのダウンロードに失敗しました: \(targetDocID)\n", stderr)
+            printError("XBRLのダウンロードに失敗しました: \(targetDocID)\n")
             throw ExitCode.failure
         }
 
@@ -155,21 +155,21 @@ struct FilingCommand: AsyncParsableCommand {
                 print(str)
             }
         } else {
-            fputs("\n[書類 \(targetDocID)]\n", stderr)
+            printError("\n[書類 \(targetDocID)]\n")
             for (key, text) in extracted.sorted(by: { $0.key < $1.key }) {
                 let def = xbrlSections[key]
                 let title = def?.title ?? key
-                fputs("\n## \(title)\n", stderr)
+                printError("\n## \(title)\n")
                 if text.isEmpty {
-                    fputs("（見つかりませんでした）\n", stderr)
+                    printError("（見つかりませんでした）\n")
                 } else {
                     let truncated = text.count > 2000 ? String(text.prefix(2000)) + "..." : text
-                    fputs(truncated + "\n", stderr)
+                    printError(truncated + "\n")
                 }
             }
             for (key, seg) in segmentResults.sorted(by: { $0.key < $1.key }) {
                 let title = SegmentExtractor.specialSectionTitles[key] ?? key
-                fputs("\n## \(title)\n", stderr)
+                printError("\n## \(title)\n")
                 printSegmentResult(seg)
             }
         }
@@ -180,13 +180,13 @@ struct FilingCommand: AsyncParsableCommand {
         case "html_table":
             for t in seg.tables {
                 let period = t.period.map { "（\($0)）" } ?? ""
-                fputs("\n### \(t.heading)\(period)\n\(t.markdown)\n", stderr)
+                printError("\n### \(t.heading)\(period)\n\(t.markdown)\n")
             }
         case "xbrl_facts":
-            fputs("（HTML表未検出・dimensionファクト \(seg.facts.count) 件を集計）\n", stderr)
+            printError("（HTML表未検出・dimensionファクト \(seg.facts.count) 件を集計）\n")
             printSegmentFactsAsTable(seg.facts)
         default:
-            fputs("（見つかりませんでした）\n", stderr)
+            printError("（見つかりませんでした）\n")
         }
     }
 
@@ -282,7 +282,7 @@ struct FilingCommand: AsyncParsableCommand {
         }
 
         guard !memberSet.isEmpty, !pivot.isEmpty else {
-            fputs("（ファクトを表形式に変換できませんでした）\n", stderr)
+            printError("（ファクトを表形式に変換できませんでした）\n")
             return
         }
 
@@ -295,21 +295,21 @@ struct FilingCommand: AsyncParsableCommand {
             let u = (f.unitRef ?? "").uppercased()
             return (u.isEmpty || u == "JPY" || u.hasPrefix("JPY")) && abs(f.value) >= 1_000_000
         }
-        if hasMonetary { fputs("（単位: 百万円）\n", stderr) }
+        if hasMonetary { printError("（単位: 百万円）\n") }
 
         for pKey in pivot.keys.sorted(by: { $0.order < $1.order }) {
             guard let metrics = pivot[pKey], !metrics.isEmpty else { continue }
-            fputs("\n【\(pKey.label)】\n", stderr)
+            printError("\n【\(pKey.label)】\n")
             let header = "| 指標 | " + shortHeaders.joined(separator: " | ") + " |"
             let sep    = "|---|" + shortHeaders.map { _ in "---:" }.joined(separator: "|") + "|"
-            fputs(header + "\n" + sep + "\n", stderr)
+            printError(header + "\n" + sep + "\n")
             for metric in allMetrics {
                 guard let vals = metrics[metric] else { continue }
                 let cells = sortedMembers.map { m -> String in
                     guard let (v, u) = vals[m] else { return "-" }
                     return fmtValue(v, u)
                 }
-                fputs("| \(metric) | " + cells.joined(separator: " | ") + " |\n", stderr)
+                printError("| \(metric) | " + cells.joined(separator: " | ") + " |\n")
             }
         }
     }

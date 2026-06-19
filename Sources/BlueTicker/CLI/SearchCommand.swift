@@ -18,7 +18,7 @@ struct SearchCommand: AsyncParsableCommand {
         let results = await service.searchCompanies(query)
 
         if results.isEmpty {
-            fputs("該当する銘柄が見つかりませんでした: \(query)\n", stderr)
+            printError("該当する銘柄が見つかりませんでした: \(query)\n")
             return
         }
 

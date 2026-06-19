@@ -92,7 +92,7 @@ struct ConfigInit: AsyncParsableCommand {
         print("-------------------")
         print("EDINET API キーを入力してください（https://disclosure2.edinet-fsa.go.jp）:")
         guard let key = readLine()?.trimmingCharacters(in: .whitespaces), !key.isEmpty else {
-            fputs("APIキーが入力されませんでした。\n", stderr)
+            printError("APIキーが入力されませんでした。\n")
             return
         }
         try await settingsStore.set(.edinetApiKey, value: key)

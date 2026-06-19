@@ -69,7 +69,7 @@ struct CachePrepare: AsyncParsableCommand {
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("EDINET API キーが設定されていません。`ticker config set --edinet-api-key <KEY>` で設定してください。\n", stderr)
+            printError("EDINET API キーが設定されていません。`ticker config set --edinet-api-key <KEY>` で設定してください。\n")
             throw ExitCode.failure
         }
         let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
@@ -98,7 +98,7 @@ struct CacheCatchup: AsyncParsableCommand {
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("EDINET API キーが設定されていません。\n", stderr)
+            printError("EDINET API キーが設定されていません。\n")
             throw ExitCode.failure
         }
         let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
@@ -127,7 +127,7 @@ struct CacheRefresh: AsyncParsableCommand {
     func run() async throws {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            fputs("EDINET API キーが設定されていません。\n", stderr)
+            printError("EDINET API キーが設定されていません。\n")
             throw ExitCode.failure
         }
         let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")

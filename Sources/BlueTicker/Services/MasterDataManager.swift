@@ -16,7 +16,7 @@ actor MasterDataManager {
     func reload() async {
         let path = resolveAssetsPath()
         guard let url = path else {
-            fputs("[blue-ticker] Warning: data_j.csv が見つかりません。BLUE_TICKER_ASSETS_PATH を設定してください。\n", stderr)
+            printError("[blue-ticker] Warning: data_j.csv が見つかりません。BLUE_TICKER_ASSETS_PATH を設定してください。\n")
             return
         }
         await loadCSV(from: url)
@@ -82,7 +82,7 @@ actor MasterDataManager {
 
     private func loadCSV(from url: URL) async {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else {
-            fputs("[blue-ticker] Warning: data_j.csv の読み込みに失敗しました。\n", stderr)
+            printError("[blue-ticker] Warning: data_j.csv の読み込みに失敗しました。\n")
             return
         }
 
@@ -94,7 +94,7 @@ actor MasterDataManager {
         guard let codeIdx = cols.firstIndex(of: "コード"),
               let nameIdx = cols.firstIndex(of: "銘柄名")
         else {
-            fputs("[blue-ticker] Warning: data_j.csv のヘッダー形式が不正です。\n", stderr)
+            printError("[blue-ticker] Warning: data_j.csv のヘッダー形式が不正です。\n")
             return
         }
         let s33idx = cols.firstIndex(of: "33業種コード")

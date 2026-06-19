@@ -175,7 +175,7 @@ final class EdinetCacheStore: Sendable {
 
             let elapsed = Date().timeIntervalSince(start)
             if !noticeShown && elapsed >= Api.cacheLockNoticeSeconds {
-                fputs("EDINETキャッシュを準備中です。別のblue-tickerプロセスの完了を待っています...\n", stderr)
+                printError("EDINETキャッシュを準備中です。別のblue-tickerプロセスの完了を待っています...\n")
                 noticeShown = true
             }
             if elapsed >= Api.cacheLockTimeoutSeconds {
@@ -185,7 +185,7 @@ final class EdinetCacheStore: Sendable {
         }
 
         if noticeShown {
-            fputs("EDINETキャッシュの準備が完了しました。処理を続行します。\n", stderr)
+            printError("EDINETキャッシュの準備が完了しました。処理を続行します。\n")
         }
         defer { try? fm.removeItem(at: lockPath) }
         return try await work()
