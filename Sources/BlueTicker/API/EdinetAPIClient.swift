@@ -155,7 +155,7 @@ actor EdinetAPIClient {
 
     // MARK: - 日付範囲
 
-    func getDocumentsForDateRange(
+    nonisolated func getDocumentsForDateRange(
         start: Date,
         end: Date,
         useIndex: Bool = true
@@ -317,7 +317,7 @@ actor EdinetAPIClient {
         return hadFailure ? nil : documents
     }
 
-    private func getDocumentsFromIndex(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
+    private nonisolated func getDocumentsFromIndex(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
         var result = emptyDateRange(start: start, end: end)
         for year in yearRange(start: start, end: end) {
             for var doc in await ensureDocumentIndexForYear(year) {
@@ -335,7 +335,7 @@ actor EdinetAPIClient {
         return result
     }
 
-    private func getDocumentsDaily(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
+    private nonisolated func getDocumentsDaily(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
         var dates: [String] = []
         var current = start
         while current <= end {
