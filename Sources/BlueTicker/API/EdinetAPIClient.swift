@@ -319,8 +319,21 @@ actor EdinetAPIClient {
 
     private nonisolated func getDocumentsFromIndex(start: Date, end: Date) async -> sending [String: [[String: Any]]?] {
         var result = emptyDateRange(start: start, end: end)
-        for year in yearRange(start: start, end: end) {
-            for var doc in await ensureDocumentIndexForYear(year) {
+        // actor 隔離メソッドの await 結果を直接 result へ取り込むと、古いコンパイラ
+        // （Swift 6.0/6.1）が docs を self-isolated と判定し sending 返却を拒否する。
+        // getDocumentsDaily / buildDocumentIndexForYear と同様に TaskGroup を介して
+        // 領域を転送することで回避する。年は yearRange で重複なく分かれているため、
+        // 同一日付バケットの docs は単一年からのみ来る（出力は逐次処理時と等価）。
+        let yearDocs = await withTaskGroup(of: YearDocsResult.self, returning: [YearDocsResult].self) { group in
+            for year in yearRange(start: start, end: end) {
+                group.addTask { YearDocsResult(docs: await self.ensureDocumentIndexForYear(year)) }
+            }
+            var results: [YearDocsResult] = []
+            for await r in group { results.append(r) }
+            return results
+        }
+        for yd in yearDocs {
+            for var doc in yd.docs {
                 guard let docDate = documentListDate(doc),
                       docDate >= start && docDate <= end
                 else { continue }
@@ -439,6 +452,11 @@ private func yearRange(start: Date, end: Date) -> [Int] {
 private struct DateDocsResult: @unchecked Sendable {
     let dateStr: String
     let docs: [[String: Any]]?
+}
+
+// 年次インデックスの子タスク結果を運ぶ型。DateDocsResult と同じ理由で @unchecked Sendable。
+private struct YearDocsResult: @unchecked Sendable {
+    let docs: [[String: Any]]
 }
 
 // MARK: - Concurrency helpers
