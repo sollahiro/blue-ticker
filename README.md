@@ -45,18 +45,24 @@ ticker search 7203 --format json
 
 ```bash
 ticker cache status
-ticker analyze 7203
+ticker summarize 7203          # 主要財務指標の網羅表（水準値）
+ticker analyze 7203            # 増減分析（前年差分解）
 ticker analyze 7203 --years 6
 ticker analyze 7203 --half
 ticker analyze 7203 --no-cache
 ```
 
+- `summarize`: 売上・利益・BS・CF など主要指標の水準値を年度横断で一覧表示
+- `analyze`: 5つの増減分析を表示
+  - ① 事業利益増減（売上差・粗利率差・販管費差の3要因）
+  - ② ROIC増減（NOPATマージン差・投下資本回転率差）
+  - ③ ROE増減（純利益率差・総資産回転率差・財務レバレッジ差）
+  - ④ ネットキャッシュ増減（現金増減・有利子負債増減）
+  - ⑤ 運転資本・CCC増減（売掛金・棚卸資産・買掛金の前年差、DSO/DIO/DPO/CCC）
 - `--years N`: 通期分析はデフォルト6年、半期分析はデフォルト3年
-- `--half`: 上半期(H1)・下半期(H2)の半期推移を表示
+- `--half`: 上半期(H1)・下半期(H2)の半期推移を表示（前年同期差）
 - `--no-cache`: 分析結果キャッシュを使わず再計算
-- `--include-debug-fields`: `--format json` で `MetricSources` や `IBDComponents` などの内部検証フィールドも出力
-
-分析では ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、営業利益増減分解などを確認できます。
+- `--json`: JSON 形式で出力
 
 ### EDINET書類
 
