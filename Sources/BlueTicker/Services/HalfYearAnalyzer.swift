@@ -109,6 +109,8 @@ struct HalfYearAnalyzer {
         applyRoicWaterfallToYears(&h2YEs)
         applyRoeWaterfallToYears(&h1YEs)
         applyRoeWaterfallToYears(&h2YEs)
+        applyWorkingCapitalAndCCCToYears(&h1YEs)
+        applyWorkingCapitalAndCCCToYears(&h2YEs)
 
         var periods: [HalfPeriod] = []
         for (i, (fyEnd, _)) in h1Pairs.enumerated() {

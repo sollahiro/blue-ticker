@@ -67,13 +67,19 @@ ticker search <社名またはコード> --format json
 
 ### 財務を分析する
 
-年次推移を見る。
+主要財務指標の水準値（売上・利益・BS・CF など）を年度横断で一覧する。
+
+```bash
+ticker summarize <code> --years 6
+```
+
+増減分析（前年差分解）を見る。事業利益増減・ROIC増減・ROE増減・ネットキャッシュ増減・運転資本/CCC増減の5ブロックを表示する。
 
 ```bash
 ticker analyze <code> --years 6
 ```
 
-半期の季節性や直近の変化を見る。
+半期の季節性や直近の変化を見る（`summarize`・`analyze` とも `--half` 対応。半期は前年同期差）。
 
 ```bash
 ticker analyze <code> --half

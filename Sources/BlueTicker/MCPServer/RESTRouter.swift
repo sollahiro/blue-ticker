@@ -184,6 +184,39 @@ private extension RESTRouter {
             "roe": calc.roe as Any,
             "roic": calc.roic as Any,
             "employees": calc.employees as Any,
+            // 事業利益増減分析
+            "business_profit": calc.businessProfit as Any,
+            "business_profit_margin": calc.businessProfitMargin as Any,
+            "business_profit_change": calc.businessProfitChange as Any,
+            "sales_change_impact": calc.salesChangeImpact as Any,
+            "gross_margin_change_impact": calc.grossMarginChangeImpact as Any,
+            "sga_change_impact": calc.sgaChangeImpact as Any,
+            // ROIC増減分析
+            "nopat_margin": calc.nopatMargin as Any,
+            "invested_capital_turnover": calc.investedCapitalTurnover as Any,
+            "roic_delta": calc.roicDelta as Any,
+            "roic_margin_effect": calc.roicMarginEffect as Any,
+            "roic_turnover_effect": calc.roicTurnoverEffect as Any,
+            // ROE増減分析
+            "net_margin": calc.netMargin as Any,
+            "asset_turnover": calc.assetTurnover as Any,
+            "financial_leverage": calc.financialLeverage as Any,
+            "roe_delta": calc.roeDelta as Any,
+            "roe_net_margin_effect": calc.roeNetMarginEffect as Any,
+            "roe_asset_turnover_effect": calc.roeAssetTurnoverEffect as Any,
+            "roe_leverage_effect": calc.roeLeverageEffect as Any,
+            // ネットキャッシュ
+            "cash_equivalents": raw.cashEq as Any,
+            "net_cash": calc.netCash as Any,
+            // 運転資本・CCC
+            "accounts_receivable": calc.accountsReceivable as Any,
+            "inventory": calc.inventory as Any,
+            "accounts_payable": calc.accountsPayable as Any,
+            "working_capital": calc.workingCapital as Any,
+            "dso": calc.dso as Any,
+            "dio": calc.dio as Any,
+            "dpo": calc.dpo as Any,
+            "ccc": calc.ccc as Any,
         ]
     }
 }
