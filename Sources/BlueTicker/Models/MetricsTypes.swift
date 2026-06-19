@@ -182,6 +182,12 @@ struct CalculatedData: Codable {
     var accountsReceivable: Double?
     var inventory: Double?
     var accountsPayable: Double?
+    // 運転資本・CCC
+    var workingCapital: Double?
+    var dso: Double?
+    var dio: Double?
+    var dpo: Double?
+    var ccc: Double?
 
     enum CodingKeys: String, CodingKey {
         case payoutRatio = "PayoutRatio"; case cfc = "CFC"; case roe = "ROE"; case cfcvr = "CFCVR"
@@ -220,6 +226,8 @@ struct CalculatedData: Codable {
         case dividendSS = "DividendSS"; case dividendPaidCF = "DividendPaidCF"
         case accountsReceivable = "AccountsReceivable"
         case inventory = "Inventory"; case accountsPayable = "AccountsPayable"
+        case workingCapital = "WorkingCapital"
+        case dso = "DSO"; case dio = "DIO"; case dpo = "DPO"; case ccc = "CCC"
     }
 }
 

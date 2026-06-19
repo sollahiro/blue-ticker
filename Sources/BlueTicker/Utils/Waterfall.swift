@@ -92,6 +92,54 @@ private func profitBase(_ cd: CalculatedData, _ rd: RawData) -> Double? {
     return nil
 }
 
+// MARK: - Working Capital & CCC
+
+/// 各年度に運転資本（売掛金+棚卸資産−買掛金）と CCC 構成（DSO/DIO/DPO/CCC）を付与する。
+///
+/// 前年差は単純な隣接年度差分のため表示側で算出する（ここでは水準値のみ）。
+/// 売上原価 = 売上高 − 売上総利益。売上総利益が取れない場合 DIO/DPO/CCC は nil。
+func applyWorkingCapitalAndCCCToYears(_ years: inout [YearEntry]) {
+    for i in 0..<years.count {
+        let cd = years[i].calculatedData
+        let rd = years[i].rawData
+
+        // 運転資本（3要素すべて揃う場合のみ）
+        if cd.workingCapital == nil,
+           let ar = cd.accountsReceivable,
+           let inv = cd.inventory,
+           let ap = cd.accountsPayable {
+            years[i].calculatedData.workingCapital = ar + inv - ap
+        }
+
+        // DSO: 売掛金 ÷ 売上高 × 365
+        if cd.dso == nil, let ar = cd.accountsReceivable,
+           let sales = rd.sales, sales > 0 {
+            years[i].calculatedData.dso = ar / sales * Financial.daysInYear
+        }
+
+        // 売上原価 = 売上高 − 売上総利益
+        guard let sales = rd.sales, let gp = cd.grossProfit else { continue }
+        let cogs = sales - gp
+        guard cogs > 0 else { continue }
+
+        // DIO: 棚卸資産 ÷ 売上原価 × 365
+        if cd.dio == nil, let inv = cd.inventory {
+            years[i].calculatedData.dio = inv / cogs * Financial.daysInYear
+        }
+        // DPO: 買掛金 ÷ 売上原価 × 365
+        if cd.dpo == nil, let ap = cd.accountsPayable {
+            years[i].calculatedData.dpo = ap / cogs * Financial.daysInYear
+        }
+        // CCC = DSO + DIO − DPO（3要素すべて揃う場合のみ）
+        if cd.ccc == nil,
+           let dso = years[i].calculatedData.dso,
+           let dio = years[i].calculatedData.dio,
+           let dpo = years[i].calculatedData.dpo {
+            years[i].calculatedData.ccc = dso + dio - dpo
+        }
+    }
+}
+
 // MARK: - ROIC Waterfall
 
 /// 年次データに ROIC 前年差分解（NOPATMargin・投下資本回転率の2要因）を付与する。

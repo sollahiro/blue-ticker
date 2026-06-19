@@ -79,6 +79,7 @@ struct IndividualAnalyzer {
         applyOperatingProfitChangeToYears(&yearEntries)
         applyRoicWaterfallToYears(&yearEntries)
         applyRoeWaterfallToYears(&yearEntries)
+        applyWorkingCapitalAndCCCToYears(&yearEntries)
 
         var result = MetricsResult()
         result.code = code
