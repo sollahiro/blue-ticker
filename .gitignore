@@ -5,6 +5,7 @@
 cache/
 analysis_cache/
 tmp_cache/
+taxonomy/
 
 # Reports and generated data
 reports/
