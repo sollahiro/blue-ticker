@@ -10,24 +10,38 @@
 
 `blt-server` は `swift run blt-server`（または `swift build -c release` 後に `.build/release/blt-server`）で起動。self-hosted MCP の基盤実装は完了済み。Python `blt-server`（FastMCP）は Swift 実装（`modelcontextprotocol/swift-sdk` 0.12.1）に置き換え済み。
 
-blt-server には 2 種類のクライアントが接続できる。デプロイモード（上表）はサーバーの配置場所を表すもので、クライアント種別とは独立した軸。
+blt-server には 3 種類のクライアントが接続できる。デプロイモード（上表）はサーバーの配置場所を表すもので、クライアント種別とは独立した軸。
 
 | クライアント | 接続方法 | ユースケース |
 |---|---|---|
 | **remote CLI** | MCP プロトコル（HTTP transport） | OAuth 認証のみで利用可能・EDINET API キー管理不要 |
 | **AI チャット（MCP）** | MCP プロトコル（HTTP transport） | Claude.ai 等の AI ツールから財務データをツール呼び出し |
+| **iOS app** | REST API（`GET /v1/...`） | 財務データ閲覧 UI（URLSession + Codable） |
 
-remote CLI と AI チャットはどちらも MCP プロトコルで統一する。カスタム REST API は実装しない。
+remote CLI と AI チャットは MCP プロトコルで統一する。iOS app 向けには REST API を追加する（MCP はモバイル UI に不向きなため）。
+
+### REST API エンドポイント（`/v1/`）
+
+| エンドポイント | パラメーター | 説明 |
+|---|---|---|
+| `GET /v1/companies?q={query}` | `q`: 検索クエリ | 企業名・銘柄コード検索 |
+| `GET /v1/sectors/{sector}/companies?limit=20` | `sector`: 業種名、`limit` | 業種別銘柄一覧 |
+| `GET /v1/companies/{code}/filings?max_years=5` | `max_years` | 書類一覧 |
+| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別） |
+| `GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b` | `doc_id`（省略可）、`sections`（省略可） | 書類セクションテキスト |
+
+- 成功: HTTP 200 + `application/json` 直接（MCP ラッパーなし）
+- エラー: HTTP 4xx/5xx + `{"error": "...", "status": N}`
 
 ## ゴール
 
 - local CLI は blt-server 不要の独立モードとして維持する。
-- remote デプロイにより、remote CLI と AI チャット（MCP）が共通の blt-server を通じて財務データにアクセスできるようにする。
+- remote デプロイにより、remote CLI・AI チャット（MCP）・iOS app（REST）が共通の blt-server を通じて財務データにアクセスできるようにする。
 
 ## 非ゴール
 
 - **ローカル MCP サーバーは実装しない。** AI エージェントは Skills 経由で CLI を直接操作する。
-- **カスタム REST API は実装しない。** remote CLI も MCP プロトコルで統一する。
+- **remote CLI に REST API は実装しない。** remote CLI も MCP プロトコルで統一する。
 - `ticker analyze` 等の各サブコマンドに backend 選択オプションを増やさない。
 - `CacheManager` と EDINET external cache を無理に単一抽象へ統合しない。
 - ローカルキャッシュを「レガシー」として扱わない。

@@ -30,6 +30,7 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
     let cacheDir = URL(fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
 
     let context = BltServerContext(apiKey: key, cacheDir: cacheDir)
+    let restRouter = RESTRouter(context: context)
 
     logger.info("blt-server starting", metadata: ["host": "\(host)", "port": "\(port)"])
 
@@ -50,6 +51,9 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
         serverFactory: { sessionID, transport in
             logger.debug("Creating MCP session", metadata: ["sessionID": "\(sessionID)"])
             return await makeBltServer(context: context, transport: transport)
+        },
+        restHandler: { method, path, params, body in
+            await restRouter.handle(method: method, path: path, queryParams: params, body: body)
         },
         logger: logger
     )

@@ -13,6 +13,34 @@ import MCP
     import FoundationNetworking
 #endif
 
+// MARK: - RESTResult
+
+/// REST API レスポンス（非 MCP ルート用）。
+struct RESTResult: Sendable {
+    let statusCode: Int
+    let data: Data
+    let contentType: String
+
+    static func json(_ value: Any, statusCode: Int = 200) -> RESTResult {
+        guard JSONSerialization.isValidJSONObject(value),
+            let data = try? JSONSerialization.data(
+                withJSONObject: value, options: [.sortedKeys, .prettyPrinted])
+        else {
+            return error(message: "JSON serialization failed")
+        }
+        return RESTResult(statusCode: statusCode, data: data, contentType: "application/json")
+    }
+
+    static func error(statusCode: Int = 500, message: String) -> RESTResult {
+        let body: [String: Any] = ["error": message, "status": statusCode]
+        let data =
+            (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
+        return RESTResult(statusCode: statusCode, data: data, contentType: "application/json")
+    }
+}
+
+// MARK: - HTTPApp
+
 actor HTTPApp {
     struct Configuration: Sendable {
         var host: String
@@ -37,10 +65,12 @@ actor HTTPApp {
     }
 
     typealias ServerFactory = @Sendable (String, StatefulHTTPServerTransport) async throws -> Server
+    typealias RESTHandler = @Sendable (String, String, [String: String], Data?) async -> RESTResult
 
     private let configuration: Configuration
     private let serverFactory: ServerFactory
     private let validationPipeline: (any HTTPRequestValidationPipeline)?
+    private let restHandler: RESTHandler?
     private var channel: Channel?
     private var sessions: [String: SessionContext] = [:]
 
@@ -57,11 +87,13 @@ actor HTTPApp {
         configuration: Configuration = Configuration(),
         validationPipeline: (any HTTPRequestValidationPipeline)? = nil,
         serverFactory: @escaping ServerFactory,
+        restHandler: RESTHandler? = nil,
         logger: Logger? = nil
     ) {
         self.configuration = configuration
         self.serverFactory = serverFactory
         self.validationPipeline = validationPipeline
+        self.restHandler = restHandler
         self.logger = logger ?? Logger(
             label: "mcp.http.app",
             factory: { _ in SwiftLogNoOpLogHandler() }
@@ -73,11 +105,13 @@ actor HTTPApp {
         port: Int = 3000,
         endpoint: String = "/mcp",
         serverFactory: @escaping ServerFactory,
+        restHandler: RESTHandler? = nil,
         logger: Logger? = nil
     ) {
         self.init(
             configuration: Configuration(host: host, port: port, endpoint: endpoint),
             serverFactory: serverFactory,
+            restHandler: restHandler,
             logger: logger
         )
     }
@@ -121,6 +155,27 @@ actor HTTPApp {
     }
 
     var endpoint: String { configuration.endpoint }
+
+    func handleRESTRequest(method: String, path: String, queryString: String, body: Data?) async -> RESTResult {
+        guard let handler = restHandler else {
+            return .error(statusCode: 404, message: "REST API not configured")
+        }
+        let params = parseQueryString(queryString)
+        return await handler(method, path, params, body)
+    }
+
+    private func parseQueryString(_ query: String) -> [String: String] {
+        guard !query.isEmpty else { return [:] }
+        var params: [String: String] = [:]
+        for pair in query.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1)
+            guard kv.count == 2 else { continue }
+            let key = String(kv[0]).removingPercentEncoding ?? String(kv[0])
+            let val = String(kv[1]).removingPercentEncoding ?? String(kv[1])
+            params[key] = val
+        }
+        return params
+    }
 
     func handleHTTPRequest(_ request: HTTPRequest) async -> HTTPResponse {
         let sessionID = request.header(HTTPHeaderName.sessionID)
@@ -274,9 +329,27 @@ private final class HTTPHandler: ChannelInboundHandler, @unchecked Sendable {
     @MainActor
     private func handleRequest(state: RequestState, context: ChannelHandlerContext) async {
         let head = state.head
-        let path = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
-        let endpoint = await app.endpoint
+        let uriParts = head.uri.split(separator: "?", maxSplits: 1)
+        let path = String(uriParts[0])
+        let queryString = uriParts.count > 1 ? String(uriParts[1]) : ""
 
+        // REST routes
+        if path.hasPrefix("/v1/") {
+            let body: Data? = state.bodyBuffer.readableBytes > 0
+                ? state.bodyBuffer.getBytes(at: 0, length: state.bodyBuffer.readableBytes).map { Data($0) }
+                : nil
+            let result = await app.handleRESTRequest(
+                method: head.method.rawValue,
+                path: path,
+                queryString: queryString,
+                body: body
+            )
+            await writeRESTResult(result, version: head.version, context: context)
+            return
+        }
+
+        // MCP routes
+        let endpoint = await app.endpoint
         guard path == endpoint else {
             await writeResponse(
                 .error(statusCode: 404, .invalidRequest("Not Found")),
@@ -289,6 +362,32 @@ private final class HTTPHandler: ChannelInboundHandler, @unchecked Sendable {
         let httpRequest = makeHTTPRequest(from: state)
         let response = await app.handleHTTPRequest(httpRequest)
         await writeResponse(response, version: head.version, context: context)
+    }
+
+    @MainActor
+    private func writeRESTResult(
+        _ result: RESTResult,
+        version: HTTPVersion,
+        context: ChannelHandlerContext
+    ) async {
+        nonisolated(unsafe) let ctx = context
+        let eventLoop = ctx.eventLoop
+        let data = result.data
+        let statusCode = result.statusCode
+        let contentType = result.contentType
+
+        eventLoop.execute {
+            var head = HTTPResponseHead(
+                version: version,
+                status: HTTPResponseStatus(statusCode: statusCode)
+            )
+            head.headers.add(name: "Content-Type", value: contentType)
+            ctx.write(self.wrapOutboundOut(.head(head)), promise: nil)
+            var buffer = ctx.channel.allocator.buffer(capacity: data.count)
+            buffer.writeBytes(data)
+            ctx.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+            ctx.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+        }
     }
 
     private func makeHTTPRequest(from state: RequestState) -> HTTPRequest {
