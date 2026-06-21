@@ -18,11 +18,10 @@ struct SectorCommand: AsyncParsableCommand {
         } else {
             printTable(
                 columns: [
-                    TableColumn("コード", width: 6),
                     TableColumn("業種名", width: 30),
                     TableColumn("銘柄数", width: 6, rightAlign: true),
                 ],
-                rows: sectors.map { [$0.code, $0.name, String($0.count)] }
+                rows: sectors.map { [$0.name, String($0.count)] }
             )
         }
     }
