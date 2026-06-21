@@ -1,6 +1,7 @@
 import Foundation
 
 private let assetsPathEnv = "BLUE_TICKER_ASSETS_PATH"
+private let edinetCsvFilename = "EdinetcodeDlInfo.csv"
 
 // MARK: - MasterDataManager
 
@@ -16,7 +17,7 @@ actor MasterDataManager {
     func reload() async {
         let path = resolveAssetsPath()
         guard let url = path else {
-            printError("[blue-ticker] Warning: data_j.csv が見つかりません。BLUE_TICKER_ASSETS_PATH を設定してください。\n")
+            printError("[blue-ticker] Warning: \(edinetCsvFilename) が見つかりません。BLUE_TICKER_ASSETS_PATH を設定してください。\n")
             return
         }
         await loadCSV(from: url)
@@ -81,27 +82,40 @@ actor MasterDataManager {
     // MARK: - Private
 
     private func loadCSV(from url: URL) async {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
-            printError("[blue-ticker] Warning: data_j.csv の読み込みに失敗しました。\n")
+        guard let data = try? Data(contentsOf: url) else {
+            printError("[blue-ticker] Warning: \(edinetCsvFilename) の読み込みに失敗しました。\n")
+            return
+        }
+        // EdinetcodeDlInfo.csv は Windows Shift-JIS（CP932）エンコード
+        let raw = String(data: data, encoding: .shiftJIS)
+            ?? String(data: data, encoding: .utf8)
+        guard let content = raw else {
+            printError("[blue-ticker] Warning: \(edinetCsvFilename) のエンコード変換に失敗しました。\n")
             return
         }
 
-        var lines = content.components(separatedBy: "\n")
+        var lines = content
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
+
+        // 1行目: メタデータ行（ダウンロード実行日 ...）をスキップ
+        guard lines.count >= 2 else { return }
+        lines.removeFirst()
+
+        // 2行目: ヘッダー
         guard let header = lines.first else { return }
         lines.removeFirst()
 
         let cols = parseCSVRow(header)
-        guard let codeIdx = cols.firstIndex(of: "コード"),
-              let nameIdx = cols.firstIndex(of: "銘柄名")
+        guard let codeIdx = cols.firstIndex(of: "証券コード"),
+              let nameIdx = cols.firstIndex(of: "提出者名")
         else {
-            printError("[blue-ticker] Warning: data_j.csv のヘッダー形式が不正です。\n")
+            printError("[blue-ticker] Warning: \(edinetCsvFilename) のヘッダー形式が不正です。\n")
             return
         }
-        let s33idx = cols.firstIndex(of: "33業種コード")
-        let s33nmIdx = cols.firstIndex(of: "33業種区分")
-        let s17idx = cols.firstIndex(of: "17業種コード")
-        let s17nmIdx = cols.firstIndex(of: "17業種区分")
-        let mktIdx = cols.firstIndex(of: "市場・商品区分")
+        let industryIdx = cols.firstIndex(of: "提出者業種")
+        let listingIdx = cols.firstIndex(of: "上場区分")
 
         var loaded: [MasterStock] = []
         var index: [String: MasterStock] = [:]
@@ -109,19 +123,34 @@ actor MasterDataManager {
         for line in lines {
             let fields = parseCSVRow(line)
             guard fields.count > max(codeIdx, nameIdx) else { continue }
-            let code = fields[codeIdx].trimmingCharacters(in: .whitespaces)
-            let name = fields[nameIdx].trimmingCharacters(in: .whitespaces)
-            guard !code.isEmpty else { continue }
+            // EDINET証券コードは5桁（4桁TSEコード + "0"）。ユーザー向けは末尾を除いた4桁
+            let secCode = fields[codeIdx].trimmingCharacters(in: CharacterSet.whitespaces)
+            guard secCode.count == 5, Int(secCode) != nil else { continue }
+            let code = String(secCode.dropLast())
+            let name = fields[nameIdx].trimmingCharacters(in: CharacterSet.whitespaces)
+            guard !name.isEmpty else { continue }
+            let industry: String
+            if let idx = industryIdx, idx < fields.count {
+                industry = fields[idx].trimmingCharacters(in: CharacterSet.whitespaces)
+            } else {
+                industry = ""
+            }
+            let market: String
+            if let idx = listingIdx, idx < fields.count {
+                market = fields[idx].trimmingCharacters(in: CharacterSet.whitespaces)
+            } else {
+                market = ""
+            }
             let stock = MasterStock(
                 code: code,
                 coName: name,
                 coNameUpper: name.uppercased(),
                 coNameNormalized: normalizeForSearch(name),
-                s33nm: s33nmIdx.map { $0 < fields.count ? fields[$0] : "" } ?? "",
-                mktNm: mktIdx.map { $0 < fields.count ? fields[$0] : "" } ?? "",
-                s33: s33idx.map { $0 < fields.count ? fields[$0] : "" } ?? "",
-                s17nm: s17nmIdx.map { $0 < fields.count ? fields[$0] : "" } ?? "",
-                s17: s17idx.map { $0 < fields.count ? fields[$0] : "" } ?? ""
+                s33nm: industry,
+                mktNm: market,
+                s33: industry,
+                s17nm: "",
+                s17: ""
             )
             loaded.append(stock)
             index[code] = stock
@@ -157,18 +186,16 @@ actor MasterDataManager {
         let env = ProcessInfo.processInfo.environment
         let dir: String? = env[assetsPathEnv]
         if let d = dir, !d.isEmpty {
-            let url = URL(fileURLWithPath: d).appendingPathComponent("data_j.csv")
+            let url = URL(fileURLWithPath: d).appendingPathComponent(edinetCsvFilename)
             if FileManager.default.fileExists(atPath: url.path) { return url }
         }
         let fm = FileManager.default
         let candidates: [URL] = [
-            // カレントディレクトリ相対（Python版と同じ）
             URL(fileURLWithPath: fm.currentDirectoryPath)
-                .appendingPathComponent("assets/data_j.csv"),
-            // バイナリ横の assets/
+                .appendingPathComponent("assets/\(edinetCsvFilename)"),
             Bundle.main.executableURL?
                 .deletingLastPathComponent()
-                .appendingPathComponent("assets/data_j.csv"),
+                .appendingPathComponent("assets/\(edinetCsvFilename)"),
         ].compactMap { $0 }
         return candidates.first { fm.fileExists(atPath: $0.path) }
     }
