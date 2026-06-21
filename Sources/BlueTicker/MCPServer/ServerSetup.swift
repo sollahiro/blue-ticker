@@ -232,7 +232,7 @@ private func toolGetFilings(args: [String: Value], context: BltServerContext) as
     let maxYears = args["max_years"]?.intValue ?? 5
 
     let stock = await masterDataManager.getByCode(code)
-    let edinetClient = await context.edinetClient
+    let edinetClient = context.edinetClient
     let service = FilingService(edinetClient: edinetClient)
     let docs = await service.searchFilings(code: code, maxYears: maxYears, maxDocuments: 50)
 
@@ -261,8 +261,8 @@ private func toolGetFinancialSummary(args: [String: Value], context: BltServerCo
     let code = args["code"]?.stringValue ?? ""
     let years = args["years"]?.intValue ?? 5
 
-    let edinetClient = await context.edinetClient
-    let cacheManager = await context.cacheManager
+    let edinetClient = context.edinetClient
+    let cacheManager = context.cacheManager
     let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
     guard let result = await analyzer.analyze(code: code, analysisYears: years) else {
         return ["code": code, "error": "データが見つかりませんでした"]
@@ -316,7 +316,7 @@ private func toolGetFilingContent(args: [String: Value], context: BltServerConte
     let docIdArg = args["doc_id"]?.stringValue
     let sectionsArg: [String]? = args["sections"]?.arrayValue?.compactMap { $0.stringValue }
 
-    let edinetClient = await context.edinetClient
+    let edinetClient = context.edinetClient
 
     let targetDocID: String
     if let d = docIdArg, !d.isEmpty {
@@ -351,7 +351,7 @@ private func toolGetFilingContent(args: [String: Value], context: BltServerConte
 
 private func toolSyncDocumentList(args: [String: Value], context: BltServerContext) async throws -> Any {
     let years = args["years"]?.intValue ?? 2
-    let edinetClient = await context.edinetClient
+    let edinetClient = context.edinetClient
 
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "UTC")!
