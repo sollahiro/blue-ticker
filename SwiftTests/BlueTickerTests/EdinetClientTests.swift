@@ -134,4 +134,28 @@ import Foundation
         #expect(docs.compactMap { $0["docID"] as? String } == ["OLD", "NEW"])
         #expect(cachedInfo?["built_through"] as? String == support.iso(today))
     }
+
+    // MARK: - XBRL ダウンロード
+
+    @Test func testDownloadDocumentReturnsCachedDirWithoutApiKey() async throws {
+        // 事前に XBRL を展開しておけば、API キーなしでもキャッシュヒットでディレクトリを返す
+        // （ヒット時はネットワークへ行かない。失敗していたら nil になる）
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "1234"])
+        _ = try store.storeXbrlZip("S100CACHE", content: zip)
+
+        let dir = await client.downloadDocument("S100CACHE")
+
+        #expect(dir != nil)
+        #expect(store.hasXbrlDir("S100CACHE"))
+    }
+
+    @Test func testDownloadDocumentReturnsNilWithoutApiKeyOrCache() async throws {
+        // キャッシュなし・API キーなし → 取得失敗で nil。
+        // キー検証で早期リターンするため、ファイルロックは取得されず残らない。
+        let dir = await client.downloadDocument("S100MISS")
+
+        #expect(dir == nil)
+        let lockPath = store.locksDir.appendingPathComponent("xbrl_S100MISS.lock")
+        #expect(!(FileManager.default.fileExists(atPath: lockPath.path)))
+    }
 }

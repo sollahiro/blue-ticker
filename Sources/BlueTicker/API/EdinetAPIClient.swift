@@ -183,14 +183,23 @@ actor EdinetAPIClient {
             cacheStore.touchXbrlDir(docID, saveDir: dir)
             return dest
         }
-        guard let key = apiKey, !key.isEmpty else { return nil }
+        guard apiKey?.isEmpty == false else { return nil }
 
-        await xbrlDownloadSemaphore.wait()
-        defer { xbrlDownloadSemaphore.signal() }
-
+        // ファイルロックでプロセス間の同一 docID 同時取得・展開を防ぎ、セマフォで並列ダウンロード数を制限する
+        // actor プロパティを @Sendable クロージャ境界を渡す前にキャプチャする
+        let cs = cacheStore
+        let semaphore = xbrlDownloadSemaphore
         do {
-            let content = try await requestBinary("/documents/\(docID)", params: ["type": "1"])
-            return try cacheStore.storeXbrlZip(docID, content: content, saveDir: dir)
+            return try await cacheStore.withFileLock("xbrl_\(docID)") {
+                if cs.hasXbrlDir(docID, saveDir: dir) {
+                    cs.touchXbrlDir(docID, saveDir: dir)
+                    return dest
+                }
+                await semaphore.wait()
+                defer { semaphore.signal() }
+                let content = try await self.requestBinary("/documents/\(docID)", params: ["type": "1"])
+                return try cs.storeXbrlZip(docID, content: content, saveDir: dir)
+            }
         } catch {
             return nil
         }
