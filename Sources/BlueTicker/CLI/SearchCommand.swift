@@ -30,9 +30,9 @@ struct SearchCommand: AsyncParsableCommand {
                     TableColumn("コード", width: 6),
                     TableColumn("銘柄名", width: 40),
                     TableColumn("業種", width: 20),
-                    TableColumn("市場", width: 20),
+                    TableColumn("所在地", width: 20),
                 ],
-                rows: results.map { [$0.code, $0.name, $0.sector, $0.market] }
+                rows: results.map { [$0.code, $0.name, $0.sector, $0.location] }
             )
         }
     }

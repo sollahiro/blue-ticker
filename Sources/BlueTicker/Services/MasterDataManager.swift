@@ -66,7 +66,8 @@ actor MasterDataManager {
                     code: stock.code,
                     name: stock.coName,
                     sector: stock.s33nm,
-                    market: stock.mktNm
+                    market: stock.mktNm,
+                    location: stock.location
                 ))
                 if results.count >= limit { break }
             }
@@ -90,7 +91,8 @@ actor MasterDataManager {
                     code: stock.code,
                     name: stock.coName,
                     sector: stock.s33nm,
-                    market: stock.mktNm
+                    market: stock.mktNm,
+                    location: stock.location
                 ))
                 if results.count >= limit { break }
             }
@@ -139,14 +141,16 @@ actor MasterDataManager {
         lines.removeFirst()
 
         let cols = parseCSVRow(header)
-        guard let codeIdx = cols.firstIndex(of: "証券コード"),
-              let nameIdx = cols.firstIndex(of: "提出者名")
+        let normalizedCols = cols.map(normalizeHeaderName)
+        guard let codeIdx = normalizedCols.firstIndex(of: normalizeHeaderName("証券コード")),
+              let nameIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者名"))
         else {
             printError("[blue-ticker] Warning: \(edinetCsvFilename) のヘッダー形式が不正です。\n")
             return
         }
-        let industryIdx = cols.firstIndex(of: "提出者業種")
-        let listingIdx = cols.firstIndex(of: "上場区分")
+        let industryIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者業種"))
+        let listingIdx = normalizedCols.firstIndex(of: normalizeHeaderName("上場区分"))
+        let locationIdx = normalizedCols.firstIndex(of: normalizeHeaderName("所在地"))
 
         var loaded: [MasterStock] = []
         var index: [String: MasterStock] = [:]
@@ -155,8 +159,8 @@ actor MasterDataManager {
             let fields = parseCSVRow(line)
             guard fields.count > max(codeIdx, nameIdx) else { continue }
             // EDINET証券コードは5桁（4桁TSEコード + "0"）。ユーザー向けは末尾を除いた4桁
-            let secCode = fields[codeIdx].trimmingCharacters(in: CharacterSet.whitespaces)
-            guard secCode.count == 5, Int(secCode) != nil else { continue }
+            let secCode = normalizeSecurityCode(fields[codeIdx])
+            guard secCode.count == 5, secCode.last == "0" else { continue }
             let code = String(secCode.dropLast())
             let name = fields[nameIdx].trimmingCharacters(in: CharacterSet.whitespaces)
             guard !name.isEmpty else { continue }
@@ -172,6 +176,12 @@ actor MasterDataManager {
             } else {
                 market = ""
             }
+            let location: String
+            if let idx = locationIdx, idx < fields.count {
+                location = fields[idx].trimmingCharacters(in: CharacterSet.whitespaces)
+            } else {
+                location = ""
+            }
             let stock = MasterStock(
                 code: code,
                 coName: name,
@@ -179,6 +189,7 @@ actor MasterDataManager {
                 coNameNormalized: normalizeForSearch(name),
                 s33nm: industry,
                 mktNm: market,
+                location: location,
                 s33: industry,
                 s17nm: "",
                 s17: ""
@@ -211,6 +222,23 @@ actor MasterDataManager {
             .replacingOccurrences(of: "・", with: "")
             .replacingOccurrences(of: "･", with: "")
             .components(separatedBy: .whitespaces).joined()
+    }
+
+    private func normalizeHeaderName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\u{feff}\""))
+            .precomposedStringWithCompatibilityMapping
+            .components(separatedBy: .whitespacesAndNewlines)
+            .joined()
+    }
+
+    private func normalizeSecurityCode(_ code: String) -> String {
+        code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            .precomposedStringWithCompatibilityMapping
+            .uppercased()
     }
 
     private func resolveAssetsPath() -> URL? {

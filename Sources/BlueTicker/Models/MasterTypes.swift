@@ -5,6 +5,7 @@ struct MasterStock: Codable {
     let coNameNormalized: String
     let s33nm: String
     let mktNm: String
+    let location: String
     let s33: String
     let s17nm: String
     let s17: String
@@ -17,6 +18,7 @@ struct MasterStock: Codable {
         case coNameNormalized  = "CoNameNormalized"
         case s33nm     = "S33Nm"
         case mktNm     = "MktNm"
+        case location  = "Location"
         case s33       = "S33"
         case s17nm     = "S17Nm"
         case s17       = "S17"
@@ -28,6 +30,7 @@ struct StockSearchResult: Codable {
     let name: String
     let sector: String
     let market: String
+    let location: String
 }
 
 struct SectorSummary: Codable {

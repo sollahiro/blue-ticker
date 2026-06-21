@@ -24,7 +24,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
     func run() async throws {
         let ctx = try await MetricsLoader.prepare(rawCode: code)
-        printError("\n分析中: \(ctx.code) \(ctx.name) (\(ctx.market)) ...\n")
+        printError("\n分析中: \(ctx.code) \(ctx.name) ...\n")
         printError("分析対象期間: 直近 \(years) 年分\n")
 
         if half {
@@ -127,7 +127,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
         printDelta(periods, priors, entry, [
             ("ネットキャッシュ前年差", { optDelta($0.calculatedData.netCash, $1.calculatedData.netCash) }),
             ("  現金増減",             { optDelta($0.rawData.cashEq, $1.rawData.cashEq) }),
-            ("  有利子負債増減(寄与)", { optDelta($1.calculatedData.interestBearingDebt, $0.calculatedData.interestBearingDebt) }),
+            ("  負債増減",             { optDelta($1.calculatedData.interestBearingDebt, $0.calculatedData.interestBearingDebt) }),
         ])
 
         // ⑤ 運転資本・CCC増減分析
