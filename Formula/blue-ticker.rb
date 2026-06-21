@@ -8,10 +8,12 @@ class BlueTicker < Formula
   def install
     bin.install "ticker"
     bin.install_symlink "ticker" => "blt"
+    pkgshare.install "assets"
   end
 
   test do
     system "#{bin}/ticker", "--version"
     system "#{bin}/blt", "--version"
+    assert_match "7203", shell_output("#{bin}/ticker search 7203")
   end
 end

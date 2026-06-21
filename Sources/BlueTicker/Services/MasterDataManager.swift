@@ -3,6 +3,37 @@ import Foundation
 private let assetsPathEnv = "BLUE_TICKER_ASSETS_PATH"
 private let edinetCsvFilename = "EdinetcodeDlInfo.csv"
 
+func resolveEdinetCSVURL(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    currentDirectoryPath: String = FileManager.default.currentDirectoryPath,
+    executableURL: URL? = Bundle.main.executableURL,
+    fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+) -> URL? {
+    if let dir = environment[assetsPathEnv], !dir.isEmpty {
+        let url = URL(fileURLWithPath: dir).appendingPathComponent(edinetCsvFilename)
+        if fileExists(url.path) { return url }
+    }
+
+    var candidates: [URL] = [
+        URL(fileURLWithPath: currentDirectoryPath)
+            .appendingPathComponent("assets/\(edinetCsvFilename)")
+    ]
+
+    if let executableURL {
+        let executableDir = executableURL.deletingLastPathComponent()
+        candidates.append(
+            executableDir.appendingPathComponent("assets/\(edinetCsvFilename)")
+        )
+        candidates.append(
+            executableDir
+                .deletingLastPathComponent()
+                .appendingPathComponent("share/blue-ticker/assets/\(edinetCsvFilename)")
+        )
+    }
+
+    return candidates.first { fileExists($0.path) }
+}
+
 // MARK: - MasterDataManager
 
 actor MasterDataManager {
@@ -183,21 +214,7 @@ actor MasterDataManager {
     }
 
     private func resolveAssetsPath() -> URL? {
-        let env = ProcessInfo.processInfo.environment
-        let dir: String? = env[assetsPathEnv]
-        if let d = dir, !d.isEmpty {
-            let url = URL(fileURLWithPath: d).appendingPathComponent(edinetCsvFilename)
-            if FileManager.default.fileExists(atPath: url.path) { return url }
-        }
-        let fm = FileManager.default
-        let candidates: [URL] = [
-            URL(fileURLWithPath: fm.currentDirectoryPath)
-                .appendingPathComponent("assets/\(edinetCsvFilename)"),
-            Bundle.main.executableURL?
-                .deletingLastPathComponent()
-                .appendingPathComponent("assets/\(edinetCsvFilename)"),
-        ].compactMap { $0 }
-        return candidates.first { fm.fileExists(atPath: $0.path) }
+        resolveEdinetCSVURL()
     }
 }
 

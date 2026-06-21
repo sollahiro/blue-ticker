@@ -47,8 +47,9 @@ jobs:
         run: |
           mkdir -p release
           cp .build/release/ticker release/
+          cp -R assets release/
           cd release
-          tar -czvf blue-ticker-macos-arm64.tar.gz ticker
+          tar -czvf blue-ticker-macos-arm64.tar.gz ticker assets
         shell: bash
 
       - name: Upload Artifacts
