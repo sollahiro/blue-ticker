@@ -1,5 +1,4 @@
 import Foundation
-import MCP
 
 #if canImport(FoundationNetworking)
     import FoundationNetworking
@@ -7,8 +6,8 @@ import MCP
 
 // MARK: - RESTRouter
 
-/// iOS app など非 MCP クライアント向けの REST API ルーター。
-/// 内部では MCP ツールと同じ Services 層を呼ぶ。
+/// iOS app など HTTP クライアント向けの REST API ルーター。
+/// 内部では CLI と同じ Services 層を呼ぶ。
 struct RESTRouter: Sendable {
     let context: BltServerContext
 

@@ -64,7 +64,7 @@ enum SegmentExtractor {
 
     // MARK: - 公開 API
 
-    /// filing コマンド・MCP の --sections で使う特殊セクション名（XBRLSectionDef 非経由）。
+    /// filing コマンド・REST API の sections で使う特殊セクション名（XBRLSectionDef 非経由）。
     static let specialSectionKeys = ["segments", "geography"]
 
     /// 特殊セクションの表示タイトル。

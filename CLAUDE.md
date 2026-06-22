@@ -14,14 +14,14 @@ swift test                   # 全テスト（Swift Testing）
 
 | ターゲット | 内容 |
 |---|---|
-| `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・MCPサーバーを含む共有ライブラリ |
+| `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・REST サーバーを含む共有ライブラリ |
 | `BlueTicker`（`Sources/BlueTickerMain/`） | `ticker` CLI のエントリポイントのみ |
 | `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ |
 
 `BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
 
 - `Services/` は `CLI/` のコマンド型を参照してはならない
-- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`MCPServer/` を参照してはならない
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`Server/` を参照してはならない
 
 @.agents/rules/generic/commit-conventions.md
 @.agents/rules/project/date-conversion.md

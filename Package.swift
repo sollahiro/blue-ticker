@@ -14,23 +14,19 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
-        // 共有ライブラリ（CLI・MCPサーバー共通のコア機能）
+        // 共有ライブラリ（CLI・REST サーバー共通のコア機能）
         .target(
             name: "BlueTickerCore",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "SwiftSoup",
                 "ZIPFoundation",
-                .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/BlueTicker",
             swiftSettings: [
@@ -53,7 +49,7 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-        // MCP サーバー実行可能ターゲット
+        // REST サーバー実行可能ターゲット
         .executableTarget(
             name: "BltServer",
             dependencies: [

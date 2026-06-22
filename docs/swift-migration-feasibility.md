@@ -118,17 +118,17 @@ Python の `total=False` による段階的辞書組み立てパターンは、S
 
 ---
 
-### 7. MCP サーバー (`mcp_server/`) — 難易度: 中
+### 7. リモートサーバー (`blt-server`) — 難易度: 中
 
-**ローカル MCP は実装しない。** AI エージェントは Skills 経由で CLI を直接操作する。  
-MCP サーバーは **リモート（HTTP transport）専用** として実装する。
+**ローカルサーバーは実装しない。** AI エージェントは Skills 経由で CLI を直接操作する。  
+`blt-server` は **リモート（HTTP）専用** として実装する。
 
-現在 `FastMCP`（Python）でリモート MCP を提供中。Swift 向けの公式 SDK が利用可能になったため、Phase 5 で Python `blt-server` を Swift 実装に置き換える。
+CLI（remote モード）・iOS app など複数クライアントが共通の HTTP API で財務データへアクセスできるよう、SwiftNIO ベースの REST API サーバー（`/v1/`）として実装する。
 
-- 公式 Swift MCP SDK: [modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)（最新リリース 0.12.1 / 2026-05-07）
-- MCP spec 2025-11-25 準拠、HTTP transport（Streamable HTTP）対応
+- HTTP サーバー: [swift-nio](https://github.com/apple/swift-nio)（Apple 公式）
+- クライアントは `URLSession` + `Codable` で `/v1/` JSON を消費
 
-Python `FastMCP` との API 差分・エンドポイント互換性の検証が必要。
+> Phase 5 では当初 MCP プロトコル（公式 swift-sdk）でも公開していたが、後に REST 一本へ集約し MCP 実装と swift-sdk / swift-log 依存を削除した（`docs/blt-server-roadmap.md` 参照）。
 
 ---
 
@@ -172,9 +172,9 @@ XML フィクスチャファイルは Swift プロジェクトにそのまま移
 
 `ZIPFoundation` と `SwiftSoup` は実績のある OSS だが、依存ポリシー（`dependencies.md`）との整合を確認する必要がある。
 
-### リスク C（低〜中）: MCP サーバー
+### リスク C（低〜中）: リモートサーバー
 
-公式 Swift MCP SDK（0.12.1）が利用可能になったため、移行の不確実性は大幅に低下した。ローカル MCP は実装しない（AI エージェントは Skills 経由で CLI 操作）ため、HTTP transport のリモートサーバー実装のみが対象。Python `FastMCP` との API 差分の検証は必要。
+ローカルサーバーは実装しない（AI エージェントは Skills 経由で CLI 操作）ため、HTTP のリモートサーバー実装のみが対象。SwiftNIO による REST API サーバーで、外部 SDK 依存なし（HTTP サーバーは swift-nio のみ）。
 
 ### リスク D（低）: Linux ツールチェーン
 
@@ -196,19 +196,21 @@ Linux 固有の注意点として、`#if os(Linux)` の条件コンパイルが�
 | Phase 2 | ✅ 完了 | `Services/EdinetDiscovery`, `Services/FilingService`, `Services/CachePruner`, `CLI/FilingsCommand`（filings 一覧）, `CLI/CacheCommand`（clean オプション拡充） |
 | Phase 3 | ✅ 完了 | `Analysis/FieldParser`, `Analysis/Extractors`（12 エクストラクター＋銀行固有）, `Services/IndividualAnalyzer`, `CLI/AnalyzeCommand`, `CLI/FilingCommand`（XBRL セクション抽出）, `SwiftTests/SmokeTests`（11 社全 OK） |
 | Phase 4 | ✅ 完了 | HTML パース完了（`Analysis/USGAAPHtmlFields`, `Analysis/IFRSLease`）— スモークテスト knownGap 全廃で 11 社全 OK。分析層ユニットテスト移植完了（13 ファイル・149 テスト）。サービス層テスト移植完了（5 ファイル・34 テスト追加、全 204 テスト合格）。テストを Swift Testing へ移行し macOS / Linux CI ジョブを整備（下記） |
-| Phase 5 | ✅ 完了 | `Sources/BlueTicker/MCPServer/`（HTTPApp・ServerSetup・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
+| Phase 5 | ✅ 完了 | `Sources/BlueTicker/Server/`（HTTPApp・BltServerContext・RESTRouter・BltServerEntry）、`Sources/BltServer/main.swift`、`Sources/BlueTickerMain/main.swift` |
 | Phase A | ✅ 完了 | 年次 analyze 不足フィールド（net_revenue・share_buyback・ROE/ROIC/営業利益ウォーターフォール） |
 | Phase B | ✅ 完了 | 半期機能（`--half` フラグ・`HalfYearAnalyzer`・`HalfPeriod` 型・`halfYearTrimPeriods`）＋半期スモークテスト（11 社全 OK） |
-| Phase C | ✅ 完了 | セグメント・地域別情報（`Analysis/SegmentExtractor`・`filing --sections segments/geography`・MCP `get_filing_content` 拡充）＋Python ゴールデンパリティテスト（26 書類完全一致） |
+| Phase C | ✅ 完了 | セグメント・地域別情報（`Analysis/SegmentExtractor`・`filing --sections segments/geography`・REST `filing-content` 拡充）＋Python ゴールデンパリティテスト（26 書類完全一致） |
 | Phase D | ✅ 完了 | Python 全廃（`blue_ticker/`・`tests/`・Poetry 設定削除、CI を Swift のみに整理、CLAUDE.md / .agents/rules / README / docs を Swift 向けに書き換え） |
 
 ### Phase 5 実装範囲（2026-06-12）
 
 Python `blt-server`（FastMCP）を Swift 実装に完全置き換え。`swift build` で `blt-server` バイナリが生成される。
 
+> 当初は MCP プロトコル（公式 swift-sdk）と REST API を併存させたが、後に REST 一本へ集約。MCP 実装・`swift-sdk`・`swift-log` 依存を削除し、`MCPServer/` を `Server/` にリネームした。以下は集約後の構成。
+
 **アーキテクチャ変更:**
 
-- `BlueTickerCore`（ライブラリターゲット）: `Sources/BlueTicker/` 全体（CLI・XBRL・サービス層・MCPサーバー実装を含む共有ライブラリ）
+- `BlueTickerCore`（ライブラリターゲット）: `Sources/BlueTicker/` 全体（CLI・XBRL・サービス層・REST サーバー実装を含む共有ライブラリ）
 - `BlueTicker`（実行ターゲット）: `Sources/BlueTickerMain/main.swift` のみ（`Task { await Ticker.main() }` + `RunLoop.main.run()`）
 - `BltServer`（実行ターゲット）: `Sources/BltServer/main.swift` のみ（`runBltServer(host:port:)` 呼び出し）
 
@@ -216,26 +218,27 @@ Python `blt-server`（FastMCP）を Swift 実装に完全置き換え。`swift b
 
 | ファイル | 役割 |
 |---|---|
-| `Sources/BlueTicker/MCPServer/HTTPApp.swift` | SwiftNIO ベース HTTP サーバー。`StatefulHTTPServerTransport` とセッション管理を実装（swift-sdk conformance server を参考に NIO で再実装） |
-| `Sources/BlueTicker/MCPServer/ServerSetup.swift` | `BltServerContext` actor（`EdinetAPIClient`・`CacheManager` 共有）と 6 MCP ツールのハンドラー |
-| `Sources/BlueTicker/MCPServer/BltServerEntry.swift` | `public func runBltServer(host:port:)` エントリポイント。`SettingsStore` から API キーを読み出し `HTTPApp` を起動 |
+| `Sources/BlueTicker/Server/HTTPApp.swift` | SwiftNIO ベース REST HTTP サーバー。`RESTResult` と NIO チャネルハンドラーを実装 |
+| `Sources/BlueTicker/Server/BltServerContext.swift` | `BltServerContext` actor（`EdinetAPIClient`・`CacheManager` 共有） |
+| `Sources/BlueTicker/Server/RESTRouter.swift` | `/v1/` ルーティングと各エンドポイントのハンドラー（Services 層を呼ぶ） |
+| `Sources/BlueTicker/Server/BltServerEntry.swift` | `public func runBltServer(host:port:)` エントリポイント。`SettingsStore` から API キーを読み出し `HTTPApp` を起動 |
 | `Sources/BltServer/main.swift` | `runBltServer()` を呼ぶだけの薄いエントリポイント |
 | `Sources/BlueTickerMain/main.swift` | `ticker` CLI の async エントリポイント |
 
-**実装した MCP ツール（6 件）:**
+**REST エンドポイント（`/v1/`、6 機能）:**
 
-| ツール名 | 機能 |
+| エンドポイント | 機能 |
 |---|---|
-| `search_companies` | 銘柄コード・企業名で検索 |
-| `search_by_sector` | セクターで銘柄一覧を取得 |
-| `get_filings` | 有価証券報告書一覧を取得 |
-| `get_financial_summary` | 財務指標サマリーを取得（キャッシュ優先） |
-| `get_filing_content` | 書類セクション（リスク・MD&A 等）テキストを抽出 |
-| `sync_document_list` | EDINET 書類一覧を同期 |
+| `GET /v1/companies?q=` | 銘柄コード・企業名で検索 |
+| `GET /v1/sectors/{sector}/companies` | セクターで銘柄一覧を取得 |
+| `GET /v1/companies/{code}/filings` | 有価証券報告書一覧を取得 |
+| `GET /v1/companies/{code}/financials` | 財務指標サマリーを取得（キャッシュ優先） |
+| `GET /v1/companies/{code}/filing-content` | 書類セクション（リスク・MD&A・セグメント等）テキストを抽出 |
+
+> EDINET 書類一覧の同期（旧 MCP `sync_document_list`）はサーバー起動とは独立した管理操作。REST 集約時にエンドポイントからは外し、CLI 側のキャッシュ同期で扱う。
 
 **技術的知見:**
 
-- `JSONRPCMessageKind` は swift-sdk 内で `package enum` 宣言のため外部パッケージから参照不可。`isInitializeRequest(_ data: Data)` として `JSONSerialization` で代替実装
 - `AsyncParsableCommand.main()` を `main.swift` から呼ぶには `Task { await Ticker.main() }` + `RunLoop.main.run()` パターンが必要（`@main` なしで async エントリポイントを確立）
 - SwiftPM ライブラリターゲットの型はデフォルト `internal`。`Ticker` 構造体のみ `public` 化し、CLIサブコマンド群は `internal` のまま（`App.swift` が同一モジュール内のため）
 - `@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)` を `Ticker` に付与することで ArgumentParser のアベイラビリティチェックをパス
@@ -351,8 +354,8 @@ Swift スモークテスト（11 社）は全て `OK` で合格。
 | Phase 2 | HTTP クライアント（EDINET API）・サービス層・データ集計・ウォーターフォール計算 | 2〜3 週 |
 | Phase 3 | XBRL 解析 25 モジュール（analysis/）・AnalyzeCommand・FilingCommand | 4〜6 週 |
 | Phase 4 | テスト移植・Smoke テスト検証（macOS + Linux CI） | 2〜3 週 |
-| Phase 5 | リモート MCP サーバー（HTTP transport・公式 Swift SDK、Python blt-server を置き換え、remote CLI も MCP 統一） | 1〜2 週 |
-| **合計** | MCP 含む全 Phase | **11〜17 週** |
+| Phase 5 | リモート REST サーバー（SwiftNIO・HTTP API、Python blt-server を置き換え） | 1〜2 週 |
+| **合計** | blt-server 含む全 Phase | **11〜17 週** |
 
 ---
 
@@ -390,10 +393,10 @@ Phase 1 ✅: CLI + インフラ（Keystore macOS/Linux）+ キャッシュ
 Phase 2 ✅: EDINET API + 書類検索サービス + キャッシュ整理
 Phase 3 ✅: XBRL 解析（12 エクストラクター＋銀行固有）+ Swift スモークテスト（11 社全 OK）
 Phase 4 ✅: HTML パース / テスト移植（全 204 テスト・Swift Testing）/ CI 整備（macOS + Linux）
-Phase 5 ✅: MCP サーバー（公式 Swift SDK 0.12.1、Python blt-server 完全置き換え）
+Phase 5 ✅: REST サーバー（SwiftNIO、Python blt-server 完全置き換え）
 Phase A ✅: 年次 analyze 不足フィールド（ウォーターフォール・自己株式取得・IFRS 純収益）
 Phase B ✅: 半期機能（--half フラグ・HalfYearAnalyzer）＋半期スモークテスト（11 社全 OK）
-Phase C ✅: セグメント・地域別情報（SegmentExtractor・filing/MCP セクション拡充）＋パリティテスト（26 書類）
+Phase C ✅: セグメント・地域別情報（SegmentExtractor・filing/REST セクション拡充）＋パリティテスト（26 書類）
 Phase D ✅: Python 全廃（blue_ticker/ 削除・CI・ドキュメント更新）
 ```
 
@@ -402,7 +405,7 @@ Phase 3 完了時点で全コマンドが純 Swift で動作する。Phase 4 で
 **利点**:
 - 各フェーズ完了時点で動作確認でき、問題を局所化できる
 - Phase 3 の XBRL 移植は Swift スモークテスト（11 社）をゴールデンファイルとして常時検証できる
-- MCP サーバーは公式 Swift SDK（0.12.1）を用いて Phase 5 で Swift 化できる
+- blt-server は SwiftNIO による REST API として Phase 5 で Swift 化できる
 
 ---
 
@@ -500,7 +503,7 @@ Python の `half_year_data_service.py` には外部株価 API 経由の IBD・BS
 | `Analysis/SegmentExtractor.swift` | 抽出本体。XBRL TextBlock HTML テーブル（期間判定付き）優先 → dimension 付き fact フォールバック。SAX ベースの TextBlock 収集（エスケープ済み HTML 対応）と context dimension マップ収集 |
 | `Constants/Xbrl.swift` | セグメント・地域別の TextBlock タグ／dimension キーワード定数 |
 | `CLI/FilingsCommand.swift` | `--sections` に `segments` / `geography` を追加、セクション名バリデーション（Python 同様に不正名はエラー）、テキスト出力（Markdown 表） |
-| `MCPServer/ServerSetup.swift` | `get_filing_content` に `segments` / `geography` を追加（Python MCP とパリティ） |
+| `Server/RESTRouter.swift` | `/v1/companies/{code}/filing-content` に `segments` / `geography` を追加 |
 | `SwiftTests/BlueTickerTests/SegmentExtractorTests.swift` | ユニットテスト（Python `test_segment_extractor.py` 全ケース＋TextBlock/fact 統合テスト）＋パリティテスト |
 
 #### 検証
@@ -546,7 +549,7 @@ Python の `half_year_data_service.py` には外部株価 API 経由の IBD・BS
 
 - CLAUDE.md / `.agents/rules/project/*.md`（8 本）/ README / `docs/xbrl-parsing.md` / `.gitignore` を Swift 向けに書き換え
 - 陳腐化記述の除去: WACC・財務省国債利回り（削除前の Python にも実装が存在しなかった）、`.claude/settings.json` の pyright フック
-- バージョン定数を `Constants/Version.swift` の `blueTickerVersion` に一元化（CLI `--version`・MCP・derived キャッシュが参照）
+- バージョン定数を `Constants/Version.swift` の `blueTickerVersion` に一元化（CLI `--version`・blt-server・derived キャッシュが参照）
 
 #### リリースで得た教訓
 
