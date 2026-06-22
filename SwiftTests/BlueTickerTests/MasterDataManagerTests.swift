@@ -51,4 +51,20 @@ import Testing
 
         #expect(url?.path == existing)
     }
+
+    @Test func testCurrentEdinetCSVLoadsListedCompanyName() async throws {
+        let manager = MasterDataManager()
+        let stock = try #require(await manager.getByCode("6501"), "6501 が CSV に見つからない — EdinetcodeDlInfo.csv が欠落しているかコード検索が壊れている")
+
+        #expect(stock.coName == "株式会社日立製作所")
+        #expect(stock.s33nm == "電気機器")
+        #expect(stock.mktNm == "上場")
+    }
+
+    @Test func testCurrentEdinetCSVLoadsAlphanumericSecurityCode() async throws {
+        let manager = MasterDataManager()
+        let stock = try #require(await manager.getByCode("477A"), "477A が CSV に見つからない — EdinetcodeDlInfo.csv が欠落しているか英数字コードのパースが壊れている")
+
+        #expect(!stock.coName.isEmpty)
+    }
 }
