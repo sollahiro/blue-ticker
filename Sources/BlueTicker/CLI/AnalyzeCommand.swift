@@ -151,7 +151,10 @@ struct AnalyzeCommand: AsyncParsableCommand {
             ("CCC (日)",                  { $0.calculatedData.ccc }),
         ])
         printDelta(periods, priors, entry, [
-            ("CCC前年差 (日)", { optDelta($0.calculatedData.ccc, $1.calculatedData.ccc) }),
+            ("CCC前年差 (日)",   { optDelta($0.calculatedData.ccc, $1.calculatedData.ccc) }),
+            ("  DSO差影響",      { optDelta($0.calculatedData.dso, $1.calculatedData.dso) }),
+            ("  DIO差影響",      { optDelta($0.calculatedData.dio, $1.calculatedData.dio) }),
+            ("  DPO差影響",      { optDelta($1.calculatedData.dpo, $0.calculatedData.dpo) }),
         ])
 
         printError(MetricsTable.separator(columns: columnLabels.count) + "\n")
