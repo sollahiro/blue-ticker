@@ -24,10 +24,9 @@ struct IndividualAnalyzer {
 
         if useCache {
             let cached = await cacheManager.getJSON(cacheKey)
-            if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
-                if let result = decodeMetricsResult(c) {
-                    return trimMetrics(result, to: analysisYears)
-                }
+            if individualCacheIsReusable(cached, cacheVersion: _cacheVersion, requestedYears: analysisYears),
+               let result = decodeMetricsResult(cached!) {
+                return trimMetrics(result, to: analysisYears)
             }
         }
 
@@ -35,6 +34,7 @@ struct IndividualAnalyzer {
         if let r = result {
             if var dict = encodeMetricsResult(r) {
                 dict["_cache_version"] = _cacheVersion
+                dict["_requested_years"] = analysisYears
                 await cacheManager.setJSON(cacheKey, value: dict)
             }
         }
@@ -317,4 +317,19 @@ struct IndividualAnalyzer {
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return dict
     }
+}
+
+// MARK: - Testable helpers
+
+/// individual_analysis キャッシュが再利用可能か判定する。
+///
+/// キャッシュキー（`individual_analysis_<code>`）は年数を含まないため、
+/// 要求年数より少ない年数で構築されたキャッシュを再利用すると
+/// `trimMetrics`（縮小のみ）では要求年数まで拡張できず結果が不足する。
+/// バージョン一致かつ構築時要求年数 `_requested_years` が要求年数以上のときのみ true。
+func individualCacheIsReusable(_ cached: [String: Any]?, cacheVersion: String, requestedYears: Int) -> Bool {
+    guard let c = cached,
+          (c["_cache_version"] as? String) == cacheVersion,
+          (c["_requested_years"] as? Int ?? 0) >= requestedYears else { return false }
+    return true
 }
