@@ -126,8 +126,8 @@ struct AnalyzeCommand: AsyncParsableCommand {
         ])
         printDelta(periods, priors, entry, [
             ("ネットキャッシュ前年差", { optDelta($0.calculatedData.netCash, $1.calculatedData.netCash) }),
-            ("  現金増減",             { optDelta($0.rawData.cashEq, $1.rawData.cashEq) }),
-            ("  負債増減",             { optDelta($1.calculatedData.interestBearingDebt, $0.calculatedData.interestBearingDebt) }),
+            ("  現金差影響",           { optDelta($0.rawData.cashEq, $1.rawData.cashEq) }),
+            ("  負債差影響",           { optDelta($1.calculatedData.interestBearingDebt, $0.calculatedData.interestBearingDebt) }),
         ])
 
         // ⑤ 運転資本・CCC増減分析
@@ -140,9 +140,9 @@ struct AnalyzeCommand: AsyncParsableCommand {
         ])
         printDelta(periods, priors, entry, [
             ("運転資本前年差",       { optDelta($0.calculatedData.workingCapital, $1.calculatedData.workingCapital) }),
-            ("  売掛金前年差",       { optDelta($0.calculatedData.accountsReceivable, $1.calculatedData.accountsReceivable) }),
-            ("  棚卸資産前年差",     { optDelta($0.calculatedData.inventory, $1.calculatedData.inventory) }),
-            ("  買掛金前年差(寄与)", { optDelta($1.calculatedData.accountsPayable, $0.calculatedData.accountsPayable) }),
+            ("  売掛金差影響",       { optDelta($0.calculatedData.accountsReceivable, $1.calculatedData.accountsReceivable) }),
+            ("  棚卸資産差影響",     { optDelta($0.calculatedData.inventory, $1.calculatedData.inventory) }),
+            ("  買掛金差影響",       { optDelta($1.calculatedData.accountsPayable, $0.calculatedData.accountsPayable) }),
         ])
         printNum(periods, entry, [
             ("DSO 売上債権回転日数 (日)", { $0.calculatedData.dso }),
@@ -151,7 +151,10 @@ struct AnalyzeCommand: AsyncParsableCommand {
             ("CCC (日)",                  { $0.calculatedData.ccc }),
         ])
         printDelta(periods, priors, entry, [
-            ("CCC前年差 (日)", { optDelta($0.calculatedData.ccc, $1.calculatedData.ccc) }),
+            ("CCC前年差 (日)",   { optDelta($0.calculatedData.ccc, $1.calculatedData.ccc) }),
+            ("  DSO差影響",      { optDelta($0.calculatedData.dso, $1.calculatedData.dso) }),
+            ("  DIO差影響",      { optDelta($0.calculatedData.dio, $1.calculatedData.dio) }),
+            ("  DPO差影響",      { optDelta($1.calculatedData.dpo, $0.calculatedData.dpo) }),
         ])
 
         printError(MetricsTable.separator(columns: columnLabels.count) + "\n")
