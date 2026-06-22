@@ -35,6 +35,11 @@ let package = Package(
             path: "Sources/BlueTicker",
             swiftSettings: [
                 .swiftLanguageMode(.v6),
+            ],
+            linkerSettings: [
+                // CP932 デコード（decodeCP932）で system iconv を使用。
+                // macOS は libiconv の明示リンクが必要。Linux は glibc 内蔵のため不要。
+                .linkedLibrary("iconv", .when(platforms: [.macOS])),
             ]
         ),
         // CLI 実行可能ターゲット（@main エントリポイントのみ）
