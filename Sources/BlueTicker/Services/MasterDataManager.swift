@@ -119,8 +119,9 @@ actor MasterDataManager {
             printError("[blue-ticker] Warning: \(edinetCsvFilename) の読み込みに失敗しました。\n")
             return
         }
-        // EdinetcodeDlInfo.csv は Windows Shift-JIS（CP932）エンコード
-        let raw = String(data: data, encoding: .shiftJIS)
+        // EdinetcodeDlInfo.csv は Windows Shift-JIS（CP932）エンコード。
+        // .shiftJIS は Linux Foundation 非対応のため iconv に一本化する（decodeCP932 参照）。
+        let raw = decodeCP932(data)
             ?? String(data: data, encoding: .utf8)
         guard let content = raw else {
             printError("[blue-ticker] Warning: \(edinetCsvFilename) のエンコード変換に失敗しました。\n")
