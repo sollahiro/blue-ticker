@@ -18,9 +18,7 @@ Foundation / 標準ライブラリで賄えるものは外部パッケージを�
 | `swift-argument-parser` | CLI コマンド体系（Apple 公式） |
 | `SwiftSoup` | HTML/XML の柔軟なパース（`XMLParser` では壊れた HTML を扱えない） |
 | `ZIPFoundation` | EDINET XBRL ZIP の展開（標準ライブラリに ZIP なし） |
-| `swift-sdk`（MCP） | リモート MCP サーバー（公式 SDK） |
-| `swift-nio` | MCP サーバーの HTTP transport |
-| `swift-log` | MCP サーバーのロギング（swift-sdk が要求） |
+| `swift-nio` | `blt-server`（REST HTTP API）の HTTP サーバー実装 |
 
 ## 新規パッケージ追加の判断基準
 

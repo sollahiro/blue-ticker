@@ -77,9 +77,9 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ### 近期（MCP 廃止）
 
-- [ ] `MCPServer/` ディレクトリから MCP プロトコル実装を削除し、REST API サーバーに一本化する
-- [ ] `Package.swift` から `swift-sdk`（MCP）・`swift-log` への依存を削除する
-- [ ] CLAUDE.md のターゲット構成・依存ルールを更新する（`MCPServer/` → `Server/` 等）
+- [x] `MCPServer/` を `Server/` にリネームし、MCP プロトコル実装を削除して REST API サーバーに一本化した
+- [x] `Package.swift` から `swift-sdk`（MCP）・`swift-log` への依存を削除した
+- [x] CLAUDE.md のターゲット構成・依存ルールを更新した（`MCPServer/` → `Server/`）
 
 ### 近期（remote CLI）
 
