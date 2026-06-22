@@ -169,6 +169,15 @@ import Foundation
         #expect(result.current == 100_000_000.0)
     }
 
+    @Test func testAccountsReceivableIfrsTradeAndContractAssetsExtension() {
+        // 売上債権＋契約資産の企業拡張タグ（日立 6501、2025-03 期: 3,496,340 百万）。
+        // 拡張タグを取りこぼすと売掛金が nil になり運転資本・DSO・CCC が連鎖欠損する。
+        let fs = makeFieldSet(("TradeReceivablesAndContractAssetsCAIFRSIFRS", 3_496_340.0, 2_991_316.0))
+        let result = AccountsReceivableExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.current == 3_496_340.0)
+        #expect(result.method == "direct")
+    }
+
     @Test func testAccountsReceivableNotFound() {
         let result = AccountsReceivableExtractor.extract(fieldSet: [:], accountingStandard: "J-GAAP")
         #expect(result.current == nil)

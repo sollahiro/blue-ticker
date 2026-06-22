@@ -495,6 +495,9 @@ enum Xbrl {
         "TradeAndOtherReceivables3CAIFRS",
         "TradeReceivablesCAIFRS",
         "TradeReceivables2CAIFRS",
+        // 売上債権＋契約資産を合算した企業拡張タグ（例: 日立 6501）。
+        // 契約資産分を含むが、運転資本・CCC の用途では営業債権として許容する。
+        "TradeReceivablesAndContractAssetsCAIFRSIFRS",
     ]
 
     // MARK: - 棚卸資産（BS, Instant）
