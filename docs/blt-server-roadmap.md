@@ -32,7 +32,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 ### 構築順序（残タスク）
 
 1. ~~Server 独立ターゲット分離~~ → **完了**
-2. **Vapor + Fluent を `BltServerCore` に追加**（下記「Vapor + Fluent 移行」）
+2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
 3. 共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から
 4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション）
 5. financials レスポンスの公開契約 ＋ schema version 確定
@@ -158,24 +158,23 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent を採用**（2026-06 ユーザー確認済み。`dependencies.md` の大型依存追加確認をクリア）。素の swift-nio 手書きだと Postgres ドライバ・SQL・マイグレーション・コネクションプール・認証を全て自前実装することになり、自前 DB 層がバグの温床になるため。
 
-#### Vapor + Fluent 移行の内容
+#### Vapor + Fluent 移行の内容（実装済み）
 
 前段の Server ターゲット分離は完了済み。Vapor/Fluent は **`BltServerCore` ターゲットにのみ**追加し、`BlueTickerCore`（＝CLI）には一切波及させない。
 
-1. **`Package.swift` 依存追加**（`BltServerCore` のみ）
-   - `vapor/vapor`（HTTP・ルーティング・ミドルウェア）
-   - `vapor/fluent` ＋ `vapor/fluent-postgres-driver`（ORM ＋ Neon 接続）
-   - 既存の素 NIO 依存（`NIOCore`/`NIOPosix`/`NIOHTTP1`）は Vapor が内包するため整理（Vapor 経由に一本化）。
-2. **トランスポート層を Vapor へ置換**（`BltServerCore` 内）
-   - `HTTPApp`（手書き NIO HTTP）→ Vapor の `Application` / `routes`。
-   - `RESTRouter` のパスルーティング → Vapor のルート定義。ハンドラは引き続き `BlueTickerCore` の `BltServerContext` ファサードを呼ぶ（**ファサード境界は不変**。Core 側は無改修）。
-   - `RESTResult` → Vapor の `Response`。`BltServerResponse`（ok/notFound/upstreamFailure）→ HTTP ステータス変換は Vapor の `Abort` / `ResponseEncodable` へ移す。
-3. **DB 層（Fluent）追加**（`BltServerCore`）
-   - `DATABASE_URL`（Neon）から `app.databases.use(.postgres(...))`。
-   - Stage 1/3 のモデル（`Model` 準拠）＋ `Migration` を定義（スキーマ設計は別タスク）。
-   - 接続プール・マイグレーション実行は Vapor のライフサイクルに乗せる。
-4. **認証ミドルウェア追加**: Bearer トークン（CLI remote）→ 後続で Sign in with Apple（iOS）。
-5. **検証**: `ticker`（CLI）に Vapor/Fluent シンボルが**漏れていない**ことを `nm .build/release/ticker | grep -c Vapor` で確認（分離の回帰検知）。REST API のレスポンス契約が不変であることをテスト。
+1. ~~**`Package.swift` 依存追加**（`BltServerCore` のみ）~~ → **完了**
+   - `vapor/vapor` 4.121 / `vapor/fluent` / `vapor/fluent-postgres-driver` 2.12 を追加。
+   - 素 NIO 依存（`NIOCore`/`NIOPosix`/`NIOHTTP1`）は Vapor が内包するため削除（Vapor 経由に一本化）。
+2. ~~**トランスポート層を Vapor へ置換**（`BltServerCore` 内）~~ → **完了**
+   - `HTTPApp`（手書き NIO HTTP）→ Vapor の `Application`（`BltServerEntry.swift`）。
+   - `RESTRouter` のパスルーティング → Vapor のルート定義（`Routes.swift`）。ハンドラは引き続き `BlueTickerCore` の `BltServerContext` ファサードを呼ぶ（**ファサード境界は不変**。Core 側は無改修）。
+   - `RESTResult` → Vapor の `Response`。エラー封筒 `{"error":"...","status":N}` は `BltErrorMiddleware`（カスタム）で維持。
+   - 既知の挙動差: 不正メソッドの応答は旧 405 → Vapor 既定の 404（エラー封筒は不変）。`Content-Type` に `; charset=utf-8` が付与される。
+3. ~~**DB 層（Fluent）配線**（`BltServerCore`、`Database.swift`）~~ → **完了（接続配線のみ）**
+   - `DATABASE_URL`（Neon）があれば `app.databases.use(.postgres(...))`。未設定なら DB なしで起動（ステートレス EDINET プロキシ）。
+   - **Stage 1/3 のモデル・`Migration` は未着手**（スキーマ設計＝下記ステップ4。空マイグレーションは置かない方針）。
+4. **認証ミドルウェア追加**: Bearer トークン（CLI remote）→ 後続で Sign in with Apple（iOS）。→ **未着手（構築順序ステップ3）**
+5. ~~**検証**~~ → **完了**: `ticker` に Vapor/Fluent シンボル 0（`nm` 確認、NIO は `union` 等の偽陽性のみ）。全 311 テスト通過。`/v1/companies` 実応答が旧契約（sorted+pretty JSON）と一致。
 
 > 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
 
@@ -218,7 +217,7 @@ DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent
 - [x] DB 選定の確定 → **Neon（serverless Postgres）**
 - [x] サーバースタック確定 → **Vapor + Fluent 採用**（ユーザー確認済み）
 - [x] Server を独立ターゲット（`BltServerCore`）へ分離し CLI から NIO 依存を排除（実測でシンボル 0・サイズ半減）
-- [ ] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換。「Vapor + Fluent 移行の内容」参照）
+- [x] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換完了。Fluent は DATABASE_URL 条件付き配線。「Vapor + Fluent 移行の内容」参照）
 - [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 はサーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
 - [ ] Stage 2 保持ポリシー確定（即削除 vs R2 退避＋再パース）
 - [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）

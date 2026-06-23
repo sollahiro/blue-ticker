@@ -14,18 +14,18 @@ swift test                   # 全テスト（Swift Testing）
 
 | ターゲット | 内容 |
 |---|---|
-| `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・REST サーバーのファサード（`Server/`）を含む共有ライブラリ。**NIO には依存しない** |
-| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（NIO）。`BlueTickerCore` のファサードを呼ぶ。Web/DB 依存（NIO・将来の Vapor/Fluent）をここに閉じ込める |
+| `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・REST サーバーのファサード（`Server/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
+| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードを呼ぶ。Web/DB 依存（Vapor・Fluent）をここに閉じ込める |
 | `BlueTicker`（`Sources/BlueTickerMain/`） | `ticker` CLI のエントリポイントのみ |
 | `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ |
 
-ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` は可。逆は不可（Core は NIO/Vapor を参照しない）。これにより `ticker` CLI に Web/DB 依存がリンクされない。
+ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。これにより `ticker` CLI に Web/DB 依存がリンクされない。
 
 `BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
 
 - `Services/` は `CLI/` のコマンド型を参照してはならない
 - `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`Server/` を参照してはならない
-- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`）のみを置く。NIO トランスポートは `BltServerCore` ターゲットに置く
+- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
 
 @.agents/rules/generic/commit-conventions.md
 @.agents/rules/project/date-conversion.md
