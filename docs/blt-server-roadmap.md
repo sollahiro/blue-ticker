@@ -18,9 +18,36 @@
 |---|---|---|
 | **CLI (local)** | Services 層を直接呼ぶ | オフライン・EDINET API キー直接管理 |
 | **CLI (remote)** | REST API | blt-server 経由・API キー管理不要 |
-| **iOS app** | REST API | 財務データ閲覧 UI（URLSession + Codable） |
+| **iOS app** | REST API | `analyze` の数値をビジュアル化（URLSession + Codable） |
 
 CLI は `ticker config set edinet-backend remote` で local/remote を切り替える。
+
+## 計算の責務（client / server）
+
+**計算はサーバーに集約する。クライアントは表示専念**（iOS は計算済みメトリクスのビジュアル化、remote CLI は計算済み JSON の整形表示）。
+
+| クライアント | 計算 | やること | データ源 |
+|---|---|---|---|
+| CLI (local) | in-process（従来通り） | 計算して表示 | `Services/` 直呼び |
+| CLI (remote) | しない | 計算済みを受信して表示 | REST API |
+| iOS app | しない | 計算済みを受信してグラフ化 | REST API |
+| blt-server | **する（唯一の計算者）** | Stage 1-4 を実行し計算済み JSON を返す | — |
+
+- 計算ロジックの単一の真実源は `BlueTickerCore` の `Analysis/`＋`Services/`。サーバーが実行し、local CLI も同一バイナリ内で同じコードを in-process 実行する（二重メンテにならない）。
+- iOS は分析せず分析結果を描画するため、`Analysis/` 層をクライアントへ共有する必要はない。`analyze --json` と同じメトリクス（`MetricsResult` の `RawData`＋`CalculatedData`）を載せた財務サマリ JSON を受け取って描画する。
+- 転送量・計算負荷はクライアント計算とサーバー計算で実質中立（詳細1社で数 KB・四則演算数十回）。したがって判断軸は性能ではなく「計算ロジックの所在とメンテコスト」であり、受益者（計算するクライアント）が現状いないためサーバー集約とする。
+
+### 公開契約は financials レスポンス
+
+Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
+
+- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。現行 `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`RESTRouter.flattenYearEntry`）、`code`/`name`/`sector`/`market`/`currency`/`unit` を付与した独自スキーマを返す。**`MetricsResult` 直シリアライズか flatten 形かは確定形 TODO で決める**（下記 schema version とセット）。
+- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
+- Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
+
+### 将来クライアント計算へ移す場合
+
+iOS が対話的な再計算（係数を変えた what-if 等）を要求し、計算式変更のたびのサーバー再デプロイが実コストになった段階で、`Analysis/` を独立ターゲット化してクライアント計算へ移す。`YearEntry` が `RawData`（Stage 3）と `CalculatedData`（Stage 4）に分かれており移行の分割線は既にあるため、要求が出てから対応すれば足りる（先行して切り出さない）。
 
 ## REST API エンドポイント（`/v1/`）
 
@@ -59,7 +86,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 1 | 書類一覧取得（EDINET インデックス） | **DB** | 実装済み・設定待ち |
 | Stage 2 | XBRL ファイル取得 | **一時ファイル（Stage 3 完了後に削除 or オブジェクトストレージへ退避）** | 未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（マスターデータ）** | 未着手 |
-| Stage 4 | TICKER 計算（財務指標・増減分析） | **クライアント計算** | 未着手 |
+| Stage 4 | TICKER 計算（財務指標・増減分析） | **サーバー計算**（現行 `getFinancials` 実装済み） | 実装済み |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -70,25 +97,14 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 2 生 XBRL（展開後） | 約 9MB（4.8〜11MB） | 2.0GB | `external/edinet/xbrl` |
 | Stage 3 パース済み数値インデックス | 約 800KB（JSON） | 182MB | `derived/xbrl_numeric_index`（232件） |
 
-- Stage 3 をそのままモバイルへ流すのは重い（1社×5年 ≈ 4MB）。**単社オンデマンドは許容、一覧/スキャンでのまとめ取りは破綻**する。
-- よって Stage 3 の API は「書類まるごと」ではなく**指標/フィールド単位で絞って返せる形**が前提。これはそのままスキーマ設計の制約になる。
+- Stage 3 数値インデックスを**そのまま**モバイルへ流すのは重い（全 fact で 1社×5年 ≈ 4MB）。ただし公開するのは Stage 3 RAW ではなく**計算済み財務サマリ**（`analyze` 相当のメトリクスを載せた JSON）であり、こちらは詳細1社×5年で数 KB に収まる。
+- 一覧/スキャンは**表示する指標だけをサーバー計算サマリとして返す**（材料となる RAW をクライアントへまとめ取りさせない）。詳細は1社分の計算済みサマリをオンデマンドで返す。
 
-### Stage 3 スキーマは公開契約
+### 公開契約は financials レスポンス（計算済み JSON）
 
-Stage 4 をクライアント計算にしたため、**Stage 3 のスキーマ＝サーバー↔CLI↔iOS の公開インターフェース**になる。
-内部実装ではなく公開契約として扱い、変更時はユーザー確認・バージョニングを行う。
+計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
 
-- Stage 3 出力に **schema version** を持たせ、クライアントの計算ロジック版と整合判定する（derived キャッシュの `_cache_version` の発想を契約面へ拡張）。
-
-### Stage 4 をクライアントに置く設計
-
-| 観点 | 内容 |
-|---|---|
-| 利点 | 計算ロジック変更にサーバーデプロイ不要。`Analysis` 層を BlueTickerCore から CLI / iOS で共有できる |
-| 注意1 | クライアント間の計算バージョン差 → Stage 3 schema version と計算版の整合管理が必要 |
-| 注意2 | 一覧/スキャン系が高コスト化（多数社ぶん Stage 3 を引いて端末計算） |
-
-**純化しすぎない方針**：詳細画面はクライアント計算、一覧/スキャンはサーバー側で計算済みサマリを返すハイブリッドにし、UX が崩れないようにする。
+- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
 
 ### Stage 2 の保持ポリシー
 
@@ -148,11 +164,11 @@ Stage 4 をクライアント計算にしたため、**Stage 3 のスキーマ�
 
 ### 次の検討課題（優先順）
 
-- [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 は公開契約・指標単位取得・schema version 込み）
+- [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 はサーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
 - [ ] DB 選定の確定（Fly Postgres / Neon）
 - [ ] サーバースタック確定（素 NIO 維持 vs Vapor + Fluent 採用 → Package.swift 変更は要確認）
 - [ ] Stage 2 保持ポリシー確定（即削除 vs R2 退避＋再パース）
-- [ ] Stage 4 の純度確定（フル client vs 一覧だけサーバー計算のハイブリッド）
+- [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）
 
 ### クラウド公開前の必須（コード側）
 
@@ -177,9 +193,8 @@ Stage 4 をクライアント計算にしたため、**Stage 3 のスキーマ�
 - DB の確定（Fly Postgres / Neon）
 - サーバースタックの確定（素 NIO 維持 vs Vapor + Fluent）
 - Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）
-- Stage 3 スキーマの確定形（公開契約・指標単位取得・schema version）
+- financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）
 - remote backend 利用時の `ticker cache status` 表示内容
-- local / remote 間で分析結果キャッシュ `derived/` を共有するか、backend ごとに分けるか
 
 ---
 
