@@ -11,7 +11,6 @@ import Foundation
 struct AnalysisContext {
     let code: String
     let name: String
-    let market: String
     let client: EdinetAPIClient
     let cacheManager: CacheManager
 }
@@ -45,7 +44,6 @@ enum MetricsLoader {
         return AnalysisContext(
             code: codeTrimmed,
             name: info?.coName ?? codeTrimmed,
-            market: info?.mktNm ?? "",
             client: client,
             cacheManager: cacheManager
         )

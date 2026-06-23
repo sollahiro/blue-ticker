@@ -24,7 +24,7 @@ struct SummarizeCommand: AsyncParsableCommand {
 
     func run() async throws {
         let ctx = try await MetricsLoader.prepare(rawCode: code)
-        printError("\n集計中: \(ctx.code) \(ctx.name) (\(ctx.market)) ...\n")
+        printError("\n集計中: \(ctx.code) \(ctx.name) ...\n")
         printError("対象期間: 直近 \(years) 年分\n")
 
         if half {
