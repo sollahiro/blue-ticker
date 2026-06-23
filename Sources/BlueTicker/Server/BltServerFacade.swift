@@ -1,62 +1,79 @@
+// blt-server の REST API が呼ぶ Core 側ファサード。
+// HTTP トランスポート（BltServerCore ターゲット）から呼ばれ、計算済みの応答データを返す。
+// このファイルは NIO に依存しない（トランスポートと分離）。
+// 内部では CLI と同じ Services / Analysis 層を呼ぶ。
+
 import Foundation
 
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
 
-// MARK: - RESTRouter
+// MARK: - BltServerResponse
 
-/// iOS app など HTTP クライアント向けの REST API ルーター。
-/// 内部では CLI と同じ Services 層を呼ぶ。
-struct RESTRouter: Sendable {
-    let context: BltServerContext
+/// ファサードの応答。HTTP ステータスコードはトランスポート側が決める。
+/// 戻り値パターン（error-handling.md）に従い、失敗は throw せず case で表現する。
+public enum BltServerResponse {
+    /// 成功。JSON 値（オブジェクト or 配列）。
+    case ok(Any)
+    /// 対象が見つからない（404 相当）。
+    case notFound(String)
+    /// 外部取得の失敗（502 相当）。
+    case upstreamFailure(String)
+}
 
-    func handle(method: String, path: String, queryParams: [String: String], body: Data?) async -> RESTResult {
-        guard method.uppercased() == "GET" else {
-            return .error(statusCode: 405, message: "Method not allowed")
-        }
-        return await handleGET(path: path, queryParams: queryParams)
-    }
+// MARK: - BltServerContext
 
-    private func handleGET(path: String, queryParams: [String: String]) async -> RESTResult {
-        if path == "/v1/companies" {
-            return await searchCompanies(q: queryParams["q"] ?? "")
-        }
-        if let code = segment(of: path, between: "/v1/companies/", and: "/filings") {
-            return await getFilings(code: code, maxYears: Int(queryParams["max_years"] ?? "5") ?? 5)
-        }
-        if let code = segment(of: path, between: "/v1/companies/", and: "/financials") {
-            return await getFinancials(code: code, years: Int(queryParams["years"] ?? "5") ?? 5)
-        }
-        if let code = segment(of: path, between: "/v1/companies/", and: "/filing-content") {
-            let sections = queryParams["sections"].map { $0.split(separator: ",").map(String.init) }
-            return await getFilingContent(code: code, docId: queryParams["doc_id"], sections: sections)
-        }
-        if let sector = segment(of: path, between: "/v1/sectors/", and: "/companies") {
-            return await searchBySector(sector: sector, limit: Int(queryParams["limit"] ?? "20") ?? 20)
-        }
-        return .error(statusCode: 404, message: "Not found: \(path)")
+/// blt-server が共有するコンテキスト兼ファサード（EDINET クライアント・キャッシュを保持）。
+/// 可変状態を持たないため `actor` ではなく `Sendable` struct。
+public struct BltServerContext: Sendable {
+    let edinetClient: EdinetAPIClient
+    let cacheManager: CacheManager
+    let cacheDir: URL
+
+    init(apiKey: String, cacheDir: URL) {
+        self.cacheDir = cacheDir
+        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
+        self.edinetClient = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
+        self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
     }
 }
 
-// MARK: - Route Handlers
+// MARK: - Factory
 
-private extension RESTRouter {
-    func searchCompanies(q: String) async -> RESTResult {
+/// 設定（settingsStore）から BltServerContext を構築する。
+/// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
+public func makeBltServerContext() async -> BltServerContext? {
+    guard let key = await settingsStore.get(.edinetApiKey), !key.isEmpty else {
+        return nil
+    }
+    let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
+    let cacheDir = URL(
+        fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
+    return BltServerContext(apiKey: key, cacheDir: cacheDir)
+}
+
+// MARK: - REST Facade
+
+public extension BltServerContext {
+    func searchCompanies(q: String) async -> BltServerResponse {
         let results = await masterDataManager.search(q, limit: 50)
-        let json = results.map { ["code": $0.code, "name": $0.name, "sector": $0.sector, "market": $0.market] }
-        return .json(json)
+        let json = results.map {
+            ["code": $0.code, "name": $0.name, "sector": $0.sector, "market": $0.market]
+        }
+        return .ok(json)
     }
 
-    func searchBySector(sector: String, limit: Int) async -> RESTResult {
+    func searchBySector(sector: String, limit: Int) async -> BltServerResponse {
         let results = await masterDataManager.searchBySector(sector, limit: limit)
-        let json = results.map { ["code": $0.code, "name": $0.name, "sector": $0.sector, "market": $0.market] }
-        return .json(json)
+        let json = results.map {
+            ["code": $0.code, "name": $0.name, "sector": $0.sector, "market": $0.market]
+        }
+        return .ok(json)
     }
 
-    func getFilings(code: String, maxYears: Int) async -> RESTResult {
+    func getFilings(code: String, maxYears: Int) async -> BltServerResponse {
         let stock = await masterDataManager.getByCode(code)
-        let edinetClient = context.edinetClient
         let service = FilingService(edinetClient: edinetClient)
         let docs = await service.searchFilings(code: code, maxYears: maxYears, maxDocuments: 50)
 
@@ -74,15 +91,13 @@ private extension RESTRouter {
             ]
         }
 
-        return .json(["code": code, "name": stock?.coName ?? "", "filings": filings])
+        return .ok(["code": code, "name": stock?.coName ?? "", "filings": filings])
     }
 
-    func getFinancials(code: String, years: Int) async -> RESTResult {
-        let edinetClient = context.edinetClient
-        let cacheManager = context.cacheManager
+    func getFinancials(code: String, years: Int) async -> BltServerResponse {
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
         guard let result = await analyzer.analyze(code: code, analysisYears: years) else {
-            return .error(statusCode: 404, message: "データが見つかりませんでした: \(code)")
+            return .notFound("データが見つかりませんでした: \(code)")
         }
         let stock = await masterDataManager.getByCode(code)
         let json: [String: Any] = [
@@ -94,12 +109,10 @@ private extension RESTRouter {
             "unit": "百万円",
             "years": (result.years ?? []).map { flattenYearEntry($0) },
         ]
-        return .json(json)
+        return .ok(json)
     }
 
-    func getFilingContent(code: String, docId: String?, sections: [String]?) async -> RESTResult {
-        let edinetClient = context.edinetClient
-
+    func getFilingContent(code: String, docId: String?, sections: [String]?) async -> BltServerResponse {
         let targetDocID: String
         if let d = docId, !d.isEmpty {
             targetDocID = d
@@ -108,13 +121,13 @@ private extension RESTRouter {
                 code: code, client: edinetClient, analysisYears: 1
             )
             guard let latest = docs.first, let d = latest["docID"] as? String else {
-                return .error(statusCode: 404, message: "書類が見つかりませんでした: \(code)")
+                return .notFound("書類が見つかりませんでした: \(code)")
             }
             targetDocID = d
         }
 
         guard let xbrlDir = await edinetClient.downloadDocument(targetDocID) else {
-            return .error(statusCode: 502, message: "XBRLのダウンロードに失敗しました")
+            return .upstreamFailure("XBRLのダウンロードに失敗しました")
         }
 
         let targetSections = sections ?? Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys
@@ -128,23 +141,13 @@ private extension RESTRouter {
             }
         }
 
-        return .json(["code": code, "doc_id": targetDocID, "sections": extracted])
+        return .ok(["code": code, "doc_id": targetDocID, "sections": extracted])
     }
 }
 
 // MARK: - Helpers
 
-private extension RESTRouter {
-    /// `/v1/companies/7203/filings` → segment(between:"/v1/companies/", and:"/filings") → "7203"
-    func segment(of path: String, between prefix: String, and suffix: String) -> String? {
-        guard path.hasPrefix(prefix), path.hasSuffix(suffix) else { return nil }
-        let start = path.index(path.startIndex, offsetBy: prefix.count)
-        let end = path.index(path.endIndex, offsetBy: -suffix.count)
-        guard start < end else { return nil }
-        let raw = String(path[start..<end])
-        return raw.removingPercentEncoding ?? raw
-    }
-
+private extension BltServerContext {
     func docTypeLabel(_ code: String) -> String? {
         switch code {
         case "120": return "有価証券報告書"

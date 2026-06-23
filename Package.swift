@@ -17,16 +17,13 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
     ],
     targets: [
-        // 共有ライブラリ（CLI・REST サーバー共通のコア機能）
+        // 共有ライブラリ（CLI・REST サーバー共通のコア機能）。NIO には依存しない。
         .target(
             name: "BlueTickerCore",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "SwiftSoup",
                 "ZIPFoundation",
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
             ],
             path: "Sources/BlueTicker",
             swiftSettings: [
@@ -36,6 +33,20 @@ let package = Package(
                 // CP932 デコード（decodeCP932）で system iconv を使用。
                 // macOS は libiconv の明示リンクが必要。Linux は glibc 内蔵のため不要。
                 .linkedLibrary("iconv", .when(platforms: [.macOS])),
+            ]
+        ),
+        // REST サーバーのトランスポート層（NIO）。Web/DB 依存をここに閉じ込め、CLI へ漏らさない。
+        .target(
+            name: "BltServerCore",
+            dependencies: [
+                "BlueTickerCore",
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+            ],
+            path: "Sources/BltServerCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
             ]
         ),
         // CLI 実行可能ターゲット（@main エントリポイントのみ）
@@ -53,6 +64,7 @@ let package = Package(
         .executableTarget(
             name: "BltServer",
             dependencies: [
+                "BltServerCore",
                 "BlueTickerCore",
             ],
             path: "Sources/BltServer",
