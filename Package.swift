@@ -14,7 +14,11 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        // REST サーバー（HTTP・ルーティング・ミドルウェア）と DB 層（Fluent ORM ＋ Neon 接続）。
+        // BltServerCore ターゲットのみが使用。素 NIO は Vapor が内包するため個別依存は持たない。
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0"),
+        .package(url: "https://github.com/vapor/fluent.git", from: "4.9.0"),
+        .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
     ],
     targets: [
         // 共有ライブラリ（CLI・REST サーバー共通のコア機能）。NIO には依存しない。
@@ -35,14 +39,15 @@ let package = Package(
                 .linkedLibrary("iconv", .when(platforms: [.macOS])),
             ]
         ),
-        // REST サーバーのトランスポート層（NIO）。Web/DB 依存をここに閉じ込め、CLI へ漏らさない。
+        // REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。
+        // Web/DB 依存をここに閉じ込め、CLI へ漏らさない。
         .target(
             name: "BltServerCore",
             dependencies: [
                 "BlueTickerCore",
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "Fluent", package: "fluent"),
+                .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
             ],
             path: "Sources/BltServerCore",
             swiftSettings: [
