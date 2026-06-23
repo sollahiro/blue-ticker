@@ -10,6 +10,34 @@
 
 `blt-server` は `swift run blt-server`（または `swift build -c release` 後に `.build/release/blt-server`）で起動。
 
+## 確定済みアーキテクチャ（2026-06）
+
+iOS app / remote CLI を実際に作る方針が固まり、blt-server 開発に着手。主要な技術選定は以下で確定済み。
+
+| 項目 | 確定内容 | 状態 |
+|---|---|---|
+| compute / TLS / secrets / scheduler | **Fly.io**（`primary_region = "nrt"`）。自作サーバー(self-host)も同一 Docker イメージで可 | 確定 |
+| DB | **Neon（serverless Postgres）** | 確定（旧「Fly Postgres / Neon 要確定」を解決） |
+| サーバースタック | **Vapor + Fluent** | 確定（旧「素 NIO vs Vapor 要確定」を解決） |
+| ターゲット構成 | Server を `BltServerCore` へ分離し CLI から Web/DB 依存を排除 | **実装済み**（下記） |
+
+### サーバーターゲット分離（実装済み）
+
+Vapor + Fluent を足す前段として、Server を独立ターゲットへ切り出した。狙いは Web/DB 依存（NIO・将来の Vapor/Fluent）を CLI バイナリへ漏らさないこと。
+
+- **`BlueTickerCore`**（`Sources/BlueTicker/`）: NIO 非依存の共有ライブラリ。`Server/BltServerFacade.swift` に REST ファサード（`BltServerContext` struct ＋ `BltServerResponse` enum ＋ `makeBltServerContext()`）のみを置く。計算ロジック（`Analysis/`＋`Services/`）は internal のまま。
+- **`BltServerCore`**（`Sources/BltServerCore/`）: NIO トランスポート（`HTTPApp` / `RESTRouter` / `BltServerEntry`）。`BlueTickerCore` のファサードを呼ぶ。依存方向は `BltServerCore` → `BlueTickerCore` のみ（逆流不可）。
+- 効果（実測）: `ticker` の NIO シンボル 27,635 → 0、バイナリ 20.8MB → 10.4MB に半減。REST API の挙動は不変（監査確認済み）。
+
+### 構築順序（残タスク）
+
+1. ~~Server 独立ターゲット分離~~ → **完了**
+2. **Vapor + Fluent を `BltServerCore` に追加**（下記「Vapor + Fluent 移行」）
+3. 共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から
+4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション）
+5. financials レスポンスの公開契約 ＋ schema version 確定
+6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
+
 ## クライアント
 
 主要クライアントは CLI と iOS app の 2 種。いずれも REST API で blt-server と通信する。
@@ -41,7 +69,7 @@ CLI は `ticker config set edinet-backend remote` で local/remote を切り替�
 
 Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
 
-- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。現行 `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`RESTRouter.flattenYearEntry`）、`code`/`name`/`sector`/`market`/`currency`/`unit` を付与した独自スキーマを返す。**`MetricsResult` 直シリアライズか flatten 形かは確定形 TODO で決める**（下記 schema version とセット）。
+- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。現行 `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`BltServerFacade.flattenYearEntry`）、`code`/`name`/`sector`/`market`/`currency`/`unit` を付与した独自スキーマを返す。**`MetricsResult` 直シリアライズか flatten 形かは確定形 TODO で決める**（下記 schema version とセット）。
 - レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
 - Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
 
@@ -119,14 +147,37 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | カテゴリ | 採用 | メモ |
 |---|---|---|
 | compute / TLS / Volume / secrets / scheduler | **Fly.io**（`primary_region = "nrt"`） | TLS・cron・シークレットを内包し外部サービス数を最小化 |
-| DB | **Fly Postgres または Neon**（要確定） | Stage 1/3 の保存先。Fluent 採用なら Postgres |
+| DB | **Neon（serverless Postgres）確定** | Stage 1/3 の保存先。scale-to-zero・ブランチ機能・Postgres 互換で将来 Fly Managed Postgres へ移行可。接続は `DATABASE_URL` env（Fly secrets / 自作サーバーは `.env`） |
 | オブジェクトストレージ | **Cloudflare R2**（egress 無料） | Stage 2 生 XBRL の退避先 |
 | DNS | **Cloudflare** | `fly certs add` で証明書 |
 | 監視 | 当面 Fly ログ（Sentry / Better Stack は保留） | |
 
-### サーバースタック（要確定）
+> Neon は東京リージョン非対応（最寄り ap-southeast、片道 ~100ms）。ただし書き込みは Stage 1/3 のバッチ取り込み、読み取りはキャッシュ＋計算済み JSON で DB を連打しないため許容。同期おしゃべりクエリが増えたら Fly Managed Postgres（同 nrt）へ移行検討。
 
-現行 `Server/` は素の **swift-nio** 手書き（Vapor 不使用）。DB（Fluent ORM）と認証ミドルウェアが必要になるため **Vapor + Fluent 採用に傾ける**が、Package.swift の大型依存追加であり既存 `Server/` 4ファイルを捨てる判断を伴う。`dependencies.md` に従い変更前にユーザー確認する。
+### サーバースタック（Vapor + Fluent 確定）
+
+DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent を採用**（2026-06 ユーザー確認済み。`dependencies.md` の大型依存追加確認をクリア）。素の swift-nio 手書きだと Postgres ドライバ・SQL・マイグレーション・コネクションプール・認証を全て自前実装することになり、自前 DB 層がバグの温床になるため。
+
+#### Vapor + Fluent 移行の内容
+
+前段の Server ターゲット分離は完了済み。Vapor/Fluent は **`BltServerCore` ターゲットにのみ**追加し、`BlueTickerCore`（＝CLI）には一切波及させない。
+
+1. **`Package.swift` 依存追加**（`BltServerCore` のみ）
+   - `vapor/vapor`（HTTP・ルーティング・ミドルウェア）
+   - `vapor/fluent` ＋ `vapor/fluent-postgres-driver`（ORM ＋ Neon 接続）
+   - 既存の素 NIO 依存（`NIOCore`/`NIOPosix`/`NIOHTTP1`）は Vapor が内包するため整理（Vapor 経由に一本化）。
+2. **トランスポート層を Vapor へ置換**（`BltServerCore` 内）
+   - `HTTPApp`（手書き NIO HTTP）→ Vapor の `Application` / `routes`。
+   - `RESTRouter` のパスルーティング → Vapor のルート定義。ハンドラは引き続き `BlueTickerCore` の `BltServerContext` ファサードを呼ぶ（**ファサード境界は不変**。Core 側は無改修）。
+   - `RESTResult` → Vapor の `Response`。`BltServerResponse`（ok/notFound/upstreamFailure）→ HTTP ステータス変換は Vapor の `Abort` / `ResponseEncodable` へ移す。
+3. **DB 層（Fluent）追加**（`BltServerCore`）
+   - `DATABASE_URL`（Neon）から `app.databases.use(.postgres(...))`。
+   - Stage 1/3 のモデル（`Model` 準拠）＋ `Migration` を定義（スキーマ設計は別タスク）。
+   - 接続プール・マイグレーション実行は Vapor のライフサイクルに乗せる。
+4. **認証ミドルウェア追加**: Bearer トークン（CLI remote）→ 後続で Sign in with Apple（iOS）。
+5. **検証**: `ticker`（CLI）に Vapor/Fluent シンボルが**漏れていない**ことを `nm .build/release/ticker | grep -c Vapor` で確認（分離の回帰検知）。REST API のレスポンス契約が不変であることをテスト。
+
+> 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
 
 ### 認証
 
@@ -164,9 +215,11 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ### 次の検討課題（優先順）
 
+- [x] DB 選定の確定 → **Neon（serverless Postgres）**
+- [x] サーバースタック確定 → **Vapor + Fluent 採用**（ユーザー確認済み）
+- [x] Server を独立ターゲット（`BltServerCore`）へ分離し CLI から NIO 依存を排除（実測でシンボル 0・サイズ半減）
+- [ ] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換。「Vapor + Fluent 移行の内容」参照）
 - [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 はサーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
-- [ ] DB 選定の確定（Fly Postgres / Neon）
-- [ ] サーバースタック確定（素 NIO 維持 vs Vapor + Fluent 採用 → Package.swift 変更は要確認）
 - [ ] Stage 2 保持ポリシー確定（即削除 vs R2 退避＋再パース）
 - [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）
 
@@ -174,7 +227,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 - [ ] bind 可変化（`BLT_HOST`/`BLT_PORT`、Fly では `0.0.0.0:8080`）
 - [ ] `/healthz` ヘルスチェック追加（Fly `[checks]` 用）
-- [ ] Bearer トークン認証を `HTTPApp` に追加（トークンは Fly secrets 経由）
+- [ ] Bearer トークン認証を追加（Vapor ミドルウェア。トークンは Fly secrets 経由）
 - [ ] EDINET API キーの読み元を env（Fly secrets）対応に
 - [ ] Dockerfile（swift:6.1 2段ビルド）＋ `fly.toml`、永続 Volume、`fly secrets`
 
@@ -190,8 +243,6 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 ## 未決事項
 
-- DB の確定（Fly Postgres / Neon）
-- サーバースタックの確定（素 NIO 維持 vs Vapor + Fluent）
 - Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）
 - financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）
 - remote backend 利用時の `ticker cache status` 表示内容
