@@ -42,6 +42,7 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
 
     // Step 2: 時系列昇順インデックス
     let sortedIndices = years.indices.sorted { (years[$0].fyEnd ?? "") < (years[$1].fyEnd ?? "") }
+    guard sortedIndices.count > 1 else { return }  // 前年差は2期以上必要
 
     for k in 1..<sortedIndices.count {
         let curIdx = sortedIndices[k]
@@ -148,6 +149,7 @@ func applyWorkingCapitalAndCCCToYears(_ years: inout [YearEntry]) {
 /// 既に設定済みであることを前提とする。
 func applyRoicWaterfallToYears(_ years: inout [YearEntry]) {
     let sortedIndices = years.indices.sorted { (years[$0].fyEnd ?? "") < (years[$1].fyEnd ?? "") }
+    guard sortedIndices.count > 1 else { return }  // 前年差は2期以上必要
 
     for k in 1..<sortedIndices.count {
         let curIdx = sortedIndices[k]
@@ -209,6 +211,7 @@ func applyRoeWaterfallToYears(_ years: inout [YearEntry]) {
 
     // Step 2: 前年差を3要因に分解
     let sortedIndices = years.indices.sorted { (years[$0].fyEnd ?? "") < (years[$1].fyEnd ?? "") }
+    guard sortedIndices.count > 1 else { return }  // 前年差は2期以上必要
 
     for k in 1..<sortedIndices.count {
         let curIdx = sortedIndices[k]
