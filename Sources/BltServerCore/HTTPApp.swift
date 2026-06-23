@@ -1,5 +1,7 @@
-// NIO ベースの REST HTTP サーバー。
+// NIO ベースの REST HTTP サーバー（トランスポート層）。
+// データ取得は BlueTickerCore の BltServerContext ファサードに委譲する。
 
+import BlueTickerCore
 import Foundation
 @preconcurrency import NIOCore
 @preconcurrency import NIOPosix

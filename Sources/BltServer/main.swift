@@ -1,6 +1,7 @@
 // blt-server エントリポイント。
 // 使い方: blt-server [--host HOST] [--port PORT]
 
+import BltServerCore
 import BlueTickerCore
 import Foundation
 
