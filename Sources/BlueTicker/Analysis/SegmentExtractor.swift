@@ -57,6 +57,31 @@ struct SegmentResult: Equatable {
     }
 }
 
+extension SegmentResult {
+    /// toDictionary() の逆変換。remote CLI が filing-content の JSON をローカル同等に描画するために使う。
+    init(dictionary: [String: Any]) {
+        method = dictionary["method"] as? String ?? "not_found"
+        tables = (dictionary["tables"] as? [[String: Any]] ?? []).map { t in
+            SegmentTable(
+                heading: t["heading"] as? String ?? "",
+                markdown: t["markdown"] as? String ?? "",
+                period: t["period"] as? String
+            )
+        }
+        facts = (dictionary["facts"] as? [[String: Any]] ?? []).map { f in
+            SegmentFact(
+                tag: f["tag"] as? String ?? "",
+                contextRef: f["contextRef"] as? String ?? "",
+                dimensions: f["dimensions"] as? [String: String] ?? [:],
+                value: f["value"] as? Double ?? 0,
+                label: f["label"] as? String,
+                unitRef: f["unitRef"] as? String,
+                decimals: f["decimals"] as? String
+            )
+        }
+    }
+}
+
 enum SegmentExtractor {
 
     private static let currentPeriodKeywords = ["当連結会計年度", "当期"]

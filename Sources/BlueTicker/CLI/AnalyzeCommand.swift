@@ -23,6 +23,11 @@ struct AnalyzeCommand: AsyncParsableCommand {
     var half = false
 
     func run() async throws {
+        if let remote = try await RemoteBackend.clientIfEnabled() {
+            try await runRemote(remote)
+            return
+        }
+
         let ctx = try await MetricsLoader.prepare(rawCode: code)
         printError("\n分析中: \(ctx.code) \(ctx.name) ...\n")
         printError("分析対象期間: 直近 \(years) 年分\n")
@@ -56,7 +61,35 @@ struct AnalyzeCommand: AsyncParsableCommand {
             throw ExitCode.failure
         }
         if json { MetricsJSON.print(result); return }
+        renderAnnual(yearsData)
+    }
 
+    /// remote バックエンド経路。計算済み財務データを受け取り、ローカルと同じ増減分析を表示する。
+    private func runRemote(_ remote: RemoteAPIClient) async throws {
+        if half {
+            printError("エラー: --half は remote バックエンドでは未対応です。\n")
+            throw ExitCode.failure
+        }
+        let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
+        let resp: FinancialsResponse
+        switch await remote.getFinancials(code: codeTrimmed, years: years) {
+        case .ok(let r): resp = r
+        case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
+        }
+
+        let result = resp.toMetricsResult()
+        guard let yearsData = result.years, !yearsData.isEmpty else {
+            printError("エラー: 財務データの取得に失敗しました。\n")
+            throw ExitCode.failure
+        }
+        printError("\n分析中: \(codeTrimmed) \(resp.name) ...\n")
+        printError("分析対象期間: 直近 \(years) 年分\n")
+        if json { MetricsJSON.print(result); return }
+        renderAnnual(yearsData)
+    }
+
+    /// 年次の増減分析を表示する（ローカル・remote 共通）。
+    private func renderAnnual(_ yearsData: [YearEntry]) {
         let periods = yearsData.reversed().map { $0 }  // 古い順（前年差の基準）
         printError("\n[増減分析]\n")
         // 前期 = 直前の年度（年次は 1 期前）

@@ -24,6 +24,8 @@ struct ConfigShow: AsyncParsableCommand {
         let cacheDir = await settingsStore.get(.cacheDir) ?? ""
         let cacheEnabled = await settingsStore.getBool(.cacheEnabled)
         let backend = await settingsStore.get(.edinetBackend) ?? "local"
+        let serverURL = await settingsStore.get(.serverURL) ?? ""
+        let authToken = await settingsStore.maskedAuthToken()
 
         if json {
             printJSONObject([
@@ -31,6 +33,8 @@ struct ConfigShow: AsyncParsableCommand {
                 "cacheDir": cacheDir,
                 "cacheEnabled": cacheEnabled,
                 "edinetBackend": backend,
+                "serverURL": serverURL,
+                "authToken": authToken,
             ])
         } else {
             print("設定一覧:")
@@ -38,6 +42,8 @@ struct ConfigShow: AsyncParsableCommand {
             print("  キャッシュDir  : \(cacheDir)")
             print("  キャッシュ有効  : \(cacheEnabled)")
             print("  バックエンド    : \(backend)")
+            print("  サーバーURL     : \(serverURL.isEmpty ? "(未設定)" : serverURL)")
+            print("  認証トークン    : \(authToken)")
         }
     }
 }
@@ -54,6 +60,12 @@ struct ConfigSet: AsyncParsableCommand {
     @Option(name: .long, help: "バックエンド (local / remote)")
     var backend: String?
 
+    @Option(name: .long, help: "remote バックエンドの blt-server URL (例: https://blt-server.fly.dev)")
+    var serverUrl: String?
+
+    @Option(name: .long, help: "remote バックエンドの Bearer 認証トークン")
+    var authToken: String?
+
     @Flag(name: .long, help: "キャッシュを無効化")
     var disableCache = false
 
@@ -68,6 +80,14 @@ struct ConfigSet: AsyncParsableCommand {
         if let b = backend {
             try await settingsStore.set(.edinetBackend, value: b)
             print("バックエンドを \(b) に設定しました。")
+        }
+        if let url = serverUrl {
+            try await settingsStore.set(.serverURL, value: url)
+            print("サーバーURLを \(url) に設定しました。")
+        }
+        if let token = authToken {
+            try await settingsStore.set(.authToken, value: token)
+            print("認証トークンを保存しました。")
         }
         if disableCache {
             await settingsStore.set(.cacheEnabled, value: false)

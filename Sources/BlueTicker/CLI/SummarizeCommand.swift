@@ -23,6 +23,11 @@ struct SummarizeCommand: AsyncParsableCommand {
     var half = false
 
     func run() async throws {
+        if let remote = try await RemoteBackend.clientIfEnabled() {
+            try await runRemote(remote)
+            return
+        }
+
         let ctx = try await MetricsLoader.prepare(rawCode: code)
         printError("\n集計中: \(ctx.code) \(ctx.name) ...\n")
         printError("対象期間: 直近 \(years) 年分\n")
@@ -43,6 +48,31 @@ struct SummarizeCommand: AsyncParsableCommand {
             printError("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
             throw ExitCode.failure
         }
+        if json { MetricsJSON.print(result); return }
+        printYearTable(result: result)
+        printError("\n増減分析は ticker analyze、定性情報は ticker filing で確認できます。\n")
+    }
+
+    /// remote バックエンド経路。計算済み財務データを受け取り、ローカルと同じ水準値一覧を表示する。
+    private func runRemote(_ remote: RemoteAPIClient) async throws {
+        if half {
+            printError("エラー: --half は remote バックエンドでは未対応です。\n")
+            throw ExitCode.failure
+        }
+        let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
+        let resp: FinancialsResponse
+        switch await remote.getFinancials(code: codeTrimmed, years: years) {
+        case .ok(let r): resp = r
+        case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
+        }
+
+        let result = resp.toMetricsResult()
+        guard let yearsData = result.years, !yearsData.isEmpty else {
+            printError("エラー: 財務データの取得に失敗しました。\n")
+            throw ExitCode.failure
+        }
+        printError("\n集計中: \(codeTrimmed) \(resp.name) ...\n")
+        printError("対象期間: 直近 \(years) 年分\n")
         if json { MetricsJSON.print(result); return }
         printYearTable(result: result)
         printError("\n増減分析は ticker analyze、定性情報は ticker filing で確認できます。\n")

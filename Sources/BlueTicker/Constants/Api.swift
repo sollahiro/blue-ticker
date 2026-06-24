@@ -28,7 +28,9 @@ enum Api {
 
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
     /// レスポンス形を破壊的に変更したときのみ +1 する（クライアントのデコード整合判定用）。
-    static let financialsSchemaVersion = 1
+    /// v2: remote CLI のローカル同等表示のため、flatten にラベル・SGA・NOPAT・実効税率・
+    ///     支払利息・流動/固定資産負債・PPE・ネット D/E・capex/buyback/RD・配当内訳等を追加。
+    static let financialsSchemaVersion = 2
 
     /// Stage 1 同期で DB へ取り込む書類種別。
     /// 現状は有報・半期・四半期＋訂正有報。他種別へ拡張する場合はここへ追加する（単一の真実源）。

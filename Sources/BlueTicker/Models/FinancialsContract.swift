@@ -1,0 +1,439 @@
+// financials API の公開契約（flatten 形）。サーバーとクライアントで共有する単一の Codable 型。
+//
+// 設計意図:
+// - サーバー（BltServerContext.getFinancials）はこの型から JSON を生成し、
+//   remote CLN（RemoteAPIClient）は同じ型でデコードして MetricsResult に復元する。
+//   キー定義が 1 か所（CodingKeys）に集約され、契約のドリフトを防ぐ（「統一」）。
+// - 内部モデル（MetricsResult/RawData/CalculatedData）は直シリアライズせず、ここで
+//   公開用フラット形（snake_case）へ写像する（公開 API を内部モデルから疎結合に保つ）。
+// - 出力は「全キーが存在する（欠落値は null）」を維持する（既存契約の互換性）。
+//   nil の Optional を JSONEncoder は省略するため、jsonObject() で CodingKeys.allCases を
+//   使って null を補完する。
+//
+// Foundation のみ依存（NIO/Vapor 非依存）。サーバー・CLI 双方から使う。
+
+import Foundation
+
+// MARK: - 年度エントリ（フラット形）
+
+struct FinancialsYear: Codable {
+    var fyEnd: String?
+    var financialPeriod: String?
+    var curPerType: String?
+    var docId: String?
+    var salesLabel: String?
+    var grossProfitLabel: String?
+    var opLabel: String?
+
+    var sales: Double?
+    var grossProfit: Double?
+    var grossProfitMargin: Double?
+    var sga: Double?
+    var operatingProfit: Double?
+    var operatingMargin: Double?
+    var nopat: Double?
+    var netProfit: Double?
+    var effectiveTaxRate: Double?
+
+    var roe: Double?
+    var roic: Double?
+    var nopatMargin: Double?
+    var investedCapitalTurnover: Double?
+    var interestBearingDebt: Double?
+    var interestExpense: Double?
+
+    var totalAssets: Double?
+    var currentAssets: Double?
+    var nonCurrentAssets: Double?
+    var ppeTotal: Double?
+    var currentLiabilities: Double?
+    var nonCurrentLiabilities: Double?
+    var netAssets: Double?
+    var accountsReceivable: Double?
+    var inventory: Double?
+    var accountsPayable: Double?
+    var workingCapital: Double?
+
+    var cashEquivalents: Double?
+    var netCash: Double?
+    var netDe: Double?
+    var cfo: Double?
+    var cfi: Double?
+    var cfc: Double?
+    var capex: Double?
+    var buyback: Double?
+    var rd: Double?
+    var cfTreasuryStock: Double?
+    var dividendSs: Double?
+    var dividendPaidCf: Double?
+
+    var eps: Double?
+    var bps: Double?
+    var dividendsPerShare: Double?
+    var payoutRatio: Double?
+    var employees: Int?
+
+    // 増減分析（事業利益・ROIC・ROE）
+    var businessProfit: Double?
+    var businessProfitMargin: Double?
+    var businessProfitChange: Double?
+    var salesChangeImpact: Double?
+    var grossMarginChangeImpact: Double?
+    var sgaChangeImpact: Double?
+    var netMargin: Double?
+    var assetTurnover: Double?
+    var financialLeverage: Double?
+    var roicDelta: Double?
+    var roicMarginEffect: Double?
+    var roicTurnoverEffect: Double?
+    var roeDelta: Double?
+    var roeNetMarginEffect: Double?
+    var roeAssetTurnoverEffect: Double?
+    var roeLeverageEffect: Double?
+
+    // 運転資本・CCC
+    var dso: Double?
+    var dio: Double?
+    var dpo: Double?
+    var ccc: Double?
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case fyEnd = "fy_end"
+        case financialPeriod = "financial_period"
+        case curPerType = "cur_per_type"
+        case docId = "doc_id"
+        case salesLabel = "sales_label"
+        case grossProfitLabel = "gross_profit_label"
+        case opLabel = "op_label"
+        case sales
+        case grossProfit = "gross_profit"
+        case grossProfitMargin = "gross_profit_margin"
+        case sga
+        case operatingProfit = "operating_profit"
+        case operatingMargin = "operating_margin"
+        case nopat
+        case netProfit = "net_profit"
+        case effectiveTaxRate = "effective_tax_rate"
+        case roe
+        case roic
+        case nopatMargin = "nopat_margin"
+        case investedCapitalTurnover = "invested_capital_turnover"
+        case interestBearingDebt = "interest_bearing_debt"
+        case interestExpense = "interest_expense"
+        case totalAssets = "total_assets"
+        case currentAssets = "current_assets"
+        case nonCurrentAssets = "non_current_assets"
+        case ppeTotal = "ppe_total"
+        case currentLiabilities = "current_liabilities"
+        case nonCurrentLiabilities = "non_current_liabilities"
+        case netAssets = "net_assets"
+        case accountsReceivable = "accounts_receivable"
+        case inventory
+        case accountsPayable = "accounts_payable"
+        case workingCapital = "working_capital"
+        case cashEquivalents = "cash_equivalents"
+        case netCash = "net_cash"
+        case netDe = "net_de"
+        case cfo
+        case cfi
+        case cfc
+        case capex
+        case buyback
+        case rd
+        case cfTreasuryStock = "cf_treasury_stock"
+        case dividendSs = "dividend_ss"
+        case dividendPaidCf = "dividend_paid_cf"
+        case eps
+        case bps
+        case dividendsPerShare = "dividends_per_share"
+        case payoutRatio = "payout_ratio"
+        case employees
+        case businessProfit = "business_profit"
+        case businessProfitMargin = "business_profit_margin"
+        case businessProfitChange = "business_profit_change"
+        case salesChangeImpact = "sales_change_impact"
+        case grossMarginChangeImpact = "gross_margin_change_impact"
+        case sgaChangeImpact = "sga_change_impact"
+        case netMargin = "net_margin"
+        case assetTurnover = "asset_turnover"
+        case financialLeverage = "financial_leverage"
+        case roicDelta = "roic_delta"
+        case roicMarginEffect = "roic_margin_effect"
+        case roicTurnoverEffect = "roic_turnover_effect"
+        case roeDelta = "roe_delta"
+        case roeNetMarginEffect = "roe_net_margin_effect"
+        case roeAssetTurnoverEffect = "roe_asset_turnover_effect"
+        case roeLeverageEffect = "roe_leverage_effect"
+        case dso
+        case dio
+        case dpo
+        case ccc
+    }
+}
+
+extension FinancialsYear {
+    /// 内部モデル（YearEntry）→ 公開フラット形。サーバー側で使う。
+    init(_ entry: YearEntry) {
+        let raw = entry.rawData
+        let calc = entry.calculatedData
+        fyEnd = entry.fyEnd
+        financialPeriod = entry.financialPeriod
+        curPerType = raw.curPerType
+        docId = calc.docID
+        salesLabel = raw.salesLabel
+        grossProfitLabel = calc.grossProfitLabel
+        opLabel = calc.opLabel
+
+        sales = raw.sales
+        grossProfit = calc.grossProfit
+        grossProfitMargin = calc.grossProfitMargin
+        sga = calc.sellingGeneralAdministrativeExpenses
+        operatingProfit = raw.op
+        operatingMargin = calc.operatingMargin
+        nopat = calc.nopat
+        netProfit = raw.np
+        effectiveTaxRate = calc.effectiveTaxRate
+
+        roe = calc.roe
+        roic = calc.roic
+        nopatMargin = calc.nopatMargin
+        investedCapitalTurnover = calc.investedCapitalTurnover
+        interestBearingDebt = calc.interestBearingDebt
+        interestExpense = calc.interestExpense
+
+        totalAssets = calc.totalAssets
+        currentAssets = calc.currentAssets
+        nonCurrentAssets = calc.nonCurrentAssets
+        ppeTotal = calc.ppeTotal
+        currentLiabilities = calc.currentLiabilities
+        nonCurrentLiabilities = calc.nonCurrentLiabilities
+        netAssets = calc.netAssets
+        accountsReceivable = calc.accountsReceivable
+        inventory = calc.inventory
+        accountsPayable = calc.accountsPayable
+        workingCapital = calc.workingCapital
+
+        cashEquivalents = raw.cashEq
+        netCash = calc.netCash
+        netDe = calc.netDE
+        cfo = raw.cfo
+        cfi = raw.cfi
+        cfc = calc.cfc
+        capex = raw.capex
+        buyback = raw.buyback
+        rd = raw.rd
+        cfTreasuryStock = calc.cfTreasuryStock
+        dividendSs = calc.dividendSS
+        dividendPaidCf = calc.dividendPaidCF
+
+        eps = raw.eps
+        bps = raw.bps
+        dividendsPerShare = raw.divTotalAnn
+        payoutRatio = raw.payoutRatioAnn
+        employees = calc.employees
+
+        businessProfit = calc.businessProfit
+        businessProfitMargin = calc.businessProfitMargin
+        businessProfitChange = calc.businessProfitChange
+        salesChangeImpact = calc.salesChangeImpact
+        grossMarginChangeImpact = calc.grossMarginChangeImpact
+        sgaChangeImpact = calc.sgaChangeImpact
+        netMargin = calc.netMargin
+        assetTurnover = calc.assetTurnover
+        financialLeverage = calc.financialLeverage
+        roicDelta = calc.roicDelta
+        roicMarginEffect = calc.roicMarginEffect
+        roicTurnoverEffect = calc.roicTurnoverEffect
+        roeDelta = calc.roeDelta
+        roeNetMarginEffect = calc.roeNetMarginEffect
+        roeAssetTurnoverEffect = calc.roeAssetTurnoverEffect
+        roeLeverageEffect = calc.roeLeverageEffect
+
+        dso = calc.dso
+        dio = calc.dio
+        dpo = calc.dpo
+        ccc = calc.ccc
+    }
+
+    /// 公開フラット形 → 内部モデル（YearEntry）。remote CLI が既存レンダラへ渡すために復元する。
+    /// レンダラが参照するフィールドのみ詰める（その他は nil）。
+    func toYearEntry() -> YearEntry {
+        var raw = RawData.blank
+        raw.curPerType = curPerType
+        raw.salesLabel = salesLabel
+        raw.sales = sales
+        raw.op = operatingProfit
+        raw.np = netProfit
+        raw.cfo = cfo
+        raw.cfi = cfi
+        raw.capex = capex
+        raw.buyback = buyback
+        raw.rd = rd
+        raw.eps = eps
+        raw.bps = bps
+        raw.divTotalAnn = dividendsPerShare
+        raw.payoutRatioAnn = payoutRatio
+        raw.cashEq = cashEquivalents
+
+        var calc = CalculatedData.blank
+        calc.docID = docId
+        calc.grossProfit = grossProfit
+        calc.grossProfitMargin = grossProfitMargin
+        calc.grossProfitLabel = grossProfitLabel
+        calc.sellingGeneralAdministrativeExpenses = sga
+        calc.operatingMargin = operatingMargin
+        calc.opLabel = opLabel
+        calc.nopat = nopat
+        calc.effectiveTaxRate = effectiveTaxRate
+        calc.roe = roe
+        calc.roic = roic
+        calc.nopatMargin = nopatMargin
+        calc.investedCapitalTurnover = investedCapitalTurnover
+        calc.interestBearingDebt = interestBearingDebt
+        calc.interestExpense = interestExpense
+        calc.totalAssets = totalAssets
+        calc.currentAssets = currentAssets
+        calc.nonCurrentAssets = nonCurrentAssets
+        calc.ppeTotal = ppeTotal
+        calc.currentLiabilities = currentLiabilities
+        calc.nonCurrentLiabilities = nonCurrentLiabilities
+        calc.netAssets = netAssets
+        calc.accountsReceivable = accountsReceivable
+        calc.inventory = inventory
+        calc.accountsPayable = accountsPayable
+        calc.workingCapital = workingCapital
+        calc.netCash = netCash
+        calc.netDE = netDe
+        calc.cfc = cfc
+        calc.cfTreasuryStock = cfTreasuryStock
+        calc.dividendSS = dividendSs
+        calc.dividendPaidCF = dividendPaidCf
+        calc.employees = employees
+        calc.businessProfit = businessProfit
+        calc.businessProfitMargin = businessProfitMargin
+        calc.businessProfitChange = businessProfitChange
+        calc.salesChangeImpact = salesChangeImpact
+        calc.grossMarginChangeImpact = grossMarginChangeImpact
+        calc.sgaChangeImpact = sgaChangeImpact
+        calc.netMargin = netMargin
+        calc.assetTurnover = assetTurnover
+        calc.financialLeverage = financialLeverage
+        calc.roicDelta = roicDelta
+        calc.roicMarginEffect = roicMarginEffect
+        calc.roicTurnoverEffect = roicTurnoverEffect
+        calc.roeDelta = roeDelta
+        calc.roeNetMarginEffect = roeNetMarginEffect
+        calc.roeAssetTurnoverEffect = roeAssetTurnoverEffect
+        calc.roeLeverageEffect = roeLeverageEffect
+        calc.dso = dso
+        calc.dio = dio
+        calc.dpo = dpo
+        calc.ccc = ccc
+
+        return YearEntry(
+            fyEnd: fyEnd,
+            financialPeriod: financialPeriod ?? "",
+            rawData: raw,
+            calculatedData: calc
+        )
+    }
+
+    /// 全キーを含む JSON オブジェクト（欠落値は null）。既存契約の「全キー存在」を維持する。
+    func jsonObject() -> [String: Any] {
+        var dict = encodeToDictionary(self)
+        for key in CodingKeys.allCases where dict[key.rawValue] == nil {
+            dict[key.rawValue] = NSNull()
+        }
+        return dict
+    }
+}
+
+// MARK: - レスポンス（トップレベル封筒）
+
+struct FinancialsResponse: Codable {
+    var schemaVersion: Int
+    var code: String
+    var name: String
+    var sector: String
+    var market: String
+    var currency: String
+    var unit: String
+    var years: [FinancialsYear]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case code, name, sector, market, currency, unit, years
+    }
+}
+
+extension FinancialsResponse {
+    /// 内部モデル（MetricsResult）→ 公開契約レスポンス。サーバー側で使う。
+    init(code: String, name: String, sector: String, market: String, result: MetricsResult) {
+        schemaVersion = Api.financialsSchemaVersion
+        self.code = code
+        self.name = name
+        self.sector = sector
+        self.market = market
+        currency = "JPY"
+        unit = "百万円"
+        years = (result.years ?? []).map { FinancialsYear($0) }
+    }
+
+    /// 公開契約レスポンス → 内部モデル（MetricsResult）。remote CLI が既存レンダラへ渡す。
+    func toMetricsResult() -> MetricsResult {
+        var result = MetricsResult.blank
+        result.code = code
+        result.years = years.map { $0.toYearEntry() }
+        return result
+    }
+
+    /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
+    func jsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name,
+            "sector": sector,
+            "market": market,
+            "currency": currency,
+            "unit": unit,
+            "years": years.map { $0.jsonObject() },
+        ]
+    }
+}
+
+// MARK: - 内部ヘルパー
+
+/// Encodable を [String: Any] へ変換する（nil の Optional はキーごと省略される）。
+private func encodeToDictionary(_ value: some Encodable) -> [String: Any] {
+    guard let data = try? JSONEncoder().encode(value),
+        let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+        return [:]
+    }
+    return dict
+}
+
+// 全 Optional の内部モデルを「空（全 nil）」で生成する。
+// メンバーワイズ init は全フィールド指定が必要なため、空 JSON のデコードで生成する
+// （全フィールド Optional なので必ず成功する。リモート復元で必要分だけ後から詰める）。
+extension RawData {
+    static var blank: RawData {
+        // swiftlint:disable:next force_try
+        try! JSONDecoder().decode(RawData.self, from: Data("{}".utf8))
+    }
+}
+
+extension CalculatedData {
+    static var blank: CalculatedData {
+        // swiftlint:disable:next force_try
+        try! JSONDecoder().decode(CalculatedData.self, from: Data("{}".utf8))
+    }
+}
+
+extension MetricsResult {
+    static var blank: MetricsResult {
+        // swiftlint:disable:next force_try
+        try! JSONDecoder().decode(MetricsResult.self, from: Data("{}".utf8))
+    }
+}

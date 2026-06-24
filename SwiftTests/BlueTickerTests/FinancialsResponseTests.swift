@@ -48,7 +48,7 @@ import Testing
     }
 
     @Test func schemaVersionIsStableInteger() {
-        // 公開契約バージョンは現状 1（破壊的変更時のみ +1）。
-        #expect(Api.financialsSchemaVersion == 1)
+        // 公開契約バージョンは現状 2（v2 で remote CLI 用フィールドを追加）。
+        #expect(Api.financialsSchemaVersion == 2)
     }
 }
