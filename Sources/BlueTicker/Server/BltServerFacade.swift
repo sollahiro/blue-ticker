@@ -155,6 +155,56 @@ public extension BltServerContext {
     }
 }
 
+// MARK: - Stage 1 同期
+
+public extension BltServerContext {
+    /// Stage 1 同期用に、指定期間（YYYY-MM-DD）の EDINET 書類を正規化済みレコードで返す。
+    /// seed 種別（Api.stage1SyncDocTypes）に絞り、docID で重複排除する。
+    /// 取得失敗・空期間は空配列（戻り値パターン）。
+    func fetchDocumentsForSync(from: String, to: String) async -> [EdinetDocumentRecord] {
+        guard let start = parseDateString(from), let end = parseDateString(to), start <= end else {
+            return []
+        }
+        let byDate = await edinetClient.getDocumentsForDateRange(start: start, end: end)
+        let allDocs = byDate.values.compactMap { $0 }.flatMap { $0 }
+        return mapEdinetDocumentRecords(allDocs)
+    }
+}
+
+/// EDINET の動的 JSON（[String: Any]）配列を正規化済みレコードへ写す。
+/// seed 種別フィルタ・docID 重複排除・日付正規化を行う純粋関数（ネットワーク非依存・テスト対象）。
+func mapEdinetDocumentRecords(_ docs: [[String: Any]]) -> [EdinetDocumentRecord] {
+    var seen = Set<String>()
+    var records: [EdinetDocumentRecord] = []
+    for doc in docs {
+        guard let docID = doc["docID"] as? String, !docID.isEmpty else { continue }
+        guard let docType = doc["docTypeCode"] as? String,
+              Api.stage1SyncDocTypes.contains(docType) else { continue }
+        guard seen.insert(docID).inserted else { continue }
+        records.append(EdinetDocumentRecord(
+            docID: docID,
+            edinetCode: nonEmptyString(doc["edinetCode"]) ?? "",
+            secCode: nonEmptyString(doc["secCode"]),
+            filerName: nonEmptyString(doc["filerName"]) ?? "",
+            docTypeCode: docType,
+            ordinanceCode: nonEmptyString(doc["ordinanceCode"]),
+            formCode: nonEmptyString(doc["formCode"]),
+            periodStart: normalizeDateFormat(doc["periodStart"] as? String),
+            periodEnd: normalizeDateFormat(doc["periodEnd"] as? String),
+            submitDateTime: nonEmptyString(doc["submitDateTime"]) ?? "",
+            docDescription: nonEmptyString(doc["docDescription"])
+        ))
+    }
+    return records
+}
+
+/// Any? を String? に落とし、空文字・空白のみは nil 扱いにする。
+private func nonEmptyString(_ value: Any?) -> String? {
+    guard let s = value as? String else { return nil }
+    let trimmed = s.trimmingCharacters(in: .whitespaces)
+    return trimmed.isEmpty ? nil : trimmed
+}
+
 // MARK: - Helpers
 
 private extension BltServerContext {

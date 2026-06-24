@@ -42,6 +42,16 @@ func parseDateString(_ dateStr: String?) -> Date? {
     return nil
 }
 
+/// Date → "YYYY-MM-DD"（UTC 固定）。
+func formatDateString(_ date: Date) -> String {
+    isoFormatter.string(from: date)
+}
+
+/// 今日（UTC）の "YYYY-MM-DD"。
+public func todayUTC() -> String {
+    isoFormatter.string(from: Date())
+}
+
 /// YYYYMMDD / YYYY-MM-DD → (year, month). 失敗時は (nil, nil)。
 func extractYearMonth(_ dateStr: String?) -> (Int?, Int?) {
     guard let date = parseDateString(dateStr) else { return (nil, nil) }
