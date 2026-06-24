@@ -110,15 +110,12 @@ public extension BltServerContext {
             return .notFound("データが見つかりませんでした: \(code)")
         }
         let stock = await masterDataManager.getByCode(code)
-        let json: [String: Any] = [
-            "code": code,
-            "name": stock?.coName ?? result.code ?? "",
-            "sector": stock?.s33nm ?? "",
-            "market": stock?.mktNm ?? "",
-            "currency": "JPY",
-            "unit": "百万円",
-            "years": (result.years ?? []).map { flattenYearEntry($0) },
-        ]
+        let json = buildFinancialsResponse(
+            code: code,
+            name: stock?.coName ?? result.code ?? "",
+            sector: stock?.s33nm ?? "",
+            market: stock?.mktNm ?? "",
+            result: result)
         return .ok(json)
     }
 
@@ -219,66 +216,87 @@ private extension BltServerContext {
         default: return nil
         }
     }
+}
 
-    func flattenYearEntry(_ entry: YearEntry) -> [String: Any] {
-        let raw = entry.rawData
-        let calc = entry.calculatedData
-        return [
-            "fy_end": entry.fyEnd as Any,
-            "financial_period": entry.financialPeriod,
-            "doc_id": calc.docID as Any,
-            "sales": raw.sales as Any,
-            "gross_profit": calc.grossProfit as Any,
-            "gross_profit_margin": calc.grossProfitMargin as Any,
-            "operating_profit": raw.op as Any,
-            "operating_margin": calc.operatingMargin as Any,
-            "net_profit": raw.np as Any,
-            "cfo": raw.cfo as Any,
-            "cfi": raw.cfi as Any,
-            "cfc": calc.cfc as Any,
-            "eps": raw.eps as Any,
-            "bps": raw.bps as Any,
-            "dividends_per_share": raw.divTotalAnn as Any,
-            "payout_ratio": raw.payoutRatioAnn as Any,
-            "total_assets": calc.totalAssets as Any,
-            "net_assets": calc.netAssets as Any,
-            "interest_bearing_debt": calc.interestBearingDebt as Any,
-            "roe": calc.roe as Any,
-            "roic": calc.roic as Any,
-            "employees": calc.employees as Any,
-            // 事業利益増減分析
-            "business_profit": calc.businessProfit as Any,
-            "business_profit_margin": calc.businessProfitMargin as Any,
-            "business_profit_change": calc.businessProfitChange as Any,
-            "sales_change_impact": calc.salesChangeImpact as Any,
-            "gross_margin_change_impact": calc.grossMarginChangeImpact as Any,
-            "sga_change_impact": calc.sgaChangeImpact as Any,
-            // ROIC増減分析
-            "nopat_margin": calc.nopatMargin as Any,
-            "invested_capital_turnover": calc.investedCapitalTurnover as Any,
-            "roic_delta": calc.roicDelta as Any,
-            "roic_margin_effect": calc.roicMarginEffect as Any,
-            "roic_turnover_effect": calc.roicTurnoverEffect as Any,
-            // ROE増減分析
-            "net_margin": calc.netMargin as Any,
-            "asset_turnover": calc.assetTurnover as Any,
-            "financial_leverage": calc.financialLeverage as Any,
-            "roe_delta": calc.roeDelta as Any,
-            "roe_net_margin_effect": calc.roeNetMarginEffect as Any,
-            "roe_asset_turnover_effect": calc.roeAssetTurnoverEffect as Any,
-            "roe_leverage_effect": calc.roeLeverageEffect as Any,
-            // ネットキャッシュ
-            "cash_equivalents": raw.cashEq as Any,
-            "net_cash": calc.netCash as Any,
-            // 運転資本・CCC
-            "accounts_receivable": calc.accountsReceivable as Any,
-            "inventory": calc.inventory as Any,
-            "accounts_payable": calc.accountsPayable as Any,
-            "working_capital": calc.workingCapital as Any,
-            "dso": calc.dso as Any,
-            "dio": calc.dio as Any,
-            "dpo": calc.dpo as Any,
-            "ccc": calc.ccc as Any,
-        ]
-    }
+// MARK: - financials レスポンス（公開契約）
+
+/// financials API の公開契約レスポンスを組み立てる。
+/// 形は flatten 形（`flattenYearEntry`）で確定。`schema_version` を持たせクライアントの
+/// デコード整合判定に使う（`Api.financialsSchemaVersion`、blueTickerVersion とは独立）。
+func buildFinancialsResponse(
+    code: String, name: String, sector: String, market: String, result: MetricsResult
+) -> [String: Any] {
+    [
+        "schema_version": Api.financialsSchemaVersion,
+        "code": code,
+        "name": name,
+        "sector": sector,
+        "market": market,
+        "currency": "JPY",
+        "unit": "百万円",
+        "years": (result.years ?? []).map { flattenYearEntry($0) },
+    ]
+}
+
+/// YearEntry を flatten 形（フラットな snake_case）へ展開する。
+func flattenYearEntry(_ entry: YearEntry) -> [String: Any] {
+    let raw = entry.rawData
+    let calc = entry.calculatedData
+    return [
+        "fy_end": entry.fyEnd as Any,
+        "financial_period": entry.financialPeriod,
+        "doc_id": calc.docID as Any,
+        "sales": raw.sales as Any,
+        "gross_profit": calc.grossProfit as Any,
+        "gross_profit_margin": calc.grossProfitMargin as Any,
+        "operating_profit": raw.op as Any,
+        "operating_margin": calc.operatingMargin as Any,
+        "net_profit": raw.np as Any,
+        "cfo": raw.cfo as Any,
+        "cfi": raw.cfi as Any,
+        "cfc": calc.cfc as Any,
+        "eps": raw.eps as Any,
+        "bps": raw.bps as Any,
+        "dividends_per_share": raw.divTotalAnn as Any,
+        "payout_ratio": raw.payoutRatioAnn as Any,
+        "total_assets": calc.totalAssets as Any,
+        "net_assets": calc.netAssets as Any,
+        "interest_bearing_debt": calc.interestBearingDebt as Any,
+        "roe": calc.roe as Any,
+        "roic": calc.roic as Any,
+        "employees": calc.employees as Any,
+        // 事業利益増減分析
+        "business_profit": calc.businessProfit as Any,
+        "business_profit_margin": calc.businessProfitMargin as Any,
+        "business_profit_change": calc.businessProfitChange as Any,
+        "sales_change_impact": calc.salesChangeImpact as Any,
+        "gross_margin_change_impact": calc.grossMarginChangeImpact as Any,
+        "sga_change_impact": calc.sgaChangeImpact as Any,
+        // ROIC増減分析
+        "nopat_margin": calc.nopatMargin as Any,
+        "invested_capital_turnover": calc.investedCapitalTurnover as Any,
+        "roic_delta": calc.roicDelta as Any,
+        "roic_margin_effect": calc.roicMarginEffect as Any,
+        "roic_turnover_effect": calc.roicTurnoverEffect as Any,
+        // ROE増減分析
+        "net_margin": calc.netMargin as Any,
+        "asset_turnover": calc.assetTurnover as Any,
+        "financial_leverage": calc.financialLeverage as Any,
+        "roe_delta": calc.roeDelta as Any,
+        "roe_net_margin_effect": calc.roeNetMarginEffect as Any,
+        "roe_asset_turnover_effect": calc.roeAssetTurnoverEffect as Any,
+        "roe_leverage_effect": calc.roeLeverageEffect as Any,
+        // ネットキャッシュ
+        "cash_equivalents": raw.cashEq as Any,
+        "net_cash": calc.netCash as Any,
+        // 運転資本・CCC
+        "accounts_receivable": calc.accountsReceivable as Any,
+        "inventory": calc.inventory as Any,
+        "accounts_payable": calc.accountsPayable as Any,
+        "working_capital": calc.workingCapital as Any,
+        "dso": calc.dso as Any,
+        "dio": calc.dio as Any,
+        "dpo": calc.dpo as Any,
+        "ccc": calc.ccc as Any,
+    ]
 }
