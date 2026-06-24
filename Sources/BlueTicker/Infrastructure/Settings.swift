@@ -23,6 +23,7 @@ actor SettingsStore {
             if let backend = file.edinetBackend, backend == "local" || backend == "remote" {
                 v.edinetBackend = backend
             }
+            v.serverURL = file.serverURL ?? v.serverURL
         }
 
         self.userDataPath = base
@@ -45,6 +46,11 @@ actor SettingsStore {
             return values.cacheDir
         case .edinetBackend:
             return values.edinetBackend
+        case .serverURL:
+            return values.serverURL.isEmpty ? nil : values.serverURL
+        case .authToken:
+            return Keystore.getPassword(service: keychainService, key: key.rawValue)
+                ?? (values.authToken.isEmpty ? nil : values.authToken)
         }
     }
 
@@ -65,6 +71,11 @@ actor SettingsStore {
         case .edinetBackend:
             guard value == "local" || value == "remote" else { return }
             values.edinetBackend = value
+        case .serverURL:
+            values.serverURL = value
+        case .authToken:
+            try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
+            values.authToken = ""
         }
     }
 
@@ -80,7 +91,8 @@ actor SettingsStore {
         let payload = SettingsFile(
             cacheDir: values.cacheDir,
             cacheEnabled: values.cacheEnabled,
-            edinetBackend: values.edinetBackend
+            edinetBackend: values.edinetBackend,
+            serverURL: values.serverURL.isEmpty ? nil : values.serverURL
         )
         guard let data = try? JSONEncoder().encode(payload) else { return false }
         do {
@@ -92,10 +104,16 @@ actor SettingsStore {
     }
 
     func maskedApiKey() -> String {
-        guard let key = get(.edinetApiKey), !key.isEmpty else { return "****" }
-        return key.count > 8
-            ? String(key.prefix(4)) + "****" + String(key.suffix(4))
-            : "****"
+        mask(get(.edinetApiKey))
+    }
+
+    func maskedAuthToken() -> String {
+        mask(get(.authToken))
+    }
+
+    private func mask(_ secret: String?) -> String {
+        guard let s = secret, !s.isEmpty else { return "****" }
+        return s.count > 8 ? String(s.prefix(4)) + "****" + String(s.suffix(4)) : "****"
     }
 
 }
@@ -106,6 +124,8 @@ enum SettingsKey: String {
     case edinetApiKey
     case cacheDir
     case edinetBackend
+    case serverURL
+    case authToken
 }
 
 enum SettingsBoolKey {
@@ -117,12 +137,17 @@ private struct SettingsValues {
     var cacheDir: String
     var cacheEnabled: Bool = true
     var edinetBackend: String = "local"
+    var serverURL: String = ""
+    // 機密のため通常は keychain に保存し、values には載せない（keychain 不在環境のフォールバックのみ）。
+    var authToken: String = ""
 }
 
 private struct SettingsFile: Codable {
     var cacheDir: String?
     var cacheEnabled: Bool?
     var edinetBackend: String?
+    var serverURL: String?
+    // authToken は config ファイルに保存しない（keychain 管理。edinetApiKey と同様）。
 }
 
 // MARK: - Global singleton

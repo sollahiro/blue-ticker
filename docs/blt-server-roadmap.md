@@ -35,7 +35,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
 3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
 4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション） — **Stage 1・Stage 3 スキーマ完了**（下記「Stage 1 DB 配線」「Stage 3 DB スキーマ」）。残りは Stage 3 の実パース取り込み（Stage 2 とセット）
-5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion=1`、blueTickerVersion 非連動）を追加
+5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion`、blueTickerVersion 非連動）を追加。**v2** で単一 Codable 契約型へ統一＋remote CLI 用フィールド追加（下記「remote CLI 実装」）
 6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
 
 ### Stage 1 DB 配線（実装済み）
@@ -65,7 +65,17 @@ XBRL 数値 RAW（パース済み fact インデックス）の格納先スキ�
 | **CLI (remote)** | REST API | blt-server 経由・API キー管理不要 |
 | **iOS app** | REST API | `analyze` の数値をビジュアル化（URLSession + Codable） |
 
-CLI は `ticker config set edinet-backend remote` で local/remote を切り替える。
+CLI は `ticker config set --backend remote` で local/remote を切り替える。
+
+### remote CLI 実装（実装済み）
+
+`backend=remote` のとき、CLI は EDINET を直接叩かず blt-server の REST API を呼び、**計算済み JSON をローカルと同じ整形で表示**する（計算はサーバー集約）。
+
+- **対象コマンド**: `search` / `filings` / `filing` / `analyze` / `summarize`（REST 5 エンドポイントに対応）。各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil ならローカル経路（Services 直呼び）を実行する。
+- **整形の再現**: `RemoteAPIClient`（`API/RemoteAPIClient.swift`）が応答を `StockSearchResult` / `RemoteFilings` / `FinancialsResponse` / セクション辞書へデコードし、`FinancialsResponse.toMetricsResult()` で内部 `MetricsResult` に復元して**既存レンダラをそのまま使う**。`filing` のセグメント表は `SegmentResult(dictionary:)` で復元。
+- **接続設定**: `ticker config set --server-url <url> --auth-token <token>`。解決順位は env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`auth-token` は keychain 保存（`edinetApiKey` と同様）、`server-url` は config ファイル。`config show` は token をマスク表示。
+- **境界**: `sector`（全 33 業種一覧）は対応する REST が無く、CSV からオフライン算出するため常にローカル。`analyze`/`summarize` の `--half`（半期）は REST 未提供のため remote では非対応エラー。
+- 失敗は throw せず `RemoteOutcome`（ok / notFound / failure）で表現し、CLI 層が stderr へ出して終了する（戻り値パターン）。
 
 ## 計算の責務（client / server）
 
@@ -86,8 +96,8 @@ CLI は `ticker config set edinet-backend remote` で local/remote を切り替�
 
 Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
 
-- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。**flatten 形で確定**: `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`buildFinancialsResponse`／`flattenYearEntry`）、`schema_version`/`code`/`name`/`sector`/`market`/`currency`/`unit` を付与する。`MetricsResult` 直シリアライズは採用しない（内部モデルから公開 API を疎結合）。
-- レスポンス top-level に **`schema_version`** を持たせ、クライアントのデコード版と整合判定する。採番は `Api.financialsSchemaVersion`（独立した整数・初期 1・破壊的変更時のみ +1。blueTickerVersion 非連動）。URL の `/v1` とは別レイヤー。
+- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。**flatten 形で確定**。公開契約は**単一の Codable 型 `FinancialsResponse`／`FinancialsYear`**（`Models/FinancialsContract.swift`）に統一し、サーバー出力（`buildFinancialsResponse`）と remote CLI のデコードを同一型から導出する（キー定義を 1 か所に集約しドリフトを防ぐ）。`MetricsResult` 直シリアライズは採用しない（内部モデルから公開 API を疎結合）。`jsonObject()` が欠落値を null 補完し「全キー存在」を維持する。
+- レスポンス top-level に **`schema_version`** を持たせ、クライアントのデコード版と整合判定する。採番は `Api.financialsSchemaVersion`（独立した整数・現在 **2**・破壊的変更時のみ +1。blueTickerVersion 非連動）。**v2** で remote CLI のローカル同等表示のため flatten に約20項目を追加（ラベル `op_label`/`sales_label`/`gross_profit_label`、`sga`/`nopat`/`effective_tax_rate`/`interest_expense`、`current_assets`/`non_current_assets`/`current_liabilities`/`non_current_liabilities`/`ppe_total`/`net_de`、`capex`/`buyback`/`rd`/`cf_treasury_stock`/`dividend_ss`/`dividend_paid_cf`/`cur_per_type`）。URL の `/v1` とは別レイヤー。
 - Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
 
 ### 将来クライアント計算へ移す場合
@@ -149,7 +159,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
 
-- レスポンス top-level に **`schema_version`**（`Api.financialsSchemaVersion`=1、独立採番）を持たせ、クライアントのデコード版と整合判定する。**実装済み**（上記「公開契約は financials レスポンス」参照）。
+- レスポンス top-level に **`schema_version`**（`Api.financialsSchemaVersion`=2、独立採番）を持たせ、クライアントのデコード版と整合判定する。**実装済み**（上記「公開契約は financials レスポンス」参照）。
 
 ### Stage 2 の保持ポリシー
 
@@ -260,7 +270,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 近期（remote CLI）
 
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
-- [ ] CLI の remote モードで REST API を呼ぶ実装を追加する（現状は未実装）
+- [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
 
 ### 次の検討課題（優先順）
 

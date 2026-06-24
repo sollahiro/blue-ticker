@@ -17,6 +17,11 @@ struct FilingsCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
+        if let remote = try await RemoteBackend.clientIfEnabled() {
+            try await runRemote(remote)
+            return
+        }
+
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
             printError("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n")
@@ -63,6 +68,34 @@ struct FilingsCommand: AsyncParsableCommand {
             )
         }
     }
+
+    /// remote バックエンド経路。計算済み書類一覧を受け取り、ローカルと同じ表で表示する。
+    private func runRemote(_ remote: RemoteAPIClient) async throws {
+        let filings: [RemoteFilings.Entry]
+        switch await remote.getFilings(code: code, maxYears: years) {
+        case .ok(let r): filings = r.filings
+        case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
+        }
+
+        if filings.isEmpty {
+            printError("書類が見つかりませんでした: \(code)\n")
+            throw ExitCode.failure
+        }
+
+        if json {
+            printJSON(filings)
+        } else {
+            printTable(
+                columns: [
+                    TableColumn("書類ID", width: 16),
+                    TableColumn("種別", width: 6),
+                    TableColumn("提出日時", width: 20),
+                    TableColumn("書類名", width: 60),
+                ],
+                rows: filings.map { [$0.docId, $0.docType, $0.submittedAt, $0.docTypeLabel] }
+            )
+        }
+    }
 }
 
 struct FilingCommand: AsyncParsableCommand {
@@ -89,6 +122,11 @@ struct FilingCommand: AsyncParsableCommand {
         guard unknown.isEmpty else {
             printError("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n")
             throw ExitCode.failure
+        }
+
+        if let remote = try await RemoteBackend.clientIfEnabled() {
+            try await runRemote(remote)
+            return
         }
 
         let apiKey = await settingsStore.get(.edinetApiKey)
@@ -155,23 +193,61 @@ struct FilingCommand: AsyncParsableCommand {
                 print(str)
             }
         } else {
-            printError("\n[書類 \(targetDocID)]\n")
-            for (key, text) in extracted.sorted(by: { $0.key < $1.key }) {
-                let def = xbrlSections[key]
-                let title = def?.title ?? key
-                printError("\n## \(title)\n")
-                if text.isEmpty {
-                    printError("（見つかりませんでした）\n")
-                } else {
-                    let truncated = text.count > 2000 ? String(text.prefix(2000)) + "..." : text
-                    printError(truncated + "\n")
-                }
+            renderSections(docID: targetDocID, extracted: extracted, segmentResults: segmentResults)
+        }
+    }
+
+    /// remote バックエンド経路。計算済みセクションを受け取り、ローカルと同じ整形で表示する。
+    private func runRemote(_ remote: RemoteAPIClient) async throws {
+        let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
+        let result: RemoteFilingContent
+        switch await remote.getFilingContent(
+            code: codeTrimmed, docId: docId, sections: sections.isEmpty ? nil : sections)
+        {
+        case .ok(let r): result = r
+        case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
+        }
+
+        // sections は本文（文字列）とセグメント表（辞書）の混在。ローカルと同じ型へ復元する。
+        var extracted: [String: String] = [:]
+        var segmentResults: [String: SegmentResult] = [:]
+        for (key, value) in result.sections {
+            if let text = value as? String {
+                extracted[key] = text
+            } else if let dict = value as? [String: Any] {
+                segmentResults[key] = SegmentResult(dictionary: dict)
             }
-            for (key, seg) in segmentResults.sorted(by: { $0.key < $1.key }) {
-                let title = SegmentExtractor.specialSectionTitles[key] ?? key
-                printError("\n## \(title)\n")
-                printSegmentResult(seg)
+        }
+
+        if json {
+            printJSONObject([
+                "code": result.code, "docID": result.docId, "sections": result.sections,
+            ])
+        } else {
+            renderSections(docID: result.docId, extracted: extracted, segmentResults: segmentResults)
+        }
+    }
+
+    /// セクション本文・セグメント表を人間向けに整形表示する（ローカル・remote 共通）。
+    private func renderSections(
+        docID: String, extracted: [String: String], segmentResults: [String: SegmentResult]
+    ) {
+        printError("\n[書類 \(docID)]\n")
+        for (key, text) in extracted.sorted(by: { $0.key < $1.key }) {
+            let def = xbrlSections[key]
+            let title = def?.title ?? key
+            printError("\n## \(title)\n")
+            if text.isEmpty {
+                printError("（見つかりませんでした）\n")
+            } else {
+                let truncated = text.count > 2000 ? String(text.prefix(2000)) + "..." : text
+                printError(truncated + "\n")
             }
+        }
+        for (key, seg) in segmentResults.sorted(by: { $0.key < $1.key }) {
+            let title = SegmentExtractor.specialSectionTitles[key] ?? key
+            printError("\n## \(title)\n")
+            printSegmentResult(seg)
         }
     }
 

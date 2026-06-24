@@ -14,8 +14,16 @@ struct SearchCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let service = CompanyInfoService()
-        let results = await service.searchCompanies(query)
+        let results: [StockSearchResult]
+        if let remote = try await RemoteBackend.clientIfEnabled() {
+            switch await remote.searchCompanies(q: query) {
+            case .ok(let r): results = r
+            case .notFound: results = []
+            case .failure(let m): printError(m + "\n"); throw ExitCode.failure
+            }
+        } else {
+            results = await CompanyInfoService().searchCompanies(query)
+        }
 
         if results.isEmpty {
             printError("該当する銘柄が見つかりませんでした: \(query)\n")
