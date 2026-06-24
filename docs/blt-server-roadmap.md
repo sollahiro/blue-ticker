@@ -34,9 +34,26 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 1. ~~Server 独立ターゲット分離~~ → **完了**
 2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
 3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
-4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション）
-5. financials レスポンスの公開契約 ＋ schema version 確定
+4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション） — **Stage 1・Stage 3 スキーマ完了**（下記「Stage 1 DB 配線」「Stage 3 DB スキーマ」）。残りは Stage 3 の実パース取り込み（Stage 2 とセット）
+5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion=1`、blueTickerVersion 非連動）を追加
 6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
+
+### Stage 1 DB 配線（実装済み）
+
+書類一覧（Stage 1）を Postgres へ取り込む経路を実装した。
+
+- **スキーマ**（`BltServerCore/Models`・`Migrations`）: `edinet_documents`（書類1件=1行、docID PK、EDINET メタ。`edinet_code`/`sec_code` に索引）＋ `edinet_sync_state`（単一行、`synced_through` で同期高水位）。`DATABASE_URL` 設定時のみ `autoMigrate` で適用（未設定なら従来どおり DB なしのステートレス動作）。
+- **同期コマンド**: `blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]`（ワンショット。`to` 既定は UTC 当日、`from` は 明示 > `synced_through` > エラー）。取得・正規化は `BlueTickerCore` のファサード `fetchDocumentsForSync`（seed 種別 `Api.stage1SyncDocTypes` に限定・docID 重複排除）、DB upsert は docID 単位の find-or-create（冪等）。
+- スキーマは公開契約ではなくサーバー内部（公開契約は financials レスポンス側）。raw(jsonb) は持たず明示カラムのみ。
+
+### Stage 3 DB スキーマ（実装済み・取り込みは未着手）
+
+XBRL 数値 RAW（パース済み fact インデックス）の格納先スキーマを実装した。実パース取り込み（Stage 2 取得 → パース → 格納）は未着手。
+
+- **スキーマ**: `edinet_xbrl_facts`（書類1件=1行、docID PK）。`facts` カラムに書類単位の fact インデックス（tag → contextRef → fact）を **JSONB 1 セル**で格納（Postgres=JSONB / SQLite=TEXT）。`cache_version` で書類単位の staleness 照合（`blueTickerVersion` 不一致なら再パース）。
+- **格納粒度（A）**: fact 1件=1行の正規化ではなく書類単位 JSONB。理由は唯一の消費者 Stage 4 が書類単位に全 fact をまとめ読みするため。タグ横断クエリが実需要化したら**保存済み JSONB から正規化投影を派生**できる（EDINET 再取得・再パース不要）。
+- 格納用 Codable DTO（`XbrlFactRecord`／`XbrlFactIndexPayload`）は `BlueTickerCore`（Foundation のみ依存）に置き、内部型 `XbrlFact` を露出させない。Fluent モデル・マイグレーションは `BltServerCore`。
+- Stage 3 RAW は公開しない（サーバー内部の中間生成物）。`doc_id` は `edinet_documents` への論理参照（硬い FK は張らず取り込み順を非結合）。
 
 ## クライアント
 
@@ -69,8 +86,8 @@ CLI は `ticker config set edinet-backend remote` で local/remote を切り替�
 
 Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
 
-- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。現行 `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`BltServerFacade.flattenYearEntry`）、`code`/`name`/`sector`/`market`/`currency`/`unit` を付与した独自スキーマを返す。**`MetricsResult` 直シリアライズか flatten 形かは確定形 TODO で決める**（下記 schema version とセット）。
-- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
+- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。**flatten 形で確定**: `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`buildFinancialsResponse`／`flattenYearEntry`）、`schema_version`/`code`/`name`/`sector`/`market`/`currency`/`unit` を付与する。`MetricsResult` 直シリアライズは採用しない（内部モデルから公開 API を疎結合）。
+- レスポンス top-level に **`schema_version`** を持たせ、クライアントのデコード版と整合判定する。採番は `Api.financialsSchemaVersion`（独立した整数・初期 1・破壊的変更時のみ +1。blueTickerVersion 非連動）。URL の `/v1` とは別レイヤー。
 - Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
 
 ### 将来クライアント計算へ移す場合
@@ -84,7 +101,7 @@ iOS が対話的な再計算（係数を変えた what-if 等）を要求し、�
 | `GET /v1/companies?q={query}` | `q`: 検索クエリ | 企業名・銘柄コード検索 |
 | `GET /v1/sectors/{sector}/companies?limit=20` | `sector`: 業種名、`limit` | 業種別銘柄一覧 |
 | `GET /v1/companies/{code}/filings?max_years=5` | `max_years` | 書類一覧 |
-| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別） |
+| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別、flatten 形＋`schema_version`） |
 | `GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b` | `doc_id`（省略可）、`sections`（省略可） | 書類セクションテキスト |
 
 - 成功: HTTP 200 + `application/json`
@@ -111,9 +128,9 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 | ステージ | 処理内容 | 保存先 | 状態 |
 |---|---|---|---|
-| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB** | 実装済み・設定待ち |
+| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | スキーマ・同期コマンド（`blt-server sync`）実装済み・初回同期待ち |
 | Stage 2 | XBRL ファイル取得 | **一時ファイル（Stage 3 完了後に削除 or オブジェクトストレージへ退避）** | 未着手 |
-| Stage 3 | XBRL パース（RAW データ構造化） | **DB（マスターデータ）** | 未着手 |
+| Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ実装済み・実パース取り込みは未着手（Stage 2 とセット） |
 | Stage 4 | TICKER 計算（財務指標・増減分析） | **サーバー計算**（現行 `getFinancials` 実装済み） | 実装済み |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
@@ -132,7 +149,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
 
-- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
+- レスポンス top-level に **`schema_version`**（`Api.financialsSchemaVersion`=1、独立採番）を持たせ、クライアントのデコード版と整合判定する。**実装済み**（上記「公開契約は financials レスポンス」参照）。
 
 ### Stage 2 の保持ポリシー
 
@@ -225,11 +242,12 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 必須（blt-server を使い始める前に）
 
 - [ ] サーバーマシンに EDINET API キーを設定する（`BLT_EDINET_API_KEY` env、または `settings_store`）
-- [ ] `sync_document_list` ツールで書類一覧を初回同期する
+- [ ] `blt-server sync --from <初回開始日>` で書類一覧を初回同期する（要 `DATABASE_URL`）
 
 ### 近期（Stage 1 安定化）
 
-- [ ] `sync_document_list` の定期実行を launchd で設定する
+- [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
+- [ ] 実 Neon への接続・同期の E2E 検証（現状テストはインメモリ SQLite まで）
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
 
@@ -250,7 +268,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] サーバースタック確定 → **Vapor + Fluent 採用**（ユーザー確認済み）
 - [x] Server を独立ターゲット（`BltServerCore`）へ分離し CLI から NIO 依存を排除（実測でシンボル 0・サイズ半減）
 - [x] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換完了。Fluent は DATABASE_URL 条件付き配線。「Vapor + Fluent 移行の内容」参照）
-- [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 はサーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
+- [x] **Stage 1 の DB スキーマ設計＋同期配線**（`edinet_documents`/`edinet_sync_state`・`blt-server sync`。「Stage 1 DB 配線」参照）
+- [x] **Stage 3 の DB スキーマ設計**（`edinet_xbrl_facts`・書類単位 JSONB。「Stage 3 DB スキーマ」参照）。残りは実パース取り込み（Stage 2 とセット）
 - [ ] Stage 2 保持ポリシー確定（即削除 vs R2 退避＋再パース）
 - [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）
 
@@ -275,7 +294,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ## 未決事項
 
 - Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）
-- financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）
+- ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
 - remote backend 利用時の `ticker cache status` 表示内容
 
 ---

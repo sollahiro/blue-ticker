@@ -33,7 +33,7 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
         app.http.server.configuration.hostname = host
         app.http.server.configuration.port = port
 
-        try configureDatabase(app)
+        try await configureDatabase(app)
         registerRoutes(app, context: context)
 
         try await app.execute()

@@ -19,6 +19,8 @@ let package = Package(
         .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0"),
         .package(url: "https://github.com/vapor/fluent.git", from: "4.9.0"),
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
+        // テスト専用: マイグレーションをインメモリ DB で実走させ検証する（本番は Postgres）。
+        .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
     ],
     targets: [
         // 共有ライブラリ（CLI・REST サーバー共通のコア機能）。NIO には依存しない。
@@ -85,6 +87,17 @@ let package = Package(
                 "SwiftSoup",
             ],
             path: "SwiftTests/BlueTickerTests"
+        ),
+        // BltServerCore（DB 層）のテスト。マイグレーションをインメモリ SQLite で実走検証する。
+        .testTarget(
+            name: "BltServerCoreTests",
+            dependencies: [
+                "BltServerCore",
+                .product(name: "Fluent", package: "fluent"),
+                .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),
+                .product(name: "Vapor", package: "vapor"),
+            ],
+            path: "SwiftTests/BltServerCoreTests"
         ),
     ]
 )

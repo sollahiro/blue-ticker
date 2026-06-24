@@ -26,6 +26,19 @@ enum Api {
     static let docTypeQuarterlyReport = "140"
     static let docTypeHalfYearReport = "160"
 
+    /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
+    /// レスポンス形を破壊的に変更したときのみ +1 する（クライアントのデコード整合判定用）。
+    static let financialsSchemaVersion = 1
+
+    /// Stage 1 同期で DB へ取り込む書類種別。
+    /// 現状は有報・半期・四半期＋訂正有報。他種別へ拡張する場合はここへ追加する（単一の真実源）。
+    static let stage1SyncDocTypes: Set<String> = [
+        docTypeAnnualReport,
+        docTypeAmendment,
+        docTypeQuarterlyReport,
+        docTypeHalfYearReport,
+    ]
+
     // キャッシュロック
     static let cacheLockPollSeconds: Double = 0.2
     static let cacheLockNoticeSeconds: Double = 1.0

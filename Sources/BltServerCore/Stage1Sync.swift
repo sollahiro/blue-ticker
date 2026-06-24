@@ -1,0 +1,140 @@
+// Stage 1 同期: EDINET 書類一覧を DB（edinet_documents）へ取り込み、
+// 同期高水位（edinet_sync_state.synced_through）を進める。
+// 取得・正規化は BlueTickerCore のファサード（fetchDocumentsForSync）に委譲し、
+// ここでは DB への upsert と高水位更新のみを担う。
+
+import BlueTickerCore
+import Fluent
+import Foundation
+import Vapor
+
+/// 同期結果のサマリ。
+public struct Stage1SyncSummary: Sendable, Equatable {
+    public let from: String
+    public let to: String
+    public let fetched: Int
+    public let created: Int
+    public let updated: Int
+}
+
+enum Stage1SyncError: Error, CustomStringConvertible {
+    /// 初回同期で開始日が決められない（同期状態なし・--from 未指定）。
+    case missingStartDate
+    /// DATABASE_URL 未設定で DB が無い。
+    case databaseUnavailable
+    /// EDINET API キーが未設定。
+    case apiKeyMissing
+
+    var description: String {
+        switch self {
+        case .missingStartDate:
+            return "初回同期では --from YYYY-MM-DD で開始日を指定してください（同期状態が未作成のため）。"
+        case .databaseUnavailable:
+            return "DATABASE_URL が未設定です。同期には DB 接続が必要です。"
+        case .apiKeyMissing:
+            return "EDINET API キーが未設定です。BLT_EDINET_API_KEY 環境変数、または ticker config set edinet-key <key> で設定してください。"
+        }
+    }
+}
+
+/// EDINET 書類を期間取得して DB へ upsert し、synced_through を to へ進める。
+/// from 解決順位: 明示指定 > 既存 synced_through > （いずれも無ければ）missingStartDate。
+func runStage1Sync(
+    context: BltServerContext,
+    db: Database,
+    from: String?,
+    to: String
+) async throws -> Stage1SyncSummary {
+    let resolvedFrom = try await resolveStartDate(from: from, db: db)
+    let records = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
+    let counts = try await applyDocuments(records, db: db)
+    try await upsertSyncState(syncedThrough: to, db: db)
+
+    return Stage1SyncSummary(
+        from: resolvedFrom, to: to, fetched: records.count,
+        created: counts.created, updated: counts.updated)
+}
+
+/// レコードを edinet_documents へ upsert する（docID 一致で更新、無ければ作成）。
+func applyDocuments(
+    _ records: [EdinetDocumentRecord], db: Database
+) async throws -> (created: Int, updated: Int) {
+    var created = 0
+    var updated = 0
+    for record in records {
+        if let existing = try await EdinetDocument.find(record.docID, on: db) {
+            existing.apply(record)
+            try await existing.update(on: db)
+            updated += 1
+        } else {
+            let model = EdinetDocument()
+            model.id = record.docID
+            model.apply(record)
+            try await model.create(on: db)
+            created += 1
+        }
+    }
+    return (created, updated)
+}
+
+/// from 解決順位: 明示指定 > 既存 synced_through > missingStartDate。
+func resolveStartDate(from: String?, db: Database) async throws -> String {
+    if let f = from, !f.isEmpty { return f }
+    if let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db) {
+        return state.syncedThrough
+    }
+    throw Stage1SyncError.missingStartDate
+}
+
+/// synced_through を upsert する（単一行）。
+func upsertSyncState(syncedThrough: String, db: Database) async throws {
+    let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
+        ?? EdinetSyncState()
+    state.id = EdinetSyncState.singletonID
+    state.syncedThrough = syncedThrough
+    try await state.save(on: db)
+}
+
+extension EdinetDocument {
+    /// 正規化済みレコードの値を自身へ写す（id は呼び出し側で設定済み）。
+    func apply(_ record: EdinetDocumentRecord) {
+        edinetCode = record.edinetCode
+        secCode = record.secCode
+        filerName = record.filerName
+        docTypeCode = record.docTypeCode
+        ordinanceCode = record.ordinanceCode
+        formCode = record.formCode
+        periodStart = record.periodStart
+        periodEnd = record.periodEnd
+        submitDateTime = record.submitDateTime
+        docDescription = record.docDescription
+    }
+}
+
+// MARK: - CLI エントリ
+
+/// `blt-server sync` の本体。Application を一時的に起動して DB を配線し、同期を実行する。
+/// to 未指定なら UTC の当日。DATABASE_URL 未設定なら databaseUnavailable を投げる。
+public func runStage1SyncCommand(from: String?, to: String?) async throws {
+    guard let context = await makeBltServerContext() else {
+        throw Stage1SyncError.apiKeyMissing
+    }
+    guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
+        throw Stage1SyncError.databaseUnavailable
+    }
+
+    var env = Environment(name: "production", arguments: ["blt-server"])
+    try LoggingSystem.bootstrap(from: &env)
+    let app = try await Application.make(env)
+    do {
+        try await configureDatabase(app)
+        let summary = try await runStage1Sync(
+            context: context, db: app.db, from: from, to: to ?? todayUTC())
+        app.logger.notice(
+            "Stage 1 同期完了: \(summary.from)..\(summary.to) fetched=\(summary.fetched) created=\(summary.created) updated=\(summary.updated)")
+    } catch {
+        try? await app.asyncShutdown()
+        throw error
+    }
+    try await app.asyncShutdown()
+}
