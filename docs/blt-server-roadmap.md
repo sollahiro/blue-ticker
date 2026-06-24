@@ -33,7 +33,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 
 1. ~~Server 独立ターゲット分離~~ → **完了**
 2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
-3. 共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から
+3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
 4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション）
 5. financials レスポンスの公開契約 ＋ schema version 確定
 6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
@@ -173,7 +173,7 @@ DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent
 3. ~~**DB 層（Fluent）配線**（`BltServerCore`、`Database.swift`）~~ → **完了（接続配線のみ）**
    - `DATABASE_URL`（Neon）があれば `app.databases.use(.postgres(...))`。未設定なら DB なしで起動（ステートレス EDINET プロキシ）。
    - **Stage 1/3 のモデル・`Migration` は未着手**（スキーマ設計＝下記ステップ4。空マイグレーションは置かない方針）。
-4. **認証ミドルウェア追加**: Bearer トークン（CLI remote）→ 後続で Sign in with Apple（iOS）。→ **未着手（構築順序ステップ3）**
+4. ~~**認証ミドルウェア追加**: Bearer トークン（CLI remote）~~ → **完了**（下記「共通基盤」）。後続で Sign in with Apple（iOS）。
 5. ~~**検証**~~ → **完了**: `ticker` に Vapor/Fluent シンボル 0（`nm` 確認、NIO は `union` 等の偽陽性のみ）。全 311 テスト通過。`/v1/companies` 実応答が旧契約（sorted+pretty JSON）と一致。
 
 > 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
@@ -201,13 +201,30 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 | iOS app | **Sign in with Apple**（JWT 検証は Linux サーバーでも可能） |
 | 将来 | **Google OAuth 追加**（CLI ログイン UX の Linux ヘッジ。provider 問わずブラウザ/デバイスコードフローが要る点に注意） |
 
+### 共通基盤（env 設定・ヘルスチェック・認証）
+
+クラウド（Fly.io）／self-host 双方で同一バイナリを使うため、起動時設定を環境変数へ寄せた（構築順序ステップ3）。
+
+| 環境変数 | 役割 | デフォルト |
+|---|---|---|
+| `BLT_HOST` | bind ホスト。クラウドでは `0.0.0.0` | `127.0.0.1` |
+| `BLT_PORT` | bind ポート | `3000` |
+| `BLT_EDINET_API_KEY` | EDINET API キー（keychain 非搭載の Linux サーバー向け） | （未設定なら settingsStore へフォールバック） |
+| `BLT_AUTH_TOKEN` | Bearer トークン。設定時のみ `/v1` 配下を認証で保護 | （未設定なら認証なし） |
+| `DATABASE_URL` | Neon Postgres 接続文字列（既存。Fluent 配線） | （未設定なら DB なし） |
+
+- **bind**: 解決順位は CLI 引数（`--host`/`--port`）> env > デフォルト。
+- **EDINET キー**: env（`BLT_EDINET_API_KEY`）優先、未設定時のみ `settingsStore`（keychain/config）へフォールバック。両方とも空なら起動時に exit(1)。
+- **`GET /healthz`**: 認証不要。`{"status":"ok"}` を 200 で返す（Fly.io／LB のヘルスチェック用）。`/v1` の認証グループ外に登録。
+- **Bearer 認証**: `BLT_AUTH_TOKEN` 設定時のみ有効。`/v1` 配下で `Authorization: Bearer <token>` を定数時間比較で検証し、不一致・未提示は 401（公開契約のエラー封筒 `{"error":...,"status":401}`）。`/healthz` は常に認証不要。未設定なら認証なしで起動（self-host／ローカル開発）。
+
 ---
 
 ## TODO
 
 ### 必須（blt-server を使い始める前に）
 
-- [ ] サーバーマシンの `settings_store` に EDINET API キーを設定する
+- [ ] サーバーマシンに EDINET API キーを設定する（`BLT_EDINET_API_KEY` env、または `settings_store`）
 - [ ] `sync_document_list` ツールで書類一覧を初回同期する
 
 ### 近期（Stage 1 安定化）

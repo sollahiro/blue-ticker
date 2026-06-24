@@ -41,10 +41,20 @@ public struct BltServerContext: Sendable {
 
 // MARK: - Factory
 
-/// 設定（settingsStore）から BltServerContext を構築する。
+/// EDINET API キーを解決する。env（BLT_EDINET_API_KEY）を優先し、未設定なら settingsStore に
+/// フォールバックする。クラウド（keychain 非搭載の Linux サーバー）では env から注入する。
+private func resolveEdinetApiKey() async -> String? {
+    if let envKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"], !envKey.isEmpty {
+        return envKey
+    }
+    let stored = await settingsStore.get(.edinetApiKey)
+    return (stored?.isEmpty == false) ? stored : nil
+}
+
+/// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
 public func makeBltServerContext() async -> BltServerContext? {
-    guard let key = await settingsStore.get(.edinetApiKey), !key.isEmpty else {
+    guard let key = await resolveEdinetApiKey() else {
         return nil
     }
     let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""

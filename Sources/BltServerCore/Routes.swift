@@ -16,7 +16,18 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     app.middleware = .init()
     app.middleware.use(BltErrorMiddleware())
 
-    let v1 = app.grouped("v1")
+    // GET /healthz: 認証不要のヘルスチェック（Fly.io / ロードバランサ用）。
+    // /v1 の認証より前に、認証グループの外へ登録する。
+    app.get("healthz") { _ async -> Response in
+        jsonResponse(["status": "ok"], status: .ok)
+    }
+
+    // BLT_AUTH_TOKEN が設定されていれば /v1 配下を Bearer 認証で保護する。
+    // 未設定なら認証なしで起動する（self-host / ローカル開発）。
+    var v1 = app.grouped("v1")
+    if let token = Environment.get("BLT_AUTH_TOKEN"), !token.isEmpty {
+        v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
+    }
 
     // GET /v1/companies?q={query}
     v1.get("companies") { req async -> Response in
@@ -53,6 +64,33 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
             .map { $0.split(separator: ",").map(String.init) }
         return makeResponse(await context.getFilingContent(code: code, docId: docId, sections: sections))
     }
+}
+
+// MARK: - 認証ミドルウェア
+
+/// Authorization: Bearer <token> を検証する。BLT_AUTH_TOKEN が設定されたときのみ /v1 へ適用する。
+/// 失敗時は 401 を投げ、BltErrorMiddleware が公開契約のエラー封筒へ変換する。
+private struct BltBearerAuthMiddleware: AsyncMiddleware {
+    let token: String
+
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        guard let presented = request.headers.bearerAuthorization?.token,
+            constantTimeEquals(presented, token)
+        else {
+            throw Abort(.unauthorized, reason: "認証が必要です")
+        }
+        return try await next.respond(to: request)
+    }
+}
+
+/// トークン比較のタイミング攻撃を避ける定数時間比較（長さの違いのみ早期に返す）。
+private func constantTimeEquals(_ a: String, _ b: String) -> Bool {
+    let ab = Array(a.utf8)
+    let bb = Array(b.utf8)
+    guard ab.count == bb.count else { return false }
+    var diff: UInt8 = 0
+    for i in 0..<ab.count { diff |= ab[i] ^ bb[i] }
+    return diff == 0
 }
 
 // MARK: - エラーミドルウェア
