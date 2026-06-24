@@ -178,6 +178,21 @@ DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent
 
 > 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
 
+#### Linux ビルドの既知の問題（swift-nio / MemberImportVisibility）
+
+Vapor が引き込む **swift-nio 2.101.x の `_NIOFileSystem/FileInfo.swift`** が Linux（Glibc/Musl）で `import CSystem` を欠いており、swift-nio が全ターゲットに有効化する upcoming feature **`MemberImportVisibility`（SE-0444）** の下で `st_ctim`/`st_dev`/`st_blksize` 等が「未 import モジュールのメンバー」とされ **Swift 6.1+ の Linux でのみコンパイルエラー**になる（macOS は `Darwin` 経由で解決され無傷）。swift-nio 最新 2.101.1 でも未修正。Vapor 追加前は `_NIOFileSystem` 自体が未ビルドだったため顕在化していなかった。
+
+**回避策（一時措置）**: Linux での `swift build` / `swift test` / Docker ビルドに次のフラグを付ける。`-Xswiftc` は全ターゲット（swift-nio 含む）に伝播するため、swift-nio の feature 有効化を上書きできる。
+
+```bash
+swift test  -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+```
+
+- `ci.yml` の `swift-linux` ジョブに適用済み（`swift:6.1` で全 311 テスト緑を実測確認）。macOS ジョブ・`release.yml`（macOS＋`ticker` のみ）は影響なしのため変更不要。
+- **ステップ6 の Dockerfile（Fly.io 用、`swift:6.1` 2 段ビルド）でも同フラグが必須**。
+- swift-nio 側が修正されたら本フラグは除去する（一時措置）。
+
 ### 認証
 
 | 時期 | 方式 |
