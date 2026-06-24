@@ -34,9 +34,17 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 1. ~~Server 独立ターゲット分離~~ → **完了**
 2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
 3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
-4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション）
+4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション） — **Stage 1 完了**（下記「Stage 1 DB 配線」）。Stage 3 スキーマは未着手
 5. financials レスポンスの公開契約 ＋ schema version 確定
 6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
+
+### Stage 1 DB 配線（実装済み）
+
+書類一覧（Stage 1）を Postgres へ取り込む経路を実装した。
+
+- **スキーマ**（`BltServerCore/Models`・`Migrations`）: `edinet_documents`（書類1件=1行、docID PK、EDINET メタ。`edinet_code`/`sec_code` に索引）＋ `edinet_sync_state`（単一行、`synced_through` で同期高水位）。`DATABASE_URL` 設定時のみ `autoMigrate` で適用（未設定なら従来どおり DB なしのステートレス動作）。
+- **同期コマンド**: `blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]`（ワンショット。`to` 既定は UTC 当日、`from` は 明示 > `synced_through` > エラー）。取得・正規化は `BlueTickerCore` のファサード `fetchDocumentsForSync`（seed 種別 `Api.stage1SyncDocTypes` に限定・docID 重複排除）、DB upsert は docID 単位の find-or-create（冪等）。
+- スキーマは公開契約ではなくサーバー内部（公開契約は financials レスポンス側）。raw(jsonb) は持たず明示カラムのみ。
 
 ## クライアント
 
@@ -111,7 +119,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 | ステージ | 処理内容 | 保存先 | 状態 |
 |---|---|---|---|
-| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB** | 実装済み・設定待ち |
+| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | スキーマ・同期コマンド（`blt-server sync`）実装済み・初回同期待ち |
 | Stage 2 | XBRL ファイル取得 | **一時ファイル（Stage 3 完了後に削除 or オブジェクトストレージへ退避）** | 未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（マスターデータ）** | 未着手 |
 | Stage 4 | TICKER 計算（財務指標・増減分析） | **サーバー計算**（現行 `getFinancials` 実装済み） | 実装済み |
@@ -225,11 +233,12 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 必須（blt-server を使い始める前に）
 
 - [ ] サーバーマシンに EDINET API キーを設定する（`BLT_EDINET_API_KEY` env、または `settings_store`）
-- [ ] `sync_document_list` ツールで書類一覧を初回同期する
+- [ ] `blt-server sync --from <初回開始日>` で書類一覧を初回同期する（要 `DATABASE_URL`）
 
 ### 近期（Stage 1 安定化）
 
-- [ ] `sync_document_list` の定期実行を launchd で設定する
+- [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
+- [ ] 実 Neon への接続・同期の E2E 検証（現状テストはインメモリ SQLite まで）
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
 
@@ -250,7 +259,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] サーバースタック確定 → **Vapor + Fluent 採用**（ユーザー確認済み）
 - [x] Server を独立ターゲット（`BltServerCore`）へ分離し CLI から NIO 依存を排除（実測でシンボル 0・サイズ半減）
 - [x] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換完了。Fluent は DATABASE_URL 条件付き配線。「Vapor + Fluent 移行の内容」参照）
-- [ ] **Stage 1/3 の DB スキーマ設計**（Stage 3 はサーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
+- [x] **Stage 1 の DB スキーマ設計＋同期配線**（`edinet_documents`/`edinet_sync_state`・`blt-server sync`。「Stage 1 DB 配線」参照）
+- [ ] **Stage 3 の DB スキーマ設計**（XBRL 数値 RAW。サーバー内部スキーマ。公開契約は financials レスポンス側に schema version を持たせる）
 - [ ] Stage 2 保持ポリシー確定（即削除 vs R2 退避＋再パース）
 - [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）
 
