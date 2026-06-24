@@ -1,0 +1,36 @@
+# Fly.io デプロイ設定。blt-server を nrt（東京）で起動する。
+# 実行時 env のデフォルトは Dockerfile に持たせている（self-host と共通）。
+# ここでは Fly 固有の設定（ポート・ヘルスチェック・Volume・VM）のみを定義する。
+#
+# 機密は fly secrets で注入する（イメージ・このファイルに焼かない）:
+#   fly secrets set BLT_EDINET_API_KEY=... BLT_AUTH_TOKEN=... DATABASE_URL=...
+# 手順は docs/deploy.md を参照。
+
+app = "blt-server"             # グローバル一意。重複時は fly launch で変更する
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080         # Dockerfile の BLT_PORT と一致させる
+  force_https = true
+  auto_stop_machines = "stop"  # 無通信時はマシン停止（scale-to-zero）
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"          # 認証不要のヘルスチェック（共通基盤で実装済み）
+
+# キャッシュ・設定の永続化（Stage 1 の真実源は Neon。これは EDINET 取得キャッシュ等）。
+[[mounts]]
+  source = "blt_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"               # XBRL パースがメモリを使うため 512mb より余裕を持たせる
