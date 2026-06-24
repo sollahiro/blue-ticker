@@ -35,7 +35,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
 3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
 4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション） — **Stage 1・Stage 3 スキーマ完了**（下記「Stage 1 DB 配線」「Stage 3 DB スキーマ」）。残りは Stage 3 の実パース取り込み（Stage 2 とセット）
-5. financials レスポンスの公開契約 ＋ schema version 確定
+5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion=1`、blueTickerVersion 非連動）を追加
 6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
 
 ### Stage 1 DB 配線（実装済み）
@@ -86,8 +86,8 @@ CLI は `ticker config set edinet-backend remote` で local/remote を切り替�
 
 Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
 
-- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。現行 `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`BltServerFacade.flattenYearEntry`）、`code`/`name`/`sector`/`market`/`currency`/`unit` を付与した独自スキーマを返す。**`MetricsResult` 直シリアライズか flatten 形かは確定形 TODO で決める**（下記 schema version とセット）。
-- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
+- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。**flatten 形で確定**: `getFinancials` は `RawData`／`CalculatedData` をフラットな snake_case に展開し（`buildFinancialsResponse`／`flattenYearEntry`）、`schema_version`/`code`/`name`/`sector`/`market`/`currency`/`unit` を付与する。`MetricsResult` 直シリアライズは採用しない（内部モデルから公開 API を疎結合）。
+- レスポンス top-level に **`schema_version`** を持たせ、クライアントのデコード版と整合判定する。採番は `Api.financialsSchemaVersion`（独立した整数・初期 1・破壊的変更時のみ +1。blueTickerVersion 非連動）。URL の `/v1` とは別レイヤー。
 - Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
 
 ### 将来クライアント計算へ移す場合
@@ -101,7 +101,7 @@ iOS が対話的な再計算（係数を変えた what-if 等）を要求し、�
 | `GET /v1/companies?q={query}` | `q`: 検索クエリ | 企業名・銘柄コード検索 |
 | `GET /v1/sectors/{sector}/companies?limit=20` | `sector`: 業種名、`limit` | 業種別銘柄一覧 |
 | `GET /v1/companies/{code}/filings?max_years=5` | `max_years` | 書類一覧 |
-| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別） |
+| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別、flatten 形＋`schema_version`） |
 | `GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b` | `doc_id`（省略可）、`sections`（省略可） | 書類セクションテキスト |
 
 - 成功: HTTP 200 + `application/json`
@@ -149,7 +149,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
 
-- レスポンスに **schema version** を持たせ、クライアントのデコード版と整合判定する（derived キャッシュの `_cache_version` の発想を公開契約面へ拡張）。
+- レスポンス top-level に **`schema_version`**（`Api.financialsSchemaVersion`=1、独立採番）を持たせ、クライアントのデコード版と整合判定する。**実装済み**（上記「公開契約は financials レスポンス」参照）。
 
 ### Stage 2 の保持ポリシー
 
@@ -294,7 +294,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ## 未決事項
 
 - Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）
-- financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）
+- ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
 - remote backend 利用時の `ticker cache status` 表示内容
 
 ---
