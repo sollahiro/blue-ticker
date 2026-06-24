@@ -36,7 +36,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
 4. Neon 接続 ＋ Stage 1/3 スキーマ設計（Fluent マイグレーション） — **Stage 1・Stage 3 スキーマ完了**（下記「Stage 1 DB 配線」「Stage 3 DB スキーマ」）。残りは Stage 3 の実パース取り込み（Stage 2 とセット）
 5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion=1`、blueTickerVersion 非連動）を追加
-6. Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順
+6. ~~Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順~~ → **完了**（下記「デプロイ（Dockerfile / Fly.io / self-host）」）
 
 ### Stage 1 DB 配線（実装済み）
 
@@ -171,6 +171,15 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 > Neon は東京リージョン非対応（最寄り ap-southeast、片道 ~100ms）。ただし書き込みは Stage 1/3 のバッチ取り込み、読み取りはキャッシュ＋計算済み JSON で DB を連打しないため許容。同期おしゃべりクエリが増えたら Fly Managed Postgres（同 nrt）へ移行検討。
 
+### デプロイ（Dockerfile / Fly.io / self-host）（実装済み）
+
+クラウド・self-host で同一イメージを使うデプロイ成果物を追加した（構築順序ステップ6）。具体的なコマンド手順は `docs/deploy.md`。
+
+- **`Dockerfile`**: swift:6.1 の 2 段ビルド。ビルド段で `blt-server` のみリリースビルド（MemberImportVisibility 無効化フラグ付き）、ランタイム段は `swift:6.1-slim`（Swift ランタイム内包で堅牢・追加コピー不要）。サーバーバイナリと `EdinetcodeDlInfo.csv` のみ収録（`assets/taxonomy` 約 105MB はソース未参照のため除外）。実行時 env のデフォルト（`BLT_HOST=0.0.0.0`/`BLT_PORT=8080`/assets・data パス）を内包し、self-host も `fly.toml` なしで動く。Fly Volume が root マウントのため root 実行（entrypoint chown を避ける最小構成）。
+- **`.dockerignore`**: ビルドコンテキストから `.build`/`.git`/`SwiftTests`/`assets/taxonomy` 等を除外。
+- **`fly.toml`**: `primary_region = "nrt"`、`internal_port = 8080`、`/healthz` チェック、`/data` Volume（`blt_data`）、`shared-cpu-1x`/1gb。実行時 env は Dockerfile 側に集約し重複を避ける。機密（`BLT_EDINET_API_KEY`/`BLT_AUTH_TOKEN`/`DATABASE_URL`）は `fly secrets` で注入。
+- 検証: macOS で `blt-server` リリースビルド成功。Linux 実ビルドは `docker build`（swift:6.1 → slim）で確認。
+
 ### サーバースタック（Vapor + Fluent 確定）
 
 DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent を採用**（2026-06 ユーザー確認済み。`dependencies.md` の大型依存追加確認をクリア）。素の swift-nio 手書きだと Postgres ドライバ・SQL・マイグレーション・コネクションプール・認証を全て自前実装することになり、自前 DB 層がバグの温床になるため。
@@ -275,11 +284,11 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 ### クラウド公開前の必須（コード側）
 
-- [ ] bind 可変化（`BLT_HOST`/`BLT_PORT`、Fly では `0.0.0.0:8080`）
-- [ ] `/healthz` ヘルスチェック追加（Fly `[checks]` 用）
-- [ ] Bearer トークン認証を追加（Vapor ミドルウェア。トークンは Fly secrets 経由）
-- [ ] EDINET API キーの読み元を env（Fly secrets）対応に
-- [ ] Dockerfile（swift:6.1 2段ビルド）＋ `fly.toml`、永続 Volume、`fly secrets`
+- [x] bind 可変化（`BLT_HOST`/`BLT_PORT`、Fly では `0.0.0.0:8080`） — 共通基盤で実装済み
+- [x] `/healthz` ヘルスチェック追加（Fly `[checks]` 用） — 共通基盤で実装済み
+- [x] Bearer トークン認証を追加（Vapor ミドルウェア。トークンは Fly secrets 経由） — 共通基盤で実装済み
+- [x] EDINET API キーの読み元を env（Fly secrets）対応に — 共通基盤で実装済み（`BLT_EDINET_API_KEY`）
+- [x] Dockerfile（swift:6.1 2段ビルド）＋ `fly.toml`、永続 Volume、`fly secrets` — 「デプロイ」節・`docs/deploy.md` 参照
 
 ### 将来
 

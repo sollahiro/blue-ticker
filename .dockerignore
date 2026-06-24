@@ -1,0 +1,10 @@
+# ビルドコンテキストを最小化する。依存解決後に COPY . . するため、
+# ビルドに不要なものはここで除外する（SwiftTests は manifest のパス検証に必要なので残す）。
+.build/
+.git/
+.github/
+.claude/
+docs/
+# taxonomy（約 105MB）はサーバー未使用。CSV だけ残す。
+assets/taxonomy/
+**/.DS_Store
