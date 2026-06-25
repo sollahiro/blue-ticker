@@ -275,7 +275,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 近期（Stage 1 安定化）
 
 - [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
-- [ ] 実 Neon への接続・同期の E2E 検証（現状テストはインメモリ SQLite まで）
+- [~] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。残りはシークレットを用いた実 Neon での実行
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
 
