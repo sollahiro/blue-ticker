@@ -108,7 +108,7 @@ import Vapor
 
             let row = try #require(try await EdinetXbrlFacts.find("S100E2E1", on: app.db))
             #expect(row.facts == payload)  // JSONB ネストマップ・配列・nil まで完全一致
-            #expect(row.cacheVersion == blueTickerVersion)
+            #expect(row.cacheVersion == xbrlFactsCacheVersion)
 
             // 再実行は現行バージョン済みのため skip（staleness 判定が Postgres でも効く）。
             let rerun = try await runStage3Ingest(db: app.db, limit: nil) { _ in

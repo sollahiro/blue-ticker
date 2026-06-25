@@ -42,3 +42,10 @@ public struct XbrlFactRecord: Codable, Sendable, Equatable {
 
 /// 書類1件分の数値 fact インデックス（tag → contextRef → fact）。JSONB 1 セルに格納する。
 public typealias XbrlFactIndexPayload = [String: [String: XbrlFactRecord]]
+
+/// Neon facts キャッシュ（`edinet_xbrl_facts.cache_version`）のパース／スキーマバージョン。
+/// `blueTickerVersion` とは独立し、XBRL fact のパースロジック（`parseXbrlFactIndex`）または
+/// 本 RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したときのみバンプする。
+/// グローバルバージョンに連動させないことで、月内 Micro バンプで高コストな再 ingest
+/// （EDINET からの XBRL 再ダウンロード＋再パース）を走らせない。
+public let xbrlFactsCacheVersion = "facts-v1"

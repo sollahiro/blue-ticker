@@ -21,7 +21,8 @@ final class EdinetXbrlFacts: Model, @unchecked Sendable {
     @Field(key: "facts")
     var facts: XbrlFactIndexPayload
 
-    /// パース時の blueTickerVersion。読み込み時に照合し、不一致なら再パースする（derived キャッシュと同思想）。
+    /// パース時の xbrlFactsCacheVersion。読み込み時に照合し、不一致なら再パースする（derived キャッシュと同思想）。
+    /// blueTickerVersion とは独立し、パース／スキーマ変更時のみバンプする（月内 Micro バンプで再 ingest を走らせない）。
     @Field(key: "cache_version")
     var cacheVersion: String
 

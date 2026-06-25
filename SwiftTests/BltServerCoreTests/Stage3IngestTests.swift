@@ -62,7 +62,7 @@ private func payload(_ value: Double) -> XbrlFactIndexPayload {
             let pre = EdinetXbrlFacts()
             pre.id = "S1"
             pre.facts = payload(1)
-            pre.cacheVersion = blueTickerVersion
+            pre.cacheVersion = xbrlFactsCacheVersion
             try await pre.create(on: app.db)
 
             let summary = try await runStage3Ingest(db: app.db, limit: nil) { _ in
@@ -93,7 +93,7 @@ private func payload(_ value: Double) -> XbrlFactIndexPayload {
             #expect(summary.skipped == 0)
             let row = try #require(try await EdinetXbrlFacts.find("S1", on: app.db))
             #expect(row.facts["NetSales"]?["CurrentYearDuration"]?.value == 42)
-            #expect(row.cacheVersion == blueTickerVersion)
+            #expect(row.cacheVersion == xbrlFactsCacheVersion)
             #expect(try await EdinetXbrlFacts.query(on: app.db).count() == 1)
         }
     }
