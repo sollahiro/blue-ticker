@@ -42,7 +42,7 @@ func runStage3Ingest(
         guard let docID = doc.id else { continue }
         // 1 書類につき find は 1 回。現行版でパース済みなら skip、それ以外は取り込む。
         let existing = try await EdinetXbrlFacts.find(docID, on: db)
-        if let row = existing, row.cacheVersion == blueTickerVersion {
+        if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
             skipped += 1
             continue
         }
@@ -61,19 +61,19 @@ func runStage3Ingest(
 }
 
 /// fact インデックスを edinet_xbrl_facts へ書き込む（既存行があれば更新、無ければ作成）。
-/// `existing` は呼び出し側で取得済みの行（再 find を避ける）。cache_version に現行 blueTickerVersion を埋め込む。
+/// `existing` は呼び出し側で取得済みの行（再 find を避ける）。cache_version に現行 xbrlFactsCacheVersion を埋め込む。
 func storeXbrlFacts(
     existing: EdinetXbrlFacts?, docID: String, facts: XbrlFactIndexPayload, db: Database
 ) async throws {
     if let row = existing {
         row.facts = facts
-        row.cacheVersion = blueTickerVersion
+        row.cacheVersion = xbrlFactsCacheVersion
         try await row.update(on: db)
     } else {
         let model = EdinetXbrlFacts()
         model.id = docID
         model.facts = facts
-        model.cacheVersion = blueTickerVersion
+        model.cacheVersion = xbrlFactsCacheVersion
         try await model.create(on: db)
     }
 }

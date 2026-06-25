@@ -50,7 +50,7 @@ Vapor + Fluent を足す前段として、Server を独立ターゲットへ切�
 
 XBRL 数値 RAW（パース済み fact インデックス）の格納先スキーマと、実パース取り込み（Stage 2 取得 → パース → 格納）を実装した。`getFinancials`（Stage 4）の DB 読み込みへの配線は未着手（現状は従来どおりインプロセス再パース）。
 
-- **スキーマ**: `edinet_xbrl_facts`（書類1件=1行、docID PK）。`facts` カラムに書類単位の fact インデックス（tag → contextRef → fact）を **JSONB 1 セル**で格納（Postgres=JSONB / SQLite=TEXT）。`cache_version` で書類単位の staleness 照合（`blueTickerVersion` 不一致なら再パース）。
+- **スキーマ**: `edinet_xbrl_facts`（書類1件=1行、docID PK）。`facts` カラムに書類単位の fact インデックス（tag → contextRef → fact）を **JSONB 1 セル**で格納（Postgres=JSONB / SQLite=TEXT）。`cache_version` で書類単位の staleness 照合（`xbrlFactsCacheVersion` 不一致なら再パース）。`xbrlFactsCacheVersion` は `blueTickerVersion` と独立し、パース／RAW スキーマ変更時のみバンプする（月内 Micro バンプで高コストな再 ingest を走らせないため）。
 - **格納粒度（A）**: fact 1件=1行の正規化ではなく書類単位 JSONB。理由は唯一の消費者 Stage 4 が書類単位に全 fact をまとめ読みするため。タグ横断クエリが実需要化したら**保存済み JSONB から正規化投影を派生**できる（EDINET 再取得・再パース不要）。
 - 格納用 Codable DTO（`XbrlFactRecord`／`XbrlFactIndexPayload`）は `BlueTickerCore`（Foundation のみ依存）に置き、内部型 `XbrlFact` を露出させない。Fluent モデル・マイグレーションは `BltServerCore`。
 - Stage 3 RAW は公開しない（サーバー内部の中間生成物）。`doc_id` は `edinet_documents` への論理参照（硬い FK は張らず取り込み順を非結合）。
@@ -58,7 +58,7 @@ XBRL 数値 RAW（パース済み fact インデックス）の格納先スキ�
 #### 取り込みコマンド（`blt-server ingest`）
 
 - **コマンド**: `blt-server ingest [--limit N]`（ワンショット。`--limit` は新規取り込み件数の上限。XBRL ダウンロードが 9MB/件と重いためバッチ分割用）。
-- **対象選定**: `edinet_documents` を提出日時降順（新しい順）に走査し、`edinet_xbrl_facts` が無い or `cache_version != blueTickerVersion` の書類のみ取り込む。最新版でパース済みは skip（derived キャッシュと同思想の staleness 判定）。
+- **対象選定**: `edinet_documents` を提出日時降順（新しい順）に走査し、`edinet_xbrl_facts` が無い or `cache_version != xbrlFactsCacheVersion` の書類のみ取り込む。最新版でパース済みは skip（derived キャッシュと同思想の staleness 判定）。
 - **取得・パース**: Core ファサード `parseXbrlFactIndex(docID:)` が `downloadDocument`（Stage 2）→ `collectAllNumericFacts`（`nilAsZero: false`、Stage 4 と同条件）→ `XbrlFactRecord` 写経を行う。DB upsert（find-or-create・冪等）は `BltServerCore/Stage3Ingest.swift`。取得失敗・fact 0 件は failed としてスキップ（戻り値パターン）。
 - **テスト**: DB ロジック（候補選定・skip・再パース・limit・upsert）はパーサ closure 注入でネットワーク非依存に検証（`Stage3IngestTests`）。
 - **Stage 2 保持ポリシー**: 生 XBRL は**ローカル保持継続**（`external/edinet/xbrl` キャッシュ／Fly Volume）。Stage 4 が HTML 依存抽出（US-GAAP・IFRSリース・セグメント・粗利）のため生ディレクトリを必要とするため即削除は不可。Cloudflare R2 退避はクラウド実運用で容量が問題化してから（延期）。
