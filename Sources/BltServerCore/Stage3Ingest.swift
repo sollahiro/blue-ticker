@@ -1,0 +1,108 @@
+// Stage 3 取り込み: edinet_documents の各書類について XBRL を取得（Stage 2）・パースし、
+// 数値 fact インデックスを edinet_xbrl_facts へ upsert する。
+// 取得・パースは BlueTickerCore のファサード（parseXbrlFactIndex）に委譲し、
+// ここでは候補選定・staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
+
+import BlueTickerCore
+import Fluent
+import Foundation
+import Vapor
+
+/// 取り込み結果のサマリ。
+public struct Stage3IngestSummary: Sendable, Equatable {
+    /// 取り込みを試みた書類数（skip を除く）。
+    public let attempted: Int
+    /// パース・格納に成功した書類数。
+    public let stored: Int
+    /// 取得・パース失敗（XBRL 無し等）でスキップした書類数。
+    public let failed: Int
+    /// 既に最新版でパース済みのためスキップした書類数。
+    public let skipped: Int
+}
+
+/// docID を受けて fact インデックスを返すパーサ（成功で payload、失敗で nil）。
+/// 本番は `context.parseXbrlFactIndex`、テストはフェイクを注入する。
+public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPayload?
+
+/// edinet_documents の書類を新しい順に走査し、未パース or バージョン不一致のものを取り込む。
+/// `limit` は新規取り込み件数の上限（XBRL ダウンロードが重いためバッチ実行用）。
+func runStage3Ingest(
+    db: Database, limit: Int?, parse: XbrlFactParser
+) async throws -> Stage3IngestSummary {
+    let documents = try await EdinetDocument.query(on: db)
+        .sort(\.$submitDateTime, .descending)
+        .all()
+
+    var attempted = 0
+    var stored = 0
+    var failed = 0
+    var skipped = 0
+
+    for doc in documents {
+        guard let docID = doc.id else { continue }
+        // 1 書類につき find は 1 回。現行版でパース済みなら skip、それ以外は取り込む。
+        let existing = try await EdinetXbrlFacts.find(docID, on: db)
+        if let row = existing, row.cacheVersion == blueTickerVersion {
+            skipped += 1
+            continue
+        }
+        if let lim = limit, attempted >= lim { break }
+        attempted += 1
+        guard let payload = await parse(docID) else {
+            failed += 1
+            continue
+        }
+        try await storeXbrlFacts(existing: existing, docID: docID, facts: payload, db: db)
+        stored += 1
+    }
+
+    return Stage3IngestSummary(
+        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
+}
+
+/// fact インデックスを edinet_xbrl_facts へ書き込む（既存行があれば更新、無ければ作成）。
+/// `existing` は呼び出し側で取得済みの行（再 find を避ける）。cache_version に現行 blueTickerVersion を埋め込む。
+func storeXbrlFacts(
+    existing: EdinetXbrlFacts?, docID: String, facts: XbrlFactIndexPayload, db: Database
+) async throws {
+    if let row = existing {
+        row.facts = facts
+        row.cacheVersion = blueTickerVersion
+        try await row.update(on: db)
+    } else {
+        let model = EdinetXbrlFacts()
+        model.id = docID
+        model.facts = facts
+        model.cacheVersion = blueTickerVersion
+        try await model.create(on: db)
+    }
+}
+
+// MARK: - CLI エントリ
+
+/// `blt-server ingest` の本体。Application を一時起動して DB を配線し、Stage 3 取り込みを実行する。
+/// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
+public func runStage3IngestCommand(limit: Int?) async throws {
+    guard let context = await makeBltServerContext() else {
+        throw Stage1SyncError.apiKeyMissing
+    }
+    guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
+        throw Stage1SyncError.databaseUnavailable
+    }
+
+    var env = Environment(name: "production", arguments: ["blt-server"])
+    try LoggingSystem.bootstrap(from: &env)
+    let app = try await Application.make(env)
+    do {
+        try await configureDatabase(app)
+        let summary = try await runStage3Ingest(db: app.db, limit: limit) { docID in
+            await context.parseXbrlFactIndex(docID: docID)
+        }
+        app.logger.notice(
+            "Stage 3 取り込み完了: attempted=\(summary.attempted) stored=\(summary.stored) failed=\(summary.failed) skipped=\(summary.skipped)")
+    } catch {
+        try? await app.asyncShutdown()
+        throw error
+    }
+    try await app.asyncShutdown()
+}
