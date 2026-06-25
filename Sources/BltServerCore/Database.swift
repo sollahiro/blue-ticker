@@ -23,6 +23,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateEdinetSyncState())
     // Stage 3: XBRL 数値 RAW（edinet_xbrl_facts、書類単位 JSONB）。
     app.migrations.add(CreateEdinetXbrlFacts())
+    // Stage 4: 計算済み財務サマリ（company_financials、企業単位 JSONB）。
+    app.migrations.add(CreateCompanyFinancials())
     try await app.autoMigrate()
 
     app.logger.notice("Postgres (Neon) を登録し、マイグレーションを適用しました。")

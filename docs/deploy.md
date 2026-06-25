@@ -36,9 +36,11 @@ fly deploy
 # 5. 初回データ同期（Stage 1 書類一覧 → Neon）。稼働マシン上で実行
 fly ssh console -C "/app/blt-server sync --from 2024-01-01"
 
-# 6. Stage 3 取り込み（XBRL 数値 fact → Neon）。XBRL 取得が重いため --limit で分割推奨
+# 6. 取り込み（Stage 3 数値 fact ＋ Stage 4 計算済み財務サマリ → Neon）。--limit で分割推奨
 fly ssh console -C "/app/blt-server ingest --limit 50"
 ```
+
+`ingest` は Stage 3（XBRL 数値 fact → `edinet_xbrl_facts`）に続けて Stage 4（計算済み財務サマリ → `company_financials`）を実行する。Stage 4 計算は HTML 依存抽出・waterfall を含みメモリを使うため、shared-cpu-1x/1gb の Fly 上で大量に走らせると OOM しうる。**重い初回バックフィルはローカル（または余裕のあるマシン）から `DATABASE_URL` を Neon に向けて実行する**運用を推奨（下記「Neon 接続の E2E 検証」と同手順）。REST サーバー（Fly）は `company_financials` を読むだけなので financials は OOM しない。
 
 ヘルスチェック・HTTPS・証明書は `fly.toml` と Fly が処理する。独自ドメインは `fly certs add <domain>`。
 
@@ -92,13 +94,14 @@ export BLT_EDINET_API_KEY=xxxxx
 
 # 起動時に autoMigrate がスキーマを適用（DATABASE_URL があれば自動）
 swift run blt-server sync --from 2025-04-01   # Stage 1: 書類一覧 → edinet_documents
-swift run blt-server ingest --limit 5         # Stage 3: 数値 fact → edinet_xbrl_facts
+swift run blt-server ingest --limit 5         # Stage 3 数値 fact → edinet_xbrl_facts ＋ Stage 4 計算済み → company_financials
 
 # DB に入ったことを確認（psql）
 psql "$DATABASE_URL" -c "SELECT count(*) FROM edinet_documents;"
 psql "$DATABASE_URL" -c "SELECT doc_id, cache_version, jsonb_typeof(facts) FROM edinet_xbrl_facts LIMIT 5;"
+psql "$DATABASE_URL" -c "SELECT code, cache_version, requested_years FROM company_financials LIMIT 5;"
 
-# financials 読み取り（計算済み JSON が返る。DB の有無で公開契約は不変）
+# financials 読み取り（Stage 4 格納済みなら DB から、無ければライブ計算へフォールバック。公開契約は不変）
 swift run blt-server &                          # ローカル起動（既定 127.0.0.1:3000）
 curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=3' | jq '.schema_version, .years[0].fy_end'
 ```

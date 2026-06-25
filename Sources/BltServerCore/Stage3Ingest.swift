@@ -80,7 +80,13 @@ func storeXbrlFacts(
 
 // MARK: - CLI エントリ
 
-/// `blt-server ingest` の本体。Application を一時起動して DB を配線し、Stage 3 取り込みを実行する。
+/// Stage 4 取り込みで格納する年数。要求が増えても再計算が走らないよう余裕を持たせる
+/// （REST の financials は years 既定 5。read 時に要求年数へ縮める）。
+let stage4IngestYears = 6
+
+/// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
+/// Stage 3（XBRL 数値 fact）→ Stage 4（計算済み財務サマリ）の順に取り込む。
+/// Stage 3 が先に走り XBRL をローカルキャッシュへ落とすため、Stage 4 の計算は再ダウンロードを避けられる。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runStage3IngestCommand(limit: Int?) async throws {
     guard let context = await makeBltServerContext() else {
@@ -95,11 +101,16 @@ public func runStage3IngestCommand(limit: Int?) async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let summary = try await runStage3Ingest(db: app.db, limit: limit) { docID in
+        let s3 = try await runStage3Ingest(db: app.db, limit: limit) { docID in
             await context.parseXbrlFactIndex(docID: docID)
         }
         app.logger.notice(
-            "Stage 3 取り込み完了: attempted=\(summary.attempted) stored=\(summary.stored) failed=\(summary.failed) skipped=\(summary.skipped)")
+            "Stage 3 取り込み完了: attempted=\(s3.attempted) stored=\(s3.stored) failed=\(s3.failed) skipped=\(s3.skipped)")
+        let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit) { code in
+            await context.computeFinancials(code: code, years: stage4IngestYears)
+        }
+        app.logger.notice(
+            "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
     } catch {
         try? await app.asyncShutdown()
         throw error
