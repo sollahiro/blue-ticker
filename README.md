@@ -81,7 +81,7 @@ ticker analyze 7203 --no-cache
   - ③ ROE増減（純利益率差・総資産回転率差・財務レバレッジ差）
   - ④ ネットキャッシュ増減（現金増減・有利子負債増減）
   - ⑤ 運転資本・CCC増減（売掛金・棚卸資産・買掛金の前年差、DSO/DIO/DPO/CCC）
-- `--years N`: 通期分析はデフォルト6年、半期分析はデフォルト3年
+- `--years N`: 分析年数（デフォルト6年、通期・半期共通）
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示（前年同期差）
 - `--no-cache`: 分析結果キャッシュを使わず再計算
 - `--json`: JSON 形式で出力
@@ -135,15 +135,6 @@ ticker cache clean --execute --edinet-xbrl-days 30
 ticker sector
 ticker sector --json
 ```
-
-## 開発
-
-```bash
-swift build
-swift test
-```
-
-XBRL解析のタグ体系・コンテキスト仕様は `docs/xbrl-parsing.md` を参照してください。
 
 ## 免責事項
 
