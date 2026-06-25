@@ -100,18 +100,28 @@ public extension BltServerContext {
     }
 
     func getFinancials(code: String, years: Int) async -> BltServerResponse {
-        let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
-        guard let result = await analyzer.analyze(code: code, analysisYears: years) else {
+        guard let response = await computeFinancials(code: code, years: years) else {
             return .notFound("データが見つかりませんでした: \(code)")
         }
+        return .ok(response.jsonObject())
+    }
+
+    /// 財務サマリ（公開契約 `FinancialsResponse`）を計算する。
+    /// ライブ計算経路の単一の実装点。getFinancials（REST ライブ応答）と
+    /// Stage 4 取り込み（`blt-server ingest` → Neon 保存）の両方がここを通る。
+    /// EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
+    func computeFinancials(code: String, years: Int) async -> FinancialsResponse? {
+        let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
+        guard let result = await analyzer.analyze(code: code, analysisYears: years) else {
+            return nil
+        }
         let stock = await masterDataManager.getByCode(code)
-        let json = buildFinancialsResponse(
+        return FinancialsResponse(
             code: code,
             name: stock?.coName ?? result.code ?? "",
             sector: stock?.s33nm ?? "",
             market: stock?.mktNm ?? "",
             result: result)
-        return .ok(json)
     }
 
     func getFilingContent(code: String, docId: String?, sections: [String]?) async -> BltServerResponse {

@@ -16,7 +16,7 @@ import Foundation
 
 // MARK: - 年度エントリ（フラット形）
 
-struct FinancialsYear: Codable {
+struct FinancialsYear: Codable, Sendable {
     var fyEnd: String?
     var financialPeriod: String?
     var curPerType: String?
@@ -350,7 +350,9 @@ extension FinancialsYear {
 
 // MARK: - レスポンス（トップレベル封筒）
 
-struct FinancialsResponse: Codable {
+// public: BltServerCore（Stage 4 derived キャッシュ）がこの型を JSONB として保存・読込する。
+// 内部メンバーは internal のまま（モジュール外からは Codable 経由でのみ扱う）。
+public struct FinancialsResponse: Codable, Sendable {
     var schemaVersion: Int
     var code: String
     var name: String
@@ -388,7 +390,8 @@ extension FinancialsResponse {
     }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
-    func jsonObject() -> [String: Any] {
+    /// public: BltServerCore の Stage 4 read 経路が格納済みレスポンスを JSON へ落とすために使う。
+    public func jsonObject() -> [String: Any] {
         [
             "schema_version": schemaVersion,
             "code": code,
@@ -399,6 +402,44 @@ extension FinancialsResponse {
             "unit": unit,
             "years": years.map { $0.jsonObject() },
         ]
+    }
+
+    /// years を新しい順の先頭 n 件に縮めたコピーを返す（n 以上ならそのまま）。
+    /// Stage 4 derived キャッシュは要求年数以上で格納し、read 時に要求年数へ縮める。
+    ///
+    /// ライブ計算経路は要求年数ちょうどの年度集合で waterfall を回すため、最古年は前年が無く
+    /// 増減系フィールドが null になる（Waterfall.swift の各ループは k>=1 のみ設定）。DB 経路は
+    /// 多めの年数で計算してから縮めるので、縮めた集合の最古年（より古い年を落とした結果）は
+    /// 前年依存値を保持してしまう。両経路の出力を一致させるため、縮めて最古になった年の
+    /// 前年依存フィールドを null へ戻す（実際に古い年を落とした＝n 未満に縮めた場合のみ）。
+    public func trimmed(toYears n: Int) -> FinancialsResponse {
+        guard n >= 0, years.count > n else { return self }
+        var copy = self
+        copy.years = Array(years.prefix(n))
+        if n > 0 {
+            copy.years[n - 1].clearPriorDependentMetrics()
+        }
+        return copy
+    }
+}
+
+extension FinancialsYear {
+    /// Waterfall.swift が「前年あり」のとき（ループ k>=1）だけ設定する増減系フィールドを null へ戻す。
+    /// trim で最古になった年をライブ経路（最古年は前年なし＝null）と一致させるために使う。
+    /// 対象は op 増減分解・ROIC 差分・ROE 差分の出力のみ（businessProfit/netMargin 等の
+    /// 各年で設定される項目は対象外）。Waterfall.swift の k>=1 代入箇所と対応させて維持すること。
+    mutating func clearPriorDependentMetrics() {
+        businessProfitChange = nil
+        salesChangeImpact = nil
+        grossMarginChangeImpact = nil
+        sgaChangeImpact = nil
+        roicDelta = nil
+        roicMarginEffect = nil
+        roicTurnoverEffect = nil
+        roeDelta = nil
+        roeNetMarginEffect = nil
+        roeAssetTurnoverEffect = nil
+        roeLeverageEffect = nil
     }
 }
 
