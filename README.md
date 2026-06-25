@@ -32,13 +32,35 @@ ticker cache prepare --years 5
 
 EDINET APIキーは [EDINET公式サイト](https://disclosure2.edinet-fsa.go.jp/) で取得してください。
 
+## バックエンド（local / remote）
+
+`ticker` は2つのモードで動作します。既定は **local**（このマシンで EDINET を直接叩いて計算）です。
+
+| モード | 計算 | EDINET APIキー | 用途 |
+|---|---|---|---|
+| `local`（既定） | このマシン | 必要 | オフライン・単体利用 |
+| `remote` | blt-server | 不要（サーバー側で保持） | 共有サーバー経由・キー管理不要 |
+
+remote モードは、計算済みの結果を blt-server（REST API）から受け取り、local と同じ整形で表示します。
+
+```bash
+ticker config set --backend remote --server-url https://blt-server.example.com
+ticker config set --auth-token <token>   # サーバーが Bearer 認証を要求する場合
+ticker config show                        # 設定確認（トークンはマスク表示）
+ticker config set --backend local         # local へ戻す
+```
+
+- 接続情報は環境変数 `BLT_SERVER_URL` / `BLT_AUTH_TOKEN` でも指定でき、設定より優先されます。
+- 対応コマンド: `search` / `filings` / `filing` / `analyze` / `summarize`。`sector`（業種一覧）は常に local、`analyze`/`summarize` の `--half`（半期）は remote 非対応です。
+- 自分で blt-server を立てる手順は [`docs/deploy.md`](docs/deploy.md) を参照してください。
+
 ## 使い方
 
 ### 銘柄検索
 
 ```bash
 ticker search トヨタ
-ticker search 7203 --format json
+ticker search 7203 --json
 ```
 
 ### 財務分析
@@ -105,12 +127,13 @@ ticker cache clean --execute --edinet-xbrl-days 30
 
 日本株の分析やEDINET書類抽出の前には、API負荷を抑えるため `ticker cache status` を確認し、表示された `next action` を先に実行してください。
 
-### セクター検索
+### 業種一覧
+
+東証33業種と各業種の銘柄数を一覧表示します。
 
 ```bash
 ticker sector
-ticker sector 輸送用機器
-ticker sector 情報・通信業 --format json
+ticker sector --json
 ```
 
 ## 開発
