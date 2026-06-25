@@ -197,6 +197,29 @@ private func nonEmptyString(_ value: Any?) -> String? {
     return trimmed.isEmpty ? nil : trimmed
 }
 
+// MARK: - Stage 3 取り込み（XBRL 数値 fact）
+
+public extension BltServerContext {
+    /// Stage 3: 書類1件分の XBRL をダウンロード（Stage 2）してパースし、
+    /// 数値 fact インデックス（公開 Codable `XbrlFactIndexPayload`）を返す。
+    /// IndividualAnalyzer と同じ `nilAsZero: false` で収集し、Stage 4 が消費する値と一致させる。
+    /// ダウンロード失敗・fact 0 件は nil（戻り値パターン）。生 XBRL はローカルキャッシュに保持する。
+    func parseXbrlFactIndex(docID: String) async -> XbrlFactIndexPayload? {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
+        guard !facts.isEmpty else { return nil }
+        return facts.mapValues { ctxMap in ctxMap.mapValues(xbrlFactRecord(from:)) }
+    }
+}
+
+/// 内部型 `XbrlFact` を公開格納用 `XbrlFactRecord` へ写経する（欠落なく保持）。
+private func xbrlFactRecord(from f: XbrlFact) -> XbrlFactRecord {
+    XbrlFactRecord(
+        value: f.value, consolidation: f.consolidation, unitRef: f.unitRef,
+        decimals: f.decimals, role: f.role, section: f.section,
+        roles: f.roles, sections: f.sections, label: f.label, sourceFile: f.sourceFile)
+}
+
 // MARK: - Helpers
 
 private extension BltServerContext {
