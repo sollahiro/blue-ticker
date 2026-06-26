@@ -286,7 +286,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 近期（Stage 1 安定化）
 
 - [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
-- [~] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。残りはシークレットを用いた実 Neon での実行
+- [~] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。**実 Neon での実行は着手済みだが未完**: `sync`(Stage1) は実 Neon へ書き込み成功（冪等 upsert 確認）、Stage4 DB読み版を Fly へ再デプロイ済み・`computeFinancials` 単体も実データで動作確認済み。ただし `blt-server ingest` が `stored=0 failed=5`（Stage3/4 とも候補書類が `parseXbrlFactIndex` で nil）で**バックフィルが進まない**。真因未確定（要: 候補 docID の確認、または ingest への per-doc 失敗理由ログ追加）。これが解消するまで financials の DB warm 化は不可
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
 
