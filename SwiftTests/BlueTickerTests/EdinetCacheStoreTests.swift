@@ -210,6 +210,27 @@ import Foundation
         #expect(store.hasXbrlDir("DOC3"))
     }
 
+    @Test func testHasXbrlDirRejectsEmptyDirectory() throws {
+        let store = makeStore()
+        let dir = store.xbrlDir("DOC_EMPTY")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        // 空ディレクトリ（展開失敗の残骸）はキャッシュヒットにしない
+        #expect(!(store.hasXbrlDir("DOC_EMPTY")))
+    }
+
+    @Test func testStoreXbrlZipLeavesNoDirectoryWhenContentIsNotZip() {
+        let store = makeStore()
+        let notZip = Data(#"{"StatusCode":401,"message":"invalid"}"#.utf8)
+
+        #expect(throws: (any Error).self) {
+            _ = try store.storeXbrlZip("DOC_BADZIP", content: notZip)
+        }
+        // 展開失敗時にディレクトリ自体を残さない（残すと以後のキャッシュが汚染される）。
+        // hasXbrlDir は空ディレクトリも false にするため、dest の非存在を直接検証する。
+        #expect(!(FileManager.default.fileExists(atPath: store.xbrlDir("DOC_BADZIP").path)))
+    }
+
     @Test func testTouchXbrlDirUpdatesMtime() throws {
         let store = makeStore()
         let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "1234"])
