@@ -27,6 +27,8 @@ swift test                   # 全テスト（Swift Testing）
 - `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`Server/` を参照してはならない
 - `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
 
+@.agents/rules/generic/workflow.md
+@.agents/rules/generic/documentation.md
 @.agents/rules/generic/commit-conventions.md
 @.agents/rules/project/date-conversion.md
 @.agents/rules/project/versioning.md
