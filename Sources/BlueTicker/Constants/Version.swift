@@ -4,4 +4,4 @@
 // derived キャッシュの `_cache_version` にもこの値を使うため、
 // 同じ月内のリリースでも Micro を上げるとキャッシュは再生成される。
 
-public let blueTickerVersion = "26.6.10"
+public let blueTickerVersion = "26.6.11"

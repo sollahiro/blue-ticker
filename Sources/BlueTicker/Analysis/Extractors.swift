@@ -1055,8 +1055,10 @@ enum AccountsReceivableExtractor {
         let tags = accountingStandard == "IFRS"
             ? Xbrl.accountsReceivableIFRSTags
             : Xbrl.accountsReceivableJGAAPTags
-        let item = resolveItem(fieldSet, tags: tags)
-        guard item.tag != nil else {
+        // 会計基準移行年は前期列が旧科目（prior のみ）になるため current 値を持つタグを優先する。
+        // prior のみの先頭候補（旧科目）に引きずられて当期値を取りこぼすのを防ぐ。
+        let item = resolveItemPreferCurrent(fieldSet, tags: tags)
+        guard item.current != nil else {
             return WorkingCapitalResult(current: nil, method: "not_found")
         }
         return WorkingCapitalResult(current: item.current, method: "direct")
@@ -1075,13 +1077,14 @@ enum InventoryExtractor {
         let tags = accountingStandard == "IFRS"
             ? Xbrl.inventoryIFRSTags
             : Xbrl.inventoryJGAAPTags
-        let item = resolveItem(fieldSet, tags: tags)
-        if item.tag != nil {
+        // current 値を持つタグを優先（移行年の prior のみ科目に引きずられない）。
+        let item = resolveItemPreferCurrent(fieldSet, tags: tags)
+        if item.current != nil {
             return WorkingCapitalResult(current: item.current, method: "direct")
         }
         if accountingStandard == "J-GAAP" {
             let agg = resolveAggregate(fieldSet, componentTagLists: Xbrl.inventoryJGAAPComponents)
-            if agg.tag != nil {
+            if agg.current != nil {
                 return WorkingCapitalResult(current: agg.current, method: "aggregated")
             }
         }
@@ -1101,8 +1104,9 @@ enum AccountsPayableExtractor {
         let tags = accountingStandard == "IFRS"
             ? Xbrl.accountsPayableIFRSTags
             : Xbrl.accountsPayableJGAAPTags
-        let item = resolveItem(fieldSet, tags: tags)
-        guard item.tag != nil else {
+        // 会計基準移行年は前期列が旧科目（prior のみ）になるため current 値を持つタグを優先する。
+        let item = resolveItemPreferCurrent(fieldSet, tags: tags)
+        guard item.current != nil else {
             return WorkingCapitalResult(current: nil, method: "not_found")
         }
         return WorkingCapitalResult(current: item.current, method: "direct")
