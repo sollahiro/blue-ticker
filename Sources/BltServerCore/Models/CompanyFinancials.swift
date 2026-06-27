@@ -3,7 +3,8 @@
 // REST の financials read 経路は EDINET 取得・XBRL パースなしで返せるようにする（OOM 回避）。
 //
 // edinet_xbrl_facts（Stage 3 RAW）とは別物。こちらは Stage 4 derived（計算結果）であり、
-// cache_version は blueTickerVersion に連動する（計算ロジック変更で再計算させる）。
+// cache_version は companyFinancialsCacheVersion（blueTickerVersion 非連動）に連動する。
+// 計算ロジック変更時のみバンプし、月内 Micro バンプで全社再計算を強制しない（Stage 3 と同思想）。
 // 公開契約は response の中身（FinancialsResponse）側であり、本テーブルはサーバー内部スキーマ。
 
 import BlueTickerCore
@@ -22,7 +23,7 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     @Field(key: "response")
     var response: FinancialsResponse
 
-    /// 計算時の blueTickerVersion。読込時に照合し、不一致なら再計算する（derived キャッシュ）。
+    /// 計算時の companyFinancialsCacheVersion。読込時に照合し、不一致なら再計算する（derived キャッシュ）。
     @Field(key: "cache_version")
     var cacheVersion: String
 

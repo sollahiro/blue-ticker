@@ -128,7 +128,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let pre = CompanyFinancials()
             pre.id = "7203"
             pre.response = makeResponse(code: "7203", years: 6)
-            pre.cacheVersion = blueTickerVersion
+            pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 6
             try await pre.create(on: app.db)
 
@@ -149,7 +149,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let pre = CompanyFinancials()
             pre.id = "7203"
             pre.response = makeResponse(code: "7203", years: 3)
-            pre.cacheVersion = blueTickerVersion
+            pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 3
             try await pre.create(on: app.db)
 
@@ -181,7 +181,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
             let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
-            #expect(row.cacheVersion == blueTickerVersion)
+            #expect(row.cacheVersion == companyFinancialsCacheVersion)
             #expect(try await CompanyFinancials.query(on: app.db).count() == 1)
         }
     }
@@ -222,7 +222,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = makeResponse(code: "7203", years: 6)
-            row.cacheVersion = blueTickerVersion
+            row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
 
@@ -253,7 +253,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = makeResponse(code: "7203", years: 3)
-            row.cacheVersion = blueTickerVersion
+            row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 3
             try await row.create(on: app.db)
 
@@ -275,7 +275,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = makeResponse(code: "7203", years: 6)
-            row.cacheVersion = blueTickerVersion
+            row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
 
@@ -290,7 +290,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = makeResponseWithChanges(code: "7203", years: 6)
-            row.cacheVersion = blueTickerVersion
+            row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
 
@@ -316,7 +316,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = makeResponseWithChanges(code: "7203", years: 3)
-            row.cacheVersion = blueTickerVersion
+            row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 3
             try await row.create(on: app.db)
 
