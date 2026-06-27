@@ -488,6 +488,10 @@ enum Xbrl {
     static let accountsReceivableJGAAPTags: [String] = [
         "NotesAndAccountsReceivableTrade",
         "AccountsReceivableTrade",
+        // 収益認識基準導入後の標準科目「受取手形、売掛金及び契約資産」（例: さくらインターネット 3778）。
+        // 契約資産分を含むが、運転資本・CCC の用途では営業債権として許容する。
+        "NotesAndAccountsReceivableTradeAndContractAssets",
+        "AccountsReceivableTradeAndContractAssets",
     ]
     static let accountsReceivableIFRSTags: [String] = [
         "TradeAndOtherReceivablesCAIFRS",
