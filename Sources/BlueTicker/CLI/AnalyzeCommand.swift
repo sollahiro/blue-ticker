@@ -162,6 +162,9 @@ struct AnalyzeCommand: AsyncParsableCommand {
             ("  現金差影響",           { optDelta($0.rawData.cashEq, $1.rawData.cashEq) }),
             ("  負債差影響",           { optDelta($1.calculatedData.interestBearingDebt, $0.calculatedData.interestBearingDebt) }),
         ])
+        printNum(periods, entry, [
+            ("ネットD/E (倍)",         { $0.calculatedData.netDE }),
+        ])
 
         // ⑤ 運転資本・CCC増減分析
         printError("[⑤ 運転資本・CCC増減分析]\n")
