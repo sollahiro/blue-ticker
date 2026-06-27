@@ -132,7 +132,8 @@ struct HalfYearAnalyzer {
     // MARK: - H2 Derivation
 
     /// H2 = FY フロー - H1 フロー、BS は FY 期末値を使用。
-    private func buildH2Entry(fy: YearEntry, h1: YearEntry, fyEnd: String) -> YearEntry {
+    /// テスト容易化のため internal（モジュール内可視）。
+    func buildH2Entry(fy: YearEntry, h1: YearEntry, fyEnd: String) -> YearEntry {
         var raw = RawData()
         var calc = CalculatedData()
 
@@ -165,6 +166,11 @@ struct HalfYearAnalyzer {
         calc.ppeTotal              = fy.calculatedData.ppeTotal
         calc.ppeAccountingStandard = fy.calculatedData.ppeAccountingStandard
         calc.balanceSheetAccountingStandard = fy.calculatedData.balanceSheetAccountingStandard
+        // BS 運転資本（Instant スナップショット）: FY 期末値を使用。
+        // applyWorkingCapitalAndCCCToYears が H2 の WorkingCapital/DSO/DIO/DPO/CCC を再計算する。
+        calc.accountsReceivable    = fy.calculatedData.accountsReceivable
+        calc.inventory             = fy.calculatedData.inventory
+        calc.accountsPayable       = fy.calculatedData.accountsPayable
 
         // 損益フロー: FY − H1
         calc.grossProfit = sub(fy.calculatedData.grossProfit, h1.calculatedData.grossProfit)
@@ -178,6 +184,11 @@ struct HalfYearAnalyzer {
         calc.pretaxIncome  = sub(fy.calculatedData.pretaxIncome,  h1.calculatedData.pretaxIncome)
         calc.incomeTax     = sub(fy.calculatedData.incomeTax,     h1.calculatedData.incomeTax)
         calc.interestExpense = sub(fy.calculatedData.interestExpense, h1.calculatedData.interestExpense)
+
+        // CF 自己株式取得・配当（フロー）: FY − H1
+        calc.cfTreasuryStock = sub(fy.calculatedData.cfTreasuryStock, h1.calculatedData.cfTreasuryStock)
+        calc.dividendSS      = sub(fy.calculatedData.dividendSS,      h1.calculatedData.dividendSS)
+        calc.dividendPaidCF  = sub(fy.calculatedData.dividendPaidCF,  h1.calculatedData.dividendPaidCF)
 
         // 派生指標を再計算
         if let gp = calc.grossProfit, let s = raw.sales, s > 0 {
