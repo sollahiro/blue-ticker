@@ -285,8 +285,10 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 ### 近期（Stage 1 安定化）
 
-- [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
-- [ ] **初回バックフィル**: ローカルから `DATABASE_URL`=Neon に向け `blt-server ingest` を全件実行（XBRL 9MB/件で重いため `--limit` でバッチ分割）。ingest ブロッカー解消済みのため実行可能。Fly は読むだけ（OOM 回避）。
+- [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する（残り ~3,000 社のバックフィル drain もこの定期 ingest で消化する）
+- [~] **初回バックフィル（進行中・2026-06-27）**: ローカルから `DATABASE_URL`=Neon に向け `blt-server ingest`。**150/約3,176 社を fin-v1 で格納済み**（Stage 4 stored=150 failed=0）。エンドツーエンド検証済み — 新 Fly（fin-v1 イメージ）が DB 格納企業を **warm 0.3s / cold-start 3.6s** で応答（旧ライブ計算は 120s+ タイムアウト）。残り ~3,000 社は定期 ingest で drain（XBRL 9MB/件で重いため `--limit` バッチ）。Fly は読むだけ（OOM 回避）。
+  - 補足: Stage 3 のバッチで failed が出る（例 attempted=150 stored=121 failed=29）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。
+- [x] **Stage 4 キャッシュバージョンの分離 ＋ Fly 再デプロイ（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion="fin-v1"`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。main マージ・CI green・Fly 再デプロイ（`fly deploy`、fin-v1 イメージ）完了。
 - [x] **Fly secret `BLT_EDINET_API_KEY` の正否確認** — 解消（2026-06-27）。破損の正体は値を囲むシングルクォート（ローカル `.env` が `'32hex'`＝34文字。`docker run --env-file`/env ファイル経由だとクォートをはがさず生値に混入する）。正規 32hex が EDINET API で 200 OK を返すことを直接確認し、Fly secret をクォートなし 32hex で再設定（rolling deploy 成功）。ローカル `.env` も裸書きに修正。blt-server 自体は `.env` を読まず `ProcessInfo.environment` を読む（dotenv パーサなし）ため、クォート害は env ファイル経由の消費時のみ。
 - [x] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。実 Neon で `sync`(Stage1) 書き込み・`ingest`(Stage3/4) バックフィル・`computeFinancials` を実データで確認済み（`ingest --limit 10` で Stage3/4 とも stored=10 failed=0）。<br>**過去の `stored=0 failed=5` ブロッカーは解消済み**: 真因は汚染された空キャッシュディレクトリ。キー破損期に EDINET が JSON エラー封筒をバイナリとして返し、`extractZip` が dest 作成後に throw → 空ディレクトリ残留 → 以後 `hasXbrlDir` が「取得済み」と誤判定し再取得されず facts=0。`hasXbrlDir` が空ディレクトリを拒否（自己修復）＋ `storeXbrlZip` が展開失敗時に dest 削除、で修正。
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
