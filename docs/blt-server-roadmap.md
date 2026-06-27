@@ -287,7 +287,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 - [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する
 - [ ] **初回バックフィル**: ローカルから `DATABASE_URL`=Neon に向け `blt-server ingest` を全件実行（XBRL 9MB/件で重いため `--limit` でバッチ分割）。ingest ブロッカー解消済みのため実行可能。Fly は読むだけ（OOM 回避）。
-- [ ] **Fly secret `BLT_EDINET_API_KEY` の正否確認**: ローカル `.env` で過去にキー改行欠落の破損があったため、Fly 側 secret も同じ破損値でないか確認し、必要なら正規 32hex に更新（Fly はライブ計算フォールバック時のみ EDINET 必要）。
+- [x] **Fly secret `BLT_EDINET_API_KEY` の正否確認** — 解消（2026-06-27）。破損の正体は値を囲むシングルクォート（ローカル `.env` が `'32hex'`＝34文字。`docker run --env-file`/env ファイル経由だとクォートをはがさず生値に混入する）。正規 32hex が EDINET API で 200 OK を返すことを直接確認し、Fly secret をクォートなし 32hex で再設定（rolling deploy 成功）。ローカル `.env` も裸書きに修正。blt-server 自体は `.env` を読まず `ProcessInfo.environment` を読む（dotenv パーサなし）ため、クォート害は env ファイル経由の消費時のみ。
 - [x] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。実 Neon で `sync`(Stage1) 書き込み・`ingest`(Stage3/4) バックフィル・`computeFinancials` を実データで確認済み（`ingest --limit 10` で Stage3/4 とも stored=10 failed=0）。<br>**過去の `stored=0 failed=5` ブロッカーは解消済み**: 真因は汚染された空キャッシュディレクトリ。キー破損期に EDINET が JSON エラー封筒をバイナリとして返し、`extractZip` が dest 作成後に throw → 空ディレクトリ残留 → 以後 `hasXbrlDir` が「取得済み」と誤判定し再取得されず facts=0。`hasXbrlDir` が空ディレクトリを拒否（自己修復）＋ `storeXbrlZip` が展開失敗時に dest 削除、で修正。
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
 - [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
