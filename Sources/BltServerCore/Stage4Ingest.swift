@@ -40,7 +40,7 @@ func runStage4Ingest(
 
     for code in codes {
         let existing = try await CompanyFinancials.find(code, on: db)
-        if let row = existing, row.cacheVersion == blueTickerVersion, row.requestedYears >= years {
+        if let row = existing, row.cacheVersion == companyFinancialsCacheVersion, row.requestedYears >= years {
             skipped += 1
             continue
         }
@@ -74,21 +74,21 @@ func distinctCompanyCodes(db: Database) async throws -> [String] {
 }
 
 /// 計算済みサマリを company_financials へ書き込む（既存行があれば更新、無ければ作成）。
-/// cache_version に現行 blueTickerVersion、requested_years に計算年数を埋め込む。
+/// cache_version に現行 companyFinancialsCacheVersion、requested_years に計算年数を埋め込む。
 func storeCompanyFinancials(
     existing: CompanyFinancials?, code: String, years: Int,
     response: FinancialsResponse, db: Database
 ) async throws {
     if let row = existing {
         row.response = response
-        row.cacheVersion = blueTickerVersion
+        row.cacheVersion = companyFinancialsCacheVersion
         row.requestedYears = years
         try await row.update(on: db)
     } else {
         let model = CompanyFinancials()
         model.id = code
         model.response = response
-        model.cacheVersion = blueTickerVersion
+        model.cacheVersion = companyFinancialsCacheVersion
         model.requestedYears = years
         try await model.create(on: db)
     }
@@ -103,7 +103,7 @@ func loadStoredFinancials(code: String, years: Int, db: Database) async throws -
     // DB 経路で空 years の 200 を返すとライブ経路（404）と挙動が食い違うため。
     guard years > 0,
         let row = try await CompanyFinancials.find(code, on: db),
-        row.cacheVersion == blueTickerVersion,
+        row.cacheVersion == companyFinancialsCacheVersion,
         row.requestedYears >= years
     else { return nil }
     return row.response.trimmed(toYears: years).jsonObject()

@@ -60,19 +60,22 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 // バージョン不一致 → フォールスルーして再取得・上書き
 ```
 
-## Neon facts キャッシュバージョン（グローバル非連動）
+## Neon キャッシュバージョン（グローバル非連動）
 
-`blt-server` の Neon テーブル `edinet_xbrl_facts.cache_version` は **`blueTickerVersion` と独立した専用定数 `xbrlFactsCacheVersion`**（`Sources/BlueTicker/Models/XbrlFactRecord.swift`、現在 `"facts-v1"`）で staleness 判定する。
+`blt-server` の Neon テーブルの staleness 判定は **`blueTickerVersion` と独立した専用定数**で行う。ローカル derived とコスト構造が逆（再生成に EDINET からの XBRL 再ダウンロード＋再パース／再計算が伴い高コスト）なため、月内 Micro バンプで毎回全件再 ingest が走らないよう、グローバルバージョンから切り離している。Stage 3・Stage 4 で別定数を持つ。
 
-ローカル derived とコスト構造が逆（再生成に EDINET からの XBRL 再ダウンロード＋再パースが伴い高コスト）なため、月内 Micro バンプで毎回全件再 ingest が走らないよう、グローバルバージョンから切り離している。
+| テーブル | 定数 | 置き場所 | 現在値 |
+|---|---|---|---|
+| `edinet_xbrl_facts`（Stage 3 RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
+| `company_financials`（Stage 4 derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v1"` |
 
 ### バンプ規則
 
-`xbrlFactsCacheVersion` を上げるのは次のときのみ。`blueTickerVersion` のバンプでは上げない。
+いずれも `blueTickerVersion` のバンプでは上げない。次のときのみ上げる。
 
-- XBRL fact のパースロジック（`parseXbrlFactIndex`）を変更したとき
-- RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したとき
+- `xbrlFactsCacheVersion`: XBRL fact のパースロジック（`parseXbrlFactIndex`）、または RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したとき
+- `companyFinancialsCacheVersion`: 財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）、または公開契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変更したとき
 
 ### 運用上の注意（バンプ時の一度きり再 ingest）
 
-`xbrlFactsCacheVersion` を上げると、既存の Neon 行は全件が一度だけ stale 判定され、次回 `blt-server ingest` で再パースされる。これは想定どおりの移行コスト。XBRL ダウンロードが重い（9MB/件）ため、必要なら `--limit` でバッチ分割して取り込む。
+これらを上げると、既存の Neon 行は全件が一度だけ stale 判定され、次回 `blt-server ingest` で再パース／再計算される。これは想定どおりの移行コスト。XBRL ダウンロードが重い（9MB/件）ため、必要なら `--limit` でバッチ分割して取り込む。

@@ -50,6 +50,14 @@ enum EdinetDiscovery {
             }
         }
 
+        // 年次インデックスの境界で同一 docID が重複しうるため docID で一意化する。
+        // 重複は同一書類のため先勝ちで安全。Dictionary 構築のクラッシュと有報の二重計上を防ぐ。
+        var seenDocIDs = Set<String>()
+        allDocs = allDocs.filter { doc in
+            guard let id = doc["docID"] as? String else { return true }
+            return seenDocIDs.insert(id).inserted
+        }
+
         // ③ edinetCode でフィルタ（有報・訂正を分類）
         let annualDocs = allDocs.filter {
             $0["edinetCode"] as? String == edinetCode &&
