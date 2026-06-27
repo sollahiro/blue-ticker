@@ -67,6 +67,31 @@ docker exec blt-server /app/blt-server ingest --limit 50
 
 `blt-server sync` / `ingest` はワンショット。定期実行は Fly スケジューラ（`fly machine run ... --schedule`）または self-host の cron / launchd で回す。`sync`（引数なし＝前回 `synced_through` から当日まで）→ `ingest`（未取り込み・旧バージョン書類のみ）の順に実行する。
 
+**重い ingest（Stage 3/4）は Fly(1GB) で走らせると OOM する**ため、計算はローカル（または余裕あるマシン）で実行し Fly は読むだけにする。現状はローカル launchd で回す（将来クラウドスケジューラへ移行予定）。
+
+### 定期同期（ローカル launchd）
+
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200）で調整。
+
+```bash
+# 1. リリースビルド（コード変更後は再実行が必要）
+swift build -c release --product blt-server
+
+# 2. launchd plist を ~/Library/LaunchAgents に置く（Label: com.sollahiro.blt-sync、
+#    ProgramArguments に scripts/blt-scheduled-sync.sh の絶対パス、
+#    StartCalendarInterval で 1 日数回。plist はマシン固有のためリポジトリ非管理）
+
+# 3. 登録（再登録は bootout してから bootstrap）
+launchctl bootout   gui/$(id -u) ~/Library/LaunchAgents/com.sollahiro.blt-sync.plist 2>/dev/null
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.sollahiro.blt-sync.plist
+
+# 4. 手動実行（検証・即時 drain）
+launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
+tail -f .build/blt-scheduled.log
+```
+
+初回バックフィル中（全 ~3,176 社）は本ジョブが少しずつ `company_financials` を埋める。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。
+
 ## Neon 接続の E2E 検証
 
 実 DB に対する検証は 2 段で行う。CI/ユニットテストはインメモリ SQLite までのため、Postgres 固有挙動（`.json`→JSONB・索引・String PK）と実パイプラインは別途確認する。
