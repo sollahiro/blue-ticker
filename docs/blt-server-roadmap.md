@@ -93,8 +93,21 @@ CLI は `ticker config set --backend remote` で local/remote を切り替える
 - **対象コマンド**: `search` / `filings` / `filing` / `analyze` / `summarize`（REST 5 エンドポイントに対応）。各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil ならローカル経路（Services 直呼び）を実行する。
 - **整形の再現**: `RemoteAPIClient`（`API/RemoteAPIClient.swift`）が応答を `StockSearchResult` / `RemoteFilings` / `FinancialsResponse` / セクション辞書へデコードし、`FinancialsResponse.toMetricsResult()` で内部 `MetricsResult` に復元して**既存レンダラをそのまま使う**。`filing` のセグメント表は `SegmentResult(dictionary:)` で復元。
 - **接続設定**: `ticker config set --server-url <url> --auth-token <token>`。解決順位は env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`auth-token` は keychain 保存（`edinetApiKey` と同様）、`server-url` は config ファイル。`config show` は token をマスク表示。
-- **境界**: `sector`（全 33 業種一覧）は対応する REST が無く、CSV からオフライン算出するため常にローカル。`analyze`/`summarize` の `--half`（半期）は REST 未提供のため remote では非対応エラー。
+- **現状の制約（将来は解消し全コマンド remote 対応を目指す）**: 現時点で `sector`（全 33 業種一覧）は対応する REST が無く CSV からオフライン算出するため常にローカル。`analyze`/`summarize` の `--half`（半期）も REST 未提供のため remote では非対応エラー。**これらは設計上の恒久境界ではなく未実装による暫定制約**であり、`--half` を含む全コマンドを将来 remote 対応する方針（必要な REST エンドポイントを追加し、local/remote の機能差をなくす）。
 - 失敗は throw せず `RemoteOutcome`（ok / notFound / failure）で表現し、CLI 層が stderr へ出して終了する（戻り値パターン）。
+
+#### 稼働状況（2026-06-27 実機検証・Fly `blt-server.fly.dev`）
+
+remote の各コマンドを実 Fly に対して検証した結果と、残る配線ギャップ。
+
+| コマンド | remote 稼働 | 備考 |
+|---|---|---|
+| `search` | ✅ | CSV マスターで軽量 |
+| `analyze` / `summarize` | ✅（**DB 格納済み銘柄のみ安定**） | Stage 4 DB 読み経路あり。warm 0.3s（例 8591）。未バックフィル銘柄はサーバーがライブ計算に落ち OOM/502 のリスク |
+| `filings` / `filing` | ❌ **OOM/502** | `getFilings`（`BltServerFacade.swift`）が `EdinetDiscovery.buildDocumentIndexForCode` の**ライブ EDINET 探索**を実行し `edinet_documents` を読まない。Fly 1GB で ~880MB 消費し OOM kill（ログ実測） |
+
+- **要対応（Stage 1 read 配線）**: `filings`/`filing` を OOM なしで remote 稼働させるには、`getFilings` を Stage 4 と同様 **`edinet_documents`（既に Neon に同期済み）の DB 読み**へ切り替える。これが remote CLI 全面安定化の最有力タスク。
+- バックフィルが進むほど `analyze` の remote 対応銘柄が広がる（未格納はライブ計算フォールバックで重い）。
 
 ## 計算の責務（client / server）
 
@@ -304,6 +317,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
 - [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
+- [ ] **Stage 1 read 配線**: `getFilings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え、remote `filings`/`filing` の OOM/502 を解消する（実機検証で OOM 確認・「稼働状況」参照）。remote CLI 全面安定化の最有力タスク
+- [ ] **remote 全コマンド対応（フル parity 目標）**: `--half`（半期）の REST 提供、`sector` の REST 化など、local/remote の機能差をなくす。現状の `--half`/`sector` 非対応は恒久境界ではなく未実装による暫定制約
 
 ### 次の検討課題（優先順）
 
