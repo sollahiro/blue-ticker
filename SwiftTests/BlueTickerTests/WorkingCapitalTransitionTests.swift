@@ -31,6 +31,17 @@ import Foundation
         #expect(res.method == "direct")
     }
 
+    @Test func accountsReceivableExtractsContractAssetsStandardTag() {
+        // 収益認識基準導入後の標準科目「受取手形、売掛金及び契約資産」
+        // （例: 3778 さくらインターネット 2024/03 以降）を売掛金として抽出する。
+        var fs: FieldSet = [:]
+        fs["NotesAndAccountsReceivableTradeAndContractAssets"] = FieldValue(current: 3_241_165, prior: 2_392_419)
+
+        let res = AccountsReceivableExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(res.current == 3_241_165)
+        #expect(res.method == "direct")
+    }
+
     @Test func accountsReceivableReturnsNotFoundWhenNoCurrentAnywhere() {
         // 当期値がどのタグにも無い場合は not_found（prior のみで direct を返さない）。
         var fs: FieldSet = [:]
