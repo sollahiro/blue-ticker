@@ -355,6 +355,10 @@ enum Xbrl {
         "LongTermDebtIFRSNCLIFRS",
     ]
 
+    /// 連結附属明細表「借入金等明細表」TextBlock タグ。
+    /// 連結BSに有利子負債の数値タグが無い企業（リース債務が明細表のみに記載される等）のフォールバック源。
+    static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
+
     // MARK: - 支払利息タグ
 
     static let interestExpenseJGAAPTags: [String] = ["InterestExpensesNOE"]

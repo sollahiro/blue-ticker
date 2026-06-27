@@ -19,7 +19,7 @@ import Foundation
 /// または本契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変えたときのみバンプする。
 /// グローバルバージョンに連動させないことで、月内 Micro バンプで高コストな全社再計算
 /// （XBRL 再ダウンロード＋HTML 依存抽出の再実行）を走らせない（Stage 3 の `xbrlFactsCacheVersion` と同思想）。
-public let companyFinancialsCacheVersion = "fin-v1"
+public let companyFinancialsCacheVersion = "fin-v2"
 
 // MARK: - 年度エントリ（フラット形）
 

@@ -253,6 +253,79 @@ import Foundation
         }
     }
 
+    // MARK: - 借入金等明細表フォールバック（連結附属明細表）
+
+    /// 借入金等明細表 TextBlock を含む XBRL を生成する。
+    /// 列構成: 区分 | 当期首残高 | 当期末残高 | 平均利率 | 返済期限
+    private func makeXbrlWithBorrowingsSchedule(_ scheduleRows: String, baseElementsXml: String = "") -> String {
+        let html = "&lt;table&gt;\(scheduleRows)&lt;/table&gt;"
+        return XBRLTestSupport.makeXbrlInstant(baseElementsXml + """
+
+            <jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock>
+        """)
+    }
+
+    private func scheduleRow(_ label: String, _ opening: String, _ closing: String,
+                             rate: String = "－", due: String = "－") -> String {
+        "&lt;tr&gt;&lt;td&gt;\(label)&lt;/td&gt;&lt;td&gt;\(opening)&lt;/td&gt;&lt;td&gt;\(closing)&lt;/td&gt;"
+            + "&lt;td&gt;\(rate)&lt;/td&gt;&lt;td&gt;\(due)&lt;/td&gt;&lt;/tr&gt;"
+    }
+
+    @Test func testBorrowingsScheduleLeaseOnly() {
+        // 東京エレクトロン型: 連結BSに有利子負債タグが無く、リース債務のみ明細表に記載。
+        // 当期末残高（3列目）を当期、当期首残高（2列目）を前期として読む。平均利率列は無視する。
+        let rows = scheduleRow("短期借入金", "－", "－")
+            + scheduleRow("1年以内に返済予定のリース債務", "3,715", "8,347", rate: "3.9")
+            + scheduleRow("リース債務(1年以内に返済予定のものを除く。)", "17,684", "29,995", rate: "3.9", due: "2027年～2041年")
+            + scheduleRow("その他有利子負債", "－", "－")
+            + scheduleRow("合計", "21,400", "38,342")
+        let xml = makeXbrlWithBorrowingsSchedule(rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "borrowings_schedule")
+            #expect(result.total == 38_342 * Financial.millionYen)
+            #expect(result.priorTotal == 21_400 * Financial.millionYen)
+            let labels = result.components.map(\.label)
+            #expect(labels.contains("リース負債（流動）"))
+            #expect(labels.contains("リース負債（非流動）"))
+            let cl = result.components.first { $0.label == "リース負債（流動）" }
+            #expect(cl?.current == 8_347 * Financial.millionYen)
+            #expect(cl?.prior == 3_715 * Financial.millionYen)
+        }
+    }
+
+    @Test func testBorrowingsScheduleExcludesMaturityTable() {
+        // 本体明細表（合計を含む）の後に続く「返済予定額」別表をリース債務総額に混入させない。
+        let mainRows = scheduleRow("リース債務", "17,684", "29,995", rate: "3.9")
+            + scheduleRow("合計", "17,684", "29,995")
+        let maturityRows = scheduleRow("リース債務", "7,823", "6,328")
+        let html = "&lt;table&gt;\(mainRows)&lt;/table&gt;&lt;table&gt;\(maturityRows)&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "borrowings_schedule")
+            #expect(result.total == 29_995 * Financial.millionYen)
+        }
+    }
+
+    @Test func testBorrowingsScheduleNotUsedWhenTagsResolve() {
+        // 連結借入金タグが解決できる企業では、明細表ではなくタグ（field_parser）を優先する。
+        let rows = scheduleRow("リース債務", "1,000", "2,000") + scheduleRow("合計", "1,000", "2,000")
+        let xml = makeXbrlWithBorrowingsSchedule(rows, baseElementsXml: """
+            <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">10000000000</jppfs_cor:ShortTermLoansPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "field_parser")
+            #expect(result.total == 10_000_000_000)
+        }
+    }
+
     @Test func testJgaapLeaseNotAdded() {
         // J-GAAPではリース注記があってもリース負債は加算されない
         let rows = "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
