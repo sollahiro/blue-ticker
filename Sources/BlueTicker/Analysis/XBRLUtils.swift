@@ -308,39 +308,43 @@ enum XBRLUtils {
         in dir: URL,
         textblockTag: String
     ) -> [String: (current: Double?, prior: Double?)] {
+        guard let htmlContent = extractTextblockHtml(in: dir, textblockTag: textblockTag),
+              let soup = try? SwiftSoup.parse(htmlContent),
+              let rows = try? soup.select("tr") else { return [:] }
+
+        var result: [String: (current: Double?, prior: Double?)] = [:]
+        for row in rows {
+            guard let cells = try? row.select("td"), cells.count >= 3 else { continue }
+            guard let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true),
+                  !label.isEmpty else { continue }
+            let dataCells = Array(cells.dropFirst())
+            guard dataCells.count >= 2 else { continue }
+            let currentV = parseTextblockCellValue(try? dataCells.last?.text())
+            let priorV = parseTextblockCellValue(try? dataCells[dataCells.count - 2].text())
+            if currentV != nil || priorV != nil {
+                result[label] = (currentV, priorV)
+            }
+        }
+        return result
+    }
+
+    /// 指定タグの TextBlock 要素内のHTML（エンティティ復号済み）を最初に一致したファイルから返す。
+    static func extractTextblockHtml(in dir: URL, textblockTag: String) -> String? {
         let pattern = try? NSRegularExpression(
             pattern: "<[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "[^>]*>(.*?)</[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + ">",
             options: [.dotMatchesLineSeparators]
         )
-
         for xbrlFile in findXbrlFiles(in: dir) {
             guard let raw = try? String(contentsOf: xbrlFile, encoding: .utf8) else { continue }
             guard let match = pattern?.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
                   let range = Range(match.range(at: 1), in: raw) else { continue }
-
-            let htmlContent = String(raw[range]).htmlEntityDecoded
-            guard let soup = try? SwiftSoup.parse(htmlContent) else { continue }
-
-            var result: [String: (current: Double?, prior: Double?)] = [:]
-            guard let rows = try? soup.select("tr") else { continue }
-            for row in rows {
-                guard let cells = try? row.select("td"), cells.count >= 3 else { continue }
-                guard let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true),
-                      !label.isEmpty else { continue }
-                let dataCells = Array(cells.dropFirst())
-                guard dataCells.count >= 2 else { continue }
-                let currentV = parseIfrsTextblockCellValue(try? dataCells.last?.text())
-                let priorV = parseIfrsTextblockCellValue(try? dataCells[dataCells.count - 2].text())
-                if currentV != nil || priorV != nil {
-                    result[label] = (currentV, priorV)
-                }
-            }
-            return result
+            return String(raw[range]).htmlEntityDecoded
         }
-        return [:]
+        return nil
     }
 
-    private static func parseIfrsTextblockCellValue(_ text: String?) -> Double? {
+    /// TextBlock 内 HTML 表セルの数値テキスト → Double（百万円単位の生値）。△/▲ は負、－ は nil。
+    static func parseTextblockCellValue(_ text: String?) -> Double? {
         guard let t = text else { return nil }
         var s = t.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: "\u{00A0}", with: "")

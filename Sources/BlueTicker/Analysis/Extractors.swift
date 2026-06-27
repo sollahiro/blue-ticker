@@ -530,6 +530,12 @@ enum IBDExtractor {
                   let textblockResult = IFRSLease.extractIBDFromTextblock(xbrlDir: dir) {
             // IFRS Summary型XBRLでは連結借入金タグが存在しないため、TextBlockから抽出する
             result = textblockResult
+        } else if let dir = xbrlDir,
+                  let scheduleResult = BorrowingsSchedule.extract(xbrlDir: dir, accountingStandard: accountingStandard) {
+            // 連結BSに有利子負債タグが無い企業（リース債務が明細表のみに記載される等）:
+            // 連結附属明細表「借入金等明細表」から積み上げる。合計にはリース債務が含まれるため、
+            // 後続のリース加算をスキップして即返す。
+            return scheduleResult
         } else if let dir = xbrlDir, hasLargeXbrlFile(in: dir) {
             // インスタンス文書が十分大きいのにIBDタグが皆無 → 無借金企業とみなす
             result = IBDResult(total: 0.0, priorTotal: 0.0, components: [],
