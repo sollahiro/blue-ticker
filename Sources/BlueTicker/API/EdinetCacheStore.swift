@@ -117,7 +117,11 @@ final class EdinetCacheStore: Sendable {
     func hasXbrlDir(_ docID: String, saveDir: URL? = nil) -> Bool {
         let dest = xbrlDir(docID, saveDir: saveDir)
         var isDir: ObjCBool = false
-        return fm.fileExists(atPath: dest.path, isDirectory: &isDir) && isDir.boolValue
+        guard fm.fileExists(atPath: dest.path, isDirectory: &isDir), isDir.boolValue else { return false }
+        // 空ディレクトリはキャッシュヒットとみなさない。展開失敗（非 ZIP の混入等）で残った
+        // 空ディレクトリを「取得済み」と誤判定すると、再取得されず facts=0 で永続的に失敗するため。
+        let entries = (try? fm.contentsOfDirectory(atPath: dest.path)) ?? []
+        return !entries.isEmpty
     }
 
     func touchXbrlDir(_ docID: String, saveDir: URL? = nil) {
@@ -132,7 +136,13 @@ final class EdinetCacheStore: Sendable {
         let zipPath = root.appendingPathComponent("\(docID).zip")
         try content.write(to: zipPath)
         defer { try? fm.removeItem(at: zipPath) }
-        try extractZip(at: zipPath, to: dest)
+        do {
+            try extractZip(at: zipPath, to: dest)
+        } catch {
+            // 展開失敗時に残る dest（多くは空）を消す。残すと hasXbrlDir が誤ヒットしてキャッシュが汚染される。
+            try? fm.removeItem(at: dest)
+            throw error
+        }
         evictXbrlIfNeeded(root: root)
         return dest
     }
