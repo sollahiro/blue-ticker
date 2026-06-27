@@ -187,6 +187,20 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 - Stage 3 数値インデックスを**そのまま**モバイルへ流すのは重い（全 fact で 1社×5年 ≈ 4MB）。ただし公開するのは Stage 3 RAW ではなく**計算済み財務サマリ**（`analyze` 相当のメトリクスを載せた JSON）であり、こちらは詳細1社×5年で数 KB に収まる。
 - 一覧/スキャンは**表示する指標だけをサーバー計算サマリとして返す**（材料となる RAW をクライアントへまとめ取りさせない）。詳細は1社分の計算済みサマリをオンデマンドで返す。
 
+#### 全件スケール投影（2026-06・Neon 実測ベース）
+
+書類総数 **21,250 / 3,944 社**（`edinet_documents`）。Neon 実測テーブルサイズから全件を投影する。
+
+| データ | 1書類 | 全 21,250 件 | 置き場所 / 制約 |
+|---|---|---|---|
+| 数値 facts JSONB（Stage 3） | ~33KB（実測 20MB/613件） | **~700MB** | 現状 Postgres。**branch logical size 上限 512MB を超える見込み⚠️** |
+| 生 XBRL（展開後） | ~9MB | ~191GB | 保存対象外 |
+| 生 XBRL（EDINET ZIP） | ~2MB | **~42GB** | オブジェクトストレージ（Postgres 不可） |
+| .xbrl＋honbun .htm のみ圧縮 | ~0.7MB | **~15GB** | オブジェクトストレージ（最小案） |
+| 計算済み financials（Stage 4） | ~5KB | ~20MB | Postgres（小さい） |
+
+→ 容量の制約は **Postgres 側（512MB）**にある。生 XBRL は Postgres に入れず**オブジェクトストレージ**に置けば容量問題にならない（~15〜42GB＝月 $1 未満規模）。一方、数値 facts だけでも全件 ~700MB で 512MB を超えるため、Neon プラン拡張 or facts のオブジェクトストレージ退避が**先に**必要になる。
+
 ### 公開契約は financials レスポンス（計算済み JSON）
 
 計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
@@ -199,6 +213,42 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 - **確定**: 生 XBRL は**ローカル保持継続**（`external/edinet/xbrl` キャッシュ＝ self-host／ローカルはローカルディスク、Fly では永続 Volume `/data`）。`blt-server ingest` も `downloadDocument` 経由で同キャッシュに保持する。
 - **R2 退避は延期**: Cloudflare R2（egress 無料）への退避は、クラウド実運用で Volume 容量（全 EDINET ユニバースで数十 GB 規模）が問題化してから着手する。S3 互換クライアントの新規外部依存追加が必要なため、実需要が出るまで持ち込まない（YAGNI）。退避時は再取り込みジョブとセットで設計する。
+
+### 取得→抽出→計算の分離とストレージ方針（将来・方針整理 2026-06）
+
+**背景**: 抽出・計算ロジックを変えたとき（例: 借入金等明細表からの IBD 抽出追加で `companyFinancialsCacheVersion` を fin-v2 にバンプ）、全件再 ingest で生 XBRL の再ダウンロードが走り重い。「取得は一度きり、抽出・計算だけ回したい」が要件。
+
+**現状の事実整理**:
+
+- バージョンは既に3層で分離済み（**取得=非連動 / 抽出facts=`xbrlFactsCacheVersion` / 計算=`companyFinancialsCacheVersion`**）。fin-v バンプは計算結果のみ無効化し、**生 XBRL キャッシュは無効化しない**。
+- それでも再 DL が起きるのは、**生 XBRL の中央（永続・共有）保存先が無い**ため。保存しているのは ① マシンごとの一時ファイルキャッシュ（ローカル `~/.config` / Fly `/data`）と ② Neon の**数値 facts のみ（HTML TextBlock を含まない）**。
+- Stage 4 の `computeFinancials` は Neon の facts を読まず `IndividualAnalyzer` 経由で**生 XBRL を読み直す**。HTML 依存抽出（IBD リース・借入金等明細表・US-GAAP HTML・セグメント等）は数値 facts に無い TextBlock を必要とするため、生 XBRL が必須。
+- 重い再 DL の実態は fin-v ではなく、**バックフィルを生 XBRL 未取得のローカル（~228件のみ）で回している**こと。Fly `/data`（既取得分が温かい）で回せば既取得分は再 DL しない（が計算が OOM するため現状ローカル運用）。
+
+**目標アーキテクチャ A（生 XBRL の中央永続化）**:
+
+1. オブジェクトストレージ（Neon Object Storage / Cloudflare R2 / S3 互換）に `edinet/xbrl/<docID>`（生 ZIP または蒸留版 .xbrl＋honbun .htm）を write-through 保存。容量は ~15〜42GB で月 $1 未満規模（上記「全件スケール投影」）。
+2. `EdinetCacheStore` の取得経路を **ローカル → オブジェクトストレージ → EDINET（取得したら書き戻し）** の3段フォールバックに。
+3. 再計算（fin-v バンプ）は EDINET を叩かずオブジェクトストレージから生 XBRL を読んで再抽出 → 「取得は一度きり」を実現。
+
+**着手順（A の前段に容量対策が必要）**:
+
+- **A1. Postgres 512MB 対策**: 数値 facts だけで全件 ~700MB 見込み（512MB 超）。Neon プラン拡張 or facts JSONB のオブジェクトストレージ退避（Postgres には docID→キー索引のみ）を先に決める。
+- **A2. オブジェクトストレージ＋3段フォールバック**を設計・実装（上記「R2 退避は延期」の発火条件が容量で満たされ次第）。S3 互換クライアントの外部依存追加はここで判断する。
+
+**計算バージョンの粒度は「出典別」でなく「抽出方式別」が妥当**:
+
+- 計算ロジックの変更を細かくバージョン分割したくなるが、**PL/BS/CF/SS の出典別に割るのは ROI が低い**。これらは同一書類の別セクションで大半は同じタグベース抽出（FieldParser）であり、SS には専用抽出器も無い。出典という粒度に乗らない。
+- 再 ingest の支配的コストは**取得(DL)で抽出ではない**。出典別に計算バージョンを割っても、変わった部分の再計算には結局その書類の生 XBRL が要るため DL は減らない。`company_financials` は 1社=1行の単一 JSONB＋単一 cache_version であり、部分無効化はバージョン列多重化／部分再計算／マージで複雑化する。
+- 意味があるのは**抽出方式（データ源）軸**。これは「再計算に何が要るか」を決める：
+
+  | 抽出方式 | 例 | 再計算に必要 | コスト |
+  |---|---|---|---|
+  | タグベース（数値 XBRL tag / FieldParser） | PL/BS/CF の大半 | Neon の数値 facts のみ | 生 XBRL 不要・激安 |
+  | HTML パース（TextBlock/本文 HTML） | IBD リース・借入金等明細表・US-GAAP HTML・セグメント | 生 XBRL（TextBlock/HTML） | 目標 A の中央ストア必須 |
+
+- 理想は「**タグ由来ロジックを直した→ Neon facts から再計算（DL ゼロ）／ HTML 由来を直した→生 XBRL を読む**」。ただし現状 Stage 4 は全部を生 XBRL から読み直す実装のため、**目標 A ＋ Stage 4 のデータ源見直し（タグ系は facts 消費へ）とセットで初めて効く**。
+- **当面は単一 `companyFinancialsCacheVersion` のまま**（単純さ優先）。粒度分割は A 着手時に「抽出方式別」で再検討する。
 
 ---
 
@@ -343,6 +393,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 将来
 
 - [ ] Stage 2〜4 実装（データパイプライン拡張、上表参照）
+- [ ] **生 XBRL の中央永続化（目標 A）**: オブジェクトストレージ＋3段フォールバックで「取得は一度きり・抽出/計算だけ再実行」を実現。前段に Postgres 512MB 対策（A1）が必要。詳細は「取得→抽出→計算の分離とストレージ方針」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
 - [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
@@ -355,6 +406,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - ~~Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）~~ → 解決（ローカル保持継続・R2 退避は延期）
 - ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
 - remote backend 利用時の `ticker cache status` 表示内容
+- **Postgres 512MB 上限への対策（目標 A の前段 A1）**: 数値 facts 全件 ~700MB 見込みで現プラン上限超過。Neon プラン拡張 or facts JSONB のオブジェクトストレージ退避のどちらにするか未決
 
 ---
 
