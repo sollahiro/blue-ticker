@@ -95,7 +95,39 @@ func upsertSyncState(syncedThrough: String, db: Database) async throws {
     try await state.save(on: db)
 }
 
+// MARK: - read 経路（REST filings）
+
+/// 指定銘柄（4 桁証券コード）の Stage 1 書類を DB から引いて正規化レコードで返す。
+/// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため LIKE プレフィックスで突き合わせる
+/// （ライブ探索の hasPrefix(code4) と同条件）。該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
+func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
+    let code4 = String(code.prefix(4))
+    // 証券コードは英数字のみ。LIKE プレフィックス突き合わせのため、ワイルドカード
+    // （% / _）等の混入を弾く（不正コードは空 → 呼び出し側がライブ探索へフォールバック）。
+    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
+    let rows = try await EdinetDocument.query(on: db)
+        .filter(\.$secCode, .contains(inverse: false, .prefix), code4)
+        .all()
+    return rows.map { $0.toRecord() }
+}
+
 extension EdinetDocument {
+    /// DB モデル → 正規化済みレコード（read 経路でファサードへ渡す）。
+    func toRecord() -> EdinetDocumentRecord {
+        EdinetDocumentRecord(
+            docID: id ?? "",
+            edinetCode: edinetCode,
+            secCode: secCode,
+            filerName: filerName,
+            docTypeCode: docTypeCode,
+            ordinanceCode: ordinanceCode,
+            formCode: formCode,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            submitDateTime: submitDateTime,
+            docDescription: docDescription)
+    }
+
     /// 正規化済みレコードの値を自身へ写す（id は呼び出し側で設定済み）。
     func apply(_ record: EdinetDocumentRecord) {
         edinetCode = record.edinetCode

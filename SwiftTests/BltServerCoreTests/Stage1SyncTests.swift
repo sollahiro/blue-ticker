@@ -24,9 +24,11 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-private func record(_ docID: String, filerName: String = "テスト株式会社") -> EdinetDocumentRecord {
+private func record(
+    _ docID: String, filerName: String = "テスト株式会社", secCode: String? = "72030"
+) -> EdinetDocumentRecord {
     EdinetDocumentRecord(
-        docID: docID, edinetCode: "E00001", secCode: "72030", filerName: filerName,
+        docID: docID, edinetCode: "E00001", secCode: secCode, filerName: filerName,
         docTypeCode: "120", ordinanceCode: "010", formCode: "030000",
         periodStart: "2024-04-01", periodEnd: "2025-03-31",
         submitDateTime: "2025-06-20 09:00", docDescription: "有価証券報告書")
@@ -69,6 +71,33 @@ private func record(_ docID: String, filerName: String = "テスト株式会社"
             let state = try #require(
                 try await EdinetSyncState.find(EdinetSyncState.singletonID, on: app.db))
             #expect(state.syncedThrough == "2025-06-20")
+        }
+    }
+
+    @Test func loadStoredFilingRecordsMatchesBySecCodePrefix() async throws {
+        try await withMigratedApp { app in
+            // 4 桁コード "8591" は 5 桁 secCode "85910" に前方一致。別銘柄 "12340" は除外。
+            _ = try await applyDocuments(
+                [
+                    record("MATCH1", secCode: "85910"),
+                    record("MATCH2", secCode: "85910"),
+                    record("OTHER", secCode: "12340"),
+                ], db: app.db)
+
+            let records = try await loadStoredFilingRecords(code: "8591", db: app.db)
+            #expect(Set(records.map(\.docID)) == ["MATCH1", "MATCH2"])
+            // 5 桁コードを渡しても prefix(4) で正規化される。
+            let viaFive = try await loadStoredFilingRecords(code: "85910", db: app.db)
+            #expect(Set(viaFive.map(\.docID)) == ["MATCH1", "MATCH2"])
+        }
+    }
+
+    @Test func loadStoredFilingRecordsReturnsEmptyWhenNoMatch() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments([record("S1", secCode: "85910")], db: app.db)
+            // 未同期銘柄は空（呼び出し側はライブ探索へフォールバックする）。
+            let records = try await loadStoredFilingRecords(code: "9999", db: app.db)
+            #expect(records.isEmpty)
         }
     }
 
