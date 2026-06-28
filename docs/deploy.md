@@ -90,7 +90,7 @@ launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
 tail -f .build/blt-scheduled.log
 ```
 
-初回バックフィル中（全 ~3,176 社）は本ジョブが少しずつ `company_financials` を埋める。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials` を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は、**Fly を `fly deploy` で新バージョンのイメージへ更新する**こと（古いイメージのサーバーは新バージョンで格納された行を stale 扱いで拒否し、ライブ計算フォールバック＝OOM になる）。
 
 ## Neon 接続の E2E 検証
 

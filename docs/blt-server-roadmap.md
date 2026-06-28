@@ -68,7 +68,7 @@ XBRL 数値 RAW（パース済み fact インデックス）の格納先スキ�
 financials の REST 応答を、毎リクエストのライブ計算（EDINET 取得 → XBRL 9MB DL → パース）から **Neon 格納済みの計算結果の読み取り**へ切り替えた。Fly の小メモリ機（shared-cpu-1x/1gb）でも financials が OOM しない。
 
 - **なぜ facts 読みではないか**: 計算（`processDocument`）は数値 fact だけでなく **生 XBRL 内の HTML を直接パースする抽出器**（US-GAAP 連結 P/L・BS、IFRS 粗利／IBD／支払利息の TextBlock フォールバック）に依存する。`edinet_xbrl_facts`（数値のみ）からは再現できないため、**計算結果（公開契約 `FinancialsResponse`）を企業単位で格納**する方式を採る。HTML 解決・waterfall は ingest 時（生ディレクトリがある所）で完了させる。
-- **スキーマ**: `company_financials`（証券コード 4 桁を PK、`response` JSONB に `FinancialsResponse`、`cache_version`＝`companyFinancialsCacheVersion`、`requested_years`、`updated_at`）。Stage 4 derived だが `cache_version` は **`blueTickerVersion` 非連動の専用定数 `companyFinancialsCacheVersion`**（`Models/FinancialsContract.swift`、現在 `"fin-v1"`）。Stage 3 と同じく再生成が高コスト（XBRL 再 DL＋HTML 依存抽出の再計算）なため、月内 Micro バンプで全社再計算を強制しない。計算ロジック／契約型変更時のみバンプ（`versioning.md`）。公開契約は `response` 中身であり本テーブルは内部スキーマ。
+- **スキーマ**: `company_financials`（証券コード 4 桁を PK、`response` JSONB に `FinancialsResponse`、`cache_version`＝`companyFinancialsCacheVersion`、`requested_years`、`updated_at`）。Stage 4 derived だが `cache_version` は **`blueTickerVersion` 非連動の専用定数 `companyFinancialsCacheVersion`**（`Models/FinancialsContract.swift`、現在 `"fin-v2"`）。Stage 3 と同じく再生成が高コスト（XBRL 再 DL＋HTML 依存抽出の再計算）なため、月内 Micro バンプで全社再計算を強制しない。計算ロジック／契約型変更時のみバンプ（`versioning.md`）。公開契約は `response` 中身であり本テーブルは内部スキーマ。
 - **取り込み**: `blt-server ingest` が Stage 3 の後に Stage 4 を実行する。`edinet_documents` の secCode から distinct な企業（4 桁コード）を導出し、未計算 or `cache_version` 不一致 or `requested_years` 不足の企業のみ Core ファサード `computeFinancials(code:years:)`（既定 6 年）で計算・upsert。`--limit` は新規計算件数の上限。staleness skip は derived キャッシュと同思想。
 - **read 経路**: `GET /v1/companies/{code}/financials` は DB 接続時、`company_financials` に現行バージョン & 要求年数を満たす行があれば `trimmed(toYears:)` して返す（DL・パースなし）。無い・古い・年数不足、または DB 非接続なら従来のライブ計算へフォールバックする（`loadStoredFinancials` / `Routes.swift`）。
 - **運用**: 計算はメモリを使うため、**重い初回バックフィルはローカル等から `DATABASE_URL` を Neon に向けて ingest** する（Fly 上で大量に走らせると ingest 自体が OOM しうる）。Fly サーバーは読むだけ。
@@ -170,10 +170,10 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 | ステージ | 処理内容 | 保存先 | 状態 |
 |---|---|---|---|
-| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | スキーマ・同期コマンド（`blt-server sync`）実装済み・初回同期待ち |
+| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | 同期済み（3,944 社）。定期 `sync` は launchd `com.sollahiro.blt-sync` で 1 日 3 回 |
 | Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ・取り込み（`blt-server ingest`）実装済み（RAW アーカイブ。Stage 4 は別途計算結果を格納） |
-| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 読み配線 実装済み（未格納はライブ計算フォールバック） |
+| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 読み配線 実装済み。fin-v2・302/3,944 社格納・launchd で drain 中（未格納はライブ計算フォールバック） |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -343,15 +343,16 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 ### 必須（blt-server を使い始める前に）
 
-- [ ] サーバーマシンに EDINET API キーを設定する（`BLT_EDINET_API_KEY` env、または `settings_store`）
-- [ ] `blt-server sync --from <初回開始日>` で書類一覧を初回同期する（要 `DATABASE_URL`）
+- [x] サーバーマシンに EDINET API キーを設定する（Fly secret `BLT_EDINET_API_KEY`・ローカル `.env` とも設定済み）
+- [x] `blt-server sync` で書類一覧を初回同期する（実 Neon に 3,944 社同期済み）
 
 ### 近期（Stage 1 安定化）
 
-- [ ] `blt-server sync` の定期実行を launchd / Fly スケジューラで設定する（残り ~3,000 社のバックフィル drain もこの定期 ingest で消化する）
-- [~] **初回バックフィル（進行中・2026-06-27）**: ローカルから `DATABASE_URL`=Neon に向け `blt-server ingest`。**150/約3,176 社を fin-v1 で格納済み**（Stage 4 stored=150 failed=0）。エンドツーエンド検証済み — 新 Fly（fin-v1 イメージ）が DB 格納企業を **warm 0.3s / cold-start 3.6s** で応答（旧ライブ計算は 120s+ タイムアウト）。残り ~3,000 社は定期 ingest で drain（XBRL 9MB/件で重いため `--limit` バッチ）。Fly は読むだけ（OOM 回避）。
-  - 補足: Stage 3 のバッチで failed が出る（例 attempted=150 stored=121 failed=29）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。
-- [x] **Stage 4 キャッシュバージョンの分離 ＋ Fly 再デプロイ（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion="fin-v1"`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。main マージ・CI green・Fly 再デプロイ（`fly deploy`、fin-v1 イメージ）完了。
+- [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 3/4）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
+- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **302/3,944 社格納**（2026-06-28 朝時点 fin-v2=235・fin-v1=67）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い→ライブ計算フォールバック（OOM）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 limit200 回で解消。その後に新規 ~3,642 社へカバレッジ拡大（実測 200社/回・3回/日 → 全完了 ~1 週間規模）。Fly は読むだけ（OOM 回避）。
+  - 補足: Stage 3 のバッチで failed が出る（例 attempted=200 stored=183 failed=17）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。Stage 3 は facts-v1 一致を skip（再パースしない。例 skipped=373）。
+- [x] **fin-v2 再デプロイ（2026-06-28）** — IBD 借入金等明細表抽出（computeFinancials の HTML 依存抽出）追加で `companyFinancialsCacheVersion` を fin-v1→**fin-v2** にバンプ。`fly deploy --remote-only` で fin-v2 イメージへ更新（fin-v1 サーバーは fin-v2 行を stale 拒否してしまうため必須）。fin-v2 銘柄が **warm 0.31s** で 200 read を確認。
+- [x] **Stage 4 キャッシュバージョンの分離（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。
 - [x] **Fly secret `BLT_EDINET_API_KEY` の正否確認** — 解消（2026-06-27）。破損の正体は値を囲むシングルクォート（ローカル `.env` が `'32hex'`＝34文字。`docker run --env-file`/env ファイル経由だとクォートをはがさず生値に混入する）。正規 32hex が EDINET API で 200 OK を返すことを直接確認し、Fly secret をクォートなし 32hex で再設定（rolling deploy 成功）。ローカル `.env` も裸書きに修正。blt-server 自体は `.env` を読まず `ProcessInfo.environment` を読む（dotenv パーサなし）ため、クォート害は env ファイル経由の消費時のみ。
 - [x] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。実 Neon で `sync`(Stage1) 書き込み・`ingest`(Stage3/4) バックフィル・`computeFinancials` を実データで確認済み（`ingest --limit 10` で Stage3/4 とも stored=10 failed=0）。<br>**過去の `stored=0 failed=5` ブロッカーは解消済み**: 真因は汚染された空キャッシュディレクトリ。キー破損期に EDINET が JSON エラー封筒をバイナリとして返し、`extractZip` が dest 作成後に throw → 空ディレクトリ残留 → 以後 `hasXbrlDir` が「取得済み」と誤判定し再取得されず facts=0。`hasXbrlDir` が空ディレクトリを拒否（自己修復）＋ `storeXbrlZip` が展開失敗時に dest 削除、で修正。
 - [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
