@@ -53,13 +53,21 @@ struct RemoteFilingContent {
 struct RemoteAPIClient: Sendable {
     let baseURL: String
     let authToken: String?
+    let cfAccessClientId: String?
+    let cfAccessClientSecret: String?
 
-    /// baseURL が空・不正なら nil。authToken は空なら未設定扱い。
-    init?(baseURLString: String, authToken: String?) {
+    /// baseURL が空・不正なら nil。各認証情報は空なら未設定扱い。
+    /// authToken（Bearer）と Cloudflare Access Service Token は独立に付与される。
+    init?(
+        baseURLString: String, authToken: String?,
+        cfAccessClientId: String? = nil, cfAccessClientSecret: String? = nil
+    ) {
         let trimmed = baseURLString.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, URL(string: trimmed) != nil else { return nil }
         baseURL = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
         self.authToken = (authToken?.isEmpty == false) ? authToken : nil
+        self.cfAccessClientId = (cfAccessClientId?.isEmpty == false) ? cfAccessClientId : nil
+        self.cfAccessClientSecret = (cfAccessClientSecret?.isEmpty == false) ? cfAccessClientSecret : nil
     }
 
     // MARK: - エンドポイント
@@ -136,6 +144,11 @@ struct RemoteAPIClient: Sendable {
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        // Cloudflare Access Service Token は鍵ペアが両方そろったときだけ2ヘッダを付与する。
+        if let id = cfAccessClientId, let secret = cfAccessClientSecret {
+            request.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
+            request.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -146,7 +159,9 @@ struct RemoteAPIClient: Sendable {
             case 200:
                 return .ok(data)
             case 401:
-                return .failure("認証に失敗しました。ticker config set --auth-token <token> を確認してください。")
+                return .failure(
+                    "認証に失敗しました。ticker config set --auth-token <token>"
+                        + "（または --cf-access-client-id / --cf-access-client-secret）を確認してください。")
             case 404:
                 return .notFound(errorMessage(data) ?? "見つかりませんでした")
             default:

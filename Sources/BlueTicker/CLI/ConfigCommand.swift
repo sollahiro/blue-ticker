@@ -26,6 +26,8 @@ struct ConfigShow: AsyncParsableCommand {
         let backend = await settingsStore.get(.edinetBackend) ?? "local"
         let serverURL = await settingsStore.get(.serverURL) ?? ""
         let authToken = await settingsStore.maskedAuthToken()
+        let cfClientId = await settingsStore.maskedCfAccessClientId()
+        let cfClientSecret = await settingsStore.maskedCfAccessClientSecret()
 
         if json {
             printJSONObject([
@@ -35,15 +37,19 @@ struct ConfigShow: AsyncParsableCommand {
                 "edinetBackend": backend,
                 "serverURL": serverURL,
                 "authToken": authToken,
+                "cfAccessClientId": cfClientId,
+                "cfAccessClientSecret": cfClientSecret,
             ])
         } else {
             print("設定一覧:")
-            print("  EDINET API Key : \(apiKey)")
-            print("  キャッシュDir  : \(cacheDir)")
-            print("  キャッシュ有効  : \(cacheEnabled)")
-            print("  バックエンド    : \(backend)")
-            print("  サーバーURL     : \(serverURL.isEmpty ? "(未設定)" : serverURL)")
-            print("  認証トークン    : \(authToken)")
+            print("  EDINET API Key   : \(apiKey)")
+            print("  キャッシュDir    : \(cacheDir)")
+            print("  キャッシュ有効    : \(cacheEnabled)")
+            print("  バックエンド      : \(backend)")
+            print("  サーバーURL       : \(serverURL.isEmpty ? "(未設定)" : serverURL)")
+            print("  認証トークン      : \(authToken)")
+            print("  CF Client ID     : \(cfClientId)")
+            print("  CF Client Secret : \(cfClientSecret)")
         }
     }
 }
@@ -65,6 +71,12 @@ struct ConfigSet: AsyncParsableCommand {
 
     @Option(name: .long, help: "remote バックエンドの Bearer 認証トークン")
     var authToken: String?
+
+    @Option(name: .long, help: "Cloudflare Access Service Token の Client ID")
+    var cfAccessClientId: String?
+
+    @Option(name: .long, help: "Cloudflare Access Service Token の Client Secret")
+    var cfAccessClientSecret: String?
 
     @Flag(name: .long, help: "キャッシュを無効化")
     var disableCache = false
@@ -88,6 +100,14 @@ struct ConfigSet: AsyncParsableCommand {
         if let token = authToken {
             try await settingsStore.set(.authToken, value: token)
             print("認証トークンを保存しました。")
+        }
+        if let id = cfAccessClientId {
+            try await settingsStore.set(.cfAccessClientId, value: id)
+            print("CF Access Client ID を保存しました。")
+        }
+        if let secret = cfAccessClientSecret {
+            try await settingsStore.set(.cfAccessClientSecret, value: secret)
+            print("CF Access Client Secret を保存しました。")
         }
         if disableCache {
             await settingsStore.set(.cacheEnabled, value: false)
