@@ -12,6 +12,8 @@ CLI は同一バイナリのまま、設定（`edinet-backend`）で接続先を
 | **remote (self-host)** | blt-server | 同一マシン | 基盤実装済み |
 | **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | 配線済み・実 Neon E2E 待ち |
 
+> **方針（2026-06-28 確定）**: ユーザー向けは最終的に remote（cloud）へ集約し、**local モードのユーザー向け分析 CLI は段階的に廃止**する（即時削除しない）。local 実行系は開発・テスト・フィクスチャ用途の **Dev CLI** として残す。到達点は「Blue Ticker はサーバーで動き、CLI / GUI / MCP はそれを操作するクライアント」。移行段取りは `blt-server-roadmap.md`「方針転換」を参照。
+
 ## ターゲット構成と依存方向
 
 `ticker` CLI に Web/DB 依存（Vapor/Fluent/NIO）をリンクさせないため、トランスポート層を `BltServerCore` に隔離する。依存は一方向（`BltServerCore` → `BlueTickerCore`、逆流不可）。
