@@ -71,10 +71,14 @@ docker exec blt-server /app/blt-server ingest --limit 50
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200）で調整。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200、plist の `EnvironmentVariables` で上書き）で調整。
+
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` は 1 プロセスで Stage 3 → Stage 4（通期）→ Stage 4-half の順に流す。limit を大きくすると 1 ラン数時間に及び、途中で Neon 接続がリセット（PSQLError）されるとそのランの **Stage 4 / Stage 4-half がまとめて失われる**（特に最後に走る Stage 4-half は完走しにくい）。完走率を優先し `BLT_INGEST_LIMIT=75` 程度に下げる（バックフィル中の暫定。全社 drain 後は既定に戻してよい）。
 
 ```bash
-# 1. リリースビルド（コード変更後は再実行が必要）
+# 1. リリースビルド（コード変更後は再実行が必須）
+#    旧バイナリは新しく配線したステージ（例: Stage 4-half）を黙って飛ばし、
+#    ログにそのステージの完了行が出ないまま該当テーブルが埋まらない。
 swift build -c release --product blt-server
 
 # 2. launchd plist を ~/Library/LaunchAgents に置く（Label: com.sollahiro.blt-sync、

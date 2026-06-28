@@ -201,8 +201,8 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | 同期済み（3,944 社）。定期 `sync` は launchd `com.sollahiro.blt-sync` で 1 日 3 回 |
 | Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ・取り込み（`blt-server ingest`）実装済み（RAW アーカイブ。Stage 4 は別途計算結果を格納） |
-| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・~302/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
-| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィルは緒に就いたばかり（5 社）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
+| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・506/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
+| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィル進行中（9 社、2026-06-28 夜に release 再ビルドで drain 再開）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -399,8 +399,9 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 近期（Stage 1 安定化）
 
 - [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 3/4）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
-- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **~302/3,944 社格納**（2026-06-28 朝時点 fin-v2=235・fin-v1=67）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い（フォールバック撤去後は 404）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 limit200 回で解消。その後に新規 ~3,642 社へカバレッジ拡大（実測 200社/回・3回/日 → 全完了 ~1 週間規模）。Fly は読むだけ（未格納は 404＝OOM しない）。
-  - **半期（company_half_financials）も同 ingest が Stage 4-half として埋める**が、**2026-06-28 時点で 5 社のみ**（2695/2753/4174/7064/7073）。通期 drain と並行して全社展開される。半期 read は `Api.halfMaxYears`(=5) クランプ＋未格納 404 で OOM しない。
+- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **506/3,944 社格納**（2026-06-28 夜時点）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い（フォールバック撤去後は 404）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 ingest で解消。その後に新規社へカバレッジ拡大。Fly は読むだけ（未格納は 404＝OOM しない）。
+  - **半期（company_half_financials）も同 ingest が Stage 4-half として埋める**。**2026-06-28 夜に 5→9 社へ前進**。半期が長く 5 社で止まっていた真因は **launchd の release バイナリが Stage 4-half 配線より古かった**こと（定期ランのログに「Stage 4-half 取り込み完了」行が出ていなかった）。release 再ビルドで解消し、手動 ingest で Stage 4-half 到達を確認。半期 read は `Api.halfMaxYears`(=5) クランプ＋未格納 404 で OOM しない。
+  - **長時間ランの transient PSQLError 対策**: limit を大きくすると 1 ラン数時間に及び、途中の Neon 接続リセットで Stage 4 / Stage 4-half がまとめて巻き戻る（最後に走る Stage 4-half が完走しにくい）。バックフィル中は `BLT_INGEST_LIMIT=75` に下げて完走率を優先（全社 drain 後は既定 200 に戻してよい）。詳細は `docs/deploy.md`「定期同期（ローカル launchd）」。
   - 補足: Stage 3 のバッチで failed が出る（例 attempted=200 stored=183 failed=17）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。Stage 3 は facts-v1 一致を skip（再パースしない。例 skipped=373）。
 - [x] **fin-v2 再デプロイ（2026-06-28）** — IBD 借入金等明細表抽出（computeFinancials の HTML 依存抽出）追加で `companyFinancialsCacheVersion` を fin-v1→**fin-v2** にバンプ。`fly deploy --remote-only` で fin-v2 イメージへ更新（fin-v1 サーバーは fin-v2 行を stale 拒否してしまうため必須）。fin-v2 銘柄が **warm 0.31s** で 200 read を確認。
 - [x] **Stage 4 キャッシュバージョンの分離（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。
