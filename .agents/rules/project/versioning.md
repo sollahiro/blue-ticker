@@ -68,6 +68,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 |---|---|---|---|
 | `edinet_xbrl_facts`（Stage 3 RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
 | `company_financials`（Stage 4 derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v2"` |
+| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v1"` |
 
 ### バンプ規則
 
@@ -75,6 +76,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 
 - `xbrlFactsCacheVersion`: XBRL fact のパースロジック（`parseXbrlFactIndex`）、または RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したとき
 - `companyFinancialsCacheVersion`: 財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）、または公開契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変更したとき
+- `companyHalfFinancialsCacheVersion`: 半期計算ロジック（`HalfYearAnalyzer` / `buildH2Entry`）、または公開契約型（`HalfFinancialsResponse` / `HalfFinancialsPeriod`）の意味を変更したとき
 
 ### 運用上の注意（バンプ時の一度きり再 ingest）
 

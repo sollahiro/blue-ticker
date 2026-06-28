@@ -1,0 +1,87 @@
+// 半期 Stage 4 取り込み: edinet_documents に存在する企業（証券コード）について半期財務サマリを
+// 計算し、company_half_financials へ upsert する。計算は BlueTickerCore のファサード
+// （computeHalfFinancials）に委譲し、ここでは企業選定・staleness 判定・DB upsert のみを担う
+// （ネットワーク非依存でテスト可能）。通期 Stage 4（Stage4Ingest.swift）と同構造。
+//
+// 計算は HalfYearAnalyzer（FY/2Q から H1/H2 導出・waterfall）を含み高コストなため、ローカル等で
+// ingest し Neon へ保存する。REST サーバー（Fly 等）は読むだけにして OOM を回避する。
+// read 経路は loadStoredHalfFinancials。
+
+import BlueTickerCore
+import Fluent
+import Foundation
+
+/// 半期 Stage 4 取り込みで格納する年数（HalfYearAnalyzer の探索上限 5 年＝全集合）。
+/// read 時に要求年数へ縮める（REST の half-financials は years 既定 3）。
+let stage4HalfIngestYears = 5
+
+/// 証券コードを受けて半期財務サマリを返す計算器（成功で response、失敗で nil）。
+/// 本番は `context.computeHalfFinancials`、テストはフェイクを注入する。
+public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinancialsResponse?
+
+/// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
+/// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 Stage 4 と同ロジック。
+func runStage4HalfIngest(
+    db: Database, years: Int, limit: Int?, compute: HalfFinancialsComputer
+) async throws -> Stage4IngestSummary {
+    let codes = try await distinctCompanyCodes(db: db)
+
+    var attempted = 0
+    var stored = 0
+    var failed = 0
+    var skipped = 0
+
+    for code in codes {
+        let existing = try await CompanyHalfFinancials.find(code, on: db)
+        if let row = existing, row.cacheVersion == companyHalfFinancialsCacheVersion,
+            row.requestedYears >= years {
+            skipped += 1
+            continue
+        }
+        if let lim = limit, attempted >= lim { break }
+        attempted += 1
+        guard let response = await compute(code) else {
+            failed += 1
+            continue
+        }
+        try await storeCompanyHalfFinancials(
+            existing: existing, code: code, years: years, response: response, db: db)
+        stored += 1
+    }
+
+    return Stage4IngestSummary(
+        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
+}
+
+/// 計算済み半期サマリを company_half_financials へ書き込む（既存行があれば更新、無ければ作成）。
+func storeCompanyHalfFinancials(
+    existing: CompanyHalfFinancials?, code: String, years: Int,
+    response: HalfFinancialsResponse, db: Database
+) async throws {
+    if let row = existing {
+        row.response = response
+        row.cacheVersion = companyHalfFinancialsCacheVersion
+        row.requestedYears = years
+        try await row.update(on: db)
+    } else {
+        let model = CompanyHalfFinancials()
+        model.id = code
+        model.response = response
+        model.cacheVersion = companyHalfFinancialsCacheVersion
+        model.requestedYears = years
+        try await model.create(on: db)
+    }
+}
+
+// MARK: - read 経路（REST half-financials）
+
+/// 格納済み半期 Stage 4 結果を code で引き、現行バージョン & 要求年数を満たすなら years に縮めた JSON を返す。
+/// 無い・古い・年数不足なら nil（呼び出し側はライブ計算へフォールバックする）。
+func loadStoredHalfFinancials(code: String, years: Int, db: Database) async throws -> [String: Any]? {
+    guard years > 0,
+        let row = try await CompanyHalfFinancials.find(code, on: db),
+        row.cacheVersion == companyHalfFinancialsCacheVersion,
+        row.requestedYears >= years
+    else { return nil }
+    return row.response.trimmed(toYears: years).jsonObject()
+}
