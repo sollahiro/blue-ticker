@@ -321,7 +321,7 @@ DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent
 3. ~~**DB 層（Fluent）配線**（`BltServerCore`、`Database.swift`）~~ → **完了（接続配線のみ）**
    - `DATABASE_URL`（Neon）があれば `app.databases.use(.postgres(...))`。未設定なら DB なしで起動（ステートレス EDINET プロキシ）。
    - **Stage 1/3 のモデル・`Migration` は未着手**（スキーマ設計＝下記ステップ4。空マイグレーションは置かない方針）。
-4. ~~**認証ミドルウェア追加**: Bearer トークン（CLI remote）~~ → **完了**（下記「共通基盤」）。後続で Sign in with Apple（iOS）。
+4. ~~**認証ミドルウェア追加**: Bearer トークン（CLI remote）~~ → **完了**（下記「共通基盤」）。本番認証は Cloudflare Access + IdP へ発展（下記「認証」）。
 5. ~~**検証**~~ → **完了**: `ticker` に Vapor/Fluent シンボル 0（`nm` 確認、NIO は `union` 等の偽陽性のみ）。全 311 テスト通過。`/v1/companies` 実応答が旧契約（sorted+pretty JSON）と一致。
 
 > 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
@@ -341,13 +341,30 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - **ステップ6 の Dockerfile（Fly.io 用、`swift:6.1` 2 段ビルド）でも同フラグが必須**。
 - swift-nio 側が修正されたら本フラグは除去する（一時措置）。
 
-### 認証
+### 認証（Cloudflare Access + IdP・2026-06-28 確定）
 
-| 時期 | 方式 |
-|---|---|
-| 初期（CLI remote） | Bearer トークン（Web ログイン後に個人アクセストークン発行 → CLI が保持） |
-| iOS app | **Sign in with Apple**（JWT 検証は Linux サーバーでも可能） |
-| 将来 | **Google OAuth 追加**（CLI ログイン UX の Linux ヘッジ。provider 問わずブラウザ/デバイスコードフローが要る点に注意） |
+クラウド本番は **Cloudflare Access**（Zero Trust リバースプロキシ）をエッジに置き、IdP で認証する。origin（Fly.io）は **Cloudflare Tunnel** 経由でのみ到達可能にし公開ポートを閉じる。
+
+認証方式はクライアント種別で2経路に分かれる。分岐軸は「人間か AI か」ではなく「クライアント内にブラウザのログイン操作が挟まるか」。
+
+| クライアント | 操作者 | 認証方式 | 備考 |
+|---|---|---|---|
+| CLI（人間/AI 半々）・MCP（AI） | 無人 or 非対話 | **Service Token**（`CF-Access-Client-Id` / `CF-Access-Client-Secret`） | ブラウザ不要。鍵ペアをクライアントが保持して毎リクエストに付与 |
+| iOS（**他人配布あり**） | 人間 | **SSO（IdP 連携）** | Cloudflare Access を OIDC プロバイダとし、`ASWebAuthenticationSession` で認可コード+PKCE。配布アプリに共有シークレットを埋められないため Service Token 不可 |
+| self-host / dev | — | 既存 **Bearer**（`BLT_AUTH_TOKEN`）/ 無認証 | Cloudflare 非依存で立てられるよう温存 |
+
+**origin の検証方針 = 方式 A（エッジ信頼）**。Tunnel + Access がエッジで認証済みのため、origin は Cloudflare 経路に対し**追加の JWT 検証をしない**（新規依存ゼロ。`vapor/jwt` 不要）。
+
+- **A の安全要件**: A のセキュリティは「origin が非公開であること」に全面依存する。**Tunnel + 公開ポート閉鎖 + Access ポリシー適用**の3点セットで初めて成立する。ポートが開いていると Cloudflare 経路に対し無検証で素通りになる。
+- **B（多層防御）へ移るトリガー**: origin が**ユーザー単位の処理**を始めるとき（ユーザー別クォータ／データ／email 付き監査）。そのとき `vapor/jwt` を足し `Cf-Access-Jwt-Assertion` を JWKS（`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`）で検証して identity を取り出す。現状は全員に同じ公開財務データを返すだけなので A で十分。
+
+#### 実装ステップ
+
+1. ~~**origin 認証ミドルウェアの env 分岐**（`Routes.swift`、依存ゼロ）~~ → **完了**（下記「共通基盤」の認証モード表）
+2. **CLI の Service Token 対応**（config/keychain スキーマ追加＝公開インターフェース変更・要確認）: `CF-Access-Client-Id` / `CF-Access-Client-Secret` を保持し2ヘッダ付与
+3. **Dockerfile**: `cloudflared` サイドカー同梱
+4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に
+5. **docs/deploy.md**: Cloudflare 側手順（zone 移管 → Tunnel → Access アプリ + ポリシー + Service Token 発行 + IdP 接続）
 
 ### 共通基盤（env 設定・ヘルスチェック・認証）
 
@@ -358,13 +375,17 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 | `BLT_HOST` | bind ホスト。クラウドでは `0.0.0.0` | `127.0.0.1` |
 | `BLT_PORT` | bind ポート | `3000` |
 | `BLT_EDINET_API_KEY` | EDINET API キー（keychain 非搭載の Linux サーバー向け） | （未設定なら settingsStore へフォールバック） |
-| `BLT_AUTH_TOKEN` | Bearer トークン。設定時のみ `/v1` 配下を認証で保護 | （未設定なら認証なし） |
+| `CF_ACCESS_TEAM_DOMAIN` | 設定時は Cloudflare Access モード（エッジ信頼）。origin は検証せず Tunnel + Access に委ねる | （未設定） |
+| `BLT_AUTH_TOKEN` | 静的 Bearer トークン。Cloudflare Access モードでないときに設定すると `/v1` を保護 | （未設定なら無認証） |
 | `DATABASE_URL` | Neon Postgres 接続文字列（既存。Fluent 配線） | （未設定なら DB なし） |
 
 - **bind**: 解決順位は CLI 引数（`--host`/`--port`）> env > デフォルト。
 - **EDINET キー**: env（`BLT_EDINET_API_KEY`）優先、未設定時のみ `settingsStore`（keychain/config）へフォールバック。両方とも空なら起動時に exit(1)。
 - **`GET /healthz`**: 認証不要。`{"status":"ok"}` を 200 で返す（Fly.io／LB のヘルスチェック用）。`/v1` の認証グループ外に登録。
-- **Bearer 認証**: `BLT_AUTH_TOKEN` 設定時のみ有効。`/v1` 配下で `Authorization: Bearer <token>` を定数時間比較で検証し、不一致・未提示は 401（公開契約のエラー封筒 `{"error":...,"status":401}`）。`/healthz` は常に認証不要。未設定なら認証なしで起動（self-host／ローカル開発）。
+- **認証モード（`/v1` 配下・起動時に env から決定）**: 優先順位で1つを選ぶ。`/healthz` は常に認証不要。
+  1. `CF_ACCESS_TEAM_DOMAIN` 設定 → **Cloudflare Access モード**（エッジ信頼 / 方式 A）。origin は検証せず Tunnel + Access に委ねる。起動ログに前提（Tunnel 経由・公開ポート閉鎖）を notice 出力。
+  2. `BLT_AUTH_TOKEN` 設定 → **静的 Bearer**。`Authorization: Bearer <token>` を定数時間比較で検証し、不一致・未提示は 401（エラー封筒 `{"error":...,"status":401}`）。
+  3. どちらも無し → **無認証**（ローカル開発専用）。`/v1` 無防備のため起動時に warning を出す。
 
 ---
 
@@ -432,7 +453,11 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
 - [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
-- [ ] OAuth 認証の追加（Google OAuth・iOS app ログイン）
+- [x] 認証方式の確定（**Cloudflare Access + IdP**・方式 A エッジ信頼） — 「認証」節参照
+- [x] origin 認証ミドルウェアの env 分岐（Cloudflare Access / Bearer / 無認証） — ステップ1 完了
+- [ ] CLI の Service Token 対応（ステップ2・config/keychain スキーマ変更・要確認）
+- [ ] Cloudflare Tunnel 同梱（Dockerfile）＋ fly.toml 公開ポート閉鎖（ステップ3・4）
+- [ ] iOS の SSO（OIDC + PKCE）連携（iOS アプリ側プロジェクト）
 - [ ] **REST API の整備（公開 API 化）**: ユーザー接点（remote CLI / GUI / MCP）が依存する公開 API を整える。現行 `/v1` を土台に、スキーマ安定化・認証・レート制御を進める（`方針転換` のユーザー集約に必須）。
 - [ ] **オンデマンド ingest（非同期）の実装**: 未充足リクエスト記録テーブル＋既存 ingest バッチでの消化（上記「オンデマンド ingest（非同期）」）。公開スキーマ追加のためユーザー確認後に着手。
 - [ ] **ユーザー向けローカル分析 CLI の段階的廃止**: `backend=local` の deprecation 告知 → 廃止バージョンを定めて削除。Dev CLI・Core・Unit Test は残す。
