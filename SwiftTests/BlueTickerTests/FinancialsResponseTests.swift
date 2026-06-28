@@ -11,9 +11,9 @@ import Testing
 
     @Test func envelopeCarriesSchemaVersionAndMetadata() throws {
         let result = try decodeResult(#"{"code":"7203","years":[]}"#)
-        let resp = buildFinancialsResponse(
+        let resp = FinancialsResponse(
             code: "7203", name: "トヨタ自動車", sector: "輸送用機器", market: "プライム",
-            result: result)
+            result: result).jsonObject()
 
         #expect(resp["schema_version"] as? Int == Api.financialsSchemaVersion)
         #expect(resp["code"] as? String == "7203")
@@ -32,8 +32,8 @@ import Testing
           {"fy_end":"2025-03","FinancialPeriod":"FY","RawData":{},"CalculatedData":{}}
         ]}
         """#)
-        let resp = buildFinancialsResponse(
-            code: "7203", name: "x", sector: "", market: "", result: result)
+        let resp = FinancialsResponse(
+            code: "7203", name: "x", sector: "", market: "", result: result).jsonObject()
 
         let years = try #require(resp["years"] as? [[String: Any]])
         #expect(years.count == 1)

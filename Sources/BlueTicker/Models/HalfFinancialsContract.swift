@@ -1,8 +1,8 @@
 // 半期 financials API の公開契約。サーバーとクライアントで共有する単一の Codable 型。
 //
 // 設計意図（financials の FinancialsContract と同思想）:
-// - サーバー（BltServerContext.getHalfFinancials / Stage 4-half ingest）はこの型で JSON を
-//   生成・JSONB 保存し、remote CLI（RemoteAPIClient）は同じ型でデコードして [HalfPeriod] に
+// - サーバー（Stage 4-half ingest の computeHalfFinancials → JSONB 保存 → read で jsonObject()）は
+//   この型で JSON を生成・保存し、remote CLI（RemoteAPIClient）は同じ型でデコードして [HalfPeriod] に
 //   復元する（計算はサーバー集約・キー定義を 1 か所に集約しドリフトを防ぐ）。
 // - 年度メトリクスは financials と同じ flatten 形（FinancialsYear）を再利用し、内部モデル
 //   （YearEntry）を露出させない。半期固有のメタ（label / half）だけを period が足す。
