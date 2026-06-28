@@ -76,6 +76,11 @@ struct RemoteAPIClient: Sendable {
         await getDecoding("/v1/companies/\(escape(code))/financials", query: ["years": String(years)])
     }
 
+    func getHalfFinancials(code: String, years: Int) async -> RemoteOutcome<HalfFinancialsResponse> {
+        await getDecoding(
+            "/v1/companies/\(escape(code))/half-financials", query: ["years": String(years)])
+    }
+
     func getFilingContent(code: String, docId: String?, sections: [String]?)
         async -> RemoteOutcome<RemoteFilingContent>
     {

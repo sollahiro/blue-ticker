@@ -38,19 +38,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
                 printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
                 throw ExitCode.failure
             }
-            if json { MetricsJSON.print(periods); return }
-            printError("\n[半期 増減分析]\n")
-            // 前期 = 同じ半期（H1/H2）の直近の過去期。欠落期があってもラベル意味（前年同期差）を保つ。
-            let priors: [HalfPeriod?] = periods.indices.map { i in
-                periods[..<i].last { $0.half == periods[i].half }
-            }
-            render(
-                periods: periods,
-                priors: priors,
-                columnLabels: periods.map { $0.label },
-                entry: { $0.yearEntry },
-                latest: periods.last?.yearEntry
-            )
+            renderHalf(periods)
             return
         }
 
@@ -66,11 +54,25 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
     /// remote バックエンド経路。計算済み財務データを受け取り、ローカルと同じ増減分析を表示する。
     private func runRemote(_ remote: RemoteAPIClient) async throws {
-        if half {
-            printError("エラー: --half は remote バックエンドでは未対応です。\n")
-            throw ExitCode.failure
-        }
         let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
+
+        if half {
+            let resp: HalfFinancialsResponse
+            switch await remote.getHalfFinancials(code: codeTrimmed, years: years) {
+            case .ok(let r): resp = r
+            case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
+            }
+            let periods = resp.toPeriods()
+            guard !periods.isEmpty else {
+                printError("エラー: 半期財務データの取得に失敗しました。\n")
+                throw ExitCode.failure
+            }
+            printError("\n分析中: \(codeTrimmed) \(resp.name) ...\n")
+            printError("分析対象期間: 直近 \(years) 年分\n")
+            renderHalf(periods)
+            return
+        }
+
         let resp: FinancialsResponse
         switch await remote.getFinancials(code: codeTrimmed, years: years) {
         case .ok(let r): resp = r
@@ -86,6 +88,23 @@ struct AnalyzeCommand: AsyncParsableCommand {
         printError("分析対象期間: 直近 \(years) 年分\n")
         if json { MetricsJSON.print(result); return }
         renderAnnual(yearsData)
+    }
+
+    /// 半期の増減分析を表示する（ローカル・remote 共通）。
+    private func renderHalf(_ periods: [HalfPeriod]) {
+        if json { MetricsJSON.print(periods); return }
+        printError("\n[半期 増減分析]\n")
+        // 前期 = 同じ半期（H1/H2）の直近の過去期。欠落期があってもラベル意味（前年同期差）を保つ。
+        let priors: [HalfPeriod?] = periods.indices.map { i in
+            periods[..<i].last { $0.half == periods[i].half }
+        }
+        render(
+            periods: periods,
+            priors: priors,
+            columnLabels: periods.map { $0.label },
+            entry: { $0.yearEntry },
+            latest: periods.last?.yearEntry
+        )
     }
 
     /// 年次の増減分析を表示する（ローカル・remote 共通）。

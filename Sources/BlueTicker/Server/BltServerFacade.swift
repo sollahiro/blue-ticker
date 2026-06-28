@@ -130,6 +130,27 @@ public extension BltServerContext {
             result: result)
     }
 
+    func getHalfFinancials(code: String, years: Int) async -> BltServerResponse {
+        guard let response = await computeHalfFinancials(code: code, years: years) else {
+            return .notFound("半期データが見つかりませんでした: \(code)")
+        }
+        return .ok(response.jsonObject())
+    }
+
+    /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。
+    /// ライブ計算経路の単一の実装点。getHalfFinancials（REST ライブ応答）と半期 Stage 4 取り込み
+    /// （`blt-server ingest` → Neon 保存）の両方がここを通る。HalfYearAnalyzer は内部で 5 年分を
+    /// 構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば全集合が返る。
+    /// EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
+    func computeHalfFinancials(code: String, years: Int) async -> HalfFinancialsResponse? {
+        let analyzer = HalfYearAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
+        guard let periods = await analyzer.analyze(code: code, analysisYears: years) else {
+            return nil
+        }
+        let stock = await masterDataManager.getByCode(code)
+        return HalfFinancialsResponse(code: code, name: stock?.coName ?? "", periods: periods)
+    }
+
     func getFilingContent(code: String, docId: String?, sections: [String]?) async -> BltServerResponse {
         let targetDocID: String
         if let d = docId, !d.isEmpty {

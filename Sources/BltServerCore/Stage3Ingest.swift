@@ -111,6 +111,11 @@ public func runStage3IngestCommand(limit: Int?) async throws {
         }
         app.logger.notice(
             "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
+        let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit) { code in
+            await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
+        }
+        app.logger.notice(
+            "Stage 4-half 取り込み完了: attempted=\(s4h.attempted) stored=\(s4h.stored) failed=\(s4h.failed) skipped=\(s4h.skipped)")
     } catch {
         try? await app.asyncShutdown()
         throw error

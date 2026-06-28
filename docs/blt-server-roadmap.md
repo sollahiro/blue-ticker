@@ -93,7 +93,8 @@ CLI は `ticker config set --backend remote` で local/remote を切り替える
 - **対象コマンド**: `search` / `filings` / `filing` / `analyze` / `summarize`（REST 5 エンドポイントに対応）。各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil ならローカル経路（Services 直呼び）を実行する。
 - **整形の再現**: `RemoteAPIClient`（`API/RemoteAPIClient.swift`）が応答を `StockSearchResult` / `RemoteFilings` / `FinancialsResponse` / セクション辞書へデコードし、`FinancialsResponse.toMetricsResult()` で内部 `MetricsResult` に復元して**既存レンダラをそのまま使う**。`filing` のセグメント表は `SegmentResult(dictionary:)` で復元。
 - **接続設定**: `ticker config set --server-url <url> --auth-token <token>`。解決順位は env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`auth-token` は keychain 保存（`edinetApiKey` と同様）、`server-url` は config ファイル。`config show` は token をマスク表示。
-- **現状の制約（将来は解消し全コマンド remote 対応を目指す）**: 現時点で `sector`（全 33 業種一覧）は対応する REST が無く CSV からオフライン算出するため常にローカル。`analyze`/`summarize` の `--half`（半期）も REST 未提供のため remote では非対応エラー。**これらは設計上の恒久境界ではなく未実装による暫定制約**であり、`--half` を含む全コマンドを将来 remote 対応する方針（必要な REST エンドポイントを追加し、local/remote の機能差をなくす）。
+- **`--half` の remote 対応（実装済み）**: `analyze --half` / `summarize --half` は `GET /v1/companies/{code}/half-financials` を呼び、ローカルと同一整形（半期 5 ブロック増減分析・水準値テーブル）で表示する。OOM 安全のため通期と同型の DB 格納経路（`company_half_financials`、ingest で計算格納、read を DB 優先）。
+- **残る制約**: `sector`（全 33 業種一覧）は対応する REST が無く CSV からオフライン算出するため remote でも常にローカルで動作する（機能欠落ではない）。REST 化は一貫性のための polish で未着手。
 - 失敗は throw せず `RemoteOutcome`（ok / notFound / failure）で表現し、CLI 層が stderr へ出して終了する（戻り値パターン）。
 
 #### 稼働状況（2026-06-27 実機検証・Fly `blt-server.fly.dev`）
@@ -145,6 +146,7 @@ iOS が対話的な再計算（係数を変えた what-if 等）を要求し、�
 | `GET /v1/sectors/{sector}/companies?limit=20` | `sector`: 業種名、`limit` | 業種別銘柄一覧 |
 | `GET /v1/companies/{code}/filings?max_years=5` | `max_years` | 書類一覧 |
 | `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別、flatten 形＋`schema_version`） |
+| `GET /v1/companies/{code}/half-financials?years=3` | `years` | 半期財務サマリー（H1/H2、flatten 形＋`schema_version`） |
 | `GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b` | `doc_id`（省略可）、`sections`（省略可） | 書類セクションテキスト |
 
 - 成功: HTTP 200 + `application/json`
@@ -175,6 +177,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ・取り込み（`blt-server ingest`）実装済み（RAW アーカイブ。Stage 4 は別途計算結果を格納） |
 | Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 読み配線 実装済み。fin-v2・302/3,944 社格納・launchd で drain 中（未格納はライブ計算フォールバック） |
+| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 読み配線 実装済み（half-v1）。`--half` の remote 対応に使う。バックフィルは未開始 |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -370,7 +373,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
 - [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
 - [x] **Stage 1 read 配線**: `filings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え（`loadStoredFilingRecords`＋`getFilingsFromRecords`、未同期/DB 非接続はライブフォールバック）。簡易セマンティクス採用（140/130 はライブと意図的差分・schema 変更回避）。「稼働状況」参照。**残: 実 Fly での E2E 検証**
-- [ ] **remote 全コマンド対応（フル parity 目標）**: `--half`（半期）の REST 提供、`sector` の REST 化など、local/remote の機能差をなくす。現状の `--half`/`sector` 非対応は恒久境界ではなく未実装による暫定制約
+- [x] **remote `--half` 対応**: `GET /v1/companies/{code}/half-financials` ＋ DB 格納経路（`company_half_financials`・ingest・read 優先）＋ remote CLI 配線で `analyze --half`/`summarize --half` を remote 対応。**残: 実 Fly での E2E 検証＋半期バックフィル**
+- [ ] **`sector` の REST 化（任意）**: 現状 CSV 算出で remote でも動作するため機能欠落ではない。一貫性のための polish（優先度低）
 
 ### 次の検討課題（優先順）
 

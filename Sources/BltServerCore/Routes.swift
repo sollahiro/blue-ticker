@@ -74,6 +74,20 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         return makeResponse(await context.getFinancials(code: code, years: years))
     }
 
+    // GET /v1/companies/{code}/half-financials?years=3
+    // 半期財務サマリ。DB（半期 Stage 4 derived キャッシュ company_half_financials）に現行
+    // バージョン・十分な年数で格納済みならそれを返す（EDINET 取得・XBRL パースなし＝OOM 回避）。
+    // 未格納・古い場合のみライブ計算へフォールバックする。
+    v1.get("companies", ":code", "half-financials") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let years = req.query[Int.self, at: "years"] ?? 3
+        if dbAvailable,
+            let stored = try? await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
+            return jsonResponse(stored, status: .ok)
+        }
+        return makeResponse(await context.getHalfFinancials(code: code, years: years))
+    }
+
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
     v1.get("companies", ":code", "filing-content") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
