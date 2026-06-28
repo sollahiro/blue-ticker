@@ -90,7 +90,7 @@ launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
 tail -f .build/blt-scheduled.log
 ```
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials` を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は、**Fly を `fly deploy` で新バージョンのイメージへ更新する**こと（古いイメージのサーバーは新バージョンで格納された行を stale 扱いで拒否し、ライブ計算フォールバック＝OOM になる）。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は、**Fly を `fly deploy` で新バージョンのイメージへ更新する**こと（古いイメージのサーバーは新バージョンで格納された行を stale 扱いで拒否し、**未格納と同じ 404** になる＝そのバージョン分のデータが見えなくなる）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ## Neon 接続の E2E 検証
 
@@ -126,7 +126,7 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM edinet_documents;"
 psql "$DATABASE_URL" -c "SELECT doc_id, cache_version, jsonb_typeof(facts) FROM edinet_xbrl_facts LIMIT 5;"
 psql "$DATABASE_URL" -c "SELECT code, cache_version, requested_years FROM company_financials LIMIT 5;"
 
-# financials 読み取り（Stage 4 格納済みなら DB から、無ければライブ計算へフォールバック。公開契約は不変）
+# financials 読み取り（Stage 4 格納済みなら DB から 200。未格納/古い/年数不足は 404・DB 非接続は 503。ライブ計算フォールバックなし。公開契約は不変）
 swift run blt-server &                          # ローカル起動（既定 127.0.0.1:3000）
 curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=3' | jq '.schema_version, .years[0].fy_end'
 ```
