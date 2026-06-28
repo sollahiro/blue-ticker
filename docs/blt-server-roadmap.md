@@ -85,7 +85,7 @@ financials の REST 応答を、毎リクエストのライブ計算（EDINET �
 - **なぜ facts 読みではないか**: 計算（`processDocument`）は数値 fact だけでなく **生 XBRL 内の HTML を直接パースする抽出器**（US-GAAP 連結 P/L・BS、IFRS 粗利／IBD／支払利息の TextBlock フォールバック）に依存する。`edinet_xbrl_facts`（数値のみ）からは再現できないため、**計算結果（公開契約 `FinancialsResponse`）を企業単位で格納**する方式を採る。HTML 解決・waterfall は ingest 時（生ディレクトリがある所）で完了させる。
 - **スキーマ**: `company_financials`（証券コード 4 桁を PK、`response` JSONB に `FinancialsResponse`、`cache_version`＝`companyFinancialsCacheVersion`、`requested_years`、`updated_at`）。Stage 4 derived だが `cache_version` は **`blueTickerVersion` 非連動の専用定数 `companyFinancialsCacheVersion`**（`Models/FinancialsContract.swift`、現在 `"fin-v2"`）。Stage 3 と同じく再生成が高コスト（XBRL 再 DL＋HTML 依存抽出の再計算）なため、月内 Micro バンプで全社再計算を強制しない。計算ロジック／契約型変更時のみバンプ（`versioning.md`）。公開契約は `response` 中身であり本テーブルは内部スキーマ。
 - **取り込み**: `blt-server ingest` が Stage 3 の後に Stage 4 を実行する。`edinet_documents` の secCode から distinct な企業（4 桁コード）を導出し、未計算 or `cache_version` 不一致 or `requested_years` 不足の企業のみ Core ファサード `computeFinancials(code:years:)`（既定 6 年）で計算・upsert。`--limit` は新規計算件数の上限。staleness skip は derived キャッシュと同思想。
-- **read 経路**: `GET /v1/companies/{code}/financials` は DB 接続時、`company_financials` に現行バージョン & 要求年数を満たす行があれば `trimmed(toYears:)` して返す（DL・パースなし）。無い・古い・年数不足、または DB 非接続なら従来のライブ計算へフォールバックする（`loadStoredFinancials` / `Routes.swift`）。
+- **read 経路（DB 専用・ライブ計算フォールバックなし）**: `GET /v1/companies/{code}/financials` は `company_financials` に現行バージョン & 要求年数を満たす行があれば `trimmed(toYears:)` して返す（DL・パースなし）。無い・古い・年数不足は **404**、DB 非接続は **503**。**ライブ計算へはフォールバックしない**（`loadStoredFinancials` / `Routes.swift`）。理由: フォールバックは 1 リクエストでサーバー全体を OOM 落ちさせる地雷で、warm でも years 整合がずれると毎回発火し得た（half で実害化、下記）。重い計算は ingest（ローカル→Neon）に閉じ込め、serving は read-only を保つ。
 - **運用**: 計算はメモリを使うため、**重い初回バックフィルはローカル等から `DATABASE_URL` を Neon に向けて ingest** する（Fly 上で大量に走らせると ingest 自体が OOM しうる）。Fly サーバーは読むだけ。
 - **テスト**: DB ロジック（企業選定・重複排除・staleness・年数不足・limit・upsert）と read 経路（バージョン／年数ゲート・trim）を計算器 closure 注入でネットワーク非依存に検証（`Stage4IngestTests`）。
 
@@ -97,7 +97,7 @@ financials の REST 応答を、毎リクエストのライブ計算（EDINET �
 - **同期にしない理由**: 同期パースはリクエストを握ったまま OOM し、serving インスタンスごと落として無関係なリクエストを巻き込む。Stage 4 DB 配線で勝ち取った「serving=read-only / ingest=別バッチ」の分離を逆行させない。
 - **UX**: クライアントは「準備中」を表示、または裏でポーリングしてスピナー表示する（**サーバーはリクエストを握らない**点が同期と決定的に違う）。
 - **新規要素**: 未充足リクエストの記録テーブル（小さな Neon テーブル 1 枚）。**公開スキーマの追加に当たるため実装前にユーザー確認**（`workflow.md` 公開インターフェース保護）。
-- 状態: **設計確定・未実装**。
+- 状態: **設計確定・未実装**。現状の未格納銘柄は同期 404（ライブ計算フォールバックは撤去済み＝serving は read-only を達成）。本節は「404 を 202＋キュー記録に変えて UX を改善する」将来案であり、記録テーブルは未充足リクエストの公開スキーマ追加に当たるため実装前にユーザー確認。
 
 ## クライアント
 
@@ -118,23 +118,23 @@ CLI は `ticker config set --backend remote` で local/remote を切り替える
 - **対象コマンド**: `search` / `filings` / `filing` / `analyze` / `summarize`（REST 5 エンドポイントに対応）。各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil ならローカル経路（Services 直呼び）を実行する。
 - **整形の再現**: `RemoteAPIClient`（`API/RemoteAPIClient.swift`）が応答を `StockSearchResult` / `RemoteFilings` / `FinancialsResponse` / セクション辞書へデコードし、`FinancialsResponse.toMetricsResult()` で内部 `MetricsResult` に復元して**既存レンダラをそのまま使う**。`filing` のセグメント表は `SegmentResult(dictionary:)` で復元。
 - **接続設定**: `ticker config set --server-url <url> --auth-token <token>`。解決順位は env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`auth-token` は keychain 保存（`edinetApiKey` と同様）、`server-url` は config ファイル。`config show` は token をマスク表示。
-- **`--half` の remote 対応（実装済み）**: `analyze --half` / `summarize --half` は `GET /v1/companies/{code}/half-financials` を呼び、ローカルと同一整形（半期 5 ブロック増減分析・水準値テーブル）で表示する。OOM 安全のため通期と同型の DB 格納経路（`company_half_financials`、ingest で計算格納、read を DB 優先）。
+- **`--half` の remote 対応（実装済み・実 Fly E2E 検証済み 2026-06-28）**: `analyze --half` / `summarize --half` は `GET /v1/companies/{code}/half-financials` を呼び、ローカルと同一整形（半期 5 ブロック増減分析・水準値テーブル）で表示する。通期と同型の DB 専用経路（`company_half_financials`、ingest で計算格納、read は DB のみ・未格納は 404）。**read は要求年数を半期上限 `Api.halfMaxYears`(=5) へクランプ**する。半期は FY/2Q から H1/H2 を導出する都合で最大 5 年しか作れず、CLI 既定 `analyzeDefaultYears`=6 のままでは read guard `requested_years(5) >= years(6)` が常に偽になり DB を空振り→旧ライブ計算フォールバックで Fly を OOM させていた（実機で再現・修正済み）。クランプで years=6 でも warm read（200）を返す。
 - **残る制約**: `sector`（全 33 業種一覧）は対応する REST が無く CSV からオフライン算出するため remote でも常にローカルで動作する（機能欠落ではない）。REST 化は一貫性のための polish で未着手。
 - 失敗は throw せず `RemoteOutcome`（ok / notFound / failure）で表現し、CLI 層が stderr へ出して終了する（戻り値パターン）。
 
-#### 稼働状況（2026-06-27 実機検証・Fly `blt-server.fly.dev`）
+#### 稼働状況（2026-06-28 実機検証・Fly `blt-server.fly.dev`）
 
 remote の各コマンドを実 Fly に対して検証した結果と、残る配線ギャップ。
 
 | コマンド | remote 稼働 | 備考 |
 |---|---|---|
 | `search` | ✅ | CSV マスターで軽量 |
-| `analyze` / `summarize` | ✅（**DB 格納済み銘柄のみ安定**） | Stage 4 DB 読み経路あり。warm 0.3s（例 8591）。未バックフィル銘柄はサーバーがライブ計算に落ち OOM/502 のリスク |
-| `filings` / `filing` | ✅（DB 読み配線済み・実 Fly 検証待ち） | Stage 1 read 配線を実装（下記）。DB 同期済み銘柄は `edinet_documents` を読み OOM を回避。未同期銘柄のみライブ探索へフォールバック |
+| `analyze` / `summarize`（通期・`--half`） | ✅ | Stage 4 / 4-half とも DB 専用 read。warm 0.3s。**未バックフィル銘柄は 404**（ライブ計算フォールバック撤去済み＝OOM しない）。`--half` の years=6 は read クランプで warm read |
+| `filings` / `filing` | ✅（DB 読み配線済み・実 Fly 検証待ち） | Stage 1 read 配線を実装（下記）。DB 同期済み銘柄は `edinet_documents` を読み OOM を回避。未同期銘柄のみライブ探索へフォールバック（filings は軽量なので維持） |
 
 - **Stage 1 read 配線（実装済み）**: `filings` エンドポイントを `EdinetDiscovery.buildDocumentIndexForCode` のライブ探索から **`edinet_documents`（Neon 同期済み）の DB 読み**へ切り替えた（Stage 4 financials と同型: DB 読み優先＋未同期/DB 非接続はライブフォールバック）。`Routes.swift` が `loadStoredFilingRecords`（secCode 前方一致クエリ）で当該銘柄の行を引き、ファサード `getFilingsFromRecords` が応答を組み立てる。応答スキーマは不変。
   - **簡易セマンティクス（確定・ライブ探索との意図的差分）**: DB 経路は各書類の `period_end` をそのまま `fy_end` とする自己完結ビュー。主要 doc type の有報(120)・半期(160) は period_end が通期期末のためライブと**完全一致**。一方、旧四半期(140) は 2Q 末、訂正(130) は親有報リンク（`edinet_documents` に `parentDocID` 列なし）を再現できないため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は再現せず、自身の period_end・窓内全件で返す。完全パリティには schema 変更（parent_doc_id 追加＋再 sync）が要るが、140 は概ね廃止・130 の差は軽微のため**簡易セマンティクスを採用**（schema 変更回避）。`filingsList` の doc コメント・`FilingsListTests` で固定。
-- バックフィルが進むほど `analyze` の remote 対応銘柄が広がる（未格納はライブ計算フォールバックで重い）。
+- バックフィルが進むほど `analyze` / `analyze --half` の remote 対応銘柄が広がる（未格納は 404＝即時。サーバーで重い計算はしない）。
 
 ## 計算の責務（client / server）
 
@@ -201,8 +201,8 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | 同期済み（3,944 社）。定期 `sync` は launchd `com.sollahiro.blt-sync` で 1 日 3 回 |
 | Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ・取り込み（`blt-server ingest`）実装済み（RAW アーカイブ。Stage 4 は別途計算結果を格納） |
-| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 読み配線 実装済み。fin-v2・302/3,944 社格納・launchd で drain 中（未格納はライブ計算フォールバック） |
-| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 読み配線 実装済み（half-v1）。`--half` の remote 対応に使う。バックフィルは未開始 |
+| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・~302/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
+| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィルは緒に就いたばかり（5 社）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -378,7 +378,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 ### 近期（Stage 1 安定化）
 
 - [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 3/4）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
-- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **302/3,944 社格納**（2026-06-28 朝時点 fin-v2=235・fin-v1=67）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い→ライブ計算フォールバック（OOM）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 limit200 回で解消。その後に新規 ~3,642 社へカバレッジ拡大（実測 200社/回・3回/日 → 全完了 ~1 週間規模）。Fly は読むだけ（OOM 回避）。
+- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **~302/3,944 社格納**（2026-06-28 朝時点 fin-v2=235・fin-v1=67）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い（フォールバック撤去後は 404）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 limit200 回で解消。その後に新規 ~3,642 社へカバレッジ拡大（実測 200社/回・3回/日 → 全完了 ~1 週間規模）。Fly は読むだけ（未格納は 404＝OOM しない）。
+  - **半期（company_half_financials）も同 ingest が Stage 4-half として埋める**が、**2026-06-28 時点で 5 社のみ**（2695/2753/4174/7064/7073）。通期 drain と並行して全社展開される。半期 read は `Api.halfMaxYears`(=5) クランプ＋未格納 404 で OOM しない。
   - 補足: Stage 3 のバッチで failed が出る（例 attempted=200 stored=183 failed=17）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。Stage 3 は facts-v1 一致を skip（再パースしない。例 skipped=373）。
 - [x] **fin-v2 再デプロイ（2026-06-28）** — IBD 借入金等明細表抽出（computeFinancials の HTML 依存抽出）追加で `companyFinancialsCacheVersion` を fin-v1→**fin-v2** にバンプ。`fly deploy --remote-only` で fin-v2 イメージへ更新（fin-v1 サーバーは fin-v2 行を stale 拒否してしまうため必須）。fin-v2 銘柄が **warm 0.31s** で 200 read を確認。
 - [x] **Stage 4 キャッシュバージョンの分離（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。
@@ -398,7 +399,10 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
 - [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
 - [x] **Stage 1 read 配線**: `filings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え（`loadStoredFilingRecords`＋`getFilingsFromRecords`、未同期/DB 非接続はライブフォールバック）。簡易セマンティクス採用（140/130 はライブと意図的差分・schema 変更回避）。「稼働状況」参照。**残: 実 Fly での E2E 検証**
-- [x] **remote `--half` 対応**: `GET /v1/companies/{code}/half-financials` ＋ DB 格納経路（`company_half_financials`・ingest・read 優先）＋ remote CLI 配線で `analyze --half`/`summarize --half` を remote 対応。**残: 実 Fly での E2E 検証＋半期バックフィル**
+- [x] **remote `--half` 対応**: `GET /v1/companies/{code}/half-financials` ＋ DB 格納経路（`company_half_financials`・ingest・DB 専用 read）＋ remote CLI 配線で `analyze --half`/`summarize --half` を remote 対応。**実 Fly E2E 検証済み（2026-06-28、years=6 warm read・未格納 404・OOM なし）**。残: 半期バックフィルの全社 drain（launchd ingest が消化）
+- [x] **財務系 read のライブ計算フォールバック撤去（2026-06-28）**: financials / half-financials を DB 専用化（未格納 404・DB 非接続 503・ライブ計算なし）。half read は `Api.halfMaxYears`(=5) へクランプ（CLI 既定 years=6 が DB を空振りしないように）。重複していた半期上限「5」を `Api.halfMaxYears` に集約。Fly 再デプロイ済み（v9）。`company_financials`/`company_half_financials` のスキーマ・cache_version は不変（再 ingest 不要）
+  - **レガシー候補（未削除）**: フォールバック撤去で `BltServerFacade.getFinancials(code:years:)` / `getHalfFinancials(code:years:)`（`Sources/BlueTicker/Server/BltServerFacade.swift`）は呼び出し元を失い未使用。サーバーのライブ計算入口で残しておく必要がなくなったため削除候補（規約「不要コードは削除せず候補提示」に従い保留）。削除する場合は `IndividualAnalyzer`/`HalfYearAnalyzer` への依存も連鎖的に外せるか要確認。
+  - **オンデマンド ingest（202＋キュー）を実装する場合の入口**でもあるため、上記削除は「オンデマンド設計を採らない」判断とセットで行うこと。
 - [ ] **`sector` の REST 化（任意）**: 現状 CSV 算出で remote でも動作するため機能欠落ではない。一貫性のための polish（優先度低）
 
 ### 次の検討課題（優先順）
