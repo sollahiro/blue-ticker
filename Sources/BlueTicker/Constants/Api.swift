@@ -1,4 +1,4 @@
-enum Api {
+public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
     // 検索キャッシュ TTL（日）
@@ -16,6 +16,12 @@ enum Api {
     static let filingsDefaultYears = 3
     static let prepareDefaultYears = 5
     static let analyzeDefaultYears = 6
+
+    /// 半期分析で算出・格納できる最大年数（HalfYearAnalyzer の探索上限）。
+    /// 半期は FY/2Q の組から H1/H2 を導出する都合でこの年数までしか作れない。
+    /// 格納（Stage 4-half）・read クランプ・分析の単一の真実源。
+    /// BltServerCore（Stage 4-half ingest / read クランプ）からも参照するため public。
+    public static let halfMaxYears = 5
 
     static let docDiscoveryLimit = 10
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
