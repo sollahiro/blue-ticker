@@ -423,8 +423,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] **Stage 1 read 配線**: `filings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え（`loadStoredFilingRecords`＋`getFilingsFromRecords`、未同期/DB 非接続はライブフォールバック）。簡易セマンティクス採用（140/130 はライブと意図的差分・schema 変更回避）。「稼働状況」参照。**残: 実 Fly での E2E 検証**
 - [x] **remote `--half` 対応**: `GET /v1/companies/{code}/half-financials` ＋ DB 格納経路（`company_half_financials`・ingest・DB 専用 read）＋ remote CLI 配線で `analyze --half`/`summarize --half` を remote 対応。**実 Fly E2E 検証済み（2026-06-28、years=6 warm read・未格納 404・OOM なし）**。残: 半期バックフィルの全社 drain（launchd ingest が消化）
 - [x] **財務系 read のライブ計算フォールバック撤去（2026-06-28）**: financials / half-financials を DB 専用化（未格納 404・DB 非接続 503・ライブ計算なし）。half read は `Api.halfMaxYears`(=5) へクランプ（CLI 既定 years=6 が DB を空振りしないように）。重複していた半期上限「5」を `Api.halfMaxYears` に集約。Fly 再デプロイ済み（v9）。`company_financials`/`company_half_financials` のスキーマ・cache_version は不変（再 ingest 不要）
-  - **レガシー候補（未削除）**: フォールバック撤去で `BltServerFacade.getFinancials(code:years:)` / `getHalfFinancials(code:years:)`（`Sources/BlueTicker/Server/BltServerFacade.swift`）は呼び出し元を失い未使用。サーバーのライブ計算入口で残しておく必要がなくなったため削除候補（規約「不要コードは削除せず候補提示」に従い保留）。削除する場合は `IndividualAnalyzer`/`HalfYearAnalyzer` への依存も連鎖的に外せるか要確認。
-  - **オンデマンド ingest（202＋キュー）を実装する場合の入口**でもあるため、上記削除は「オンデマンド設計を採らない」判断とセットで行うこと。
+  - **レガシー削除済み（2026-06-29）**: 呼び出し元を失った `BltServerFacade.getFinancials/getHalfFinancials`（薄いラッパー）とテスト専用ヘルパー `buildFinancialsResponse` を削除。計算本体 `computeFinancials/computeHalfFinancials`（Stage 4 ingest が使用）は保持。オンデマンド ingest（202＋キュー）を後で実装する際は `compute*` を入口に使う（ラッパー復活は不要）。
 - [ ] **`sector` の REST 化（任意）**: 現状 CSV 算出で remote でも動作するため機能欠落ではない。一貫性のための polish（優先度低）
 
 ### 次の検討課題（優先順）
