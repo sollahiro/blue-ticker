@@ -361,7 +361,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 #### 実装ステップ
 
 1. ~~**origin 認証ミドルウェアの env 分岐**（`Routes.swift`、依存ゼロ）~~ → **完了**（下記「共通基盤」の認証モード表）
-2. **CLI の Service Token 対応**（config/keychain スキーマ追加＝公開インターフェース変更・要確認）: `CF-Access-Client-Id` / `CF-Access-Client-Secret` を保持し2ヘッダ付与
+2. ~~**CLI の Service Token 対応**（config/keychain スキーマ追加）: `CF-Access-Client-Id` / `CF-Access-Client-Secret` を保持し2ヘッダ付与~~ → **完了**。鍵ペアを keychain（専用キー `cfAccessClientId` / `cfAccessClientSecret`）に保存し、remote 経路で2ヘッダを付与。設定: `ticker config set --cf-access-client-id <id> --cf-access-client-secret <secret>`。env 上書きは `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（env > keychain）。authToken（Bearer）とは独立に付与され、将来の SSO トークンも別キーで横付けできる
 3. **Dockerfile**: `cloudflared` サイドカー同梱
 4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に
 5. **docs/deploy.md**: Cloudflare 側手順（zone 移管 → Tunnel → Access アプリ + ポリシー + Service Token 発行 + IdP 接続）
