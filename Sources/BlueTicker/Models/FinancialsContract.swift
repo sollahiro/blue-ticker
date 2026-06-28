@@ -1,8 +1,8 @@
 // financials API の公開契約（flatten 形）。サーバーとクライアントで共有する単一の Codable 型。
 //
 // 設計意図:
-// - サーバー（BltServerContext.getFinancials）はこの型から JSON を生成し、
-//   remote CLN（RemoteAPIClient）は同じ型でデコードして MetricsResult に復元する。
+// - サーバー（Stage 4 ingest の computeFinancials → DB 格納 → read で jsonObject()）は
+//   この型から JSON を生成し、remote CLI（RemoteAPIClient）は同じ型でデコードして MetricsResult に復元する。
 //   キー定義が 1 か所（CodingKeys）に集約され、契約のドリフトを防ぐ（「統一」）。
 // - 内部モデル（MetricsResult/RawData/CalculatedData）は直シリアライズせず、ここで
 //   公開用フラット形（snake_case）へ写像する（公開 API を内部モデルから疎結合に保つ）。

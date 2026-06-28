@@ -105,16 +105,8 @@ public extension BltServerContext {
         return .ok(["code": code, "name": stock?.coName ?? "", "filings": filings])
     }
 
-    func getFinancials(code: String, years: Int) async -> BltServerResponse {
-        guard let response = await computeFinancials(code: code, years: years) else {
-            return .notFound("データが見つかりませんでした: \(code)")
-        }
-        return .ok(response.jsonObject())
-    }
-
     /// 財務サマリ（公開契約 `FinancialsResponse`）を計算する。
-    /// ライブ計算経路の単一の実装点。getFinancials（REST ライブ応答）と
-    /// Stage 4 取り込み（`blt-server ingest` → Neon 保存）の両方がここを通る。
+    /// Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。
     /// EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
     func computeFinancials(code: String, years: Int) async -> FinancialsResponse? {
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
@@ -130,18 +122,10 @@ public extension BltServerContext {
             result: result)
     }
 
-    func getHalfFinancials(code: String, years: Int) async -> BltServerResponse {
-        guard let response = await computeHalfFinancials(code: code, years: years) else {
-            return .notFound("半期データが見つかりませんでした: \(code)")
-        }
-        return .ok(response.jsonObject())
-    }
-
     /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。
-    /// ライブ計算経路の単一の実装点。getHalfFinancials（REST ライブ応答）と半期 Stage 4 取り込み
-    /// （`blt-server ingest` → Neon 保存）の両方がここを通る。HalfYearAnalyzer は内部で 5 年分を
-    /// 構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば全集合が返る。
-    /// EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
+    /// 半期 Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。HalfYearAnalyzer は
+    /// 内部で 5 年分を構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば
+    /// 全集合が返る。EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
     func computeHalfFinancials(code: String, years: Int) async -> HalfFinancialsResponse? {
         let analyzer = HalfYearAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
         guard let periods = await analyzer.analyze(code: code, analysisYears: years) else {
@@ -327,17 +311,4 @@ private extension BltServerContext {
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
     }
-}
-
-// MARK: - financials レスポンス（公開契約）
-
-/// financials API の公開契約レスポンスを組み立てる。
-/// 公開契約は単一の Codable 型 `FinancialsResponse`/`FinancialsYear`（`Models/FinancialsContract.swift`）。
-/// サーバー出力・remote CLI のデコードを同一型から導出し、キー定義を 1 か所に集約する（統一）。
-/// `jsonObject()` は欠落値を null 補完して「全キー存在」の既存契約を維持する。
-func buildFinancialsResponse(
-    code: String, name: String, sector: String, market: String, result: MetricsResult
-) -> [String: Any] {
-    FinancialsResponse(code: code, name: name, sector: sector, market: market, result: result)
-        .jsonObject()
 }
