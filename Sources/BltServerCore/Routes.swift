@@ -29,8 +29,9 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
     }
 
-    // DB（Neon）接続の有無。接続時は Stage 1/4 の格納済みデータを読み（OOM 回避）、
-    // 未接続・未格納のときのみライブ EDINET 取得へフォールバックする。
+    // DB（Neon）接続の有無。財務系（financials / half-financials）は格納済みデータのみを返し、
+    // 未接続なら 503・未格納なら 404 とする（ライブ計算へは落とさない＝OOM 回避）。
+    // filings は軽量な EDINET 一覧取得のため未格納時のライブ取得を許容する。
     let dbAvailable = !app.databases.ids().isEmpty
 
     // GET /v1/companies?q={query}
@@ -62,30 +63,36 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     }
 
     // GET /v1/companies/{code}/financials?years=5
-    // DB（Stage 4 derived キャッシュ）に現行バージョン・十分な年数で格納済みならそれを返す
-    // （EDINET 取得・XBRL パースなし＝OOM 回避）。未格納・古い場合のみライブ計算へフォールバックする。
+    // DB（Stage 4 derived キャッシュ company_financials）の格納済み結果のみを返す。
+    // 重い XBRL 取得・計算はローカル ingest→Neon に閉じ込め、サーバーは読むだけにして OOM を防ぐ。
+    // 未格納・古い・年数不足は 404（バックフィルが追いつけば warm read になる）。
+    // ライブ計算へはフォールバックしない（1リクエストでサーバー全体を OOM 落ちさせる地雷を断つ）。
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? 5
-        if dbAvailable,
-            let stored = try? await loadStoredFinancials(code: code, years: years, db: req.db) {
+        guard dbAvailable else {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+        if let stored = try? await loadStoredFinancials(code: code, years: years, db: req.db) {
             return jsonResponse(stored, status: .ok)
         }
-        return makeResponse(await context.getFinancials(code: code, years: years))
+        return errorResponse(.notFound, message: "財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/half-financials?years=3
-    // 半期財務サマリ。DB（半期 Stage 4 derived キャッシュ company_half_financials）に現行
-    // バージョン・十分な年数で格納済みならそれを返す（EDINET 取得・XBRL パースなし＝OOM 回避）。
-    // 未格納・古い場合のみライブ計算へフォールバックする。
+    // 半期財務サマリ。DB（半期 Stage 4 derived キャッシュ company_half_financials）の格納済み結果のみ
+    // を返す（read で years を半期上限へクランプ）。financials と同じく未格納・古いは 404、ライブ計算へは
+    // フォールバックしない。
     v1.get("companies", ":code", "half-financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? 3
-        if dbAvailable,
-            let stored = try? await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
+        guard dbAvailable else {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+        if let stored = try? await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
             return jsonResponse(stored, status: .ok)
         }
-        return makeResponse(await context.getHalfFinancials(code: code, years: years))
+        return errorResponse(.notFound, message: "半期財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b

@@ -187,4 +187,24 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             #expect(json == nil)
         }
     }
+
+    // 半期上限を超える要求年数はクランプして warm read を返す（nil にしない）。
+    // クランプ前は requestedYears(=halfMaxYears) >= years(halfMaxYears+1) が偽で常に空振りし、
+    // CLI 既定（analyzeDefaultYears=6 > 5）がサーバーをライブ計算へ落としていた。
+    @Test func loadStoredHalfFinancialsClampsYearsBeyondHalfMax() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyHalfFinancials()
+            row.id = "7203"
+            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.cacheVersion = companyHalfFinancialsCacheVersion
+            row.requestedYears = Api.halfMaxYears
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredHalfFinancials(
+                    code: "7203", years: Api.halfMaxYears + 1, db: app.db))
+            let periods = try #require(json["periods"] as? [[String: Any]])
+            #expect(!periods.isEmpty)
+        }
+    }
 }

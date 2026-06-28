@@ -5,7 +5,7 @@ import Foundation
 // FY / 2Q XBRL から H1/H2 の半期財務指標を構築する。
 
 private let _halfCacheVersion = blueTickerVersion
-private let _halfDiscoveryYears = 5
+private let _halfDiscoveryYears = Api.halfMaxYears
 
 struct HalfYearAnalyzer {
     let edinetClient: EdinetAPIClient

@@ -11,9 +11,9 @@ import BlueTickerCore
 import Fluent
 import Foundation
 
-/// 半期 Stage 4 取り込みで格納する年数（HalfYearAnalyzer の探索上限 5 年＝全集合）。
+/// 半期 Stage 4 取り込みで格納する年数（HalfYearAnalyzer の探索上限＝全集合）。
 /// read 時に要求年数へ縮める（REST の half-financials は years 既定 3）。
-let stage4HalfIngestYears = 5
+let stage4HalfIngestYears = Api.halfMaxYears
 
 /// 証券コードを受けて半期財務サマリを返す計算器（成功で response、失敗で nil）。
 /// 本番は `context.computeHalfFinancials`、テストはフェイクを注入する。
@@ -76,12 +76,17 @@ func storeCompanyHalfFinancials(
 // MARK: - read 経路（REST half-financials）
 
 /// 格納済み半期 Stage 4 結果を code で引き、現行バージョン & 要求年数を満たすなら years に縮めた JSON を返す。
-/// 無い・古い・年数不足なら nil（呼び出し側はライブ計算へフォールバックする）。
+/// 無い・古い・年数不足なら nil（呼び出し側は 404 を返す。ライブ計算へはフォールバックしない）。
+///
+/// 要求年数は半期算出上限（`Api.halfMaxYears`）へクランプする。半期はこの年数までしか作れず
+/// 格納（`stage4HalfIngestYears`）もそこで頭打ちのため、上限超の要求でも上限ぶんを warm read で返す。
+/// クランプしないと CLI 既定（`analyzeDefaultYears`=6 > 5）が常に guard を外し DB を空振りする。
 func loadStoredHalfFinancials(code: String, years: Int, db: Database) async throws -> [String: Any]? {
-    guard years > 0,
+    let effectiveYears = min(years, Api.halfMaxYears)
+    guard effectiveYears > 0,
         let row = try await CompanyHalfFinancials.find(code, on: db),
         row.cacheVersion == companyHalfFinancialsCacheVersion,
-        row.requestedYears >= years
+        row.requestedYears >= effectiveYears
     else { return nil }
-    return row.response.trimmed(toYears: years).jsonObject()
+    return row.response.trimmed(toYears: effectiveYears).jsonObject()
 }
