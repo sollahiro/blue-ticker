@@ -22,11 +22,22 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         jsonResponse(["status": "ok"], status: .ok)
     }
 
-    // BLT_AUTH_TOKEN が設定されていれば /v1 配下を Bearer 認証で保護する。
-    // 未設定なら認証なしで起動する（self-host / ローカル開発）。
+    // /v1 配下の認証モードを env から決める（docs/blt-server-roadmap.md「認証」参照）。
+    // 優先順位:
+    //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
+    //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
+    //      ※安全要件: 公開ポートを閉じ Cloudflare Tunnel 経由限定にすること（origin 非公開が前提）。
+    //   2. BLT_AUTH_TOKEN 設定 → 静的 Bearer（self-host）。
+    //   3. どちらも無し → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
     var v1 = app.grouped("v1")
-    if let token = Environment.get("BLT_AUTH_TOKEN"), !token.isEmpty {
+    if Environment.get("CF_ACCESS_TEAM_DOMAIN")?.isEmpty == false {
+        app.logger.notice(
+            "認証モード: Cloudflare Access（エッジ信頼）。Tunnel 経由・公開ポート閉鎖が前提です。")
+    } else if let token = Environment.get("BLT_AUTH_TOKEN"), !token.isEmpty {
         v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
+        app.logger.notice("認証モード: 静的 Bearer（BLT_AUTH_TOKEN）。")
+    } else {
+        app.logger.warning("認証モード: 無認証。/v1 は保護されていません（ローカル開発専用）。")
     }
 
     // DB（Neon）接続の有無。財務系（financials / half-financials）は格納済みデータのみを返し、
