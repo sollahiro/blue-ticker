@@ -10,6 +10,21 @@
 
 `blt-server` は `swift run blt-server`（または `swift build -c release` 後に `.build/release/blt-server`）で起動。
 
+## 方針転換（2026-06-28 確定）: サーバー集約とローカル CLI 段階廃止
+
+サーバーデプロイが実用域に入ったため、**ユーザー向けの実行環境を blt-server（remote/cloud）へ一本化**する。到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP はそれを操作するクライアント**」。
+
+| 区分 | 対象 | 扱い |
+|---|---|---|
+| 残す | Core（`BlueTickerCore` の `Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（デバッグ・テスト・フィクスチャ） | 維持 |
+| 切る | **ユーザー向けローカル分析 CLI**（`backend=local`） | **段階的に廃止**（deprecation 告知 → バージョンを定めて削除。即時削除しない） |
+| ユーザー接点 | remote CLI / GUI / MCP | すべて **REST API 経由**で blt-server を呼ぶ（`クライアント → API → Server`） |
+
+- **Core はサーバー専用にしない**: サーバー・Dev CLI・Unit Test が同一 Core を共有し実装を一元化する。これは既存ターゲット構成（`BlueTickerCore` は Vapor/Fluent 非依存）で構造的に担保済み。
+- **MCP の位置づけ**: 旧 MCP（サーバーが MCP プロトコルを直接話す方式）は廃止のまま。将来復活させる MCP は remote CLI / GUI と同じ **REST API クライアント**として実装する（`MCP → API → Server`。プロトコルサーバーは復活させない）。
+- **オンデマンド ingest は非同期**: 未 ingest 銘柄の取得はリクエスト経路に重い処理を持ち込まず、未充足リクエストをキューに記録して既存 ingest バッチが消化する（下記「オンデマンド ingest（非同期）」）。
+- **バックフィル範囲**: 当面は「人気銘柄＋オンデマンド」、ゆくゆく全銘柄 ingest へ拡大。
+
 ## 確定済みアーキテクチャ（2026-06）
 
 iOS app / remote CLI を実際に作る方針が固まり、blt-server 開発に着手。主要な技術選定は以下で確定済み。
@@ -73,6 +88,16 @@ financials の REST 応答を、毎リクエストのライブ計算（EDINET �
 - **read 経路**: `GET /v1/companies/{code}/financials` は DB 接続時、`company_financials` に現行バージョン & 要求年数を満たす行があれば `trimmed(toYears:)` して返す（DL・パースなし）。無い・古い・年数不足、または DB 非接続なら従来のライブ計算へフォールバックする（`loadStoredFinancials` / `Routes.swift`）。
 - **運用**: 計算はメモリを使うため、**重い初回バックフィルはローカル等から `DATABASE_URL` を Neon に向けて ingest** する（Fly 上で大量に走らせると ingest 自体が OOM しうる）。Fly サーバーは読むだけ。
 - **テスト**: DB ロジック（企業選定・重複排除・staleness・年数不足・limit・upsert）と read 経路（バージョン／年数ゲート・trim）を計算器 closure 注入でネットワーク非依存に検証（`Stage4IngestTests`）。
+
+### オンデマンド ingest（非同期・設計確定／未実装）
+
+「人気銘柄＋オンデマンド」運用での cold path（未 ingest 銘柄を叩かれたとき）を **非同期**で扱う。serving は read-only を保ち、OOM を起こす重い処理（9MB DL＋XBRL パース）をリクエスト経路に持ち込まない。
+
+- **フロー**: `GET /v1/companies/{code}/financials` が DB に無い → serving は重い処理をせず、当該コードを **未充足リクエストとして記録**し `202`（準備中）を返す → 既存 ingest バッチ（launchd / 将来ワーカー）がそのキューを消化 → 次回リクエストで DB から即返る。
+- **同期にしない理由**: 同期パースはリクエストを握ったまま OOM し、serving インスタンスごと落として無関係なリクエストを巻き込む。Stage 4 DB 配線で勝ち取った「serving=read-only / ingest=別バッチ」の分離を逆行させない。
+- **UX**: クライアントは「準備中」を表示、または裏でポーリングしてスピナー表示する（**サーバーはリクエストを握らない**点が同期と決定的に違う）。
+- **新規要素**: 未充足リクエストの記録テーブル（小さな Neon テーブル 1 枚）。**公開スキーマの追加に当たるため実装前にユーザー確認**（`workflow.md` 公開インターフェース保護）。
+- 状態: **設計確定・未実装**。
 
 ## クライアント
 
@@ -154,15 +179,15 @@ iOS が対話的な再計算（係数を変えた what-if 等）を要求し、�
 
 ## ゴール
 
-- local CLI は blt-server 不要の独立モードとして維持する。
-- remote デプロイにより、CLI（remote モード）・iOS app が共通の blt-server を通じて財務データにアクセスできるようにする。
+- **ユーザー向け実行環境を blt-server（remote/cloud）へ集約**し、remote CLI / GUI / MCP が共通の REST API 経由で財務データへアクセスできるようにする（`方針転換` 参照）。
+- **ユーザー向けローカル分析 CLI（`backend=local`）は段階的に廃止**する（deprecation → 削除）。Core・Unit Test・開発用 CLI は維持する。
 
 ## 非ゴール
 
-- MCP プロトコルによるサーバー公開（廃止）
+- 旧 MCP（サーバーが MCP プロトコルを直接話す方式）の復活。将来の MCP は REST API クライアントとして実装する（プロトコルサーバーは復活させない）。
 - `ticker analyze` 等の各サブコマンドに backend 選択オプションを増やさない。
 - `CacheManager` と EDINET external cache を無理に単一抽象へ統合しない。
-- ローカルキャッシュを「レガシー」として扱わない。
+- ユーザー向けローカル CLI を**即時**削除する（互換維持期間を置く段階的廃止であり、いきなり消さない）。
 
 ---
 
@@ -404,6 +429,10 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
 - [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
 - [ ] OAuth 認証の追加（Google OAuth・iOS app ログイン）
+- [ ] **REST API の整備（公開 API 化）**: ユーザー接点（remote CLI / GUI / MCP）が依存する公開 API を整える。現行 `/v1` を土台に、スキーマ安定化・認証・レート制御を進める（`方針転換` のユーザー集約に必須）。
+- [ ] **オンデマンド ingest（非同期）の実装**: 未充足リクエスト記録テーブル＋既存 ingest バッチでの消化（上記「オンデマンド ingest（非同期）」）。公開スキーマ追加のためユーザー確認後に着手。
+- [ ] **ユーザー向けローカル分析 CLI の段階的廃止**: `backend=local` の deprecation 告知 → 廃止バージョンを定めて削除。Dev CLI・Core・Unit Test は残す。
+- [ ] **MCP クライアントの復活**: REST API クライアントとして再実装（remote CLI / GUI と同型。プロトコルサーバーは復活させない）。
 
 ---
 
