@@ -83,19 +83,25 @@ public extension BltServerContext {
         let docs = await service.searchFilings(code: code, maxYears: maxYears, maxDocuments: 50)
 
         let filings: [[String: Any]] = docs.map { doc in
-            let docType = doc["docTypeCode"] as? String ?? ""
-            let rawFyEnd = doc["edinet_fy_end"] as? String ?? ""
-            let fyEnd = rawFyEnd.count >= 7 ? String(rawFyEnd.prefix(7)) : rawFyEnd
-            let submitAt = (doc["submitDateTime"] as? String) ?? (doc["submitDate"] as? String) ?? ""
-            return [
-                "doc_id": doc["docID"] as? String ?? "",
-                "doc_type": docType,
-                "doc_type_label": docTypeLabel(docType) ?? (doc["docDescription"] as? String ?? ""),
-                "fy_end": fyEnd,
-                "submitted_at": submitAt,
-            ]
+            filingDict(
+                docID: doc["docID"] as? String ?? "",
+                docType: doc["docTypeCode"] as? String ?? "",
+                rawFyEnd: doc["edinet_fy_end"] as? String ?? "",
+                submitAt: (doc["submitDateTime"] as? String) ?? (doc["submitDate"] as? String) ?? "",
+                docDescription: doc["docDescription"] as? String ?? "")
         }
 
+        return .ok(["code": code, "name": stock?.coName ?? "", "filings": filings])
+    }
+
+    /// Stage 1 DB（`edinet_documents`）から取り込んだ書類レコードで filings 応答を組み立てる。
+    /// ライブ EDINET 探索（getFilings）と同一スキーマを返す read 経路。EDINET 取得を伴わず OOM を避ける。
+    /// records は呼び出し側（BltServerCore）が当該銘柄分を DB から引いて渡す（空なら呼ばれない）。
+    func getFilingsFromRecords(
+        code: String, records: [EdinetDocumentRecord], maxYears: Int
+    ) async -> BltServerResponse {
+        let stock = await masterDataManager.getByCode(code)
+        let filings = filingsList(from: records, maxYears: maxYears)
         return .ok(["code": code, "name": stock?.coName ?? "", "filings": filings])
     }
 
@@ -207,6 +213,69 @@ private func nonEmptyString(_ value: Any?) -> String? {
     return trimmed.isEmpty ? nil : trimmed
 }
 
+// MARK: - filings 応答の組み立て（ライブ／DB read 共通）
+
+/// Stage 1 DB レコードから filings の配列を組み立てる純粋関数（ネットワーク・DB 非依存・テスト対象）。
+/// 提出日時降順 → docID 重複排除 → 直近 maxYears 年度窓 → 最大 50 件。
+/// 年度窓は最新書類の期末年を起点に maxYears 年ぶんを残す（ライブ探索の analysisYears に対応）。
+///
+/// 簡易セマンティクス（ライブ探索との意図的な差分・確定事項）:
+/// 各書類の `fy_end` は自身の period_end をそのまま使う（自己完結ビュー）。主要 doc type の
+/// 有報(120)・半期報告書(160) は period_end が通期期末のためライブ経路と完全一致する。
+/// 一方、旧四半期(140) は period_end が 2Q 末、訂正(130) は親有報リンクを `edinet_documents` が
+/// 保持しない（parentDocID 列なし）ため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は
+/// 再現せず、自身の period_end・窓内全件で返す。schema 変更を避ける判断（docs/blt-server-roadmap.md）。
+func filingsList(from records: [EdinetDocumentRecord], maxYears: Int) -> [[String: Any]] {
+    let sorted = records.sorted { $0.submitDateTime > $1.submitDateTime }
+    let cutoffYear = sorted.compactMap { extractYearMonth($0.periodEnd ?? "").0 }.max()
+        .map { $0 - maxYears + 1 }
+
+    var seen = Set<String>()
+    var filings: [[String: Any]] = []
+    for rec in sorted {
+        guard !rec.docID.isEmpty, seen.insert(rec.docID).inserted else { continue }
+        if let cutoff = cutoffYear, let y = extractYearMonth(rec.periodEnd ?? "").0, y < cutoff {
+            continue
+        }
+        filings.append(filingDict(
+            docID: rec.docID,
+            docType: rec.docTypeCode ?? "",
+            rawFyEnd: rec.periodEnd ?? "",
+            submitAt: rec.submitDateTime,
+            docDescription: rec.docDescription ?? ""))
+        if filings.count >= 50 { break }
+    }
+    return filings
+}
+
+/// filings 応答の 1 件分（公開スキーマ）。ライブ経路と DB read 経路でマッピングを共有しドリフトを防ぐ。
+/// fy_end は期末日（YYYY-MM-DD）の先頭 7 文字（YYYY-MM）。date-conversion.md で許容された prefix(7)。
+func filingDict(
+    docID: String, docType: String, rawFyEnd: String, submitAt: String, docDescription: String
+) -> [String: Any] {
+    let fyEnd = rawFyEnd.count >= 7 ? String(rawFyEnd.prefix(7)) : rawFyEnd
+    return [
+        "doc_id": docID,
+        "doc_type": docType,
+        "doc_type_label": docTypeLabel(docType) ?? docDescription,
+        "fy_end": fyEnd,
+        "submitted_at": submitAt,
+    ]
+}
+
+/// EDINET 書類種別コード → 表示ラベル。未知コードは nil（呼び出し側が docDescription へフォールバック）。
+func docTypeLabel(_ code: String) -> String? {
+    switch code {
+    case "120": return "有価証券報告書"
+    case "130": return "訂正有価証券報告書"
+    case "140": return "半期報告書"
+    case "150": return "訂正半期報告書"
+    case "160": return "四半期報告書"
+    case "170": return "訂正四半期報告書"
+    default: return nil
+    }
+}
+
 // MARK: - Stage 3 取り込み（XBRL 数値 fact）
 
 public extension BltServerContext {
@@ -236,18 +305,6 @@ private extension BltServerContext {
     /// 企業検索結果の公開 JSON（companies / sectors エンドポイント共通）。
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
-    }
-
-    func docTypeLabel(_ code: String) -> String? {
-        switch code {
-        case "120": return "有価証券報告書"
-        case "130": return "訂正有価証券報告書"
-        case "140": return "半期報告書"
-        case "150": return "訂正半期報告書"
-        case "160": return "四半期報告書"
-        case "170": return "訂正四半期報告書"
-        default: return nil
-        }
     }
 }
 

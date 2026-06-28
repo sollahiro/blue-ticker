@@ -104,9 +104,10 @@ remote の各コマンドを実 Fly に対して検証した結果と、残る�
 |---|---|---|
 | `search` | ✅ | CSV マスターで軽量 |
 | `analyze` / `summarize` | ✅（**DB 格納済み銘柄のみ安定**） | Stage 4 DB 読み経路あり。warm 0.3s（例 8591）。未バックフィル銘柄はサーバーがライブ計算に落ち OOM/502 のリスク |
-| `filings` / `filing` | ❌ **OOM/502** | `getFilings`（`BltServerFacade.swift`）が `EdinetDiscovery.buildDocumentIndexForCode` の**ライブ EDINET 探索**を実行し `edinet_documents` を読まない。Fly 1GB で ~880MB 消費し OOM kill（ログ実測） |
+| `filings` / `filing` | ✅（DB 読み配線済み・実 Fly 検証待ち） | Stage 1 read 配線を実装（下記）。DB 同期済み銘柄は `edinet_documents` を読み OOM を回避。未同期銘柄のみライブ探索へフォールバック |
 
-- **要対応（Stage 1 read 配線）**: `filings`/`filing` を OOM なしで remote 稼働させるには、`getFilings` を Stage 4 と同様 **`edinet_documents`（既に Neon に同期済み）の DB 読み**へ切り替える。これが remote CLI 全面安定化の最有力タスク。
+- **Stage 1 read 配線（実装済み）**: `filings` エンドポイントを `EdinetDiscovery.buildDocumentIndexForCode` のライブ探索から **`edinet_documents`（Neon 同期済み）の DB 読み**へ切り替えた（Stage 4 financials と同型: DB 読み優先＋未同期/DB 非接続はライブフォールバック）。`Routes.swift` が `loadStoredFilingRecords`（secCode 前方一致クエリ）で当該銘柄の行を引き、ファサード `getFilingsFromRecords` が応答を組み立てる。応答スキーマは不変。
+  - **簡易セマンティクス（確定・ライブ探索との意図的差分）**: DB 経路は各書類の `period_end` をそのまま `fy_end` とする自己完結ビュー。主要 doc type の有報(120)・半期(160) は period_end が通期期末のためライブと**完全一致**。一方、旧四半期(140) は 2Q 末、訂正(130) は親有報リンク（`edinet_documents` に `parentDocID` 列なし）を再現できないため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は再現せず、自身の period_end・窓内全件で返す。完全パリティには schema 変更（parent_doc_id 追加＋再 sync）が要るが、140 は概ね廃止・130 の差は軽微のため**簡易セマンティクスを採用**（schema 変更回避）。`filingsList` の doc コメント・`FilingsListTests` で固定。
 - バックフィルが進むほど `analyze` の remote 対応銘柄が広がる（未格納はライブ計算フォールバックで重い）。
 
 ## 計算の責務（client / server）
@@ -368,7 +369,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 - [x] `ticker config set edinet-backend remote` のサポート実装済み
 - [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
-- [ ] **Stage 1 read 配線**: `getFilings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え、remote `filings`/`filing` の OOM/502 を解消する（実機検証で OOM 確認・「稼働状況」参照）。remote CLI 全面安定化の最有力タスク
+- [x] **Stage 1 read 配線**: `filings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え（`loadStoredFilingRecords`＋`getFilingsFromRecords`、未同期/DB 非接続はライブフォールバック）。簡易セマンティクス採用（140/130 はライブと意図的差分・schema 変更回避）。「稼働状況」参照。**残: 実 Fly での E2E 検証**
 - [ ] **remote 全コマンド対応（フル parity 目標）**: `--half`（半期）の REST 提供、`sector` の REST 化など、local/remote の機能差をなくす。現状の `--half`/`sector` 非対応は恒久境界ではなく未実装による暫定制約
 
 ### 次の検討課題（優先順）

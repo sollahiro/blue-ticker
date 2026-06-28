@@ -29,6 +29,10 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
     }
 
+    // DB（Neon）接続の有無。接続時は Stage 1/4 の格納済みデータを読み（OOM 回避）、
+    // 未接続・未格納のときのみライブ EDINET 取得へフォールバックする。
+    let dbAvailable = !app.databases.ids().isEmpty
+
     // GET /v1/companies?q={query}
     v1.get("companies") { req async -> Response in
         let q = req.query[String.self, at: "q"] ?? ""
@@ -43,16 +47,23 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     }
 
     // GET /v1/companies/{code}/filings?max_years=5
+    // DB（Stage 1 `edinet_documents`）に同期済みの書類があればそれを読んで返す
+    // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let maxYears = req.query[Int.self, at: "max_years"] ?? 5
+        if dbAvailable,
+            let records = try? await loadStoredFilingRecords(code: code, db: req.db),
+            !records.isEmpty {
+            return makeResponse(
+                await context.getFilingsFromRecords(code: code, records: records, maxYears: maxYears))
+        }
         return makeResponse(await context.getFilings(code: code, maxYears: maxYears))
     }
 
     // GET /v1/companies/{code}/financials?years=5
     // DB（Stage 4 derived キャッシュ）に現行バージョン・十分な年数で格納済みならそれを返す
     // （EDINET 取得・XBRL パースなし＝OOM 回避）。未格納・古い場合のみライブ計算へフォールバックする。
-    let dbAvailable = !app.databases.ids().isEmpty
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? 5
