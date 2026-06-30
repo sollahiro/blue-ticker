@@ -10,6 +10,7 @@
 import BlueTickerCore
 import Fluent
 import Foundation
+import Logging
 
 /// 半期 Stage 4 取り込みで格納する年数（HalfYearAnalyzer の探索上限＝全集合）。
 /// read 時に要求年数へ縮める（REST の half-financials は years 既定 3）。
@@ -22,9 +23,9 @@ public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinanc
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 Stage 4 と同ロジック。
 func runStage4HalfIngest(
-    db: Database, years: Int, limit: Int?, compute: HalfFinancialsComputer
+    db: Database, years: Int, limit: Int?, logger: Logger? = nil, compute: HalfFinancialsComputer
 ) async throws -> Stage4IngestSummary {
-    let codes = try await distinctCompanyCodes(db: db)
+    let codes = try await distinctCompanyCodes(db: db, logger: logger)
 
     var attempted = 0
     var stored = 0
@@ -32,7 +33,9 @@ func runStage4HalfIngest(
     var skipped = 0
 
     for code in codes {
-        let existing = try await CompanyHalfFinancials.find(code, on: db)
+        let existing = try await withDbRetry(logger: logger) {
+            try await CompanyHalfFinancials.find(code, on: db)
+        }
         if let row = existing, row.cacheVersion == companyHalfFinancialsCacheVersion,
             row.requestedYears >= years {
             skipped += 1
@@ -44,8 +47,10 @@ func runStage4HalfIngest(
             failed += 1
             continue
         }
-        try await storeCompanyHalfFinancials(
-            existing: existing, code: code, years: years, response: response, db: db)
+        try await withDbRetry(logger: logger) {
+            try await storeCompanyHalfFinancials(
+                existing: existing, code: code, years: years, response: response, db: db)
+        }
         stored += 1
     }
 

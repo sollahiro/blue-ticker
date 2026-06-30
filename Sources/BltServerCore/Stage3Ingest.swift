@@ -27,11 +27,13 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 /// edinet_documents の書類を新しい順に走査し、未パース or バージョン不一致のものを取り込む。
 /// `limit` は新規取り込み件数の上限（XBRL ダウンロードが重いためバッチ実行用）。
 func runStage3Ingest(
-    db: Database, limit: Int?, parse: XbrlFactParser
+    db: Database, limit: Int?, logger: Logger? = nil, parse: XbrlFactParser
 ) async throws -> Stage3IngestSummary {
-    let documents = try await EdinetDocument.query(on: db)
-        .sort(\.$submitDateTime, .descending)
-        .all()
+    let documents = try await withDbRetry(logger: logger) {
+        try await EdinetDocument.query(on: db)
+            .sort(\.$submitDateTime, .descending)
+            .all()
+    }
 
     var attempted = 0
     var stored = 0
@@ -41,7 +43,9 @@ func runStage3Ingest(
     for doc in documents {
         guard let docID = doc.id else { continue }
         // 1 書類につき find は 1 回。現行版でパース済みなら skip、それ以外は取り込む。
-        let existing = try await EdinetXbrlFacts.find(docID, on: db)
+        let existing = try await withDbRetry(logger: logger) {
+            try await EdinetXbrlFacts.find(docID, on: db)
+        }
         if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
             skipped += 1
             continue
@@ -52,7 +56,9 @@ func runStage3Ingest(
             failed += 1
             continue
         }
-        try await storeXbrlFacts(existing: existing, docID: docID, facts: payload, db: db)
+        try await withDbRetry(logger: logger) {
+            try await storeXbrlFacts(existing: existing, docID: docID, facts: payload, db: db)
+        }
         stored += 1
     }
 
@@ -101,17 +107,17 @@ public func runStage3IngestCommand(limit: Int?) async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let s3 = try await runStage3Ingest(db: app.db, limit: limit) { docID in
+        let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
             await context.parseXbrlFactIndex(docID: docID)
         }
         app.logger.notice(
             "Stage 3 取り込み完了: attempted=\(s3.attempted) stored=\(s3.stored) failed=\(s3.failed) skipped=\(s3.skipped)")
-        let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit) { code in
+        let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit, logger: app.logger) { code in
             await context.computeFinancials(code: code, years: stage4IngestYears)
         }
         app.logger.notice(
             "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
-        let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit) { code in
+        let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit, logger: app.logger) { code in
             await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
         }
         app.logger.notice(

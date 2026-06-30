@@ -9,6 +9,7 @@
 import BlueTickerCore
 import Fluent
 import Foundation
+import Logging
 
 /// Stage 4 取り込み結果のサマリ。
 public struct Stage4IngestSummary: Sendable, Equatable {
@@ -29,9 +30,9 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsResp
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。
 func runStage4Ingest(
-    db: Database, years: Int, limit: Int?, compute: FinancialsComputer
+    db: Database, years: Int, limit: Int?, logger: Logger? = nil, compute: FinancialsComputer
 ) async throws -> Stage4IngestSummary {
-    let codes = try await distinctCompanyCodes(db: db)
+    let codes = try await distinctCompanyCodes(db: db, logger: logger)
 
     var attempted = 0
     var stored = 0
@@ -39,7 +40,9 @@ func runStage4Ingest(
     var skipped = 0
 
     for code in codes {
-        let existing = try await CompanyFinancials.find(code, on: db)
+        let existing = try await withDbRetry(logger: logger) {
+            try await CompanyFinancials.find(code, on: db)
+        }
         if let row = existing, row.cacheVersion == companyFinancialsCacheVersion, row.requestedYears >= years {
             skipped += 1
             continue
@@ -50,8 +53,10 @@ func runStage4Ingest(
             failed += 1
             continue
         }
-        try await storeCompanyFinancials(
-            existing: existing, code: code, years: years, response: response, db: db)
+        try await withDbRetry(logger: logger) {
+            try await storeCompanyFinancials(
+                existing: existing, code: code, years: years, response: response, db: db)
+        }
         stored += 1
     }
 
@@ -61,8 +66,10 @@ func runStage4Ingest(
 
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
 /// secCode が無い／非上場（末尾 0 でない・桁数不一致）は対象外。
-func distinctCompanyCodes(db: Database) async throws -> [String] {
-    let documents = try await EdinetDocument.query(on: db).all()
+func distinctCompanyCodes(db: Database, logger: Logger? = nil) async throws -> [String] {
+    let documents = try await withDbRetry(logger: logger) {
+        try await EdinetDocument.query(on: db).all()
+    }
     var seen = Set<String>()
     var codes: [String] = []
     for doc in documents {
