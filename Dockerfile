@@ -31,6 +31,25 @@ WORKDIR /app
 COPY --from=build /build/.build/release/blt-server ./blt-server
 COPY assets/EdinetcodeDlInfo.csv ./assets/EdinetcodeDlInfo.csv
 
+# cloudflared サイドカー（Cloudflare Access 方式A・エッジ信頼。docs/deploy.md 参照）。
+# CLOUDFLARE_TUNNEL_TOKEN 未設定時は entrypoint.sh が起動をスキップするため self-host 互換は保たれる。
+# バージョン固定 + sha256 検証で取得（latest 追従によるサプライチェーン変化を防ぐ）。
+# 更新時は https://github.com/cloudflare/cloudflared/releases で新バージョンを確認し、
+# 当該バイナリの sha256sum を取り直して両方の値を書き換える。curl はダウンロード後に削除する。
+ARG CLOUDFLARED_VERSION=2026.6.1
+ARG CLOUDFLARED_SHA256=5861a10a438fe8ddcfebb3b830f83966cbf193edafce0fe2eeb198fbae1f7a22
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+ && curl -fsSL --retry 3 --retry-delay 2 \
+      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64" \
+      -o /usr/local/bin/cloudflared \
+ && echo "${CLOUDFLARED_SHA256}  /usr/local/bin/cloudflared" | sha256sum -c - \
+ && chmod +x /usr/local/bin/cloudflared \
+ && apt-get purge -y --auto-remove curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # 自己完結する実行時デフォルト（self-host も fly.toml なしでこのまま動く）。
 #   BLT_HOST/PORT       : bind（Fly はこのポートへルーティング）
 #   BLUE_TICKER_ASSETS_PATH : EDINET コード CSV の場所
@@ -45,4 +64,4 @@ EXPOSE 8080
 
 # root 実行。Fly Volume は実行時に root:root でマウントされ、非 root だと書き込めないため
 # entrypoint での chown を避けて最小構成にする（単一テナントのデータ取り込みサーバー）。
-ENTRYPOINT ["./blt-server"]
+ENTRYPOINT ["/app/entrypoint.sh"]

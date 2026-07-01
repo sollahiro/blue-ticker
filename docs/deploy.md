@@ -92,31 +92,11 @@ fly secrets set \
 # Cloudflare Access モードでは BLT_AUTH_TOKEN は設定しない（排他・前者が優先）
 ```
 
-### C. Dockerfile に cloudflared サイドカーを同梱
+### C. Dockerfile に cloudflared サイドカーを同梱（実装済み）
 
-runtime ステージ（`swift:6.1-slim` / debian）に cloudflared を入れ、ENTRYPOINT を小さな起動スクリプトに置き換える。`CLOUDFLARE_TUNNEL_TOKEN` 未設定なら blt-server のみ起動するので self-host 互換は保たれる。
+runtime ステージ（`swift:6.1-slim` / debian）に cloudflared を入れ、ENTRYPOINT を `scripts/entrypoint.sh` に置き換えている。`CLOUDFLARE_TUNNEL_TOKEN` 未設定なら blt-server のみ起動するので self-host 互換は保たれる（`docker build`＋`docker run` で無トークン／トークンありの両分岐を確認済み）。
 
-```dockerfile
-# runtime ステージに追加（Fly は x86_64）
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
- && curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-      -o /usr/local/bin/cloudflared \
- && chmod +x /usr/local/bin/cloudflared \
- && rm -rf /var/lib/apt/lists/*
-
-COPY scripts/entrypoint.sh /app/entrypoint.sh
-ENTRYPOINT ["/app/entrypoint.sh"]
-```
-
-```sh
-#!/bin/sh
-# scripts/entrypoint.sh
-set -e
-if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-  cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
-fi
-exec ./blt-server
-```
+cloudflared は `latest` ではなくバージョン固定＋sha256 検証で取得する（サプライチェーン変化を防ぐため）。ダウンロード後 curl は runtime イメージから削除する（不要な攻撃面を残さない）。更新時は Dockerfile の `CLOUDFLARED_VERSION`/`CLOUDFLARED_SHA256` を [cloudflared releases](https://github.com/cloudflare/cloudflared/releases) の新バージョンで書き換える。実装は `Dockerfile`・`scripts/entrypoint.sh` を参照。
 
 cloudflared は接続断を内部で自動再接続する。blt-server が落ちればコンテナが終了し Fly が再起動する（単一テナント前提の最小構成）。
 
