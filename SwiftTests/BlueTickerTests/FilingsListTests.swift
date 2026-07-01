@@ -60,6 +60,18 @@ import Testing
         #expect(row["submitted_at"] as? String == "2025-06-20 09:00")
     }
 
+    // 種別コード → ラベルの全対応。140=四半期・160=半期（Api.docTypeQuarterlyReport /
+    // docTypeHalfYearReport と同じ対応）。ラベル逆転の回帰を防ぐ。
+    @Test func labelsMatchDocTypeCodes() {
+        #expect(docTypeLabel("120") == "有価証券報告書")
+        #expect(docTypeLabel("130") == "訂正有価証券報告書")
+        #expect(docTypeLabel("140") == "四半期報告書")
+        #expect(docTypeLabel("150") == "訂正四半期報告書")
+        #expect(docTypeLabel("160") == "半期報告書")
+        #expect(docTypeLabel("170") == "訂正半期報告書")
+        #expect(docTypeLabel("999") == nil)
+    }
+
     @Test func unknownDocTypeFallsBackToDescription() {
         let list = filingsList(
             from: [rec("S1", docType: "999", desc: "その他の書類")], maxYears: 5)
