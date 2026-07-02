@@ -237,12 +237,7 @@ enum EdinetDiscovery {
     }
 
     // MARK: - Date helpers
-
-    private static let utcCalendar: Calendar = {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(secondsFromGMT: 0)!
-        return cal
-    }()
+    // 日付処理は共有 `utcCalendar`（Utils/UTCCalendar.swift）を使う。
 
     private static func utcStartOfDay(_ date: Date) -> Date {
         let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)

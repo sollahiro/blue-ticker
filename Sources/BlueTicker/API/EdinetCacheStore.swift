@@ -209,13 +209,13 @@ final class EdinetCacheStore: Sendable {
         let ttl = searchCacheTTL(path, hasResults: hasResults)
         guard let mtime = (try? fm.attributesOfItem(atPath: path.path))?[.modificationDate] as? Date
         else { return true }
-        return Calendar.current.dateComponents([.day], from: mtime, to: Date()).day ?? 0 >= ttl
+        return elapsedDaysUTC(since: mtime) >= ttl
     }
 
     private func searchCacheTTL(_ path: URL, hasResults: Bool) -> Int {
         let stem = path.deletingPathExtension().lastPathComponent
         let datePart = stem.hasPrefix("search_") ? String(stem.dropFirst("search_".count)) : stem
-        if let date = parseDateString(datePart), date < Calendar.current.date(byAdding: .day, value: -1, to: Date())! {
+        if let date = parseDateString(datePart), date < utcCalendar.date(byAdding: .day, value: -1, to: Date())! {
             return searchPastTTLDays
         }
         return hasResults ? searchHitTTLDays : searchEmptyTTLDays

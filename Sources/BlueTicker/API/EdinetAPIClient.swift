@@ -390,13 +390,7 @@ actor EdinetAPIClient {
 
 // MARK: - Helpers
 
-/// EDINET の日付ラベル（YYYY-MM-DD）は UTC で統一する。
-/// Calendar.current と混在させると JST 環境で年次インデックスのラベルが1日ずれる。
-private let utcCalendar: Calendar = {
-    var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(secondsFromGMT: 0)!
-    return cal
-}()
+// EDINET の日付ラベル（YYYY-MM-DD）は UTC 固定の共有 `utcCalendar`（Utils/UTCCalendar.swift）を使う。
 
 private let _isoDateFormatter: DateFormatter = {
     let f = DateFormatter()
