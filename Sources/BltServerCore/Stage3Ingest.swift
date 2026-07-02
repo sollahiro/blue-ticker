@@ -91,10 +91,16 @@ func storeXbrlFacts(
 let stage4IngestYears = 6
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
-/// Stage 3（XBRL 数値 fact）→ Stage 4（計算済み財務サマリ）の順に取り込む。
-/// Stage 3 が先に走り XBRL をローカルキャッシュへ落とすため、Stage 4 の計算は再ダウンロードを避けられる。
+/// Stage 4（計算済み財務サマリ）→ Stage 4-half（半期）を取り込む。
+///
+/// Stage 3（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
+/// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
+/// branch logical size 上限 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）が
+/// できるまで蓄積を止める。停止は可逆で、`includeFacts: true`（CLI: `--with-facts`）で
+/// 再開できる。Stage 4 の `computeFinancials` は自前で生 XBRL を DL するため、Stage 3 を
+/// 飛ばしても Stage 4/4-half は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
-public func runStage3IngestCommand(limit: Int?) async throws {
+public func runStage3IngestCommand(limit: Int?, includeFacts: Bool = false) async throws {
     guard let context = await makeBltServerContext() else {
         throw Stage1SyncError.apiKeyMissing
     }
@@ -107,11 +113,15 @@ public func runStage3IngestCommand(limit: Int?) async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
-            await context.parseXbrlFactIndex(docID: docID)
+        if includeFacts {
+            let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
+                await context.parseXbrlFactIndex(docID: docID)
+            }
+            app.logger.notice(
+                "Stage 3 取り込み完了: attempted=\(s3.attempted) stored=\(s3.stored) failed=\(s3.failed) skipped=\(s3.skipped)")
+        } else {
+            app.logger.notice("Stage 3（XBRL 数値 fact）は停止中（issue #22）。再開は --with-facts。")
         }
-        app.logger.notice(
-            "Stage 3 取り込み完了: attempted=\(s3.attempted) stored=\(s3.stored) failed=\(s3.failed) skipped=\(s3.skipped)")
         let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit, logger: app.logger) { code in
             await context.computeFinancials(code: code, years: stage4IngestYears)
         }

@@ -200,7 +200,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 |---|---|---|---|
 | Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | 同期済み（3,944 社）。定期 `sync` は launchd `com.sollahiro.blt-sync` で 1 日 3 回 |
 | Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
-| Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ・取り込み（`blt-server ingest`）実装済み（RAW アーカイブ。Stage 4 は別途計算結果を格納） |
+| Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ実装済み。**取り込みは停止中（issue #22。512MB 対策で消費者ができるまで蓄積停止。`ingest --with-facts` で再開）**。RAW アーカイブで現状消費者なし（Stage 4 は生 XBRL を直接読む） |
 | Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・506/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
 | Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィル進行中（9 社、2026-06-28 夜に release 再ビルドで drain 再開）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
 
@@ -262,7 +262,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 
 **着手順（A の前段に容量対策が必要）**:
 
-- **A1. Postgres 512MB 対策**: 数値 facts だけで全件 ~700MB 見込み（512MB 超）。Neon プラン拡張 or facts JSONB のオブジェクトストレージ退避（Postgres には docID→キー索引のみ）を先に決める。
+- **A1. Postgres 512MB 対策（解決済み・issue #22）**: 当面は **Stage 3 ingest（数値 facts 蓄積）を停止**して 512MB 到達を先送りする（facts は現状消費者なし＝蓄積は純粋な負債）。ストレージ強化（Neon プラン拡張 or facts/生 XBRL のオブジェクトストレージ退避）は、目標 A（Stage 4 のタグ系抽出を facts 消費へ切り替え）という**実需要が出た時点**で段階的に選ぶ。生 XBRL 中央ストア（A2）が入れば facts はそこから再導出でき、Postgres に 800MB を持つ必要性自体が薄れる。
 - **A2. オブジェクトストレージ＋3段フォールバック**を設計・実装（上記「R2 退避は延期」の発火条件が容量で満たされ次第）。S3 互換クライアントの外部依存追加はここで判断する。
 
 **計算バージョンの粒度は「出典別」でなく「抽出方式別」が妥当**:
@@ -400,7 +400,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 ### 近期（Stage 1 安定化）
 
-- [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 3/4）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
+- [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 4/4-half。**Stage 3 数値 facts は停止中＝issue #22**）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
 - [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **506/3,944 社格納**（2026-06-28 夜時点）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い（フォールバック撤去後は 404）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 ingest で解消。その後に新規社へカバレッジ拡大。Fly は読むだけ（未格納は 404＝OOM しない）。
   - **半期（company_half_financials）も同 ingest が Stage 4-half として埋める**。**2026-06-28 夜に 5→9 社へ前進**。半期が長く 5 社で止まっていた真因は **launchd の release バイナリが Stage 4-half 配線より古かった**こと（定期ランのログに「Stage 4-half 取り込み完了」行が出ていなかった）。release 再ビルドで解消し、手動 ingest で Stage 4-half 到達を確認。半期 read は `Api.halfMaxYears`(=5) クランプ＋未格納 404 で OOM しない。
   - **長時間ランの transient PSQLError 対策**: limit を大きくすると 1 ラン数時間に及び、途中の Neon 接続リセットで Stage 4 / Stage 4-half がまとめて巻き戻る（最後に走る Stage 4-half が完走しにくい）。バックフィル中は `BLT_INGEST_LIMIT=75` に下げて完走率を優先（全社 drain 後は既定 200 に戻してよい）。詳細は `docs/deploy.md`「定期同期（ローカル launchd）」。
@@ -472,7 +472,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - ~~Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）~~ → 解決（ローカル保持継続・R2 退避は延期）
 - ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
 - remote backend 利用時の `ticker cache status` 表示内容
-- **Postgres 512MB 上限への対策（目標 A の前段 A1）**: 数値 facts 全件 ~700MB 見込みで現プラン上限超過。Neon プラン拡張 or facts JSONB のオブジェクトストレージ退避のどちらにするか未決
+- ~~**Postgres 512MB 上限への対策（目標 A の前段 A1）**~~ → 解決（issue #22）: **Stage 3 ingest（数値 facts 蓄積）を停止**する。facts はどこからも消費されない RAW アーカイブで、全件 ~800MB は 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）ができるまで蓄積を止め、512MB 到達を先送りする。Neon プラン拡張 vs facts/生 XBRL のオブジェクトストレージ退避は**ストレージ強化時の段階的選択肢**として保留（実需要が出てから決める）。既存 54MB 行は温存（可逆）。実装: `blt-server ingest` は既定で Stage 3 をスキップ（`--with-facts` で再開）。Stage 4 は自前 DL で自足するため機能影響なし
 
 ---
 

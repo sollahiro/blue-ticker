@@ -2,7 +2,7 @@
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    Stage 1 書類一覧を DB へ同期
-//   blt-server ingest [--limit N]                            Stage 3 XBRL 数値 fact を DB へ取り込み
+//   blt-server ingest [--limit N] [--with-facts]             Stage 4/4-half を DB へ取り込み（--with-facts で Stage 3 数値 fact も。既定は停止。issue #22）
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
@@ -45,7 +45,8 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         try await runStage3IngestCommand(
-            limit: optionValue("--limit", in: argv).flatMap(Int.init)
+            limit: optionValue("--limit", in: argv).flatMap(Int.init),
+            includeFacts: argv.contains("--with-facts")
         )
     } else {
         let args = ServerArgs.parse(argv)
