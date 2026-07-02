@@ -67,15 +67,7 @@ struct CachePrepare: AsyncParsableCommand {
     var years: Int = Api.prepareDefaultYears
 
     func run() async throws {
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("EDINET API キーが設定されていません。`ticker config set --edinet-api-key <KEY>` で設定してください。\n")
-            throw ExitCode.failure
-        }
-        let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
-
+        let client = try await EdinetClientLoader.make().client
         let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年 のインデックスを構築中...")
@@ -96,15 +88,7 @@ struct CacheCatchup: AsyncParsableCommand {
     var years: Int = Api.prepareDefaultYears
 
     func run() async throws {
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("EDINET API キーが設定されていません。\n")
-            throw ExitCode.failure
-        }
-        let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
-
+        let client = try await EdinetClientLoader.make().client
         let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年のデータを取得中です。")
@@ -125,15 +109,7 @@ struct CacheRefresh: AsyncParsableCommand {
     var years: Int = Api.prepareDefaultYears
 
     func run() async throws {
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("EDINET API キーが設定されていません。\n")
-            throw ExitCode.failure
-        }
-        let cacheDir = URL(fileURLWithPath: await settingsStore.get(.cacheDir) ?? "")
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
-
+        let client = try await EdinetClientLoader.make().client
         let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年 を再構築中...")

@@ -22,22 +22,14 @@ struct FilingsCommand: AsyncParsableCommand {
             return
         }
 
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("エラー: EDINET API キーが設定されていません。ticker config set --edinet-api-key <KEY> で設定してください。\n")
-            throw ExitCode.failure
-        }
-        let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
-        let cacheDir = URL(fileURLWithPath: cacheDirStr)
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
+        let client = try await EdinetClientLoader.make().client
         let service = FilingService(edinetClient: client)
 
         let docs = await service.searchFilings(
             code: code,
             maxYears: years,
-            docTypes: ["120", "130", "140", "150", "160", "170"],
-            maxDocuments: 10
+            docTypes: Array(Api.filingsDisplayDocTypes),
+            maxDocuments: Api.filingsCliMaxDocuments
         )
 
         if docs.isEmpty {
@@ -129,17 +121,8 @@ struct FilingCommand: AsyncParsableCommand {
             return
         }
 
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("エラー: EDINET API キーが設定されていません。ticker config set --edinet-api-key <KEY> で設定してください。\n")
-            throw ExitCode.failure
-        }
-
+        let client = try await EdinetClientLoader.make().client
         let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
-        let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
-        let cacheDir = URL(fileURLWithPath: cacheDirStr)
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
 
         // 書類IDを決定
         let targetDocID: String

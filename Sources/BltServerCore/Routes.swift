@@ -54,7 +54,7 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     // GET /v1/sectors/{sector}/companies?limit=20
     v1.get("sectors", ":sector", "companies") { req async -> Response in
         let sector = req.parameters.get("sector") ?? ""
-        let limit = req.query[Int.self, at: "limit"] ?? 20
+        let limit = req.query[Int.self, at: "limit"] ?? Api.sectorCompaniesLimitDefault
         return makeResponse(await context.searchBySector(sector: sector, limit: limit))
     }
 
@@ -63,7 +63,7 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        let maxYears = req.query[Int.self, at: "max_years"] ?? 5
+        let maxYears = req.query[Int.self, at: "max_years"] ?? Api.filingsMaxYearsDefault
         if dbAvailable {
             do {
                 let records = try await loadStoredFilingRecords(code: code, db: req.db)
@@ -87,7 +87,7 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     // ライブ計算へはフォールバックしない（1リクエストでサーバー全体を OOM 落ちさせる地雷を断つ）。
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        let years = req.query[Int.self, at: "years"] ?? 5
+        let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
@@ -107,7 +107,7 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     // フォールバックしない。
     v1.get("companies", ":code", "half-financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        let years = req.query[Int.self, at: "years"] ?? 3
+        let years = req.query[Int.self, at: "years"] ?? Api.halfFinancialsYearsDefault
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }

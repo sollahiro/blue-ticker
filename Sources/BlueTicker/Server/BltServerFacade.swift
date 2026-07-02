@@ -67,7 +67,7 @@ public func makeBltServerContext() async -> BltServerContext? {
 
 public extension BltServerContext {
     func searchCompanies(q: String) async -> BltServerResponse {
-        let results = await masterDataManager.search(q, limit: 50)
+        let results = await masterDataManager.search(q, limit: Api.companySearchLimit)
         return .ok(results.map(companyJSON))
     }
 
@@ -80,7 +80,8 @@ public extension BltServerContext {
     func getFilings(code: String, maxYears: Int) async -> BltServerResponse {
         let stock = await masterDataManager.getByCode(code)
         let service = FilingService(edinetClient: edinetClient)
-        let docs = await service.searchFilings(code: code, maxYears: maxYears, maxDocuments: 50)
+        let docs = await service.searchFilings(
+            code: code, maxYears: maxYears, maxDocuments: Api.filingsMaxDocuments)
 
         let filings: [[String: Any]] = docs.map { doc in
             filingDict(
@@ -248,7 +249,7 @@ func filingsList(from records: [EdinetDocumentRecord], maxYears: Int) -> [[Strin
             rawFyEnd: rec.periodEnd ?? "",
             submitAt: rec.submitDateTime,
             docDescription: rec.docDescription ?? ""))
-        if filings.count >= 50 { break }
+        if filings.count >= Api.filingsMaxDocuments { break }
     }
     return filings
 }

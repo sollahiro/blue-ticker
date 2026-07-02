@@ -12,10 +12,22 @@ public enum Api {
     static let documentIndexMinRangeDays = 30
     static let documentIndexKeepYears = 6
 
-    // デフォルト年数
+    // デフォルト年数（CLI）
     static let filingsDefaultYears = 3
     static let prepareDefaultYears = 5
     static let analyzeDefaultYears = 6
+
+    // REST API クエリの省略時デフォルト（BltServerCore から参照するため public）。
+    // 値は既存の直書きと同一（挙動不変）。
+    public static let sectorCompaniesLimitDefault = 20
+    public static let filingsMaxYearsDefault = 5
+    public static let financialsYearsDefault = 5
+    public static let halfFinancialsYearsDefault = 3
+
+    // 件数上限
+    static let companySearchLimit = 50      // searchCompanies の返却上限
+    static let filingsMaxDocuments = 50     // server read（getFilings / filingsList）の filings 上限
+    static let filingsCliMaxDocuments = 10  // CLI `filings` コマンドの表示上限
 
     /// 半期分析で算出・格納できる最大年数（HalfYearAnalyzer の探索上限）。
     /// 半期は FY/2Q の組から H1/H2 を導出する都合でこの年数までしか作れない。
@@ -28,9 +40,11 @@ public enum Api {
 
     // 書類種別
     static let docTypeAnnualReport = "120"
-    static let docTypeAmendment = "130"
+    static let docTypeAmendment = "130"           // 訂正有価証券報告書
     static let docTypeQuarterlyReport = "140"
+    static let docTypeAmendedQuarterlyReport = "150"
     static let docTypeHalfYearReport = "160"
+    static let docTypeAmendedHalfYearReport = "170"
 
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
     /// レスポンス形を破壊的に変更したときのみ +1 する（クライアントのデコード整合判定用）。
@@ -42,13 +56,26 @@ public enum Api {
     /// financials とは独立採番。レスポンス形を破壊的に変更したときのみ +1 する。
     static let halfFinancialsSchemaVersion = 1
 
-    /// Stage 1 同期で DB へ取り込む書類種別。
-    /// 現状は有報・半期・四半期＋訂正有報。他種別へ拡張する場合はここへ追加する（単一の真実源）。
+    /// Stage 1 同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
+    /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない
+    /// （有報中心の財務計算に対し、訂正は訂正有報(130)のみ採用する設計）。
+    /// filings 表示用の上位集合とは別セット → `filingsDisplayDocTypes`。
     static let stage1SyncDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
         docTypeQuarterlyReport,
         docTypeHalfYearReport,
+    ]
+
+    /// filings 表示（CLI `filings`）で採用する書類種別。探索済み書類に対する表示フィルタで、
+    /// 訂正を含む全 6 種の上位集合（Stage 1 sync 用より広い。上の別セットと区別）。
+    static let filingsDisplayDocTypes: Set<String> = [
+        docTypeAnnualReport,
+        docTypeAmendment,
+        docTypeQuarterlyReport,
+        docTypeAmendedQuarterlyReport,
+        docTypeHalfYearReport,
+        docTypeAmendedHalfYearReport,
     ]
 
     // キャッシュロック
