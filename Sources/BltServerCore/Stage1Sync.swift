@@ -32,7 +32,7 @@ enum Stage1SyncError: Error, CustomStringConvertible {
         case .databaseUnavailable:
             return "DATABASE_URL が未設定です。同期には DB 接続が必要です。"
         case .apiKeyMissing:
-            return "EDINET API キーが未設定です。BLT_EDINET_API_KEY 環境変数、または ticker config set edinet-key <key> で設定してください。"
+            return "EDINET API キーが未設定です。BLT_EDINET_API_KEY 環境変数、または ticker config set --edinet-api-key <KEY> で設定してください。"
         }
     }
 }

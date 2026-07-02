@@ -21,7 +21,7 @@ enum MetricsLoader {
     static func prepare(rawCode: String) async throws -> AnalysisContext {
         let apiKey = await settingsStore.get(.edinetApiKey)
         guard let key = apiKey, !key.isEmpty else {
-            printError("エラー: EDINET API キーが設定されていません。ticker config set edinet-key <key> で設定してください。\n")
+            printError("エラー: EDINET API キーが設定されていません。ticker config set --edinet-api-key <KEY> で設定してください。\n")
             throw ExitCode.failure
         }
 

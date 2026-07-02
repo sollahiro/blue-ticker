@@ -17,7 +17,7 @@ import Vapor
 ///   - port: ポート番号（デフォルト 3000）
 public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async throws {
     guard let context = await makeBltServerContext() else {
-        printError("EDINET API キーが設定されていません。BLT_EDINET_API_KEY 環境変数、または ticker config set edinet-key <key> で設定してください。\n")
+        printError("EDINET API キーが設定されていません。BLT_EDINET_API_KEY 環境変数、または ticker config set --edinet-api-key <KEY> で設定してください。\n")
         exit(1)
     }
 
