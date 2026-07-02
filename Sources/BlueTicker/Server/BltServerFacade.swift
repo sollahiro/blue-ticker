@@ -136,37 +136,50 @@ public extension BltServerContext {
         return HalfFinancialsResponse(code: code, name: stock?.coName ?? "", periods: periods)
     }
 
-    func getFilingContent(code: String, docId: String?, sections: [String]?) async -> BltServerResponse {
-        let targetDocID: String
-        if let d = docId, !d.isEmpty {
-            targetDocID = d
-        } else {
-            let docs = await EdinetDiscovery.buildDocumentIndexForCode(
-                code: code, client: edinetClient, analysisYears: 1
-            )
-            guard let latest = docs.first, let d = latest["docID"] as? String else {
-                return .notFound("書類が見つかりませんでした: \(code)")
-            }
-            targetDocID = d
-        }
+    /// Stage 5: 書類1件分の XBRL を取得（Stage 2 キャッシュ経由）し、全セクションを抽出して
+    /// 格納用 payload を返す。重い SwiftSoup 抽出を含むため **ingest 専用**（大企業の有報で 1GB OOM を
+    /// 実測。serving のライブ抽出は撤去し、read は Neon 格納済みを返す）。ダウンロード失敗は nil（戻り値パターン）。
+    /// texts は xbrlSections 全 key を格納（未検出は ""）、specials は segments/geography。
+    func extractFilingSections(docID: String) async -> FilingSectionsPayload? {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
 
-        guard let xbrlDir = await edinetClient.downloadDocument(targetDocID) else {
-            return .upstreamFailure("XBRLのダウンロードに失敗しました")
-        }
-
-        let targetSections = sections ?? Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys
+        // honbun HTML 系は1回パースでまとめて抽出（セクション数ぶん再パースしない＝メモリ節約）。
         let parser = XBRLParser()
-        var extracted: [String: Any] = [:]
-        for key in targetSections {
+        let titlesByKey = Dictionary(
+            xbrlSections.map { ($0.key, $0.value.title) },
+            uniquingKeysWith: { first, _ in first })
+        let found = parser.extractSections(in: xbrlDir, titlesByKey: titlesByKey)
+        var texts: [String: String] = [:]
+        for key in xbrlSections.keys { texts[key] = found[key] ?? "" }  // 全 key 存在を維持
+
+        var specials: [String: SegmentPayload] = [:]
+        for key in SegmentExtractor.specialSectionKeys {
             if let seg = SegmentExtractor.extractSpecialSection(key, xbrlDir: xbrlDir) {
-                extracted[key] = seg.toDictionary()
-            } else if let def = xbrlSections[key] {
-                extracted[key] = parser.extractSection(in: xbrlDir, sectionName: def.title) ?? ""
+                specials[key] = segmentPayload(from: seg)
             }
         }
-
-        return .ok(["code": code, "doc_id": targetDocID, "sections": extracted])
+        return FilingSectionsPayload(texts: texts, specials: specials)
     }
+
+    /// 上場ユニバース（東証上場）の 4 桁コード集合。Stage 5 取り込みの対象選定に使う
+    /// （EDINET 公式 CSV の「上場区分」から導出。roadmap の著作権判断参照）。
+    func listedCompanyCodes() async -> Set<String> {
+        await masterDataManager.listedCodes()
+    }
+}
+
+/// 内部型 SegmentResult を公開格納用 SegmentPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。
+private func segmentPayload(from r: SegmentResult) -> SegmentPayload {
+    SegmentPayload(
+        method: r.method,
+        tables: r.tables.map {
+            SegmentTablePayload(heading: $0.heading, markdown: $0.markdown, period: $0.period)
+        },
+        facts: r.facts.map {
+            SegmentFactPayload(
+                tag: $0.tag, contextRef: $0.contextRef, dimensions: $0.dimensions,
+                value: $0.value, label: $0.label, unitRef: $0.unitRef, decimals: $0.decimals)
+        })
 }
 
 // MARK: - Stage 1 同期

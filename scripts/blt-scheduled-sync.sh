@@ -1,9 +1,11 @@
 #!/bin/zsh
 # blt-server 定期同期ジョブ（ローカル launchd 用）。
 #
-# Stage 1 (sync: 書類一覧 → Neon) → Stage 3/4 (ingest: XBRL 数値 fact ＋
-# 計算済み財務サマリ → Neon) をローカルで実行する。重い ingest を Fly(1GB) で
-# 走らせると OOM するため、計算はローカル・Fly は company_financials を読むだけ。
+# Stage 1 (sync: 書類一覧 → Neon) → Stage 4/4-half (ingest: 計算済み財務サマリ
+# → Neon) をローカルで実行する。重い ingest を Fly(1GB) で走らせると OOM するため、
+# 計算はローカル・Fly は company_financials を読むだけ。
+# Stage 3（XBRL 数値 fact）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
+# 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
 # 機密（DATABASE_URL / BLT_EDINET_API_KEY）はリポジトリ直下 .env から読む。
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:

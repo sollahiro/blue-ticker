@@ -122,12 +122,27 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
+    // DB（Stage 5 company_filing_sections）の格納済みセクション本文のみを返す。
+    // 有報のライブ抽出（9MB DL＋SwiftSoup）は大企業で 1GB OOM を実測したため撤去し、重い抽出は
+    // ingest（Stage 5）へ閉じ込めた。未抽出は 404・DB 非接続は 503（financials と同型・フォールバックなし）。
     v1.get("companies", ":code", "filing-content") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
         let sections = req.query[String.self, at: "sections"]
             .map { $0.split(separator: ",").map(String.init) }
-        return makeResponse(await context.getFilingContent(code: code, docId: docId, sections: sections))
+        guard dbAvailable else {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+        do {
+            if let stored = try await loadStoredFilingSections(
+                code: code, docId: docId, sections: sections, db: req.db)
+            {
+                return jsonResponse(stored, status: .ok)
+            }
+            return errorResponse(.notFound, message: "書類本文は未抽出です")
+        } catch {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
     }
 }
 
