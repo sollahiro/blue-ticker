@@ -43,12 +43,13 @@ func runStage1Sync(
     context: BltServerContext,
     db: Database,
     from: String?,
-    to: String
+    to: String,
+    logger: Logger? = nil
 ) async throws -> Stage1SyncSummary {
-    let resolvedFrom = try await resolveStartDate(from: from, db: db)
+    let resolvedFrom = try await resolveStartDate(from: from, db: db, logger: logger)
     let records = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
-    let counts = try await applyDocuments(records, db: db)
-    try await upsertSyncState(syncedThrough: to, db: db)
+    let counts = try await applyDocuments(records, db: db, logger: logger)
+    try await upsertSyncState(syncedThrough: to, db: db, logger: logger)
 
     return Stage1SyncSummary(
         from: resolvedFrom, to: to, fetched: records.count,
@@ -56,21 +57,26 @@ func runStage1Sync(
 }
 
 /// レコードを edinet_documents へ upsert する（docID 一致で更新、無ければ作成）。
+/// 各 DB 操作は withDbRetry で一過性の接続断（Neon scale-to-zero 等）に対して再試行する
+/// （EDINET 取得の空白中に suspend され、直後の DB 操作が死んだ接続で失敗するのを回復。ingest と同思想）。
 func applyDocuments(
-    _ records: [EdinetDocumentRecord], db: Database
+    _ records: [EdinetDocumentRecord], db: Database, logger: Logger? = nil
 ) async throws -> (created: Int, updated: Int) {
     var created = 0
     var updated = 0
     for record in records {
-        if let existing = try await EdinetDocument.find(record.docID, on: db) {
+        let existing = try await withDbRetry(logger: logger) {
+            try await EdinetDocument.find(record.docID, on: db)
+        }
+        if let existing {
             existing.apply(record)
-            try await existing.update(on: db)
+            try await withDbRetry(logger: logger) { try await existing.update(on: db) }
             updated += 1
         } else {
             let model = EdinetDocument()
             model.id = record.docID
             model.apply(record)
-            try await model.create(on: db)
+            try await withDbRetry(logger: logger) { try await model.create(on: db) }
             created += 1
         }
     }
@@ -78,21 +84,23 @@ func applyDocuments(
 }
 
 /// from 解決順位: 明示指定 > 既存 synced_through > missingStartDate。
-func resolveStartDate(from: String?, db: Database) async throws -> String {
+func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async throws -> String {
     if let f = from, !f.isEmpty { return f }
-    if let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db) {
-        return state.syncedThrough
+    let state = try await withDbRetry(logger: logger) {
+        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
     }
+    if let state { return state.syncedThrough }
     throw Stage1SyncError.missingStartDate
 }
 
 /// synced_through を upsert する（単一行）。
-func upsertSyncState(syncedThrough: String, db: Database) async throws {
-    let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
-        ?? EdinetSyncState()
+func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil) async throws {
+    let state = try await withDbRetry(logger: logger) {
+        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
+    } ?? EdinetSyncState()
     state.id = EdinetSyncState.singletonID
     state.syncedThrough = syncedThrough
-    try await state.save(on: db)
+    try await withDbRetry(logger: logger) { try await state.save(on: db) }
 }
 
 // MARK: - read 経路（REST filings）
@@ -161,7 +169,7 @@ public func runStage1SyncCommand(from: String?, to: String?) async throws {
     do {
         try await configureDatabase(app)
         let summary = try await runStage1Sync(
-            context: context, db: app.db, from: from, to: to ?? todayUTC())
+            context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
         app.logger.notice(
             "Stage 1 同期完了: \(summary.from)..\(summary.to) fetched=\(summary.fetched) created=\(summary.created) updated=\(summary.updated)")
     } catch {
