@@ -17,6 +17,7 @@ public struct Ticker: AsyncParsableCommand {
             FilingsCommand.self,
             FilingCommand.self,
             SectorCommand.self,
+            SkillCommand.self,
         ]
     )
 
