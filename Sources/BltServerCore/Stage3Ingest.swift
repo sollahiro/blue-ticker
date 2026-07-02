@@ -132,6 +132,16 @@ public func runStage3IngestCommand(limit: Int?, includeFacts: Bool = false) asyn
         }
         app.logger.notice(
             "Stage 4-half 取り込み完了: attempted=\(s4h.attempted) stored=\(s4h.stored) failed=\(s4h.failed) skipped=\(s4h.skipped)")
+        // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
+        let listed = await context.listedCompanyCodes()
+        let s5 = try await runStage5Ingest(
+            db: app.db, listedCodes: listed, years: stage5IngestYears,
+            sectionKeys: currentFilingSectionKeys(), limit: limit, logger: app.logger
+        ) { docID in
+            await context.extractFilingSections(docID: docID)
+        }
+        app.logger.notice(
+            "Stage 5 取り込み完了: attempted=\(s5.attempted) stored=\(s5.stored) failed=\(s5.failed) skipped=\(s5.skipped)")
     } catch {
         try? await app.asyncShutdown()
         throw error

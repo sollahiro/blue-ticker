@@ -80,6 +80,14 @@ actor MasterDataManager {
         return codeIndex[code]
     }
 
+    /// 上場（EDINET「上場区分」==「上場」）の 4 桁証券コード集合。
+    /// Stage 5 取り込みの対象ユニバース（東証上場）を EDINET 公式 CSV から導出する
+    /// （TOPIX/日経の構成銘柄リストは編集著作物の懸念があるため使わない）。
+    func listedCodes() async -> Set<String> {
+        await loadIfNeeded()
+        return Set(stocks.filter { $0.mktNm == "上場" }.map { $0.code })
+    }
+
     func searchBySector(_ sector: String, limit: Int = 20) async -> [StockSearchResult] {
         await loadIfNeeded()
         let q = sector.lowercased()

@@ -89,6 +89,21 @@ financials の REST 応答を、毎リクエストのライブ計算（EDINET �
 - **運用**: 計算はメモリを使うため、**重い初回バックフィルはローカル等から `DATABASE_URL` を Neon に向けて ingest** する（Fly 上で大量に走らせると ingest 自体が OOM しうる）。Fly サーバーは読むだけ。
 - **テスト**: DB ロジック（企業選定・重複排除・staleness・年数不足・limit・upsert）と read 経路（バージョン／年数ゲート・trim）を計算器 closure 注入でネットワーク非依存に検証（`Stage4IngestTests`）。
 
+### Stage 5 DB スキーマ＋取り込み（有報セクション本文・実装済み）
+
+`GET /v1/companies/{code}/filing-content`（有報のリスク情報・MD&A・研究開発等のセクション本文）を、リクエスト経路のライブ抽出から **ingest 事前抽出＋DB read-only** へ切り替えた（issue #23）。
+
+- **動機（実測）**: 旧経路は request 時に XBRL を 9MB ライブ DL＋SwiftSoup パースしていた。**Toyota(7203) の全セクション要求 1 本で Fly 1GB が OOM kill（anon-rss 880MB, exit 137）**。財務系（Stage 4）で撤去したのと同型の地雷で、単発でも致命的（ピークは巨大 honbun 1個の DOM に律速され、セクション数や単一パース化では下がらない＝返るテキストは 76KB なのに抽出に ~1GB）。→ 重い抽出は ingest（生 XBRL がある所）へ、serving は小さいテキストを読むだけに。
+- **スキーマ**: `company_filing_sections`（**docID を PK**＝過去書類も保持。Stage 3 と同型）。`payload` JSONB に `FilingSectionsPayload`（texts＝本文 String、specials＝segments/geography）、`code`(4桁・read-by-code 用)、`submit_date_time`(最新選択用)、`cache_version`＝`filingSectionsCacheVersion`、`section_keys`。格納契約 `FilingSectionsPayload`／`SegmentPayload` は `BlueTickerCore/Models/FilingSectionsContract.swift`（内部型 `SegmentResult` を写経・非露出。Stage 3 の `XbrlFactRecord` 方式）。Fluent モデル・マイグレーションは `BltServerCore`。
+- **対象ユニバース（東証上場・著作権クリーン）**: EDINET 公式 CSV の「上場区分」==「上場」から導出（`MasterDataManager.listedCodes` → ファサード `listedCompanyCodes`）。TOPIX/日経の構成銘柄リストは編集著作物／DB 権の懸念があるため**同梱・依存しない**。
+- **保持粒度（容量＝#22 と整合）**: 企業単位・**有報(120)のみ・提出日時降順で直近 `stage5IngestYears`(=3) 件**。全書類（21,250件×~50-100KB≈1-2GB）は 512MB 超になるため直近に絞る。全書類はキーだが年数上限で総量を抑える。**ストレージ強化（#22 の Neon プラン拡張 or オブジェクトストレージ退避）後に年数を緩められる**。
+- **抽出**: Core ファサード `extractFilingSections(docID:)` が `downloadDocument`（Stage 2）→ `XBRLParser.extractSections`（**honbun を1回パースして全セクション**＝セクションごと再パースの非効率を解消・latency 25→15s）→ `SegmentExtractor` で segments/geography を写経。ingest は常に全セクション抽出（絞り込みは read 側）。DB upsert は `BltServerCore/Stage5Ingest.swift`。
+- **取り込み**: `blt-server ingest` が Stage 4-half の後に Stage 5 を実行。候補=上場×有報×直近3年、`cache_version` 一致 & `section_keys` 一致で skip、いずれか不一致で再抽出。**セクション追加は `xbrlSections` に1行足すだけ**（`section_keys` 不一致で当該行のみ自動再抽出＝cache_version バンプ不要）。`--limit` は新規抽出件数上限。
+- **read 経路（DB 専用・ライブ抽出フォールバックなし）**: `loadStoredFilingSections`。doc_id 省略時は当該 code の最新有報、指定時はその書類（当該 code のもの・取り違え防止）。無い・古いは **404**、DB 非接続は **503**。公開契約 `{code, doc_id, sections}` は不変（`sectionsObject(sections:)` で復元）。
+- **公開挙動の変更**: doc_id 指定は「格納済み（直近3年の有報）と一致時のみ 200」。3年より古い書類・非有報の doc_id は 404（旧: 任意 docID をライブ抽出）。retention を広げれば緩和される。
+- **運用**: 抽出はメモリを使うため初回バックフィルはローカル等から `DATABASE_URL`=Neon で ingest（Fly は読むだけ）。**バックフィル未実施**（launchd が drain 予定）。
+- **テスト**: 対象選定（上場×有報×直近N・secCode 検証）・staleness（version/section_keys）・limit・upsert・read（code 最新／doc_id／取り違え／バージョン／sections 絞り込み）を抽出器 closure 注入でネットワーク非依存に検証（`Stage5IngestTests`、16件）。
+
 ### オンデマンド ingest（非同期・設計確定／未実装）
 
 「人気銘柄＋オンデマンド」運用での cold path（未 ingest 銘柄を叩かれたとき）を **非同期**で扱う。serving は read-only を保ち、OOM を起こす重い処理（9MB DL＋XBRL パース）をリクエスト経路に持ち込まない。
@@ -203,6 +218,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ実装済み。**取り込みは停止中（issue #22。512MB 対策で消費者ができるまで蓄積停止。`ingest --with-facts` で再開）**。RAW アーカイブで現状消費者なし（Stage 4 は生 XBRL を直接読む） |
 | Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・506/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
 | Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィル進行中（9 社、2026-06-28 夜に release 再ビルドで drain 再開）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
+| Stage 5 | 有報セクション本文抽出（リスク・MD&A 等） | **DB（`company_filing_sections`、書類単位 JSONB）＋サーバー抽出** | 抽出（SwiftSoup）・DB 格納（ingest が Stage 4-half の後に実行）・DB 専用 read 配線（sections-v1）実装済み（issue #23）。対象=**東証上場×有報(120)×直近 `stage5IngestYears`(=3) 年**。filing-content のライブ抽出（大企業有報で **1GB OOM 実測**）を撤去し read-only 化。未抽出は **404**。バックフィル未実施（launchd が drain 予定） |
 
 ### 実測データ量（2026-06 時点・手元キャッシュ232書類）
 
@@ -464,6 +480,10 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [ ] **オンデマンド ingest（非同期）の実装**: 未充足リクエスト記録テーブル＋既存 ingest バッチでの消化（上記「オンデマンド ingest（非同期）」）。公開スキーマ追加のためユーザー確認後に着手。
 - [ ] **ユーザー向けローカル分析 CLI の段階的廃止**: `backend=local` の deprecation 告知 → 廃止バージョンを定めて削除。Dev CLI・Core・Unit Test は残す。
 - [ ] **MCP クライアントの復活**: REST API クライアントとして再実装（remote CLI / GUI と同型。プロトコルサーバーは復活させない）。
+- [x] **filing-content の OOM 地雷解消（issue #23）** — Stage 5（有報セクション本文の ingest 事前抽出＋DB read-only 化）で解決。上記「Stage 5 DB スキーマ＋取り込み」参照。残: 初回バックフィル（launchd drain）・実 Fly E2E 検証。
+- [ ] **Stage 5 の対象拡張（有報の年数・ユニバース）**: 当面 東証上場×有報×直近3年。ストレージ強化（#22）後に retention 年数を緩める／全書類化を検討。TOPIX/日経での絞り込みが要る場合はライセンス済み or ユーザー提供リストを実行時に渡す（構成銘柄リストは同梱しない）。
+- [ ] **半期報告書(160)のセクション本文取得**: Stage 5 を有報(120)に限定しているが、将来は半期(160)のテキストも抽出対象に含める（半期はセクション構成が異なるため抽出品質の検証が必要。`stage5Candidates` の docType 条件を拡張）。
+- [ ] **Stage 6: 事業別・地域別売上の LLM 構造化**: Stage 5 の `specials`（segments/geography の markdown 表）を入力に、LLM で売上を構造化して新 derived テーブル（例 `company_segment_revenue`、専用 cache_version）へ格納。EDINET 再取得・XBRL 再パースなしで回せる。LLM 実装（API 選定・プロンプト・整合検証）が必要なため独立タスク。
 
 ---
 

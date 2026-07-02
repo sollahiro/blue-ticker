@@ -40,6 +40,48 @@ struct XBRLParser {
         return nil
     }
 
+    /// 複数セクションを honbun HTML の **1回パース**でまとめて抽出する。
+    /// `extractSection` をセクション数ぶん呼ぶと同じ巨大 HTML を毎回 SwiftSoup で
+    /// パースし直しメモリが膨張する（大企業の有報で 1GB OOM を実測）。本メソッドは
+    /// 対象ファイルを1回だけパースし、そのDOMから全セクションを引く。
+    /// 入力は key→セクション見出し（`xbrlSections` から作る）。見つかった key→本文を返す。
+    /// セクション追加は `xbrlSections` への追記だけで済む（拡張点はマップに集約）。
+    func extractSections(in xbrlDir: URL, titlesByKey: [String: String]) -> [String: String] {
+        guard !titlesByKey.isEmpty else { return [:] }
+        let fm = FileManager.default
+        var htmlFiles = [URL]()
+        if let enumerator = fm.enumerator(at: xbrlDir, includingPropertiesForKeys: nil) {
+            for case let url as URL in enumerator {
+                let ext = url.pathExtension.lowercased()
+                if ext == "html" || ext == "htm" { htmlFiles.append(url) }
+            }
+        }
+        guard !htmlFiles.isEmpty else { return [:] }
+
+        let priorityFiles = htmlFiles.filter {
+            $0.lastPathComponent.contains("honbun") || $0.lastPathComponent.contains("ixbrl")
+        }
+        let targets = priorityFiles.isEmpty ? htmlFiles : priorityFiles
+
+        var result: [String: String] = [:]
+        // findSection がヒットした key（本文が空でも打ち切る）。単一セクション版 extractSection と
+        // 同一の意味にするため：最初にヒットしたファイルで確定し、後続ファイルは走査しない
+        // （ヒットしたが空なら「未検出」扱いのまま次ファイルを見ない）。
+        var resolved = Set<String>()
+        for htmlFile in targets {
+            if resolved.count == titlesByKey.count { break }
+            guard let content = try? String(contentsOf: htmlFile, encoding: .utf8),
+                  let soup = try? SwiftSoup.parse(content) else { continue }
+            for (key, title) in titlesByKey where !resolved.contains(key) {
+                guard let text = findSection(in: soup, sectionTitle: title) else { continue }
+                resolved.insert(key)
+                let cleaned = cleanText(text)
+                if !cleaned.isEmpty { result[key] = cleaned }
+            }
+        }
+        return result
+    }
+
     // MARK: - Sections by Type (TextBlock-based)
 
     /// XBRLディレクトリから全セクションを XBRL TextBlock 経由で抽出する。

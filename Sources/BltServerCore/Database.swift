@@ -27,6 +27,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyFinancials())
     // Stage 4-half: 計算済み半期財務サマリ（company_half_financials、企業単位 JSONB）。
     app.migrations.add(CreateCompanyHalfFinancials())
+    // Stage 5: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
+    app.migrations.add(CreateCompanyFilingSections())
     try await app.autoMigrate()
 
     app.logger.notice("Postgres (Neon) を登録し、マイグレーションを適用しました。")
