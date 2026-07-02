@@ -64,11 +64,18 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let maxYears = req.query[Int.self, at: "max_years"] ?? 5
-        if dbAvailable,
-            let records = try? await loadStoredFilingRecords(code: code, db: req.db),
-            !records.isEmpty {
-            return makeResponse(
-                await context.getFilingsFromRecords(code: code, records: records, maxYears: maxYears))
+        if dbAvailable {
+            do {
+                let records = try await loadStoredFilingRecords(code: code, db: req.db)
+                if !records.isEmpty {
+                    return makeResponse(
+                        await context.getFilingsFromRecords(
+                            code: code, records: records, maxYears: maxYears))
+                }
+            } catch {
+                req.logger.warning(
+                    "DB からの filing 取得に失敗、ライブ探索へフォールバック: \(error)")
+            }
         }
         return makeResponse(await context.getFilings(code: code, maxYears: maxYears))
     }
@@ -84,10 +91,14 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
-        if let stored = try? await loadStoredFinancials(code: code, years: years, db: req.db) {
-            return jsonResponse(stored, status: .ok)
+        do {
+            if let stored = try await loadStoredFinancials(code: code, years: years, db: req.db) {
+                return jsonResponse(stored, status: .ok)
+            }
+            return errorResponse(.notFound, message: "財務データは未集計です")
+        } catch {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
-        return errorResponse(.notFound, message: "財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/half-financials?years=3
@@ -100,10 +111,14 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
-        if let stored = try? await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
-            return jsonResponse(stored, status: .ok)
+        do {
+            if let stored = try await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
+                return jsonResponse(stored, status: .ok)
+            }
+            return errorResponse(.notFound, message: "半期財務データは未集計です")
+        } catch {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
-        return errorResponse(.notFound, message: "半期財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
