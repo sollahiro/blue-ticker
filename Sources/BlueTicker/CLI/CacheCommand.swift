@@ -76,7 +76,7 @@ struct CachePrepare: AsyncParsableCommand {
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         let client = EdinetAPIClient(apiKey: key, cacheStore: store)
 
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年 のインデックスを構築中...")
             let docs = await client.ensureDocumentIndexForYear(year)
@@ -105,7 +105,7 @@ struct CacheCatchup: AsyncParsableCommand {
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         let client = EdinetAPIClient(apiKey: key, cacheStore: store)
 
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年のデータを取得中です。")
             let docs = await client.catchupDocumentIndexForYear(year)
@@ -134,7 +134,7 @@ struct CacheRefresh: AsyncParsableCommand {
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         let client = EdinetAPIClient(apiKey: key, cacheStore: store)
 
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年 を再構築中...")
             let docs = await client.refreshDocumentIndexForYear(year)

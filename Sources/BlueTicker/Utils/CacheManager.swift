@@ -81,7 +81,6 @@ actor CacheManager {
     private func isExpired(_ url: URL) -> Bool {
         guard let mtime = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
         else { return true }
-        let days = Calendar.current.dateComponents([.day], from: mtime, to: Date()).day ?? 0
-        return days >= ttlDays
+        return elapsedDaysUTC(since: mtime) >= ttlDays
     }
 }

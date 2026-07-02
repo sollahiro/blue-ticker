@@ -75,7 +75,7 @@ struct CachePruner {
     }
 
     private func pruneEdinetDocIndexes(keepYears: Int, dryRun: Bool) -> PruneSummary {
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = utcCalendar.component(.year, from: Date())
         let thresholdYear = keepYears <= 0 ? currentYear + 1 : currentYear - keepYears + 1
         let files = edinetDocIndexFiles().filter { url in
             guard let year = docIndexYear(url) else { return false }
@@ -141,7 +141,7 @@ struct CachePruner {
     private func ageDays(_ url: URL) -> Int {
         guard let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         else { return 0 }
-        return max(0, Calendar.current.dateComponents([.day], from: mtime, to: Date()).day ?? 0)
+        return elapsedDaysUTC(since: mtime)
     }
 
     private func fileSize(_ url: URL) -> Int64? {
