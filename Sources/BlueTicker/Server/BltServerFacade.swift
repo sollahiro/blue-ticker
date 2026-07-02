@@ -273,10 +273,10 @@ func docTypeLabel(_ code: String) -> String? {
     switch code {
     case "120": return "有価証券報告書"
     case "130": return "訂正有価証券報告書"
-    case "140": return "半期報告書"
-    case "150": return "訂正半期報告書"
-    case "160": return "四半期報告書"
-    case "170": return "訂正四半期報告書"
+    case "140": return "四半期報告書"
+    case "150": return "訂正四半期報告書"
+    case "160": return "半期報告書"
+    case "170": return "訂正半期報告書"
     default: return nil
     }
 }
