@@ -10,7 +10,7 @@ CLI は同一バイナリのまま、設定（`edinet-backend`）で接続先を
 |---|---|---|---|
 | **local** | CLI 自身 | なし | 現行稼働中 |
 | **remote (self-host)** | blt-server | 同一マシン | 基盤実装済み |
-| **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | 配線済み・実 Neon E2E 待ち |
+| **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | 稼働中（実 Fly / Neon で E2E 検証済み・バックフィル進行中） |
 
 > **方針（2026-06-28 確定）**: ユーザー向けは最終的に remote（cloud）へ集約し、**local モードのユーザー向け分析 CLI は段階的に廃止**する（即時削除しない）。local 実行系は開発・テスト・フィクスチャ用途の **Dev CLI** として残す。到達点は「Blue Ticker はサーバーで動き、CLI / GUI / MCP はそれを操作するクライアント」。移行段取りは `blt-server-roadmap.md`「方針転換」を参照。
 
@@ -67,7 +67,7 @@ graph TD
 
 ## リクエストフロー（local / remote）
 
-CLI 各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil なら local 経路へ分岐する。**財務指標の計算（Stage 4）はどちらの経路でもサーバー相当の Core ロジックが行い、表示は CLI が担う**。
+CLI 各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil なら local 経路へ分岐する。**財務系（financials / half-financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。local 経路は従来どおり同じ Core ロジックを in-process 実行する。
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ flowchart LR
     svc2 --> edinet
     svc -.->|read/write| cache[("ローカルキャッシュ<br/>analysis_cache/")]
     svc2 -.-> cache
-    facade -.->|Stage1/3| pg[("Neon Postgres")]
+    server -.->|"filings/financials read<br/>（財務系は DB 専用）"| pg[("Neon Postgres")]
 ```
 
 接続情報の解決順位: env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > `BLT_AUTH_TOKEN` 設定なら静的 Bearer > どちらも無しなら無認証（dev）。クラウド本番は Cloudflare Access + IdP（CLI/MCP は Service Token・iOS は SSO）、self-host は Bearer。詳細は `blt-server-roadmap.md`「認証」。
@@ -93,8 +93,9 @@ flowchart LR
 | `GET /healthz` | — | ヘルスチェック（認証不要） |
 | `GET /v1/companies?q=` | `searchCompanies` | 企業検索 |
 | `GET /v1/sectors/{sector}/companies` | `searchBySector` | セクター別企業 |
-| `GET /v1/companies/{code}/filings` | `getFilings` | 提出書類一覧 |
-| `GET /v1/companies/{code}/financials` | `getFinancials` | 計算済み財務指標（Stage 4） |
+| `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
+| `GET /v1/companies/{code}/financials` | DB read（`company_financials`。未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4） |
+| `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |
 | `GET /v1/companies/{code}/filing-content` | `getFilingContent` | 有報セクション本文・セグメント |
 
 レスポンス契約は単一の Codable 型から導出（`Models/FinancialsContract.swift`）。エラー封筒は `{"error":..., "status":N}`。
@@ -109,21 +110,23 @@ flowchart TD
     s1["Stage 1: 書類一覧取得<br/>blt-server sync"]
     s2["Stage 2: XBRL ファイル取得<br/>downloadDocument"]
     s3["Stage 3: XBRL パース (RAW fact)<br/>blt-server ingest"]
-    s4["Stage 4: TICKER 計算<br/>getFinancials"]
+    s4["Stage 4: TICKER 計算<br/>blt-server ingest"]
 
     edinet --> s1 --> s2 --> s3 --> s4
     s1 -->|永続化| db1[("edinet_documents<br/>edinet_sync_state")]
     s2 -->|ローカル保持| fs[("external/edinet/xbrl<br/>(Fly Volume)")]
     s3 -->|書類単位 JSONB| db3[("edinet_xbrl_facts")]
-    s4 -->|計算済み JSON| out(["financials API / CLI 表示"])
+    s4 -->|企業単位 JSONB| db4[("company_financials<br/>company_half_financials")]
+    db4 -->|DB read| out(["financials API / CLI 表示"])
 ```
 
 | Stage | 保存先 | 状態 |
 |---|---|---|
-| 1 書類一覧 | DB（`edinet_documents` / `edinet_sync_state`） | スキーマ・`sync` 実装済み |
+| 1 書類一覧 | DB（`edinet_documents` / `edinet_sync_state`） | スキーマ・`sync` 実装済み。filings read も DB 優先 |
 | 2 XBRL ファイル | ローカル保持（Stage 4 が生 HTML を要するため即削除不可） | `ingest` から取得・保持 |
-| 3 XBRL パース | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest` 実装済み・Stage 4 読みは未配線 |
-| 4 TICKER 計算 | サーバー計算（インプロセス） | 実装済み（現状は再パース、DB 読みは未配線） |
+| 3 XBRL パース | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest` 実装済み（RAW アーカイブ。Stage 4 は消費せず生 XBRL を読む） |
+| 4 TICKER 計算 | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は DB 専用（未格納 404・ライブ計算フォールバックなし） |
+| 4-half 半期計算 | DB（`company_half_financials`・企業単位 JSONB） | 通期と同型（`ingest` 格納・DB 専用 read・years クランプ） |
 
 Stage 3 RAW はサーバー内部の中間生成物で非公開。公開するのは Stage 4 の計算済み財務サマリのみ。
 
