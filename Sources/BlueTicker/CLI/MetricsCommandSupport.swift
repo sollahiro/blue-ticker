@@ -19,11 +19,8 @@ enum MetricsLoader {
     /// API キー検証・銘柄コード検証・クライアント構築・会社名解決をまとめて行う。
     /// 失敗時は stderr へ出力し `ExitCode.failure` を投げる。
     static func prepare(rawCode: String) async throws -> AnalysisContext {
-        let apiKey = await settingsStore.get(.edinetApiKey)
-        guard let key = apiKey, !key.isEmpty else {
-            printError("エラー: EDINET API キーが設定されていません。ticker config set --edinet-api-key <KEY> で設定してください。\n")
-            throw ExitCode.failure
-        }
+        // キー検証・クライアント構築は EdinetClientLoader に集約（キー未設定を先に弾く）。
+        let (client, cacheDir) = try await EdinetClientLoader.make()
 
         let codeTrimmed = rawCode.trimmingCharacters(in: .whitespaces)
         guard !codeTrimmed.isEmpty else {
@@ -31,10 +28,6 @@ enum MetricsLoader {
             throw ExitCode.failure
         }
 
-        let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
-        let cacheDir = URL(fileURLWithPath: cacheDirStr)
-        let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
-        let client = EdinetAPIClient(apiKey: key, cacheStore: store)
         let cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
 
         let masterDataManager = MasterDataManager()
