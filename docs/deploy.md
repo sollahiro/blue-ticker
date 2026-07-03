@@ -115,7 +115,7 @@ cloudflared は接続断を内部で自動再接続する。blt-server が落ち
   curl -si https://api.<domain>/v1/companies/7203/financials | head -n1
   ```
 
-- **Phase 2（公開ポート閉鎖・経路を tunnel に一本化）**: Phase 1 を確認後にのみ実施。`fly.toml` から `[http_service]`（＝公開 LB）を撤去し、`min_machines_running = 1` ＋ `auto_stop_machines`/`auto_start_machines` を外して **always-on** にする（Tunnel 維持に必須）。`/healthz` の Fly HTTP チェックは service 撤去で失われるため可用性は Tunnel + Access に委ねる。再 `fly deploy` 後、Fly 公開 IP への直アクセスが到達不能・`api.<domain>` のみ生存を確認する。
+- **Phase 2（公開ポート閉鎖・経路を tunnel に一本化・適用済み）**: Phase 1 を確認後にのみ実施。`fly.toml` から `[http_service]`（＝公開 LB・ポート 80/443）を**丸ごと撤去**する。サービスが1つも無くなることで Fly の auto-stop 対象から外れ、マシンは **always-on**（Tunnel 維持に必須）になる（`min_machines_running` はサービスブロック内の field なので `[http_service]` 撤去後は置き場が無い。serviceless＝常駐が正しい機構）。`/healthz` の Fly HTTP チェックも service 撤去で失われるため可用性は Tunnel + Access に委ねる。再 `fly deploy` 後、`https://blt-server.fly.dev` への直アクセスが到達不能・`api.<domain>` のみ生存を確認する。
 
 ### クライアント設定（CLI・実装済み）
 
