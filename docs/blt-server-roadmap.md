@@ -492,7 +492,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - ~~Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）~~ → 解決（ローカル保持継続・R2 退避は延期）
 - ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
 - remote backend 利用時の `ticker cache status` 表示内容
-- ~~**Postgres 512MB 上限への対策（目標 A の前段 A1）**~~ → 解決（issue #22）: **Stage 3 ingest（数値 facts 蓄積）を停止**する。facts はどこからも消費されない RAW アーカイブで、全件 ~800MB は 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）ができるまで蓄積を止め、512MB 到達を先送りする。Neon プラン拡張 vs facts/生 XBRL のオブジェクトストレージ退避は**ストレージ強化時の段階的選択肢**として保留（実需要が出てから決める）。既存 54MB 行は温存（可逆）。実装: `blt-server ingest` は既定で Stage 3 をスキップ（`--with-facts` で再開）。Stage 4 は自前 DL で自足するため機能影響なし
+- ~~**Postgres 512MB 上限への対策（目標 A の前段 A1）＝暫定**~~ → 暫定解決（issue #22・2026-07-03 close）: **Stage 3 ingest（数値 facts 蓄積）を停止**する。facts はどこからも消費されない RAW アーカイブで、全件 ~800MB は 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）ができるまで蓄積を止め、512MB 到達を先送りする。既存 54MB 行は温存（可逆）。実装: `blt-server ingest` は既定で Stage 3 をスキップ（`--with-facts` で再開）。Stage 4 は自前 DL で自足するため機能影響なし
+- **【未決】ストレージ強化の方式選定（issue #22 の本丸・目標 A の実現に必要）**: 上記は 512MB 到達の先送りに過ぎず、目標 A（タグ系抽出を facts 消費へ切替＋生 XBRL 中央永続化）を始めるには facts と生 XBRL の置き場を決める必要が残る。選択肢は **(a) Neon プラン拡張** vs **(b) facts/生 XBRL のオブジェクトストレージ退避（Cloudflare R2・A2 の3段フォールバック）**。生 XBRL 中央ストア（A2）が入れば facts はそこから再導出でき Postgres に 800MB を持つ必要自体が薄れるため、A2 を先に入れる筋が有力。**実需要（目標 A の着手）が出た時点で決める**。詳細は「取得→抽出→計算の分離とストレージ方針」節
 
 ---
 
