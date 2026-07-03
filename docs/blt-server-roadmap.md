@@ -378,8 +378,8 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
 1. ~~**origin 認証ミドルウェアの env 分岐**（`Routes.swift`、依存ゼロ）~~ → **完了**（下記「共通基盤」の認証モード表）
 2. ~~**CLI の Service Token 対応**（config/keychain スキーマ追加）: `CF-Access-Client-Id` / `CF-Access-Client-Secret` を保持し2ヘッダ付与~~ → **完了**。鍵ペアを keychain（専用キー `cfAccessClientId` / `cfAccessClientSecret`）に保存し、remote 経路で2ヘッダを付与。設定: `ticker config set --cf-access-client-id <id> --cf-access-client-secret <secret>`。env 上書きは `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（env > keychain）。authToken（Bearer）とは独立に付与され、将来の SSO トークンも別キーで横付けできる
-3. **Dockerfile**: `cloudflared` サイドカー同梱 → **手順化済み（実適用は保留）**。`docs/deploy.md`「Cloudflare Access（本番認証・方式A）」C 節に Dockerfile 差分（cloudflared 導入＋ entrypoint スクリプト）を記載。token 未設定なら blt-server のみ起動で self-host 互換維持
-4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に → **手順化済み（実適用は保留）**。同 D 節に段階カットオーバー（Phase 1=ポート開で Access 検証 → Phase 2=`[http_service]` 撤去＋always-on 化）を記載。**常駐を受け入れる**判断のため scale-to-zero は Phase 2 で失う
+3. **Dockerfile**: `cloudflared` サイドカー同梱 → **完了（実装・main マージ済み）**。`docs/deploy.md`「Cloudflare Access（本番認証・方式A）」C 節に記載。token 未設定なら blt-server のみ起動で self-host 互換維持
+4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に → **完了（Phase 2 適用済み）**。段階カットオーバー（Phase 1=ポート開で Access 検証 → Phase 2=`[http_service]` 撤去＋serviceless で always-on 化）を実施。**常駐を受け入れる**判断のため scale-to-zero は Phase 2 で失う。詳細は同 D 節
 5. **docs/deploy.md**: Cloudflare 側手順（zone → Tunnel → Access アプリ + ポリシー + Service Token 発行 + IdP 接続）→ **完了**
 
 > ステップ3・4 はユーザー判断（2026-06-29）で **docs 手順化のみ実施・実コード/設定変更とダッシュボード操作は運用者が段階実施**とした（Cloudflare ダッシュボード・zone 移管・Service Token 発行・IdP 接続はユーザー側作業）。
@@ -474,7 +474,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - [x] 認証方式の確定（**Cloudflare Access + IdP**・方式 A エッジ信頼） — 「認証」節参照
 - [x] origin 認証ミドルウェアの env 分岐（Cloudflare Access / Bearer / 無認証） — ステップ1 完了
 - [x] CLI の Service Token 対応（ステップ2） — keychain `cfAccessClientId/Secret` ＋ remote 2ヘッダ付与で完了
-- [~] Cloudflare Tunnel 同梱（Dockerfile）＋ fly.toml 公開ポート閉鎖（ステップ3・4） — **docs 手順化済み**（`docs/deploy.md` C/D 節）。実コード/設定変更とダッシュボード操作は運用者が段階実施
+- [x] Cloudflare Tunnel 同梱（Dockerfile）＋ fly.toml 公開ポート閉鎖（ステップ3・4） — **完了**。Dockerfile サイドカーは main マージ済み、fly.toml は Phase 2 で `[http_service]` 撤去済み（`docs/deploy.md` C/D 節）。本番 `api.sollahiro.com` で疎通・Access 検証済み
 - [ ] iOS の SSO（OIDC + PKCE）連携（iOS アプリ側プロジェクト）
 - [ ] **REST API の整備（公開 API 化）**: ユーザー接点（remote CLI / GUI / MCP）が依存する公開 API を整える。現行 `/v1` を土台に、スキーマ安定化・認証・レート制御を進める（`方針転換` のユーザー集約に必須）。
 - [ ] **オンデマンド ingest（非同期）の実装**: 未充足リクエスト記録テーブル＋既存 ingest バッチでの消化（上記「オンデマンド ingest（非同期）」）。公開スキーマ追加のためユーザー確認後に着手。
