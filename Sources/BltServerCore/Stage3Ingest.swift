@@ -99,8 +99,15 @@ let stage4IngestYears = 6
 /// できるまで蓄積を止める。停止は可逆で、`includeFacts: true`（CLI: `--with-facts`）で
 /// 再開できる。Stage 4 の `computeFinancials` は自前で生 XBRL を DL するため、Stage 3 を
 /// 飛ばしても Stage 4/4-half は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
+///
+/// `stages` は実行する Stage 4/4-half/5 の集合（CLI: `--stages 5` 等）。既定は全ステージ。
+/// 例えば Stage 5 だけを先に流したいとき、重い Stage 4/4-half の全件 drain を挟まずに済む。
+/// Stage 3 は `stages` に含めず、従来どおり `includeFacts` で別制御する。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
-public func runStage3IngestCommand(limit: Int?, includeFacts: Bool = false) async throws {
+public func runStage3IngestCommand(
+    limit: Int?, includeFacts: Bool = false,
+    stages: Set<IngestStage> = Set(IngestStage.allCases)
+) async throws {
     guard let context = await makeBltServerContext() else {
         throw Stage1SyncError.apiKeyMissing
     }
@@ -122,26 +129,32 @@ public func runStage3IngestCommand(limit: Int?, includeFacts: Bool = false) asyn
         } else {
             app.logger.notice("Stage 3（XBRL 数値 fact）は停止中（issue #22）。再開は --with-facts。")
         }
-        let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit, logger: app.logger) { code in
-            await context.computeFinancials(code: code, years: stage4IngestYears)
+        if stages.contains(.financials) {
+            let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit, logger: app.logger) { code in
+                await context.computeFinancials(code: code, years: stage4IngestYears)
+            }
+            app.logger.notice(
+                "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
         }
-        app.logger.notice(
-            "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
-        let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit, logger: app.logger) { code in
-            await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
+        if stages.contains(.half) {
+            let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit, logger: app.logger) { code in
+                await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
+            }
+            app.logger.notice(
+                "Stage 4-half 取り込み完了: attempted=\(s4h.attempted) stored=\(s4h.stored) failed=\(s4h.failed) skipped=\(s4h.skipped)")
         }
-        app.logger.notice(
-            "Stage 4-half 取り込み完了: attempted=\(s4h.attempted) stored=\(s4h.stored) failed=\(s4h.failed) skipped=\(s4h.skipped)")
-        // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
-        let listed = await context.listedCompanyCodes()
-        let s5 = try await runStage5Ingest(
-            db: app.db, listedCodes: listed, years: stage5IngestYears,
-            sectionKeys: currentFilingSectionKeys(), limit: limit, logger: app.logger
-        ) { docID in
-            await context.extractFilingSections(docID: docID)
+        if stages.contains(.sections) {
+            // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
+            let listed = await context.listedCompanyCodes()
+            let s5 = try await runStage5Ingest(
+                db: app.db, listedCodes: listed, years: stage5IngestYears,
+                sectionKeys: currentFilingSectionKeys(), limit: limit, logger: app.logger
+            ) { docID in
+                await context.extractFilingSections(docID: docID)
+            }
+            app.logger.notice(
+                "Stage 5 取り込み完了: attempted=\(s5.attempted) stored=\(s5.stored) failed=\(s5.failed) skipped=\(s5.skipped)")
         }
-        app.logger.notice(
-            "Stage 5 取り込み完了: attempted=\(s5.attempted) stored=\(s5.stored) failed=\(s5.failed) skipped=\(s5.skipped)")
     } catch {
         try? await app.asyncShutdown()
         throw error
