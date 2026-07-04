@@ -68,6 +68,26 @@ public enum Api {
         docTypeHalfYearReport,
     ]
 
+    /// Stage 4（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
+    /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（有報＋訂正有報）とだけ
+    /// 揃える。これ以外の新規提出（四半期等）では通期の再計算をトリガーしない。
+    /// BltServerCore（Stage4Ingest）から参照するため public。
+    public static let stage4FreshnessDocTypes: Set<String> = [
+        docTypeAnnualReport,
+        docTypeAmendment,
+    ]
+
+    /// Stage 4-half（company_half_financials）の high-water 鮮度判定が対象とする書類種別。
+    /// `HalfYearAnalyzer` → `EdinetDiscovery.buildHalfYearDocumentIndexForCode` が消費する
+    /// 有報＋半期/四半期に加え、通期側の訂正(130)も含める（訂正で FY 基準が動き、半期の
+    /// 再計算が必要になるため）。BltServerCore（Stage4HalfIngest）から参照するため public。
+    public static let stage4HalfFreshnessDocTypes: Set<String> = [
+        docTypeAnnualReport,
+        docTypeAmendment,
+        docTypeQuarterlyReport,
+        docTypeHalfYearReport,
+    ]
+
     /// filings 表示（CLI `filings`）で採用する書類種別。探索済み書類に対する表示フィルタで、
     /// 訂正を含む全 6 種の上位集合（Stage 1 sync 用より広い。上の別セットと区別）。
     static let filingsDisplayDocTypes: Set<String> = [

@@ -31,6 +31,12 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     @Field(key: "requested_years")
     var requestedYears: Int
 
+    /// 計算の基にした書類集合（`Api.stage4FreshnessDocTypes`）の max(submitDateTime)。
+    /// 次回 ingest でこれより新しい提出があれば再計算する（high-water 鮮度トリガー）。
+    /// 既存行は NULL（マイグレーション後の初回 ingest で一度だけ再計算される）。
+    @OptionalField(key: "high_water")
+    var highWater: String?
+
     /// 最終更新時刻（計算・upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?

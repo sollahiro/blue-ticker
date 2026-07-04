@@ -17,6 +17,9 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(CreateCompanyHalfFinancials())
+        // AddHighWaterToCompanyFinancials は両テーブルを触るため、通期側も作っておく。
+        app.migrations.add(CreateCompanyFinancials())
+        app.migrations.add(AddHighWaterToCompanyFinancials())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -26,14 +29,18 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-private func seedDocument(_ docID: String, secCode: String?, db: Database) async throws {
+/// docTypeCode / submitDateTime は high-water 判定のテストで可変にできるよう引数化する。
+private func seedDocument(
+    _ docID: String, secCode: String?, docTypeCode: String = "120",
+    submitDateTime: String = "2025-06-20 09:00", db: Database
+) async throws {
     let model = EdinetDocument()
     model.id = docID
     model.edinetCode = "E00001"
     model.secCode = secCode
     model.filerName = "テスト株式会社"
-    model.docTypeCode = "120"
-    model.submitDateTime = "2025-06-20 09:00"
+    model.docTypeCode = docTypeCode
+    model.submitDateTime = submitDateTime
     try await model.create(on: db)
 }
 
@@ -80,6 +87,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
             pre.cacheVersion = companyHalfFinancialsCacheVersion
             pre.requestedYears = 5
+            pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
             try await pre.create(on: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
@@ -88,6 +96,83 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
+        }
+    }
+
+    // MARK: - high-water 鮮度トリガー（issue #26）
+
+    @Test func skipsWhenHighWaterMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            let pre = CompanyHalfFinancials()
+            pre.id = "7203"
+            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.cacheVersion = companyHalfFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-20 09:00"
+            try await pre.create(on: app.db)
+
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run when high-water matches")
+                return makeHalfResponse(code: "x", fyEnds: years3)
+            }
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
+    /// Stage 4-half は通期(120/130)に加え半期/四半期(140/160)も消費種別に含む。
+    /// 通期のみを見る Stage 4 とは異なり、140 の新規提出だけでも再計算がトリガーされる。
+    @Test func recomputesWhenNewerQuarterlyFilingArrives() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-01 09:00", db: app.db)
+            let pre = CompanyHalfFinancials()
+            pre.id = "7203"
+            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.cacheVersion = companyHalfFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-01 09:00"
+            try await pre.create(on: app.db)
+
+            try await seedDocument(
+                "S2", secCode: "72030", docTypeCode: "140",
+                submitDateTime: "2025-08-01 09:00", db: app.db)
+
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
+                makeHalfResponse(code: code, fyEnds: years3)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
+            #expect(row.highWater == "2025-08-01 09:00")
+        }
+    }
+
+    @Test func keepsHighWaterOnComputeFailure() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            let pre = CompanyHalfFinancials()
+            pre.id = "7203"
+            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.cacheVersion = companyHalfFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
+            try await pre.create(on: app.db)
+
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in nil }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.failed == 1)
+            #expect(summary.stored == 0)
+            let row = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
+            #expect(row.highWater == "2025-01-01 09:00")  // 失敗時は更新されず据え置き
         }
     }
 

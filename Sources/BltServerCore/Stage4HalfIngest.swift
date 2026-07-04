@@ -25,7 +25,8 @@ public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinanc
 func runStage4HalfIngest(
     db: Database, years: Int, limit: Int?, logger: Logger? = nil, compute: HalfFinancialsComputer
 ) async throws -> Stage4IngestSummary {
-    let codes = try await distinctCompanyCodes(db: db, logger: logger)
+    let (codes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
+        db: db, docTypes: Api.stage4HalfFreshnessDocTypes, logger: logger)
 
     var attempted = 0
     var stored = 0
@@ -36,8 +37,9 @@ func runStage4HalfIngest(
         let existing = try await withDbRetry(logger: logger) {
             try await CompanyHalfFinancials.find(code, on: db)
         }
+        let highWater = highWaterMap[code]
         if let row = existing, row.cacheVersion == companyHalfFinancialsCacheVersion,
-            row.requestedYears >= years {
+            row.requestedYears >= years, row.highWater == highWater {
             skipped += 1
             continue
         }
@@ -49,7 +51,8 @@ func runStage4HalfIngest(
         }
         try await withDbRetry(logger: logger) {
             try await storeCompanyHalfFinancials(
-                existing: existing, code: code, years: years, response: response, db: db)
+                existing: existing, code: code, years: years, response: response,
+                highWater: highWater, db: db)
         }
         stored += 1
     }
@@ -61,12 +64,13 @@ func runStage4HalfIngest(
 /// 計算済み半期サマリを company_half_financials へ書き込む（既存行があれば更新、無ければ作成）。
 func storeCompanyHalfFinancials(
     existing: CompanyHalfFinancials?, code: String, years: Int,
-    response: HalfFinancialsResponse, db: Database
+    response: HalfFinancialsResponse, highWater: String?, db: Database
 ) async throws {
     if let row = existing {
         row.response = response
         row.cacheVersion = companyHalfFinancialsCacheVersion
         row.requestedYears = years
+        row.highWater = highWater
         try await row.update(on: db)
     } else {
         let model = CompanyHalfFinancials()
@@ -74,6 +78,7 @@ func storeCompanyHalfFinancials(
         model.response = response
         model.cacheVersion = companyHalfFinancialsCacheVersion
         model.requestedYears = years
+        model.highWater = highWater
         try await model.create(on: db)
     }
 }

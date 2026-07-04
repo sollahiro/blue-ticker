@@ -27,6 +27,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyFinancials())
     // Stage 4-half: 計算済み半期財務サマリ（company_half_financials、企業単位 JSONB）。
     app.migrations.add(CreateCompanyHalfFinancials())
+    // Stage 4 / 4-half: high-water 鮮度トリガー列の追加（issue #26）。
+    app.migrations.add(AddHighWaterToCompanyFinancials())
     // Stage 5: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
     try await app.autoMigrate()
