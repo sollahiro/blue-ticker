@@ -218,6 +218,8 @@ import Foundation
         var accountsReceivable: Double?
         var inventory: Double?
         var accountsPayable: Double?
+        var eps: Double?
+        var issuedShares: Double?
     }
 
     private func extractFromXBRL(xbrlDir: URL) -> Extracted {
@@ -254,6 +256,7 @@ import Foundation
         let ar  = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let ap  = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let ps  = PerShareExtractor.extract(durationFS: durationFS, tagElements: allTags)
 
         let opProfit = op.operatingProfit ?? is_.operatingProfit
 
@@ -287,7 +290,9 @@ import Foundation
             dividendPaidCF:         divPaid.current,
             accountsReceivable:     ar.current,
             inventory:              inv.current,
-            accountsPayable:        ap.current
+            accountsPayable:        ap.current,
+            eps:                    ps.eps,
+            issuedShares:           ps.issuedShares
         )
     }
 
@@ -378,6 +383,10 @@ import Foundation
 
         let ap = expected["accounts_payable"] as? [String: Any] ?? [:]
         check("accountsPayable", exp: dbl(ap["current"]), act: actual.accountsPayable)
+
+        let perShare = expected["per_share"] as? [String: Any] ?? [:]
+        check("eps",          exp: dbl(perShare["eps"]),           act: actual.eps)
+        check("issuedShares", exp: dbl(perShare["issued_shares"]), act: actual.issuedShares)
 
         return diffs
     }

@@ -117,6 +117,31 @@ enum Xbrl {
         "NetIncomeLossSummaryOfBusinessResults",
     ]
 
+    // MARK: - 1株当たり利益（基本EPS・連結当期）
+
+    /// 基本1株当たり当期利益（連結）。連結本表タグを優先し、無ければ主要な経営指標等の推移
+    /// （SummaryOfBusinessResults）の当期連結値へフォールバックする。durationFS で解決すると
+    /// 連結 CurrentYearDuration が選ばれる（`_NonConsolidatedMember` は単体としてフォールバック）。
+    /// JGAAP・US-GAAP は本表に離散数値EPSタグが無く Summary が唯一の数値源。
+    static let basicEpsTags: [String] = [
+        "BasicEarningsLossPerShareIFRS",                            // IFRS 連結本表
+        "BasicAndDilutedEarningsLossPerShareIFRS",                 // IFRS 連結本表（基本=希薄化 同値）
+        "BasicEarningsLossPerShareIFRSSummaryOfBusinessResults",   // IFRS Summary
+        "BasicEarningsLossPerShareUSGAAPSummaryOfBusinessResults", // US-GAAP Summary
+        "BasicEarningsLossPerShareSummaryOfBusinessResults",       // JGAAP・汎用 Summary
+    ]
+
+    // MARK: - 発行済普通株式数（期末残高）
+
+    /// 発行済普通株式数（期末残高）。【株式の総数】表の普通株式（OrdinaryShareMember）を優先し、
+    /// 無ければ主要な経営指標等の推移の期末発行済株式総数（CurrentYearInstant）へフォールバックする。
+    /// 単一株式クラスの企業では両者は一致する。
+    static let issuedSharesFYEndTag = "NumberOfIssuedSharesAsOfFiscalYearEndIssuedSharesTotalNumberOfSharesEtc"
+    static let issuedSharesSummaryTag = "TotalNumberOfIssuedSharesSummaryOfBusinessResults"
+    static let ordinaryShareMemberSuffix = "_OrdinaryShareMember"
+    static let currentYearInstantContext = "CurrentYearInstant"
+    static let filingDateInstantContext = "FilingDateInstant"
+
     // MARK: - 営業利益タグ
 
     static let ordinaryIncomeTags: [String] = [

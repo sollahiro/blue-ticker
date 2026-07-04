@@ -69,5 +69,9 @@
   },
   "share_buyback": {
     "current": null
+  },
+  "per_share": {
+    "eps": 80.6,
+    "issued_shares": 1150896846
   }
 }

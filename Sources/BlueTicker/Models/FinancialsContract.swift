@@ -75,9 +75,7 @@ struct FinancialsYear: Codable, Sendable {
     var dividendPaidCf: Double?
 
     var eps: Double?
-    var bps: Double?
-    var dividendsPerShare: Double?
-    var payoutRatio: Double?
+    var issuedShares: Double?
     var employees: Int?
 
     // 増減分析（事業利益・ROIC・ROE）
@@ -151,9 +149,7 @@ struct FinancialsYear: Codable, Sendable {
         case dividendSs = "dividend_ss"
         case dividendPaidCf = "dividend_paid_cf"
         case eps
-        case bps
-        case dividendsPerShare = "dividends_per_share"
-        case payoutRatio = "payout_ratio"
+        case issuedShares = "issued_shares"
         case employees
         case businessProfit = "business_profit"
         case businessProfitMargin = "business_profit_margin"
@@ -234,9 +230,7 @@ extension FinancialsYear {
         dividendPaidCf = calc.dividendPaidCF
 
         eps = raw.eps
-        bps = raw.bps
-        dividendsPerShare = raw.divTotalAnn
-        payoutRatio = raw.payoutRatioAnn
+        issuedShares = raw.shOutFY
         employees = calc.employees
 
         businessProfit = calc.businessProfit
@@ -277,9 +271,7 @@ extension FinancialsYear {
         raw.buyback = buyback
         raw.rd = rd
         raw.eps = eps
-        raw.bps = bps
-        raw.divTotalAnn = dividendsPerShare
-        raw.payoutRatioAnn = payoutRatio
+        raw.shOutFY = issuedShares
         raw.cashEq = cashEquivalents
 
         var calc = CalculatedData.blank
