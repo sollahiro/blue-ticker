@@ -152,17 +152,12 @@ enum Xbrl {
         "OperatingGrossProfit",
     ]
 
-    static let grossProfitSalesTags: [String] = [
-        "NetSalesIFRS",
-        "RevenueIFRS",
-        "NetSales",
-        "Revenue",
-        "Revenues",
-        "RevenuesUSGAAPSummaryOfBusinessResults",
-        "NetSalesOfCompletedConstructionContractsCNS",
-        "OperatingRevenue1",
-        "OperatingRevenue1SummaryOfBusinessResults",
-    ]
+    // 売上総利益の計算法（売上 − 売上原価）の売上側タグ。
+    // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）を
+    // 除外して導出する。独立手書きリストを持たないことで「片側だけタグが腐り not_found に落ちる」
+    // 事故を防ぎ（issue #24）、かつ売上原価を持たない非銀行金融（保険等）が
+    // 「GP＝経常収益（原価0扱い）」という無意味な値を誤算出するのを防ぐ。
+    static let grossProfitSalesTags: [String] = netSalesTags.filter { !ordinaryRevenueTags.contains($0) }
 
     static let grossProfitCostsTags: [String] = [
         "CostOfSalesIFRS",
