@@ -87,5 +87,9 @@
   },
   "accounts_payable": {
     "current": 53510000.0
+  },
+  "per_share": {
+    "eps": 3.44,
+    "issued_shares": 5120700
   }
 }
