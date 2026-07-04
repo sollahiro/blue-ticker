@@ -17,6 +17,9 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(CreateCompanyFinancials())
+        // AddHighWaterToCompanyFinancials は両テーブルを触るため、half 側も作っておく。
+        app.migrations.add(CreateCompanyHalfFinancials())
+        app.migrations.add(AddHighWaterToCompanyFinancials())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -27,14 +30,18 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 }
 
 /// secCode 付きの書類を 1 件投入する（Stage 4 は secCode から企業を導出する）。
-private func seedDocument(_ docID: String, secCode: String?, db: Database) async throws {
+/// docTypeCode / submitDateTime は high-water 判定のテストで可変にできるよう引数化する。
+private func seedDocument(
+    _ docID: String, secCode: String?, docTypeCode: String = "120",
+    submitDateTime: String = "2025-06-20 09:00", db: Database
+) async throws {
     let model = EdinetDocument()
     model.id = docID
     model.edinetCode = "E00001"
     model.secCode = secCode
     model.filerName = "テスト株式会社"
-    model.docTypeCode = "120"
-    model.submitDateTime = "2025-06-20 09:00"
+    model.docTypeCode = docTypeCode
+    model.submitDateTime = submitDateTime
     try await model.create(on: db)
 }
 
@@ -130,6 +137,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             pre.response = makeResponse(code: "7203", years: 6)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 6
+            pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
             try await pre.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
@@ -140,6 +148,112 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
             #expect(summary.stored == 0)
+        }
+    }
+
+    // MARK: - high-water 鮮度トリガー（issue #26）
+
+    @Test func skipsWhenHighWaterMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-20 09:00"
+            try await pre.create(on: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run when high-water matches")
+                return makeResponse(code: "x", years: 5)
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
+    @Test func recomputesWhenNewerAnnualFilingArrives() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-20 09:00"  // 旧提出時点の high-water
+            try await pre.create(on: app.db)
+
+            // 同一企業に、より新しい有報（訂正含む消費種別）が追加提出された。
+            try await seedDocument(
+                "S2", secCode: "72030", docTypeCode: "130",
+                submitDateTime: "2026-01-15 09:00", db: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+                makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.highWater == "2026-01-15 09:00")
+        }
+    }
+
+    @Test func doesNotRecomputeWhenOnlyNonConsumedDocTypeArrives() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-01 09:00", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-01 09:00"
+            try await pre.create(on: app.db)
+
+            // 四半期報告書(140)は Stage 4 の消費種別（120/130）に含まれないため、
+            // より新しい提出があっても通期の high-water は前進しない。
+            try await seedDocument(
+                "S2", secCode: "72030", docTypeCode: "140",
+                submitDateTime: "2025-08-01 09:00", db: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run when only a non-consumed doc type arrives")
+                return makeResponse(code: "x", years: 5)
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
+    @Test func keepsHighWaterOnComputeFailure() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
+            try await pre.create(on: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in nil }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.failed == 1)
+            #expect(summary.stored == 0)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.highWater == "2025-01-01 09:00")  // 失敗時は更新されず据え置き
         }
     }
 

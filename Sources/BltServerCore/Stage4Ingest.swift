@@ -32,7 +32,8 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsResp
 func runStage4Ingest(
     db: Database, years: Int, limit: Int?, logger: Logger? = nil, compute: FinancialsComputer
 ) async throws -> Stage4IngestSummary {
-    let codes = try await distinctCompanyCodes(db: db, logger: logger)
+    let (codes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
+        db: db, docTypes: Api.stage4FreshnessDocTypes, logger: logger)
 
     var attempted = 0
     var stored = 0
@@ -43,7 +44,9 @@ func runStage4Ingest(
         let existing = try await withDbRetry(logger: logger) {
             try await CompanyFinancials.find(code, on: db)
         }
-        if let row = existing, row.cacheVersion == companyFinancialsCacheVersion, row.requestedYears >= years {
+        let highWater = highWaterMap[code]
+        if let row = existing, row.cacheVersion == companyFinancialsCacheVersion,
+            row.requestedYears >= years, row.highWater == highWater {
             skipped += 1
             continue
         }
@@ -55,7 +58,8 @@ func runStage4Ingest(
         }
         try await withDbRetry(logger: logger) {
             try await storeCompanyFinancials(
-                existing: existing, code: code, years: years, response: response, db: db)
+                existing: existing, code: code, years: years, response: response,
+                highWater: highWater, db: db)
         }
         stored += 1
     }
@@ -66,30 +70,45 @@ func runStage4Ingest(
 
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
 /// secCode が無い／非上場（末尾 0 でない・桁数不一致）は対象外。
-func distinctCompanyCodes(db: Database, logger: Logger? = nil) async throws -> [String] {
+/// コード列挙は財務行の対象社集合を変えないため全 doc から行うが、high-water は
+/// `docTypes` に含まれる doc のみで `code -> max(submitDateTime)`（辞書順）を構築する。
+/// 該当種別の書類が無い社は high-water map に現れない（nil 扱い）。
+func distinctCompanyCodesWithHighWater(
+    db: Database, docTypes: Set<String>, logger: Logger? = nil
+) async throws -> (codes: [String], highWater: [String: String]) {
     let documents = try await withDbRetry(logger: logger) {
         try await EdinetDocument.query(on: db).all()
     }
     var seen = Set<String>()
     var codes: [String] = []
+    var highWater: [String: String] = [:]
     for doc in documents {
         guard let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0") else { continue }
         let code = String(sec.dropLast())
         if seen.insert(code).inserted { codes.append(code) }
+
+        guard let docType = doc.docTypeCode, docTypes.contains(docType) else { continue }
+        if let current = highWater[code] {
+            if doc.submitDateTime > current { highWater[code] = doc.submitDateTime }
+        } else {
+            highWater[code] = doc.submitDateTime
+        }
     }
-    return codes
+    return (codes, highWater)
 }
 
 /// 計算済みサマリを company_financials へ書き込む（既存行があれば更新、無ければ作成）。
-/// cache_version に現行 companyFinancialsCacheVersion、requested_years に計算年数を埋め込む。
+/// cache_version に現行 companyFinancialsCacheVersion、requested_years に計算年数、
+/// high_water に消費書類集合の現在の max(submitDateTime) を埋め込む。
 func storeCompanyFinancials(
     existing: CompanyFinancials?, code: String, years: Int,
-    response: FinancialsResponse, db: Database
+    response: FinancialsResponse, highWater: String?, db: Database
 ) async throws {
     if let row = existing {
         row.response = response
         row.cacheVersion = companyFinancialsCacheVersion
         row.requestedYears = years
+        row.highWater = highWater
         try await row.update(on: db)
     } else {
         let model = CompanyFinancials()
@@ -97,6 +116,7 @@ func storeCompanyFinancials(
         model.response = response
         model.cacheVersion = companyFinancialsCacheVersion
         model.requestedYears = years
+        model.highWater = highWater
         try await model.create(on: db)
     }
 }
