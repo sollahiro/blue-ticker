@@ -43,6 +43,29 @@ jobs:
       - name: Build CLI Binary
         run: swift build -c release --product ticker
 
+      - name: Code Sign Binary
+        run: |
+          echo "$DEVID_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/build.keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$RUNNER_TEMP/build.keychain" \
+            -P "$DEVID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+          security list-keychains -d user -s "$RUNNER_TEMP/build.keychain" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          codesign --force --options runtime --timestamp \
+            --sign "$CODESIGN_IDENTITY" .build/release/ticker
+          codesign --verify --strict --verbose=2 .build/release/ticker
+        shell: bash
+        env:
+          DEVID_CERT_P12_BASE64: ${{ secrets.DEVID_CERT_P12_BASE64 }}
+          DEVID_CERT_PASSWORD: ${{ secrets.DEVID_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+
       - name: Package Binary
         run: |
           mkdir -p release
