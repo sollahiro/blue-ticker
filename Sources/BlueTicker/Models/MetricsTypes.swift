@@ -28,27 +28,6 @@ struct MetricSource: Codable {
     var confidence: Double?
 }
 
-struct StockSplitEvent: Codable {
-    var ratio: Double?
-    var effectiveDate: String?
-    var scope: String?
-    var alreadyReflected: Bool?
-    var appliesTo: String?
-    var dividendBasis: String?
-    var sourceStatement: String?
-    var contextExcerpt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case ratio, scope
-        case effectiveDate    = "effective_date"
-        case alreadyReflected = "already_reflected"
-        case appliesTo        = "applies_to"
-        case dividendBasis    = "dividend_basis"
-        case sourceStatement  = "source_statement"
-        case contextExcerpt   = "context_excerpt"
-    }
-}
-
 // MARK: - RawData
 
 struct RawData: Codable {
@@ -67,24 +46,10 @@ struct RawData: Codable {
     var buyback: Double?
     var rd: Double?
     var eps: Double?
+    // bps（1株当たり純資産）は未実装。将来のper-share拡張で produce 予定のため契約からは外しつつ内部フィールドを残す。
     var bps: Double?
     var shOutFY: Double?
-    var averageShares: Double?
-    var treasuryShares: Double?
-    var sharesForBPS: Double?
-    var parentEquity: Double?
-    var stockSplitRatio: Double?
-    var cumulativeStockSplitRatio: Double?
-    var stockSplitEvents: [StockSplitEvent]?
-    var calculatedEPS: Double?
-    var calculatedBPS: Double?
-    var epsDirectDiff: Double?
-    var bpsDirectDiff: Double?
-    var divTotalAnn: Double?
-    var payoutRatioAnn: Double?
     var cashEq: Double?
-    var div2Q: Double?
-    var divAnn: Double?
 
     enum CodingKeys: String, CodingKey {
         case curPerType = "CurPerType"; case curFYSt = "CurFYSt"; case curFYEn = "CurFYEn"
@@ -92,15 +57,7 @@ struct RawData: Codable {
         case op = "OP"; case np = "NP"; case netAssets = "NetAssets"
         case cfo = "CFO"; case cfi = "CFI"; case capex = "Capex"; case buyback = "Buyback"
         case rd = "RD"; case eps = "EPS"; case bps = "BPS"; case shOutFY = "ShOutFY"
-        case averageShares = "AverageShares"; case treasuryShares = "TreasuryShares"
-        case sharesForBPS = "SharesForBPS"; case parentEquity = "ParentEquity"
-        case stockSplitRatio = "StockSplitRatio"
-        case cumulativeStockSplitRatio = "CumulativeStockSplitRatio"
-        case stockSplitEvents = "StockSplitEvents"
-        case calculatedEPS = "CalculatedEPS"; case calculatedBPS = "CalculatedBPS"
-        case epsDirectDiff = "EPSDirectDiff"; case bpsDirectDiff = "BPSDirectDiff"
-        case divTotalAnn = "DivTotalAnn"; case payoutRatioAnn = "PayoutRatioAnn"
-        case cashEq = "CashEq"; case div2Q = "Div2Q"; case divAnn = "DivAnn"
+        case cashEq = "CashEq"
     }
 }
 
@@ -108,7 +65,6 @@ struct RawData: Codable {
 
 struct CalculatedData: Codable {
     // 収益性
-    var payoutRatio: Double?
     var cfc: Double?
     var roe: Double?
     var cfcvr: Double?
@@ -190,7 +146,7 @@ struct CalculatedData: Codable {
     var ccc: Double?
 
     enum CodingKeys: String, CodingKey {
-        case payoutRatio = "PayoutRatio"; case cfc = "CFC"; case roe = "ROE"; case cfcvr = "CFCVR"
+        case cfc = "CFC"; case roe = "ROE"; case cfcvr = "CFCVR"
         case grossProfit = "GrossProfit"; case grossProfitMargin = "GrossProfitMargin"
         case grossProfitMethod = "GrossProfitMethod"; case grossProfitLabel = "GrossProfitLabel"
         case interestBearingDebt = "InterestBearingDebt"; case ibdComponents = "IBDComponents"
