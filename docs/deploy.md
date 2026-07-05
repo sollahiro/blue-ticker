@@ -173,14 +173,19 @@ plist はリポジトリの絶対パスを埋め込む必要があるためマ�
 
 ## EDINET マスタデータ（コードリスト CSV）の更新
 
-企業マスタ（証券コード⇔企業名⇔業種⇔上場区分、`assets/EdinetcodeDlInfo.csv`）は Docker イメージへ焼き込み済みだが、正本は Neon（`edinet_master_snapshot`、単一行）にも置ける。デプロイなしで更新したい場合:
+企業マスタ（証券コード⇔企業名⇔業種⇔上場区分、`assets/EdinetcodeDlInfo.csv`）の正本は Neon（`edinet_master_snapshot`、単一行）に一本化する。更新するときは必ず両方を同時に行う:
 
 ```bash
-# DATABASE_URL を Neon に向けて実行（ローカルから可）
+# 1. git 側（ローカル開発・フォールバック用に同一内容を保つ）
+#    assets/EdinetcodeDlInfo.csv を差し替えてコミット・push（通常の docs/コード変更と同様）
+
+# 2. Neon 側（本番反映。DATABASE_URL を Neon に向けて実行、ローカルから可）
 DATABASE_URL=... .build/release/blt-server master-data-upload assets/EdinetcodeDlInfo.csv
 ```
 
-稼働中の Fly サーバーは `updated_at` を 30 分間隔でポーリングし（`Api.masterDataPollIntervalSeconds`）、変更を検知すると自動でローカルファイルへ反映してリロードする（**再起動不要**）。Neon 側に行が無い場合はイメージ焼き込み済み CSV をそのまま使う（フォールバック）。
+稼働中の Fly サーバーは `updated_at` を 30 分間隔でポーリングし（`Api.masterDataPollIntervalSeconds`）、変更を検知すると自動でローカルファイルへ反映してリロードする（**再起動不要**）。
+
+> **注意（drift）**: Neon に一度でも行が入ると、以後は **Neon 側が優先**される。ポーリングのたびに Neon の内容でローカルファイルを上書きするため、`assets/EdinetcodeDlInfo.csv` を git 側だけ更新して再デプロイしても、次のポーリングで Neon の（古い）内容に巻き戻る。**CSV を更新する際は必ず `master-data-upload` もセットで実行する**。Neon にまだ行が無い場合のみ、イメージ焼き込み済み CSV がそのまま使われる（フォールバック）。
 
 ## Neon 接続の E2E 検証
 
