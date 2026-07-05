@@ -35,6 +35,12 @@ public enum Api {
     /// BltServerCore（Stage 4-half ingest / read クランプ）からも参照するため public。
     public static let halfMaxYears = 5
 
+    /// REST read パス（Routes.swift）で Neon cold-start（scale-to-zero 後の再接続）を
+    /// 吸収するための DB リトライ設定。ingest（`withDbRetry` 既定値、最大5回/16秒）より
+    /// 短めにし、DB が本当に落ちている場合に同期リクエストを長時間ブロックしないようにする。
+    public static let dbReadRetryMaxAttempts = 3
+    public static let dbReadRetryMaxBackoffSeconds: Double = 4
+
     static let docDiscoveryLimit = 10
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
