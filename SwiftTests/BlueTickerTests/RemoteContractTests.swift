@@ -93,6 +93,51 @@ import Testing
         #expect(arr.first?.location == "愛知県")
     }
 
+    /// Cloudflare Access SSO（ticker login 経由）が有効なとき、JWT が CF_Authorization Cookie で付与される。
+    /// Access のエッジ認証は Cookie を見るため（`Cf-Access-Jwt-Assertion` ヘッダーでは通らないことを実機で確認済み）。
+    /// Service Token（鍵ペア）とは独立したヘッダーのため、両方設定しても両方が乗る。
+    @Test func buildRequestAddsCfAuthorizationCookieWhenSsoJwtSet() throws {
+        let client = try #require(
+            RemoteAPIClient(
+                baseURLString: "https://api.example.com", authToken: nil,
+                cfAccessClientId: "client-id", cfAccessClientSecret: "client-secret",
+                cfAccessJwt: "jwt-token"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cookie") == "CF_Authorization=jwt-token")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Id") == "client-id")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Secret") == "client-secret")
+    }
+
+    /// 空文字は未設定扱い（Cookie を付与しない）。
+    @Test func buildRequestOmitsCfAuthorizationCookieWhenEmpty() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: ""))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+    }
+
+    /// Bearer（静的トークン）は Authorization ヘッダーへ付与される（既存経路の回帰確認）。
+    @Test func buildRequestAddsAuthorizationHeaderForBearerToken() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: "bearer-token"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer bearer-token")
+    }
+
+    /// SSO JWT のみ設定（Service Token 鍵ペアなし）でも Cookie が付与される。
+    @Test func buildRequestAddsCfAuthorizationCookieWithoutServiceToken() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: "jwt-only"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cookie") == "CF_Authorization=jwt-only")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Id") == nil)
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Secret") == nil)
+    }
+
     /// filings の公開 JSON が RemoteFilings へデコードできる。
     @Test func remoteFilingsDecodes() throws {
         let json = #"""

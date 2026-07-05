@@ -1,6 +1,11 @@
 public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
+    /// remote バックエンドの既定 blt-server URL。インストール直後に `ticker login` だけで
+    /// 使い始められるよう、config 未設定時のフォールバック先として組み込む
+    /// （`ticker config set --server-url` / `BLT_SERVER_URL` で上書き可能）。
+    static let defaultRemoteServerURL = "https://api.sollahiro.com"
+
     // 検索キャッシュ TTL（日）
     static let searchEmptyTTLDays = 1
     static let searchHitTTLDays = 30

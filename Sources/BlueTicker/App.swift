@@ -13,6 +13,7 @@ public struct Ticker: AsyncParsableCommand {
             AnalyzeCommand.self,
             SummarizeCommand.self,
             ConfigCommand.self,
+            LoginCommand.self,
             CacheCommand.self,
             FilingsCommand.self,
             FilingCommand.self,

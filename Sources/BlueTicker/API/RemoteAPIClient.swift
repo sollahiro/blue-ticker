@@ -55,12 +55,14 @@ struct RemoteAPIClient: Sendable {
     let authToken: String?
     let cfAccessClientId: String?
     let cfAccessClientSecret: String?
+    let cfAccessJwt: String?
 
     /// baseURL が空・不正なら nil。各認証情報は空なら未設定扱い。
-    /// authToken（Bearer）と Cloudflare Access Service Token は独立に付与される。
+    /// authToken（Bearer）・Cloudflare Access Service Token・SSO JWT は独立に付与される。
     init?(
         baseURLString: String, authToken: String?,
-        cfAccessClientId: String? = nil, cfAccessClientSecret: String? = nil
+        cfAccessClientId: String? = nil, cfAccessClientSecret: String? = nil,
+        cfAccessJwt: String? = nil
     ) {
         let trimmed = baseURLString.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, URL(string: trimmed) != nil else { return nil }
@@ -68,6 +70,7 @@ struct RemoteAPIClient: Sendable {
         self.authToken = (authToken?.isEmpty == false) ? authToken : nil
         self.cfAccessClientId = (cfAccessClientId?.isEmpty == false) ? cfAccessClientId : nil
         self.cfAccessClientSecret = (cfAccessClientSecret?.isEmpty == false) ? cfAccessClientSecret : nil
+        self.cfAccessJwt = (cfAccessJwt?.isEmpty == false) ? cfAccessJwt : nil
     }
 
     // MARK: - エンドポイント
@@ -130,24 +133,8 @@ struct RemoteAPIClient: Sendable {
 
     /// GET リクエストを実行し、ステータスごとに RemoteOutcome へ写す。
     private func fetch(_ path: String, query: [String: String]) async -> RemoteOutcome<Data> {
-        guard var comps = URLComponents(string: baseURL + path) else {
+        guard let request = buildRequest(path, query: query) else {
             return .failure("URL の組み立てに失敗しました: \(baseURL)\(path)")
-        }
-        if !query.isEmpty {
-            comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
-        }
-        guard let url = comps.url else {
-            return .failure("URL の組み立てに失敗しました: \(baseURL)\(path)")
-        }
-
-        var request = URLRequest(url: url)
-        if let token = authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        // Cloudflare Access Service Token は鍵ペアが両方そろったときだけ2ヘッダを付与する。
-        if let id = cfAccessClientId, let secret = cfAccessClientSecret {
-            request.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
-            request.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
         }
 
         do {
@@ -161,7 +148,8 @@ struct RemoteAPIClient: Sendable {
             case 401:
                 return .failure(
                     "認証に失敗しました。ticker config set --auth-token <token>"
-                        + "（または --cf-access-client-id / --cf-access-client-secret）を確認してください。")
+                        + "（または --cf-access-client-id / --cf-access-client-secret）を確認するか、"
+                        + "SSO ログインの場合は ticker login を再実行してください。")
             case 404:
                 return .notFound(errorMessage(data) ?? "見つかりませんでした")
             default:
@@ -170,6 +158,33 @@ struct RemoteAPIClient: Sendable {
         } catch {
             return .failure("サーバーに接続できませんでした: \(error.localizedDescription)")
         }
+    }
+
+    /// リクエストを組み立てヘッダを付与する（URL が不正なら nil）。テストから直接検証できるよう internal。
+    func buildRequest(_ path: String, query: [String: String]) -> URLRequest? {
+        guard var comps = URLComponents(string: baseURL + path) else { return nil }
+        if !query.isEmpty {
+            comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        guard let url = comps.url else { return nil }
+
+        var request = URLRequest(url: url)
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        // Cloudflare Access Service Token は鍵ペアが両方そろったときだけ2ヘッダを付与する。
+        if let id = cfAccessClientId, let secret = cfAccessClientSecret {
+            request.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
+            request.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
+        // Cloudflare Access SSO（ticker login 経由の JWT）。Service Token とは独立に付与される。
+        // エッジでの認証は Cookie `CF_Authorization` を見る（`Cf-Access-Jwt-Assertion` ヘッダーは
+        // Access が認証済みリクエストを origin に転送する際に付与するものであり、クライアントが
+        // 未認証状態でこれを送っても Access のログイン画面へ 302 されるだけで通らない。実機検証で確認済み）。
+        if let jwt = cfAccessJwt {
+            request.setValue("CF_Authorization=\(jwt)", forHTTPHeaderField: "Cookie")
+        }
+        return request
     }
 
     /// エラー封筒 `{"error": "...", "status": N}` から message を取り出す。
