@@ -138,9 +138,9 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200、plist の `EnvironmentVariables` で上書き）で調整。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200、`.env` に書けば上書き）で調整。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。
 
-> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` は 1 プロセスで Stage 3 → Stage 4（通期）→ Stage 4-half の順に流す。limit を大きくすると 1 ラン数時間に及び、途中で Neon 接続がリセット（PSQLError）されるとそのランの **Stage 4 / Stage 4-half がまとめて失われる**（特に最後に走る Stage 4-half は完走しにくい）。完走率を優先し `BLT_INGEST_LIMIT=75` 程度に下げる（バックフィル中の暫定。全社 drain 後は既定に戻してよい）。
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` は 1 プロセスで Stage 3 → Stage 4（通期）→ Stage 4-half の順に流す。limit を大きくすると 1 ラン数時間に及び、途中で Neon 接続がリセット（PSQLError）されるとそのランの **Stage 4 / Stage 4-half がまとめて失われる**（特に最後に走る Stage 4-half は完走しにくい）。完走率を優先し `.env` に `BLT_INGEST_LIMIT=75` 程度を書いて下げる（バックフィル中の暫定。全社 drain 後は既定に戻してよい）。
 
 ```bash
 # 1. リリースビルド（コード変更後は再実行が必須）
@@ -148,20 +148,19 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 #    ログにそのステージの完了行が出ないまま該当テーブルが埋まらない。
 swift build -c release --product blt-server
 
-# 2. launchd plist を ~/Library/LaunchAgents に置く（Label: com.sollahiro.blt-sync、
-#    ProgramArguments に scripts/blt-scheduled-sync.sh の絶対パス、
-#    StartCalendarInterval で 1 日数回。plist はマシン固有のためリポジトリ非管理）
+# 2. .env を作成（キー名は .env.example を参照。DATABASE_URL / BLT_EDINET_API_KEY が必須）
 
-# 3. 登録（再登録は bootout してから bootstrap）
-launchctl bootout   gui/$(id -u) ~/Library/LaunchAgents/com.sollahiro.blt-sync.plist 2>/dev/null
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.sollahiro.blt-sync.plist
+# 3. plist をテンプレートから生成して登録（再登録も同じコマンドで bootout→bootstrap）
+./scripts/install-launchd.sh
 
 # 4. 手動実行（検証・即時 drain）
 launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
 tail -f .build/blt-scheduled.log
 ```
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は、**Fly を `fly deploy` で新バージョンのイメージへ更新する**こと（古いイメージのサーバーは新バージョンで格納された行を stale 扱いで拒否し、**未格納と同じ 404** になる＝そのバージョン分のデータが見えなくなる）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
+
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ## Neon 接続の E2E 検証
 
