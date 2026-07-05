@@ -5,6 +5,8 @@
 //   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5]
 //                                                            Stage 4/4-half/5 を DB へ取り込み（--stages で対象を選択、既定は全て。
 //                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22）
+//   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
+//                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
@@ -55,6 +57,12 @@ do {
             includeFacts: argv.contains("--with-facts"),
             stages: stages
         )
+    } else if argv.count > 1, argv[1] == "master-data-upload" {
+        guard argv.count > 2 else {
+            printError("blt-server error: master-data-upload には CSV ファイルパスを指定してください\n")
+            exit(1)
+        }
+        try await runMasterDataUploadCommand(path: argv[2])
     } else {
         let args = ServerArgs.parse(argv)
         try await runBltServer(host: args.host, port: args.port)

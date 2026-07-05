@@ -171,6 +171,17 @@ plist はリポジトリの絶対パスを埋め込む必要があるためマ�
 
 初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
+## EDINET マスタデータ（コードリスト CSV）の更新
+
+企業マスタ（証券コード⇔企業名⇔業種⇔上場区分、`assets/EdinetcodeDlInfo.csv`）は Docker イメージへ焼き込み済みだが、正本は Neon（`edinet_master_snapshot`、単一行）にも置ける。デプロイなしで更新したい場合:
+
+```bash
+# DATABASE_URL を Neon に向けて実行（ローカルから可）
+DATABASE_URL=... .build/release/blt-server master-data-upload assets/EdinetcodeDlInfo.csv
+```
+
+稼働中の Fly サーバーは `updated_at` を 30 分間隔でポーリングし（`Api.masterDataPollIntervalSeconds`）、変更を検知すると自動でローカルファイルへ反映してリロードする（**再起動不要**）。Neon 側に行が無い場合はイメージ焼き込み済み CSV をそのまま使う（フォールバック）。
+
 ## Neon 接続の E2E 検証
 
 実 DB に対する検証は 2 段で行う。CI/ユニットテストはインメモリ SQLite までのため、Postgres 固有挙動（`.json`→JSONB・索引・String PK）と実パイプラインは別途確認する。

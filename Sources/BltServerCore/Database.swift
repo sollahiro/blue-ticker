@@ -31,6 +31,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(AddHighWaterToCompanyFinancials())
     // Stage 5: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
+    // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。
+    app.migrations.add(CreateEdinetMasterSnapshot())
     try await app.autoMigrate()
 
     app.logger.notice("Postgres (Neon) を登録し、マイグレーションを適用しました。")

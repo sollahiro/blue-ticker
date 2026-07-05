@@ -116,6 +116,11 @@ public enum Api {
     static let cacheLockStaleSeconds: Double = 10 * 60
     static let cacheLockTimeoutSeconds: Double = 3 * 60
 
+    /// EDINET マスタデータ（コードリスト CSV）の Neon 定期ポーリング間隔（秒）。
+    /// デプロイ不要で手動アップロードを反映するための鮮度チェック周期。
+    /// BltServerCore（起動中サーバーのポーリングループ）から参照するため public。
+    public static let masterDataPollIntervalSeconds: UInt64 = 1800
+
     // SSL 証明書候補（macOS / Linux）
     static let sslCertFileEnv = "SSL_CERT_FILE"
     static let sslCaBundleCandidates: [String] = [

@@ -256,3 +256,13 @@ actor MasterDataManager {
 }
 
 let masterDataManager = MasterDataManager()
+
+/// Neon 等の外部ストアから取得した EDINET コードリスト CSV（生バイト列）を反映する。
+/// 解決済みローカルパスへ書き込んでから MasterDataManager をリロードする。
+/// パス未解決・書き込み失敗は false（戻り値パターン）。BltServerCore の定期ポーリングから呼ばれる。
+public func applyEdinetMasterDataSnapshot(_ data: Data) async -> Bool {
+    guard let url = resolveEdinetCSVURL() else { return false }
+    guard (try? data.write(to: url)) != nil else { return false }
+    await masterDataManager.reload()
+    return true
+}
