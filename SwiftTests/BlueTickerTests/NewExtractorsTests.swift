@@ -178,6 +178,23 @@ import Foundation
         #expect(result.method == "direct")
     }
 
+    @Test func testAccountsReceivableJgaapReceivablesFromContractsWithCustomersExtension() {
+        // 収益認識基準移行期の企業拡張タグ（ぷらっとホーム 6836、2023-03 期: 168,055 千円）。
+        // 拡張タグを取りこぼすと FY22〜FY25 の売掛金だけ連続で nil になる。
+        let fs = makeFieldSet(("AccountsReceivableTradeReceivablesFromContractsWithCustomersCA", 168_055_000.0, 155_124_000.0))
+        let result = AccountsReceivableExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.current == 168_055_000.0)
+        #expect(result.method == "direct")
+    }
+
+    @Test func testAccountsReceivableJgaapTradeAndContractAssetsExtension() {
+        // 同上の別名義タグ（ぷらっとホーム 6836、2025-03 期: 105,474 千円）。
+        let fs = makeFieldSet(("AccountsReceivableTradeAndContractAssetsCA", 105_474_000.0, 152_851_000.0))
+        let result = AccountsReceivableExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.current == 105_474_000.0)
+        #expect(result.method == "direct")
+    }
+
     @Test func testAccountsReceivableNotFound() {
         let result = AccountsReceivableExtractor.extract(fieldSet: [:], accountingStandard: "J-GAAP")
         #expect(result.current == nil)

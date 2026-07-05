@@ -516,6 +516,9 @@ enum Xbrl {
         // 契約資産分を含むが、運転資本・CCC の用途では営業債権として許容する。
         "NotesAndAccountsReceivableTradeAndContractAssets",
         "AccountsReceivableTradeAndContractAssets",
+        // 収益認識基準移行期の企業拡張タグ（例: ぷらっとホーム 6836、FY22〜FY25の間のみ使用）。
+        "AccountsReceivableTradeReceivablesFromContractsWithCustomersCA",
+        "AccountsReceivableTradeAndContractAssetsCA",
     ]
     static let accountsReceivableIFRSTags: [String] = [
         "TradeAndOtherReceivablesCAIFRS",
