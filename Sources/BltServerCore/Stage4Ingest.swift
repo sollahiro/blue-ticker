@@ -39,9 +39,19 @@ func runStage4Ingest(
     var stored = 0
     var failed = 0
     var skipped = 0
+    var unhealthyRetries = 0
 
     for code in codes {
-        let existing = try await withDbRetry(logger: logger) {
+        // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 4 を中断します(リトライ\(unhealthyRetries)回・残り\(codes.count - attempted - skipped)社は次回スケジュールで再試行)"
+            )
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await CompanyFinancials.find(code, on: db)
         }
         let highWater = highWaterMap[code]
@@ -56,7 +66,9 @@ func runStage4Ingest(
             failed += 1
             continue
         }
-        try await withDbRetry(logger: logger) {
+        try await withDbRetry(
+            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await storeCompanyFinancials(
                 existing: existing, code: code, years: years, response: response,
                 highWater: highWater, db: db)
@@ -76,7 +88,7 @@ func runStage4Ingest(
 func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
 ) async throws -> (codes: [String], highWater: [String: String]) {
-    let documents = try await withDbRetry(logger: logger) {
+    let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocument.query(on: db).all()
     }
     var seen = Set<String>()

@@ -46,6 +46,21 @@ public enum Api {
     public static let dbReadRetryMaxAttempts = 3
     public static let dbReadRetryMaxBackoffSeconds: Double = 4
 
+    /// `withDbRetry` のエラーログに含めるエラー詳細（`String(reflecting:)`）の最大文字数。
+    /// Stage 3/4 の facts/response は JSONB で巨大なため、ログ行が肥大化しないよう切り詰める。
+    public static let dbRetryErrorLogMaxLength = 2000
+
+    /// ingest（Stage 3/4/4-half/5）で「DB が不安定」と判断してその場でループを打ち切るまでの
+    /// リトライ発生回数の閾値。Neon の scale-to-zero 明けの再接続が不調な状態が続くと、
+    /// 1件ずつは（数回リトライの末に）復旧してもトータルでは長時間を浪費するため、
+    /// 閾値超で早期中断し、残りは次回スケジュールに委ねる。
+    public static let ingestDbUnhealthyRetryThreshold = 10
+
+    /// Postgres 接続プールの設定（Neon 向け・現状 FluentPostgresDriver の既定値と同一）。
+    /// 挙動を変えず、起動時ログで可視化するために明示値として持つ。
+    public static let dbMaxConnectionsPerEventLoop = 1
+    public static let dbConnectionPoolTimeoutSeconds: Int64 = 10
+
     static let docDiscoveryLimit = 10
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 

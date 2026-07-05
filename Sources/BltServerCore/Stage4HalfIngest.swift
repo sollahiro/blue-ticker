@@ -32,9 +32,19 @@ func runStage4HalfIngest(
     var stored = 0
     var failed = 0
     var skipped = 0
+    var unhealthyRetries = 0
 
     for code in codes {
-        let existing = try await withDbRetry(logger: logger) {
+        // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り\(codes.count - attempted - skipped)社は次回スケジュールで再試行)"
+            )
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await CompanyHalfFinancials.find(code, on: db)
         }
         let highWater = highWaterMap[code]
@@ -49,7 +59,9 @@ func runStage4HalfIngest(
             failed += 1
             continue
         }
-        try await withDbRetry(logger: logger) {
+        try await withDbRetry(
+            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await storeCompanyHalfFinancials(
                 existing: existing, code: code, years: years, response: response,
                 highWater: highWater, db: db)

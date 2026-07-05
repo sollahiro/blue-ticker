@@ -47,9 +47,19 @@ func runStage5Ingest(
     var stored = 0
     var failed = 0
     var skipped = 0
+    var unhealthyRetries = 0
 
     for cand in candidates {
-        let existing = try await withDbRetry(logger: logger) {
+        // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted - skipped)件は次回スケジュールで再試行)"
+            )
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await CompanyFilingSections.find(cand.docID, on: db)
         }
         if let row = existing, row.cacheVersion == filingSectionsCacheVersion,
@@ -64,7 +74,9 @@ func runStage5Ingest(
             failed += 1
             continue
         }
-        try await withDbRetry(logger: logger) {
+        try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await storeCompanyFilingSections(
                 existing: existing, docID: cand.docID, code: cand.code,
                 submitDateTime: cand.submitDateTime, payload: payload,
@@ -82,7 +94,7 @@ func runStage5Ingest(
 func stage5Candidates(
     db: Database, listedCodes: Set<String>, years: Int, logger: Logger? = nil
 ) async throws -> [(docID: String, code: String, submitDateTime: String)] {
-    let documents = try await withDbRetry(logger: logger) {
+    let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocument.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
             .all()

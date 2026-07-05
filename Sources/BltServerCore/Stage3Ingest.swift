@@ -29,7 +29,7 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 func runStage3Ingest(
     db: Database, limit: Int?, logger: Logger? = nil, parse: XbrlFactParser
 ) async throws -> Stage3IngestSummary {
-    let documents = try await withDbRetry(logger: logger) {
+    let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocument.query(on: db)
             .sort(\.$submitDateTime, .descending)
             .all()
@@ -39,11 +39,21 @@ func runStage3Ingest(
     var stored = 0
     var failed = 0
     var skipped = 0
+    var unhealthyRetries = 0
 
     for doc in documents {
         guard let docID = doc.id else { continue }
+        // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り\(documents.count - attempted - skipped)件は次回スケジュールで再試行)"
+            )
+            break
+        }
         // 1 書類につき find は 1 回。現行版でパース済みなら skip、それ以外は取り込む。
-        let existing = try await withDbRetry(logger: logger) {
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await EdinetXbrlFacts.find(docID, on: db)
         }
         if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
@@ -56,7 +66,9 @@ func runStage3Ingest(
             failed += 1
             continue
         }
-        try await withDbRetry(logger: logger) {
+        try await withDbRetry(
+            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await storeXbrlFacts(existing: existing, docID: docID, facts: payload, db: db)
         }
         stored += 1

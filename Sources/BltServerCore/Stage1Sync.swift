@@ -64,19 +64,35 @@ func applyDocuments(
 ) async throws -> (created: Int, updated: Int) {
     var created = 0
     var updated = 0
+    var unhealthyRetries = 0
     for record in records {
-        let existing = try await withDbRetry(logger: logger) {
+        // 他ステージと同様、各項目の先頭で判定する（本ループに continue は無いが一貫性のため）。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 1 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated)件は次回スケジュールで再試行)"
+            )
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(record.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
             try await EdinetDocument.find(record.docID, on: db)
         }
         if let existing {
             existing.apply(record)
-            try await withDbRetry(logger: logger) { try await existing.update(on: db) }
+            try await withDbRetry(
+                logger: logger, context: "docID=\(record.docID)",
+                onRetry: { unhealthyRetries += 1 }
+            ) { try await existing.update(on: db) }
             updated += 1
         } else {
             let model = EdinetDocument()
             model.id = record.docID
             model.apply(record)
-            try await withDbRetry(logger: logger) { try await model.create(on: db) }
+            try await withDbRetry(
+                logger: logger, context: "docID=\(record.docID)",
+                onRetry: { unhealthyRetries += 1 }
+            ) { try await model.create(on: db) }
             created += 1
         }
     }
@@ -86,7 +102,7 @@ func applyDocuments(
 /// from 解決順位: 明示指定 > 既存 synced_through > missingStartDate。
 func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async throws -> String {
     if let f = from, !f.isEmpty { return f }
-    let state = try await withDbRetry(logger: logger) {
+    let state = try await withDbRetry(logger: logger, context: "sync_state") {
         try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
     }
     if let state { return state.syncedThrough }
@@ -95,12 +111,12 @@ func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async 
 
 /// synced_through を upsert する（単一行）。
 func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil) async throws {
-    let state = try await withDbRetry(logger: logger) {
+    let state = try await withDbRetry(logger: logger, context: "sync_state") {
         try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
     } ?? EdinetSyncState()
     state.id = EdinetSyncState.singletonID
     state.syncedThrough = syncedThrough
-    try await withDbRetry(logger: logger) { try await state.save(on: db) }
+    try await withDbRetry(logger: logger, context: "sync_state") { try await state.save(on: db) }
 }
 
 // MARK: - read 経路（REST filings）

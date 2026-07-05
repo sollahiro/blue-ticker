@@ -3,6 +3,7 @@
 // Stage 1 のマイグレーションを適用する。
 // 未設定なら DB なしで起動する（現行のステートレス EDINET プロキシ動作を維持）。
 
+import BlueTickerCore
 import Fluent
 import FluentPostgresDriver
 import Vapor
@@ -16,7 +17,15 @@ func configureDatabase(_ app: Application) async throws {
     }
 
     let configuration = try SQLPostgresConfiguration(url: urlString)
-    app.databases.use(.postgres(configuration: configuration), as: .psql)
+    app.databases.use(
+        .postgres(
+            configuration: configuration,
+            maxConnectionsPerEventLoop: Api.dbMaxConnectionsPerEventLoop,
+            connectionPoolTimeout: .seconds(Api.dbConnectionPoolTimeoutSeconds)
+        ), as: .psql)
+    app.logger.notice(
+        "Postgres 接続プール設定: maxConnectionsPerEventLoop=\(Api.dbMaxConnectionsPerEventLoop) connectionPoolTimeout=\(Api.dbConnectionPoolTimeoutSeconds)s"
+    )
 
     // Stage 1: 書類一覧（edinet_documents）と同期進捗（edinet_sync_state）。
     app.migrations.add(CreateEdinetDocument())
