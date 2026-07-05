@@ -20,7 +20,6 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$REPO/.build/release/blt-server"
 LOG="$REPO/.build/blt-scheduled.log"
-INGEST_LIMIT="${BLT_INGEST_LIMIT:-200}"
 
 cd "$REPO" || exit 1
 
@@ -34,10 +33,14 @@ if [ ! -f "$REPO/.env" ]; then
   exit 1
 fi
 
-# .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）
+# .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）。
+# BLT_INGEST_LIMIT の一時的な上書きも .env に書けば反映される（plist はテンプレートから
+# 生成する共有ファイルのため、マシン固有のチューニング値は .env 側に置く）。
 set -a
 . "$REPO/.env"
 set +a
+
+INGEST_LIMIT="${BLT_INGEST_LIMIT:-200}"
 
 {
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') sync 開始 ====="
