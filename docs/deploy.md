@@ -135,7 +135,7 @@ ticker config set --backend remote --server-url https://api.<domain>
 ticker login   # ブラウザが開き、Access のログイン画面（IdP）で認証
 ```
 
-ログイン成功後は remote 経路のリクエストのたびに `cloudflared access token -app=<server-url>` を呼び `Cf-Access-Jwt-Assertion` ヘッダーへ付与する（Service Token の 2 ヘッダーとは独立。同時設定も可）。前提として Access アプリに **SSO（Allow）ポリシー**（上記 A-4）が当該ユーザーのメールに対して設定されている必要がある。無効化は `ticker config set --disable-sso`。
+ログイン成功後は remote 経路のリクエストのたびに `cloudflared access token -app=<server-url>` を呼び、`Cookie: CF_Authorization=<jwt>` として付与する（Service Token の 2 ヘッダーとは独立。同時設定も可）。**`Cf-Access-Jwt-Assertion` ヘッダーでは Access のログイン画面へ 302 されるだけで通らない**ことを実機検証で確認済み（そのヘッダーは Access が認証済みリクエストを origin へ転送する際に付与するものであり、クライアントが未認証状態で送っても意味を持たない）。前提として Access アプリに **SSO（Allow）ポリシー**（上記 A-4）が当該ユーザーのメールに対して設定されている必要がある。無効化は `ticker config set --disable-sso`。
 
 セッションが失効した場合（Access の Session Duration 経過後など）は `ticker login` を再実行する。origin（方式A）は JWT を検証しないため、この機構の安全性は引き続き「Tunnel + 公開ポート閉鎖 + Access ポリシー」に依存する。
 

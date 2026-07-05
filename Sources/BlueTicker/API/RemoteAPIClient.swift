@@ -178,8 +178,11 @@ struct RemoteAPIClient: Sendable {
             request.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
         }
         // Cloudflare Access SSO（ticker login 経由の JWT）。Service Token とは独立に付与される。
+        // エッジでの認証は Cookie `CF_Authorization` を見る（`Cf-Access-Jwt-Assertion` ヘッダーは
+        // Access が認証済みリクエストを origin に転送する際に付与するものであり、クライアントが
+        // 未認証状態でこれを送っても Access のログイン画面へ 302 されるだけで通らない。実機検証で確認済み）。
         if let jwt = cfAccessJwt {
-            request.setValue(jwt, forHTTPHeaderField: "Cf-Access-Jwt-Assertion")
+            request.setValue("CF_Authorization=\(jwt)", forHTTPHeaderField: "Cookie")
         }
         return request
     }
