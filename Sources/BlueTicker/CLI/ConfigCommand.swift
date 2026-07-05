@@ -23,7 +23,7 @@ struct ConfigShow: AsyncParsableCommand {
         let apiKey = await settingsStore.maskedApiKey()
         let cacheDir = await settingsStore.get(.cacheDir) ?? ""
         let cacheEnabled = await settingsStore.getBool(.cacheEnabled)
-        let backend = await settingsStore.get(.edinetBackend) ?? "local"
+        let backend = await settingsStore.get(.edinetBackend) ?? "remote"
         let serverURL = await settingsStore.get(.serverURL) ?? ""
         let authToken = await settingsStore.maskedAuthToken()
         let cfClientId = await settingsStore.maskedCfAccessClientId()

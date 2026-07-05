@@ -165,8 +165,10 @@ private struct SettingsValues {
     var edinetApiKey: String = ""
     var cacheDir: String
     var cacheEnabled: Bool = true
-    var edinetBackend: String = "local"
-    var serverURL: String = ""
+    // local モードのユーザー向け分析 CLI は段階的に廃止方針のため、既定を remote にし
+    // インストール直後は `ticker login` のみで使い始められるようにする（architecture.md 参照）。
+    var edinetBackend: String = "remote"
+    var serverURL: String = Api.defaultRemoteServerURL
     // 機密のため通常は keychain に保存し、values には載せない（keychain 不在環境のフォールバックのみ）。
     var authToken: String = ""
     // Cloudflare Access Service Token の鍵ペア。authToken と同様 keychain 管理。

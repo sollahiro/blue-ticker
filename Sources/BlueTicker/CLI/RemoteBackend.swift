@@ -10,7 +10,7 @@ enum RemoteBackend {
     /// 接続情報の解決順位は env（BLT_SERVER_URL / BLT_AUTH_TOKEN）> config。
     /// remote だが server-url が未解決なら stderr へ出して `ExitCode.failure` を投げる。
     static func clientIfEnabled() async throws -> RemoteAPIClient? {
-        let backend = await settingsStore.get(.edinetBackend) ?? "local"
+        let backend = await settingsStore.get(.edinetBackend) ?? "remote"
         guard backend == "remote" else { return nil }
 
         let env = ProcessInfo.processInfo.environment

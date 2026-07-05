@@ -130,10 +130,13 @@ ticker config set --cf-access-client-id <id> --cf-access-client-secret <secret>
 
 人間が対話的に CLI を使う場合、Service Token の Client ID/Secret を手動コピペする代わりに `ticker login` でブラウザ経由の SSO ログインができる。内部的には `cloudflared`（要インストール。`brew install cloudflared` 等）の `access login` / `access token` を呼び出す薄いラッパーで、JWT 自体の保管・更新は cloudflared に委ねる（blue_ticker 側は `config.json` に「SSO 有効」フラグのみ持つ）。
 
+**`backend`（既定 remote）・`server-url`（既定 `Api.defaultRemoteServerURL`、現在 `https://api.sollahiro.com`）は CLI にビルド時の既定値として組み込まれている**（local モードのユーザー向け分析 CLI 段階的廃止方針のため。`architecture.md` 参照）。そのため新規インストール後は `config set` 不要で以下だけで使い始められる。
+
 ```bash
-ticker config set --backend remote --server-url https://api.<domain>
 ticker login   # ブラウザが開き、Access のログイン画面（IdP）で認証
 ```
+
+既定と異なるサーバー・self-host 等を使う場合のみ `ticker config set --server-url <url>`（や `--backend local`）で上書きする。
 
 ログイン成功後は remote 経路のリクエストのたびに `cloudflared access token -app=<server-url>` を呼び、`Cookie: CF_Authorization=<jwt>` として付与する（Service Token の 2 ヘッダーとは独立。同時設定も可）。**`Cf-Access-Jwt-Assertion` ヘッダーでは Access のログイン画面へ 302 されるだけで通らない**ことを実機検証で確認済み（そのヘッダーは Access が認証済みリクエストを origin へ転送する際に付与するものであり、クライアントが未認証状態で送っても意味を持たない）。前提として Access アプリに **SSO（Allow）ポリシー**（上記 A-4）が当該ユーザーのメールに対して設定されている必要がある。無効化は `ticker config set --disable-sso`。
 
