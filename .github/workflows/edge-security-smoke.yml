@@ -1,0 +1,57 @@
+name: Edge Security Smoke
+
+# 方式A（Cloudflare Access・エッジ信頼）の3点セット（Tunnel 経由限定 + 公開ポート閉鎖 +
+# Access ポリシー）が本番で実際に生きているかを外形監視する。fly-toml-guard（ci.yml）は
+# リポジトリのファイル内容しか証明できず、`fly deploy -c 別ファイル` や Machines API 直変更
+# はすり抜けるため、実体を見るこちらが必要（docs/deploy.md「Cloudflare Access」）。
+# 失敗時は GitHub 標準の workflow failure メール通知で足りる（追加のアラート基盤は導入しない）。
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  origin-unreachable:
+    # blt-server.fly.dev への直アクセスは到達不能でなければならない（serviceless 構成）。
+    # 単純な「200 でない」判定は Fly edge の 404/502 応答を誤って合格させてしまうため、
+    # curl 自体が TLS/TCP レベルで失敗すること（到達不能）を確認する。
+    runs-on: ubuntu-latest
+    steps:
+      - name: blt-server.fly.dev は直接到達不能であること
+        run: |
+          set +e
+          curl -sS --max-time 15 https://blt-server.fly.dev/healthz -o /dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "::error::blt-server.fly.dev への直アクセスが成功しました（本来は到達不能のはず）。[http_service] が復活していないか、Machines API 直変更が無いか確認してください。"
+            exit 1
+          fi
+          echo "OK: blt-server.fly.dev は到達不能です（curl exit=$code）"
+
+  access-policy-alive:
+    # api.<domain> への無認証アクセスは Cloudflare Access に拒否されなければならない。
+    # ホスト名は repo secret（BLT_API_DOMAIN）から取得する（値の秘匿目的ではなく、
+    # ホスト切り替え時に secret 更新だけで済ませるため。docs/deploy.md「repo secrets」参照）。
+    runs-on: ubuntu-latest
+    steps:
+      - name: 無認証アクセスが Cloudflare Access にブロックされること
+        env:
+          BLT_API_DOMAIN: ${{ secrets.BLT_API_DOMAIN }}
+        run: |
+          if [ -z "$BLT_API_DOMAIN" ]; then
+            echo "::error::secrets.BLT_API_DOMAIN が未設定です"
+            exit 1
+          fi
+          headers=$(curl -sS --max-time 15 -D - -o /dev/null "https://$BLT_API_DOMAIN/healthz")
+          http_status=$(printf '%s' "$headers" | head -1 | awk '{print $2}')
+          if [ "$http_status" = "200" ]; then
+            echo "::error::/healthz が無認証で200を返しました。Access ポリシーが外れている可能性があります。"
+            exit 1
+          fi
+          if ! printf '%s' "$headers" | grep -qi "cloudflareaccess.com\|Cloudflare-Access"; then
+            echo "::error::http_status=$http_status ですが Cloudflare Access のチャレンジ signature が確認できません。Tunnel / Access の稼働状況を確認してください。"
+            exit 1
+          fi
+          echo "OK: 無認証アクセスは Cloudflare Access にブロックされています（http_status=$http_status）"
