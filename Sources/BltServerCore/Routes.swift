@@ -66,7 +66,13 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
         let maxYears = req.query[Int.self, at: "max_years"] ?? Api.filingsMaxYearsDefault
         if dbAvailable {
             do {
-                let records = try await loadStoredFilingRecords(code: code, db: req.db)
+                let records = try await withDbRetry(
+                    maxAttempts: Api.dbReadRetryMaxAttempts,
+                    maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+                    logger: req.logger
+                ) {
+                    try await loadStoredFilingRecords(code: code, db: req.db)
+                }
                 if !records.isEmpty {
                     return makeResponse(
                         await context.getFilingsFromRecords(
@@ -92,7 +98,14 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
         do {
-            if let stored = try await loadStoredFinancials(code: code, years: years, db: req.db) {
+            let stored = try await withDbRetry(
+                maxAttempts: Api.dbReadRetryMaxAttempts,
+                maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+                logger: req.logger
+            ) {
+                try await loadStoredFinancials(code: code, years: years, db: req.db)
+            }
+            if let stored {
                 return jsonResponse(stored, status: .ok)
             }
             return errorResponse(.notFound, message: "財務データは未集計です")
@@ -112,7 +125,14 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
         do {
-            if let stored = try await loadStoredHalfFinancials(code: code, years: years, db: req.db) {
+            let stored = try await withDbRetry(
+                maxAttempts: Api.dbReadRetryMaxAttempts,
+                maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+                logger: req.logger
+            ) {
+                try await loadStoredHalfFinancials(code: code, years: years, db: req.db)
+            }
+            if let stored {
                 return jsonResponse(stored, status: .ok)
             }
             return errorResponse(.notFound, message: "半期財務データは未集計です")
@@ -134,9 +154,15 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
         do {
-            if let stored = try await loadStoredFilingSections(
-                code: code, docId: docId, sections: sections, db: req.db)
-            {
+            let stored = try await withDbRetry(
+                maxAttempts: Api.dbReadRetryMaxAttempts,
+                maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+                logger: req.logger
+            ) {
+                try await loadStoredFilingSections(
+                    code: code, docId: docId, sections: sections, db: req.db)
+            }
+            if let stored {
                 return jsonResponse(stored, status: .ok)
             }
             return errorResponse(.notFound, message: "書類本文は未抽出です")
