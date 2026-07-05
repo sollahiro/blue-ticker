@@ -18,8 +18,18 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
 
     // GET /healthz: 認証不要のヘルスチェック（Fly.io / ロードバランサ用）。
     // /v1 の認証より前に、認証グループの外へ登録する。
+    // cache_versions は「今このイメージが話す derived キャッシュバージョン」を外部から確認するための情報
+    // （キャッシュバージョンバンプ後に fly deploy を忘れていないかを curl 一発で判定できるようにする）。
     app.get("healthz") { _ async -> Response in
-        jsonResponse(["status": "ok"], status: .ok)
+        jsonResponse([
+            "status": "ok",
+            "cache_versions": [
+                "xbrl_facts": xbrlFactsCacheVersion,
+                "company_financials": companyFinancialsCacheVersion,
+                "company_half_financials": companyHalfFinancialsCacheVersion,
+                "filing_sections": filingSectionsCacheVersion,
+            ],
+        ], status: .ok)
     }
 
     // /v1 配下の認証モードを env から決める（docs/blt-server-roadmap.md「認証」参照）。
