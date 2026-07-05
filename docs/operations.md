@@ -33,7 +33,7 @@ Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-ha
 
 | 観点 | 内容 |
 |---|---|
-| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の認証付与（`RemoteAPIClient.swift`）: Service Token 2 ヘッダ（非対話・AI エージェント用）と `ticker login` SSO（`CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存）④ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP 設定 |
+| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の SSO 付与（`RemoteAPIClient.swift`・`LoginCommand.swift`）: `ticker login` → `CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存（Service Token は v26.7.2 で廃止済み）④ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP 設定 |
 | 撤退経路（実装済み） | 認証モード②の静的 Bearer（`BLT_AUTH_TOKEN`）へ切り替え + `fly.toml` に `[http_service]` を復活させて公開ポートを開ける。コード変更不要・env と toml のみ |
 | 不変条件 | 方式A は origin が JWT を検証しない。安全性は「**Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー**」の 3 点セットで成立する。**どれか 1 つでも欠けると無認証素通りになる**ため、fly.toml へのサービスブロック追加・ポート公開は単独で行ってはならない |
 
@@ -44,7 +44,7 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 - **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（Stage 3/4/4-half/5）はローカル Mac の launchd で回している（Fly 1GB では OOM）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。将来はクラウドスケジューラへ移行予定（`deploy.md`「定期同期」）。
 - **キャッシュバージョンバンプと Fly デプロイの同期**: `fin-v*` 等（`versioning.md`）をバンプしたら **必ず `fly deploy` で Fly 側イメージも更新**する。古いイメージは新バージョンで格納された行を stale 拒否し、未格納と同じ 404 になる（そのデータが「見えなくなる」）。
 - **cloudflared のバージョン固定更新**: `Dockerfile` の `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` は固定値。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
-- **Cloudflare 認証クレデンシャルの失効**: 人間の対話利用は `ticker login`（SSO）に移行済みで、Access の Session Duration 経過で失効したら `ticker login` を再実行するだけ（保守作業なし）。Service Token は非対話用途（AI エージェント・自動化）に残置しており、こちらは有効期限（既定 1 年）で失効すると突然 403 になる。期限前にローテーションし、クライアント側は `ticker config set --cf-access-client-id/--cf-access-client-secret` で更新する。
+- **Cloudflare SSO セッションの失効**: CLI 認証は `ticker login`（SSO）に一本化済み（Service Token は v26.7.2 で廃止）。Access の Session Duration 経過で失効したら `ticker login` を再実行するだけで、定期的な保守作業はない。制約として、ブラウザ操作できない完全無人の自動化には非対応（AI エージェント経由の利用は人間が初回ログインを行う想定。`deploy.md`「クライアント設定」）。
 - **Fly serviceless の再起動挙動**: `[http_service]` が無いため `fly deploy` 後にマシンが stopped のままになることがある。`--restart always` 設定 + `fly machine start` を確認する（Tunnel 常駐に必須）。
 - **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 側）と HTTP read 4 ルートのリトライで吸収済み。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
 - **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`dependencies.md`）。
@@ -57,6 +57,6 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 |---|---|---|
 | Fly secrets | `BLT_EDINET_API_KEY` / `DATABASE_URL` / `CF_ACCESS_TEAM_DOMAIN` / `CLOUDFLARE_TUNNEL_TOKEN` | 各サービスで再発行・`fly secrets set`（`deploy.md` 環境変数表） |
 | Neon | 全テーブルのデータ | dump/restore または EDINET から再 ingest |
-| Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー / Service Token・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
-| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`・keychain（EDINET キー / Service Token）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
+| Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
+| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`・keychain（EDINET キー / Bearer トークン）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
 | Fly Volume `/data` | EDINET 取得キャッシュ | 再取得（コピー不要） |
