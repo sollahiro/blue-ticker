@@ -262,7 +262,7 @@ let masterDataManager = MasterDataManager()
 /// パス未解決・書き込み失敗は false（戻り値パターン）。BltServerCore の定期ポーリングから呼ばれる。
 public func applyEdinetMasterDataSnapshot(_ data: Data) async -> Bool {
     guard let url = resolveEdinetCSVURL() else { return false }
-    guard (try? data.write(to: url)) != nil else { return false }
+    guard (try? data.write(to: url, options: .atomic)) != nil else { return false }
     await masterDataManager.reload()
     return true
 }

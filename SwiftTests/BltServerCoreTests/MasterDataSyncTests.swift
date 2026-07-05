@@ -37,4 +37,16 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
             #expect(snapshot.content == Data("second".utf8))
         }
     }
+
+    @Test func lightweightUpdatedAtQueryMatchesFullRow() async throws {
+        try await withMigratedApp { app in
+            try await upsertMasterDataSnapshot(Data("payload".utf8), db: app.db)
+
+            let full = try #require(
+                try await EdinetMasterSnapshot.find(EdinetMasterSnapshot.singletonID, on: app.db))
+            let meta = try #require(
+                try await EdinetMasterSnapshotUpdatedAt.find(EdinetMasterSnapshot.singletonID, on: app.db))
+            #expect(meta.updatedAt == full.updatedAt)
+        }
+    }
 }
