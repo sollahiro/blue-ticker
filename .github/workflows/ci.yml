@@ -42,3 +42,40 @@ jobs:
         # st_ctim 等がエラー化する（macOS は Darwin 経由で無傷）。swift-nio 修正までの一時措置。
         # 詳細: docs/blt-server-roadmap.md「Linux ビルドの既知の問題」
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
+  fly-toml-guard:
+    # 本番認証（方式A・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
+    # 3点セットで初めて成立する（docs/deploy.md「Cloudflare Access」）。fly.toml に
+    # [http_service] / [[services]]（＝公開 LB・ポート）が復活すると、この前提が崩れ
+    # origin が無検証で素通りになる。TOML としてパースして判定する（コメント中の文字列
+    # 一致による誤検知を避けるため。fly.toml 自身の警告コメントが `[http_service]` という
+    # 文字列を含む）。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: fly.toml が serviceless を維持しているか検証
+        run: |
+          python3 - <<'PYEOF'
+          import sys
+          import tomllib
+
+          with open("fly.toml", "rb") as f:
+              data = tomllib.load(f)
+
+          offending = [k for k in ("http_service", "services") if k in data]
+          if offending:
+              print(
+                  f"fly.toml に {offending} が定義されています。"
+                  "方式A（Cloudflare Access・エッジ信頼）は公開ポート閉鎖が前提のため、"
+                  "復活させる場合は docs/deploy.md「D. fly.toml の段階カットオーバー」を確認してください。",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print("OK: fly.toml は serviceless を維持しています")
+          PYEOF
