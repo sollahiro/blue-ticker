@@ -1,0 +1,44 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Dockerfile'
+      - 'fly.toml'
+      - 'Package.swift'
+      - 'Package.resolved'
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Ensure machine is running
+        # serviceless 構成（[http_service] 撤去済み・docs/deploy.md「D. fly.toml の段階カットオーバー」）
+        # のため、fly deploy 後にマシンが stopped のままになることがある（docs/operations.md「保守ポイント」）。
+        # `flyctl machine status` に汎用 --json フラグは無いため、id/state を含む `machine list --json` のみで完結させる。
+        run: |
+          flyctl machine list --json | jq -c '.[]' | while read -r m; do
+            id=$(echo "$m" | jq -r '.id')
+            state=$(echo "$m" | jq -r '.state')
+            if [ "$state" != "started" ]; then
+              echo "machine $id is $state, starting..."
+              flyctl machine start "$id"
+            fi
+          done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

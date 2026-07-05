@@ -15,7 +15,7 @@
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared サイドカーの Tunnel トークン。設定時のみコンテナ内で cloudflared を起動 | **secret**（Cloudflare 本番時） |
 | `DATABASE_URL` | Neon Postgres 接続文字列 | **secret**（未設定なら DB なしのステートレス動作） |
 
-`/healthz` は認証不要で `{"status":"ok"}` を返す（ヘルスチェック用）。
+`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_half_financials`・`filing_sections`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。
 
 認証モードは `/v1` 配下で起動時に env から1つ選ばれる（優先順）: ① `CF_ACCESS_TEAM_DOMAIN` → Cloudflare Access、② `BLT_AUTH_TOKEN` → 静的 Bearer、③ どちらも無し → 無認証（ローカル開発専用・起動時 warning）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
 
