@@ -26,7 +26,9 @@ enum CloudflaredAccess {
         guard let bin = resolveBinaryPath() else { return false }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: bin)
-        process.arguments = ["access", "login", appURL]
+        // -q: 認証成功時に JWT 本体を標準出力へ出さない（ターミナル/ログへの露出防止）。
+        // トークン自体は cloudflared のローカルストレージに保存され、fetchToken() で取得できる。
+        process.arguments = ["access", "login", "-q", appURL]
         do {
             try process.run()
             process.waitUntilExit()
