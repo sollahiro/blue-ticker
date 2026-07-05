@@ -42,9 +42,9 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 ## 定常運用の保守ポイント
 
 - **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（Stage 3/4/4-half/5）はローカル Mac の launchd で回している（Fly 1GB では OOM）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。将来はクラウドスケジューラへ移行予定（`deploy.md`「定期同期」）。
-- **キャッシュバージョンバンプと Fly デプロイの同期**: `fin-v*` 等（`versioning.md`）をバンプしたら **必ず `fly deploy` で Fly 側イメージも更新**する。古いイメージは新バージョンで格納された行を stale 拒否し、未格納と同じ 404 になる（そのデータが「見えなくなる」）。
-- **cloudflared のバージョン固定更新**: `Dockerfile` の `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` は固定値。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
-- **Cloudflare SSO セッションの失効**: CLI 認証は `ticker login`（SSO）に一本化済み（Service Token は v26.7.2 で廃止）。Access の Session Duration 経過で失効したら `ticker login` を再実行するだけで、定期的な保守作業はない。制約として、ブラウザ操作できない完全無人の自動化には非対応（AI エージェント経由の利用は人間が初回ログインを行う想定。`deploy.md`「クライアント設定」）。
+- **キャッシュバージョンバンプと Fly デプロイの同期**: バンプ後に `fly deploy` を忘れると、古いイメージが新バージョンで格納された行を stale 拒否し未格納と同じ 404 になる。バンプ規則は `versioning.md`「Neon キャッシュバージョン」、デプロイ手順は `deploy.md`「定期同期」を参照。
+- **cloudflared のバージョン固定更新**: `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` の固定運用は `deploy.md`「C. Dockerfile に cloudflared サイドカーを同梱」を参照。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
+- **Cloudflare SSO セッションの失効**: Access の Session Duration 経過で失効したら `ticker login` を再実行する。手順・完全無人自動化の非対応は `deploy.md`「クライアント設定（CLI・SSO ログイン）」を参照。
 - **Fly serviceless の再起動挙動**: `[http_service]` が無いため `fly deploy` 後にマシンが stopped のままになることがある。`--restart always` 設定 + `fly machine start` を確認する（Tunnel 常駐に必須）。
 - **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 側）と HTTP read 4 ルートのリトライで吸収済み。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
 - **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`dependencies.md`）。
