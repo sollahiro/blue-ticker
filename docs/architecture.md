@@ -157,7 +157,7 @@ graph LR
 - DB: **Neon**（serverless Postgres、`DATABASE_URL` 未設定ならステートレス EDINET プロキシとして起動）
 - オブジェクトストレージ: **Cloudflare R2**（Stage 2 退避先、容量問題化まで延期）
 
-詳細・残タスクは `blt-server-roadmap.md`、XBRL 解析仕様は `xbrl-parsing.md`、デプロイ手順は `deploy.md` を参照。
+詳細・残タスクは `blt-server-roadmap.md`、XBRL 解析仕様は `xbrl-parsing.md`、デプロイ手順は `deploy.md`、外部サービスの結合点・代替可能性・保守ポイントは `operations.md` を参照。
 
 ## コンテナ責務マップ
 
