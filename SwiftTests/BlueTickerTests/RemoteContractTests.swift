@@ -93,6 +93,50 @@ import Testing
         #expect(arr.first?.location == "愛知県")
     }
 
+    /// Cloudflare Access SSO（ticker login 経由）が有効なとき、JWT が専用ヘッダーで付与される。
+    /// Service Token（鍵ペア）とは独立したヘッダーのため、両方設定しても両方が乗る。
+    @Test func buildRequestAddsCfAccessJwtHeaderWhenSet() throws {
+        let client = try #require(
+            RemoteAPIClient(
+                baseURLString: "https://api.example.com", authToken: nil,
+                cfAccessClientId: "client-id", cfAccessClientSecret: "client-secret",
+                cfAccessJwt: "jwt-token"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cf-Access-Jwt-Assertion") == "jwt-token")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Id") == "client-id")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Secret") == "client-secret")
+    }
+
+    /// 空文字は未設定扱い（ヘッダーを付与しない）。
+    @Test func buildRequestOmitsCfAccessJwtHeaderWhenEmpty() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: ""))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cf-Access-Jwt-Assertion") == nil)
+    }
+
+    /// Bearer（静的トークン）は Authorization ヘッダーへ付与される（既存経路の回帰確認）。
+    @Test func buildRequestAddsAuthorizationHeaderForBearerToken() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: "bearer-token"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer bearer-token")
+    }
+
+    /// SSO JWT のみ設定（Service Token 鍵ペアなし）でもヘッダーが付与される。
+    @Test func buildRequestAddsCfAccessJwtHeaderWithoutServiceToken() throws {
+        let client = try #require(
+            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: "jwt-only"))
+        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
+
+        #expect(request.value(forHTTPHeaderField: "Cf-Access-Jwt-Assertion") == "jwt-only")
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Id") == nil)
+        #expect(request.value(forHTTPHeaderField: "CF-Access-Client-Secret") == nil)
+    }
+
     /// filings の公開 JSON が RemoteFilings へデコードできる。
     @Test func remoteFilingsDecodes() throws {
         let json = #"""

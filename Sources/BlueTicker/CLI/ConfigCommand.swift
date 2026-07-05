@@ -28,6 +28,7 @@ struct ConfigShow: AsyncParsableCommand {
         let authToken = await settingsStore.maskedAuthToken()
         let cfClientId = await settingsStore.maskedCfAccessClientId()
         let cfClientSecret = await settingsStore.maskedCfAccessClientSecret()
+        let ssoEnabled = await settingsStore.getBool(.cfAccessSsoEnabled)
 
         if json {
             printJSONObject([
@@ -39,6 +40,7 @@ struct ConfigShow: AsyncParsableCommand {
                 "authToken": authToken,
                 "cfAccessClientId": cfClientId,
                 "cfAccessClientSecret": cfClientSecret,
+                "cfAccessSsoEnabled": ssoEnabled,
             ])
         } else {
             print("設定一覧:")
@@ -50,6 +52,7 @@ struct ConfigShow: AsyncParsableCommand {
             print("  認証トークン      : \(authToken)")
             print("  CF Client ID     : \(cfClientId)")
             print("  CF Client Secret : \(cfClientSecret)")
+            print("  SSO ログイン      : \(ssoEnabled ? "有効（ticker login 済み）" : "無効")")
         }
     }
 }
@@ -84,6 +87,9 @@ struct ConfigSet: AsyncParsableCommand {
     @Flag(name: .long, help: "キャッシュを有効化")
     var enableCache = false
 
+    @Flag(name: .long, help: "Cloudflare Access SSO ログイン（ticker login）を無効化")
+    var disableSso = false
+
     func run() async throws {
         if let key = edinetApiKey {
             try await settingsStore.set(.edinetApiKey, value: key)
@@ -116,6 +122,10 @@ struct ConfigSet: AsyncParsableCommand {
         if enableCache {
             await settingsStore.set(.cacheEnabled, value: true)
             print("キャッシュを有効化しました。")
+        }
+        if disableSso {
+            await settingsStore.set(.cfAccessSsoEnabled, value: false)
+            print("SSO ログインを無効化しました。")
         }
         await settingsStore.save()
     }

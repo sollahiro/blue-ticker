@@ -79,8 +79,8 @@ docker exec blt-server /app/blt-server ingest --limit 50
 2. **Tunnel 作成**（Networks → Tunnels → Cloudflared）→ **トークン**を取得。Public hostname を1本追加: `api.<domain>` → サービス `http://localhost:8080`（コンテナ内 blt-server）。token モードのためルーティングはダッシュボードが保持し、コンテナ内に config/credentials ファイルは不要。
 3. **Access アプリ作成**（Access → Applications → Self-hosted）= `api.<domain>`。
 4. **Access ポリシー 2 本**:
-   - **Service Token**（CLI / MCP 用・decision = *Service Auth*）: Service Token を発行（Access → Service Auth → Service Tokens）→ **Client ID / Client Secret** を取得し、ポリシーで当該トークンを許可。ブラウザ不要で非対話。
-   - **SSO / IdP**（iOS 等の人間用・decision = *Allow*・rule = emails / group）。配布アプリに共有シークレットを埋められないため Service Token 不可。
+   - **Service Token**（CLI / MCP の非対話利用・AI エージェント用・decision = *Service Auth*）: Service Token を発行（Access → Service Auth → Service Tokens）→ **Client ID / Client Secret** を取得し、ポリシーで当該トークンを許可。ブラウザ不要で非対話。
+   - **SSO / IdP**（iOS・CLI を人間が対話的に使う場合・decision = *Allow*・rule = emails / group）。iOS は配布アプリに共有シークレットを埋められないため Service Token 不可。CLI も `ticker login`（下記）で同じ SSO 経路を使える（Service Token の Client ID/Secret を手動コピペする UX 負荷を避けたい場合）。
 5. **IdP 接続**（Settings → Authentication）でログイン方式（Google / OIDC 等）を追加。
 
 ### B. origin（Fly）側 secrets
@@ -119,12 +119,25 @@ cloudflared は接続断を内部で自動再接続する。blt-server が落ち
 
 ### クライアント設定（CLI・実装済み）
 
-remote backend の CLI は Service Token を keychain に保持し、remote 経路で 2 ヘッダを自動付与する。
+remote backend の CLI は Service Token を keychain に保持し、remote 経路で 2 ヘッダを自動付与する。AI エージェント・自動化用途（非対話）はこちらを使う。
 
 ```bash
 ticker config set --cf-access-client-id <id> --cf-access-client-secret <secret>
 # env 上書き: CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET（env > keychain）
 ```
+
+### クライアント設定（CLI・SSO ログイン・実装済み）
+
+人間が対話的に CLI を使う場合、Service Token の Client ID/Secret を手動コピペする代わりに `ticker login` でブラウザ経由の SSO ログインができる。内部的には `cloudflared`（要インストール。`brew install cloudflared` 等）の `access login` / `access token` を呼び出す薄いラッパーで、JWT 自体の保管・更新は cloudflared に委ねる（blue_ticker 側は `config.json` に「SSO 有効」フラグのみ持つ）。
+
+```bash
+ticker config set --backend remote --server-url https://api.<domain>
+ticker login   # ブラウザが開き、Access のログイン画面（IdP）で認証
+```
+
+ログイン成功後は remote 経路のリクエストのたびに `cloudflared access token -app=<server-url>` を呼び `Cf-Access-Jwt-Assertion` ヘッダーへ付与する（Service Token の 2 ヘッダーとは独立。同時設定も可）。前提として Access アプリに **SSO（Allow）ポリシー**（上記 A-4）が当該ユーザーのメールに対して設定されている必要がある。無効化は `ticker config set --disable-sso`。
+
+セッションが失効した場合（Access の Session Duration 経過後など）は `ticker login` を再実行する。origin（方式A）は JWT を検証しないため、この機構の安全性は引き続き「Tunnel + 公開ポート閉鎖 + Access ポリシー」に依存する。
 
 ## 定期同期
 

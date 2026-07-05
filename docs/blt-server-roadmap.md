@@ -357,16 +357,16 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 - **ステップ6 の Dockerfile（Fly.io 用、`swift:6.1` 2 段ビルド）でも同フラグが必須**。
 - swift-nio 側が修正されたら本フラグは除去する（一時措置）。
 
-### 認証（Cloudflare Access + IdP・2026-06-28 確定）
+### 認証（Cloudflare Access + IdP・2026-06-28 確定、2026-07-05 CLI SSO 追加）
 
 クラウド本番は **Cloudflare Access**（Zero Trust リバースプロキシ）をエッジに置き、IdP で認証する。origin（Fly.io）は **Cloudflare Tunnel** 経由でのみ到達可能にし公開ポートを閉じる。
 
-認証方式はクライアント種別で2経路に分かれる。分岐軸は「人間か AI か」ではなく「クライアント内にブラウザのログイン操作が挟まるか」。
+認証方式はクライアント種別で2経路に分かれる。分岐軸は「人間か AI か」ではなく「クライアント内にブラウザのログイン操作が挟まるか」。CLI は当初 Service Token 一本化の方針（2026-06-28）だったが、人間が対話的に使う場合に Client ID/Secret を手動コピペする UX 負荷が大きいため、CLI にも SSO 経路を追加した（2026-07-05）。**非対話（AI エージェント・自動化）は引き続き Service Token、対話的な人間利用は SSO** という使い分け。
 
 | クライアント | 操作者 | 認証方式 | 備考 |
 |---|---|---|---|
-| CLI（人間/AI 半々）・MCP（AI） | 無人 or 非対話 | **Service Token**（`CF-Access-Client-Id` / `CF-Access-Client-Secret`） | ブラウザ不要。鍵ペアをクライアントが保持して毎リクエストに付与 |
-| iOS（**他人配布あり**） | 人間 | **SSO（IdP 連携）** | Cloudflare Access を OIDC プロバイダとし、`ASWebAuthenticationSession` で認可コード+PKCE。配布アプリに共有シークレットを埋められないため Service Token 不可 |
+| CLI（AI エージェント・自動化）・MCP（AI） | 無人 or 非対話 | **Service Token**（`CF-Access-Client-Id` / `CF-Access-Client-Secret`） | ブラウザ不要。鍵ペアをクライアントが保持して毎リクエストに付与 |
+| CLI（人間が対話的に使う場合）・iOS（**他人配布あり**） | 人間 | **SSO（IdP 連携）** | Cloudflare Access を IdP とする。CLI は `ticker login` が `cloudflared access login`（ブラウザ）を呼び、以後 `cloudflared access token` で取得した JWT を `Cf-Access-Jwt-Assertion` ヘッダーへ付与。iOS は `ASWebAuthenticationSession` で認可コード+PKCE（配布アプリに共有シークレットを埋められないため Service Token 不可） |
 | self-host / dev | — | 既存 **Bearer**（`BLT_AUTH_TOKEN`）/ 無認証 | Cloudflare 非依存で立てられるよう温存 |
 
 **origin の検証方針 = 方式 A（エッジ信頼）**。Tunnel + Access がエッジで認証済みのため、origin は Cloudflare 経路に対し**追加の JWT 検証をしない**（新規依存ゼロ。`vapor/jwt` 不要）。
@@ -381,6 +381,7 @@ swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 3. **Dockerfile**: `cloudflared` サイドカー同梱 → **完了（実装・main マージ済み）**。`docs/deploy.md`「Cloudflare Access（本番認証・方式A）」C 節に記載。token 未設定なら blt-server のみ起動で self-host 互換維持
 4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に → **完了（Phase 2 適用済み）**。段階カットオーバー（Phase 1=ポート開で Access 検証 → Phase 2=`[http_service]` 撤去＋serviceless で always-on 化）を実施。**常駐を受け入れる**判断のため scale-to-zero は Phase 2 で失う。詳細は同 D 節
 5. **docs/deploy.md**: Cloudflare 側手順（zone → Tunnel → Access アプリ + ポリシー + Service Token 発行 + IdP 接続）→ **完了**
+6. ~~**CLI の SSO ログイン対応**（`ticker login`）~~ → **完了（2026-07-05）**。`cloudflared access login`/`access token` を呼ぶ薄いラッパー（`Infrastructure/CloudflaredAccess.swift`）を追加し、`RemoteAPIClient` に `Cf-Access-Jwt-Assertion` ヘッダーを追加（Service Token とは独立に付与）。有効化フラグ（秘密情報ではない）は `config.json` の `cfAccessSsoEnabled` に保存、JWT 自体は cloudflared 側のローカルストレージ管理。origin（Routes.swift）は無改修（方式A＝エッジ信頼のまま）。**Cloudflare ダッシュボード側で当該ユーザーのメールに対する SSO（Allow）ポリシーの追加が別途必要**（ユーザー側作業）。
 
 > ステップ3・4 はユーザー判断（2026-06-29）で **docs 手順化のみ実施・実コード/設定変更とダッシュボード操作は運用者が段階実施**とした（Cloudflare ダッシュボード・zone 移管・Service Token 発行・IdP 接続はユーザー側作業）。
 

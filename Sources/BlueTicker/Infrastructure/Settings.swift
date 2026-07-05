@@ -24,6 +24,7 @@ actor SettingsStore {
                 v.edinetBackend = backend
             }
             v.serverURL = file.serverURL ?? v.serverURL
+            v.cfAccessSsoEnabled = file.cfAccessSsoEnabled ?? v.cfAccessSsoEnabled
         }
 
         self.userDataPath = base
@@ -64,6 +65,8 @@ actor SettingsStore {
         switch key {
         case .cacheEnabled:
             return values.cacheEnabled
+        case .cfAccessSsoEnabled:
+            return values.cfAccessSsoEnabled
         }
     }
 
@@ -95,6 +98,8 @@ actor SettingsStore {
         switch key {
         case .cacheEnabled:
             values.cacheEnabled = value
+        case .cfAccessSsoEnabled:
+            values.cfAccessSsoEnabled = value
         }
     }
 
@@ -104,7 +109,8 @@ actor SettingsStore {
             cacheDir: values.cacheDir,
             cacheEnabled: values.cacheEnabled,
             edinetBackend: values.edinetBackend,
-            serverURL: values.serverURL.isEmpty ? nil : values.serverURL
+            serverURL: values.serverURL.isEmpty ? nil : values.serverURL,
+            cfAccessSsoEnabled: values.cfAccessSsoEnabled ? true : nil
         )
         guard let data = try? JSONEncoder().encode(payload) else { return false }
         do {
@@ -152,6 +158,7 @@ enum SettingsKey: String {
 
 enum SettingsBoolKey {
     case cacheEnabled
+    case cfAccessSsoEnabled
 }
 
 private struct SettingsValues {
@@ -165,6 +172,9 @@ private struct SettingsValues {
     // Cloudflare Access Service Token の鍵ペア。authToken と同様 keychain 管理。
     var cfAccessClientId: String = ""
     var cfAccessClientSecret: String = ""
+    // ticker login（cloudflared access login）成功時に立てるフラグ。秘密情報ではなく
+    // JWT 自体は cloudflared 側のローカルストレージが保持するため config.json に保存してよい。
+    var cfAccessSsoEnabled: Bool = false
 }
 
 private struct SettingsFile: Codable {
@@ -172,6 +182,7 @@ private struct SettingsFile: Codable {
     var cacheEnabled: Bool?
     var edinetBackend: String?
     var serverURL: String?
+    var cfAccessSsoEnabled: Bool?
     // authToken は config ファイルに保存しない（keychain 管理。edinetApiKey と同様）。
 }
 
