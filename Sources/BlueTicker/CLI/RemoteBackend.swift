@@ -27,19 +27,6 @@ enum RemoteBackend {
         } else {
             token = await settingsStore.get(.authToken)
         }
-        // Cloudflare Access Service Token（鍵ペア）。env（Cloudflare 標準名）> keychain。
-        let cfClientId: String?
-        if let envId = nonEmpty(env["CF_ACCESS_CLIENT_ID"]) {
-            cfClientId = envId
-        } else {
-            cfClientId = await settingsStore.get(.cfAccessClientId)
-        }
-        let cfClientSecret: String?
-        if let envSecret = nonEmpty(env["CF_ACCESS_CLIENT_SECRET"]) {
-            cfClientSecret = envSecret
-        } else {
-            cfClientSecret = await settingsStore.get(.cfAccessClientSecret)
-        }
         // Cloudflare Access SSO（ticker login 経由）。有効なら cloudflared から都度 JWT を取得する。
         var cfJwt: String?
         if await settingsStore.getBool(.cfAccessSsoEnabled), !url.isEmpty {
@@ -51,10 +38,7 @@ enum RemoteBackend {
         }
 
         guard
-            let client = RemoteAPIClient(
-                baseURLString: url, authToken: token,
-                cfAccessClientId: cfClientId, cfAccessClientSecret: cfClientSecret,
-                cfAccessJwt: cfJwt)
+            let client = RemoteAPIClient(baseURLString: url, authToken: token, cfAccessJwt: cfJwt)
         else {
             printError(
                 "エラー: remote バックエンドですが server-url が未設定です。"

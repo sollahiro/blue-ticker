@@ -86,7 +86,7 @@ flowchart LR
     server -.->|"filings/financials read<br/>（財務系は DB 専用）"| pg[("Neon Postgres")]
 ```
 
-接続情報の解決順位: env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > `BLT_AUTH_TOKEN` 設定なら静的 Bearer > どちらも無しなら無認証（dev）。クラウド本番は Cloudflare Access + IdP（CLI/MCP は Service Token・iOS は SSO）、self-host は Bearer。詳細は `blt-server-roadmap.md`「認証」。
+接続情報の解決順位: env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > `BLT_AUTH_TOKEN` 設定なら静的 Bearer > どちらも無しなら無認証（dev）。クラウド本番は Cloudflare Access + IdP（CLI/iOS とも SSO）、self-host は Bearer。詳細は `blt-server-roadmap.md`「認証」。
 
 ### REST エンドポイント（`/v1/`、公開契約）
 

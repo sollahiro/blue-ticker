@@ -52,12 +52,6 @@ actor SettingsStore {
         case .authToken:
             return Keystore.getPassword(service: keychainService, key: key.rawValue)
                 ?? (values.authToken.isEmpty ? nil : values.authToken)
-        case .cfAccessClientId:
-            return Keystore.getPassword(service: keychainService, key: key.rawValue)
-                ?? (values.cfAccessClientId.isEmpty ? nil : values.cfAccessClientId)
-        case .cfAccessClientSecret:
-            return Keystore.getPassword(service: keychainService, key: key.rawValue)
-                ?? (values.cfAccessClientSecret.isEmpty ? nil : values.cfAccessClientSecret)
         }
     }
 
@@ -85,12 +79,6 @@ actor SettingsStore {
         case .authToken:
             try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
             values.authToken = ""
-        case .cfAccessClientId:
-            try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
-            values.cfAccessClientId = ""
-        case .cfAccessClientSecret:
-            try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
-            values.cfAccessClientSecret = ""
         }
     }
 
@@ -129,14 +117,6 @@ actor SettingsStore {
         mask(get(.authToken))
     }
 
-    func maskedCfAccessClientId() -> String {
-        mask(get(.cfAccessClientId))
-    }
-
-    func maskedCfAccessClientSecret() -> String {
-        mask(get(.cfAccessClientSecret))
-    }
-
     private func mask(_ secret: String?) -> String {
         guard let s = secret, !s.isEmpty else { return "****" }
         return s.count > 8 ? String(s.prefix(4)) + "****" + String(s.suffix(4)) : "****"
@@ -152,8 +132,6 @@ enum SettingsKey: String {
     case edinetBackend
     case serverURL
     case authToken
-    case cfAccessClientId
-    case cfAccessClientSecret
 }
 
 enum SettingsBoolKey {
@@ -171,9 +149,6 @@ private struct SettingsValues {
     var serverURL: String = Api.defaultRemoteServerURL
     // 機密のため通常は keychain に保存し、values には載せない（keychain 不在環境のフォールバックのみ）。
     var authToken: String = ""
-    // Cloudflare Access Service Token の鍵ペア。authToken と同様 keychain 管理。
-    var cfAccessClientId: String = ""
-    var cfAccessClientSecret: String = ""
     // ticker login（cloudflared access login）成功時に立てるフラグ。秘密情報ではなく
     // JWT 自体は cloudflared 側のローカルストレージが保持するため config.json に保存してよい。
     var cfAccessSsoEnabled: Bool = false

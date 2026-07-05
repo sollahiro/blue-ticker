@@ -53,23 +53,15 @@ struct RemoteFilingContent {
 struct RemoteAPIClient: Sendable {
     let baseURL: String
     let authToken: String?
-    let cfAccessClientId: String?
-    let cfAccessClientSecret: String?
     let cfAccessJwt: String?
 
     /// baseURL が空・不正なら nil。各認証情報は空なら未設定扱い。
-    /// authToken（Bearer）・Cloudflare Access Service Token・SSO JWT は独立に付与される。
-    init?(
-        baseURLString: String, authToken: String?,
-        cfAccessClientId: String? = nil, cfAccessClientSecret: String? = nil,
-        cfAccessJwt: String? = nil
-    ) {
+    /// authToken（Bearer）・SSO JWT は独立に付与される。
+    init?(baseURLString: String, authToken: String?, cfAccessJwt: String? = nil) {
         let trimmed = baseURLString.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, URL(string: trimmed) != nil else { return nil }
         baseURL = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
         self.authToken = (authToken?.isEmpty == false) ? authToken : nil
-        self.cfAccessClientId = (cfAccessClientId?.isEmpty == false) ? cfAccessClientId : nil
-        self.cfAccessClientSecret = (cfAccessClientSecret?.isEmpty == false) ? cfAccessClientSecret : nil
         self.cfAccessJwt = (cfAccessJwt?.isEmpty == false) ? cfAccessJwt : nil
     }
 
@@ -147,8 +139,7 @@ struct RemoteAPIClient: Sendable {
                 return .ok(data)
             case 401:
                 return .failure(
-                    "認証に失敗しました。ticker config set --auth-token <token>"
-                        + "（または --cf-access-client-id / --cf-access-client-secret）を確認するか、"
+                    "認証に失敗しました。ticker config set --auth-token <token> を確認するか、"
                         + "SSO ログインの場合は ticker login を再実行してください。")
             case 404:
                 return .notFound(errorMessage(data) ?? "見つかりませんでした")
@@ -172,12 +163,7 @@ struct RemoteAPIClient: Sendable {
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        // Cloudflare Access Service Token は鍵ペアが両方そろったときだけ2ヘッダを付与する。
-        if let id = cfAccessClientId, let secret = cfAccessClientSecret {
-            request.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
-            request.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
-        }
-        // Cloudflare Access SSO（ticker login 経由の JWT）。Service Token とは独立に付与される。
+        // Cloudflare Access SSO（ticker login 経由の JWT）。
         // エッジでの認証は Cookie `CF_Authorization` を見る（`Cf-Access-Jwt-Assertion` ヘッダーは
         // Access が認証済みリクエストを origin に転送する際に付与するものであり、クライアントが
         // 未認証状態でこれを送っても Access のログイン画面へ 302 されるだけで通らない。実機検証で確認済み）。
