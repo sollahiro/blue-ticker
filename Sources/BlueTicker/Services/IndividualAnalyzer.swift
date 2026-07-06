@@ -54,20 +54,14 @@ struct IndividualAnalyzer {
         // 最新 analysisYears 件に絞る（EdinetDiscovery は最大件数を返すが多い場合もある）
         let targetDocs = Array(docs.prefix(analysisYears))
 
-        // 並列で XBRL ダウンロード + 抽出
+        // 並列で XBRL ダウンロード + 抽出（メモリピーク抑制のため並列度を制限）
         // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーでクロージャ境界を渡す
         struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
-        var yearEntries: [YearEntry] = []
-        await withTaskGroup(of: YearEntry?.self) { group in
-            for doc in targetDocs {
-                let d = SendableDoc(value: doc)
-                group.addTask {
-                    await self.processDocument(d.value)
-                }
-            }
-            for await entry in group {
-                if let e = entry { yearEntries.append(e) }
-            }
+        var yearEntries: [YearEntry] = await withBoundedTaskGroup(
+            items: targetDocs.map { SendableDoc(value: $0) },
+            limit: Api.xbrlProcessConcurrency
+        ) { d in
+            await self.processDocument(d.value)
         }
 
         guard !yearEntries.isEmpty else { return nil }
