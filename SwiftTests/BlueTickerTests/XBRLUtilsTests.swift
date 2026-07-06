@@ -72,4 +72,56 @@ import Foundation
         #expect(!(ContextHelpers.isConsolidatedInstant("CurrentYearInstant_NonConsolidated")))
         #expect(ContextHelpers.isNonConsolidatedDuration("CurrentYearDuration_NonConsolidatedMember"))
     }
+
+    // MARK: - Label/Role cache (bounded FIFO) behavior
+
+    /// 最小のラベルリンクベース（_lab.xml）を生成する。NetSales → "売上高" の1エントリのみ。
+    private static func makeLabelLinkbase() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:labelLink xlink:type="extended" xlink:role="http://www.xbrl.org/2003/role/link">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetSales" xlink:label="loc_NetSales"/>
+            <link:label xlink:type="resource" xlink:label="label_NetSales" xlink:role="http://www.xbrl.org/2003/role/label" xml:lang="ja">売上高</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_NetSales" xlink:to="label_NetSales"/>
+          </link:labelLink>
+        </link:linkbase>
+        """
+    }
+
+    /// loadLabelsByTag は同一 dir への複数回の要求で常に同じ結果を返すこと（cache hit・evict 後の再パースいずれでも正しさは不変）。
+    @Test func loadLabelsByTagReturnsSameResultOnRepeatedCalls() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_lab.xml": Self.makeLabelLinkbase()]
+        ) { dir in
+            let first = XBRLUtils.loadLabelsByTag(in: dir)
+            let second = XBRLUtils.loadLabelsByTag(in: dir)
+            #expect(first == second)
+            #expect(first["NetSales"] == "売上高")
+        }
+    }
+
+    /// キャッシュ容量（16）を超える distinct dir を要求してもクラッシュせず、各 dir の結果が正しく返ること
+    /// （FIFO evict 後の再パースを含む）。
+    @Test func loadLabelsByTagHandlesManyDistinctDirsWithoutCrash() throws {
+        var dirs: [URL] = []
+        defer { for dir in dirs { try? FileManager.default.removeItem(at: dir) } }
+
+        for _ in 0..<20 {
+            let dir = try ServiceTestSupport.makeTempDir()
+            try Self.makeLabelLinkbase().write(
+                to: dir.appendingPathComponent("taxonomy_lab.xml"), atomically: true, encoding: .utf8)
+            dirs.append(dir)
+        }
+
+        for dir in dirs {
+            let labels = XBRLUtils.loadLabelsByTag(in: dir)
+            #expect(labels["NetSales"] == "売上高")
+        }
+
+        // 先頭（最も古い）dir を再要求しても evict 後の再パースで同じ結果が返ること
+        let firstAgain = XBRLUtils.loadLabelsByTag(in: dirs[0])
+        #expect(firstAgain["NetSales"] == "売上高")
+    }
 }
