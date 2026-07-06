@@ -30,11 +30,25 @@ enum RemoteBackend {
         // Cloudflare Access SSO（ticker login 経由）。有効なら cloudflared から都度 JWT を取得する。
         var cfJwt: String?
         if await settingsStore.getBool(.cfAccessSsoEnabled), !url.isEmpty {
-            guard let jwt = CloudflaredAccess.fetchToken(appURL: url) else {
-                printError("エラー: Cloudflare Access の SSO セッションが無効です。ticker login を再実行してください。\n")
+            switch CloudflaredAccess.fetchToken(appURL: url) {
+            case .success(let jwt):
+                cfJwt = jwt
+            case .binaryNotFound:
+                printError("エラー: cloudflared が見つかりません。インストールを確認してください。\n")
+                throw ExitCode.failure
+            case .processFailed(let exitCode, let stderr):
+                let detail = stderr.isEmpty ? "" : ": \(stderr)"
+                printError(
+                    "エラー: Cloudflare Access の SSO セッションが無効です。ticker login を再実行してください。"
+                        + "(cloudflared exit=\(exitCode)\(detail))\n")
+                throw ExitCode.failure
+            case .emptyToken(let stderr):
+                let detail = stderr.isEmpty ? "" : "(cloudflared: \(stderr))"
+                printError(
+                    "エラー: Cloudflare Access の SSO セッションが無効です。ticker login を再実行してください。"
+                        + "\(detail)\n")
                 throw ExitCode.failure
             }
-            cfJwt = jwt
         }
 
         guard

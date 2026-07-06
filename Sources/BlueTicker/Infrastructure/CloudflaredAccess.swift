@@ -38,30 +38,91 @@ enum CloudflaredAccess {
         }
     }
 
+    /// `fetchToken(appURL:)` の結果。失敗理由ごとに呼び出し元が原因を切り分けられるようにする。
+    enum TokenFetchResult {
+        case success(String)
+        case binaryNotFound
+        /// `cloudflared access token` が非ゼロ終了。stderr を診断用に保持する。
+        case processFailed(exitCode: Int32, stderr: String)
+        /// exit 0 だが stdout にトークンが無い。トークン未保存時の cloudflared は
+        /// exit 0・stdout 空で stderr に理由（"Unable to find token ..."）を出すため、
+        /// stderr を診断用に保持する。
+        case emptyToken(stderr: String)
+    }
+
+    /// 診断メッセージに含める stderr の最大文字数。cloudflared が大量にログを吐いても
+    /// エラーメッセージが肥大化しないよう、末尾のみを残す。
+    private static let maxStderrCaptureLength = 500
+
     /// `cloudflared access token -app=<appURL>` でキャッシュ済み JWT を取得する。
-    /// 未ログイン・失効時は nil（呼び出し元が再ログインを促す）。
-    static func fetchToken(appURL: String) -> String? {
-        guard let bin = resolveBinaryPath() else { return nil }
+    /// 未ログイン・失効時は失敗理由付きで返す（呼び出し元が再ログインを促す）。
+    ///
+    /// - Parameter binaryPathOverride: テスト専用。指定時は `resolveBinaryPath()` を経由せず
+    ///   直接このパスを実行する。本番呼び出しでは指定しない（デフォルト nil で従来どおり解決）。
+    static func fetchToken(appURL: String, binaryPathOverride: String? = nil) -> TokenFetchResult {
+        let bin: String
+        if let binaryPathOverride {
+            bin = binaryPathOverride
+        } else {
+            guard let resolved = resolveBinaryPath() else { return .binaryNotFound }
+            bin = resolved
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: bin)
         process.arguments = ["access", "token", "-app=\(appURL)"]
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        // stderr は読み捨てる。Pipe のまま放置すると出力がバッファ上限を超えたときに
-        // 子プロセスの書き込みがブロックし waitUntilExit() がデッドロックし得るため /dev/null へ流す。
-        process.standardError = FileHandle.nullDevice
+
+        // stdout（JWT 本体）は Pipe＝メモリ内のみで受ける。一時ファイル経由にすると
+        // 認証情報が短時間でもディスク（Linux では共有 /tmp・umask 依存の権限）に
+        // 残るため不可。waitUntilExit() より先に readDataToEndOfFile() で読み切れば、
+        // stdout 側のパイプバッファ詰まりによるデッドロックは起きない。
+        let stdoutPipe = Pipe()
+        process.standardOutput = stdoutPipe
+
+        // stderr は一時ファイルへ書かせる。stderr も Pipe にして stdout →
+        // stderr の順に逐次読みすると、stderr がパイプバッファ上限（通常 64KB）を
+        // 超えた時点で子の書き込みがブロックし、stdout が閉じられず永久に返らなく
+        // なる（元実装が stderr を /dev/null に捨てていた理由）。ファイル書き込みに
+        // バッファ上限はなく子はブロックしないため、終了後に安全にまとめて読める。
+        let stderrURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blt-cfaccess-stderr-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: stderrURL) }
+        guard
+            FileManager.default.createFile(atPath: stderrURL.path, contents: nil),
+            let stderrHandle = FileHandle(forWritingAtPath: stderrURL.path)
+        else {
+            return .processFailed(exitCode: -1, stderr: "一時ファイルの作成に失敗しました")
+        }
+        process.standardError = stderrHandle
+
         do {
             try process.run()
-            // 子プロセスの終了（＝パイプの書き込み側クローズ）を待たず先に読み切る。
-            // waitUntilExit() を先に呼ぶと、出力がパイプバッファ上限を超えた場合に
-            // 子プロセスの書き込みブロック待ちで永久に返らなくなるおそれがある。
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (token?.isEmpty == false) ? token : nil
         } catch {
-            return nil
+            try? stderrHandle.close()
+            return .processFailed(exitCode: -1, stderr: "\(error)")
         }
+        // 書き込み側ディスクリプタは子プロセスへ複製済みなので親側は即クローズしてよい。
+        try? stderrHandle.close()
+
+        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let errData = (try? Data(contentsOf: stderrURL)) ?? Data()
+
+        guard process.terminationStatus == 0 else {
+            return .processFailed(exitCode: process.terminationStatus, stderr: capturedStderrText(from: errData))
+        }
+        let token = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let token, !token.isEmpty else {
+            return .emptyToken(stderr: capturedStderrText(from: errData))
+        }
+        return .success(token)
+    }
+
+    /// stderr の生データを診断メッセージ用に整形する（trim ＋ 長大な出力は末尾のみへキャップ）。
+    private static func capturedStderrText(from data: Data) -> String {
+        let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard text.count > maxStderrCaptureLength else { return text }
+        return "…(truncated)…" + text.suffix(maxStderrCaptureLength)
     }
 }
