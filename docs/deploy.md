@@ -206,11 +206,12 @@ docker rm -f blt-pg
 
 ### 2. 実 Neon フルパイプライン（要シークレット・EDINET ネットワーク）
 
-`DATABASE_URL`（Neon・`?sslmode=require`）と `BLT_EDINET_API_KEY` を設定し、ローカルバイナリで sync→ingest→financials を通す。
+`DATABASE_URL`（Neon・`?sslmode=require`）と `BLT_EDINET_API_KEY` をシェルに載せ、ローカルバイナリで sync→ingest→financials を通す。**手動実行でも `.env` をロードすること**（定期同期の launchd と同じ単一ソース）。`sync`/`ingest`/サーバー起動は `BLT_EDINET_API_KEY` を env → keychain の順で解決するため、env に載っていれば keychain を触らず macOS の**キーチェーン許可プロンプト（GUI パスワード入力）が出ない**。素のシェルで env 未設定のまま叩くと keychain 経路に落ち、リリースビルドを焼き直すたびに署名が変わって毎回プロンプトが再発する。
 
 ```bash
-export DATABASE_URL='postgres://...neon.tech/...?sslmode=require'
-export BLT_EDINET_API_KEY=xxxxx
+# 機密は .env（リポジトリ直下・Git 非管理）に集約し、そこからロードする
+set -a; . ./.env; set +a
+# （.env が無い環境では export DATABASE_URL=... / export BLT_EDINET_API_KEY=... で代替）
 
 # 起動時に autoMigrate がスキーマを適用（DATABASE_URL があれば自動）
 swift run blt-server sync --from 2025-04-01   # Stage 1: 書類一覧 → edinet_documents
