@@ -64,6 +64,10 @@ public enum Api {
     static let docDiscoveryLimit = 10
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
+    /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
+    /// メモリピーク抑制のため（issue #34）。
+    static let xbrlProcessConcurrency = 2
+
     // 書類種別
     // Stage 5 取り込み（BltServerCore）が有報のみを対象にするため public。
     public static let docTypeAnnualReport = "120"

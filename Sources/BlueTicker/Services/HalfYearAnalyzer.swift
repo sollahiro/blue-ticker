@@ -60,35 +60,31 @@ struct HalfYearAnalyzer {
             ($0["period_type"] as? String) == "FY" && ($0["_is_amendment"] as? Bool) != true
         }
 
-        // FY / 2Q docs を並列処理
+        // FY / 2Q docs を並列処理（メモリピーク抑制のため並列度を制限）
         // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーでクロージャ境界を渡す
         struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
 
+        let fyPairs: [(String, YearEntry)] = await withBoundedTaskGroup(
+            items: fyDocs.map { SendableDoc(value: $0) },
+            limit: Api.xbrlProcessConcurrency
+        ) { d in
+            guard let fyEnd = d.value["edinet_fy_end"] as? String,
+                  let entry = await analyzer.processDocument(d.value) else { return nil }
+            return (fyEnd, entry)
+        }
         var fyEntries: [String: YearEntry] = [:]
-        await withTaskGroup(of: (String, YearEntry)?.self) { group in
-            for doc in fyDocs {
-                let d = SendableDoc(value: doc)
-                group.addTask {
-                    guard let fyEnd = d.value["edinet_fy_end"] as? String,
-                          let entry = await analyzer.processDocument(d.value) else { return nil }
-                    return (fyEnd, entry)
-                }
-            }
-            for await r in group { if let (k, v) = r { fyEntries[k] = v } }
-        }
+        for (k, v) in fyPairs { fyEntries[k] = v }
 
-        var q2Entries: [String: YearEntry] = [:]
-        await withTaskGroup(of: (String, YearEntry)?.self) { group in
-            for doc in halfDocs {
-                let d = SendableDoc(value: doc)
-                group.addTask {
-                    guard let fyEnd = d.value["edinet_fy_end"] as? String,
-                          let entry = await analyzer.processDocument(d.value) else { return nil }
-                    return (fyEnd, entry)
-                }
-            }
-            for await r in group { if let (k, v) = r { q2Entries[k] = v } }
+        let q2Pairs: [(String, YearEntry)] = await withBoundedTaskGroup(
+            items: halfDocs.map { SendableDoc(value: $0) },
+            limit: Api.xbrlProcessConcurrency
+        ) { d in
+            guard let fyEnd = d.value["edinet_fy_end"] as? String,
+                  let entry = await analyzer.processDocument(d.value) else { return nil }
+            return (fyEnd, entry)
         }
+        var q2Entries: [String: YearEntry] = [:]
+        for (k, v) in q2Pairs { q2Entries[k] = v }
         guard !q2Entries.isEmpty else { return nil }
 
         // H1: 全 Q2 エントリ（FY 有無を問わず）
