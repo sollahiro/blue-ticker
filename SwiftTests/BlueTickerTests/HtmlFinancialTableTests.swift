@@ -139,8 +139,8 @@ import Foundation
             """)
         defer { try? FileManager.default.removeItem(at: dir) }
         let fv = USGAAPHtml.extractGrossProfit(in: dir)
-        #expect(fv?.prior == 1_000 * 1_000_000)
-        #expect(fv?.current == 1_200 * 1_000_000)
+        #expect(fv?.prior == 1_000 * Financial.millionYen)
+        #expect(fv?.current == 1_200 * Financial.millionYen)
     }
 
     @Test func extractGrossProfitReturnsNilWhenLabelAbsent() throws {
@@ -163,8 +163,8 @@ import Foundation
             """)
         defer { try? FileManager.default.removeItem(at: dir) }
         let fv = USGAAPHtml.extractInterestExpense(in: dir)
-        #expect(fv?.prior == 40 * 1_000_000)
-        #expect(fv?.current == 50 * 1_000_000)
+        #expect(fv?.prior == 40 * Financial.millionYen)
+        #expect(fv?.current == 50 * Financial.millionYen)
     }
 
     @Test func extractInterestExpenseIgnoresReceivedAndAccruedRows() throws {
