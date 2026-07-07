@@ -9,9 +9,40 @@ import SwiftSoup
 
 // MARK: - Module-level label/role cache
 
+// キャッシュキーは document 固有の XBRL 展開ディレクトリ URL であり、document を跨いだ再利用は
+// 発生しない（doc ごとに distinct な新規 dir が積み上がるだけ）。上限を設けないと ingest 1 プロセス内で
+// 処理 document 数に比例してメモリが純増し OOM する。同一社の並列 doc 処理数は最大 6 のため、
+// 16 あれば doc 内再利用（同一 dir への複数回アクセス）の効能を潰さずに頭打ちにできる。
+private let _labelRoleCacheCapacity = 16
+
+/// 挿入順 FIFO で evict する固定容量キャッシュ。スレッド安全性は呼び出し側の _cacheLock が担保する
+/// （このstruct自体はロックしない）。
+private struct BoundedFIFOCache<Key: Hashable, Value> {
+    private var storage: [Key: Value] = [:]
+    private var insertionOrder: [Key] = []
+    let capacity: Int
+
+    init(capacity: Int) { self.capacity = capacity }
+
+    subscript(key: Key) -> Value? {
+        storage[key]
+    }
+
+    mutating func insert(_ value: Value, forKey key: Key) {
+        if storage[key] == nil {
+            insertionOrder.append(key)
+        }
+        storage[key] = value
+        while insertionOrder.count > capacity {
+            let oldest = insertionOrder.removeFirst()
+            storage.removeValue(forKey: oldest)
+        }
+    }
+}
+
 // nonisolated(unsafe): access is serialized by _cacheLock
-nonisolated(unsafe) private var _labelCache: [URL: [String: String]] = [:]
-nonisolated(unsafe) private var _roleCache: [URL: [String: [String]]] = [:]
+nonisolated(unsafe) private var _labelCache = BoundedFIFOCache<URL, [String: String]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _roleCache = BoundedFIFOCache<URL, [String: [String]]>(capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
 
 // MARK: - Core Utilities
@@ -173,7 +204,7 @@ enum XBRLUtils {
         }
 
         _cacheLock.lock()
-        _labelCache[dir] = labelsByTag
+        _labelCache.insert(labelsByTag, forKey: dir)
         _cacheLock.unlock()
         return labelsByTag
     }
@@ -198,7 +229,7 @@ enum XBRLUtils {
 
         let result = roleSetsByTag.mapValues { Array($0).sorted() }
         _cacheLock.lock()
-        _roleCache[dir] = result
+        _roleCache.insert(result, forKey: dir)
         _cacheLock.unlock()
         return result
     }
