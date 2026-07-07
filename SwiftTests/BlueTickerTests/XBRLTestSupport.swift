@@ -18,6 +18,20 @@ enum XBRLTestSupport {
         return table
     }
 
+    /// HTML 文字列から <tr> 要素の配列を返す（HtmlFinancialTable 系テスト用）。
+    static func parseTableRows(_ html: String) throws -> [Element] {
+        try SwiftSoup.parse(html).select("tr").array()
+    }
+
+    /// HTML 文字列の最初の <tr> のセル（td / th）配列を返す。
+    static func parseFirstRowCells(_ html: String) throws -> [Element] {
+        guard let row = try SwiftSoup.parse(html).select("tr").first() else {
+            throw NSError(domain: "XBRLTestSupport", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "<tr> が見つかりません"])
+        }
+        return try row.select("td, th").array()
+    }
+
     static let nsXbrli = "http://www.xbrl.org/2003/instance"
     static let nsJppfs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
     static let nsJpifrs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpifrs/2022-11-01/jpifrs_cor"
