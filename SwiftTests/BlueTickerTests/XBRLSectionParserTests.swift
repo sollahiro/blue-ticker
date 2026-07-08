@@ -43,6 +43,29 @@ import Foundation
         }
     }
 
+    @Test func extractSectionPattern2PicksInnermostDivNotWrapper() throws {
+        // 外側 div がタイトルを含む場合、文書全体ではなく内側要素を返す
+        let html = """
+            <html><body>
+            <div id="wrapper">
+              <div><p>目次や前文テキスト</p></div>
+              <div>
+                <p>【事業等のリスク】</p>
+                <p>為替変動リスクの詳細説明。</p>
+              </div>
+              <div><p>別セクションの内容</p></div>
+            </div>
+            </body></html>
+            """
+        try withDir { dir in
+            try write(html, as: "0101010_honbun_test.htm", in: dir)
+            let text = XBRLParser().extractSection(in: dir, sectionName: "事業等のリスク")
+            #expect(text?.contains("為替変動リスクの詳細説明") == true)
+            #expect(text?.contains("目次や前文テキスト") == false)
+            #expect(text?.contains("別セクションの内容") == false)
+        }
+    }
+
     @Test func extractSectionReturnsNilWhenSectionMissing() throws {
         try withDir { dir in
             try write(riskHtml, as: "0101010_honbun_test.htm", in: dir)

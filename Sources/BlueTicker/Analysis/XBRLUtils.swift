@@ -72,9 +72,15 @@ enum XBRLUtils {
             }
         }
         s = s.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "，", with: "")
-        if s.hasPrefix("△") { s = "-" + s.dropFirst() }
+        if s.hasPrefix("△") || s.hasPrefix("▲") { s = "-" + s.dropFirst() }
         if ["－", "-", "―", "—", ""].contains(s) { return nil }
         return Double(s)
+    }
+
+    /// HTML 表行から財務金額らしい値を選ぶ。閾値未満のみの場合は全数値へフォールバックする。
+    static func filterFinancialTableAmounts(_ values: [Double]) -> [Double] {
+        let financial = values.filter { abs($0) >= Financial.htmlTableMinAbsMillionYen }
+        return financial.isEmpty ? values : financial
     }
 
     /// HTML要素の整数属性を安全に読む。
@@ -362,7 +368,7 @@ enum XBRLUtils {
     /// 指定タグの TextBlock 要素内のHTML（エンティティ復号済み）を最初に一致したファイルから返す。
     static func extractTextblockHtml(in dir: URL, textblockTag: String) -> String? {
         let pattern = try? NSRegularExpression(
-            pattern: "<[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "[^>]*>(.*?)</[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + ">",
+            pattern: "<[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "(?:\\s|>|/)[^>]*>(.*?)</[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "[^>]*>",
             options: [.dotMatchesLineSeparators]
         )
         for xbrlFile in findXbrlFiles(in: dir) {
@@ -425,8 +431,7 @@ enum XBRLUtils {
             let numbers = texts.map { parseHtmlNumber($0) }
             let allNums = numbers.compactMap { $0 }
             guard !allNums.isEmpty else { continue }
-            let financial = allNums.filter { abs($0) >= 200 }
-            let found = financial.isEmpty ? allNums : financial
+            let found = filterFinancialTableAmounts(allNums)
             let current = found.last! * Financial.millionYen
             let prior: Double? = found.count >= 2 ? found[found.count - 2] * Financial.millionYen : nil
             let vtag = labelMap[lbl]!
@@ -434,21 +439,6 @@ enum XBRLUtils {
             remaining.subtract(tagToLabels[vtag] ?? [])
         }
         return fieldSet
-    }
-}
-
-// MARK: - HTML entity decode helper
-
-private extension String {
-    var htmlEntityDecoded: String {
-        // Simple HTML entity unescaping for textblock content
-        var s = self
-        let entities: [(String, String)] = [
-            ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-            ("&quot;", "\""), ("&#39;", "'"), ("&nbsp;", "\u{00A0}"),
-        ]
-        for (entity, char) in entities { s = s.replacingOccurrences(of: entity, with: char) }
-        return s
     }
 }
 

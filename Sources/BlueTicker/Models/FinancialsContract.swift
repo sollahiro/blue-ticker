@@ -23,7 +23,7 @@ import Foundation
 /// PR #27（6836 売掛金の企業拡張タグ対応）はこのバージョンをバンプせず fin-v3 のまま合流した。
 /// 抽出ロジック変更の反映（既存キャッシュ済み行の再計算）は、他の同種修正が貯まってから
 /// まとめて fin-v4 へバンプし、全社再 ingest を一度に走らせる方針のため意図的に保留している。
-public let companyFinancialsCacheVersion = "fin-v3"
+public let companyFinancialsCacheVersion = "fin-v4"
 
 // MARK: - 年度エントリ（フラット形）
 

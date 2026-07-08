@@ -76,7 +76,7 @@ enum EdinetDiscovery {
         var docs: [[String: Any]] = []
         for var doc in sorted.prefix(analysisYears) {
             guard let peDate = parseDateString(doc["periodEnd"] as? String) else { continue }
-            let fyEndStr = formatDateISO(peDate)
+            let fyEndStr = formatDateString(peDate)
             let fiscalYear = parseDateString(doc["periodStart"] as? String)
                 .map { utcCalendar.component(.year, from: $0) }
                 ?? calculateFiscalYear(fyEnd: doc["periodEnd"] as? String)
@@ -134,7 +134,7 @@ enum EdinetDiscovery {
         for doc in annualOnly {
             guard let fyEndDate = parseDateString(doc["edinet_fy_end"] as? String),
                   let fyStartDate = parseDateString(doc["periodStart"] as? String) else { continue }
-            fyPeriods[formatDateISO(fyEndDate)] = (fyStartDate, fyEndDate)
+            fyPeriods[formatDateString(fyEndDate)] = (fyStartDate, fyEndDate)
         }
 
         // 最新年度の翌年を追加（予測）
@@ -142,7 +142,7 @@ enum EdinetDiscovery {
            let (_, end) = fyPeriods[newestFyEnd] {
             let nextStart = addDays(end, 1)
             let nextEnd = addYearSafe(end, 1)
-            fyPeriods[formatDateISO(nextEnd)] = (nextStart, nextEnd)
+            fyPeriods[formatDateString(nextEnd)] = (nextStart, nextEnd)
         }
 
         var docs: [[String: Any]] = []
@@ -190,9 +190,9 @@ enum EdinetDiscovery {
     ) async -> [String: Any]? {
         let code4 = String(code.prefix(4))
         let halfEnd = addDays(addMonthsSafe(periodStart, 6), -1)
-        let fyEndStr = formatDateISO(fyEnd)
-        let halfEndStr = formatDateISO(halfEnd)
-        let periodStartStr = formatDateISO(periodStart)
+        let fyEndStr = formatDateString(fyEnd)
+        let halfEndStr = formatDateString(halfEnd)
+        let periodStartStr = formatDateString(periodStart)
         let today = utcStartOfDay(Date())
         let searchStart = addDays(halfEnd, 1)
         let searchEnd = min(addDays(halfEnd, 90), today)
@@ -242,11 +242,6 @@ enum EdinetDiscovery {
     private static func utcStartOfDay(_ date: Date) -> Date {
         let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
         return utcCalendar.date(from: comps)!
-    }
-
-    static func formatDateISO(_ date: Date) -> String {
-        let c = utcCalendar.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 
     private static func addDays(_ date: Date, _ days: Int) -> Date {

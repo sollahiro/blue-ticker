@@ -176,10 +176,15 @@ final class EdinetCacheStore: Sendable {
 
             if acquired { break }
 
-            // ステールロック（プロセスがクラッシュして残ったもの）を除去して即リトライ
+            // ステールロック（プロセスがクラッシュして残ったもの）を rename で除去して即リトライ
+            // moveItem は原子的なため、同時に除去しようとしたプロセスの一方のみ成功する（TOCTOU 回避）
             if let mtime = (try? fm.attributesOfItem(atPath: lockPath.path))?[.modificationDate] as? Date,
                Date().timeIntervalSince(mtime) >= Api.cacheLockStaleSeconds {
-                try? fm.removeItem(at: lockPath)
+                let stalePath = locksDir.appendingPathComponent(
+                    "\(safe).stale.\(ProcessInfo.processInfo.processIdentifier).\(UUID().uuidString)")
+                if (try? fm.moveItem(at: lockPath, to: stalePath)) != nil {
+                    try? fm.removeItem(at: stalePath)
+                }
                 continue
             }
 

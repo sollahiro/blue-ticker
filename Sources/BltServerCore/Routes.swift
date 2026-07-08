@@ -227,7 +227,8 @@ private struct BltErrorMiddleware: AsyncMiddleware {
         } catch let abort as AbortError {
             return errorResponse(abort.status, message: abort.reason)
         } catch {
-            return errorResponse(.internalServerError, message: String(describing: error))
+            request.logger.error("Unhandled error: \(error)")
+            return errorResponse(.internalServerError, message: "Internal server error")
         }
     }
 }

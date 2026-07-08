@@ -9,6 +9,7 @@
 |---|---|---|---|
 | `normalizeDateFormat(_:)` | YYYYMMDD / YYYY-MM-DD | `String?` | 文字列として YYYY-MM-DD が必要な場合 |
 | `parseDateString(_:)` | YYYYMMDD / YYYY-MM-DD | `Date?` | Date オブジェクトとして扱いたい場合 |
+| `formatDateString(_:)` | `Date` | `String` | Date → YYYY-MM-DD（UTC 固定） |
 | `extractYearMonth(_:)` | YYYYMMDD / YYYY-MM-DD | `(Int?, Int?)` | 年・月を整数で取り出す場合 |
 
 ## 使用例

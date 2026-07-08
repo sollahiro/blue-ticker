@@ -51,8 +51,52 @@ import Foundation
         #expect(XBRLUtils.parseHtmlNumber("22,548") == 22548.0)
         #expect(XBRLUtils.parseHtmlNumber("22,548百万円") == 22548.0)
         #expect(XBRLUtils.parseHtmlNumber("△8,752") == -8752.0)
+        #expect(XBRLUtils.parseHtmlNumber("▲1,234") == -1234.0)
         #expect(XBRLUtils.parseHtmlNumber("－") == nil)
         #expect(XBRLUtils.parseHtmlNumber("") == nil)
+    }
+
+    @Test func testFilterFinancialTableAmountsFallsBackWhenAllBelowThreshold() {
+        let small = [50.0, 80.0, 120.0]
+        #expect(XBRLUtils.filterFinancialTableAmounts(small) == small)
+        let mixed = [50.0, 300.0, 120.0]
+        #expect(XBRLUtils.filterFinancialTableAmounts(mixed) == [300.0])
+    }
+
+    @Test func testDecodeHtmlEntitiesPreservesDoubleEncodedLessThan() {
+        // &amp;lt; はリテラル &lt; として残し、過剰デコードで < にしない
+        #expect(decodeHtmlEntities("&amp;lt;") == "&lt;")
+        #expect(decodeHtmlEntities("&lt;p&gt;") == "<p>")
+        #expect(decodeHtmlEntities("&amp;amp;") == "&amp;")
+    }
+
+    @Test func testExtractTextblockHtmlDoesNotMatchLongerTagName() throws {
+        let xbrl = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+                xmlns:test="http://example.com/test">
+              <test:NetSalesTextBlock contextRef="C">12345</test:NetSalesTextBlock>
+              <test:NetSalesTextBlockExtra contextRef="C">99999</test:NetSalesTextBlockExtra>
+            </xbrli:xbrl>
+            """
+        try XBRLTestSupport.withXbrlDir(xbrl) { dir in
+            let html = XBRLUtils.extractTextblockHtml(in: dir, textblockTag: "NetSalesTextBlock")
+            #expect(html == "12345")
+        }
+    }
+
+    @Test func testExtractTextblockHtmlMatchesClosingTagWithoutSpaceAfterName() throws {
+        let xbrl = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+                xmlns:test="http://example.com/test">
+              <test:BorrowingsTextBlock contextRef="C">&lt;table&gt;data&lt;/table&gt;</test:BorrowingsTextBlock>
+            </xbrli:xbrl>
+            """
+        try XBRLTestSupport.withXbrlDir(xbrl) { dir in
+            let html = XBRLUtils.extractTextblockHtml(in: dir, textblockTag: "BorrowingsTextBlock")
+            #expect(html == "<table>data</table>")
+        }
     }
 
     @Test func testLocalName() {
