@@ -52,6 +52,40 @@ import Testing
         #expect(url?.path == existing)
     }
 
+    @Test func testResolveEdinetCSVWriteURLUsesEnvPathEvenWhenFileMissing() {
+        let url = resolveEdinetCSVWriteURL(
+            environment: ["BLUE_TICKER_ASSETS_PATH": "/opt/blue-ticker-assets"],
+            currentDirectoryPath: "/repo",
+            executableURL: URL(fileURLWithPath: "/usr/local/bin/ticker"),
+            fileExists: { _ in false }
+        )
+
+        #expect(url?.path == "/opt/blue-ticker-assets/EdinetcodeDlInfo.csv")
+    }
+
+    @Test func testResolveEdinetCSVWriteURLFallsBackToExistingReadPathWithoutEnv() {
+        let existing = "/repo/assets/EdinetcodeDlInfo.csv"
+        let url = resolveEdinetCSVWriteURL(
+            environment: [:],
+            currentDirectoryPath: "/repo",
+            executableURL: URL(fileURLWithPath: "/usr/local/bin/ticker"),
+            fileExists: { $0 == existing }
+        )
+
+        #expect(url?.path == existing)
+    }
+
+    @Test func testResolveEdinetCSVWriteURLReturnsNilWithoutEnvOrExistingFile() {
+        let url = resolveEdinetCSVWriteURL(
+            environment: [:],
+            currentDirectoryPath: "/repo",
+            executableURL: URL(fileURLWithPath: "/usr/local/bin/ticker"),
+            fileExists: { _ in false }
+        )
+
+        #expect(url == nil)
+    }
+
     @Test func testCurrentEdinetCSVLoadsListedCompanyName() async throws {
         let manager = MasterDataManager()
         let stock = try #require(await manager.getByCode("6501"), "6501 が CSV に見つからない — EdinetcodeDlInfo.csv が欠落しているかコード検索が壊れている")
