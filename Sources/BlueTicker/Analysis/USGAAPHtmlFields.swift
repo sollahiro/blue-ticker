@@ -240,8 +240,8 @@ enum USGAAPHtml {
             let allNums = cells.dropFirst()
                 .compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
                 .compactMap { XBRLUtils.parseHtmlNumber($0) }
-            let financial = allNums.filter { abs($0) >= 200 }
-            let found = financial.isEmpty ? allNums : financial
+            let financial = XBRLUtils.filterFinancialTableAmounts(allNums)
+            let found = financial
             guard !found.isEmpty else { continue }
             return FieldValue(
                 current: found.last! * Financial.millionYen,
@@ -265,8 +265,8 @@ enum USGAAPHtml {
             let nums = cells.dropFirst()
                 .compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
                 .compactMap { XBRLUtils.parseHtmlNumber($0) }
-                .filter { abs($0) >= 200 }
-            if let v = nums.last { lastValue = v }
+            let filtered = XBRLUtils.filterFinancialTableAmounts(nums)
+            if let v = filtered.last { lastValue = v }
         }
         guard let v = lastValue else { return nil }
         return FieldValue(current: v * Financial.millionYen, prior: nil)
@@ -301,7 +301,7 @@ enum USGAAPHtml {
     /// 行テキストから財務金額（百万円単位で >= 200）を抽出し当期/前期の FieldValue を返す。
     private static func financialTotals(_ texts: [String]) -> FieldValue? {
         let nums = texts.dropFirst().compactMap { XBRLUtils.parseHtmlNumber($0) }
-        let financial = nums.filter { abs($0) >= 200 }
+        let financial = XBRLUtils.filterFinancialTableAmounts(nums)
         guard !financial.isEmpty else { return nil }
         return FieldValue(
             current: financial.last! * Financial.millionYen,

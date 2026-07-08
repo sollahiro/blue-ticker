@@ -12,7 +12,7 @@ import Foundation
 /// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / SegmentExtractor /
 /// cleanText の cap 等）または本 payload スキーマの意味を変えたときのみバンプする。
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
-public let filingSectionsCacheVersion = "sections-v1"
+public let filingSectionsCacheVersion = "sections-v2"
 
 /// 現在の抽出対象セクション集合を正規化した文字列（sorted・カンマ結合）。
 /// company_filing_sections.section_keys に格納し、取り込み時に照合する。

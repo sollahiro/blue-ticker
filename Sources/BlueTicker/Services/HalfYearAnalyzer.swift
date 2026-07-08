@@ -252,8 +252,10 @@ struct HalfYearAnalyzer {
 
     private func halfLabel(_ fyEnd: String, _ suffix: String) -> String {
         let (year, _) = extractYearMonth(fyEnd)
-        let yr = (year ?? 0) % 100
-        return String(format: "%02d", yr) + suffix
+        if let y = year {
+            return String(format: "%02d", y % 100) + suffix
+        }
+        return suffix
     }
 
     private func sub(_ a: Double?, _ b: Double?) -> Double? {

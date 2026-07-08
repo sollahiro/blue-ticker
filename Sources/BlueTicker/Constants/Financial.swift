@@ -1,4 +1,7 @@
 enum Financial {
+    /// HTML 表の列見出し等の小さい数値を除外する閾値（百万円単位 = 2 億円）。
+    static let htmlTableMinAbsMillionYen: Double = 200
+
     static let percent: Double = 100
     static let millionYen: Double = 1_000_000
     static let daysInYear: Double = 365

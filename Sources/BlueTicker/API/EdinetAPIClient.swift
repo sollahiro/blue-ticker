@@ -60,7 +60,7 @@ actor EdinetAPIClient {
     func ensureDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
-        let requiredThrough = isoDate(min(yearEnd, today))
+        let requiredThrough = formatDateString(min(yearEnd, today))
 
         if let cached = cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
             return cached
@@ -69,7 +69,7 @@ actor EdinetAPIClient {
         let cs = cacheStore
         let lock = documentIndexLock(for: year)
         do {
-            return try await cacheStore.withFileLock("doc_index_\(year)") {
+            let docs = try await cacheStore.withFileLock("doc_index_\(year)") {
                 if let cached = cs.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) {
                     return cached
                 }
@@ -84,6 +84,8 @@ actor EdinetAPIClient {
                 cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
                 return docs
             }
+            pruneDocumentIndexLock(year: year, lock: lock)
+            return docs
         } catch {
             return cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) ?? []
         }
@@ -92,20 +94,22 @@ actor EdinetAPIClient {
     func refreshDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
-        let requiredThrough = isoDate(min(yearEnd, today))
+        let requiredThrough = formatDateString(min(yearEnd, today))
 
         let cs = cacheStore
         let lock = documentIndexLock(for: year)
         do {
-            return try await cacheStore.withFileLock("doc_index_\(year)") {
+            let docs: [[String: Any]] = try await cacheStore.withFileLock("doc_index_\(year)") {
                 await lock.lock()
                 defer { lock.unlock() }
                 cs.clearDocumentIndex(year)
-                guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today))
+                guard let built = await self.buildDocumentIndexForYear(year, requiredThrough: min(yearEnd, today))
                 else { return [] }
-                cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
-                return docs
+                cs.saveDocumentIndex(year, documents: built, builtThrough: requiredThrough)
+                return built
             }
+            pruneDocumentIndexLock(year: year, lock: lock)
+            return docs
         } catch {
             return []
         }
@@ -114,20 +118,20 @@ actor EdinetAPIClient {
     func catchupDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let today = Date()
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
-        let requiredThrough = isoDate(min(yearEnd, today))
+        let requiredThrough = formatDateString(min(yearEnd, today))
         let requiredDate = min(yearEnd, today)
 
         let cs = cacheStore
         let lock = documentIndexLock(for: year)
         do {
-            return try await cacheStore.withFileLock("doc_index_\(year)") {
+            let docs: [[String: Any]] = try await cacheStore.withFileLock("doc_index_\(year)") {
                 await lock.lock()
                 defer { lock.unlock() }
 
                 guard let info = cs.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
-                    guard let docs = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
-                    cs.saveDocumentIndex(year, documents: docs, builtThrough: requiredThrough)
-                    return docs
+                    guard let built = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
+                    cs.saveDocumentIndex(year, documents: built, builtThrough: requiredThrough)
+                    return built
                 }
 
                 let existingDocs = info["documents"] as? [[String: Any]] ?? []
@@ -148,6 +152,8 @@ actor EdinetAPIClient {
                 cs.saveDocumentIndex(year, documents: merged, builtThrough: requiredThrough)
                 return merged
             }
+            pruneDocumentIndexLock(year: year, lock: lock)
+            return docs
         } catch {
             return cacheStore.loadDocumentIndex(year, requiredThrough: requiredThrough, allowStale: true) ?? []
         }
@@ -177,7 +183,10 @@ actor EdinetAPIClient {
         if downloadLocks[docID] == nil { downloadLocks[docID] = AsyncLock() }
         let lock = downloadLocks[docID]!
         await lock.lock()
-        defer { lock.unlock() }
+        defer {
+            lock.unlock()
+            pruneDownloadLock(docID: docID, lock: lock)
+        }
 
         if cacheStore.hasXbrlDir(docID, saveDir: dir) {
             cacheStore.touchXbrlDir(docID, saveDir: dir)
@@ -305,7 +314,7 @@ actor EdinetAPIClient {
             // 外部変数を @Sendable addTask クロージャ境界に渡さないよう結果をまとめて返す
             let batchResults = await withTaskGroup(of: DateDocsResult.self, returning: [DateDocsResult].self) { group in
                 for date in batch {
-                    let ds = isoDate(date)
+                    let ds = formatDateString(date)
                     group.addTask { DateDocsResult(dateStr: ds, docs: await self.getDocumentsForDate(ds)) }
                 }
                 var results: [DateDocsResult] = []
@@ -346,7 +355,7 @@ actor EdinetAPIClient {
                 guard let docDate = documentListDate(doc),
                       docDate >= start && docDate <= end
                 else { continue }
-                let ds = isoDate(docDate)
+                let ds = formatDateString(docDate)
                 doc.removeValue(forKey: "_edinet_list_date")
                 if var arr = result[ds] ?? nil {
                     arr.append(doc)
@@ -361,7 +370,7 @@ actor EdinetAPIClient {
         var dates: [String] = []
         var current = start
         while current <= end {
-            dates.append(isoDate(current))
+            dates.append(formatDateString(current))
             current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
         }
 
@@ -386,23 +395,19 @@ actor EdinetAPIClient {
         if documentIndexLocks[year] == nil { documentIndexLocks[year] = AsyncLock() }
         return documentIndexLocks[year]!
     }
+
+    private func pruneDownloadLock(docID: String, lock: AsyncLock) {
+        if lock.isIdle { downloadLocks.removeValue(forKey: docID) }
+    }
+
+    private func pruneDocumentIndexLock(year: Int, lock: AsyncLock) {
+        if lock.isIdle { documentIndexLocks.removeValue(forKey: year) }
+    }
 }
 
 // MARK: - Helpers
 
 // EDINET の日付ラベル（YYYY-MM-DD）は UTC 固定の共有 `utcCalendar`（Utils/UTCCalendar.swift）を使う。
-
-private let _isoDateFormatter: DateFormatter = {
-    let f = DateFormatter()
-    f.dateFormat = "yyyy-MM-dd"
-    f.locale = Locale(identifier: "en_US_POSIX")
-    f.timeZone = TimeZone(secondsFromGMT: 0)
-    return f
-}()
-
-private func isoDate(_ date: Date) -> String {
-    _isoDateFormatter.string(from: date)
-}
 
 private func documentListDate(_ doc: [String: Any]) -> Date? {
     if let s = doc["_edinet_list_date"] as? String, let d = parseDateString(s) { return d }
@@ -414,7 +419,7 @@ private func emptyDateRange(start: Date, end: Date) -> [String: [[String: Any]]?
     var result: [String: [[String: Any]]?] = [:]
     var current = start
     while current <= end {
-        result[isoDate(current)] = [] as [[String: Any]]
+        result[formatDateString(current)] = [] as [[String: Any]]
         current = utcCalendar.date(byAdding: .day, value: 1, to: current)!
     }
     return result
@@ -503,6 +508,11 @@ final class AsyncLock: @unchecked Sendable {
         mutex.lock(); defer { mutex.unlock() }
         if waiters.isEmpty { isLocked = false }
         else { waiters.removeFirst().resume() }
+    }
+
+    var isIdle: Bool {
+        mutex.lock(); defer { mutex.unlock() }
+        return !isLocked && waiters.isEmpty
     }
 }
 

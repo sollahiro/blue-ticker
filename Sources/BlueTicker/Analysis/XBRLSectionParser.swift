@@ -213,9 +213,30 @@ struct XBRLParser {
             }
         }
 
-        // パターン2: div / p / section
-        if let elements = try? soup.select("div, p, section") {
-            for elem in elements {
+        // パターン2: div / section — タイトルを含む最小のブロック要素（子 div/section が無いもの）
+        if let blocks = try? soup.select("div, section") {
+            var matches: [Element] = []
+            for elem in blocks {
+                guard let text = try? elem.text(), text.contains(sectionTitle) else { continue }
+                matches.append(elem)
+            }
+            let innermost = matches.filter { candidate in
+                !matches.contains { other in
+                    guard other !== candidate else { return false }
+                    return other.parents().contains(candidate)
+                }
+            }
+            if let best = innermost.min(by: {
+                ((try? $0.text())?.count ?? Int.max) < ((try? $1.text())?.count ?? Int.max)
+            }) {
+                let text = (try? best.text(trimAndNormaliseWhitespace: true)) ?? ""
+                if !text.isEmpty { return text }
+            }
+        }
+
+        // パターン2b: div/section で見つからない場合のみ p を試す
+        if let paragraphs = try? soup.select("p") {
+            for elem in paragraphs {
                 guard let text = try? elem.text(), text.contains(sectionTitle) else { continue }
                 return (try? elem.text(trimAndNormaliseWhitespace: true)) ?? text
             }
@@ -354,17 +375,5 @@ private final class DocumentTypeDetectorFull: NSObject, XMLParserDelegate {
         } else if text.contains("半期報告書") || lower.contains("interim") || lower.contains("quarterly") || text.contains("030300") {
             documentType = "interim"
         }
-    }
-}
-
-private extension String {
-    var htmlEntityDecoded: String {
-        var s = self
-        let entities: [(String, String)] = [
-            ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-            ("&quot;", "\""), ("&#39;", "'"), ("&nbsp;", "\u{00A0}"),
-        ]
-        for (entity, char) in entities { s = s.replacingOccurrences(of: entity, with: char) }
-        return s
     }
 }

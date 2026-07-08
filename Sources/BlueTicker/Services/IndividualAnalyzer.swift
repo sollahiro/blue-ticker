@@ -263,8 +263,10 @@ struct IndividualAnalyzer {
             let investedCapital = ibd + na
             if investedCapital > 0 {
                 calc.roic = (nopat / investedCapital) * percent
-                calc.nopatMargin = raw.sales.map { $0 > 0 ? (nopat / $0) * percent : nil } ?? nil
-                calc.investedCapitalTurnover = raw.sales.map { $0 / investedCapital }
+                if let s = raw.sales, s > 0 {
+                    calc.nopatMargin = (nopat / s) * percent
+                    calc.investedCapitalTurnover = s / investedCapital
+                }
             }
         }
 

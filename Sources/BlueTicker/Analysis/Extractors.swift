@@ -621,7 +621,7 @@ enum IBDExtractor {
     private static func hasLargeXbrlFile(in dir: URL) -> Bool {
         XBRLUtils.findXbrlFiles(in: dir).contains { url in
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-            return (size ?? 0) > 100_000
+            return size > Xbrl.zeroDebtMinInstanceBytes
         }
     }
 
@@ -922,7 +922,7 @@ enum ShareBuybackExtractor {
         accountingStandard: String
     ) -> ShareBuybackResult {
         if accountingStandard == "US-GAAP" {
-            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_ShareBuyback"])
+            let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_CFTreasuryStock"])
             if let v = item.current {
                 return ShareBuybackResult(current: v, method: "usgaap_html")
             }
