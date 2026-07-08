@@ -44,7 +44,7 @@ fly ssh console -C "/app/blt-server sync --from 2024-01-01"
 fly ssh console -C "/app/blt-server ingest --limit 50"
 ```
 
-`ingest` は Stage 3（XBRL 数値 fact → `edinet_xbrl_facts`）に続けて Stage 4（計算済み財務サマリ → `company_financials`）を実行する。Stage 4 計算は HTML 依存抽出・waterfall を含みメモリを使う。**定期 ingest は serve とは別の Fly スケジュールマシンで実行する**（下記「定期同期」）。手動の初回バックフィルはローカルから `DATABASE_URL` を Neon に向けて実行してもよい。
+`ingest` は Stage 3（XBRL 数値 fact → `edinet_xbrl_facts`）に続けて Stage 4（計算済み財務サマリ → `company_financials`）を実行する。Stage 4 計算は HTML 依存抽出・waterfall を含みメモリを使うため、shared-cpu-1x/1gb の Fly 上で大量に走らせると OOM しうる。**重い初回バックフィルはローカル（または余裕のあるマシン）から `DATABASE_URL` を Neon に向けて実行する**運用を推奨（下記「Neon 接続の E2E 検証」と同手順）。REST サーバー（Fly）は `company_financials` を読むだけなので financials は OOM しない。
 
 ヘルスチェック・HTTPS・証明書は `fly.toml` と Fly が処理する。独自ドメインは `fly certs add <domain>`。
 
@@ -141,59 +141,35 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 ## 定期同期
 
-`blt-server sync` / `ingest` はワンショット。`sync`（引数なし＝前回 `synced_through` から当日まで）→ `ingest`（未取り込み・旧バージョン書類のみ）の順に実行する。
+`blt-server sync` / `ingest` はワンショット。定期実行は Fly スケジューラ（`fly machine run ... --schedule`）または self-host の cron / launchd で回す。`sync`（引数なし＝前回 `synced_through` から当日まで）→ `ingest`（未取り込み・旧バージョン書類のみ）の順に実行する。
 
-**重い ingest（Stage 3/4）が OOM しても serve（API 配信）を巻き込まない**ため、ingest は serve マシンとは別の **Fly 独立スケジュールマシン**（スケジュール起動・実行後停止）で回す。IndividualAnalyzer の並列度制限（`Api.xbrlProcessConcurrency=2`）と `MALLOC_ARENA_MAX=2`（`ingest-job.sh` 内）で Fly 2GB VM 上の RSS ピークを抑える（issue #34 / #35）。
+**重い ingest（Stage 3/4）は Fly(1GB) で走らせると OOM する**ため、計算はローカル（または余裕あるマシン）で実行し Fly は読むだけにする。現状はローカル launchd で回す（将来クラウドスケジューラへ移行予定）。
 
-### 定期同期（Fly スケジュールマシン・主手順）
+### 定期同期（ローカル launchd）
 
-`scripts/ingest-job.sh` が sync→ingest を実行するエントリポイント（イメージに `/app/ingest-job.sh` として同梱済み）。cloudflared・serve はこのジョブでは起動しない。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200、`.env` に書けば上書き）で調整。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。
 
-```bash
-# image-ref の取得（どちらか）
-fly status -a blt-server                       # Image 欄
-# もしくは registry.fly.io/blt-server:deployment-... 形式で直接指定
-
-# スケジュールマシンの作成（初回のみ）
-fly machine run <image-ref> \
-  --app blt-server \
-  --schedule hourly \
-  --entrypoint /app/ingest-job.sh \
-  --vm-memory 2048 \
-  --region nrt \
-  --restart no
-```
-
-- **secrets の継承**: `DATABASE_URL` / `BLT_EDINET_API_KEY` は同一 app の secrets が自動的に継承される（このマシン専用の再設定は不要）。
-- **Volume は付けない**: EDINET キャッシュはコールドだが、新規提出分はどのみち再ダウンロードになるため許容する。`/data` は root 実行でコンテナの rootfs 上に作られ、XBRL 展開は LRU cap により自動 evict される。
-- **`--restart no` の理由**: OOM kill 直後の即時リトライループを避ける。リトライは次のスケジュール tick に任せる。
-- **`BLT_INGEST_LIMIT` の上書き**: 1 回の ingest 件数（既定 75）。`--env BLT_INGEST_LIMIT=<n>` で上書きできる。
-- **スケジュール粒度**: Fly は `hourly | daily | weekly | monthly` のみ（4時間ごと等の任意間隔は不可）。スケジュールは **UTC 基準**で走るが、EDINET 処理自体が UTC 固定設計（`date-conversion.md`）のため問題ない。
-
-> **重要な落とし穴（デプロイ追随）**: `fly machine run` で作ったスケジュールマシンは Fly Launch の管理外のため、以後 `fly deploy` しても **serve マシンだけが更新され、スケジュールマシンは旧イメージのまま走り続ける**。放置すると、キャッシュバージョン（`versioning.md` の `companyFinancialsCacheVersion` 等）をバンプしたデプロイ後に「serve は新版行を読んで 404・ingest は旧バイナリで旧版行を書き続ける＝再 ingest が永久に完了しない」静かな故障になる。**`fly deploy` のたびにスケジュールマシンも新イメージへ更新する**こと。
->
-> ```bash
-> fly machine update <machine-id> --image <新image-ref> --app blt-server
-> ```
-
-**ログ確認**: `fly logs -a blt-server`（マシン ID で絞り込み可）で sync/ingest の開始・完了サマリを確認する。ローカル launchd のような永続ログファイルは残らないため、事後監査が必要な場合は Fly のログ保持期間内に確認すること。
-
-**トライアル（単発マシン）**: cutover 前に OOM 完走を確認する場合:
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` は 1 プロセスで Stage 3 → Stage 4（通期）→ Stage 4-half の順に流す。limit を大きくすると 1 ラン数時間に及び、途中で Neon 接続がリセット（PSQLError）されるとそのランの **Stage 4 / Stage 4-half がまとめて失われる**（特に最後に走る Stage 4-half は完走しにくい）。完走率を優先し `.env` に `BLT_INGEST_LIMIT=75` 程度を書いて下げる（バックフィル中の暫定。全社 drain 後は既定に戻してよい）。
 
 ```bash
-fly machine run <image-ref> \
-  --app blt-server \
-  --entrypoint /app/ingest-job.sh \
-  --vm-memory 2048 \
-  --region nrt \
-  --restart no \
-  --env BLT_INGEST_LIMIT=30
-# 実行後は必ず破棄: fly machine destroy <id> --force
+# 1. リリースビルド（コード変更後は再実行が必須）
+#    旧バイナリは新しく配線したステージ（例: Stage 4-half）を黙って飛ばし、
+#    ログにそのステージの完了行が出ないまま該当テーブルが埋まらない。
+swift build -c release --product blt-server
+
+# 2. .env を作成（キー名は .env.example を参照。DATABASE_URL / BLT_EDINET_API_KEY が必須）
+
+# 3. plist をテンプレートから生成して登録（再登録も同じコマンドで bootout→bootstrap）
+./scripts/install-launchd.sh
+
+# 4. 手動実行（検証・即時 drain）
+launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
+tail -f .build/blt-scheduled.log
 ```
 
-### 定期同期（self-host / ローカルの代替）
+plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-self-host や Fly スケジューラを使わない環境向けに、ローカル launchd 用の `scripts/blt-scheduled-sync.sh` と plist テンプレート（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）を当面レガシーとして残している。`.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。導入は `./scripts/install-launchd.sh`、手動実行は `launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync`。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ## EDINET マスタデータ（コードリスト CSV）の更新
 

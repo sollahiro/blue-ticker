@@ -41,7 +41,7 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 
 ## 定常運用の保守ポイント
 
-- **定期 ingest は Fly スケジュールマシンで実行**: 重い ingest（Stage 3/4/4-half/5）は serve マシンとは別の Fly 独立スケジュールマシン（`ingest-job.sh`）で回す。Mac launchd はレガシー代替（`deploy.md`「定期同期」）。**`fly deploy` のたびにスケジュールマシンのイメージも更新する**（Launch 管理外のため自動追随しない）。
+- **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（Stage 3/4/4-half/5）はローカル Mac の launchd で回している（Fly 1GB では OOM）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。将来はクラウドスケジューラへ移行予定（`deploy.md`「定期同期」）。
 - **キャッシュバージョンバンプと Fly デプロイの同期（自動化済み・2026-07-05）**: `Sources/**`・`Dockerfile`・`fly.toml`・`Package.*` の変更を含む push が main にマージされると、GitHub Actions（`.github/workflows/deploy.yml`）が `flyctl deploy --remote-only` を自動実行するため、手動 `fly deploy` は不要（`FLY_API_TOKEN` repo secret 必須）。バンプ規則は `versioning.md`「Neon キャッシュバージョン」を参照。`/healthz` の `cache_versions` で今イメージが話しているバージョンを curl 一発で確認できる。
 - **cloudflared のバージョン固定更新**: `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` の固定運用は `deploy.md`「C. Dockerfile に cloudflared サイドカーを同梱」を参照。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
 - **Cloudflare SSO セッションの失効**: Access の Session Duration 経過で失効したら `ticker login` を再実行する。手順・完全無人自動化の非対応は `deploy.md`「クライアント設定（CLI・SSO ログイン）」を参照。

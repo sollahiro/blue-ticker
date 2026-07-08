@@ -30,18 +30,11 @@ jobs:
       - name: Ensure machine is running
         # serviceless 構成（[http_service] 撤去済み・docs/deploy.md「D. fly.toml の段階カットオーバー」）
         # のため、fly deploy 後にマシンが stopped のままになることがある（docs/operations.md「保守ポイント」）。
-        # スケジュールマシン（config.schedule あり）は fly machine start 不可のためスキップする
-        # （docs/deploy.md「定期同期（Fly スケジュールマシン）」）。
         # `flyctl machine status` に汎用 --json フラグは無いため、id/state を含む `machine list --json` のみで完結させる。
         run: |
           flyctl machine list --json | jq -c '.[]' | while read -r m; do
             id=$(echo "$m" | jq -r '.id')
             state=$(echo "$m" | jq -r '.state')
-            schedule=$(echo "$m" | jq -r '.config.schedule // empty')
-            if [ -n "$schedule" ]; then
-              echo "machine $id has schedule=$schedule, skipping start"
-              continue
-            fi
             if [ "$state" != "started" ]; then
               echo "machine $id is $state, starting..."
               flyctl machine start "$id"

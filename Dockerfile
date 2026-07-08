@@ -50,12 +50,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Fly スケジュールマシン用の ingest 専用エントリポイント（serve/cloudflared は起動しない）。
-# デフォルト ENTRYPOINT はこのまま変えず、スケジュールマシン側で
-# `fly machine run --entrypoint /app/ingest-job.sh` により上書きする（docs/deploy.md 参照）。
-COPY scripts/ingest-job.sh /app/ingest-job.sh
-RUN chmod +x /app/ingest-job.sh
-
 # 自己完結する実行時デフォルト（self-host も fly.toml なしでこのまま動く）。
 #   BLT_HOST/PORT       : bind（Fly はこのポートへルーティング）
 #   BLUE_TICKER_ASSETS_PATH : EDINET コード CSV の場所
