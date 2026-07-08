@@ -121,7 +121,8 @@ struct XBRLParser {
         for (sectionID, sectionDef) in xbrlSections {
             var sectionText: String? = nil
 
-            for (blockName, blockText) in allTextBlocks {
+            for blockName in allTextBlocks.keys.sorted() {
+                let blockText = allTextBlocks[blockName]!
                 let elementMatch = sectionDef.xbrlElements.contains(where: {
                     blockName.contains($0) || blockName.hasSuffix($0)
                 })

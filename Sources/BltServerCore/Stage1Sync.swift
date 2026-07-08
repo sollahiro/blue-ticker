@@ -12,6 +12,8 @@ import Vapor
 public struct Stage1SyncSummary: Sendable, Equatable {
     public let from: String
     public let to: String
+    /// 実際に DB へ書き込んだ synced_through（部分失敗時は to より前になる）。
+    public let syncedThrough: String
     public let fetched: Int
     public let created: Int
     public let updated: Int
@@ -47,12 +49,26 @@ func runStage1Sync(
     logger: Logger? = nil
 ) async throws -> Stage1SyncSummary {
     let resolvedFrom = try await resolveStartDate(from: from, db: db, logger: logger)
-    let records = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
-    let counts = try await applyDocuments(records, db: db, logger: logger)
-    try await upsertSyncState(syncedThrough: to, db: db, logger: logger)
+    let previousSyncedThrough = try await loadSyncedThrough(db: db, logger: logger)
+    let fetchResult = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
+    let counts = try await applyDocuments(fetchResult.records, db: db, logger: logger)
+    let syncedThrough = computeStage1SyncedThrough(
+        from: resolvedFrom,
+        to: to,
+        previousSyncedThrough: previousSyncedThrough,
+        applyCompleted: counts.completed,
+        failedFetchDates: fetchResult.failedDates
+    )
+    if syncedThrough != to {
+        logger?.warning(
+            "Stage 1 同期を部分完了: requested_to=\(to) synced_through=\(syncedThrough) apply_completed=\(counts.completed) failed_fetch_days=\(fetchResult.failedDates.count)"
+        )
+    }
+    try await upsertSyncState(syncedThrough: syncedThrough, db: db, logger: logger)
 
     return Stage1SyncSummary(
-        from: resolvedFrom, to: to, fetched: records.count,
+        from: resolvedFrom, to: to, syncedThrough: syncedThrough,
+        fetched: fetchResult.records.count,
         created: counts.created, updated: counts.updated)
 }
 
@@ -61,7 +77,7 @@ func runStage1Sync(
 /// （EDINET 取得の空白中に suspend され、直後の DB 操作が死んだ接続で失敗するのを回復。ingest と同思想）。
 func applyDocuments(
     _ records: [EdinetDocumentRecord], db: Database, logger: Logger? = nil
-) async throws -> (created: Int, updated: Int) {
+) async throws -> (created: Int, updated: Int, completed: Bool) {
     var created = 0
     var updated = 0
     var unhealthyRetries = 0
@@ -71,7 +87,7 @@ func applyDocuments(
             logger?.error(
                 "DB接続が不安定なため Stage 1 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated)件は次回スケジュールで再試行)"
             )
-            break
+            return (created, updated, completed: false)
         }
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(record.docID)", onRetry: { unhealthyRetries += 1 }
@@ -96,7 +112,33 @@ func applyDocuments(
             created += 1
         }
     }
-    return (created, updated)
+    return (created, updated, completed: true)
+}
+
+/// 部分失敗時は高水位を進めない（または取得失敗日の前日までに留める）。
+func computeStage1SyncedThrough(
+    from: String,
+    to: String,
+    previousSyncedThrough: String?,
+    applyCompleted: Bool,
+    failedFetchDates: [String]
+) -> String {
+    guard applyCompleted else {
+        return previousSyncedThrough ?? from
+    }
+    var advanceTo = to
+    if let earliestFailed = failedFetchDates.filter({ $0 >= from && $0 <= to }).sorted().first,
+       let dayBefore = dayBeforeISO(earliestFailed) {
+        advanceTo = min(advanceTo, dayBefore)
+    }
+    return advanceTo
+}
+
+/// 現在の synced_through を読む（未作成なら nil）。
+func loadSyncedThrough(db: Database, logger: Logger? = nil) async throws -> String? {
+    try await withDbRetry(logger: logger, context: "sync_state") {
+        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)?.syncedThrough
+    }
 }
 
 /// from 解決順位: 明示指定 > 既存 synced_through > missingStartDate。
@@ -187,7 +229,7 @@ public func runStage1SyncCommand(from: String?, to: String?) async throws {
         let summary = try await runStage1Sync(
             context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
         app.logger.notice(
-            "Stage 1 同期完了: \(summary.from)..\(summary.to) fetched=\(summary.fetched) created=\(summary.created) updated=\(summary.updated)")
+            "Stage 1 同期完了: \(summary.from)..\(summary.to) synced_through=\(summary.syncedThrough) fetched=\(summary.fetched) created=\(summary.created) updated=\(summary.updated)")
     } catch {
         try? await app.asyncShutdown()
         throw error

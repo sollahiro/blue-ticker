@@ -199,24 +199,40 @@ import Foundation
         #expect(annual.first?["edinet_fy_end"] as? String == "\(year - 1)-03-31")
     }
 
-    @Test func testBuildDocumentIndexUsesYearMinus1WhenPeriodStartMissing() async throws {
-        // periodStart がない書類は fiscal_year = periodEnd の年 - 1 にフォールバックする
+    @Test func testBuildDocumentIndexUsesCalculateFiscalYearWhenPeriodStartMissing() async throws {
+        // periodStart がない書類は calculateFiscalYear(periodEnd) で fiscal_year を決める
         let year = support.currentUTCYear()
         let todayStr = support.iso(support.utcToday())
-        let docNoStart = makeAnnualDoc(
+
+        // 12月期: periodEnd 12/31 → fiscal_year = periodEnd の年（12月期は -1 しない）
+        let docDec = makeAnnualDoc(
             docID: "S100NS", edinetCode: "E12345",
             periodStart: nil, periodEnd: "\(year - 1)-12-31",
             submit: "\(todayStr) 10:00"
         )
-        seedIndexes((year - 1)...year, [year: [docNoStart]])
+        seedIndexes((year - 1)...year, [year: [docDec]])
 
-        let docs = await EdinetDiscovery.buildDocumentIndexForCode(
+        let docsDec = await EdinetDiscovery.buildDocumentIndexForCode(
             code: "9843", client: client, analysisYears: 1
         )
+        let annualDec = annualDocs(docsDec)
+        #expect(annualDec.count == 1)
+        #expect(annualDec.first?["fiscal_year"] as? Int == year - 1)
 
-        let annual = annualDocs(docs)
-        #expect(annual.count == 1)
-        #expect(annual.first?["fiscal_year"] as? Int == year - 2)
+        // 3月期: periodEnd 03/31 → fiscal_year = periodEnd の年 - 1
+        let docMar = makeAnnualDoc(
+            docID: "S100MAR", edinetCode: "E12345",
+            periodStart: nil, periodEnd: "\(year)-03-31",
+            submit: "\(todayStr) 10:00"
+        )
+        seedIndexes(year...year, [year: [docMar]])
+
+        let docsMar = await EdinetDiscovery.buildDocumentIndexForCode(
+            code: "9843", client: client, analysisYears: 1
+        )
+        let annualMar = annualDocs(docsMar)
+        #expect(annualMar.count == 1)
+        #expect(annualMar.first?["fiscal_year"] as? Int == year - 1)
     }
 
     @Test func testBuildDocumentIndexSlicesToAnalysisYears() async throws {

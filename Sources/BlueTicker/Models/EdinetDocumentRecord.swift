@@ -42,3 +42,15 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
         self.docDescription = docDescription
     }
 }
+
+/// Stage 1 同期の EDINET 取得結果。取得失敗日を高水位計算に渡す。
+public struct Stage1FetchResult: Sendable, Equatable {
+    public let records: [EdinetDocumentRecord]
+    /// getDocumentsForDateRange で nil になった日（YYYY-MM-DD）。
+    public let failedDates: [String]
+
+    public init(records: [EdinetDocumentRecord], failedDates: [String]) {
+        self.records = records
+        self.failedDates = failedDates
+    }
+}

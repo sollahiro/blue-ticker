@@ -195,6 +195,17 @@ import Foundation
         #expect(fs["Assets"]?.prior == 4500.0)
     }
 
+    @Test func testInstantPrefersCurrentYearInstantOverFilingDateInstantDeterministically() {
+        let tagElements: XbrlTagElements = [
+            "Employees": [
+                "FilingDateInstant": 100.0,
+                "CurrentYearInstant": 200.0,
+            ]
+        ]
+        let fs = fieldSetFromInstant(tagElements)
+        #expect(fs["Employees"]?.current == 200.0)
+    }
+
     @Test func testInstantEmptyInputReturnsEmpty() {
         #expect(fieldSetFromInstant([:]).isEmpty)
     }
