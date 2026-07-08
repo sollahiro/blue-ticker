@@ -21,6 +21,14 @@ set -u
 BIN=/app/blt-server
 INGEST_LIMIT="${BLT_INGEST_LIMIT:-75}"
 
+# 不正値（非数値・0 以下）で blt-server が limit 無制限扱い→OOM しないよう、既定値へフォールバックする。
+case "$INGEST_LIMIT" in
+  ''|*[!0-9]*) INGEST_LIMIT=75 ;;
+esac
+if [ "$INGEST_LIMIT" -le 0 ] 2>/dev/null; then
+  INGEST_LIMIT=75
+fi
+
 echo "===== $(date '+%Y-%m-%d %H:%M:%S') sync 開始 ====="
 "$BIN" sync
 SYNC_STATUS=$?
