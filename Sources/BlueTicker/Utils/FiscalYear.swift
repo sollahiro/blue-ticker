@@ -55,7 +55,7 @@ public func todayUTC() -> String {
 /// YYYYMMDD / YYYY-MM-DD → (year, month). 失敗時は (nil, nil)。
 func extractYearMonth(_ dateStr: String?) -> (Int?, Int?) {
     guard let date = parseDateString(dateStr) else { return (nil, nil) }
-    let comps = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: date)
+    let comps = utcCalendar.dateComponents([.year, .month], from: date)
     return (comps.year, comps.month)
 }
 
@@ -68,9 +68,17 @@ func calculateFiscalYear(fyEnd: String?, fyStart: String? = nil) -> Int? {
           let normalized = normalizeDateFormat(end),
           let date = isoFormatter.date(from: normalized)
     else { return nil }
-    let comps = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: date)
+    let comps = utcCalendar.dateComponents([.year, .month], from: date)
     guard let year = comps.year, let month = comps.month else { return nil }
     return month < 12 ? year - 1 : year
+}
+
+/// YYYY-MM-DD の前日を YYYY-MM-DD で返す。失敗時は nil。
+public func dayBeforeISO(_ dateStr: String) -> String? {
+    guard let date = parseDateString(dateStr),
+          let prev = utcCalendar.date(byAdding: .day, value: -1, to: date)
+    else { return nil }
+    return formatDateString(prev)
 }
 
 /// 年度を "2023年度" 形式で返す。

@@ -92,28 +92,44 @@ func fieldSetFromIFRSEquityAttributable(_ tagElements: XbrlTagElements) -> Field
 
 // MARK: - Normalization (private)
 
+/// パターン優先順（配列順）と辞書順で決定的にコンテキスト値を選ぶ。
+private func exactContextValue(in ctxMap: [String: Double], patterns: [String]) -> Double? {
+    for pattern in patterns where ctxMap[pattern] != nil {
+        return ctxMap[pattern]
+    }
+    return nil
+}
+
+private func firstMatchingContextValue(
+    in ctxMap: [String: Double],
+    patterns: [String],
+    predicate: (String) -> Bool
+) -> Double? {
+    for pattern in patterns {
+        for key in ctxMap.keys.sorted() where key.contains(pattern) && predicate(key) {
+            return ctxMap[key]
+        }
+    }
+    return nil
+}
+
 private func normalizeConsolidated(
     _ tagElements: XbrlTagElements,
-    exactCurrent: Set<String>,
-    exactPrior: Set<String>,
+    exactCurrent: [String],
+    exactPrior: [String],
     isCurrent: (String) -> Bool,
     isPrior: (String) -> Bool
 ) -> FieldSet {
     var fieldSet: FieldSet = [:]
     for (tag, ctxMap) in tagElements {
-        var current: Double?
-        var prior: Double?
+        var current = exactContextValue(in: ctxMap, patterns: exactCurrent)
+        var prior = exactContextValue(in: ctxMap, patterns: exactPrior)
 
-        for (ctx, val) in ctxMap {
-            if exactCurrent.contains(ctx) { current = val }
-            else if exactPrior.contains(ctx) { prior = val }
+        if current == nil {
+            current = firstMatchingContextValue(in: ctxMap, patterns: exactCurrent, predicate: isCurrent)
         }
-
-        if current == nil || prior == nil {
-            for (ctx, val) in ctxMap {
-                if current == nil && isCurrent(ctx) { current = val }
-                if prior == nil && isPrior(ctx) { prior = val }
-            }
+        if prior == nil {
+            prior = firstMatchingContextValue(in: ctxMap, patterns: exactPrior, predicate: isPrior)
         }
 
         if current != nil || prior != nil {
@@ -125,27 +141,26 @@ private func normalizeConsolidated(
 
 private func normalizeNonConsolidated(
     _ tagElements: XbrlTagElements,
-    exactCurrent: Set<String>,
-    exactPrior: Set<String>,
+    exactCurrent: [String],
+    exactPrior: [String],
     isCurrent: (String) -> Bool,
     isPrior: (String) -> Bool
 ) -> FieldSet {
     var fieldSet: FieldSet = [:]
-    let currentPatterns = Array(exactCurrent)
-    let priorPatterns = Array(exactPrior)
     for (tag, ctxMap) in tagElements {
         var current: Double?
         var prior: Double?
 
-        for (ctx, val) in ctxMap {
-            if isCurrent(ctx) {
-                if isPureNonConsolidated(ctx, patterns: currentPatterns) {
+        for key in ctxMap.keys.sorted() {
+            let val = ctxMap[key]!
+            if isCurrent(key) {
+                if isPureNonConsolidated(key, patterns: exactCurrent) {
                     current = val
                 } else if current == nil {
                     current = val
                 }
-            } else if isPrior(ctx) {
-                if isPureNonConsolidated(ctx, patterns: priorPatterns) {
+            } else if isPrior(key) {
+                if isPureNonConsolidated(key, patterns: exactPrior) {
                     prior = val
                 } else if prior == nil {
                     prior = val
@@ -169,8 +184,8 @@ private func isPureNonConsolidated(_ ctx: String, patterns: [String]) -> Bool {
 private func normalizeConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {
     normalizeConsolidated(
         tagElements,
-        exactCurrent: Set(Xbrl.durationContextPatterns),
-        exactPrior: Set(Xbrl.priorDurationContextPatterns),
+        exactCurrent: Xbrl.durationContextPatterns,
+        exactPrior: Xbrl.priorDurationContextPatterns,
         isCurrent: ContextHelpers.isConsolidatedDuration,
         isPrior: ContextHelpers.isConsolidatedPriorDuration
     )
@@ -179,8 +194,8 @@ private func normalizeConsolidatedDuration(_ tagElements: XbrlTagElements) -> Fi
 private func normalizeNonConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {
     normalizeNonConsolidated(
         tagElements,
-        exactCurrent: Set(Xbrl.durationContextPatterns),
-        exactPrior: Set(Xbrl.priorDurationContextPatterns),
+        exactCurrent: Xbrl.durationContextPatterns,
+        exactPrior: Xbrl.priorDurationContextPatterns,
         isCurrent: ContextHelpers.isNonConsolidatedDuration,
         isPrior: ContextHelpers.isNonConsolidatedPriorDuration
     )
@@ -189,8 +204,8 @@ private func normalizeNonConsolidatedDuration(_ tagElements: XbrlTagElements) ->
 private func normalizeConsolidatedInstant(_ tagElements: XbrlTagElements) -> FieldSet {
     normalizeConsolidated(
         tagElements,
-        exactCurrent: Set(Xbrl.instantContextPatterns),
-        exactPrior: Set(Xbrl.priorInstantContextPatterns),
+        exactCurrent: Xbrl.instantContextPatterns,
+        exactPrior: Xbrl.priorInstantContextPatterns,
         isCurrent: ContextHelpers.isConsolidatedInstant,
         isPrior: ContextHelpers.isConsolidatedPriorInstant
     )
@@ -199,8 +214,8 @@ private func normalizeConsolidatedInstant(_ tagElements: XbrlTagElements) -> Fie
 private func normalizeNonConsolidatedInstant(_ tagElements: XbrlTagElements) -> FieldSet {
     normalizeNonConsolidated(
         tagElements,
-        exactCurrent: Set(Xbrl.instantContextPatterns),
-        exactPrior: Set(Xbrl.priorInstantContextPatterns),
+        exactCurrent: Xbrl.instantContextPatterns,
+        exactPrior: Xbrl.priorInstantContextPatterns,
         isCurrent: ContextHelpers.isNonConsolidatedInstant,
         isPrior: ContextHelpers.isNonConsolidatedPriorInstant
     )

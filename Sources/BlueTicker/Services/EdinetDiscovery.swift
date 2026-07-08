@@ -79,7 +79,7 @@ enum EdinetDiscovery {
             let fyEndStr = formatDateISO(peDate)
             let fiscalYear = parseDateString(doc["periodStart"] as? String)
                 .map { utcCalendar.component(.year, from: $0) }
-                ?? (utcCalendar.component(.year, from: peDate) - 1)
+                ?? calculateFiscalYear(fyEnd: doc["periodEnd"] as? String)
             doc["edinet_fy_end"] = fyEndStr
             doc["fiscal_year"] = fiscalYear
             doc["period_type"] = "FY"

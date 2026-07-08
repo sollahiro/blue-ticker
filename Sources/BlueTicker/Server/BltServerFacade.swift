@@ -187,14 +187,20 @@ private func segmentPayload(from r: SegmentResult) -> SegmentPayload {
 public extension BltServerContext {
     /// Stage 1 同期用に、指定期間（YYYY-MM-DD）の EDINET 書類を正規化済みレコードで返す。
     /// seed 種別（Api.stage1SyncDocTypes）に絞り、docID で重複排除する。
-    /// 取得失敗・空期間は空配列（戻り値パターン）。
-    func fetchDocumentsForSync(from: String, to: String) async -> [EdinetDocumentRecord] {
+    /// 取得失敗日は `failedDates` に含め、高水位を進めない判定に使う。
+    func fetchDocumentsForSync(from: String, to: String) async -> Stage1FetchResult {
         guard let start = parseDateString(from), let end = parseDateString(to), start <= end else {
-            return []
+            return Stage1FetchResult(records: [], failedDates: [])
         }
         let byDate = await edinetClient.getDocumentsForDateRange(start: start, end: end)
+        let failedDates = byDate.compactMap { date, docs -> String? in
+            docs == nil ? date : nil
+        }
         let allDocs = byDate.values.compactMap { $0 }.flatMap { $0 }
-        return mapEdinetDocumentRecords(allDocs)
+        return Stage1FetchResult(
+            records: mapEdinetDocumentRecords(allDocs),
+            failedDates: failedDates
+        )
     }
 }
 

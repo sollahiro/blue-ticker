@@ -41,6 +41,7 @@ private func record(
                 [record("S1"), record("S2")], db: app.db)
             #expect(counts.created == 2)
             #expect(counts.updated == 0)
+            #expect(counts.completed)
             let total = try await EdinetDocument.query(on: app.db).count()
             #expect(total == 2)
         }
@@ -53,6 +54,7 @@ private func record(
             let counts = try await applyDocuments([record("S1", filerName: "新名")], db: app.db)
             #expect(counts.created == 0)
             #expect(counts.updated == 1)
+            #expect(counts.completed)
 
             let total = try await EdinetDocument.query(on: app.db).count()
             #expect(total == 1)
@@ -117,5 +119,38 @@ private func record(
             let fromState = try await resolveStartDate(from: nil, db: app.db)
             #expect(fromState == "2025-05-10")
         }
+    }
+
+    @Test func computeStage1SyncedThroughClampsOnFetchFailure() {
+        let synced = computeStage1SyncedThrough(
+            from: "2025-06-01",
+            to: "2025-06-20",
+            previousSyncedThrough: "2025-05-31",
+            applyCompleted: true,
+            failedFetchDates: ["2025-06-15", "2025-06-18"]
+        )
+        #expect(synced == "2025-06-14")
+    }
+
+    @Test func computeStage1SyncedThroughKeepsPreviousWhenApplyIncomplete() {
+        let synced = computeStage1SyncedThrough(
+            from: "2025-06-01",
+            to: "2025-06-20",
+            previousSyncedThrough: "2025-05-31",
+            applyCompleted: false,
+            failedFetchDates: []
+        )
+        #expect(synced == "2025-05-31")
+    }
+
+    @Test func computeStage1SyncedThroughAdvancesToToWhenFullySuccessful() {
+        let synced = computeStage1SyncedThrough(
+            from: "2025-06-01",
+            to: "2025-06-20",
+            previousSyncedThrough: "2025-05-31",
+            applyCompleted: true,
+            failedFetchDates: []
+        )
+        #expect(synced == "2025-06-20")
     }
 }
