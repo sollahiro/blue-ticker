@@ -219,6 +219,30 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         }
     }
 
+    @Test func ingestPrioritizesMissingBeforeStaleWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // stale existing
+            try await seedDocument("S2", secCode: "67580", db: app.db)  // missing
+
+            let stale = CompanyHalfFinancials()
+            stale.id = "7203"
+            stale.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            stale.cacheVersion = "stale"
+            stale.requestedYears = 5
+            try await stale.create(on: app.db)
+
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 1) { code in
+                makeHalfResponse(code: code, fyEnds: years3)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyHalfFinancials.find("6758", on: app.db) != nil)
+            let staleAfter = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
+            #expect(staleAfter.cacheVersion == "stale")  // stale より先に空白を埋める
+        }
+    }
+
     // MARK: - read 経路
 
     @Test func loadStoredHalfFinancialsTrimsToRequestedYears() async throws {

@@ -222,6 +222,32 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    @Test func ingestPrioritizesMissingBeforeStaleWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)  // stale existing
+            try await seedDoc("S2", secCode: "67580", db: app.db)  // missing
+
+            let stale = CompanyFilingSections()
+            stale.id = "S1"
+            stale.code = "7203"
+            stale.submitDateTime = "2025-06-20 09:00"
+            stale.payload = fakePayload("stale")
+            stale.cacheVersion = "old-version"
+            stale.sectionKeys = keys
+            try await stale.create(on: app.db)
+
+            let summary = try await runStage5Ingest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: 1
+            ) { _ in fakePayload("fresh") }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyFilingSections.find("S2", on: app.db) != nil)
+            let staleAfter = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            #expect(staleAfter.cacheVersion == "old-version")  // stale より先に空白を埋める
+        }
+    }
+
     @Test func ingestCountsFailuresWithoutStoring() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)

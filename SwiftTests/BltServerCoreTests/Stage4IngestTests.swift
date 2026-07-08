@@ -329,6 +329,30 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         }
     }
 
+    @Test func ingestPrioritizesMissingBeforeStaleWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // stale existing
+            try await seedDocument("S2", secCode: "67580", db: app.db)  // missing
+
+            let stale = CompanyFinancials()
+            stale.id = "7203"
+            stale.response = makeResponse(code: "7203", years: 6)
+            stale.cacheVersion = "0.0.0"
+            stale.requestedYears = 6
+            try await stale.create(on: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
+                makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyFinancials.find("6758", on: app.db) != nil)
+            let staleAfter = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(staleAfter.cacheVersion == "0.0.0")  // stale より先に空白を埋める
+        }
+    }
+
     // MARK: - read 経路
 
     @Test func loadStoredFinancialsTrimsToRequestedYears() async throws {

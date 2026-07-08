@@ -147,9 +147,9 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。1 回の取り込み件数は env `BLT_INGEST_LIMIT`（既定 200、`.env` に書けば上書き）で調整。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` はステージ別に分けて実行し、既定値は `Stage 4=80` / `Stage 4-half=80` / `Stage 5=50`（空白解消優先・Mac 負荷抑制）。上書きは env `BLT_INGEST_LIMIT_STAGE4` / `BLT_INGEST_LIMIT_STAGE4_HALF` / `BLT_INGEST_LIMIT_STAGE5` を使う。`BLT_INGEST_LIMIT` は後方互換として「3ステージの共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。
 
-> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` は 1 プロセスで Stage 3 → Stage 4（通期）→ Stage 4-half の順に流す。limit を大きくすると 1 ラン数時間に及び、途中で Neon 接続がリセット（PSQLError）されるとそのランの **Stage 4 / Stage 4-half がまとめて失われる**（特に最後に走る Stage 4-half は完走しにくい）。完走率を優先し `.env` に `BLT_INGEST_LIMIT=75` 程度を書いて下げる（バックフィル中の暫定。全社 drain 後は既定に戻してよい）。
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` をステージ別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（4=80 / 4-half=80 / 5=50）から始め、必要なら `.env` の stage 別 limit を下げる。
 
 ```bash
 # 1. リリースビルド（コード変更後は再実行が必須）
@@ -169,7 +169,7 @@ tail -f .build/blt-scheduled.log
 
 plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 回 limit200・1 日 3 回 → 全完了 ~1 週間規模）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ## EDINET マスタデータ（コードリスト CSV）の更新
 
