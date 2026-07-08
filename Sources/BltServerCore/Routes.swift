@@ -9,7 +9,14 @@ import Vapor
 // MARK: - ルート登録
 
 /// `/v1/` 配下の REST API ルートを Application へ登録する。
-func registerRoutes(_ app: Application, context: BltServerContext) {
+/// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN / BLT_AUTH_TOKEN）から読む。
+/// テストからは引数で注入する（プロセス環境の書き換えは並列実行と競合するため）。
+func registerRoutes(
+    _ app: Application,
+    context: BltServerContext,
+    cfAccessTeamDomain: String? = Environment.get("CF_ACCESS_TEAM_DOMAIN"),
+    bltAuthToken: String? = Environment.get("BLT_AUTH_TOKEN")
+) {
     // Vapor デフォルトの ErrorMiddleware（`{"error":true,"reason":...}`）を、
     // 公開契約のエラー封筒（`{"error":"...","status":N}`）に置き換える。
     // 未知パスの 404・メソッド不一致の 405 もこの形式で返る。
@@ -40,10 +47,10 @@ func registerRoutes(_ app: Application, context: BltServerContext) {
     //   2. BLT_AUTH_TOKEN 設定 → 静的 Bearer（self-host）。
     //   3. どちらも無し → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
     var v1 = app.grouped("v1")
-    if Environment.get("CF_ACCESS_TEAM_DOMAIN")?.isEmpty == false {
+    if cfAccessTeamDomain?.isEmpty == false {
         app.logger.notice(
             "認証モード: Cloudflare Access（エッジ信頼）。Tunnel 経由・公開ポート閉鎖が前提です。")
-    } else if let token = Environment.get("BLT_AUTH_TOKEN"), !token.isEmpty {
+    } else if let token = bltAuthToken, !token.isEmpty {
         v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
         app.logger.notice("認証モード: 静的 Bearer（BLT_AUTH_TOKEN）。")
     } else {
