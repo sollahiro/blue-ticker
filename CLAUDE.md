@@ -1,3 +1,5 @@
+@/Users/shutosorahiro/.claude/CLAUDE.md
+
 # BLUE TICKER — Claude Code ガイド
 
 日本株の財務データCLIツール（Swift / SwiftPM）。
