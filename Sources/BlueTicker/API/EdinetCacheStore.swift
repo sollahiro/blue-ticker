@@ -41,13 +41,11 @@ final class EdinetCacheStore: Sendable {
 
     func loadSearchCache(_ filename: String, allowExpired: Bool = false) -> [[String: Any]]? {
         let path = documentsByDateDir.appendingPathComponent(filename)
-        let actualPath = fm.fileExists(atPath: path.path) ? path
-            : cacheDir.appendingPathComponent(filename)
-        guard fm.fileExists(atPath: actualPath.path),
-              let data = try? Data(contentsOf: actualPath),
+        guard fm.fileExists(atPath: path.path),
+              let data = try? Data(contentsOf: path),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return nil }
-        if !allowExpired && isSearchCacheExpired(actualPath, hasResults: !obj.isEmpty) { return nil }
+        if !allowExpired && isSearchCacheExpired(path, hasResults: !obj.isEmpty) { return nil }
         return obj
     }
 
@@ -70,10 +68,8 @@ final class EdinetCacheStore: Sendable {
 
     func loadDocumentIndexInfo(_ year: Int, requiredThrough: String? = nil, allowStale: Bool = false) -> [String: Any]? {
         let file = documentIndexesDir.appendingPathComponent(documentIndexCacheKey(year))
-        let actual = fm.fileExists(atPath: file.path) ? file
-            : cacheDir.appendingPathComponent(documentIndexCacheKey(year))
-        guard fm.fileExists(atPath: actual.path),
-              let data = try? Data(contentsOf: actual),
+        guard fm.fileExists(atPath: file.path),
+              let data = try? Data(contentsOf: file),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         guard (payload["_cache_version"] as? String) == Api.documentIndexVersion,
@@ -100,11 +96,8 @@ final class EdinetCacheStore: Sendable {
     }
 
     func clearDocumentIndex(_ year: Int) {
-        let paths = [
-            documentIndexesDir.appendingPathComponent(documentIndexCacheKey(year)),
-            cacheDir.appendingPathComponent(documentIndexCacheKey(year)),
-        ]
-        for p in paths { try? fm.removeItem(at: p) }
+        let path = documentIndexesDir.appendingPathComponent(documentIndexCacheKey(year))
+        try? fm.removeItem(at: path)
     }
 
     // MARK: - XBRL

@@ -18,12 +18,16 @@ analysis_cache/
   derived/
     document_discovery/
     xbrl_numeric_index/
+    xbrl_sections/
     analysis/
     half_year/
+    misc/
 ```
 
 - `external/`: 外部API・外部資料から取得した生データまたは取得物
 - `derived/`: blue_ticker が探索・パース・計算して作った中間結果または分析結果
+  - `xbrl_sections/`: `xbrl_sections_*` キー（有報セクション抽出の中間結果）
+  - `misc/`: 上記 prefix に当てはまらない derived キーの受け皿
 
 パス解決は `Utils/CachePaths.swift`（`edinetCacheDir(_:)` / `derivedCacheDir(_:)`）を使う。
 

@@ -25,11 +25,9 @@ actor CacheManager {
     func getJSON(_ key: String) -> sending [String: Any]? {
         guard enabled else { return nil }
         let file = cacheFilePath(key)
-        let actual = fileExists(file) ? file
-            : (fileExists(legacyCacheFilePath(key)) ? legacyCacheFilePath(key) : nil)
-        guard let url = actual, !isExpired(url) else { return nil }
+        guard fileExists(file), !isExpired(file) else { return nil }
 
-        guard let data = try? Data(contentsOf: url),
+        guard let data = try? Data(contentsOf: file),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return obj
@@ -51,10 +49,6 @@ actor CacheManager {
 
     private func cacheFilePath(_ key: String) -> URL {
         categoryDir(key).appendingPathComponent("\(safeName(key)).json")
-    }
-
-    private func legacyCacheFilePath(_ key: String) -> URL {
-        dataDir.deletingLastPathComponent().appendingPathComponent("\(safeName(key)).json")
     }
 
     private func safeName(_ key: String) -> String {

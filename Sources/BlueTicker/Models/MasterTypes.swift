@@ -6,9 +6,8 @@ struct MasterStock: Codable {
     let s33nm: String
     let mktNm: String
     let location: String
+    /// EDINET「提出者業種」の値。CSV に業種コード列が無いため、現状は業種名と同じ文字列が入る。
     let s33: String
-    let s17nm: String
-    let s17: String
 
     // CSV の列名と対応させる CodingKeys
     enum CodingKeys: String, CodingKey {
@@ -20,8 +19,6 @@ struct MasterStock: Codable {
         case mktNm     = "MktNm"
         case location  = "Location"
         case s33       = "S33"
-        case s17nm     = "S17Nm"
-        case s17       = "S17"
     }
 }
 

@@ -219,9 +219,7 @@ actor MasterDataManager {
                 s33nm: industry,
                 mktNm: market,
                 location: location,
-                s33: industry,
-                s17nm: "",
-                s17: ""
+                s33: industry
             )
             loaded.append(stock)
             index[code] = stock
