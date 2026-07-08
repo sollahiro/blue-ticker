@@ -143,7 +143,7 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 `blt-server sync` / `ingest` はワンショット。定期実行は Fly スケジューラ（`fly machine run ... --schedule`）または self-host の cron / launchd で回す。`sync`（引数なし＝前回 `synced_through` から当日まで）→ `ingest`（未取り込み・旧バージョン書類のみ）の順に実行する。
 
-**重い ingest（Stage 3/4）は Fly(1GB) で走らせると OOM する**ため、計算はローカル（または余裕あるマシン）で実行し Fly は読むだけにする。現状はローカル launchd で回す（将来クラウドスケジューラへ移行予定）。
+**重い ingest（Stage 3/4）は Fly 上で OOM する**ため、計算はローカル Mac の launchd で実行し Fly は読むだけにする。Fly スケジュールマシンへの移行は issue #34 で OOM により打ち止め（issue #35 参照）。
 
 ### 定期同期（ローカル launchd）
 
