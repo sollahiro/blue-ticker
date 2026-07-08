@@ -93,32 +93,18 @@ struct CachePruner {
     // MARK: - ファイル列挙
 
     private func edinetSearchFiles() -> [URL] {
-        // 現行: documents_by_date/search_*.json
-        // 旧形式: external/edinet/search_*.json
-        // さらに旧形式: analysis_cache/edinet/search_*.json
         globFiles(edinetDir.appendingPathComponent("documents_by_date"), prefix: "search_", suffix: ".json")
-            + globFiles(edinetDir, prefix: "search_", suffix: ".json")
-            + globFiles(legacyEdinetDir, prefix: "search_", suffix: ".json")
     }
 
     private func edinetDocIndexFiles() -> [URL] {
         globFiles(edinetDir.appendingPathComponent("document_indexes"), prefix: "doc_index_", suffix: ".json")
-            + globFiles(edinetDir, prefix: "doc_index_", suffix: ".json")
-            + globFiles(legacyEdinetDir, prefix: "doc_index_", suffix: ".json")
     }
 
     private func edinetXbrlDirs() -> [URL] {
         globDirs(edinetDir.appendingPathComponent("xbrl"), suffix: "_xbrl")
-            + globDirs(edinetDir, suffix: "_xbrl")
-            + globDirs(legacyEdinetDir, suffix: "_xbrl")
     }
 
     // MARK: - Helpers
-
-    private var legacyEdinetDir: URL {
-        // edinetDir = cacheDir/external/edinet → legacy は cacheDir/edinet
-        cacheDir.appendingPathComponent("edinet")
-    }
 
     private func globFiles(_ dir: URL, prefix: String, suffix: String) -> [URL] {
         guard fm.fileExists(atPath: dir.path) else { return [] }
