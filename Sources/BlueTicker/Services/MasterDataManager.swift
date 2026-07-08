@@ -34,6 +34,26 @@ func resolveEdinetCSVURL(
     return candidates.first { fileExists($0.path) }
 }
 
+/// Neon スナップショット適用など、CSV を書き込む先を解決する。
+/// `BLUE_TICKER_ASSETS_PATH` が設定されていればファイル未存在でもそのパスを返す（ブートストラップ用）。
+/// env 未設定時は既存ファイルがある読み取りパスへフォールバックする。
+func resolveEdinetCSVWriteURL(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    currentDirectoryPath: String = FileManager.default.currentDirectoryPath,
+    executableURL: URL? = Bundle.main.executableURL,
+    fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+) -> URL? {
+    if let dir = environment[assetsPathEnv], !dir.isEmpty {
+        return URL(fileURLWithPath: dir).appendingPathComponent(edinetCsvFilename)
+    }
+    return resolveEdinetCSVURL(
+        environment: environment,
+        currentDirectoryPath: currentDirectoryPath,
+        executableURL: executableURL,
+        fileExists: fileExists
+    )
+}
+
 // MARK: - MasterDataManager
 
 actor MasterDataManager {
@@ -258,10 +278,15 @@ actor MasterDataManager {
 let masterDataManager = MasterDataManager()
 
 /// Neon 等の外部ストアから取得した EDINET コードリスト CSV（生バイト列）を反映する。
-/// 解決済みローカルパスへ書き込んでから MasterDataManager をリロードする。
-/// パス未解決・書き込み失敗は false（戻り値パターン）。BltServerCore の定期ポーリングから呼ばれる。
+/// 書き込み用パスへ保存してから MasterDataManager をリロードする。
+/// パス未解決・ディレクトリ作成失敗・書き込み失敗は false（戻り値パターン）。BltServerCore の定期ポーリングから呼ばれる。
 public func applyEdinetMasterDataSnapshot(_ data: Data) async -> Bool {
-    guard let url = resolveEdinetCSVURL() else { return false }
+    guard let url = resolveEdinetCSVWriteURL() else { return false }
+    let directory = url.deletingLastPathComponent()
+    guard (try? FileManager.default.createDirectory(
+        at: directory,
+        withIntermediateDirectories: true
+    )) != nil else { return false }
     guard (try? data.write(to: url, options: .atomic)) != nil else { return false }
     await masterDataManager.reload()
     return true
