@@ -78,7 +78,7 @@ func runStage3Ingest(
             )
             break
         }
-        var existing = try await withDbRetry(
+        let existing = try await withDbRetry(
             logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await EdinetXbrlFacts.find(docID, on: db)
