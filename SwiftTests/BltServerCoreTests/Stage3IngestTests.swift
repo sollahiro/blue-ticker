@@ -124,4 +124,25 @@ private func payload(_ value: Double) -> XbrlFactIndexPayload {
             #expect(try await EdinetXbrlFacts.query(on: app.db).count() == 2)
         }
     }
+
+    @Test func ingestPrioritizesMissingBeforeStaleWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", submit: "2025-06-20 09:00", db: app.db)  // stale existing
+            try await seedDocument("S2", submit: "2025-06-21 09:00", db: app.db)  // missing
+
+            let stale = EdinetXbrlFacts()
+            stale.id = "S1"
+            stale.facts = payload(1)
+            stale.cacheVersion = "0.0.0"
+            try await stale.create(on: app.db)
+
+            let summary = try await runStage3Ingest(db: app.db, limit: 1) { _ in payload(9) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await EdinetXbrlFacts.find("S2", on: app.db) != nil)
+            let staleAfter = try #require(try await EdinetXbrlFacts.find("S1", on: app.db))
+            #expect(staleAfter.cacheVersion == "0.0.0")  // stale より先に空白を埋める
+        }
+    }
 }

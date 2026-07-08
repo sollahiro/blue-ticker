@@ -40,7 +40,7 @@ func runStage5Ingest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
     limit: Int?, logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> Stage5IngestSummary {
-    let candidates = try await stage5Candidates(
+    let baseCandidates = try await stage5Candidates(
         db: db, listedCodes: listedCodes, years: years, logger: logger)
 
     var attempted = 0
@@ -48,12 +48,41 @@ func runStage5Ingest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
+    var missing: [(docID: String, code: String, submitDateTime: String)] = []
+    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
+    var staleSectionKeys: [(docID: String, code: String, submitDateTime: String)] = []
+
+    for cand in baseCandidates {
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await CompanyFilingSections.find(cand.docID, on: db)
+        }
+        if existing == nil {
+            missing.append(cand)
+        } else if existing?.cacheVersion != filingSectionsCacheVersion {
+            staleVersion.append(cand)
+        } else if existing?.sectionKeys != sectionKeys {
+            staleSectionKeys.append(cand)
+        } else {
+            skipped += 1
+        }
+    }
+    let candidates = missing + staleVersion + staleSectionKeys
+    // 分類フェーズと実処理フェーズでリトライ予算を分ける。
+    // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
+    unhealthyRetries = 0
 
     for cand in candidates {
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted - skipped)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
@@ -118,7 +147,10 @@ func stage5Candidates(
             result.append((docID: d.docID, code: code, submitDateTime: d.submitDateTime))
         }
     }
-    return result
+    return result.sorted {
+        if $0.submitDateTime != $1.submitDateTime { return $0.submitDateTime > $1.submitDateTime }
+        return $0.docID < $1.docID
+    }
 }
 
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。

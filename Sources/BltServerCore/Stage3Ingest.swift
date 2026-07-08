@@ -40,18 +40,45 @@ func runStage3Ingest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
+    var missing: [String] = []
+    var stale: [String] = []
 
     for doc in documents {
         guard let docID = doc.id else { continue }
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await EdinetXbrlFacts.find(docID, on: db)
+        }
+        if existing == nil {
+            missing.append(docID)
+        } else if existing?.cacheVersion != xbrlFactsCacheVersion {
+            stale.append(docID)
+        } else {
+            skipped += 1
+        }
+    }
+
+    let candidates = missing + stale
+    // 分類フェーズと実処理フェーズでリトライ予算を分ける。
+    // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
+    unhealthyRetries = 0
+
+    for cand in candidates {
+        let docID = cand
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り\(documents.count - attempted - skipped)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
-        // 1 書類につき find は 1 回。現行版でパース済みなら skip、それ以外は取り込む。
-        let existing = try await withDbRetry(
+        var existing = try await withDbRetry(
             logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await EdinetXbrlFacts.find(docID, on: db)

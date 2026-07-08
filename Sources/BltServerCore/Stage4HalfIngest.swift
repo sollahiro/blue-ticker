@@ -33,12 +33,49 @@ func runStage4HalfIngest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
+    var missing: [(code: String, highWater: String?)] = []
+    var staleVersion: [(code: String, highWater: String?)] = []
+    var staleYears: [(code: String, highWater: String?)] = []
+    var staleHighWater: [(code: String, highWater: String?)] = []
 
     for code in codes {
+        let highWater = highWaterMap[code]
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await CompanyHalfFinancials.find(code, on: db)
+        }
+        guard let row = existing else {
+            missing.append((code, highWater))
+            continue
+        }
+        if row.cacheVersion != companyHalfFinancialsCacheVersion {
+            staleVersion.append((code, highWater))
+        } else if row.requestedYears < years {
+            staleYears.append((code, highWater))
+        } else if row.highWater != highWater {
+            staleHighWater.append((code, highWater))
+        } else {
+            skipped += 1
+        }
+    }
+    let candidates = missing + staleVersion + staleYears + staleHighWater
+    // 分類フェーズと実処理フェーズでリトライ予算を分ける。
+    // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
+    unhealthyRetries = 0
+
+    for cand in candidates {
+        let code = cand.code
+        let highWater = cand.highWater
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り\(codes.count - attempted - skipped)社は次回スケジュールで再試行)"
+                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)社は次回スケジュールで再試行)"
             )
             break
         }
@@ -47,7 +84,6 @@ func runStage4HalfIngest(
         ) {
             try await CompanyHalfFinancials.find(code, on: db)
         }
-        let highWater = highWaterMap[code]
         if let row = existing, row.cacheVersion == companyHalfFinancialsCacheVersion,
             row.requestedYears >= years, row.highWater == highWater {
             skipped += 1

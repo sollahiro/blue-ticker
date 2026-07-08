@@ -30,7 +30,6 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
         let ctx = try await MetricsLoader.prepare(rawCode: code)
         printError("\n分析中: \(ctx.code) \(ctx.name) ...\n")
-        printError("分析対象期間: 直近 \(years) 年分\n")
 
         if half {
             let halfAnalyzer = HalfYearAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
@@ -38,9 +37,11 @@ struct AnalyzeCommand: AsyncParsableCommand {
                 printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
                 throw ExitCode.failure
             }
+            printError(halfAnalysisPeriodText(periods) + "\n")
             renderHalf(periods)
             return
         }
+        printError("分析対象期間: 直近 \(years) 年分\n")
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
         guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache),
@@ -68,7 +69,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
                 throw ExitCode.failure
             }
             printError("\n分析中: \(codeTrimmed) \(resp.name) ...\n")
-            printError("分析対象期間: 直近 \(years) 年分\n")
+            printError(halfAnalysisPeriodText(periods) + "\n")
             renderHalf(periods)
             return
         }
@@ -105,6 +106,23 @@ struct AnalyzeCommand: AsyncParsableCommand {
             entry: { $0.yearEntry },
             latest: periods.last?.yearEntry
         )
+    }
+
+    /// 半期表示用の期間ラベルを、実際に取得できたデータから組み立てる。
+    private func halfAnalysisPeriodText(_ periods: [HalfPeriod]) -> String {
+        let completedFYEnds = Set(periods.filter { $0.half == "H2" }.compactMap { $0.fyEnd })
+        let completedYears = completedFYEnds.count
+        let hasCurrentH1 = periods.contains {
+            guard $0.half == "H1", let fyEnd = $0.fyEnd else { return false }
+            return !completedFYEnds.contains(fyEnd)
+        }
+        if completedYears > 0 {
+            return hasCurrentH1
+                ? "分析対象期間: 直近 \(completedYears) 年分 + 当期H1"
+                : "分析対象期間: 直近 \(completedYears) 年分"
+        }
+        let halfPeriods = periods.filter { $0.half == "H1" || $0.half == "H2" }.count
+        return "分析対象期間: 半期 \(halfPeriods) 期分"
     }
 
     /// 年次の増減分析を表示する（ローカル・remote 共通）。
