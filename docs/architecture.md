@@ -8,13 +8,13 @@ CLI は同一バイナリのまま、設定（`edinet-backend`）で接続先を
 
 | モード | EDINET を叩くのは | blt-server | 状態 |
 |---|---|---|---|
-| **local** | CLI 自身 | なし | 現行稼働中 |
+| **local** | CLI 自身 | なし | 互換のため残存。Stage 4 が read 床以上で servable 一巡後にユーザー向け廃止 |
 | **remote (self-host)** | blt-server | 同一マシン | 基盤実装済み |
-| **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | 稼働中（実 Fly / Neon で E2E 検証済み・バックフィル進行中） |
+| **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | **本番**（バックフィル進行中） |
 
-> **方針（2026-06-28 確定）**: ユーザー向けは最終的に remote（cloud）へ集約し、**local モードのユーザー向け分析 CLI は段階的に廃止**する（即時削除しない）。local 実行系は開発・テスト・フィクスチャ用途の **Dev CLI** として残す。到達点は「Blue Ticker はサーバーで動き、CLI / GUI / MCP はそれを操作するクライアント」。移行段取りは `blt-server-roadmap.md`「方針転換」を参照。
+> **方針（2026-06-28 確定・2026-07-09 更新）**: ユーザー向けは remote（cloud）へ集約する。**local モードのユーザー向け分析 CLI は、Stage 4 が read 床（いま `fin-v2`+）以上でユニバース servable になったら廃止**する（Dev CLI・Core・Unit Test は残す）。床は明示定数 `companyFinancialsMinServableVersion`（機械オフセットではない）。完了定義は `blt-server-roadmap.md`「ローカル CLI 廃止ゲート」。到達点は「Blue Ticker はサーバーで動き、CLI / GUI / MCP はそれを操作するクライアント」。
 >
-> **既定値（2026-07-05 追加）**: 上記方針に沿って `backend`（既定 remote）・`server-url`（既定 `Api.defaultRemoteServerURL`）を CLI にビルド時の既定値として組み込んだ。新規インストール後は `ticker config set` なしで `ticker login`（Cloudflare Access SSO、`deploy.md` 参照）だけで使い始められる。local モード・別サーバーを使う場合は明示的に `ticker config set --backend local` / `--server-url <url>` で上書きする。
+> **既定値**: `backend`（既定 remote）・`server-url`（既定 `Api.defaultRemoteServerURL`）。新規は `ticker login`（Cloudflare Access SSO、`deploy.md` 参照）だけで使い始められる。local / 別サーバーは `ticker config set --backend local` / `--server-url <url>` で上書き。
 
 ## ターゲット構成と依存方向
 
@@ -96,7 +96,7 @@ flowchart LR
 | `GET /v1/companies?q=` | `searchCompanies` | 企業検索 |
 | `GET /v1/sectors/{sector}/companies` | `searchBySector` | セクター別企業 |
 | `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
-| `GET /v1/companies/{code}/financials` | DB read（`company_financials`。未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4） |
+| `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4）。read 床は `companyFinancialsMinServableVersion` |
 | `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |
 | `GET /v1/companies/{code}/filing-content` | `getFilingContent` | 有報セクション本文・セグメント |
 
@@ -127,7 +127,7 @@ flowchart TD
 | 1 書類一覧 | DB（`edinet_documents` / `edinet_sync_state`） | スキーマ・`sync` 実装済み。filings read も DB 優先 |
 | 2 XBRL ファイル | ローカル保持（Stage 4 が生 HTML を要するため即削除不可） | `ingest` から取得・保持 |
 | 3 XBRL パース | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest` 実装済み（RAW アーカイブ。Stage 4 は消費せず生 XBRL を読む） |
-| 4 TICKER 計算 | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は DB 専用（未格納 404・ライブ計算フォールバックなし） |
+| 4 TICKER 計算 | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は床以上（いま `fin-v2`+）を DB 専用返却（未格納・床未満 404・ライブ計算フォールバックなし） |
 | 4-half 半期計算 | DB（`company_half_financials`・企業単位 JSONB） | 通期と同型（`ingest` 格納・DB 専用 read・years クランプ） |
 
 Stage 3 RAW はサーバー内部の中間生成物で非公開。公開するのは Stage 4 の計算済み財務サマリのみ。

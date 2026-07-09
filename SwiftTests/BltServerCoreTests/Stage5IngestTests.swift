@@ -326,6 +326,32 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    /// 床ちょうど（sections-v1）は現行版でなくても 200。
+    @Test func loadAcceptsMinServableVersion() async throws {
+        try await withMigratedApp { app in
+            try await seedStored(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db, version: "sections-v1")
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db))
+            #expect(json["doc_id"] as? String == "S1")
+        }
+    }
+
+    /// 最新選択は床以上のうち提出日時が新しい方（床未満の新しい行はスキップ）。
+    @Test func loadByCodeSkipsBelowFloorWhenSelectingLatest() async throws {
+        try await withMigratedApp { app in
+            try await seedStored(
+                "S-ok", code: "7203", submit: "2024-06-20 09:00", db: app.db, version: "sections-v1")
+            try await seedStored(
+                "S-bad", code: "7203", submit: "2025-06-20 09:00", db: app.db, version: "old")
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db))
+            #expect(json["doc_id"] as? String == "S-ok")
+        }
+    }
+
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
             let json = try await loadStoredFilingSections(

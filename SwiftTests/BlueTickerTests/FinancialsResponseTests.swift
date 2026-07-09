@@ -25,6 +25,28 @@ import Testing
         #expect((resp["years"] as? [[String: Any]])?.isEmpty == true)
     }
 
+    @Test func cacheVersionNumberParsesFinVN() {
+        #expect(companyFinancialsCacheVersionNumber("fin-v1") == 1)
+        #expect(companyFinancialsCacheVersionNumber("fin-v2") == 2)
+        #expect(companyFinancialsCacheVersionNumber("fin-v10") == 10)
+        #expect(companyFinancialsCacheVersionNumber("fin-v") == nil)
+        #expect(companyFinancialsCacheVersionNumber("0.0.0") == nil)
+        #expect(companyFinancialsCacheVersionNumber("fin-v2b") == nil)
+    }
+
+    @Test func isServableUsesNumericFloorNotLexicographicOrder() throws {
+        #expect(companyFinancialsMinServableVersion == 2)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v1") == false)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v2") == true)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v3") == true)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v4") == true)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v10") == true)
+        #expect(isServableCompanyFinancialsCacheVersion("0.0.0") == false)
+        // 現行版番号は床以上（不変条件）。
+        let current = try #require(companyFinancialsCacheVersionNumber(companyFinancialsCacheVersion))
+        #expect(current >= companyFinancialsMinServableVersion)
+    }
+
     @Test func yearsAreFlattenedSnakeCase() throws {
         // RawData/CalculatedData は全 Optional なので最小 JSON から組み立てる。
         let result = try decodeResult(#"""

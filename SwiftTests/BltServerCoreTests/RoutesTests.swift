@@ -76,11 +76,13 @@ private func send(
             let (status, json) = try await send(app, "/healthz")
             #expect(status == .ok)
             #expect(json?["status"] as? String == "ok")
-            let versions = json?["cache_versions"] as? [String: String]
-            #expect(versions?["xbrl_facts"] == xbrlFactsCacheVersion)
-            #expect(versions?["company_financials"] == companyFinancialsCacheVersion)
-            #expect(versions?["company_half_financials"] == companyHalfFinancialsCacheVersion)
-            #expect(versions?["filing_sections"] == filingSectionsCacheVersion)
+            let versions = json?["cache_versions"] as? [String: Any]
+            #expect(versions?["xbrl_facts"] as? String == xbrlFactsCacheVersion)
+            #expect(versions?["company_financials"] as? String == companyFinancialsCacheVersion)
+            #expect(versions?["company_financials_min_servable"] as? Int == companyFinancialsMinServableVersion)
+            #expect(versions?["company_half_financials"] as? String == companyHalfFinancialsCacheVersion)
+            #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
+            #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
         }
     }
 

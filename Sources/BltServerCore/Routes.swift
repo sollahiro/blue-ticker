@@ -33,8 +33,10 @@ func registerRoutes(
             "cache_versions": [
                 "xbrl_facts": xbrlFactsCacheVersion,
                 "company_financials": companyFinancialsCacheVersion,
+                "company_financials_min_servable": companyFinancialsMinServableVersion,
                 "company_half_financials": companyHalfFinancialsCacheVersion,
                 "filing_sections": filingSectionsCacheVersion,
+                "filing_sections_min_servable": filingSectionsMinServableVersion,
             ],
         ], status: .ok)
     }

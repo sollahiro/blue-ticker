@@ -25,6 +25,27 @@ import Foundation
 /// まとめて fin-v4 へバンプし、全社再 ingest を一度に走らせる方針のため意図的に保留している。
 public let companyFinancialsCacheVersion = "fin-v4"
 
+/// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
+/// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
+/// ingest の stale 判定・書き込みは常に `companyFinancialsCacheVersion`。床未満の行は 404。
+/// 床の引き上げは、該当旧版の stale 消化が終わってから行う（引き上げ後に servable 穴を作らない）。
+/// 不変条件: `companyFinancialsMinServableVersion` ≤ 現行 `fin-vN` の N。
+public let companyFinancialsMinServableVersion = 2
+
+/// `fin-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+public func companyFinancialsCacheVersionNumber(_ version: String) -> Int? {
+    guard version.hasPrefix("fin-v") else { return nil }
+    let suffix = version.dropFirst("fin-v".count)
+    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+    return n
+}
+
+/// 格納行の `cache_version` が read 床以上か。文字列辞書順比較は使わない（`fin-v10` 対策）。
+public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
+    guard let n = companyFinancialsCacheVersionNumber(version) else { return false }
+    return n >= companyFinancialsMinServableVersion
+}
+
 // MARK: - 年度エントリ（フラット形）
 
 struct FinancialsYear: Codable, Sendable {

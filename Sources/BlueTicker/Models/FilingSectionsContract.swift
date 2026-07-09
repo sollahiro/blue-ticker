@@ -14,6 +14,27 @@ import Foundation
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
 public let filingSectionsCacheVersion = "sections-v2"
 
+/// filing-content read（REST）が 200 を返す最低抽出バージョン番号（`sections-vN` の N）。
+/// **明示指定**であり、「現行から N つ前」の機械オフセットではない。人手で上げる。
+/// ingest の stale 判定・書き込みは常に `filingSectionsCacheVersion`。床未満の行は 404。
+/// 床の引き上げは、該当旧版の stale 消化が終わってから行う。
+/// 不変条件: `filingSectionsMinServableVersion` ≤ 現行 `sections-vN` の N。
+public let filingSectionsMinServableVersion = 1
+
+/// `sections-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+public func filingSectionsCacheVersionNumber(_ version: String) -> Int? {
+    guard version.hasPrefix("sections-v") else { return nil }
+    let suffix = version.dropFirst("sections-v".count)
+    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+    return n
+}
+
+/// 格納行の `cache_version` が read 床以上か。文字列辞書順比較は使わない。
+public func isServableFilingSectionsCacheVersion(_ version: String) -> Bool {
+    guard let n = filingSectionsCacheVersionNumber(version) else { return false }
+    return n >= filingSectionsMinServableVersion
+}
+
 /// 現在の抽出対象セクション集合を正規化した文字列（sorted・カンマ結合）。
 /// company_filing_sections.section_keys に格納し、取り込み時に照合する。
 /// セクションを追加すると本文字列が変わり、既存行が stale 判定され当該行のみ再抽出される
