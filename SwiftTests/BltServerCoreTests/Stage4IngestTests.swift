@@ -386,6 +386,53 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         }
     }
 
+    /// 床未満（fin-v1）は 404。床は明示定数で、現行版との完全一致ではない。
+    @Test func loadStoredFinancialsReturnsNilWhenBelowMinServable() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyFinancials()
+            row.id = "7203"
+            row.response = makeResponse(code: "7203", years: 6)
+            row.cacheVersion = "fin-v1"
+            row.requestedYears = 6
+            try await row.create(on: app.db)
+
+            let json = try await loadStoredFinancials(code: "7203", years: 3, db: app.db)
+            #expect(json == nil)
+        }
+    }
+
+    /// 床ちょうど（fin-v2）は現行版でなくても 200。
+    @Test func loadStoredFinancialsAcceptsMinServableVersion() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyFinancials()
+            row.id = "7203"
+            row.response = makeResponse(code: "7203", years: 6)
+            row.cacheVersion = "fin-v2"
+            row.requestedYears = 6
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredFinancials(code: "7203", years: 3, db: app.db))
+            #expect(json["code"] as? String == "7203")
+        }
+    }
+
+    /// 床より新しい旧版（fin-v3）も 200。
+    @Test func loadStoredFinancialsAcceptsIntermediateServableVersion() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyFinancials()
+            row.id = "7203"
+            row.response = makeResponse(code: "7203", years: 6)
+            row.cacheVersion = "fin-v3"
+            row.requestedYears = 6
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredFinancials(code: "7203", years: 3, db: app.db))
+            #expect(json["code"] as? String == "7203")
+        }
+    }
+
     @Test func loadStoredFinancialsReturnsNilWhenYearsInsufficient() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()

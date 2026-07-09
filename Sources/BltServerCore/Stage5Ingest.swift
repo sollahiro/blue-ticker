@@ -181,8 +181,9 @@ func storeCompanyFilingSections(
 // MARK: - read 経路（REST filing-content）
 
 /// 格納済み Stage 5 セクションを引いて公開契約 {code, doc_id, sections} を返す。
-/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報。
-/// 無い・古い（cache_version 不一致）なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
+/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち床以上）。
+/// 床は `filingSectionsMinServableVersion`（明示定数。現行版との完全一致ではない）。
+/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
 func loadStoredFilingSections(
     code: String, docId: String?, sections: [String]?, db: Database
 ) async throws -> [String: Any]? {
@@ -195,15 +196,16 @@ func loadStoredFilingSections(
         let found = try await CompanyFilingSections.find(docId, on: db)
         row = (found?.code == code4) ? found : nil
     } else {
-        // 最新有報（提出日時降順の先頭）。
-        row = try await CompanyFilingSections.query(on: db)
+        // 最新有報（提出日時降順のうち、read 床以上の先頭）。
+        // 床判定は SQL では表現しにくいため code 単位で取得してから選ぶ（社あたり直近数件）。
+        let candidates = try await CompanyFilingSections.query(on: db)
             .filter(\.$code == code4)
-            .filter(\.$cacheVersion == filingSectionsCacheVersion)
             .sort(\.$submitDateTime, .descending)
-            .first()
+            .all()
+        row = candidates.first { isServableFilingSectionsCacheVersion($0.cacheVersion) }
     }
 
-    guard let row, row.cacheVersion == filingSectionsCacheVersion, let docID = row.id else {
+    guard let row, isServableFilingSectionsCacheVersion(row.cacheVersion), let docID = row.id else {
         return nil
     }
     return [

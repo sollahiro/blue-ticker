@@ -1,503 +1,169 @@
 # blt-server ロードマップ
 
+現在地と次の意思決定の索引。手順は `deploy.md` / `operations.md`、構成のスナップショットは `architecture.md`、完了履歴は Git。
+
+## 現在地（2026-07-09）
+
+| 項目 | 状態 |
+|---|---|
+| 本番 | Fly.io (nrt) + Neon + Cloudflare Access/Tunnel。`api.sollahiro.com` 稼働。main push で自動デプロイ |
+| CLI 既定 | `backend=remote`（`ticker login` で SSO） |
+| Stage 1 | 同期済み（~3,944 社）。launchd が日次増分 sync |
+| Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
+| Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
+| Stage 4 read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
+| Stage 4-half | 進行中。`half-v1` 1,392 行（単一版のため read 床は未導入。`half-v2` バンプ時に同型で追加） |
+| Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
+| Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
+| 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
+
+カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
+
+## 方針: サーバー集約とローカル CLI 廃止
+
+到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP は REST クライアント**」。
+
+| 区分 | 対象 | 扱い |
+|---|---|---|
+| 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（デバッグ・テスト・フィクスチャ） | 維持 |
+| 切る | **ユーザー向けローカル分析 CLI**（`backend=local`） | **全銘柄が read 床以上で servable になったら廃止**（下記ゲート） |
+| ユーザー接点 | remote CLI / GUI / MCP | すべて REST API 経由 |
+
+- Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
+- 旧 MCP プロトコルサーバーは復活させない。将来の MCP は REST クライアントとして実装する。
+- オンデマンド ingest は非同期（404 → 将来 202＋キュー。公開スキーマ追加のため実装前に確認）。
+
+### Stage 4 / Stage 5 read 床（min servable）
+
+financials / filing-content の REST read は現行版との完全一致ではなく、**明示した最低世代以上**を返す。half は単一版のため床未導入（`half-v2` 時に同型追加）。
+
+| 定数 | 役割 |
+|---|---|
+| `companyFinancialsCacheVersion`（いま `fin-v4`） | Stage 4 ingest の書き込み・stale 判定 |
+| `companyFinancialsMinServableVersion`（いま `2`） | financials read の最低 N（`fin-vN`） |
+| `filingSectionsCacheVersion`（いま `sections-v2`） | Stage 5 ingest の書き込み・stale 判定 |
+| `filingSectionsMinServableVersion`（いま `1`） | filing-content read の最低 N（`sections-vN`） |
+
+- 比較は `*-vN` を数値パースして行う（文字列辞書順は使わない）。
+- 床の引き上げは、該当旧版の stale 消化完了後に行う（引き上げで servable 穴を作らない）。
+- `/healthz` の `company_financials_min_servable` / `filing_sections_min_servable` で現行床を確認できる。
+
+### ローカル CLI 廃止ゲート（2026-07-09 確定）
+
+**トリガー**: ユニバース全銘柄が **Stage 4 read 床以上（servable）** の `company_financials` 行を持つ。
+
+完了の定義:
+
+- `edinet_documents` から導出できる証券コードについて、`company_financials.cache_version` が床以上（いま `fin-v2`+）
+- 残欠は恒久 failed（財務報告書なし等）として切り分け済みで、定期 ingest の Stage 4 **missing** が実質ゼロ（床未満だけの行は「空白一巡」に数えない）
+
+補足:
+
+- 現行版（`fin-v4`）への揃えは**削除の必須条件にしない**（床以上なら remote は 200。stale 版アップグレードは同ジョブが継続）
+- Stage 4-half / Stage 5 の全社 drain も必須条件にしない（Stage 5 は床=1 で旧行も読める）
+- 床を後で引き上げるときは、引き上げ後もゲート条件（全銘柄 servable）を満たすこと
+
+完了後の手順:
+
+1. `backend=local` を deprecation（警告＋ドキュメント）
+2. 次の破壊的バージョンでユーザー向け local 経路を削除（Dev CLI・Core・Unit Test は残す）
+3. remote 未格納／床未満は 404（または実装済みなら 202＋キュー）のまま。local フォールバックは戻さない
+4. 削除直前に、その時点の床での servable カバレッジを再測定する
+
 ## デプロイモード
 
 | モード | blt-server | EDINET を叩くのは | 状態 |
 |---|---|---|---|
-| **local CLI** | なし | CLI | 現行稼働中 |
-| **remote (self-host)** | 同一マシン | blt-server | 基盤実装済み・設定待ち |
-| **remote (cloud)** | リモートサーバー | blt-server | **Fly.io に確定**（後述「クラウド構成」） |
-
-`blt-server` は `swift run blt-server`（または `swift build -c release` 後に `.build/release/blt-server`）で起動。
-
-## 方針転換（2026-06-28 確定）: サーバー集約とローカル CLI 段階廃止
-
-サーバーデプロイが実用域に入ったため、**ユーザー向けの実行環境を blt-server（remote/cloud）へ一本化**する。到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP はそれを操作するクライアント**」。
-
-| 区分 | 対象 | 扱い |
-|---|---|---|
-| 残す | Core（`BlueTickerCore` の `Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（デバッグ・テスト・フィクスチャ） | 維持 |
-| 切る | **ユーザー向けローカル分析 CLI**（`backend=local`） | **段階的に廃止**（deprecation 告知 → バージョンを定めて削除。即時削除しない） |
-| ユーザー接点 | remote CLI / GUI / MCP | すべて **REST API 経由**で blt-server を呼ぶ（`クライアント → API → Server`） |
-
-- **Core はサーバー専用にしない**: サーバー・Dev CLI・Unit Test が同一 Core を共有し実装を一元化する。これは既存ターゲット構成（`BlueTickerCore` は Vapor/Fluent 非依存）で構造的に担保済み。
-- **MCP の位置づけ**: 旧 MCP（サーバーが MCP プロトコルを直接話す方式）は廃止のまま。将来復活させる MCP は remote CLI / GUI と同じ **REST API クライアント**として実装する（`MCP → API → Server`。プロトコルサーバーは復活させない）。
-- **オンデマンド ingest は非同期**: 未 ingest 銘柄の取得はリクエスト経路に重い処理を持ち込まず、未充足リクエストをキューに記録して既存 ingest バッチが消化する（下記「オンデマンド ingest（非同期）」）。
-- **バックフィル範囲**: 当面は「人気銘柄＋オンデマンド」、ゆくゆく全銘柄 ingest へ拡大。
-
-## 確定済みアーキテクチャ（2026-06）
-
-iOS app / remote CLI を実際に作る方針が固まり、blt-server 開発に着手。主要な技術選定は以下で確定済み。
-
-| 項目 | 確定内容 | 状態 |
-|---|---|---|
-| compute / TLS / secrets / scheduler | **Fly.io**（`primary_region = "nrt"`）。自作サーバー(self-host)も同一 Docker イメージで可 | 確定 |
-| DB | **Neon（serverless Postgres）** | 確定（旧「Fly Postgres / Neon 要確定」を解決） |
-| サーバースタック | **Vapor + Fluent** | 確定（旧「素 NIO vs Vapor 要確定」を解決） |
-| ターゲット構成 | Server を `BltServerCore` へ分離し CLI から Web/DB 依存を排除 | **実装済み**（下記） |
-
-### サーバーターゲット分離（実装済み）
-
-Vapor + Fluent を足す前段として、Server を独立ターゲットへ切り出した。狙いは Web/DB 依存（NIO・将来の Vapor/Fluent）を CLI バイナリへ漏らさないこと。
-
-- **`BlueTickerCore`**（`Sources/BlueTicker/`）: NIO 非依存の共有ライブラリ。`Server/BltServerFacade.swift` に REST ファサード（`BltServerContext` struct ＋ `BltServerResponse` enum ＋ `makeBltServerContext()`）のみを置く。計算ロジック（`Analysis/`＋`Services/`）は internal のまま。
-- **`BltServerCore`**（`Sources/BltServerCore/`）: NIO トランスポート（`HTTPApp` / `RESTRouter` / `BltServerEntry`）。`BlueTickerCore` のファサードを呼ぶ。依存方向は `BltServerCore` → `BlueTickerCore` のみ（逆流不可）。
-- 効果（実測）: `ticker` の NIO シンボル 27,635 → 0、バイナリ 20.8MB → 10.4MB に半減。REST API の挙動は不変（監査確認済み）。
-
-### 構築順序（残タスク）
-
-1. ~~Server 独立ターゲット分離~~ → **完了**
-2. ~~Vapor + Fluent を `BltServerCore` に追加~~ → **完了**（トランスポートを Vapor へ置換。Fluent は DATABASE_URL 条件付き配線。下記「Vapor + Fluent 移行」）
-3. ~~共通基盤: bind 可変化 / `/healthz` / Bearer 認証 / EDINET キーを env から~~ → **完了**（下記「共通基盤（env 設定・ヘルスチェック・認証）」）
-4. Neon 接続 ＋ Stage 1/3/4 スキーマ設計（Fluent マイグレーション） — **Stage 1・Stage 3・Stage 4 スキーマ＋取り込み（`blt-server ingest`）＋ Stage 4 DB 読み配線 完了**（下記「Stage 1 DB 配線」「Stage 3 DB スキーマ＋取り込み」「Stage 4 DB 配線」）。残りは実 Neon E2E 検証
-5. ~~financials レスポンスの公開契約 ＋ schema version 確定~~ → **完了**: flatten 形を公開契約として確定し、top-level に `schema_version`（`Api.financialsSchemaVersion`、blueTickerVersion 非連動）を追加。**v2** で単一 Codable 契約型へ統一＋remote CLI 用フィールド追加（下記「remote CLI 実装」）
-6. ~~Dockerfile（2段ビルド）＋ `fly.toml` ＋ 自作デプロイ手順~~ → **完了**（下記「デプロイ（Dockerfile / Fly.io / self-host）」）
-
-### Stage 1 DB 配線（実装済み）
-
-書類一覧（Stage 1）を Postgres へ取り込む経路を実装した。
-
-- **スキーマ**（`BltServerCore/Models`・`Migrations`）: `edinet_documents`（書類1件=1行、docID PK、EDINET メタ。`edinet_code`/`sec_code` に索引）＋ `edinet_sync_state`（単一行、`synced_through` で同期高水位）。`DATABASE_URL` 設定時のみ `autoMigrate` で適用（未設定なら従来どおり DB なしのステートレス動作）。
-- **同期コマンド**: `blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]`（ワンショット。`to` 既定は UTC 当日、`from` は 明示 > `synced_through` > エラー）。取得・正規化は `BlueTickerCore` のファサード `fetchDocumentsForSync`（seed 種別 `Api.stage1SyncDocTypes` に限定・docID 重複排除）、DB upsert は docID 単位の find-or-create（冪等）。
-- スキーマは公開契約ではなくサーバー内部（公開契約は financials レスポンス側）。raw(jsonb) は持たず明示カラムのみ。
-
-### Stage 3 DB スキーマ＋取り込み（実装済み）
-
-XBRL 数値 RAW（パース済み fact インデックス）の格納先スキーマと、実パース取り込み（Stage 2 取得 → パース → 格納）を実装した。なお Stage 4（下記）は `edinet_xbrl_facts` を消費せず計算結果を別途格納する設計のため、本テーブルは現状 RAW アーカイブ（タグ横断クエリが実需要化したら正規化投影の派生元）。
-
-- **スキーマ**: `edinet_xbrl_facts`（書類1件=1行、docID PK）。`facts` カラムに書類単位の fact インデックス（tag → contextRef → fact）を **JSONB 1 セル**で格納（Postgres=JSONB / SQLite=TEXT）。`cache_version` で書類単位の staleness 照合（`xbrlFactsCacheVersion` 不一致なら再パース）。`xbrlFactsCacheVersion` は `blueTickerVersion` と独立し、パース／RAW スキーマ変更時のみバンプする（月内 Micro バンプで高コストな再 ingest を走らせないため）。
-- **格納粒度（A）**: fact 1件=1行の正規化ではなく書類単位 JSONB。理由は唯一の消費者 Stage 4 が書類単位に全 fact をまとめ読みするため。タグ横断クエリが実需要化したら**保存済み JSONB から正規化投影を派生**できる（EDINET 再取得・再パース不要）。
-- 格納用 Codable DTO（`XbrlFactRecord`／`XbrlFactIndexPayload`）は `BlueTickerCore`（Foundation のみ依存）に置き、内部型 `XbrlFact` を露出させない。Fluent モデル・マイグレーションは `BltServerCore`。
-- Stage 3 RAW は公開しない（サーバー内部の中間生成物）。`doc_id` は `edinet_documents` への論理参照（硬い FK は張らず取り込み順を非結合）。
-
-#### 取り込みコマンド（`blt-server ingest`）
-
-- **コマンド**: `blt-server ingest [--limit N]`（ワンショット。`--limit` は新規取り込み件数の上限。XBRL ダウンロードが 9MB/件と重いためバッチ分割用）。
-- **対象選定**: `edinet_documents` を提出日時降順（新しい順）に走査し、`edinet_xbrl_facts` が無い or `cache_version != xbrlFactsCacheVersion` の書類のみ取り込む。最新版でパース済みは skip（derived キャッシュと同思想の staleness 判定）。
-- **取得・パース**: Core ファサード `parseXbrlFactIndex(docID:)` が `downloadDocument`（Stage 2）→ `collectAllNumericFacts`（`nilAsZero: false`、Stage 4 と同条件）→ `XbrlFactRecord` 写経を行う。DB upsert（find-or-create・冪等）は `BltServerCore/Stage3Ingest.swift`。取得失敗・fact 0 件は failed としてスキップ（戻り値パターン）。
-- **テスト**: DB ロジック（候補選定・skip・再パース・limit・upsert）はパーサ closure 注入でネットワーク非依存に検証（`Stage3IngestTests`）。
-- **Stage 2 保持ポリシー**: 生 XBRL は**ローカル保持継続**（`external/edinet/xbrl` キャッシュ／Fly Volume）。Stage 4 が HTML 依存抽出（US-GAAP・IFRSリース・セグメント・粗利）のため生ディレクトリを必要とするため即削除は不可。Cloudflare R2 退避はクラウド実運用で容量が問題化してから（延期）。
-
-### Stage 4 DB 配線（実装済み）
-
-financials の REST 応答を、毎リクエストのライブ計算（EDINET 取得 → XBRL 9MB DL → パース）から **Neon 格納済みの計算結果の読み取り**へ切り替えた。Fly の小メモリ機（shared-cpu-1x/1gb）でも financials が OOM しない。
-
-- **なぜ facts 読みではないか**: 計算（`processDocument`）は数値 fact だけでなく **生 XBRL 内の HTML を直接パースする抽出器**（US-GAAP 連結 P/L・BS、IFRS 粗利／IBD／支払利息の TextBlock フォールバック）に依存する。`edinet_xbrl_facts`（数値のみ）からは再現できないため、**計算結果（公開契約 `FinancialsResponse`）を企業単位で格納**する方式を採る。HTML 解決・waterfall は ingest 時（生ディレクトリがある所）で完了させる。
-- **スキーマ**: `company_financials`（証券コード 4 桁を PK、`response` JSONB に `FinancialsResponse`、`cache_version`＝`companyFinancialsCacheVersion`、`requested_years`、`updated_at`）。Stage 4 derived だが `cache_version` は **`blueTickerVersion` 非連動の専用定数 `companyFinancialsCacheVersion`**（`Models/FinancialsContract.swift`、現在 `"fin-v2"`）。Stage 3 と同じく再生成が高コスト（XBRL 再 DL＋HTML 依存抽出の再計算）なため、月内 Micro バンプで全社再計算を強制しない。計算ロジック／契約型変更時のみバンプ（`versioning.md`）。公開契約は `response` 中身であり本テーブルは内部スキーマ。
-- **取り込み**: `blt-server ingest` が Stage 3 の後に Stage 4 を実行する。`edinet_documents` の secCode から distinct な企業（4 桁コード）を導出し、未計算 or `cache_version` 不一致 or `requested_years` 不足の企業のみ Core ファサード `computeFinancials(code:years:)`（既定 6 年）で計算・upsert。`--limit` は新規計算件数の上限。staleness skip は derived キャッシュと同思想。
-- **read 経路（DB 専用・ライブ計算フォールバックなし）**: `GET /v1/companies/{code}/financials` は `company_financials` に現行バージョン & 要求年数を満たす行があれば `trimmed(toYears:)` して返す（DL・パースなし）。無い・古い・年数不足は **404**、DB 非接続は **503**。**ライブ計算へはフォールバックしない**（`loadStoredFinancials` / `Routes.swift`）。理由: フォールバックは 1 リクエストでサーバー全体を OOM 落ちさせる地雷で、warm でも years 整合がずれると毎回発火し得た（half で実害化、下記）。重い計算は ingest（ローカル→Neon）に閉じ込め、serving は read-only を保つ。
-- **運用**: 計算はメモリを使うため、**重い初回バックフィルはローカル等から `DATABASE_URL` を Neon に向けて ingest** する（Fly 上で大量に走らせると ingest 自体が OOM しうる）。Fly サーバーは読むだけ。
-- **テスト**: DB ロジック（企業選定・重複排除・staleness・年数不足・limit・upsert）と read 経路（バージョン／年数ゲート・trim）を計算器 closure 注入でネットワーク非依存に検証（`Stage4IngestTests`）。
-
-### Stage 5 DB スキーマ＋取り込み（有報セクション本文・実装済み）
-
-`GET /v1/companies/{code}/filing-content`（有報のリスク情報・MD&A・研究開発等のセクション本文）を、リクエスト経路のライブ抽出から **ingest 事前抽出＋DB read-only** へ切り替えた（issue #23）。
-
-- **動機（実測）**: 旧経路は request 時に XBRL を 9MB ライブ DL＋SwiftSoup パースしていた。**Toyota(7203) の全セクション要求 1 本で Fly 1GB が OOM kill（anon-rss 880MB, exit 137）**。財務系（Stage 4）で撤去したのと同型の地雷で、単発でも致命的（ピークは巨大 honbun 1個の DOM に律速され、セクション数や単一パース化では下がらない＝返るテキストは 76KB なのに抽出に ~1GB）。→ 重い抽出は ingest（生 XBRL がある所）へ、serving は小さいテキストを読むだけに。
-- **スキーマ**: `company_filing_sections`（**docID を PK**＝過去書類も保持。Stage 3 と同型）。`payload` JSONB に `FilingSectionsPayload`（texts＝本文 String、specials＝segments/geography）、`code`(4桁・read-by-code 用)、`submit_date_time`(最新選択用)、`cache_version`＝`filingSectionsCacheVersion`、`section_keys`。格納契約 `FilingSectionsPayload`／`SegmentPayload` は `BlueTickerCore/Models/FilingSectionsContract.swift`（内部型 `SegmentResult` を写経・非露出。Stage 3 の `XbrlFactRecord` 方式）。Fluent モデル・マイグレーションは `BltServerCore`。
-- **対象ユニバース（東証上場・著作権クリーン）**: EDINET 公式 CSV の「上場区分」==「上場」から導出（`MasterDataManager.listedCodes` → ファサード `listedCompanyCodes`）。TOPIX/日経の構成銘柄リストは編集著作物／DB 権の懸念があるため**同梱・依存しない**。
-- **保持粒度（容量＝#22 と整合）**: 企業単位・**有報(120)のみ・提出日時降順で直近 `stage5IngestYears`(=3) 件**。全書類（21,250件×~50-100KB≈1-2GB）は 512MB 超になるため直近に絞る。全書類はキーだが年数上限で総量を抑える。**ストレージ強化（#22 の Neon プラン拡張 or オブジェクトストレージ退避）後に年数を緩められる**。
-- **抽出**: Core ファサード `extractFilingSections(docID:)` が `downloadDocument`（Stage 2）→ `XBRLParser.extractSections`（**honbun を1回パースして全セクション**＝セクションごと再パースの非効率を解消・latency 25→15s）→ `SegmentExtractor` で segments/geography を写経。ingest は常に全セクション抽出（絞り込みは read 側）。DB upsert は `BltServerCore/Stage5Ingest.swift`。
-- **取り込み**: `blt-server ingest` が Stage 4-half の後に Stage 5 を実行。候補=上場×有報×直近3年、`cache_version` 一致 & `section_keys` 一致で skip、いずれか不一致で再抽出。**セクション追加は `xbrlSections` に1行足すだけ**（`section_keys` 不一致で当該行のみ自動再抽出＝cache_version バンプ不要）。`--limit` は新規抽出件数上限。
-- **read 経路（DB 専用・ライブ抽出フォールバックなし）**: `loadStoredFilingSections`。doc_id 省略時は当該 code の最新有報、指定時はその書類（当該 code のもの・取り違え防止）。無い・古いは **404**、DB 非接続は **503**。公開契約 `{code, doc_id, sections}` は不変（`sectionsObject(sections:)` で復元）。
-- **公開挙動の変更**: doc_id 指定は「格納済み（直近3年の有報）と一致時のみ 200」。3年より古い書類・非有報の doc_id は 404（旧: 任意 docID をライブ抽出）。retention を広げれば緩和される。
-- **運用**: 抽出はメモリを使うため初回バックフィルはローカル等から `DATABASE_URL`=Neon で ingest（Fly は読むだけ）。**バックフィル未実施**（launchd が drain 予定）。
-- **テスト**: 対象選定（上場×有報×直近N・secCode 検証）・staleness（version/section_keys）・limit・upsert・read（code 最新／doc_id／取り違え／バージョン／sections 絞り込み）を抽出器 closure 注入でネットワーク非依存に検証（`Stage5IngestTests`、16件）。
-
-### オンデマンド ingest（非同期・設計確定／未実装）
-
-「人気銘柄＋オンデマンド」運用での cold path（未 ingest 銘柄を叩かれたとき）を **非同期**で扱う。serving は read-only を保ち、OOM を起こす重い処理（9MB DL＋XBRL パース）をリクエスト経路に持ち込まない。
-
-- **フロー**: `GET /v1/companies/{code}/financials` が DB に無い → serving は重い処理をせず、当該コードを **未充足リクエストとして記録**し `202`（準備中）を返す → 既存 ingest バッチ（launchd / 将来ワーカー）がそのキューを消化 → 次回リクエストで DB から即返る。
-- **同期にしない理由**: 同期パースはリクエストを握ったまま OOM し、serving インスタンスごと落として無関係なリクエストを巻き込む。Stage 4 DB 配線で勝ち取った「serving=read-only / ingest=別バッチ」の分離を逆行させない。
-- **UX**: クライアントは「準備中」を表示、または裏でポーリングしてスピナー表示する（**サーバーはリクエストを握らない**点が同期と決定的に違う）。
-- **新規要素**: 未充足リクエストの記録テーブル（小さな Neon テーブル 1 枚）。**公開スキーマの追加に当たるため実装前にユーザー確認**（`workflow.md` 公開インターフェース保護）。
-- 状態: **設計確定・未実装**。現状の未格納銘柄は同期 404（ライブ計算フォールバックは撤去済み＝serving は read-only を達成）。本節は「404 を 202＋キュー記録に変えて UX を改善する」将来案であり、記録テーブルは未充足リクエストの公開スキーマ追加に当たるため実装前にユーザー確認。
-
-## クライアント
-
-主要クライアントは CLI と iOS app の 2 種。いずれも REST API で blt-server と通信する。
-
-| クライアント | 接続方法 | ユースケース |
-|---|---|---|
-| **CLI (local)** | Services 層を直接呼ぶ | オフライン・EDINET API キー直接管理 |
-| **CLI (remote)** | REST API | blt-server 経由・API キー管理不要 |
-| **iOS app** | REST API | `analyze` の数値をビジュアル化（URLSession + Codable） |
-
-CLI は `ticker config set --backend remote` で local/remote を切り替える。
-
-### remote CLI 実装（実装済み）
-
-`backend=remote` のとき、CLI は EDINET を直接叩かず blt-server の REST API を呼び、**計算済み JSON をローカルと同じ整形で表示**する（計算はサーバー集約）。
-
-- **対象コマンド**: `search` / `filings` / `filing` / `analyze` / `summarize`（REST 5 エンドポイントに対応）。各コマンドは `run()` 冒頭で `RemoteBackend.clientIfEnabled()` を呼び、非 nil なら remote 経路、nil ならローカル経路（Services 直呼び）を実行する。
-- **整形の再現**: `RemoteAPIClient`（`API/RemoteAPIClient.swift`）が応答を `StockSearchResult` / `RemoteFilings` / `FinancialsResponse` / セクション辞書へデコードし、`FinancialsResponse.toMetricsResult()` で内部 `MetricsResult` に復元して**既存レンダラをそのまま使う**。`filing` のセグメント表は `SegmentResult(dictionary:)` で復元。
-- **接続設定**: `ticker config set --server-url <url> --auth-token <token>`。解決順位は env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`auth-token` は keychain 保存（`edinetApiKey` と同様）、`server-url` は config ファイル。`config show` は token をマスク表示。
-- **`--half` の remote 対応（実装済み・実 Fly E2E 検証済み 2026-06-28）**: `analyze --half` / `summarize --half` は `GET /v1/companies/{code}/half-financials` を呼び、ローカルと同一整形（半期 5 ブロック増減分析・水準値テーブル）で表示する。通期と同型の DB 専用経路（`company_half_financials`、ingest で計算格納、read は DB のみ・未格納は 404）。**read は要求年数を半期上限 `Api.halfMaxYears`(=5) へクランプ**する。半期は FY/2Q から H1/H2 を導出する都合で最大 5 年しか作れず、CLI 既定 `analyzeDefaultYears`=6 のままでは read guard `requested_years(5) >= years(6)` が常に偽になり DB を空振り→旧ライブ計算フォールバックで Fly を OOM させていた（実機で再現・修正済み）。クランプで years=6 でも warm read（200）を返す。
-- **残る制約**: `sector`（全 33 業種一覧）は対応する REST が無く CSV からオフライン算出するため remote でも常にローカルで動作する（機能欠落ではない）。REST 化は一貫性のための polish で未着手。
-- 失敗は throw せず `RemoteOutcome`（ok / notFound / failure）で表現し、CLI 層が stderr へ出して終了する（戻り値パターン）。
-
-#### 稼働状況（2026-06-28 実機検証・Fly `blt-server.fly.dev`）
-
-remote の各コマンドを実 Fly に対して検証した結果と、残る配線ギャップ。
-
-| コマンド | remote 稼働 | 備考 |
-|---|---|---|
-| `search` | ✅ | CSV マスターで軽量 |
-| `analyze` / `summarize`（通期・`--half`） | ✅ | Stage 4 / 4-half とも DB 専用 read。warm 0.3s。**未バックフィル銘柄は 404**（ライブ計算フォールバック撤去済み＝OOM しない）。`--half` の years=6 は read クランプで warm read |
-| `filings` / `filing` | ✅（DB 読み配線済み・実 Fly 検証待ち） | Stage 1 read 配線を実装（下記）。DB 同期済み銘柄は `edinet_documents` を読み OOM を回避。未同期銘柄のみライブ探索へフォールバック（filings は軽量なので維持） |
-
-- **Stage 1 read 配線（実装済み）**: `filings` エンドポイントを `EdinetDiscovery.buildDocumentIndexForCode` のライブ探索から **`edinet_documents`（Neon 同期済み）の DB 読み**へ切り替えた（Stage 4 financials と同型: DB 読み優先＋未同期/DB 非接続はライブフォールバック）。`Routes.swift` が `loadStoredFilingRecords`（secCode 前方一致クエリ）で当該銘柄の行を引き、ファサード `getFilingsFromRecords` が応答を組み立てる。応答スキーマは不変。
-  - **簡易セマンティクス（確定・ライブ探索との意図的差分）**: DB 経路は各書類の `period_end` をそのまま `fy_end` とする自己完結ビュー。主要 doc type の有報(120)・半期(160) は period_end が通期期末のためライブと**完全一致**。一方、旧四半期(140) は 2Q 末、訂正(130) は親有報リンク（`edinet_documents` に `parentDocID` 列なし）を再現できないため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は再現せず、自身の period_end・窓内全件で返す。完全パリティには schema 変更（parent_doc_id 追加＋再 sync）が要るが、140 は概ね廃止・130 の差は軽微のため**簡易セマンティクスを採用**（schema 変更回避）。`filingsList` の doc コメント・`FilingsListTests` で固定。
-- バックフィルが進むほど `analyze` / `analyze --half` の remote 対応銘柄が広がる（未格納は 404＝即時。サーバーで重い計算はしない）。
-
-## 計算の責務（client / server）
-
-**計算はサーバーに集約する。クライアントは表示専念**（iOS は計算済みメトリクスのビジュアル化、remote CLI は計算済み JSON の整形表示）。
-
-| クライアント | 計算 | やること | データ源 |
-|---|---|---|---|
-| CLI (local) | in-process（従来通り） | 計算して表示 | `Services/` 直呼び |
-| CLI (remote) | しない | 計算済みを受信して表示 | REST API |
-| iOS app | しない | 計算済みを受信してグラフ化 | REST API |
-| blt-server | **する（唯一の計算者）** | Stage 1-4 を実行し計算済み JSON を返す | — |
-
-- 計算ロジックの単一の真実源は `BlueTickerCore` の `Analysis/`＋`Services/`。サーバーが実行し、local CLI も同一バイナリ内で同じコードを in-process 実行する（二重メンテにならない）。
-- iOS は分析せず分析結果を描画するため、`Analysis/` 層をクライアントへ共有する必要はない。`analyze --json` と同じメトリクス（`MetricsResult` の `RawData`＋`CalculatedData`）を載せた財務サマリ JSON を受け取って描画する。
-- 転送量・計算負荷はクライアント計算とサーバー計算で実質中立（詳細1社で数 KB・四則演算数十回）。したがって判断軸は性能ではなく「計算ロジックの所在とメンテコスト」であり、受益者（計算するクライアント）が現状いないためサーバー集約とする。
-
-### 公開契約は financials レスポンス
-
-Stage 4 をサーバー計算にしたため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。remote CLI・iOS はこの 1 スキーマだけを見る。変更時はユーザー確認・バージョニングを行う。
-
-- 載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だが、レスポンスの形は別。**flatten 形で確定**。公開契約は**単一の Codable 型 `FinancialsResponse`／`FinancialsYear`**（`Models/FinancialsContract.swift`）に統一し、サーバー出力（`buildFinancialsResponse`）と remote CLI のデコードを同一型から導出する（キー定義を 1 か所に集約しドリフトを防ぐ）。`MetricsResult` 直シリアライズは採用しない（内部モデルから公開 API を疎結合）。`jsonObject()` が欠落値を null 補完し「全キー存在」を維持する。
-- レスポンス top-level に **`schema_version`** を持たせ、クライアントのデコード版と整合判定する。採番は `Api.financialsSchemaVersion`（独立した整数・現在 **2**・破壊的変更時のみ +1。blueTickerVersion 非連動）。**v2** で remote CLI のローカル同等表示のため flatten に約20項目を追加（ラベル `op_label`/`sales_label`/`gross_profit_label`、`sga`/`nopat`/`effective_tax_rate`/`interest_expense`、`current_assets`/`non_current_assets`/`current_liabilities`/`non_current_liabilities`/`ppe_total`/`net_de`、`capex`/`buyback`/`rd`/`cf_treasury_stock`/`dividend_ss`/`dividend_paid_cf`/`cur_per_type`）。URL の `/v1` とは別レイヤー。
-- Stage 3 RAW（XBRL 数値インデックス）はサーバー内部の中間生成物であり、公開しない。
-
-### 将来クライアント計算へ移す場合
-
-iOS が対話的な再計算（係数を変えた what-if 等）を要求し、計算式変更のたびのサーバー再デプロイが実コストになった段階で、`Analysis/` を独立ターゲット化してクライアント計算へ移す。`YearEntry` が `RawData`（Stage 3）と `CalculatedData`（Stage 4）に分かれており移行の分割線は既にあるため、要求が出てから対応すれば足りる（先行して切り出さない）。
-
-## REST API エンドポイント（`/v1/`）
-
-| エンドポイント | パラメーター | 説明 |
-|---|---|---|
-| `GET /v1/companies?q={query}` | `q`: 検索クエリ | 企業名・銘柄コード検索 |
-| `GET /v1/sectors/{sector}/companies?limit=20` | `sector`: 業種名、`limit` | 業種別銘柄一覧 |
-| `GET /v1/companies/{code}/filings?max_years=5` | `max_years` | 書類一覧 |
-| `GET /v1/companies/{code}/financials?years=5` | `years` | 財務サマリー（年度別、flatten 形＋`schema_version`） |
-| `GET /v1/companies/{code}/half-financials?years=3` | `years` | 半期財務サマリー（H1/H2、flatten 形＋`schema_version`） |
-| `GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b` | `doc_id`（省略可）、`sections`（省略可） | 書類セクションテキスト |
-
-- 成功: HTTP 200 + `application/json`
-- エラー: HTTP 4xx/5xx + `{"error": "...", "status": N}`
-
-## ゴール
-
-- **ユーザー向け実行環境を blt-server（remote/cloud）へ集約**し、remote CLI / GUI / MCP が共通の REST API 経由で財務データへアクセスできるようにする（`方針転換` 参照）。
-- **ユーザー向けローカル分析 CLI（`backend=local`）は段階的に廃止**する（deprecation → 削除）。Core・Unit Test・開発用 CLI は維持する。
-
-## 非ゴール
-
-- 旧 MCP（サーバーが MCP プロトコルを直接話す方式）の復活。将来の MCP は REST API クライアントとして実装する（プロトコルサーバーは復活させない）。
-- `ticker analyze` 等の各サブコマンドに backend 選択オプションを増やさない。
-- `CacheManager` と EDINET external cache を無理に単一抽象へ統合しない。
-- ユーザー向けローカル CLI を**即時**削除する（互換維持期間を置く段階的廃止であり、いきなり消さない）。
-
----
+| **local CLI** | なし | CLI | 互換のため残存。servable 一巡後にユーザー向け廃止 |
+| **remote (self-host)** | 同一マシン | blt-server | 基盤実装済み |
+| **remote (cloud)** | Fly | blt-server | **本番** |
 
 ## データパイプライン
 
-blt-server 上で書類一覧取得から財務指標計算まで段階的に事前処理を行う構成。
-階層ごとに実行タイミングをずらし、負荷に応じて可変に動かす。
-
-| ステージ | 処理内容 | 保存先 | 状態 |
-|---|---|---|---|
-| Stage 1 | 書類一覧取得（EDINET インデックス） | **DB**（`edinet_documents`/`edinet_sync_state`） | 同期済み（3,944 社）。定期 `sync` は launchd `com.sollahiro.blt-sync` で 1 日 3 回 |
-| Stage 2 | XBRL ファイル取得 | **ローカル保持**（`external/edinet/xbrl` キャッシュ／Fly Volume。R2 退避は延期） | `ingest` から `downloadDocument` で取得・保持。R2 退避は未着手 |
-| Stage 3 | XBRL パース（RAW データ構造化） | **DB（`edinet_xbrl_facts`、書類単位 JSONB）** | スキーマ実装済み。**取り込みは停止中（issue #22。512MB 対策で消費者ができるまで蓄積停止。`ingest --with-facts` で再開）**。RAW アーカイブで現状消費者なし（Stage 4 は生 XBRL を直接読む） |
-| Stage 4 | TICKER 計算（財務指標・増減分析） | **DB（`company_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest）・DB 専用 read 配線 実装済み。fin-v2・506/3,944 社格納・launchd で drain 中（未格納は **404**。ライブ計算フォールバック撤去済み） |
-| Stage 4-half | 半期計算（H1/H2 増減分析） | **DB（`company_half_financials`、企業単位 JSONB）＋サーバー計算** | 計算・DB 格納（ingest が Stage 4 の後に実行）・DB 専用 read 配線（half-v1・years を `Api.halfMaxYears` にクランプ）。E2E 検証済み（2026-06-28）。**バックフィル進行中（9 社、2026-06-28 夜に release 再ビルドで drain 再開）**。同 launchd ingest が Stage 4-half も実行するため通期と並行して drain される |
-| Stage 5 | 有報セクション本文抽出（リスク・MD&A 等） | **DB（`company_filing_sections`、書類単位 JSONB）＋サーバー抽出** | 抽出（SwiftSoup）・DB 格納（ingest が Stage 4-half の後に実行）・DB 専用 read 配線（sections-v1）実装済み（issue #23）。対象=**東証上場×有報(120)×直近 `stage5IngestYears`(=3) 年**。filing-content のライブ抽出（大企業有報で **1GB OOM 実測**）を撤去し read-only 化。未抽出は **404**。バックフィル未実施（launchd が drain 予定） |
-
-### 実測データ量（2026-06 時点・手元キャッシュ232書類）
-
-スキーマ設計とモバイル転送量の判断材料。
-
-| 段階 | 1書類あたり | 合計 | 備考 |
-|---|---|---|---|
-| Stage 2 生 XBRL（展開後） | 約 9MB（4.8〜11MB） | 2.0GB | `external/edinet/xbrl` |
-| Stage 3 パース済み数値インデックス | 約 800KB（JSON） | 182MB | `derived/xbrl_numeric_index`（232件） |
-
-- Stage 3 数値インデックスを**そのまま**モバイルへ流すのは重い（全 fact で 1社×5年 ≈ 4MB）。ただし公開するのは Stage 3 RAW ではなく**計算済み財務サマリ**（`analyze` 相当のメトリクスを載せた JSON）であり、こちらは詳細1社×5年で数 KB に収まる。
-- 一覧/スキャンは**表示する指標だけをサーバー計算サマリとして返す**（材料となる RAW をクライアントへまとめ取りさせない）。詳細は1社分の計算済みサマリをオンデマンドで返す。
-
-#### 全件スケール投影（2026-06・Neon 実測ベース）
-
-書類総数 **21,250 / 3,944 社**（`edinet_documents`）。Neon 実測テーブルサイズから全件を投影する。
-
-| データ | 1書類 | 全 21,250 件 | 置き場所 / 制約 |
-|---|---|---|---|
-| 数値 facts JSONB（Stage 3） | ~33KB（実測 20MB/613件） | **~700MB** | 現状 Postgres。**branch logical size 上限 512MB を超える見込み⚠️** |
-| 生 XBRL（展開後） | ~9MB | ~191GB | 保存対象外 |
-| 生 XBRL（EDINET ZIP） | ~2MB | **~42GB** | オブジェクトストレージ（Postgres 不可） |
-| .xbrl＋honbun .htm のみ圧縮 | ~0.7MB | **~15GB** | オブジェクトストレージ（最小案） |
-| 計算済み financials（Stage 4） | ~5KB | ~20MB | Postgres（小さい） |
-
-→ 容量の制約は **Postgres 側（512MB）**にある。生 XBRL は Postgres に入れず**オブジェクトストレージ**に置けば容量問題にならない（~15〜42GB＝月 $1 未満規模）。一方、数値 facts だけでも全件 ~700MB で 512MB を超えるため、Neon プラン拡張 or facts のオブジェクトストレージ退避が**先に**必要になる。
-
-### 公開契約は financials レスポンス（計算済み JSON）
-
-計算をサーバーへ集約したため、**公開インターフェースは financials API のレスポンス（計算済み JSON）**。載せるメトリクスは `analyze --json`（`MetricsResult`）と同等だがレスポンスの形は別（現行は `flattenYearEntry` の独自スキーマ）。Stage 3 RAW スキーマは公開しない（サーバー内部の中間生成物）。詳細は冒頭「計算の責務（client / server）」を参照。
-
-- レスポンス top-level に **`schema_version`**（`Api.financialsSchemaVersion`=2、独立採番）を持たせ、クライアントのデコード版と整合判定する。**実装済み**（上記「公開契約は financials レスポンス」参照）。
-
-### Stage 2 の保持ポリシー（ローカル保持で確定）
-
-即削除は本プロジェクトでは危険。抽出ロジックの修正が頻繁（IFRS 契約資産タグ等）で、**生 XBRL を消すとパーサ改善のたびに EDINET から全件再取得**になる（Stage 2 は 9MB/件、再取得はレート制限・時間コスト大）。さらに Stage 4 の HTML 依存抽出（US-GAAP・IFRSリース・セグメント・粗利）が生ディレクトリを必要とするため、即削除は機能的にも不可。
-
-- **確定**: 生 XBRL は**ローカル保持継続**（`external/edinet/xbrl` キャッシュ＝ self-host／ローカルはローカルディスク、Fly では永続 Volume `/data`）。`blt-server ingest` も `downloadDocument` 経由で同キャッシュに保持する。
-- **R2 退避は延期**: Cloudflare R2（egress 無料）への退避は、クラウド実運用で Volume 容量（全 EDINET ユニバースで数十 GB 規模）が問題化してから着手する。S3 互換クライアントの新規外部依存追加が必要なため、実需要が出るまで持ち込まない（YAGNI）。退避時は再取り込みジョブとセットで設計する。
-
-### 取得→抽出→計算の分離とストレージ方針（将来・方針整理 2026-06）
-
-**背景**: 抽出・計算ロジックを変えたとき（例: 借入金等明細表からの IBD 抽出追加で `companyFinancialsCacheVersion` を fin-v2 にバンプ）、全件再 ingest で生 XBRL の再ダウンロードが走り重い。「取得は一度きり、抽出・計算だけ回したい」が要件。
-
-**現状の事実整理**:
-
-- バージョンは既に3層で分離済み（**取得=非連動 / 抽出facts=`xbrlFactsCacheVersion` / 計算=`companyFinancialsCacheVersion`**）。fin-v バンプは計算結果のみ無効化し、**生 XBRL キャッシュは無効化しない**。
-- それでも再 DL が起きるのは、**生 XBRL の中央（永続・共有）保存先が無い**ため。保存しているのは ① マシンごとの一時ファイルキャッシュ（ローカル `~/.config` / Fly `/data`）と ② Neon の**数値 facts のみ（HTML TextBlock を含まない）**。
-- Stage 4 の `computeFinancials` は Neon の facts を読まず `IndividualAnalyzer` 経由で**生 XBRL を読み直す**。HTML 依存抽出（IBD リース・借入金等明細表・US-GAAP HTML・セグメント等）は数値 facts に無い TextBlock を必要とするため、生 XBRL が必須。
-- 重い再 DL の実態は fin-v ではなく、**バックフィルを生 XBRL 未取得のローカル（~228件のみ）で回している**こと。Fly `/data`（既取得分が温かい）で回せば既取得分は再 DL しない（が計算が OOM するため現状ローカル運用）。
-
-**目標アーキテクチャ A（生 XBRL の中央永続化）**:
-
-1. オブジェクトストレージ（Neon Object Storage / Cloudflare R2 / S3 互換）に `edinet/xbrl/<docID>`（生 ZIP または蒸留版 .xbrl＋honbun .htm）を write-through 保存。容量は ~15〜42GB で月 $1 未満規模（上記「全件スケール投影」）。
-2. `EdinetCacheStore` の取得経路を **ローカル → オブジェクトストレージ → EDINET（取得したら書き戻し）** の3段フォールバックに。
-3. 再計算（fin-v バンプ）は EDINET を叩かずオブジェクトストレージから生 XBRL を読んで再抽出 → 「取得は一度きり」を実現。
-
-**着手順（A の前段に容量対策が必要）**:
-
-- **A1. Postgres 512MB 対策（解決済み・issue #22）**: 当面は **Stage 3 ingest（数値 facts 蓄積）を停止**して 512MB 到達を先送りする（facts は現状消費者なし＝蓄積は純粋な負債）。ストレージ強化（Neon プラン拡張 or facts/生 XBRL のオブジェクトストレージ退避）は、目標 A（Stage 4 のタグ系抽出を facts 消費へ切り替え）という**実需要が出た時点**で段階的に選ぶ。生 XBRL 中央ストア（A2）が入れば facts はそこから再導出でき、Postgres に 800MB を持つ必要性自体が薄れる。
-- **A2. オブジェクトストレージ＋3段フォールバック**を設計・実装（上記「R2 退避は延期」の発火条件が容量で満たされ次第）。S3 互換クライアントの外部依存追加はここで判断する。
-
-**計算バージョンの粒度は「出典別」でなく「抽出方式別」が妥当**:
-
-- 計算ロジックの変更を細かくバージョン分割したくなるが、**PL/BS/CF/SS の出典別に割るのは ROI が低い**。これらは同一書類の別セクションで大半は同じタグベース抽出（FieldParser）であり、SS には専用抽出器も無い。出典という粒度に乗らない。
-- 再 ingest の支配的コストは**取得(DL)で抽出ではない**。出典別に計算バージョンを割っても、変わった部分の再計算には結局その書類の生 XBRL が要るため DL は減らない。`company_financials` は 1社=1行の単一 JSONB＋単一 cache_version であり、部分無効化はバージョン列多重化／部分再計算／マージで複雑化する。
-- 意味があるのは**抽出方式（データ源）軸**。これは「再計算に何が要るか」を決める：
-
-  | 抽出方式 | 例 | 再計算に必要 | コスト |
-  |---|---|---|---|
-  | タグベース（数値 XBRL tag / FieldParser） | PL/BS/CF の大半 | Neon の数値 facts のみ | 生 XBRL 不要・激安 |
-  | HTML パース（TextBlock/本文 HTML） | IBD リース・借入金等明細表・US-GAAP HTML・セグメント | 生 XBRL（TextBlock/HTML） | 目標 A の中央ストア必須 |
-
-- 理想は「**タグ由来ロジックを直した→ Neon facts から再計算（DL ゼロ）／ HTML 由来を直した→生 XBRL を読む**」。ただし現状 Stage 4 は全部を生 XBRL から読み直す実装のため、**目標 A ＋ Stage 4 のデータ源見直し（タグ系は facts 消費へ）とセットで初めて効く**。
-- **当面は単一 `companyFinancialsCacheVersion` のまま**（単純さ優先）。粒度分割は A 着手時に「抽出方式別」で再検討する。
-
----
-
-## クラウド構成（Fly.io 確定）
-
-| カテゴリ | 採用 | メモ |
+| ステージ | 保存先 | 状態 |
 |---|---|---|
-| compute / TLS / Volume / secrets / scheduler | **Fly.io**（`primary_region = "nrt"`） | TLS・cron・シークレットを内包し外部サービス数を最小化 |
-| DB | **Neon（serverless Postgres）確定** | Stage 1/3 の保存先。scale-to-zero・ブランチ機能・Postgres 互換で将来 Fly Managed Postgres へ移行可。接続は `DATABASE_URL` env（Fly secrets / 自作サーバーは `.env`） |
-| オブジェクトストレージ | **Cloudflare R2**（egress 無料） | Stage 2 生 XBRL の退避先 |
-| DNS | **Cloudflare** | `fly certs add` で証明書 |
-| 監視 | JSON 構造化ログ（blt-server / ingest）＋ `scripts/check-ingest-freshness.sh`（Sentry / Better Stack は保留） | |
+| Stage 1 | DB `edinet_documents` / `edinet_sync_state` | 同期済み・定期 sync |
+| Stage 2 | ローカル / Fly Volume（生 XBRL） | 保持継続。R2 退避は容量問題化まで延期 |
+| Stage 3 | DB `edinet_xbrl_facts` | 停止中（#22） |
+| Stage 4 | DB `company_financials` | **バックフィル中（廃止ゲート＝床以上 servable）**。read は床以上・未格納/床未満 404 |
+| Stage 4-half | DB `company_half_financials` | バックフィル中 |
+| Stage 5 | DB `company_filing_sections` | バックフィル中。read は床以上（いま `sections-v1`+）・未格納/床未満 404 |
 
-> Neon は東京リージョン非対応（最寄り ap-southeast、片道 ~100ms）。ただし書き込みは Stage 1/3 のバッチ取り込み、読み取りはキャッシュ＋計算済み JSON で DB を連打しないため許容。同期おしゃべりクエリが増えたら Fly Managed Postgres（同 nrt）へ移行検討。
+重い ingest はローカル→Neon。Fly serving は read-only（ライブ計算フォールバックなし）。
 
-### デプロイ（Dockerfile / Fly.io / self-host）（実装済み）
+### オンデマンド ingest（設計確定・未実装）
 
-クラウド・self-host で同一イメージを使うデプロイ成果物を追加した（構築順序ステップ6）。具体的なコマンド手順は `docs/deploy.md`。
+未格納の `GET .../financials` を 404 のままにせず、未充足コードをキュー記録して `202`、既存 ingest バッチが消化する。公開スキーマ追加のため実装前にユーザー確認。
 
-- **`Dockerfile`**: swift:6.1 の 2 段ビルド。ビルド段で `blt-server` のみリリースビルド（MemberImportVisibility 無効化フラグ付き）、ランタイム段は `swift:6.1-slim`（Swift ランタイム内包で堅牢・追加コピー不要）。サーバーバイナリと `EdinetcodeDlInfo.csv` のみ収録（`assets/taxonomy` 約 105MB はソース未参照のため除外）。実行時 env のデフォルト（`BLT_HOST=0.0.0.0`/`BLT_PORT=8080`/assets・data パス）を内包し、self-host も `fly.toml` なしで動く。Fly Volume が root マウントのため root 実行（entrypoint chown を避ける最小構成）。
-- **`.dockerignore`**: ビルドコンテキストから `.build`/`.git`/`SwiftTests`/`assets/taxonomy` 等を除外。
-- **`fly.toml`**: `primary_region = "nrt"`、`internal_port = 8080`、`/healthz` チェック、`/data` Volume（`blt_data`）、`shared-cpu-1x`/1gb。実行時 env は Dockerfile 側に集約し重複を避ける。機密（`BLT_EDINET_API_KEY`/`BLT_AUTH_TOKEN`/`DATABASE_URL`）は `fly secrets` で注入。
-- 検証: macOS で `blt-server` リリースビルド成功。Linux 実ビルドは `docker build`（swift:6.1 → slim）で確認。
+## クライアントと計算の責務
 
-### サーバースタック（Vapor + Fluent 確定）
-
-DB（Fluent ORM）と認証ミドルウェアが必要なため **Vapor + Fluent を採用**（2026-06 ユーザー確認済み。`dependencies.md` の大型依存追加確認をクリア）。素の swift-nio 手書きだと Postgres ドライバ・SQL・マイグレーション・コネクションプール・認証を全て自前実装することになり、自前 DB 層がバグの温床になるため。
-
-#### Vapor + Fluent 移行の内容（実装済み）
-
-前段の Server ターゲット分離は完了済み。Vapor/Fluent は **`BltServerCore` ターゲットにのみ**追加し、`BlueTickerCore`（＝CLI）には一切波及させない。
-
-1. ~~**`Package.swift` 依存追加**（`BltServerCore` のみ）~~ → **完了**
-   - `vapor/vapor` 4.121 / `vapor/fluent` / `vapor/fluent-postgres-driver` 2.12 を追加。
-   - 素 NIO 依存（`NIOCore`/`NIOPosix`/`NIOHTTP1`）は Vapor が内包するため削除（Vapor 経由に一本化）。
-2. ~~**トランスポート層を Vapor へ置換**（`BltServerCore` 内）~~ → **完了**
-   - `HTTPApp`（手書き NIO HTTP）→ Vapor の `Application`（`BltServerEntry.swift`）。
-   - `RESTRouter` のパスルーティング → Vapor のルート定義（`Routes.swift`）。ハンドラは引き続き `BlueTickerCore` の `BltServerContext` ファサードを呼ぶ（**ファサード境界は不変**。Core 側は無改修）。
-   - `RESTResult` → Vapor の `Response`。エラー封筒 `{"error":"...","status":N}` は `BltErrorMiddleware`（カスタム）で維持。
-   - 既知の挙動差: 不正メソッドの応答は旧 405 → Vapor 既定の 404（エラー封筒は不変）。`Content-Type` に `; charset=utf-8` が付与される。
-3. ~~**DB 層（Fluent）配線**（`BltServerCore`、`Database.swift`）~~ → **完了（接続配線のみ）**
-   - `DATABASE_URL`（Neon）があれば `app.databases.use(.postgres(...))`。未設定なら DB なしで起動（ステートレス EDINET プロキシ）。
-   - **Stage 1/3 のモデル・`Migration` は未着手**（スキーマ設計＝下記ステップ4。空マイグレーションは置かない方針）。
-4. ~~**認証ミドルウェア追加**: Bearer トークン（CLI remote）~~ → **完了**（下記「共通基盤」）。本番認証は Cloudflare Access + IdP へ発展（下記「認証」）。
-5. ~~**検証**~~ → **完了**: `ticker` に Vapor/Fluent シンボル 0（`nm` 確認、NIO は `union` 等の偽陽性のみ）。全 311 テスト通過。`/v1/companies` 実応答が旧契約（sorted+pretty JSON）と一致。
-
-> 移行は「トランスポートの差し替え」であり、計算ロジックと公開レスポンス契約は変えない。Core の `BltServerContext` ファサードがその防壁になる。
-
-#### Linux ビルドの既知の問題（swift-nio / MemberImportVisibility）
-
-Vapor が引き込む **swift-nio 2.101.x の `_NIOFileSystem/FileInfo.swift`** が Linux（Glibc/Musl）で `import CSystem` を欠いており、swift-nio が全ターゲットに有効化する upcoming feature **`MemberImportVisibility`（SE-0444）** の下で `st_ctim`/`st_dev`/`st_blksize` 等が「未 import モジュールのメンバー」とされ **Swift 6.1+ の Linux でのみコンパイルエラー**になる（macOS は `Darwin` 経由で解決され無傷）。swift-nio 最新 2.101.1 でも未修正。Vapor 追加前は `_NIOFileSystem` 自体が未ビルドだったため顕在化していなかった。
-
-**回避策（一時措置）**: Linux での `swift build` / `swift test` / Docker ビルドに次のフラグを付ける。`-Xswiftc` は全ターゲット（swift-nio 含む）に伝播するため、swift-nio の feature 有効化を上書きできる。
-
-```bash
-swift test  -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-```
-
-- `ci.yml` の `swift-linux` ジョブに適用済み（`swift:6.1` で全 311 テスト緑を実測確認）。macOS ジョブ・`release.yml`（macOS＋`ticker` のみ）は影響なしのため変更不要。
-- **ステップ6 の Dockerfile（Fly.io 用、`swift:6.1` 2 段ビルド）でも同フラグが必須**。
-- swift-nio 側が修正されたら本フラグは除去する（一時措置）。
-
-### 認証（Cloudflare Access + IdP・2026-06-28 確定、2026-07-05 CLI SSO 追加・Service Token 廃止）
-
-クラウド本番は **Cloudflare Access**（Zero Trust リバースプロキシ）をエッジに置き、IdP で認証する。origin（Fly.io）は **Cloudflare Tunnel** 経由でのみ到達可能にし公開ポートを閉じる。
-
-CLI は当初 Service Token 一本化の方針（2026-06-28）だったが、人間が対話的に使う場合に Client ID/Secret を手動コピペする UX 負荷が大きいため SSO 経路を追加（2026-07-05）。その後、CLI の利用形態は「人間が対話的に使う」「人間が AI エージェント経由で使う（初回ログイン時のブラウザ操作は人間が行う）」のいずれも SSO で足りると判断し、Service Token 対応は撤去した（2026-07-05）。**CLI/iOS とも SSO に一本化**。
-
-| クライアント | 操作者 | 認証方式 | 備考 |
-|---|---|---|---|
-| CLI・iOS（**他人配布あり**） | 人間（AI エージェント経由含む） | **SSO（IdP 連携）** | Cloudflare Access を IdP とする。CLI は `ticker login` が `cloudflared access login`（ブラウザ）を呼び、以後 `cloudflared access token` で取得した JWT を `Cookie: CF_Authorization=<jwt>` として付与（実機検証済み。`Cf-Access-Jwt-Assertion` ヘッダーでは 302 リダイレクトされ通らない）。iOS は `ASWebAuthenticationSession` で認可コード+PKCE |
-| self-host / dev | — | 既存 **Bearer**（`BLT_AUTH_TOKEN`）/ 無認証 | Cloudflare 非依存で立てられるよう温存 |
-
-**origin の検証方針 = 方式 A（エッジ信頼）**。Tunnel + Access がエッジで認証済みのため、origin は Cloudflare 経路に対し**追加の JWT 検証をしない**（新規依存ゼロ。`vapor/jwt` 不要）。
-
-- **A の安全要件**: A のセキュリティは「origin が非公開であること」に全面依存する。**Tunnel + 公開ポート閉鎖 + Access ポリシー適用**の3点セットで初めて成立する。ポートが開いていると Cloudflare 経路に対し無検証で素通りになる。
-- **B（多層防御）へ移るトリガー**: origin が**ユーザー単位の処理**を始めるとき（ユーザー別クォータ／データ／email 付き監査）。そのとき `vapor/jwt` を足し `Cf-Access-Jwt-Assertion` を JWKS（`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`）で検証して identity を取り出す。現状は全員に同じ公開財務データを返すだけなので A で十分。
-
-#### 実装ステップ
-
-1. ~~**origin 認証ミドルウェアの env 分岐**（`Routes.swift`、依存ゼロ）~~ → **完了**（下記「共通基盤」の認証モード表）
-2. ~~**CLI の Service Token 対応**~~ → **実装後に撤去（2026-07-05）**。CLI/iOS とも SSO に一本化したため、`CF-Access-Client-Id` / `CF-Access-Client-Secret` の config/keychain・env・CLI フラグは削除した
-3. **Dockerfile**: `cloudflared` サイドカー同梱 → **完了（実装・main マージ済み）**。`docs/deploy.md`「Cloudflare Access（本番認証・方式A）」C 節に記載。token 未設定なら blt-server のみ起動で self-host 互換維持
-4. **fly.toml**: 公開ポートを閉じ cloudflared の outbound 限定に → **完了（Phase 2 適用済み）**。段階カットオーバー（Phase 1=ポート開で Access 検証 → Phase 2=`[http_service]` 撤去＋serviceless で always-on 化）を実施。**常駐を受け入れる**判断のため scale-to-zero は Phase 2 で失う。詳細は同 D 節
-5. **docs/deploy.md**: Cloudflare 側手順（zone → Tunnel → Access アプリ + SSO ポリシー + IdP 接続）→ **完了**
-6. ~~**CLI の SSO ログイン対応**（`ticker login`）~~ → **完了（2026-07-05・実機 E2E 検証済み）**。`cloudflared access login`/`access token` を呼ぶ薄いラッパー（`Infrastructure/CloudflaredAccess.swift`）を追加し、`RemoteAPIClient` に `Cookie: CF_Authorization=<jwt>` を追加。有効化フラグ（秘密情報ではない）は `config.json` の `cfAccessSsoEnabled` に保存、JWT 自体は cloudflared 側のローカルストレージ管理。origin（Routes.swift）は無改修（方式A＝エッジ信頼のまま）。**Cloudflare ダッシュボード側で当該ユーザーのメールに対する SSO（Allow）ポリシーの追加が別途必要**（ユーザー側作業）。当初 `Cf-Access-Jwt-Assertion` ヘッダーで実装したが、実機（`api.sollahiro.com`）検証で 302（ログイン画面へリダイレクト）になり通らないことが判明。Cookie 方式に切替後、実際に `ticker login` → SSO セッションでの API 到達（404=データ未集計という正常なアプリ応答）を確認。`ticker login` の JWT 出力は `cloudflared access login -q` でターミナルへの平文露出を抑止（2026-07-05）。
-
-> ステップ3・4 はユーザー判断（2026-06-29）で **docs 手順化のみ実施・実コード/設定変更とダッシュボード操作は運用者が段階実施**とした（Cloudflare ダッシュボード・zone 移管・IdP 接続はユーザー側作業）。
-
-### 共通基盤（env 設定・ヘルスチェック・認証）
-
-クラウド（Fly.io）／self-host 双方で同一バイナリを使うため、起動時設定を環境変数へ寄せた（構築順序ステップ3）。
-
-| 環境変数 | 役割 | デフォルト |
+| クライアント | 計算 | データ源 |
 |---|---|---|
-| `BLT_HOST` | bind ホスト。クラウドでは `0.0.0.0` | `127.0.0.1` |
-| `BLT_PORT` | bind ポート | `3000` |
-| `BLT_EDINET_API_KEY` | EDINET API キー（keychain 非搭載の Linux サーバー向け） | （未設定なら settingsStore へフォールバック） |
-| `CF_ACCESS_TEAM_DOMAIN` | 設定時は Cloudflare Access モード（エッジ信頼）。origin は検証せず Tunnel + Access に委ねる | （未設定） |
-| `BLT_AUTH_TOKEN` | 静的 Bearer トークン。Cloudflare Access モードでないときに設定すると `/v1` を保護 | （未設定なら無認証） |
-| `DATABASE_URL` | Neon Postgres 接続文字列（既存。Fluent 配線） | （未設定なら DB なし） |
+| CLI (local) | in-process | `Services/` 直呼び（廃止予定） |
+| CLI (remote) | しない | REST |
+| iOS | しない | REST |
+| blt-server | **唯一の計算者** | ingest ＋ DB read |
 
-- **bind**: 解決順位は CLI 引数（`--host`/`--port`）> env > デフォルト。
-- **EDINET キー**: env（`BLT_EDINET_API_KEY`）優先、未設定時のみ `settingsStore`（keychain/config）へフォールバック。両方とも空なら起動時に exit(1)。
-- **`GET /healthz`**: 認証不要。`{"status":"ok"}` を 200 で返す（Fly.io／LB のヘルスチェック用）。`/v1` の認証グループ外に登録。
-- **認証モード（`/v1` 配下・起動時に env から決定）**: 優先順位で1つを選ぶ。`/healthz` は常に認証不要。
-  1. `CF_ACCESS_TEAM_DOMAIN` 設定 → **Cloudflare Access モード**（エッジ信頼 / 方式 A）。origin は検証せず Tunnel + Access に委ねる。起動ログに前提（Tunnel 経由・公開ポート閉鎖）を notice 出力。
-  2. `BLT_AUTH_TOKEN` 設定 → **静的 Bearer**。`Authorization: Bearer <token>` を定数時間比較で検証し、不一致・未提示は 401（エラー封筒 `{"error":...,"status":401}`）。
-  3. どちらも無し → **無認証**（ローカル開発専用）。`/v1` 無防備のため起動時に warning を出す。
+公開契約は financials / half-financials レスポンス（`schema_version` 独立採番）。Stage 3 RAW は非公開。
 
----
+`sector` は REST 未整備のため remote でも CSV オフライン算出（機能欠落ではない・優先度低）。
+
+## ゴール / 非ゴール
+
+**ゴール**
+
+- ユーザー向け実行環境を blt-server（remote/cloud）へ集約する
+- 全銘柄が Stage 4 read 床以上で servable になったらユーザー向け `backend=local` を廃止する
+
+**非ゴール**
+
+- 旧 MCP プロトコルサーバーの復活
+- 各サブコマンドへの backend 選択オプション追加
+- servable 一巡前のユーザー向け local 即時削除
+- 床を「現行から N つ前」の機械オフセットにすること（明示定数のみ）
+- 削除ゲート達成のために現行版へ全社揃えすること（床以上で足りる。stale 消化は別途継続）
+- `CacheManager` と EDINET external cache の無理な単一抽象化
+
+## ストレージ（将来・未決）
+
+- **暫定（#22）**: Stage 3 facts 蓄積停止で Neon 512MB 到達を先送り
+- **未決**: 強化方式は **(a) Neon プラン拡張** vs **(b) 生 XBRL / facts のオブジェクトストレージ（R2 等）＋3段フォールバック**。目標 A（タグ系は facts 消費・HTML 系は生 XBRL）着手時に決める。A2（中央永続化）が先なら Postgres に facts 全件を持つ必要は薄れる
+- 当面の `companyFinancialsCacheVersion` は単一のまま。抽出方式別の粒度分割は A 着手時に再検討
 
 ## TODO
 
-### 必須（blt-server を使い始める前に）
+issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
-- [x] サーバーマシンに EDINET API キーを設定する（Fly secret `BLT_EDINET_API_KEY`・ローカル `.env` とも設定済み）
-- [x] `blt-server sync` で書類一覧を初回同期する（実 Neon に 3,944 社同期済み）
+### 進行中
 
-### 近期（Stage 1 安定化）
+- [~] **Stage 4 servable 一巡**（廃止ゲート）— missing 優先で空白を埋め、床未満（`fin-v1`）も再計算。床以上の旧版残存はゲート非阻害
+- [~] Stage 4 現行版への stale 消化 / Stage 4-half / Stage 5 — 同ジョブが継続（廃止の必須条件ではない）
 
-- [x] **定期 sync＋ingest を launchd で自動化（設定済み・稼働中）** — `com.sollahiro.blt-sync`（リポジトリ管理の `scripts/blt-scheduled-sync.sh`）が**毎日 08:00 / 14:00 / 20:00** に `sync`（Stage 1）→`ingest --limit 200`（Stage 4/4-half。**Stage 3 数値 facts は停止中＝issue #22**）をローカルから `DATABASE_URL`=Neon に向けて実行。Stage 4 計算は Fly(1GB) で OOM するためローカルで回し Fly は読むだけ。同一ラベルのため launchd が前回実行中の重複起動を抑止。手順は `docs/deploy.md`「定期同期（ローカル launchd）」。**コード変更後は `swift build -c release --product blt-server` の再ビルドが必須**（バイナリが古いと旧ロジックで計算される）。Mac 起動中のみ進行。
-- [~] **バックフィル（進行中・上記定期ジョブが消化中）**: company_financials **506/3,944 社格納**（2026-06-28 夜時点）。fin-v2 再デプロイで fin-v1 行はサーバーが stale 扱い（フォールバック撤去後は 404）になるが、**drain が stale を最優先で消化**（`Stage4Ingest.distinctCompanyCodes` 走査順で既存社が先頭）→ 残り fin-v1 は次回 ingest で解消。その後に新規社へカバレッジ拡大。Fly は読むだけ（未格納は 404＝OOM しない）。
-  - **半期（company_half_financials）も同 ingest が Stage 4-half として埋める**。**2026-06-28 夜に 5→9 社へ前進**。半期が長く 5 社で止まっていた真因は **launchd の release バイナリが Stage 4-half 配線より古かった**こと（定期ランのログに「Stage 4-half 取り込み完了」行が出ていなかった）。release 再ビルドで解消し、手動 ingest で Stage 4-half 到達を確認。半期 read は `Api.halfMaxYears`(=5) クランプ＋未格納 404 で OOM しない。
-  - **長時間ランの transient PSQLError 対策**: limit を大きくすると 1 ラン数時間に及び、途中の Neon 接続リセットで Stage 4 / Stage 4-half がまとめて巻き戻る（最後に走る Stage 4-half が完走しにくい）。バックフィル中は `BLT_INGEST_LIMIT=75` に下げて完走率を優先（全社 drain 後は既定 200 に戻してよい）。詳細は `docs/deploy.md`「定期同期（ローカル launchd）」。
-  - 補足: Stage 3 のバッチで failed が出る（例 attempted=200 stored=183 failed=17）。財務報告書以外や DL 一時失敗のスキップで、ブロッカーではない（次回 ingest で再試行）。Stage 3 は facts-v1 一致を skip（再パースしない。例 skipped=373）。
-- [x] **fin-v2 再デプロイ（2026-06-28）** — IBD 借入金等明細表抽出（computeFinancials の HTML 依存抽出）追加で `companyFinancialsCacheVersion` を fin-v1→**fin-v2** にバンプ。`fly deploy --remote-only` で fin-v2 イメージへ更新（fin-v1 サーバーは fin-v2 行を stale 拒否してしまうため必須）。fin-v2 銘柄が **warm 0.31s** で 200 read を確認。
-- [x] **Stage 4 キャッシュバージョンの分離（2026-06-27）** — `company_financials.cache_version` を `blueTickerVersion` 連動から専用定数 `companyFinancialsCacheVersion`（`Models/FinancialsContract.swift`）へ分離（Stage 3 `xbrlFactsCacheVersion` と同思想）。CLI バンプで全社 re-ingest が走らなくなり、**Fly サーバーを CLI リリースタグから独立して `fly deploy` 可能**に。あわせて discovery の docID 重複クラッシュ（`Dictionary(uniqueKeysWithValues:)`）を `fix:` で修正。
-- [x] **Fly secret `BLT_EDINET_API_KEY` の正否確認** — 解消（2026-06-27）。破損の正体は値を囲むシングルクォート（ローカル `.env` が `'32hex'`＝34文字。`docker run --env-file`/env ファイル経由だとクォートをはがさず生値に混入する）。正規 32hex が EDINET API で 200 OK を返すことを直接確認し、Fly secret をクォートなし 32hex で再設定（rolling deploy 成功）。ローカル `.env` も裸書きに修正。blt-server 自体は `.env` を読まず `ProcessInfo.environment` を読む（dotenv パーサなし）ため、クォート害は env ファイル経由の消費時のみ。
-- [x] 実 Neon への接続・同期の E2E 検証 — Postgres スキーマ/JSONB/索引/Stage1・3 書き込みは opt-in 統合テスト `PostgresIntegrationTests`（ローカル Docker Postgres、`BLT_TEST_POSTGRES_URL` で有効化）で検証済み。実 Neon フルパイプライン（sync→ingest→financials）の runbook は `docs/deploy.md`「Neon 接続の E2E 検証」。実 Neon で `sync`(Stage1) 書き込み・`ingest`(Stage3/4) バックフィル・`computeFinancials` を実データで確認済み（`ingest --limit 10` で Stage3/4 とも stored=10 failed=0）。<br>**過去の `stored=0 failed=5` ブロッカーは解消済み**: 真因は汚染された空キャッシュディレクトリ。キー破損期に EDINET が JSON エラー封筒をバイナリとして返し、`extractZip` が dest 作成後に throw → 空ディレクトリ残留 → 以後 `hasXbrlDir` が「取得済み」と誤判定し再取得されず facts=0。`hasXbrlDir` が空ディレクトリを拒否（自己修復）＋ `storeXbrlZip` が展開失敗時に dest 削除、で修正。
-- [x] `status.json` 追加（`analysis_cache/external/edinet/stage1_status.json`）
-- [x] `CacheManager.set()` を atomic write（temp file + rename）に修正済み
+### ゲート到達後（すぐ）
 
-### 近期（MCP 廃止）
+- [ ] **ユーザー向けローカル分析 CLI 廃止** — servable 一巡完了後。deprecation → 破壊的バージョンで `backend=local` 経路削除。Dev CLI・Core・Unit Test は残す
 
-- [x] `MCPServer/` を `Server/` にリネームし、MCP プロトコル実装を削除して REST API サーバーに一本化した
-- [x] `Package.swift` から `swift-sdk`（MCP）・`swift-log` への依存を削除した
-- [x] CLAUDE.md のターゲット構成・依存ルールを更新した（`MCPServer/` → `Server/`）
+### 次（優先度順）
 
-### 近期（remote CLI）
-
-- [x] `ticker config set edinet-backend remote` のサポート実装済み
-- [x] CLI の remote モードで REST API を呼ぶ実装を追加する（下記「remote CLI 実装」）
-- [x] **Stage 1 read 配線**: `filings` を `EdinetDiscovery` ライブ探索から `edinet_documents`（DB）読みへ切り替え（`loadStoredFilingRecords`＋`getFilingsFromRecords`、未同期/DB 非接続はライブフォールバック）。簡易セマンティクス採用（140/130 はライブと意図的差分・schema 変更回避）。「稼働状況」参照。**残: 実 Fly での E2E 検証**
-- [x] **remote `--half` 対応**: `GET /v1/companies/{code}/half-financials` ＋ DB 格納経路（`company_half_financials`・ingest・DB 専用 read）＋ remote CLI 配線で `analyze --half`/`summarize --half` を remote 対応。**実 Fly E2E 検証済み（2026-06-28、years=6 warm read・未格納 404・OOM なし）**。残: 半期バックフィルの全社 drain（launchd ingest が消化）
-- [x] **財務系 read のライブ計算フォールバック撤去（2026-06-28）**: financials / half-financials を DB 専用化（未格納 404・DB 非接続 503・ライブ計算なし）。half read は `Api.halfMaxYears`(=5) へクランプ（CLI 既定 years=6 が DB を空振りしないように）。重複していた半期上限「5」を `Api.halfMaxYears` に集約。Fly 再デプロイ済み（v9）。`company_financials`/`company_half_financials` のスキーマ・cache_version は不変（再 ingest 不要）
-  - **レガシー削除済み（2026-06-29）**: 呼び出し元を失った `BltServerFacade.getFinancials/getHalfFinancials`（薄いラッパー）とテスト専用ヘルパー `buildFinancialsResponse` を削除。計算本体 `computeFinancials/computeHalfFinancials`（Stage 4 ingest が使用）は保持。オンデマンド ingest（202＋キュー）を後で実装する際は `compute*` を入口に使う（ラッパー復活は不要）。
-- [ ] **`sector` の REST 化（任意）**: 現状 CSV 算出で remote でも動作するため機能欠落ではない。一貫性のための polish（優先度低）
-
-### 次の検討課題（優先順）
-
-- [x] DB 選定の確定 → **Neon（serverless Postgres）**
-- [x] サーバースタック確定 → **Vapor + Fluent 採用**（ユーザー確認済み）
-- [x] Server を独立ターゲット（`BltServerCore`）へ分離し CLI から NIO 依存を排除（実測でシンボル 0・サイズ半減）
-- [x] **Vapor + Fluent を `BltServerCore` に追加**（トランスポート置換完了。Fluent は DATABASE_URL 条件付き配線。「Vapor + Fluent 移行の内容」参照）
-- [x] **Stage 1 の DB スキーマ設計＋同期配線**（`edinet_documents`/`edinet_sync_state`・`blt-server sync`。「Stage 1 DB 配線」参照）
-- [x] **Stage 3 の DB スキーマ設計＋取り込み**（`edinet_xbrl_facts`・書類単位 JSONB・`blt-server ingest`。「Stage 3 DB スキーマ＋取り込み」参照）
-- [x] **Stage 4 の DB 配線**（`company_financials`・企業単位 JSONB・ingest で計算格納・financials read を DB 優先化。「Stage 4 DB 配線」参照）
-- [x] Stage 2 保持ポリシー確定 → **ローカル保持継続**（Stage 4 が生 HTML を必要とするため即削除不可。R2 退避はクラウド実運用で容量問題化してから）
-- [x] Stage 4 計算の所在確定 → **サーバー計算に集約**（クライアントは表示専念。「計算の責務」節を参照）
-
-### クラウド公開前の必須（コード側）
-
-- [x] bind 可変化（`BLT_HOST`/`BLT_PORT`、Fly では `0.0.0.0:8080`） — 共通基盤で実装済み
-- [x] `/healthz` ヘルスチェック追加（Fly `[checks]` 用） — 共通基盤で実装済み
-- [x] Bearer トークン認証を追加（Vapor ミドルウェア。トークンは Fly secrets 経由） — 共通基盤で実装済み
-- [x] EDINET API キーの読み元を env（Fly secrets）対応に — 共通基盤で実装済み（`BLT_EDINET_API_KEY`）
-- [x] Dockerfile（swift:6.1 2段ビルド）＋ `fly.toml`、永続 Volume、`fly secrets` — 「デプロイ」節・`docs/deploy.md` 参照
+- [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
+- [ ] **`sector` の REST 化**（任意・優先度低）
+- [ ] remote 時の `ticker cache status` 表示内容（未決）
 
 ### 将来
 
-- [ ] Stage 2〜4 実装（データパイプライン拡張、上表参照）
-- [ ] **生 XBRL の中央永続化（目標 A）**: オブジェクトストレージ＋3段フォールバックで「取得は一度きり・抽出/計算だけ再実行」を実現。前段に Postgres 512MB 対策（A1）が必要。詳細は「取得→抽出→計算の分離とストレージ方針」
+- [ ] 生 XBRL 中央永続化（目標 A）＋ Stage 4 のデータ源見直し（タグ系→facts）
+- [ ] ストレージ強化の方式選定（#22 本丸）
+- [ ] REST API の公開 API 化（スキーマ安定化・レート制御）
+- [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
+- [ ] MCP クライアント復活（REST クライアントとして）
+- [ ] Stage 5 拡張（retention / 半期 160 / ユニバース）
+- [ ] Stage 6: 事業別・地域別売上の LLM 構造化
 - [ ] 抽出ロジック変更時の差分検証ツール
-- [ ] LLM によるセグメント別売上の構造化抽出（仮: `get_segment_revenue`）
-- [ ] LLM による抽出値の抜き打ち整合評価（XBRL 生データとサーバー保存データを突き合わせ、乖離があれば警告）
-- [x] 認証方式の確定（**Cloudflare Access + IdP**・方式 A エッジ信頼） — 「認証」節参照
-- [x] origin 認証ミドルウェアの env 分岐（Cloudflare Access / Bearer / 無認証） — ステップ1 完了
-- [x] CLI の SSO ログイン対応（ステップ2・6） — Service Token は実装後に撤去、CLI/iOS とも SSO に一本化
-- [x] Cloudflare Tunnel 同梱（Dockerfile）＋ fly.toml 公開ポート閉鎖（ステップ3・4） — **完了**。Dockerfile サイドカーは main マージ済み、fly.toml は Phase 2 で `[http_service]` 撤去済み（`docs/deploy.md` C/D 節）。本番 `api.sollahiro.com` で疎通・Access 検証済み
-- [ ] iOS の SSO（OIDC + PKCE）連携（iOS アプリ側プロジェクト）
-- [ ] **REST API の整備（公開 API 化）**: ユーザー接点（remote CLI / GUI / MCP）が依存する公開 API を整える。現行 `/v1` を土台に、スキーマ安定化・認証・レート制御を進める（`方針転換` のユーザー集約に必須）。
-- [ ] **オンデマンド ingest（非同期）の実装**: 未充足リクエスト記録テーブル＋既存 ingest バッチでの消化（上記「オンデマンド ingest（非同期）」）。公開スキーマ追加のためユーザー確認後に着手。
-- [ ] **ユーザー向けローカル分析 CLI の段階的廃止**: `backend=local` の deprecation 告知 → 廃止バージョンを定めて削除。Dev CLI・Core・Unit Test は残す。
-- [ ] **MCP クライアントの復活**: REST API クライアントとして再実装（remote CLI / GUI と同型。プロトコルサーバーは復活させない）。
-- [x] **filing-content の OOM 地雷解消（issue #23）** — Stage 5（有報セクション本文の ingest 事前抽出＋DB read-only 化）で解決。上記「Stage 5 DB スキーマ＋取り込み」参照。残: 初回バックフィル（launchd drain）・実 Fly E2E 検証。
-- [ ] **Stage 5 の対象拡張（有報の年数・ユニバース）**: 当面 東証上場×有報×直近3年。ストレージ強化（#22）後に retention 年数を緩める／全書類化を検討。TOPIX/日経での絞り込みが要る場合はライセンス済み or ユーザー提供リストを実行時に渡す（構成銘柄リストは同梱しない）。
-- [ ] **半期報告書(160)のセクション本文取得**: Stage 5 を有報(120)に限定しているが、将来は半期(160)のテキストも抽出対象に含める（半期はセクション構成が異なるため抽出品質の検証が必要。`stage5Candidates` の docType 条件を拡張）。
-- [ ] **Stage 6: 事業別・地域別売上の LLM 構造化**: Stage 5 の `specials`（segments/geography の markdown 表）を入力に、LLM で売上を構造化して新 derived テーブル（例 `company_segment_revenue`、専用 cache_version）へ格納。EDINET 再取得・XBRL 再パースなしで回せる。LLM 実装（API 選定・プロンプト・整合検証）が必要なため独立タスク。
-
----
-
-## 未決事項
-
-- ~~Stage 2 生 XBRL の保持ポリシー（即削除 vs R2 退避）~~ → 解決（ローカル保持継続・R2 退避は延期）
-- ~~financials レスポンスの公開契約スキーマの確定形（schema version の持たせ方）~~ → 解決（flatten 形＋独立採番 `schema_version`）
-- remote backend 利用時の `ticker cache status` 表示内容
-- ~~**Postgres 512MB 上限への対策（目標 A の前段 A1）＝暫定**~~ → 暫定解決（issue #22・2026-07-03 close）: **Stage 3 ingest（数値 facts 蓄積）を停止**する。facts はどこからも消費されない RAW アーカイブで、全件 ~800MB は 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）ができるまで蓄積を止め、512MB 到達を先送りする。既存 54MB 行は温存（可逆）。実装: `blt-server ingest` は既定で Stage 3 をスキップ（`--with-facts` で再開）。Stage 4 は自前 DL で自足するため機能影響なし
-- **【未決】ストレージ強化の方式選定（issue #22 の本丸・目標 A の実現に必要）**: 上記は 512MB 到達の先送りに過ぎず、目標 A（タグ系抽出を facts 消費へ切替＋生 XBRL 中央永続化）を始めるには facts と生 XBRL の置き場を決める必要が残る。選択肢は **(a) Neon プラン拡張** vs **(b) facts/生 XBRL のオブジェクトストレージ退避（Cloudflare R2・A2 の3段フォールバック）**。生 XBRL 中央ストア（A2）が入れば facts はそこから再導出でき Postgres に 800MB を持つ必要自体が薄れるため、A2 を先に入れる筋が有力。**実需要（目標 A の着手）が出た時点で決める**。詳細は「取得→抽出→計算の分離とストレージ方針」節
-
----
+- [ ] LLM による抽出値の抜き打ち整合評価
 
 ## 関連ドキュメント
 
-- `.agents/rules/project/caching.md` — キャッシュ設計規約
-- `.agents/rules/project/dependencies.md` — アーキテクチャ依存ルール
+- `docs/architecture.md` — 構成スナップショット
+- `docs/deploy.md` — デプロイ・定期同期・E2E
+- `docs/operations.md` — 外部サービス結合と定常運用
+- `.agents/rules/project/caching.md` / `versioning.md` / `dependencies.md`
