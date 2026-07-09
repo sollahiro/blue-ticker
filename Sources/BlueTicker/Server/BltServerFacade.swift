@@ -41,14 +41,13 @@ public struct BltServerContext: Sendable {
 
 // MARK: - Factory
 
-/// EDINET API キーを解決する。env（BLT_EDINET_API_KEY）を優先し、未設定なら settingsStore に
-/// フォールバックする。クラウド（keychain 非搭載の Linux サーバー）では env から注入する。
+/// EDINET API キーを解決する。blt-server はヘッドレスなサーバープロセスのため、
+/// 対話的な `ticker config set` 用の keychain（settingsStore）には一切フォールバックしない。
+/// BLT_EDINET_API_KEY 環境変数のみを見る（ローカル macOS でのビルドのたびに ad-hoc 署名が
+/// 変わり keychain アクセス許可を毎回求められる問題を避けるため）。
 private func resolveEdinetApiKey() async -> String? {
-    if let envKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"], !envKey.isEmpty {
-        return envKey
-    }
-    let stored = await settingsStore.get(.edinetApiKey)
-    return (stored?.isEmpty == false) ? stored : nil
+    let envKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"]
+    return (envKey?.isEmpty == false) ? envKey : nil
 }
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
