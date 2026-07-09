@@ -4,12 +4,6 @@ import Foundation
 import Logging
 import Testing
 
-#if canImport(Darwin)
-    import Darwin
-#elseif canImport(Glibc)
-    import Glibc
-#endif
-
 @testable import BltServerCore
 
 @Suite struct JsonLogHandlerTests {
@@ -18,13 +12,14 @@ import Testing
             .appendingPathComponent("blt-json-log-\(UUID().uuidString).log")
         defer { try? FileManager.default.removeItem(at: tmp) }
 
-        guard let stream = fopen(tmp.path, "w") else {
+        FileManager.default.createFile(atPath: tmp.path, contents: nil)
+        guard let handle = FileHandle(forWritingAtPath: tmp.path) else {
             Issue.record("failed to open temp log file")
             return
         }
-        defer { fclose(stream) }
+        defer { try? handle.close() }
 
-        let handler = JsonLogHandler(label: "test.logger", stream: stream)
+        let handler = JsonLogHandler(label: "test.logger", handle: handle)
         handler.logLevel = .trace
         handler.log(
             event: LogEvent(
@@ -40,7 +35,7 @@ import Testing
                 function: #function,
                 line: #line
             ))
-        fflush(stream)
+        try handle.synchronize()
 
         let raw = try String(contentsOf: tmp, encoding: .utf8)
         let line = try #require(raw.split(separator: "\n").first.map(String.init))

@@ -1,21 +1,19 @@
 // JSON 1 行ログ（stdout/stderr）。Fly / launchd のログを機械可読にし、
 // ingest 失敗・DB リトライ等を grep / 転送先で拾いやすくする。
 // 外部パッケージは追加せず swift-log の LogHandler を自前実装する。
+//
+// C の stderr/stdout は使わない。Glibc のグローバル var は Swift 6 の並行性
+// チェックに通らないため、FileHandle.standardError / standardOutput に寄せる
+//（Utils/StandardError.swift・error-handling.md と同じ方針）。
 
 import Foundation
 import Logging
 
-#if canImport(Darwin)
-    import Darwin
-#elseif canImport(Glibc)
-    @preconcurrency import Glibc
-#endif
-
 /// 1 イベントを 1 行の JSON として書き出す `LogHandler`。
-/// FILE* と DateFormatter を共有するため class + lock（StreamLogHandler と同型の妥協）。
+/// DateFormatter と書き出しを共有するため class + lock（StreamLogHandler と同型の妥協）。
 final class JsonLogHandler: LogHandler, @unchecked Sendable {
     private let label: String
-    private let stream: UnsafeMutablePointer<FILE>
+    private let handle: FileHandle
     private let lock = NSLock()
     private let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -28,16 +26,16 @@ final class JsonLogHandler: LogHandler, @unchecked Sendable {
     var metadataProvider: Logger.MetadataProvider?
 
     static func standardError(label: String) -> JsonLogHandler {
-        JsonLogHandler(label: label, stream: stderr)
+        JsonLogHandler(label: label, handle: .standardError)
     }
 
     static func standardOutput(label: String) -> JsonLogHandler {
-        JsonLogHandler(label: label, stream: stdout)
+        JsonLogHandler(label: label, handle: .standardOutput)
     }
 
-    init(label: String, stream: UnsafeMutablePointer<FILE>) {
+    init(label: String, handle: FileHandle) {
         self.label = label
-        self.stream = stream
+        self.handle = handle
     }
 
     subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
@@ -68,12 +66,11 @@ final class JsonLogHandler: LogHandler, @unchecked Sendable {
         }
 
         guard JSONSerialization.isValidJSONObject(object),
-            let data = try? JSONSerialization.data(withJSONObject: object),
-            var line = String(data: data, encoding: .utf8)
+            let data = try? JSONSerialization.data(withJSONObject: object)
         else { return }
-        line.append("\n")
-        fputs(line, stream)
-        fflush(stream)
+        var line = data
+        line.append(0x0A)  // '\n'
+        handle.write(line)
     }
 
     private static func jsonObject(from metadata: Logger.Metadata) -> [String: Any] {
