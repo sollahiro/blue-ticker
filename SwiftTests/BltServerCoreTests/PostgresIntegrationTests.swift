@@ -2,7 +2,8 @@
 // 既存テストはインメモリ SQLite までのため、SQLite では現れない Postgres 固有の振る舞い
 // （.json → JSONB カラム型・索引作成・String PK・@Timestamp・JSONB round-trip）を実 DB で検証する。
 //
-// BLT_TEST_POSTGRES_URL が設定されたときのみ実行する（未設定なら skip）。EDINET ネットワークは不要で、
+// BLT_TEST_POSTGRES_URL が設定されたときのみ実行する（未設定なら skip）。CI の
+// postgres-integration ジョブでは常に設定される。EDINET ネットワークは不要で、
 // Stage 3 取り込みは runStage3Ingest にフェイクパーサを注入して DB 書き込み経路だけを通す。
 //
 //   docker run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine

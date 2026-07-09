@@ -193,7 +193,7 @@ DATABASE_URL=... .build/release/blt-server master-data-upload assets/EdinetcodeD
 
 ### 1. Postgres スキーマ検証（ローカル Docker・EDINET 不要）
 
-マイグレーション・JSONB round-trip・索引を実 Postgres で検証する opt-in 統合テスト（`PostgresIntegrationTests`、`BLT_TEST_POSTGRES_URL` 未設定なら skip）。
+マイグレーション・JSONB round-trip・索引を実 Postgres で検証する統合テスト（`PostgresIntegrationTests`）。ローカルでは `BLT_TEST_POSTGRES_URL` 未設定なら skip。CI（`.github/workflows/ci.yml` の `postgres-integration`）では Postgres 16 サービスコンテナ付きで常時実行する。
 
 ```bash
 docker run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine

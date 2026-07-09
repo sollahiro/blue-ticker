@@ -156,7 +156,7 @@ public func runStage3IngestCommand(
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])
-    try LoggingSystem.bootstrap(from: &env)
+    try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
@@ -164,24 +164,29 @@ public func runStage3IngestCommand(
             let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
             }
-            app.logger.notice(
-                "Stage 3 取り込み完了: attempted=\(s3.attempted) stored=\(s3.stored) failed=\(s3.failed) skipped=\(s3.skipped)")
+            logIngestSummary(
+                app.logger, stage: "3", attempted: s3.attempted, stored: s3.stored,
+                failed: s3.failed, skipped: s3.skipped)
         } else {
-            app.logger.notice("Stage 3（XBRL 数値 fact）は停止中（issue #22）。再開は --with-facts。")
+            app.logger.notice(
+                "Stage 3 facts ingest disabled",
+                metadata: ["event": "ingest_skipped", "stage": "3", "reason": "issue_22"])
         }
         if stages.contains(.financials) {
             let s4 = try await runStage4Ingest(db: app.db, years: stage4IngestYears, limit: limit, logger: app.logger) { code in
                 await context.computeFinancials(code: code, years: stage4IngestYears)
             }
-            app.logger.notice(
-                "Stage 4 取り込み完了: attempted=\(s4.attempted) stored=\(s4.stored) failed=\(s4.failed) skipped=\(s4.skipped)")
+            logIngestSummary(
+                app.logger, stage: "4", attempted: s4.attempted, stored: s4.stored,
+                failed: s4.failed, skipped: s4.skipped)
         }
         if stages.contains(.half) {
             let s4h = try await runStage4HalfIngest(db: app.db, years: stage4HalfIngestYears, limit: limit, logger: app.logger) { code in
                 await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
             }
-            app.logger.notice(
-                "Stage 4-half 取り込み完了: attempted=\(s4h.attempted) stored=\(s4h.stored) failed=\(s4h.failed) skipped=\(s4h.skipped)")
+            logIngestSummary(
+                app.logger, stage: "4half", attempted: s4h.attempted, stored: s4h.stored,
+                failed: s4h.failed, skipped: s4h.skipped)
         }
         if stages.contains(.sections) {
             // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
@@ -192,8 +197,9 @@ public func runStage3IngestCommand(
             ) { docID in
                 await context.extractFilingSections(docID: docID)
             }
-            app.logger.notice(
-                "Stage 5 取り込み完了: attempted=\(s5.attempted) stored=\(s5.stored) failed=\(s5.failed) skipped=\(s5.skipped)")
+            logIngestSummary(
+                app.logger, stage: "5", attempted: s5.attempted, stored: s5.stored,
+                failed: s5.failed, skipped: s5.skipped)
         }
     } catch {
         try? await app.asyncShutdown()

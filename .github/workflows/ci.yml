@@ -43,6 +43,42 @@ jobs:
         # 詳細: docs/blt-server-roadmap.md「Linux ビルドの既知の問題」
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
+  postgres-integration:
+    # SQLite では検証できない Postgres 固有挙動（JSONB・索引・String PK）を
+    # サービスコンテナ上の Postgres 16 で回帰させる（docs/deploy.md「Postgres スキーマ検証」）。
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: blt
+          POSTGRES_DB: blt
+        options: >-
+          --health-cmd "pg_isready -U postgres -d blt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-linux-pg-${{ hashFiles('Package.resolved') }}
+
+      - name: Postgres integration tests
+        env:
+          BLT_TEST_POSTGRES_URL: postgres://postgres:blt@postgres:5432/blt?sslmode=disable
+        # Linux の MemberImportVisibility 回避は swift-linux ジョブと同じ一時措置。
+        run: >
+          swift test --filter PostgresIntegrationTests
+          -Xswiftc -disable-upcoming-feature
+          -Xswiftc MemberImportVisibility
+
   fly-toml-guard:
     # 本番認証（方式A・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
     # 3点セットで初めて成立する（docs/deploy.md「Cloudflare Access」）。fly.toml に

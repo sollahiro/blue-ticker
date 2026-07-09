@@ -305,7 +305,7 @@ blt-server 上で書類一覧取得から財務指標計算まで段階的に事
 | DB | **Neon（serverless Postgres）確定** | Stage 1/3 の保存先。scale-to-zero・ブランチ機能・Postgres 互換で将来 Fly Managed Postgres へ移行可。接続は `DATABASE_URL` env（Fly secrets / 自作サーバーは `.env`） |
 | オブジェクトストレージ | **Cloudflare R2**（egress 無料） | Stage 2 生 XBRL の退避先 |
 | DNS | **Cloudflare** | `fly certs add` で証明書 |
-| 監視 | 当面 Fly ログ（Sentry / Better Stack は保留） | |
+| 監視 | JSON 構造化ログ（blt-server / ingest）＋ `scripts/check-ingest-freshness.sh`（Sentry / Better Stack は保留） | |
 
 > Neon は東京リージョン非対応（最寄り ap-southeast、片道 ~100ms）。ただし書き込みは Stage 1/3 のバッチ取り込み、読み取りはキャッシュ＋計算済み JSON で DB を連打しないため許容。同期おしゃべりクエリが増えたら Fly Managed Postgres（同 nrt）へ移行検討。
 

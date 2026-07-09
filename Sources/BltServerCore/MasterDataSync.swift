@@ -34,7 +34,7 @@ public func runMasterDataUploadCommand(path: String) async throws {
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])
-    try LoggingSystem.bootstrap(from: &env)
+    try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)

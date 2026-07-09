@@ -222,14 +222,24 @@ public func runStage1SyncCommand(from: String?, to: String?) async throws {
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])
-    try LoggingSystem.bootstrap(from: &env)
+    try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
         let summary = try await runStage1Sync(
             context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
         app.logger.notice(
-            "Stage 1 同期完了: \(summary.from)..\(summary.to) synced_through=\(summary.syncedThrough) fetched=\(summary.fetched) created=\(summary.created) updated=\(summary.updated)")
+            "Stage 1 sync summary",
+            metadata: [
+                "event": "sync_summary",
+                "stage": "1",
+                "from": .string(summary.from),
+                "to": .string(summary.to),
+                "synced_through": .string(summary.syncedThrough),
+                "fetched": .stringConvertible(summary.fetched),
+                "created": .stringConvertible(summary.created),
+                "updated": .stringConvertible(summary.updated),
+            ])
     } catch {
         try? await app.asyncShutdown()
         throw error

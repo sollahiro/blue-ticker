@@ -40,7 +40,14 @@ func withDbRetry<T>(
                 if let logger {
                     let detail = String(reflecting: error).prefix(Api.dbRetryErrorLogMaxLength)
                     logger.error(
-                        "DB操作が全リトライ失敗(\(label) 試行\(maxAttempts)/\(maxAttempts)): \(detail)")
+                        "DB retry exhausted",
+                        metadata: [
+                            "event": "db_retry_exhausted",
+                            "label": .string(label),
+                            "attempt": .stringConvertible(maxAttempts),
+                            "max_attempts": .stringConvertible(maxAttempts),
+                            "error": .string(String(detail)),
+                        ])
                 }
                 throw error
             }
@@ -49,7 +56,15 @@ func withDbRetry<T>(
             if let logger {
                 let detail = String(reflecting: error).prefix(Api.dbRetryErrorLogMaxLength)
                 logger.warning(
-                    "DB操作に失敗、\(Int(backoff))s後に再試行します(\(label) 試行 \(attempt)/\(maxAttempts)): \(detail)")
+                    "DB retry",
+                    metadata: [
+                        "event": "db_retry",
+                        "label": .string(label),
+                        "attempt": .stringConvertible(attempt),
+                        "max_attempts": .stringConvertible(maxAttempts),
+                        "backoff_seconds": .stringConvertible(Int(backoff)),
+                        "error": .string(String(detail)),
+                    ])
             }
             try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
             attempt += 1

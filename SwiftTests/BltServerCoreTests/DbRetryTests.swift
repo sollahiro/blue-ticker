@@ -16,11 +16,11 @@ private final class Counter: @unchecked Sendable {
 }
 
 /// ログメッセージを蓄積するだけの非並行 LogHandler（順次 await されるため lock 不要）。
-/// context/caller がログ本文に載ること・失敗時ログレベルを検証するために使う。
+/// context/caller が metadata に載ること・失敗時ログレベルを検証するために使う。
 private final class CapturingLogHandler: LogHandler, @unchecked Sendable {
     var metadata: Logger.Metadata = [:]
     var logLevel: Logger.Level = .trace
-    var messages: [(level: Logger.Level, message: String)] = []
+    var messages: [(level: Logger.Level, message: String, metadata: Logger.Metadata)] = []
 
     subscript(metadataKey key: String) -> Logger.Metadata.Value? {
         get { metadata[key] }
@@ -28,7 +28,7 @@ private final class CapturingLogHandler: LogHandler, @unchecked Sendable {
     }
 
     func log(event: LogEvent) {
-        messages.append((event.level, event.message.description))
+        messages.append((event.level, event.message.description, event.metadata ?? [:]))
     }
 }
 
@@ -104,9 +104,10 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
             return "ok"
         }
         let warning = try #require(handler.messages.first { $0.level == .warning })
-        #expect(warning.message.contains(expectedCaller))
-        #expect(warning.message.contains("code=7203"))
-        #expect(warning.message.contains("RetryTestError詳細"))  // debugDescription が使われている
+        #expect(warning.message == "DB retry")
+        #expect(warning.metadata["event"] == .string("db_retry"))
+        #expect(warning.metadata["label"] == .string("\(expectedCaller) code=7203"))
+        #expect(warning.metadata["error"]?.description.contains("RetryTestError詳細") == true)
     }
 
     @Test func exhaustionLogsErrorLevelWithContextBeforeRethrowing() async throws {
@@ -120,8 +121,9 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
             }
         }
         let errorLog = try #require(handler.messages.first { $0.level == .error })
-        #expect(errorLog.message.contains(expectedCaller))
-        #expect(errorLog.message.contains("docID=S1"))
-        #expect(errorLog.message.contains("RetryTestError詳細"))
+        #expect(errorLog.message == "DB retry exhausted")
+        #expect(errorLog.metadata["event"] == .string("db_retry_exhausted"))
+        #expect(errorLog.metadata["label"] == .string("\(expectedCaller) docID=S1"))
+        #expect(errorLog.metadata["error"]?.description.contains("RetryTestError詳細") == true)
     }
 }

@@ -24,7 +24,7 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
     // CLI の --host/--port は main.swift で解析済みのため、Vapor には環境引数を渡さず
     // サーバー設定を直接指定する（Environment.detect が --host を誤解釈するのを避ける）。
     var env = Environment(name: "production", arguments: ["blt-server"])
-    try LoggingSystem.bootstrap(from: &env)
+    try bootstrapBltLogging(from: &env)
 
     let app = try await Application.make(env)
     // 成功時の shutdown は do/catch の外に置く。do 内に含めると、shutdown が throw した際に
