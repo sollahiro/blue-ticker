@@ -91,6 +91,7 @@ func runStage3Ingest(
         attempted += 1
         guard let payload = await parse(docID) else {
             failed += 1
+            logger?.warning("Stage 3 取り込み失敗: docID=\(docID)")
             continue
         }
         try await withDbRetry(

@@ -100,6 +100,7 @@ func runStage4Ingest(
         attempted += 1
         guard let response = await compute(code) else {
             failed += 1
+            logger?.warning("Stage 4 取り込み失敗: code=\(code)")
             continue
         }
         try await withDbRetry(

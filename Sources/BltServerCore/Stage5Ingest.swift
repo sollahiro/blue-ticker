@@ -101,6 +101,7 @@ func runStage5Ingest(
         attempted += 1
         guard let payload = await extract(cand.docID) else {
             failed += 1
+            logger?.warning("Stage 5 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
             continue
         }
         try await withDbRetry(
