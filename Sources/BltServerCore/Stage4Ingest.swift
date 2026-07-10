@@ -29,11 +29,15 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsResp
 
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。
+/// `listedCodes` を渡すと候補をその集合に絞る（上場廃止・外国法人等、二度と成功しない企業への
+/// 無駄なリトライを避ける。`nil` は絞り込みなし＝従来どおり全企業）。
 func runStage4Ingest(
-    db: Database, years: Int, limit: Int?, logger: Logger? = nil, compute: FinancialsComputer
+    db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
+    logger: Logger? = nil, compute: FinancialsComputer
 ) async throws -> Stage4IngestSummary {
-    let (codes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
+    let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
         db: db, docTypes: Api.stage4FreshnessDocTypes, logger: logger)
+    let codes = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
 
     var attempted = 0
     var stored = 0

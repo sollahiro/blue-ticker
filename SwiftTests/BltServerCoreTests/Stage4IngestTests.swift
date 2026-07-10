@@ -99,6 +99,40 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         }
     }
 
+    // MARK: - listedCodes 絞り込み（上場廃止・外国法人の除外）
+
+    @Test func ingestSkipsCompaniesNotInListedCodes() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // listedCodes に含む
+            try await seedDocument("S2", secCode: "67580", db: app.db)  // 上場廃止想定・含まない
+
+            let summary = try await runStage4Ingest(
+                db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
+            ) { code in
+                makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyFinancials.find("7203", on: app.db) != nil)
+            #expect(try await CompanyFinancials.find("6758", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestProcessesAllCompaniesWhenListedCodesIsNil() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            try await seedDocument("S2", secCode: "67580", db: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+                makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 2)
+            #expect(try await CompanyFinancials.query(on: app.db).count() == 2)
+        }
+    }
+
     @Test func ingestDedupesMultipleDocumentsOfSameCompany() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)

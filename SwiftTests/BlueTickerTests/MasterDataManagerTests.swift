@@ -101,4 +101,17 @@ import Testing
 
         #expect(!stock.coName.isEmpty)
     }
+
+    @Test func testListedCodesExcludesForeignFilerEvenWhenListed() async throws {
+        let manager = MasterDataManager()
+        // 1773（ワイ・ティー・エル・コーポレーション・バーハッド）は上場区分「上場」だが
+        // 提出者種別が「外国法人・組合」。listedCodes() は国内法人向けユニバースのため除外する。
+        let stock = try #require(await manager.getByCode("1773"))
+        #expect(stock.mktNm == "上場")
+        #expect(stock.filerType == "外国法人・組合")
+
+        let listed = await manager.listedCodes()
+        #expect(!listed.contains("1773"))
+        #expect(listed.contains("6501"))
+    }
 }

@@ -2,6 +2,8 @@ import Foundation
 
 private let assetsPathEnv = "BLUE_TICKER_ASSETS_PATH"
 private let edinetCsvFilename = "EdinetcodeDlInfo.csv"
+/// EDINET「提出者種別」のうち、国内上場企業の取り込み対象から除外する値。
+private let foreignFilerType = "外国法人・組合"
 
 func resolveEdinetCSVURL(
     environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -100,12 +102,15 @@ actor MasterDataManager {
         return codeIndex[code]
     }
 
-    /// 上場（EDINET「上場区分」==「上場」）の 4 桁証券コード集合。
-    /// Stage 5 取り込みの対象ユニバース（東証上場）を EDINET 公式 CSV から導出する
-    /// （TOPIX/日経の構成銘柄リストは編集著作物の懸念があるため使わない）。
+    /// 上場（EDINET「上場区分」==「上場」）かつ国内法人・組合（外国法人・組合を除く）の
+    /// 4 桁証券コード集合。Stage 4/4-half/5 取り込みの対象ユニバース（東証上場の国内企業）を
+    /// EDINET 公式 CSV から導出する（TOPIX/日経の構成銘柄リストは編集著作物の懸念があるため使わない）。
+    /// 上場廃止で CSV から消えた企業は自然に含まれない（別途の除外処理は不要）。
     func listedCodes() async -> Set<String> {
         await loadIfNeeded()
-        return Set(stocks.filter { $0.mktNm == "上場" }.map { $0.code })
+        return Set(
+            stocks.filter { $0.mktNm == "上場" && $0.filerType != foreignFilerType }.map { $0.code }
+        )
     }
 
     func searchBySector(_ sector: String, limit: Int = 20) async -> [StockSearchResult] {
@@ -180,6 +185,7 @@ actor MasterDataManager {
         let industryIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者業種"))
         let listingIdx = normalizedCols.firstIndex(of: normalizeHeaderName("上場区分"))
         let locationIdx = normalizedCols.firstIndex(of: normalizeHeaderName("所在地"))
+        let filerTypeIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者種別"))
 
         var loaded: [MasterStock] = []
         var index: [String: MasterStock] = [:]
@@ -211,6 +217,12 @@ actor MasterDataManager {
             } else {
                 location = ""
             }
+            let filerType: String
+            if let idx = filerTypeIdx, idx < fields.count {
+                filerType = fields[idx].trimmingCharacters(in: CharacterSet.whitespaces)
+            } else {
+                filerType = ""
+            }
             let stock = MasterStock(
                 code: code,
                 coName: name,
@@ -219,7 +231,8 @@ actor MasterDataManager {
                 s33nm: industry,
                 mktNm: market,
                 location: location,
-                s33: industry
+                s33: industry,
+                filerType: filerType
             )
             loaded.append(stock)
             index[code] = stock
