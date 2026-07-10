@@ -174,6 +174,31 @@ func storeCompanyFinancials(
     }
 }
 
+// MARK: - servable/unservable 集計
+
+/// `cache_version` のみを対象にした軽量射影（`response` の JSONB を転送しない）。
+/// company_financials 全件の servable/unservable 集計用（`EdinetMasterSnapshotUpdatedAt` と同型）。
+final class CompanyFinancialsCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyFinancials.schema
+
+    @ID(custom: "code", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
+}
+
+/// company_financials 全件を read 床（`companyFinancialsMinServableVersion`）で集計する。
+/// ingest サマリログに DB 全体のカバレッジを添えるため、`response` を転送しない軽量クエリで行う。
+func countServableCompanyFinancials(db: Database) async throws -> (servable: Int, unservable: Int) {
+    let versions = try await CompanyFinancialsCacheVersionOnly.query(on: db).all()
+        .map(\.cacheVersion)
+    let servable = versions.filter(isServableCompanyFinancialsCacheVersion).count
+    return (servable, versions.count - servable)
+}
+
 // MARK: - read 経路（REST financials）
 
 /// 格納済み Stage 4 結果を code で引き、read 床以上 & 要求年数を満たすなら years に縮めた JSON を返す。

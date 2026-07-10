@@ -182,9 +182,13 @@ public func runStage3IngestCommand(
             ) { code in
                 await context.computeFinancials(code: code, years: stage4IngestYears)
             }
+            let coverage = try? await withDbRetry(logger: app.logger, context: "company_financials 集計") {
+                try await countServableCompanyFinancials(db: app.db)
+            }
             logIngestSummary(
                 app.logger, stage: "4", attempted: s4.attempted, stored: s4.stored,
-                failed: s4.failed, skipped: s4.skipped)
+                failed: s4.failed, skipped: s4.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable)
         }
         if stages.contains(.half) {
             let s4h = try await runStage4HalfIngest(
@@ -205,9 +209,13 @@ public func runStage3IngestCommand(
             ) { docID in
                 await context.extractFilingSections(docID: docID)
             }
+            let coverage = try? await withDbRetry(logger: app.logger, context: "company_filing_sections 集計") {
+                try await countServableFilingSections(db: app.db)
+            }
             logIngestSummary(
                 app.logger, stage: "5", attempted: s5.attempted, stored: s5.stored,
-                failed: s5.failed, skipped: s5.skipped)
+                failed: s5.failed, skipped: s5.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable)
         }
     } catch {
         try? await app.asyncShutdown()

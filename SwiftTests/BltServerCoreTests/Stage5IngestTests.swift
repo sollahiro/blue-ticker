@@ -279,6 +279,24 @@ private let keys = "business_risks,mda,segments"
         try await row.create(on: db)
     }
 
+    // MARK: - servable/unservable 集計
+
+    @Test func countServableFilingSectionsSplitsByReadFloor() async throws {
+        try await withMigratedApp { app in
+            // sections-v0: 床(1)未満 → unservable。sections-v1/sections-v2: 床以上 → servable。
+            try await seedStored(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db, version: "sections-v0")
+            try await seedStored(
+                "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db, version: "sections-v1")
+            try await seedStored(
+                "S3", code: "9984", submit: "2025-06-20 09:00", db: app.db, version: "sections-v2")
+
+            let coverage = try await countServableFilingSections(db: app.db)
+            #expect(coverage.servable == 2)
+            #expect(coverage.unservable == 1)
+        }
+    }
+
     @Test func loadByCodeReturnsLatestDocument() async throws {
         try await withMigratedApp { app in
             try await seedStored("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)

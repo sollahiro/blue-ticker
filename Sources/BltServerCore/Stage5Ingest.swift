@@ -178,6 +178,31 @@ func storeCompanyFilingSections(
     }
 }
 
+// MARK: - servable/unservable 集計
+
+/// `cache_version` のみを対象にした軽量射影（`payload` の JSONB を転送しない）。
+/// company_filing_sections 全件の servable/unservable 集計用。
+final class CompanyFilingSectionsCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyFilingSections.schema
+
+    @ID(custom: "doc_id", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
+}
+
+/// company_filing_sections 全件を read 床（`filingSectionsMinServableVersion`）で集計する。
+/// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送しない軽量クエリで行う。
+func countServableFilingSections(db: Database) async throws -> (servable: Int, unservable: Int) {
+    let versions = try await CompanyFilingSectionsCacheVersionOnly.query(on: db).all()
+        .map(\.cacheVersion)
+    let servable = versions.filter(isServableFilingSectionsCacheVersion).count
+    return (servable, versions.count - servable)
+}
+
 // MARK: - read 経路（REST filing-content）
 
 /// 格納済み Stage 5 セクションを引いて公開契約 {code, doc_id, sections} を返す。
