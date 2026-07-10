@@ -62,6 +62,27 @@ import Testing
         #expect(p.yearEntry.rawData.sales == 120)
     }
 
+    @Test func cacheVersionNumberParsesHalfVN() {
+        #expect(companyHalfFinancialsCacheVersionNumber("half-v1") == 1)
+        #expect(companyHalfFinancialsCacheVersionNumber("half-v2") == 2)
+        #expect(companyHalfFinancialsCacheVersionNumber("half-v10") == 10)
+        #expect(companyHalfFinancialsCacheVersionNumber("half-v") == nil)
+        #expect(companyHalfFinancialsCacheVersionNumber("0.0.0") == nil)
+        #expect(companyHalfFinancialsCacheVersionNumber("half-v2b") == nil)
+    }
+
+    @Test func isServableUsesNumericFloorNotLexicographicOrder() throws {
+        #expect(companyHalfFinancialsMinServableVersion == 1)
+        #expect(isServableCompanyHalfFinancialsCacheVersion("half-v1") == true)
+        #expect(isServableCompanyHalfFinancialsCacheVersion("half-v2") == true)
+        #expect(isServableCompanyHalfFinancialsCacheVersion("half-v10") == true)
+        #expect(isServableCompanyHalfFinancialsCacheVersion("0.0.0") == false)
+        // 現行版番号は床以上（不変条件）。
+        let current = try #require(
+            companyHalfFinancialsCacheVersionNumber(companyHalfFinancialsCacheVersion))
+        #expect(current >= companyHalfFinancialsMinServableVersion)
+    }
+
     /// trimmed は halfYearTrimPeriods に委譲する（完結 H1+H2 ペアを新しい順に n 件）。
     @Test func trimmedKeepsLatestNFiscalYears() {
         let periods = [

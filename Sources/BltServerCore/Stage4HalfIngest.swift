@@ -138,8 +138,9 @@ func storeCompanyHalfFinancials(
 
 // MARK: - read 経路（REST half-financials）
 
-/// 格納済み半期 Stage 4 結果を code で引き、現行バージョン & 要求年数を満たすなら years に縮めた JSON を返す。
-/// 無い・古い・年数不足なら nil（呼び出し側は 404 を返す。ライブ計算へはフォールバックしない）。
+/// 格納済み半期 Stage 4 結果を code で引き、read 床（`companyHalfFinancialsMinServableVersion`）以上 &
+/// 要求年数を満たすなら years に縮めた JSON を返す。
+/// 無い・床未満・年数不足なら nil（呼び出し側は 404 を返す。ライブ計算へはフォールバックしない）。
 ///
 /// 要求年数は半期算出上限（`Api.halfMaxYears`）へクランプする。半期はこの年数までしか作れず
 /// 格納（`stage4HalfIngestYears`）もそこで頭打ちのため、上限超の要求でも上限ぶんを warm read で返す。
@@ -148,7 +149,7 @@ func loadStoredHalfFinancials(code: String, years: Int, db: Database) async thro
     let effectiveYears = min(years, Api.halfMaxYears)
     guard effectiveYears > 0,
         let row = try await CompanyHalfFinancials.find(code, on: db),
-        row.cacheVersion == companyHalfFinancialsCacheVersion,
+        isServableCompanyHalfFinancialsCacheVersion(row.cacheVersion),
         row.requestedYears >= effectiveYears
     else { return nil }
     return row.response.trimmed(toYears: effectiveYears).jsonObject()

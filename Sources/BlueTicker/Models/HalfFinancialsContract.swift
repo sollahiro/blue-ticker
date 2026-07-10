@@ -20,6 +20,27 @@ import Foundation
 /// （financials の `companyFinancialsCacheVersion` と同思想・全社再計算が高コストなため）。
 public let companyHalfFinancialsCacheVersion = "half-v2"
 
+/// half financials read（REST）が 200 を返す最低計算バージョン番号（`half-vN` の N）。
+/// **明示指定**であり、「現行から N つ前」のような機械オフセットではない。人手で上げる。
+/// ingest の stale 判定・書き込みは常に `companyHalfFinancialsCacheVersion`。床未満の行は 404。
+/// 床の引き上げは、該当旧版の stale 消化が終わってから行う（引き上げ後に servable 穴を作らない）。
+/// 不変条件: `companyHalfFinancialsMinServableVersion` ≤ 現行 `half-vN` の N。
+public let companyHalfFinancialsMinServableVersion = 1
+
+/// `half-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+public func companyHalfFinancialsCacheVersionNumber(_ version: String) -> Int? {
+    guard version.hasPrefix("half-v") else { return nil }
+    let suffix = version.dropFirst("half-v".count)
+    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+    return n
+}
+
+/// 格納行の `cache_version` が read 床以上か。文字列辞書順比較は使わない（`half-v10` 対策）。
+public func isServableCompanyHalfFinancialsCacheVersion(_ version: String) -> Bool {
+    guard let n = companyHalfFinancialsCacheVersionNumber(version) else { return false }
+    return n >= companyHalfFinancialsMinServableVersion
+}
+
 // MARK: - 半期エントリ（label/half ＋ flatten 形）
 
 struct HalfFinancialsPeriod: Codable, Sendable {
