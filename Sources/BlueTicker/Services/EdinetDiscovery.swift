@@ -212,8 +212,10 @@ enum EdinetDiscovery {
                 let docPeriodEnd = doc["periodEnd"] as? String ?? ""
                 let docPeriodStart = doc["periodStart"] as? String ?? ""
                 if docType == Api.docTypeHalfYearReport {
-                    // 半期報告書: periodEnd は通期期末、periodStart は期首
-                    if !docPeriodEnd.isEmpty && !docPeriodEnd.hasPrefix(fyEndStr) { continue }
+                    // 半期報告書: periodEnd は多くの場合通期期末だが、一部の企業では半期自体の
+                    // 期末になっている（EDINET側の提出データによる揺らぎ）。両方を許容する。
+                    if !docPeriodEnd.isEmpty && !docPeriodEnd.hasPrefix(fyEndStr)
+                        && !docPeriodEnd.hasPrefix(halfEndStr) { continue }
                     if !docPeriodStart.isEmpty && !docPeriodStart.hasPrefix(periodStartStr) { continue }
                 } else {
                     // 旧2Q四半期報告書: periodEnd は2Q末
