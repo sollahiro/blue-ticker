@@ -323,15 +323,9 @@ smoke/
 | 半期スモーク | 同 `testHalfSmokeAll` | `smoke_half_expected/` |
 | セグメントパリティ | `SegmentExtractorTests.swift` `SegmentParityTests` | `segment_expected.json` |
 
-XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）が存在する環境でのみ実行され、ない環境ではスキップされます。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
+XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
-キャッシュを準備・再生成するには（EDINET API キー設定済みの環境で）:
-
-```bash
-SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare
-```
-
-`smoke/segment_expected.json` のキー（docID）を正として全書類をダウンロードします。展開済みの書類はスキップされます。
+CI では `swift-macos` ジョブの `Test` ステップに repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。
 
 ### 6.2 対象企業
 

@@ -295,28 +295,23 @@ import Foundation
 
 /// smoke/segment_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
 /// キャッシュ済み XBRL から Swift 実装の出力を突き合わせる。
-/// どちらかが存在しない環境ではスキップ（既存スモークテストと同じ方式）。
+/// BLT_EDINET_API_KEY が設定されていれば不足分を自動ダウンロードする（SmokeCacheSupport）。
+/// 未設定かつキャッシュも無い docID は個別に SKIP する。
 @Suite struct SegmentParityTests {
 
-    @Test func parityWithPythonGolden() throws {
-        let projectRoot = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent()  // BlueTickerTests
-            .deletingLastPathComponent()  // SwiftTests
-            .deletingLastPathComponent()  // project root
+    @Test func parityWithPythonGolden() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let goldenPath = projectRoot.appendingPathComponent("smoke/segment_expected.json")
-        let xbrlBase = projectRoot.appendingPathComponent("tmp_cache/edinet")
+        let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: goldenPath.path) else {
             print("SKIP   smoke/segment_expected.json が見つかりません")
             return
         }
-        guard FileManager.default.fileExists(atPath: xbrlBase.path) else {
-            print("SKIP   tmp_cache/edinet が見つかりません（SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare で準備）")
-            return
-        }
 
         let data = try Data(contentsOf: goldenPath)
         let golden = try #require(try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
+        await SmokeCacheSupport.ensureCached(golden.keys)
 
         var diffs: [String] = []
         var checked = 0
@@ -343,7 +338,6 @@ import Foundation
         for d in diffs.prefix(20) { print("DIFF   \(d)") }
         // SwiftSoup.Comment との曖昧性を避けるためモジュール修飾する（CI の Xcode で曖昧エラー）
         #expect(diffs.isEmpty, Testing.Comment(rawValue: "パリティ差分:\n" + diffs.joined(separator: "\n")))
-        #expect(checked > 0 || golden.isEmpty)
     }
 
     private func compare(_ expected: [String: Any], _ actual: SegmentResult, label: String) -> [String] {

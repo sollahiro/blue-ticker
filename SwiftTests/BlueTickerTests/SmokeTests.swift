@@ -2,10 +2,10 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-/// EDINET XBRL キャッシュ（ローカル）を直接読んで抽出器を動かし、
+/// EDINET XBRL キャッシュ（tmp_cache/edinet/、git 管理外）を直接読んで抽出器を動かし、
 /// smoke/smoke_expected/*.json の期待値と照合するスモークテスト。
-/// tmp_cache/edinet はローカル専用（git 管理外）。存在しない環境ではスキップする。
-/// Keychain・API キー不要。
+/// BLT_EDINET_API_KEY 環境変数が設定されていれば不足分を自動ダウンロードする
+/// （SmokeCacheSupport）。未設定かつキャッシュも無い環境ではスキップする。
 @Suite struct SmokeTests {
 
     // MARK: - Fixture → docID マッピング
@@ -53,17 +53,18 @@ import Foundation
 
     // MARK: - テスト本体
 
-    @Test func testHalfSmokeAll() throws {
+    @Test func testHalfSmokeAll() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_half_expected")
-        let xbrlBase = projectRoot.appendingPathComponent("tmp_cache/edinet")
+        let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
             print("SKIP   smoke/smoke_half_expected が見つかりません")
             return
         }
+        await SmokeCacheSupport.ensureCached(Self.halfDocIDs.values)
         guard FileManager.default.fileExists(atPath: xbrlBase.path) else {
-            print("SKIP   tmp_cache/edinet が見つかりません（SMOKE_PREPARE=1 swift test --filter SmokeCachePrepare で準備）")
+            print("SKIP   tmp_cache/edinet が見つかりません（BLT_EDINET_API_KEY 未設定）")
             return
         }
 
@@ -117,16 +118,16 @@ import Foundation
         #expect(failures.isEmpty, Comment(rawValue: "半期スモークテスト失敗:\n" + failures.map { "\($0.id): \($0.detail)" }.joined(separator: "\n")))
     }
 
-    @Test func testSmokeAll() throws {
+    @Test func testSmokeAll() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
-        let xbrlBase = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+        let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
             print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
 
         let fixtures = try FileManager.default.contentsOfDirectory(at: fixtureDir, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix(".") }
