@@ -20,6 +20,10 @@ jobs:
           key: swiftpm-macos-${{ hashFiles('Package.resolved') }}
 
       - name: Test
+        env:
+          # スモークテスト（SmokeTests / SegmentParityTests）が不足 XBRL を EDINET から
+          # 自動取得するための鍵。未設定（fork からの PR 等）では自動的に SKIP される。
+          BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
         run: swift test
 
   swift-linux:

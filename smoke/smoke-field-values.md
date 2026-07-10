@@ -137,4 +137,4 @@ swift test --filter SmokeTests
 SKIPPED: 4901 2025-03-31 の書類がキャッシュに見つかりません
 ```
 
-この場合、`cache prepare` でキャッシュを準備するか、ファイル名の `fy_end` をキャッシュにある年度に合わせる。
+この場合、`BLT_EDINET_API_KEY` 環境変数を設定してテストを再実行する（不足分は自動ダウンロードされる）か、ファイル名の `fy_end` をキャッシュにある年度に合わせる。詳細は `docs/xbrl-parsing.md`「6. スモークテスト」を参照。
