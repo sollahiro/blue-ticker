@@ -17,15 +17,19 @@ func bootstrapBltLogging(from environment: inout Environment) throws {
 
 /// ingest ステージ完了を JSON metadata 付きで 1 行出す。
 /// `failed > 0` のときは warning（成功のみ notice）。
+/// `servable`/`unservable` は read 床（`*MinServableVersion`）で見た DB 全体のカバレッジ
+/// （今回の ingest 件数ではなくテーブル全件の集計）。床の概念が無いステージ（Stage 4-half 等）は nil で省略する。
 func logIngestSummary(
     _ logger: Logger,
     stage: String,
     attempted: Int,
     stored: Int,
     failed: Int,
-    skipped: Int
+    skipped: Int,
+    servable: Int? = nil,
+    unservable: Int? = nil
 ) {
-    let metadata: Logger.Metadata = [
+    var metadata: Logger.Metadata = [
         "event": "ingest_summary",
         "stage": .string(stage),
         "attempted": .stringConvertible(attempted),
@@ -33,6 +37,8 @@ func logIngestSummary(
         "failed": .stringConvertible(failed),
         "skipped": .stringConvertible(skipped),
     ]
+    if let servable { metadata["servable"] = .stringConvertible(servable) }
+    if let unservable { metadata["unservable"] = .stringConvertible(unservable) }
     if failed > 0 {
         logger.warning("ingest summary", metadata: metadata)
     } else {

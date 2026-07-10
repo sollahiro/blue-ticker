@@ -387,6 +387,26 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         }
     }
 
+    // MARK: - servable/unservable 集計
+
+    @Test func countServableCompanyFinancialsSplitsByReadFloor() async throws {
+        try await withMigratedApp { app in
+            // fin-v1: 床(2)未満 → unservable。fin-v2/fin-v4: 床以上 → servable。
+            for (code, version) in [("7203", "fin-v1"), ("6758", "fin-v2"), ("9984", "fin-v4")] {
+                let row = CompanyFinancials()
+                row.id = code
+                row.response = makeResponse(code: code, years: 1)
+                row.cacheVersion = version
+                row.requestedYears = 1
+                try await row.create(on: app.db)
+            }
+
+            let coverage = try await countServableCompanyFinancials(db: app.db)
+            #expect(coverage.servable == 2)
+            #expect(coverage.unservable == 1)
+        }
+    }
+
     // MARK: - read 経路
 
     @Test func loadStoredFinancialsTrimsToRequestedYears() async throws {
