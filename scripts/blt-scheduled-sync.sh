@@ -13,6 +13,10 @@
 #
 # ingest 件数はステージ別に .env で上書きできる（既定: Stage4=80 / Stage4-half=80 / Stage5=50）。
 # BLT_INGEST_LIMIT がある場合は後方互換として全ステージ既定値に使う。
+#
+# 各ステージには実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
+# 強制終了して次のステージへ進む（Neon 接続不安定によるハング対策）。上書きは
+# .env の BLT_STAGE_TIMEOUT_SECONDS を使う。
 # インストール手順は docs/deploy.md「定期同期（ローカル launchd）」を参照。
 
 set -uo pipefail
@@ -23,6 +27,10 @@ BIN="$REPO/.build/release/blt-server"
 LOG="$REPO/.build/blt-scheduled.log"
 
 cd "$REPO" || exit 1
+
+# 実行中に Mac がスリープすると Neon 接続が切れてステージがハングするため、
+# スクリプトの生存期間だけスリープを抑止する（-w $$ で本プロセス終了時に自動解除）。
+caffeinate -i -s -w $$ &
 
 if [ ! -x "$BIN" ]; then
   echo "$(date '+%Y-%m-%d %H:%M:%S') ERROR: $BIN がありません。先に 'swift build -c release --product blt-server' を実行してください。" >> "$LOG"
@@ -45,15 +53,38 @@ DEFAULT_LIMIT="${BLT_INGEST_LIMIT:-}"
 LIMIT_STAGE4="${BLT_INGEST_LIMIT_STAGE4:-${DEFAULT_LIMIT:-80}}"
 LIMIT_STAGE4_HALF="${BLT_INGEST_LIMIT_STAGE4_HALF:-${DEFAULT_LIMIT:-80}}"
 LIMIT_STAGE5="${BLT_INGEST_LIMIT_STAGE5:-${DEFAULT_LIMIT:-50}}"
+STAGE_TIMEOUT_SECONDS="${BLT_STAGE_TIMEOUT_SECONDS:-5400}"
+
+# コマンドをバックグラウンドで実行し、$STAGE_TIMEOUT_SECONDS 秒経っても生きていれば
+# SIGTERM、さらに 10 秒待って生きていれば SIGKILL する（Neon 接続ハング対策）。
+run_with_timeout() {
+  "$@" &
+  local pid=$!
+  (
+    sleep "$STAGE_TIMEOUT_SECONDS"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "$(date '+%Y-%m-%d %H:%M:%S') WARN: ${STAGE_TIMEOUT_SECONDS}s タイムアウトのため強制終了: $*"
+      kill -TERM "$pid" 2>/dev/null
+      sleep 10
+      kill -KILL "$pid" 2>/dev/null
+    fi
+  ) &
+  local watchdog=$!
+  wait "$pid"
+  local exit_status=$?
+  kill "$watchdog" 2>/dev/null
+  wait "$watchdog" 2>/dev/null
+  return $exit_status
+}
 
 {
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') sync 開始 ====="
-  "$BIN" sync
+  run_with_timeout "$BIN" sync
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage4 --limit $LIMIT_STAGE4 開始 ====="
-  "$BIN" ingest --stages 4 --limit "$LIMIT_STAGE4"
+  run_with_timeout "$BIN" ingest --stages 4 --limit "$LIMIT_STAGE4"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage4-half --limit $LIMIT_STAGE4_HALF 開始 ====="
-  "$BIN" ingest --stages 4half --limit "$LIMIT_STAGE4_HALF"
+  run_with_timeout "$BIN" ingest --stages 4half --limit "$LIMIT_STAGE4_HALF"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage5 --limit $LIMIT_STAGE5 開始 ====="
-  "$BIN" ingest --stages 5 --limit "$LIMIT_STAGE5"
+  run_with_timeout "$BIN" ingest --stages 5 --limit "$LIMIT_STAGE5"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
 } >> "$LOG" 2>&1
