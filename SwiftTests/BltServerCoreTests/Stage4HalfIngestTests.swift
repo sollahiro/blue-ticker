@@ -295,6 +295,37 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         }
     }
 
+    /// 床未満は 404。床は明示定数で、現行版との完全一致ではない（issue #73 の half-v2 バンプ対応）。
+    @Test func loadStoredHalfFinancialsReturnsNilWhenBelowMinServable() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyHalfFinancials()
+            row.id = "7203"
+            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.cacheVersion = "half-v0"
+            row.requestedYears = 5
+            try await row.create(on: app.db)
+
+            let json = try await loadStoredHalfFinancials(code: "7203", years: 1, db: app.db)
+            #expect(json == nil)
+        }
+    }
+
+    /// 床ちょうど（half-v1）は現行版（half-v2）でなくても 200。
+    @Test func loadStoredHalfFinancialsAcceptsMinServableVersion() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyHalfFinancials()
+            row.id = "7203"
+            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.cacheVersion = "half-v1"
+            row.requestedYears = 5
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredHalfFinancials(code: "7203", years: 1, db: app.db))
+            #expect(json["code"] as? String == "7203")
+        }
+    }
+
     @Test func loadStoredHalfFinancialsReturnsNilWhenYearsInsufficient() async throws {
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()

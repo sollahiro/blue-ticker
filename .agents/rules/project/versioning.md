@@ -69,7 +69,8 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | `edinet_xbrl_facts`（Stage 3 RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
 | `company_financials`（Stage 4 derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `2`（`fin-v2` 以上を 200） |
-| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v1"` |
+| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
+| （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v2"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
 
@@ -80,7 +81,8 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 - `xbrlFactsCacheVersion`: XBRL fact のパースロジック（`parseXbrlFactIndex`）、または RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したとき
 - `companyFinancialsCacheVersion`: 財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）、または公開契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変更したとき
 - `companyFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。financials read が 200 を返す最低世代 N を人手で上げるとき。現行から N つ前の機械オフセットにはしない。引き上げは該当旧版の stale 消化完了後（servable 穴を作らない）。不変条件: 床 ≤ 現行 `fin-vN` の N。比較は数値パース（文字列辞書順禁止）
-- `companyHalfFinancialsCacheVersion`: 半期計算ロジック（`HalfYearAnalyzer` / `buildH2Entry`）、または公開契約型（`HalfFinancialsResponse` / `HalfFinancialsPeriod`）の意味を変更したとき。**read 床は未導入**（単一版。`half-v2` バンプ時に `companyHalfFinancialsMinServableVersion` を同型追加）
+- `companyHalfFinancialsCacheVersion`: 半期計算ロジック（`HalfYearAnalyzer` / `buildH2Entry` / `EdinetDiscovery` の書類マッチング等、計算対象ドキュメントの選定を含む）、または公開契約型（`HalfFinancialsResponse` / `HalfFinancialsPeriod`）の意味を変更したとき
+- `companyHalfFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。half financials read が 200 を返す最低世代 N を人手で上げるとき。規則は financials 床と同型（`half-v2` バンプ時に導入・床は `1` のまま据え置き）
 - `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `SegmentExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `SegmentPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
 - `filingSectionsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。filing-content read の最低世代 N。規則は financials 床と同型
 

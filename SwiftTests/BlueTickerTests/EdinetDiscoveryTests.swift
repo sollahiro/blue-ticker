@@ -305,6 +305,41 @@ import Foundation
         #expect(doc?["fiscal_year"] as? Int == 2024)
     }
 
+    @Test func testFindHalfReportAccepts160WithHalfPeriodEnd() async throws {
+        // 半期報告書（160）: 一部企業では periodEnd が半期自体の期末になっている
+        // （issue #73: 332A・438A 等、通期期末を報告しない少数派の規約）
+        let halfDoc: [String: Any] = [
+            "docID": "S100X3OS",
+            "secCode": "332A0",
+            "docTypeCode": "160",
+            "docDescription": "半期報告書－第8期(2025/04/01－2025/09/30)",
+            "periodStart": "2025-04-01",
+            "periodEnd": "2025-09-30",
+            "submitDateTime": "2025-11-13 15:31",
+            "_edinet_list_date": "2025-11-13",
+        ]
+        seedIndexes(2025...2026, [2025: [halfDoc]])
+
+        let prebuiltAnnual: [[String: Any]] = [[
+            "docID": "S100W8RB",
+            "docTypeCode": "120",
+            "edinet_fy_end": "2026-03-31",
+            "periodStart": "2025-04-01",
+            "periodEnd": "2026-03-31",
+        ]]
+
+        let docs = await EdinetDiscovery.buildHalfYearDocumentIndexForCode(
+            code: "332A", client: client, prebuiltAnnualDocs: prebuiltAnnual
+        )
+
+        let doc = docs.first { $0["docID"] as? String == "S100X3OS" }
+        #expect(doc != nil)
+        #expect(doc?["edinet_fy_end"] as? String == "2026-03-31")
+        #expect(doc?["edinet_period_start"] as? String == "2025-04-01")
+        #expect(doc?["edinet_period_end"] as? String == "2025-09-30")
+        #expect(doc?["period_type"] as? String == "2Q")
+    }
+
     @Test func testFindHalfReportAcceptsLegacy140WithQ2PeriodEnd() async throws {
         // 旧2Q四半期報告書（140）: periodEnd は2Q末・説明文に「第2四半期」を含む
         let quarterDoc: [String: Any] = [

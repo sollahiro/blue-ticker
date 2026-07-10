@@ -35,6 +35,7 @@ func registerRoutes(
                 "company_financials": companyFinancialsCacheVersion,
                 "company_financials_min_servable": companyFinancialsMinServableVersion,
                 "company_half_financials": companyHalfFinancialsCacheVersion,
+                "company_half_financials_min_servable": companyHalfFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
             ],

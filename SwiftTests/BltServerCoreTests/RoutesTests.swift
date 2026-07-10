@@ -81,6 +81,9 @@ private func send(
             #expect(versions?["company_financials"] as? String == companyFinancialsCacheVersion)
             #expect(versions?["company_financials_min_servable"] as? Int == companyFinancialsMinServableVersion)
             #expect(versions?["company_half_financials"] as? String == companyHalfFinancialsCacheVersion)
+            #expect(
+                versions?["company_half_financials_min_servable"] as? Int
+                    == companyHalfFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
         }
