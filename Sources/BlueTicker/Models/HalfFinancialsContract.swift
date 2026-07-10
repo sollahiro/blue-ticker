@@ -18,7 +18,7 @@ import Foundation
 /// `blueTickerVersion` とは独立し、半期計算ロジック（HalfYearAnalyzer / buildH2Entry）または
 /// 本契約型（HalfFinancialsResponse / HalfFinancialsPeriod）の意味を変えたときのみバンプする
 /// （financials の `companyFinancialsCacheVersion` と同思想・全社再計算が高コストなため）。
-public let companyHalfFinancialsCacheVersion = "half-v1"
+public let companyHalfFinancialsCacheVersion = "half-v2"
 
 // MARK: - 半期エントリ（label/half ＋ flatten 形）
 

@@ -12,7 +12,7 @@
 | Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
 | Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
 | Stage 4 read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
-| Stage 4-half | 進行中。`half-v1` 1,392 行（単一版のため read 床は未導入。`half-v2` バンプ時に同型で追加） |
+| Stage 4-half | 進行中。issue #73 の半期報告書マッチング修正で `half-v2` へバンプ（`half-v1` 行は全件 stale・再計算対象）。read 床は引き続き未導入（`half-v1` 以上をそのまま 200） |
 | Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |

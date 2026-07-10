@@ -69,7 +69,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | `edinet_xbrl_facts`（Stage 3 RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
 | `company_financials`（Stage 4 derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `2`（`fin-v2` 以上を 200） |
-| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v1"` |
+| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v2"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
 
