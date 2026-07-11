@@ -8,14 +8,93 @@
 // 失敗モードは「DL の空白（アイドル）中に suspend → 直後の DB 操作が死んだ接続で即時失敗」であり、
 // 当該操作はサーバー側で未実行。かつ ingest の DB 操作はいずれも冪等（find は読み取り、store は
 // 主キー upsert）なため、一過性エラーを安全に再試行できる。規定回数を超えたら元のエラーを再 throw する。
+//
+// もう一つの失敗モードとして、接続が TCP 的に無応答のまま死ぬ（FIN/RST が来ない。Mac のスリープ中の
+// ネットワーク一時停止等で発生）ケースがある。この場合クエリの await は例外を投げずに無期限へ待ち続け、
+// 上記のリトライは（catch に入れないため）一切発動しない。`withOperationTimeout` で1試行あたりの
+// 応答待ちに上限を設け、超過時は強制的にタイムアウト例外を投げて通常のリトライ経路に載せる。
 
 import BlueTickerCore
 import Foundation
 import Logging
 
+/// `withOperationTimeout` が上限超過時に投げるエラー。
+struct DbOperationTimeoutError: Error, CustomStringConvertible {
+    let seconds: Double
+    var description: String { "DB操作が\(Int(seconds))秒応答なしのためタイムアウト" }
+}
+
+/// 継続を高々1回だけ resume することを保証する箱。
+/// タイムアウト・操作完了のどちらが先着しても、後着側は無視する。
+private final class ContinuationBox<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+
+    init(_ continuation: CheckedContinuation<T, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(with result: Result<T, Error>) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(with: result)
+    }
+}
+
+/// `T` を Sendable 制約なしで継続の外へ運ぶための箱。DB read 経路は `[String: Any]`（JSON 境界の
+/// 動的型、`typing.md` で許容）を返すため `T: Sendable` を要求できない。実際には呼び出し元の
+/// タスク1つが値を生成し、それを継続経由で1回だけ受け渡すだけ（複数タスクからの同時アクセスはない）
+/// なので `@unchecked Sendable` は安全。
+private struct UncheckedSendableBox<T>: @unchecked Sendable {
+    let value: T
+}
+
+/// `operation` の応答待ちに上限を設ける。超過時は `DbOperationTimeoutError` を投げて先に返る
+/// （元の `operation` タスクは待ち合わせず切り離す＝無応答のまま死んだ接続を待ち続けない）。
+///
+/// TaskGroup による構造化並行処理は使わない: グループのスコープを抜ける際に未完了の子タスクを
+/// 暗黙に待ち合わせる仕様のため、キャンセルに応答しない無応答タスク（本関数が対処したい対象）を
+/// 待ち続けてしまい、タイムアウトの意味がなくなる。
+///
+/// 既知のトレードオフ: タイムアウトした `operation` は明示的に停止させず、切り離したまま裏で
+/// 走らせ続ける（無応答のまま死んだ接続の場合は永久に完了しない＝実害なし）。ただし「本当は生きて
+/// いるが遅いだけ」の接続だった場合、切り離したタスクが後から完了することがあり得る。呼び出し元が
+/// 同一の可変オブジェクト（例: Fluent モデルインスタンス）を複数回のリトライ試行にまたがって
+/// 再利用していると、切り離されたタスクの遅延完了とリトライ試行が当該オブジェクトへ同時にアクセス
+/// する競合窓が理論上ありうる。`withDbRetry` の呼び出し元はいずれも冪等な find/upsert で、かつ
+/// タイムアウトは滅多に起きない前提（既定30秒）のため許容している。
+private func withOperationTimeout<T>(
+    seconds: Double,
+    operation: @escaping @Sendable () async throws -> T
+) async throws -> T {
+    let box: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<UncheckedSendableBox<T>, Error>) in
+        let resultBox = ContinuationBox(continuation)
+        Task {
+            do {
+                let result = try await operation()
+                resultBox.resume(with: .success(UncheckedSendableBox(value: result)))
+            } catch {
+                resultBox.resume(with: .failure(error))
+            }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            resultBox.resume(with: .failure(DbOperationTimeoutError(seconds: seconds)))
+        }
+    }
+    return box.value
+}
+
 /// DB 操作を一過性エラー（接続断等）に対して指数 backoff で再試行する。
 /// `maxAttempts` 回試して全て失敗したら ERROR ログを1行出してから最後のエラーを再 throw する。
 /// backoff は 1, 2, 4, 8 ... 秒（上限 `maxBackoffSeconds`）。
+///
+/// 1試行あたりの応答待ちには `operationTimeoutSeconds`（既定 `Api.dbOperationTimeoutSeconds`）の
+/// 上限がある（`withOperationTimeout`）。無応答のまま死んだ接続で操作が永久に待ち続けることを防ぎ、
+/// タイムアウトも通常のリトライ経路に載せる。
 ///
 /// - `context`: 呼び出し元が識別したい対象（例: `"code=7203"`）。省略可。
 /// - `caller`: 既定で呼び出し元の関数名が自動で入る（呼び出し側の変更不要）。
@@ -24,17 +103,19 @@ import Logging
 func withDbRetry<T>(
     maxAttempts: Int = 5,
     maxBackoffSeconds: Double = 16,
+    operationTimeoutSeconds: Double = Api.dbOperationTimeoutSeconds,
     logger: Logger? = nil,
     context: String? = nil,
     caller: String = #function,
     onRetry: (() -> Void)? = nil,
-    operation: () async throws -> T
+    operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
     let label = context.map { "\(caller) \($0)" } ?? caller
     var attempt = 1
     while true {
         do {
-            return try await operation()
+            return try await withOperationTimeout(
+                seconds: operationTimeoutSeconds, operation: operation)
         } catch {
             guard attempt < maxAttempts else {
                 if let logger {
