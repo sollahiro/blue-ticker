@@ -18,7 +18,8 @@ func bootstrapBltLogging(from environment: inout Environment) throws {
 /// ingest ステージ完了を JSON metadata 付きで 1 行出す。
 /// `failed > 0` のときは warning（成功のみ notice）。
 /// `servable`/`unservable` は read 床（`*MinServableVersion`）で見た DB 全体のカバレッジ
-/// （今回の ingest 件数ではなくテーブル全件の集計）。床の概念が無いステージ（Stage 4-half 等）は nil で省略する。
+/// （今回の ingest 件数ではなくテーブル全件の集計）。床のあるステージ（4 / 4-half / 5）で付与し、
+/// 床の概念が無いステージは nil で省略する。
 /// `notApplicable` は計算対象外（例: 半期報告書未提出）でスキップした件数。区別しないステージは nil で省略する
 /// （issue #73 フォローアップ。failed に混入させず設計通りの挙動と区別する）。
 func logIngestSummary(

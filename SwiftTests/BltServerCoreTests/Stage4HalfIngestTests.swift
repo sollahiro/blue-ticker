@@ -287,6 +287,26 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         }
     }
 
+    // MARK: - servable/unservable 集計
+
+    @Test func countServableCompanyHalfFinancialsSplitsByReadFloor() async throws {
+        try await withMigratedApp { app in
+            // half-v0: 床(1)未満 → unservable。half-v1/half-v2: 床以上 → servable。
+            for (code, version) in [("7203", "half-v0"), ("6758", "half-v1"), ("9984", "half-v2")] {
+                let row = CompanyHalfFinancials()
+                row.id = code
+                row.response = try makeHalfResponse(code: code, fyEnds: years3)
+                row.cacheVersion = version
+                row.requestedYears = 3
+                try await row.create(on: app.db)
+            }
+
+            let coverage = try await countServableCompanyHalfFinancials(db: app.db)
+            #expect(coverage.servable == 2)
+            #expect(coverage.unservable == 1)
+        }
+    }
+
     // MARK: - read 経路
 
     @Test func loadStoredHalfFinancialsTrimsToRequestedYears() async throws {
