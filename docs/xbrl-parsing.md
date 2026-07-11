@@ -48,49 +48,15 @@ XBRL タグの有無から会計基準を推定します。`FieldParser.swift` �
 
 ### 判定ロジック
 
+収集済みタグ名に対する部分文字列マッチで判定します（固定のマーカータグリストは持ちません）。
+
 ```
-US-GAAP  ← Xbrl.usgaapMarkerTags のいずれかが存在 かつ IFRS マーカーが不在
-IFRS     ← Xbrl.ifrsBalanceSheetMarkerTags または Xbrl.ifrsPLMarkerTags が存在
+US-GAAP  ← タグ名に "USGAAP" を含むタグが存在 かつ "IFRS" を含むタグが不在
+IFRS     ← タグ名に "IFRS" を含むタグが存在
 J-GAAP   ← 上記いずれにも該当しない
 ```
 
-### US-GAAP判定マーカータグ（`Xbrl.usgaapMarkerTags`）
-
-```
-TotalAssetsUSGAAPSummaryOfBusinessResults
-EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults
-CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults
-RevenuesUSGAAPSummaryOfBusinessResults
-NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults
-CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults
-CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults
-```
-
-> **注意**: IFRSへ移行済みの企業でも、過去比較データとして `*USGAAP*` タグが残存することがあります。「USGAAPタグが存在してもIFRSマーカーがあれば IFRS と判定」という 2 段階チェックを行っています。
-
-### IFRSマーカータグ（BS系: `Xbrl.ifrsBalanceSheetMarkerTags`）
-
-```
-InterestBearingLiabilitiesCLIFRS / InterestBearingLiabilitiesNCLIFRS
-BorrowingsCLIFRS / BorrowingsNCLIFRS
-BondsPayableNCLIFRS
-BondsAndBorrowingsCLIFRS / BondsAndBorrowingsNCLIFRS
-BondsBorrowingsAndLeaseLiabilitiesCLIFRS / BondsBorrowingsAndLeaseLiabilitiesNCLIFRS
-```
-
-### IFRSマーカータグ（PL系: `Xbrl.ifrsPLMarkerTags`）
-
-BS系より広く、PL/CF のデータタグ自体もマーカーとして機能します。これにより BS 側タグが収集対象に含まれない場合でも IFRS 判定を維持します。
-
-```
-InterestBearingLiabilitiesCLIFRS / BorrowingsCLIFRS / BondsPayableNCLIFRS / BorrowingsNCLIFRS
-NetSalesIFRS / RevenueIFRS / GrossProfitIFRS
-SellingGeneralAndAdministrativeExpensesIFRS / OperatingProfitLossIFRS
-OperatingRevenuesIFRSKeyFinancialData
-ProfitLossAttributableToOwnersOfParentIFRS / ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults
-CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults
-CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults
-```
+> **注意**: IFRSへ移行済みの企業でも、過去比較データとして `*USGAAP*` タグが残存することがあります。「USGAAPタグが存在してもIFRSタグがあれば IFRS と判定」という優先順位でこれを吸収しています。
 
 ---
 
