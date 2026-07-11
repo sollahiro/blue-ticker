@@ -141,22 +141,32 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 ## MCP（Managed OAuth・Claude.ai / ChatGPT 向け）
 
-`POST /mcp`（`api.<domain>/mcp`）は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
+`POST /mcp` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下（`api.<domain>`）にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
 
-Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を `/mcp` パス限定の別 Access アプリに有効化する。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。
+Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホストで `/mcp` を公開する。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。
 
-### 手順（Zero Trust ダッシュボード）
+> **実機で判明した制約**: Managed OAuth は **パス指定のあるドメイン（例: `api.<domain>/mcp`）には設定できない**（`access.api.error.invalid_request: domain can not have a path if oauth is configured`）。Cloudflare Access 自体は同一ホスト名をパス単位で複数アプリに分けられるが、Managed OAuth はホスト名全体（パスなし）のアプリにしか有効化できない。そのため **新規サブドメイン `mcp.<domain>` が必須**（当初検討した「既存ホスト名のパス限定アプリ」案は不採用）。
 
-1. **Access アプリ作成**（Access → Applications → Self-hosted）= `api.<domain>/mcp`（**パスまで指定**する。既存の `api.<domain>` 全体アプリとは別アプリとして作成すること。Cloudflare Access はより詳細なパスのアプリを優先するため、`/v1/*` 等は既存アプリのポリシーのまま変わらない）。
-2. **Access ポリシー**: 既存 `api.<domain>` アプリとは別のポリシーを設定する（許可範囲は運用者が決める。IdP・組織のメール体系に応じて選ぶ）。
-3. **Managed OAuth 有効化**: 作成したアプリの編集画面 → Advanced settings → **Managed OAuth** をトグル ON。許可 redirect URI（localhost ループバック含む）を確認・必要に応じて調整する。
-4. **疎通確認**: `curl https://api.<domain>/mcp` 配下の discovery エンドポイント（`/.well-known/oauth-protected-resource` 等、パス限定アプリでの露出のされ方は実機で要確認）が Cloudflare 側から返ることを確認する。Claude Code の remote MCP 接続で OAuth 経由の疎通も確認する。
+### 手順（Zero Trust ダッシュボード・実機検証済み）
+
+1. **Cloudflare Tunnel に Public Hostname を追加**（Networks → Tunnels → 該当 Tunnel → Public Hostname → Add）: `mcp.<domain>` → サービス `http://localhost:8080`（`api.<domain>` と同じ origin・同じポート。`/mcp` は Phase 1 で既にこのポートにマウント済みのため Vapor 側の変更は不要）。
+2. **Access アプリ作成**（Access controls → Applications → Create new application → **Public DNS**）= `mcp.<domain>`（**パスなし**。ここに path を付けると Managed OAuth が有効化できない）。
+3. **Access ポリシー**: 既存 `api.<domain>` アプリとは別のポリシーを作成する（Action = **Allow**。全 Access アプリは deny-by-default のため、Include ルールに一致した相手にのみ許可する。許可範囲は運用者が決める）。
+4. **Managed OAuth 有効化**: 作成したアプリの編集画面 → Advanced settings → **Managed OAuth** をトグル ON。
+5. **疎通確認**（2026-07-12 実施・成功）:
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" https://mcp.<domain>/.well-known/oauth-protected-resource      # 200
+   curl -s -o /dev/null -w "%{http_code}\n" https://mcp.<domain>/.well-known/oauth-authorization-server     # 200
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST https://mcp.<domain>/mcp \
+     -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'   # 401（未認証で正しくブロック）
+   ```
 
 ### 既知の制限
 
 - Cloudflare 側の既知バグ: Managed OAuth の 401 応答が RFC 9728 準拠の `WWW-Authenticate: Bearer resource_metadata="..."` ヘッダーを返さないため、**Claude.ai の Web/モバイル版コネクタのログインが失敗する**既知の相互運用性問題がある（Cloudflare 側の bug）。Claude Code の remote MCP 接続はこのヘッダーに依存しないため影響を受けない。origin 側では対処不可能（401 は Cloudflare エッジが生成し origin に到達しないため）。ChatGPT コネクタでの検証は未実施。
 - Managed OAuth は本稿執筆時点で Cloudflare 側の表記が一貫しない（"open beta" 表記のページとそうでないページが混在）。GA 前提の運用にはしない。
-- 比較検討した「MCP Server Portal」（複数 MCP サーバーを1エンドポイントに集約する機能）は、本サーバーが1つしかなく集約の要求がないため不採用。Managed OAuth を既存 Access アプリの仕組みに直接足す方が単純（詳細は `blt-server-roadmap.md`）。
+- 比較検討した「MCP Server Portal」（複数 MCP サーバーを1エンドポイントに集約する機能）は、本サーバーが1つしかなく集約の要求がないため不採用。Managed OAuth を Access アプリに直接足す方が単純（詳細は `blt-server-roadmap.md`）。
 
 ## 定期同期
 

@@ -16,7 +16,7 @@
 | Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
-| MCP | **Phase 1 完了**。`blt-server`（Vapor）に `POST /mcp` を埋め込み。6 ツール（`search_companies` 等）。認証は `/v1` と同一の env 駆動グループを共有。**Phase 2 は方式決定・手順化済み**（`api.<domain>/mcp` パス限定 Access アプリ + Managed OAuth。新規サブドメイン不要・origin コード変更不要）、Cloudflare ダッシュボード作業はユーザー未実施（`deploy.md`「MCP（Managed OAuth）」参照） |
+| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）に `POST /mcp` を埋め込み。6 ツール（`search_companies` 等）。`api.<domain>/mcp`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。discovery・未認証ブロックとも実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
@@ -145,7 +145,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
-- [ ] **MCP Phase 2（OAuth 2.1 境界）のダッシュボード作業** — 方式は決定済み: **Managed OAuth for Access** を `api.<domain>/mcp` パス限定の新規 Access アプリ（既存 `api.<domain>` 全体アプリとは別ポリシー）に有効化する。discovery・`/authorize`・`/token`・DCR は Cloudflare エッジ側で完結し origin コード変更は不要。新規サブドメインは不要（同一ホスト名内のパス限定アプリで足りる）。「MCP Server Portal」は複数サーバー集約向けのため不採用。手順は `deploy.md`「MCP（Managed OAuth）」。既知の制限: Managed OAuth の 401 が RFC 9728 `WWW-Authenticate` を返さない Cloudflare 側バグにより Claude.ai Web/モバイルコネクタのログインが失敗する（Claude Code の remote MCP 接続は影響なし。origin 側では対処不可）
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 - [ ] **`sector` の REST 化**（任意・優先度低）
 - [ ] remote 時の `ticker cache status` 表示内容（未決）
