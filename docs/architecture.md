@@ -102,6 +102,19 @@ flowchart LR
 
 レスポンス契約は単一の Codable 型から導出（`Models/FinancialsContract.swift`）。エラー封筒は `{"error":..., "status":N}`。
 
+### MCP エンドポイント（`POST /mcp`）
+
+`blt-server`（Vapor）に MCP プロトコル（[modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)、`StatelessHTTPServerTransport`）を `POST /mcp` として埋め込んでいる。`/v1` と同じ認証グループ配下（`CF_ACCESS_TEAM_DOMAIN` / `BLT_AUTH_TOKEN` の env 駆動モードをそのまま共有）。
+
+| ターゲット | 役割 |
+|---|---|
+| `Sources/BltMcpServerCore/` | MCP プロトコル層。ツールカタログ（`Tools.swift`）と `MCP.Server` ファクトリ（`ServerFactory.swift`）のみ。Vapor/Fluent 非依存 |
+| `Sources/BltServerCore/MCPRoute.swift` | `/mcp` ルート登録・Vapor ↔ SDK アダプタ・ツールディスパッチ（`Routes.swift` の DB 読み取り共通関数 `serveStoredFinancials` 等を REST と共有し、ロジックを重複させない） |
+
+ツールは REST エンドポイントと 1:1 対応する（`search_companies` / `search_by_sector` / `get_filings` / `get_financial_summary` / `get_half_financial_summary` / `get_filing_content`）。財務系ツールは REST 同様ライブ計算へフォールバックしない。
+
+現状（Phase 1）は既存 `api.<domain>` の配下で疎通する。Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアント向け境界（新規サブドメイン・Cloudflare `Access for SaaS` 等）は Phase 2 として別途計画する（`blt-server-roadmap.md`「次」参照）。
+
 ## データパイプライン（Stage 1〜4）
 
 EDINET → 計算済み JSON までの 4 段。Stage 4 はサーバー計算に集約し、クライアントは表示に専念する。

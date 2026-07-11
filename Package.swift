@@ -21,6 +21,8 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
         // テスト専用: マイグレーションをインメモリ DB で実走させ検証する（本番は Postgres）。
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
+        // MCP プロトコル実装（公式 SDK）。BltMcpServerCore ターゲットのみが使用。
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
     ],
     targets: [
         // 共有ライブラリ（CLI・REST サーバー共通のコア機能）。NIO には依存しない。
@@ -41,12 +43,26 @@ let package = Package(
                 .linkedLibrary("iconv", .when(platforms: [.macOS])),
             ]
         ),
+        // MCP プロトコル層。ツールカタログと MCP.Server ファクトリのみを持つ。
+        // Vapor/Fluent には依存しない（BltServerCore が /mcp ルートとして埋め込む）。
+        .target(
+            name: "BltMcpServerCore",
+            dependencies: [
+                "BlueTickerCore",
+                .product(name: "MCP", package: "swift-sdk"),
+            ],
+            path: "Sources/BltMcpServerCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
         // REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。
         // Web/DB 依存をここに閉じ込め、CLI へ漏らさない。
         .target(
             name: "BltServerCore",
             dependencies: [
                 "BlueTickerCore",
+                "BltMcpServerCore",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
@@ -98,6 +114,15 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor"),
             ],
             path: "SwiftTests/BltServerCoreTests"
+        ),
+        // BltMcpServerCore（MCP プロトコル層）のテスト。
+        .testTarget(
+            name: "BltMcpServerCoreTests",
+            dependencies: [
+                "BltMcpServerCore",
+                .product(name: "MCP", package: "swift-sdk"),
+            ],
+            path: "SwiftTests/BltMcpServerCoreTests"
         ),
     ]
 )

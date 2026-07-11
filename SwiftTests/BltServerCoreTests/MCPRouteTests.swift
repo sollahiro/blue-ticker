@@ -1,0 +1,122 @@
+// /mcp ルート（MCPRoute.swift）の統合テスト。
+// /v1 と同じ認証グループに乗っていること、DB 読み取り共通ロジック（Routes.swift）を
+// 経由して REST と同じ意味論（404/503）でツール結果が返ることを、インメモリ Application で検証する。
+
+import Fluent
+import FluentSQLiteDriver
+import Foundation
+import Testing
+import Vapor
+
+@testable import BlueTickerCore
+@testable import BltServerCore
+
+private func makeMcpContext() -> BltServerContext {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("blt-mcp-route-tests-\(UUID().uuidString)", isDirectory: true)
+    return BltServerContext(apiKey: "test-key", cacheDir: dir)
+}
+
+private func withMcpApp(
+    databases: Bool = false,
+    bltAuthToken: String? = nil,
+    _ body: (Application) async throws -> Void
+) async throws {
+    let app = try await Application.make(.testing)
+    do {
+        if databases {
+            app.databases.use(.sqlite(.memory), as: .sqlite)
+            app.migrations.add(CreateEdinetDocument())
+            app.migrations.add(CreateCompanyFinancials())
+            app.migrations.add(CreateCompanyHalfFinancials())
+            app.migrations.add(AddHighWaterToCompanyFinancials())
+            app.migrations.add(CreateCompanyFilingSections())
+            try await app.autoMigrate()
+        }
+        try await registerRoutes(app, context: makeMcpContext(), bltAuthToken: bltAuthToken)
+        try await body(app)
+    } catch {
+        try? await app.asyncShutdown()
+        throw error
+    }
+    try await app.asyncShutdown()
+}
+
+/// `/mcp` へ JSON-RPC ボディを POST し、ステータスとデコード済み JSON を返す。
+private func postMcp(
+    _ app: Application, _ bodyObject: [String: Any], bearer: String? = nil
+) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
+    var headers = HTTPHeaders()
+    headers.contentType = .json
+    headers.add(name: "Accept", value: "application/json, text/event-stream")
+    if let bearer { headers.bearerAuthorization = BearerAuthorization(token: bearer) }
+    let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
+    let request = Request(
+        application: app, method: .POST, url: URI(string: "/mcp"), headers: headers,
+        collectedBody: ByteBuffer(data: bodyData), on: app.eventLoopGroup.next())
+    let response = try await app.responder.respond(to: request).get()
+    var json: [String: Any]?
+    if let string = response.body.string, let data = string.data(using: .utf8) {
+        json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+    return (response.status, json)
+}
+
+private func toolCallBody(name: String, arguments: [String: Any]) -> [String: Any] {
+    [
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": ["name": name, "arguments": arguments],
+    ]
+}
+
+@Suite struct MCPRouteTests {
+
+    // MARK: - 認証（/v1 と同じ認証グループ配下）
+
+    @Test func mcpRejectsMissingTokenWith401Envelope() async throws {
+        try await withMcpApp(bltAuthToken: "secret-token") { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "search_companies", arguments: ["query": "toyota"]))
+            #expect(status == .unauthorized)
+            #expect(json?["error"] as? String == "認証が必要です")
+        }
+    }
+
+    @Test func mcpAcceptsCorrectToken() async throws {
+        try await withMcpApp(bltAuthToken: "secret-token") { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_financial_summary", arguments: ["code": "7203"]),
+                bearer: "secret-token")
+            // 認証通過後、DB 非接続の financials は isError:true の JSON-RPC result になる
+            // （401 でないことが認証通過の証明。REST の 503 相当を JSON-RPC の isError で表現する）。
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+        }
+    }
+
+    // MARK: - DB 読み取り共通ロジック（REST と同じ意味論）
+
+    @Test func getFinancialSummaryReturnsErrorResultWhenNotStored() async throws {
+        try await withMcpApp(databases: true) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_financial_summary", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("未集計") == true)
+        }
+    }
+
+    @Test func toolsListIsReachableWithoutDatabase() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app, ["jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": [String: Any]()])
+            #expect(status == .ok)
+            let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
+            #expect((tools ?? []).count == 6)
+        }
+    }
+}
