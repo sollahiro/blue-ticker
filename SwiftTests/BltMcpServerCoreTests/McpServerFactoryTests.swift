@@ -22,15 +22,18 @@ private func makeTransport(
 }
 
 private func send(
-    _ transport: StatelessHTTPServerTransport, _ bodyObject: [String: Any]
+    _ transport: StatelessHTTPServerTransport, _ bodyObject: [String: Any],
+    extraHeaders: [String: String] = [:]
 ) async throws -> (status: Int, json: [String: Any]?) {
     let data = try JSONSerialization.data(withJSONObject: bodyObject)
+    var headers = [
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    ]
+    headers.merge(extraHeaders) { _, new in new }
     let request = HTTPRequest(
         method: "POST",
-        headers: [
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        ],
+        headers: headers,
         body: data,
         path: "/mcp"
     )
@@ -97,5 +100,19 @@ private func send(
 
         #expect(status == 200 || (400...499).contains(status))
         #expect(json?["error"] != nil)
+    }
+
+    /// Cloudflare Tunnel は元の Host ヘッダー（例: api.sollahiro.com）をそのまま origin へ転送する。
+    /// デフォルトの検証パイプラインは OriginValidator.localhost() を含み、localhost 以外の
+    /// Host を 421 で拒否するため、本番相当の Host ヘッダーでも通ることを回帰として固定する。
+    @Test func toolsListSucceedsWithNonLocalhostHostHeader() async throws {
+        let transport = try await makeTransport()
+        let (status, json) = try await send(
+            transport, ["jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": [String: Any]()],
+            extraHeaders: ["Host": "api.sollahiro.com"])
+
+        #expect(status == 200)
+        let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
+        #expect((tools ?? []).count == 6)
     }
 }
