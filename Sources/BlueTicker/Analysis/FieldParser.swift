@@ -281,23 +281,3 @@ func deriveSubtraction(_ fieldSet: FieldSet, minuendTags: [String], subtrahendTa
     let tag: String? = (m.tag != nil && s.tag != nil) ? "\(m.tag!)-\(s.tag!)" : nil
     return ResolvedItem(tag: tag, current: current, prior: prior)
 }
-
-// MARK: - FieldSet から XbrlTagElements を生成（既存コードとの橋渡し）
-
-/// XBRL ディレクトリから Duration FieldSet を構築する。
-func parseDurationFieldSet(in dir: URL, allowedTags: Set<String>? = nil) -> FieldSet {
-    let tagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
-    let filtered: XbrlTagElements = allowedTags.map { allowed in
-        tagElements.filter { allowed.contains($0.key) }
-    } ?? tagElements
-    return fieldSetFromDuration(filtered)
-}
-
-/// XBRL ディレクトリから Instant FieldSet を構築する。
-func parseInstantFieldSet(in dir: URL, allowedTags: Set<String>? = nil) -> FieldSet {
-    let tagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
-    let filtered: XbrlTagElements = allowedTags.map { allowed in
-        tagElements.filter { allowed.contains($0.key) }
-    } ?? tagElements
-    return fieldSetFromInstant(filtered)
-}

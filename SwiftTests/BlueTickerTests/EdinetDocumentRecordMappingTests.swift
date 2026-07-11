@@ -36,9 +36,9 @@ import Testing
         #expect(mapEdinetDocumentRecords(docs).count == 1)
     }
 
-    @Test func normalizesPeriodDateAndDropsEmptyStrings() {
+    @Test func normalizesPeriodDateAndDropsEmptyStrings() throws {
         let docs = [doc("S1", docType: "120", sec: "  ", periodEnd: "20250331")]
-        let record = try! #require(mapEdinetDocumentRecords(docs).first)
+        let record = try #require(mapEdinetDocumentRecords(docs).first)
         #expect(record.periodEnd == "2025-03-31")  // YYYYMMDD → YYYY-MM-DD
         #expect(record.secCode == nil)  // 空白のみ → nil
     }

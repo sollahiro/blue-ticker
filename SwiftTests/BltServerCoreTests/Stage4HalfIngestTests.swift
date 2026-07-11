@@ -45,7 +45,7 @@ private func seedDocument(
 }
 
 /// 公開契約 HalfFinancialsResponse を JSON 経由で構築する。fyEnds（昇順）各年に H1/H2 を持たせる。
-private func makeHalfResponse(code: String, fyEnds: [String]) -> HalfFinancialsResponse {
+private func makeHalfResponse(code: String, fyEnds: [String]) throws -> HalfFinancialsResponse {
     var periods: [[String: Any]] = []
     for fy in fyEnds {
         for half in ["H1", "H2"] {
@@ -56,8 +56,8 @@ private func makeHalfResponse(code: String, fyEnds: [String]) -> HalfFinancialsR
         "schema_version": 1, "code": code, "name": "テスト",
         "currency": "JPY", "unit": "百万円", "periods": periods,
     ]
-    let data = try! JSONSerialization.data(withJSONObject: dict)
-    return try! JSONDecoder().decode(HalfFinancialsResponse.self, from: data)
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return try JSONDecoder().decode(HalfFinancialsResponse.self, from: data)
 }
 
 private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
@@ -69,7 +69,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 2)
@@ -84,7 +84,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S1", secCode: "72030", db: app.db)
             let pre = CompanyHalfFinancials()
             pre.id = "7203"
-            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             pre.cacheVersion = companyHalfFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
@@ -92,7 +92,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for an up-to-date company")
-                return makeHalfResponse(code: "x", fyEnds: years3)
+                return try? makeHalfResponse(code: "x", fyEnds: years3)
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
@@ -109,7 +109,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             let summary = try await runStage4HalfIngest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)
@@ -127,7 +127,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 submitDateTime: "2025-06-20 09:00", db: app.db)
             let pre = CompanyHalfFinancials()
             pre.id = "7203"
-            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             pre.cacheVersion = companyHalfFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-20 09:00"
@@ -135,7 +135,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
-                return makeHalfResponse(code: "x", fyEnds: years3)
+                return try? makeHalfResponse(code: "x", fyEnds: years3)
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
@@ -151,7 +151,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 submitDateTime: "2025-06-01 09:00", db: app.db)
             let pre = CompanyHalfFinancials()
             pre.id = "7203"
-            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             pre.cacheVersion = companyHalfFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-01 09:00"
@@ -162,7 +162,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 submitDateTime: "2025-08-01 09:00", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)
@@ -179,7 +179,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 submitDateTime: "2025-06-20 09:00", db: app.db)
             let pre = CompanyHalfFinancials()
             pre.id = "7203"
-            pre.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            pre.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             pre.cacheVersion = companyHalfFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
@@ -200,13 +200,13 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S1", secCode: "72030", db: app.db)
             let stale = CompanyHalfFinancials()
             stale.id = "7203"
-            stale.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            stale.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             stale.cacheVersion = "stale"
             stale.requestedYears = 5
             try await stale.create(on: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
             #expect(summary.stored == 1)
             let row = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
@@ -231,7 +231,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 2) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -245,13 +245,13 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
             let stale = CompanyHalfFinancials()
             stale.id = "7203"
-            stale.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            stale.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             stale.cacheVersion = "stale"
             stale.requestedYears = 5
             try await stale.create(on: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 1) { code in
-                makeHalfResponse(code: code, fyEnds: years3)
+                try? makeHalfResponse(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)
@@ -268,7 +268,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = companyHalfFinancialsCacheVersion
             row.requestedYears = 5
             try await row.create(on: app.db)
@@ -285,7 +285,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = "stale"
             row.requestedYears = 5
             try await row.create(on: app.db)
@@ -300,7 +300,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = "half-v0"
             row.requestedYears = 5
             try await row.create(on: app.db)
@@ -315,7 +315,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = "half-v1"
             row.requestedYears = 5
             try await row.create(on: app.db)
@@ -330,7 +330,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = companyHalfFinancialsCacheVersion
             row.requestedYears = 2
             try await row.create(on: app.db)
@@ -354,7 +354,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
-            row.response = makeHalfResponse(code: "7203", fyEnds: years3)
+            row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
             row.cacheVersion = companyHalfFinancialsCacheVersion
             row.requestedYears = Api.halfMaxYears
             try await row.create(on: app.db)

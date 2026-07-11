@@ -33,7 +33,7 @@ import Foundation
 
     // MARK: - J-GAAP
 
-    @Test func testBasicJgaap() {
+    @Test func testJgaapComputesEffectiveTaxRateFromPretaxAndTax() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:IncomeBeforeIncomeTaxes contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:IncomeBeforeIncomeTaxes>
@@ -85,7 +85,7 @@ import Foundation
 
     // MARK: - IFRS
 
-    @Test func testBasicIfrs() {
+    @Test func testIfrsComputesEffectiveTaxRateFromPretaxAndTax() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">200000000000</jpifrs_cor:BorrowingsCLIFRS>

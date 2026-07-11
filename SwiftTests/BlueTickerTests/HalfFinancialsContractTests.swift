@@ -34,18 +34,18 @@ import Testing
         #expect(restored[0].yearEntry.calculatedData.docID == "S100H1")
     }
 
-    @Test func jsonObjectCarriesSchemaVersionAndPeriods() {
+    @Test func jsonObjectCarriesSchemaVersionAndPeriods() throws {
         let resp = HalfFinancialsResponse(
             code: "7203", name: "トヨタ",
             periods: [period("2024-03-31", "H1", sales: 100, roe: 5)])
         let json = resp.jsonObject()
         #expect(json["schema_version"] as? Int == Api.halfFinancialsSchemaVersion)
         #expect(json["code"] as? String == "7203")
-        let periods = try! #require(json["periods"] as? [[String: Any]])
+        let periods = try #require(json["periods"] as? [[String: Any]])
         #expect(periods.count == 1)
         #expect(periods[0]["label"] as? String == "24H1")
         // year は flatten 形（全キー存在・欠落は null）。
-        let year = try! #require(periods[0]["year"] as? [String: Any])
+        let year = try #require(periods[0]["year"] as? [String: Any])
         #expect(year["sales"] as? Double == 100)
         #expect(year["net_profit"] is NSNull)
     }

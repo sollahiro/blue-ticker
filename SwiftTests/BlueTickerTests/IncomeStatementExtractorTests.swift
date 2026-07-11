@@ -8,7 +8,7 @@ import Foundation
 
 @Suite struct IncomeStatementExtractorTests {
 
-    @Test func testJgaapBasic() {
+    @Test func testJgaapExtractsSalesOperatingProfitAndNetProfit() {
         let fs = makeFieldSet(
             ("NetSales", 1_000_000.0, 900_000.0),
             ("OperatingIncomeLoss", 100_000.0, 80_000.0),

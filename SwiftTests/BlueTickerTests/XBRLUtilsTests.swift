@@ -99,7 +99,7 @@ import Foundation
         }
     }
 
-    @Test func testLocalName() {
+    @Test func testLocalNameStripsNamespacePrefixOrURI() {
         // ElementTree format
         #expect(XBRLUtils.localName(of: "{http://xbrl.org}NetSales") == "NetSales")
         // SAX prefix format

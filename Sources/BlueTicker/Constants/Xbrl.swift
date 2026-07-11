@@ -35,45 +35,6 @@ enum Xbrl {
         "Prior1InterimInstant",
     ]
 
-    static let usgaapMarkerTags: [String] = [
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
-        "RevenuesUSGAAPSummaryOfBusinessResults",
-        "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults",
-        "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults",
-    ]
-
-    static let ifrsBalanceSheetMarkerTags: [String] = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "InterestBearingLiabilitiesNCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "BondsAndBorrowingsCLIFRS",
-        "BondsAndBorrowingsNCLIFRS",
-        "BondsBorrowingsAndLeaseLiabilitiesCLIFRS",
-        "BondsBorrowingsAndLeaseLiabilitiesNCLIFRS",
-    ]
-
-    static let ifrsPLMarkerTags: [String] = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "NetSalesIFRS",
-        "RevenueIFRS",
-        "GrossProfitIFRS",
-        "SellingGeneralAndAdministrativeExpensesIFRS",
-        "OperatingProfitLossIFRS",
-        "OperatingRevenuesIFRSKeyFinancialData",
-        "ProfitLossAttributableToOwnersOfParentIFRS",
-        "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
-        "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults",
-        "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults",
-    ]
-
     // MARK: - 売上高タグ
 
     static let operatingRevenueTags: [String] = [
@@ -393,18 +354,12 @@ enum Xbrl {
         "FinanceCostsIFRS",
     ]
 
-    static let ifrsInterestExpenseMarkerTags: [String] =
-        ifrsPLMarkerTags + interestExpenseIFRSTags
-
     // MARK: - 税金タグ
 
     static let pretaxIncomeJGAAPTags: [String] = ["IncomeBeforeIncomeTaxes"]
     static let pretaxIncomeIFRSTags: [String] = ["ProfitLossBeforeTaxIFRS"]
     static let incomeTaxJGAAPTags: [String] = ["IncomeTaxes"]
     static let incomeTaxIFRSTags: [String] = ["IncomeTaxExpenseIFRS"]
-
-    static let ifrsTaxMarkerTags: [String] =
-        ifrsPLMarkerTags + pretaxIncomeIFRSTags + incomeTaxIFRSTags
 
     // MARK: - 有形固定資産タグ
 

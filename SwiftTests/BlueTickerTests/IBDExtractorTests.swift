@@ -33,7 +33,7 @@ import Foundation
 
     // MARK: - 直接タグ
 
-    @Test func testDirectTag() {
+    @Test func testDirectTagResolvesCurrentAndPriorTotals() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:InterestBearingDebt contextRef="CurrentYearInstant"
                 unitRef="JPY">500000000000</jppfs_cor:InterestBearingDebt>
@@ -51,7 +51,7 @@ import Foundation
 
     // MARK: - J-GAAP コンポーネント積み上げ
 
-    @Test func testAllComponents() {
+    @Test func testJgaapComponentsSumToTotalIBD() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
                 unitRef="JPY">10000000000</jppfs_cor:ShortTermLoansPayable>
@@ -84,7 +84,7 @@ import Foundation
 
     // MARK: - IFRS コンポーネント
 
-    @Test func testIfrsTags() {
+    @Test func testIfrsComponentsSumToTotalIBD() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:BorrowingsCLIFRS contextRef="CurrentYearInstant"
                 unitRef="JPY">5923000000</jppfs_cor:BorrowingsCLIFRS>
@@ -167,7 +167,7 @@ import Foundation
 
     // MARK: - not_found
 
-    @Test func testNoDebtTags() {
+    @Test func testReturnsNotFoundWhenNoDebtTagsPresent() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jpcrp_cor:BusinessRisksTextBlock contextRef="CurrentYearInstant">
                 テキストのみ

@@ -1,10 +1,5 @@
 import Foundation
 
-enum OutputFormat: String, CaseIterable {
-    case table
-    case json
-}
-
 // MARK: - JSON 出力
 
 func printJSON(_ value: some Encodable, pretty: Bool = true) {

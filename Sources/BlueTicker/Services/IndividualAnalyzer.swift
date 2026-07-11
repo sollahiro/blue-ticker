@@ -231,10 +231,10 @@ struct IndividualAnalyzer {
 
         // NOPAT
         if let op_ = raw.op, let taxRate = tax.effectiveTaxRate {
-            let clampedTax = min(max(taxRate, 0.2), 0.45)
+            let clampedTax = min(max(taxRate, Financial.nopatMinNormalTaxRate), Financial.nopatMaxNormalTaxRate)
             calc.nopat = op_ * (1.0 - clampedTax)
         } else if let op_ = raw.op {
-            calc.nopat = op_ * (1.0 - 0.3)
+            calc.nopat = op_ * (1.0 - Financial.nopatFallbackTaxRate)
         }
 
         // ネットキャッシュ・ネットD/E

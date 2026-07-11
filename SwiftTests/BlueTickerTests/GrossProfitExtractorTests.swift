@@ -348,7 +348,7 @@ import Foundation
         }
     }
 
-    @Test func testPriorOnly() {
+    @Test func testDirectMethodReturnsNilCurrentWhenOnlyPriorYearPresent() {
         // 前期値のみ存在する場合も direct で返す
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="Prior1YearDuration"

@@ -54,35 +54,6 @@ import Foundation
         #expect(await cm.getJSON("individual_analysis_DDD") == nil)
     }
 
-    // MARK: - individualCacheIsReusable（年数キャップ回帰）
-
-    @Test func testCacheReusableWhenRequestedYearsCovered() {
-        let cached: [String: Any] = ["_cache_version": "26.6.5", "_requested_years": 8]
-        #expect(individualCacheIsReusable(cached, cacheVersion: "26.6.5", requestedYears: 6))
-        #expect(individualCacheIsReusable(cached, cacheVersion: "26.6.5", requestedYears: 8))
-    }
-
-    @Test func testCacheNotReusableWhenRequestedYearsExceedsBuiltYears() {
-        // 6 年で構築されたキャッシュは 8 年要求を満たさない（trim では拡張不能）
-        let cached: [String: Any] = ["_cache_version": "26.6.5", "_requested_years": 6]
-        #expect(!individualCacheIsReusable(cached, cacheVersion: "26.6.5", requestedYears: 8))
-    }
-
-    @Test func testCacheNotReusableWhenVersionMismatch() {
-        let cached: [String: Any] = ["_cache_version": "26.6.0", "_requested_years": 8]
-        #expect(!individualCacheIsReusable(cached, cacheVersion: "26.6.5", requestedYears: 6))
-    }
-
-    @Test func testCacheNotReusableWhenRequestedYearsFieldMissing() {
-        // _requested_years を持たない旧キャッシュは再取得対象
-        let cached: [String: Any] = ["_cache_version": "26.6.5"]
-        #expect(!individualCacheIsReusable(cached, cacheVersion: "26.6.5", requestedYears: 6))
-    }
-
-    @Test func testCacheNotReusableWhenNil() {
-        #expect(!individualCacheIsReusable(nil, cacheVersion: "26.6.5", requestedYears: 6))
-    }
-
     @Test func testConcurrentDistinctKeysAllPersist() async {
         // 異なるキー（銘柄）を並行で書き込んでも、すべて保存される（lost update が起きない）
         let cm = CacheManager(cacheDir: tmpDir)

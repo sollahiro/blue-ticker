@@ -47,15 +47,15 @@ private func seedDocument(
 
 /// 公開契約 FinancialsResponse を JSON 経由で構築する（内部 MetricsResult を介さない）。
 /// years 件の年度エントリ（fy_end のみ）を持たせる。
-private func makeResponse(code: String, years: Int) -> FinancialsResponse {
+private func makeResponse(code: String, years: Int) throws -> FinancialsResponse {
     let yrs = (0..<years).map { ["fy_end": "20\(20 + $0)-03-31"] }
     let dict: [String: Any] = [
         "schema_version": 2, "code": code, "name": "テスト",
         "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
         "years": yrs,
     ]
-    let data = try! JSONSerialization.data(withJSONObject: dict)
-    return try! JSONDecoder().decode(FinancialsResponse.self, from: data)
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return try JSONDecoder().decode(FinancialsResponse.self, from: data)
 }
 
 /// 前年依存フィールド（増減・ROIC/ROE 差分）を全年に入れた応答を新しい順で構築する。
@@ -65,7 +65,7 @@ private let priorDependentKeys = [
     "sga_change_impact", "roic_delta", "roic_margin_effect", "roic_turnover_effect",
     "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
 ]
-private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResponse {
+private func makeResponseWithChanges(code: String, years: Int) throws -> FinancialsResponse {
     let yrs = (0..<years).map { i -> [String: Any] in
         var y: [String: Any] = ["fy_end": "20\(25 - i)-03-31", "sales": 1000.0 + Double(i)]
         for key in priorDependentKeys { y[key] = 1.0 }
@@ -75,8 +75,8 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         "schema_version": 2, "code": code, "name": "テスト",
         "sector": "", "market": "", "currency": "JPY", "unit": "百万円", "years": yrs,
     ]
-    let data = try! JSONSerialization.data(withJSONObject: dict)
-    return try! JSONDecoder().decode(FinancialsResponse.self, from: data)
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return try JSONDecoder().decode(FinancialsResponse.self, from: data)
 }
 
 @Suite struct Stage4IngestTests {
@@ -86,7 +86,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -109,7 +109,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             let summary = try await runStage4Ingest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -125,7 +125,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -139,7 +139,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S2", secCode: "72030", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -155,7 +155,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S3", secCode: "12345", db: app.db)  // 末尾 0 でない
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 0)
@@ -168,7 +168,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S1", secCode: "72030", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 6)
+            pre.response = try makeResponse(code: "7203", years: 6)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 6
             pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
@@ -176,7 +176,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for a fresh company")
-                return makeResponse(code: "x", years: 5)
+                return try? makeResponse(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -194,7 +194,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
                 submitDateTime: "2025-06-20 09:00", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 5)
+            pre.response = try makeResponse(code: "7203", years: 5)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-20 09:00"
@@ -202,7 +202,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
-                return makeResponse(code: "x", years: 5)
+                return try? makeResponse(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -217,7 +217,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
                 submitDateTime: "2025-06-20 09:00", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 5)
+            pre.response = try makeResponse(code: "7203", years: 5)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-20 09:00"  // 旧提出時点の high-water
@@ -229,7 +229,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
                 submitDateTime: "2026-01-15 09:00", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -246,7 +246,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
                 submitDateTime: "2025-06-01 09:00", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 5)
+            pre.response = try makeResponse(code: "7203", years: 5)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-01 09:00"
@@ -260,7 +260,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when only a non-consumed doc type arrives")
-                return makeResponse(code: "x", years: 5)
+                return try? makeResponse(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -275,7 +275,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
                 submitDateTime: "2025-06-20 09:00", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 5)
+            pre.response = try makeResponse(code: "7203", years: 5)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
@@ -296,13 +296,13 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S1", secCode: "72030", db: app.db)
             let pre = CompanyFinancials()
             pre.id = "7203"
-            pre.response = makeResponse(code: "7203", years: 3)
+            pre.response = try makeResponse(code: "7203", years: 3)
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 3
             try await pre.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -317,13 +317,13 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S1", secCode: "72030", db: app.db)
             let stale = CompanyFinancials()
             stale.id = "7203"
-            stale.response = makeResponse(code: "7203", years: 6)
+            stale.response = try makeResponse(code: "7203", years: 6)
             stale.cacheVersion = "0.0.0"
             stale.requestedYears = 6
             try await stale.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -354,7 +354,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 2) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -370,13 +370,13 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
 
             let stale = CompanyFinancials()
             stale.id = "7203"
-            stale.response = makeResponse(code: "7203", years: 6)
+            stale.response = try makeResponse(code: "7203", years: 6)
             stale.cacheVersion = "0.0.0"
             stale.requestedYears = 6
             try await stale.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
-                makeResponse(code: code, years: 5)
+                try? makeResponse(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -395,7 +395,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
             for (code, version) in [("7203", "fin-v1"), ("6758", "fin-v2"), ("9984", "fin-v4")] {
                 let row = CompanyFinancials()
                 row.id = code
-                row.response = makeResponse(code: code, years: 1)
+                row.response = try makeResponse(code: code, years: 1)
                 row.cacheVersion = version
                 row.requestedYears = 1
                 try await row.create(on: app.db)
@@ -413,7 +413,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -430,7 +430,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = "0.0.0"
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -445,7 +445,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = "fin-v1"
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -460,7 +460,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = "fin-v2"
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -476,7 +476,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = "fin-v3"
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -491,7 +491,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 3)
+            row.response = try makeResponse(code: "7203", years: 3)
             row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 3
             try await row.create(on: app.db)
@@ -513,7 +513,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponse(code: "7203", years: 6)
+            row.response = try makeResponse(code: "7203", years: 6)
             row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -528,7 +528,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponseWithChanges(code: "7203", years: 6)
+            row.response = try makeResponseWithChanges(code: "7203", years: 6)
             row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 6
             try await row.create(on: app.db)
@@ -554,7 +554,7 @@ private func makeResponseWithChanges(code: String, years: Int) -> FinancialsResp
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
-            row.response = makeResponseWithChanges(code: "7203", years: 3)
+            row.response = try makeResponseWithChanges(code: "7203", years: 3)
             row.cacheVersion = companyFinancialsCacheVersion
             row.requestedYears = 3
             try await row.create(on: app.db)

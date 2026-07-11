@@ -80,9 +80,3 @@ public func dayBeforeISO(_ dateStr: String) -> String? {
     else { return nil }
     return formatDateString(prev)
 }
-
-/// 年度を "2023年度" 形式で返す。
-func extractFiscalYearFromFyEnd(_ fyEnd: String?) -> String {
-    guard let fy = calculateFiscalYear(fyEnd: fyEnd) else { return "" }
-    return "\(fy)年度"
-}
