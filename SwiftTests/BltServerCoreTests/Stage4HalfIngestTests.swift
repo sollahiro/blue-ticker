@@ -60,6 +60,15 @@ private func makeHalfResponse(code: String, fyEnds: [String]) throws -> HalfFina
     return try JSONDecoder().decode(HalfFinancialsResponse.self, from: data)
 }
 
+/// フェイク計算器（成功ケース）用: makeHalfResponse の throws を吸収し `.success` へ包む。
+private func makeHalfSuccess(code: String, fyEnds: [String]) -> HalfFinancialsComputeResult {
+    guard let response = try? makeHalfResponse(code: code, fyEnds: fyEnds) else {
+        Issue.record("makeHalfResponse encode failed unexpectedly")
+        return .failed
+    }
+    return .success(response)
+}
+
 private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
 @Suite struct Stage4HalfIngestTests {
@@ -69,7 +78,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 2)
@@ -92,7 +101,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for an up-to-date company")
-                return try? makeHalfResponse(code: "x", fyEnds: years3)
+                return makeHalfSuccess(code: "x", fyEnds: years3)
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
@@ -109,7 +118,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             let summary = try await runStage4HalfIngest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)
@@ -135,7 +144,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
-                return try? makeHalfResponse(code: "x", fyEnds: years3)
+                return makeHalfSuccess(code: "x", fyEnds: years3)
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
@@ -162,7 +171,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 submitDateTime: "2025-08-01 09:00", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)
@@ -185,7 +194,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in nil }
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -206,7 +215,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await stale.create(on: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
             #expect(summary.stored == 1)
             let row = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
@@ -217,8 +226,24 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
     @Test func ingestCountsComputeFailuresWithoutStoring() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in nil }
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
             #expect(summary.failed == 1)
+            #expect(summary.notApplicable == 0)
+            #expect(summary.stored == 0)
+            #expect(try await CompanyHalfFinancials.query(on: app.db).count() == 0)
+        }
+    }
+
+    /// 対象外（例: 半期報告書未提出）は failed に混入させず notApplicable として数える（issue #73 フォローアップ）。
+    @Test func ingestCountsNotApplicableSeparatelyFromFailed() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+                .notApplicable
+            }
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            #expect(summary.failed == 0)
             #expect(summary.stored == 0)
             #expect(try await CompanyHalfFinancials.query(on: app.db).count() == 0)
         }
@@ -231,7 +256,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 2) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -251,7 +276,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await stale.create(on: app.db)
 
             let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 1) { code in
-                try? makeHalfResponse(code: code, fyEnds: years3)
+                makeHalfSuccess(code: code, fyEnds: years3)
             }
 
             #expect(summary.attempted == 1)

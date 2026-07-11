@@ -33,7 +33,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
         if half {
             let halfAnalyzer = HalfYearAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-            guard let periods = await halfAnalyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache) else {
+            guard let periods = await halfAnalyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).periodsOrNil else {
                 printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
                 throw ExitCode.failure
             }
