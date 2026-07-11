@@ -113,7 +113,7 @@ flowchart LR
 
 ツールは REST エンドポイントと 1:1 対応する（`search_companies` / `search_by_sector` / `get_filings` / `get_financial_summary` / `get_half_financial_summary` / `get_filing_content`）。財務系ツールは REST 同様ライブ計算へフォールバックしない。
 
-現状（Phase 1）は既存 `api.<domain>` の配下で疎通する。Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアント向け境界（新規サブドメイン・Cloudflare `Access for SaaS` 等）は Phase 2 として別途計画する（`blt-server-roadmap.md`「次」参照）。
+Phase 1 は既存 `api.<domain>` の配下（`/v1` と同一の SSO ポリシー）で疎通する。Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアント向けには、**Phase 2** として `api.<domain>/mcp`（パス限定）に別の Cloudflare Access アプリケーションを追加し、そこにだけ **Managed OAuth for Access** を有効化する（Cloudflare が同一ホスト名内でもパス単位にアプリを分けられ、より詳細なパスが優先されるため、新規サブドメインは不要）。discovery・`/authorize`・`/token`・DCR は Cloudflare エッジ側で完結し、origin（Vapor）側のコード変更は不要 — OAuth 完了後に origin が受け取るリクエストは Phase 1 と同じエッジ信頼のまま。ダッシュボード手順は `deploy.md`「MCP（Managed OAuth）」、方針の記録は `blt-server-roadmap.md`「次」を参照。
 
 ## データパイプライン（Stage 1〜4）
 
