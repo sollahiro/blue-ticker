@@ -14,7 +14,7 @@ import Foundation
 
     // MARK: - 直接法
 
-    @Test func testDirectJgaap() {
+    @Test func testJgaapDirectTagReturnsCurrentAndPriorOperatingProfit() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">500000000000</jppfs_cor:OperatingIncomeLoss>
@@ -31,7 +31,7 @@ import Foundation
         }
     }
 
-    @Test func testDirectIfrs() {
+    @Test func testIfrsDirectTagReturnsCurrentAndPriorOperatingProfit() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>

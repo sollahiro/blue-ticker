@@ -57,7 +57,7 @@ import Foundation
 
     // MARK: - J-GAAP（大日本印刷相当）
 
-    @Test func testDnpValues() {
+    @Test func testJgaapDirectTotalTagUsedWhenPresent() {
         let result = extract("""
             <jppfs_cor:PropertyPlantAndEquipment contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">405795000000</jppfs_cor:PropertyPlantAndEquipment>
             <jppfs_cor:BuildingsAndStructuresNet contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">151499000000</jppfs_cor:BuildingsAndStructuresNet>
@@ -72,7 +72,7 @@ import Foundation
 
     // MARK: - 取得原価 − 累計減価償却フォールバック（トヨタ相当）
 
-    @Test func testToyotaValues() {
+    @Test func testIfrsDirectBookValueTagPreferredOverAcquisitionCostFallback() {
         // 直接帳簿価額タグが存在する場合はそちらを使う
         let result = extract("""
             <jpifrs_cor:PropertyPlantAndEquipmentIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">15333693000000</jpifrs_cor:PropertyPlantAndEquipmentIFRS>
