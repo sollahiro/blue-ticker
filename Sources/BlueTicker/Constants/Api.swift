@@ -61,7 +61,6 @@ public enum Api {
     public static let dbMaxConnectionsPerEventLoop = 1
     public static let dbConnectionPoolTimeoutSeconds: Int64 = 10
 
-    static let docDiscoveryLimit = 10
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
     /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
@@ -139,15 +138,4 @@ public enum Api {
     /// デプロイ不要で手動アップロードを反映するための鮮度チェック周期。
     /// BltServerCore（起動中サーバーのポーリングループ）から参照するため public。
     public static let masterDataPollIntervalSeconds: UInt64 = 1800
-
-    // SSL 証明書候補（macOS / Linux）
-    static let sslCertFileEnv = "SSL_CERT_FILE"
-    static let sslCaBundleCandidates: [String] = [
-        "/opt/homebrew/etc/openssl@3/cert.pem",
-        "/opt/homebrew/etc/ca-certificates/cert.pem",
-        "/usr/local/etc/openssl@3/cert.pem",
-        "/usr/local/etc/ca-certificates/cert.pem",
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/certs/ca-certificates.crt",
-    ]
 }

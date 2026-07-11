@@ -13,21 +13,6 @@ struct BalanceSheetComponent: Codable {
     var prior: Double?
 }
 
-struct PPEComponent: Codable {
-    var label: String?
-    var value: Double?
-}
-
-struct MetricSource: Codable {
-    var source: String?
-    var method: String?
-    var docID: String?
-    var unit: String?
-    var label: String?
-    var statement: String?
-    var confidence: Double?
-}
-
 // MARK: - RawData
 
 struct RawData: Codable {
