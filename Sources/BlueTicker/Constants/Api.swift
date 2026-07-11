@@ -61,6 +61,13 @@ public enum Api {
     public static let dbMaxConnectionsPerEventLoop = 1
     public static let dbConnectionPoolTimeoutSeconds: Int64 = 10
 
+    /// `withDbRetry` の1試行あたりに許容する DB 操作の応答待ち上限（秒）。
+    /// Neon 接続が TCP 的に無応答のまま死ぬ（FIN/RST が来ない）と、クエリの await が
+    /// 例外を投げずに無期限へ待ち続け、`withDbRetry` のリトライが一切発動しない
+    /// （catch に入れないため）。この上限を超えたら強制的にタイムアウト例外を投げ、
+    /// 通常のリトライ経路に載せる。
+    public static let dbOperationTimeoutSeconds: Double = 30
+
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
     /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
