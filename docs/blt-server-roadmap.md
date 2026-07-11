@@ -16,7 +16,7 @@
 | Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
-| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）に `POST /mcp` を埋め込み。6 ツール（`search_companies` 等）。`api.<domain>/mcp`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。discovery・未認証ブロックとも実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
+| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。6 ツール（`search_companies` 等）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
@@ -31,7 +31,7 @@
 | ユーザー接点 | remote CLI / GUI / MCP | REST API、または `blt-server` に同居する MCP プロトコル経由 |
 
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
-- **方針転換（2026-07-11）**: 「旧 MCP プロトコルサーバーは復活させない」という非ゴールは撤回した。`blt-server`（Vapor）に `POST /mcp` を埋め込む形で MCP プロトコルサーバーを再構築した（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。旧実装（`Sources/BlueTicker/MCPServer/`、Vapor 導入前の生 swift-nio）とは異なり、ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有し、ロジックの重複はない。詳細は `docs/architecture.md`「MCP」節を参照
+- **方針転換（2026-07-11）**: 「旧 MCP プロトコルサーバーは復活させない」という非ゴールは撤回した。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込む形で MCP プロトコルサーバーを再構築した（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。旧実装（`Sources/BlueTicker/MCPServer/`、Vapor 導入前の生 swift-nio）とは異なり、ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有し、ロジックの重複はない。詳細は `docs/architecture.md`「MCP」節を参照
 - オンデマンド ingest は非同期（404 → 将来 202＋キュー。公開スキーマ追加のため実装前に確認）。
 
 ### Stage 4 / Stage 5 read 床（min servable）

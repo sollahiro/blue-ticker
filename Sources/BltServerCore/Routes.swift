@@ -11,10 +11,10 @@ import Vapor
 
 // MARK: - ルート登録
 
-/// `/v1/` 配下の REST API ルートと `/mcp`（MCP プロトコル）を Application へ登録する。
+/// `/v1/` 配下の REST API ルートと MCP プロトコル（ルートパス `POST /`）を Application へ登録する。
 /// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN / BLT_AUTH_TOKEN）から読む。
 /// テストからは引数で注入する（プロセス環境の書き換えは並列実行と競合するため）。
-/// `/v1` と `/mcp` は同じ認証グループ配下に置く（同一の認証ポリシーを適用する）。
+/// `/v1` と MCP は同じ認証グループ配下に置く（同一の認証ポリシーを適用する）。
 func registerRoutes(
     _ app: Application,
     context: BltServerContext,
@@ -61,7 +61,7 @@ func registerRoutes(
         authenticated = app.grouped(BltBearerAuthMiddleware(token: token))
         app.logger.notice("認証モード: 静的 Bearer（BLT_AUTH_TOKEN）。")
     } else {
-        app.logger.warning("認証モード: 無認証。/v1・/mcp は保護されていません（ローカル開発専用）。")
+        app.logger.warning("認証モード: 無認証。/v1・MCP は保護されていません（ローカル開発専用）。")
     }
     let v1 = authenticated.grouped("v1")
 
@@ -138,7 +138,7 @@ func registerRoutes(
             notFoundMessage: "書類本文は未抽出です")
     }
 
-    // POST /mcp（MCP プロトコル。/v1 と同じ認証グループ配下）
+    // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
 }

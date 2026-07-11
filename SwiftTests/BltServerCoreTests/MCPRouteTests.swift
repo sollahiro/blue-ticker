@@ -1,4 +1,4 @@
-// /mcp ルート（MCPRoute.swift）の統合テスト。
+// MCP プロトコルルート（MCPRoute.swift、ルートパス `POST /`）の統合テスト。
 // /v1 と同じ認証グループに乗っていること、DB 読み取り共通ロジック（Routes.swift）を
 // 経由して REST と同じ意味論（404/503）でツール結果が返ることを、インメモリ Application で検証する。
 
@@ -42,7 +42,7 @@ private func withMcpApp(
     try await app.asyncShutdown()
 }
 
-/// `/mcp` へ JSON-RPC ボディを POST し、ステータスとデコード済み JSON を返す。
+/// ルートパス（`/`）へ JSON-RPC ボディを POST し、ステータスとデコード済み JSON を返す。
 private func postMcp(
     _ app: Application, _ bodyObject: [String: Any], bearer: String? = nil
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
@@ -52,7 +52,7 @@ private func postMcp(
     if let bearer { headers.bearerAuthorization = BearerAuthorization(token: bearer) }
     let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
     let request = Request(
-        application: app, method: .POST, url: URI(string: "/mcp"), headers: headers,
+        application: app, method: .POST, url: URI(string: "/"), headers: headers,
         collectedBody: ByteBuffer(data: bodyData), on: app.eventLoopGroup.next())
     let response = try await app.responder.respond(to: request).get()
     var json: [String: Any]?

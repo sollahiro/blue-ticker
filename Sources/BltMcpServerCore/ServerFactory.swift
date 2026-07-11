@@ -4,7 +4,7 @@
 import Foundation
 import MCP
 
-/// `POST /mcp` に埋め込むための、ソケットを持たない HTTP トランスポートを組み立てる。
+/// Vapor の MCP ルート（ルートパス `POST /`）に埋め込むための、ソケットを持たない HTTP トランスポートを組み立てる。
 /// 返す `StatelessHTTPServerTransport` の `handleRequest(_:)` を Vapor ルートから直接呼ぶ。
 public func makeBltMcpTransport(
     version: String,
@@ -27,7 +27,7 @@ public func makeBltMcpTransport(
     // デフォルトの検証パイプラインは OriginValidator.localhost() を含み、Host ヘッダーが
     // localhost/127.0.0.1/[::1] 以外だと 421 を返す（DNS rebinding 対策）。本サーバーは
     // Cloudflare Tunnel 経由で実ホスト名（例: api.<domain>）がそのまま Host ヘッダーに載って届き、
-    // 信頼境界は Cloudflare Access / Bearer 認証（/mcp も /v1 と同じ認証グループ）が担うため、
+    // 信頼境界は Cloudflare Access / Bearer 認証（MCP ルートも /v1 と同じ認証グループ）が担うため、
     // OriginValidator は無効化する（SDK が「cloud deployments」向けと明記する設定）。
     let transport = StatelessHTTPServerTransport(
         validationPipeline: StandardValidationPipeline(validators: [

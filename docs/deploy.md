@@ -141,32 +141,38 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 ## MCP（Managed OAuth・Claude.ai / ChatGPT 向け）
 
-`POST /mcp` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下（`api.<domain>`）にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
+MCP はルートパス（`POST /`）で公開する（`/mcp` は使わない。理由は後述）。`api.<domain>` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
 
-Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホストで `/mcp` を公開する。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。
+Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホスト `mcp.<domain>` を使う。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。**Claude Desktop での接続・OAuth 認可・ツール呼び出しまで実機確認済み**（2026-07-12）。
 
-> **実機で判明した制約**: Managed OAuth は **パス指定のあるドメイン（例: `api.<domain>/mcp`）には設定できない**（`access.api.error.invalid_request: domain can not have a path if oauth is configured`）。Cloudflare Access 自体は同一ホスト名をパス単位で複数アプリに分けられるが、Managed OAuth はホスト名全体（パスなし）のアプリにしか有効化できない。そのため **新規サブドメイン `mcp.<domain>` が必須**（当初検討した「既存ホスト名のパス限定アプリ」案は不採用）。
+> **実機で判明した制約**: Managed OAuth は **パス指定のあるドメイン（例: `api.<domain>/mcp`）には設定できない**（`access.api.error.invalid_request: domain can not have a path if oauth is configured`）。Cloudflare Access 自体は同一ホスト名をパス単位で複数アプリに分けられるが、Managed OAuth はホスト名全体（パスなし）のアプリにしか有効化できない。そのため **新規サブドメイン `mcp.<domain>` が必須**（当初検討した「既存ホスト名のパス限定アプリ」案は不採用）。この制約は Cloudflare 側のドメイン保護（Access アプリのスコープ）の話であり、origin 側の URL パスとは独立の話だが、`mcp.<domain>` は MCP 専用サブドメインなのでパスなしで統一した（`Sources/BltServerCore/MCPRoute.swift` 参照）。
 
 ### 手順（Zero Trust ダッシュボード・実機検証済み）
 
-1. **Cloudflare Tunnel に Public Hostname を追加**（Networks → Tunnels → 該当 Tunnel → Public Hostname → Add）: `mcp.<domain>` → サービス `http://localhost:8080`（`api.<domain>` と同じ origin・同じポート。`/mcp` は Phase 1 で既にこのポートにマウント済みのため Vapor 側の変更は不要）。
+1. **Cloudflare Tunnel に Public Hostname を追加**（Networks → Tunnels → 該当 Tunnel → Public Hostname → Add）: `mcp.<domain>` → サービス `http://localhost:8080`（`api.<domain>` と同じ origin・同じポート。MCP ルートは既にこのポートにマウント済みのため Vapor 側の変更は不要）。
 2. **Access アプリ作成**（Access controls → Applications → Create new application → **Public DNS**）= `mcp.<domain>`（**パスなし**。ここに path を付けると Managed OAuth が有効化できない）。
 3. **Access ポリシー**: 既存 `api.<domain>` アプリとは別のポリシーを作成する（Action = **Allow**。全 Access アプリは deny-by-default のため、Include ルールに一致した相手にのみ許可する。許可範囲は運用者が決める）。
 4. **Managed OAuth 有効化**: 作成したアプリの編集画面 → Advanced settings → **Managed OAuth** をトグル ON。
-5. **疎通確認**（2026-07-12 実施・成功）:
+5. **許可 redirect URI を登録**（DCR で各クライアントが登録するコールバック URL を許可リストに追加しないと `invalid_client_metadata: redirect_uri is not allowed by the account configuration` で失敗する）:
+   - `https://claude.ai/api/mcp/auth_callback` — Claude.ai Web / Desktop / モバイル用
+   - `http://localhost/callback`・`http://127.0.0.1/callback` — Claude Code 用。**ポート番号やワイルドカード（`:*`）は付けない**こと（`http://localhost:*/callback` は無効な URI として拒否される）。Cloudflare は RFC 8252 のループバック例外を実装しており、ポートなしでこの2つを登録するだけで実際のコールバックの任意ポート（`:54321` 等）を自動的に許可する（実機で確認済み）
+   - ChatGPT コネクタが使うコールバック URL は未調査（利用する場合は別途確認する）
+6. **疎通確認**:
 
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" https://mcp.<domain>/.well-known/oauth-protected-resource      # 200
    curl -s -o /dev/null -w "%{http_code}\n" https://mcp.<domain>/.well-known/oauth-authorization-server     # 200
-   curl -s -o /dev/null -w "%{http_code}\n" -X POST https://mcp.<domain>/mcp \
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST https://mcp.<domain>/ \
      -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'   # 401（未認証で正しくブロック）
    ```
 
+   その後、実クライアント（Claude Desktop の「カスタムコネクタを追加」等）で `https://mcp.<domain>` を登録し、ブラウザでの OAuth 認可 → ツール呼び出しまで確認する。
+
 ### 既知の制限
 
-- Cloudflare 側の既知バグ: Managed OAuth の 401 応答が RFC 9728 準拠の `WWW-Authenticate: Bearer resource_metadata="..."` ヘッダーを返さないため、**Claude.ai の Web/モバイル版コネクタのログインが失敗する**既知の相互運用性問題がある（Cloudflare 側の bug）。Claude Code の remote MCP 接続はこのヘッダーに依存しないため影響を受けない。origin 側では対処不可能（401 は Cloudflare エッジが生成し origin に到達しないため）。ChatGPT コネクタでの検証は未実施。
 - Managed OAuth は本稿執筆時点で Cloudflare 側の表記が一貫しない（"open beta" 表記のページとそうでないページが混在）。GA 前提の運用にはしない。
 - 比較検討した「MCP Server Portal」（複数 MCP サーバーを1エンドポイントに集約する機能）は、本サーバーが1つしかなく集約の要求がないため不採用。Managed OAuth を Access アプリに直接足す方が単純（詳細は `blt-server-roadmap.md`）。
+- Claude.ai の Web/モバイル版コネクタでの検証は未実施（Claude Desktop のみ確認済み）。ChatGPT コネクタも未検証。
 
 ## 定期同期
 
