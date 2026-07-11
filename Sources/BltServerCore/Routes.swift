@@ -3,20 +3,24 @@
 // 公開エンドポイント・レスポンス契約は NIO 実装時と不変（docs/blt-server-roadmap.md 参照）。
 
 import BlueTickerCore
+import BltMcpServerCore
+import Fluent
 import Foundation
+import Logging
 import Vapor
 
 // MARK: - ルート登録
 
-/// `/v1/` 配下の REST API ルートを Application へ登録する。
+/// `/v1/` 配下の REST API ルートと `/mcp`（MCP プロトコル）を Application へ登録する。
 /// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN / BLT_AUTH_TOKEN）から読む。
 /// テストからは引数で注入する（プロセス環境の書き換えは並列実行と競合するため）。
+/// `/v1` と `/mcp` は同じ認証グループ配下に置く（同一の認証ポリシーを適用する）。
 func registerRoutes(
     _ app: Application,
     context: BltServerContext,
     cfAccessTeamDomain: String? = Environment.get("CF_ACCESS_TEAM_DOMAIN"),
     bltAuthToken: String? = Environment.get("BLT_AUTH_TOKEN")
-) {
+) async throws {
     // Vapor デフォルトの ErrorMiddleware（`{"error":true,"reason":...}`）を、
     // 公開契約のエラー封筒（`{"error":"...","status":N}`）に置き換える。
     // 未知パスの 404・メソッド不一致の 405 もこの形式で返る。
@@ -49,16 +53,17 @@ func registerRoutes(
     //      ※安全要件: 公開ポートを閉じ Cloudflare Tunnel 経由限定にすること（origin 非公開が前提）。
     //   2. BLT_AUTH_TOKEN 設定 → 静的 Bearer（self-host）。
     //   3. どちらも無し → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
-    var v1 = app.grouped("v1")
+    var authenticated: RoutesBuilder = app
     if cfAccessTeamDomain?.isEmpty == false {
         app.logger.notice(
             "認証モード: Cloudflare Access（エッジ信頼）。Tunnel 経由・公開ポート閉鎖が前提です。")
     } else if let token = bltAuthToken, !token.isEmpty {
-        v1 = v1.grouped(BltBearerAuthMiddleware(token: token))
+        authenticated = app.grouped(BltBearerAuthMiddleware(token: token))
         app.logger.notice("認証モード: 静的 Bearer（BLT_AUTH_TOKEN）。")
     } else {
-        app.logger.warning("認証モード: 無認証。/v1 は保護されていません（ローカル開発専用）。")
+        app.logger.warning("認証モード: 無認証。/v1・/mcp は保護されていません（ローカル開発専用）。")
     }
+    let v1 = authenticated.grouped("v1")
 
     // DB（Neon）接続の有無。財務系（financials / half-financials）は格納済みデータのみを返し、
     // 未接続なら 503・未格納なら 404 とする（ライブ計算へは落とさない＝OOM 回避）。
@@ -84,26 +89,10 @@ func registerRoutes(
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let maxYears = req.query[Int.self, at: "max_years"] ?? Api.filingsMaxYearsDefault
-        if dbAvailable {
-            do {
-                let records = try await withDbRetry(
-                    maxAttempts: Api.dbReadRetryMaxAttempts,
-                    maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-                    logger: req.logger
-                ) {
-                    try await loadStoredFilingRecords(code: code, db: req.db)
-                }
-                if !records.isEmpty {
-                    return makeResponse(
-                        await context.getFilingsFromRecords(
-                            code: code, records: records, maxYears: maxYears))
-                }
-            } catch {
-                req.logger.warning(
-                    "DB からの filing 取得に失敗、ライブ探索へフォールバック: \(error)")
-            }
-        }
-        return makeResponse(await context.getFilings(code: code, maxYears: maxYears))
+        return makeResponse(
+            await serveFilings(
+                code: code, maxYears: maxYears, db: dbAvailable ? req.db : nil,
+                logger: req.logger, context: context))
     }
 
     // GET /v1/companies/{code}/financials?years=5
@@ -114,24 +103,10 @@ func registerRoutes(
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
-        guard dbAvailable else {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-        }
-        do {
-            let stored = try await withDbRetry(
-                maxAttempts: Api.dbReadRetryMaxAttempts,
-                maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-                logger: req.logger
-            ) {
-                try await loadStoredFinancials(code: code, years: years, db: req.db)
-            }
-            if let stored {
-                return jsonResponse(stored, status: .ok)
-            }
-            return errorResponse(.notFound, message: "財務データは未集計です")
-        } catch {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-        }
+        return makeStoredDataResponse(
+            await serveStoredFinancials(
+                code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/half-financials?years=3
@@ -141,24 +116,10 @@ func registerRoutes(
     v1.get("companies", ":code", "half-financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? Api.halfFinancialsYearsDefault
-        guard dbAvailable else {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-        }
-        do {
-            let stored = try await withDbRetry(
-                maxAttempts: Api.dbReadRetryMaxAttempts,
-                maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-                logger: req.logger
-            ) {
-                try await loadStoredHalfFinancials(code: code, years: years, db: req.db)
-            }
-            if let stored {
-                return jsonResponse(stored, status: .ok)
-            }
-            return errorResponse(.notFound, message: "半期財務データは未集計です")
-        } catch {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-        }
+        return makeStoredDataResponse(
+            await serveStoredHalfFinancials(
+                code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "半期財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
@@ -170,26 +131,117 @@ func registerRoutes(
         let docId = req.query[String.self, at: "doc_id"]
         let sections = req.query[String.self, at: "sections"]
             .map { $0.split(separator: ",").map(String.init) }
-        guard dbAvailable else {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        return makeStoredDataResponse(
+            await serveStoredFilingSections(
+                code: code, docId: docId, sections: sections, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            notFoundMessage: "書類本文は未抽出です")
+    }
+
+    // POST /mcp（MCP プロトコル。/v1 と同じ認証グループ配下）
+    try await registerMcpRoute(
+        authenticated, app: app, context: context, dbAvailable: dbAvailable)
+}
+
+// MARK: - 格納済みデータ提供ロジック（REST ルートと MCP ツールディスパッチの共通処理）
+
+/// DB 格納済みデータ提供の結果。Vapor に依存しないため MCP ディスパッチからも直接呼べる。
+enum StoredDataServeResult {
+    /// 成功。JSON 値（`[String: Any]`）。
+    case ok([String: Any])
+    /// 未格納・未抽出（404 相当）。
+    case notFound
+    /// DB 未接続・読み取り失敗（503 相当）。
+    case dbUnavailable
+}
+
+/// `financials` の DB 読み取り共通ロジック。ライブ計算へのフォールバックは行わない（OOM 回避）。
+/// `db` は DB 未接続時 `nil` を渡す（`Database` の取得自体が未接続時に fatalError するため、
+/// 呼び出し側で dbAvailable ガード済みの値のみ渡すこと。呼び出し例は Routes.swift 内を参照）。
+func serveStoredFinancials(
+    code: String, years: Int, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredFinancials(code: code, years: years, db: db)
         }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `half-financials` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+func serveStoredHalfFinancials(
+    code: String, years: Int, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredHalfFinancials(code: code, years: years, db: db)
+        }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `filing-content` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+func serveStoredFilingSections(
+    code: String, docId: String?, sections: [String]?, db: Database?,
+    logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredFilingSections(
+                code: code, docId: docId, sections: sections, db: db)
+        }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `filings` の DB 優先＋ライブ探索フォールバック共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+func serveFilings(
+    code: String, maxYears: Int, db: Database?, logger: Logger,
+    context: BltServerContext
+) async -> BltServerResponse {
+    if let db {
         do {
-            let stored = try await withDbRetry(
+            let records = try await withDbRetry(
                 maxAttempts: Api.dbReadRetryMaxAttempts,
                 maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-                logger: req.logger
+                logger: logger
             ) {
-                try await loadStoredFilingSections(
-                    code: code, docId: docId, sections: sections, db: req.db)
+                try await loadStoredFilingRecords(code: code, db: db)
             }
-            if let stored {
-                return jsonResponse(stored, status: .ok)
+            if !records.isEmpty {
+                return await context.getFilingsFromRecords(
+                    code: code, records: records, maxYears: maxYears)
             }
-            return errorResponse(.notFound, message: "書類本文は未抽出です")
         } catch {
-            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+            logger.warning("DB からの filing 取得に失敗、ライブ探索へフォールバック: \(error)")
         }
     }
+    return await context.getFilings(code: code, maxYears: maxYears)
 }
 
 // MARK: - 認証ミドルウェア
@@ -248,6 +300,21 @@ private func makeResponse(_ response: BltServerResponse) -> Response {
         return errorResponse(.notFound, message: message)
     case .upstreamFailure(let message):
         return errorResponse(.badGateway, message: message)
+    }
+}
+
+/// `StoredDataServeResult` を HTTP レスポンスへ変換する。
+/// ステータス対応: ok→200 / notFound→404 / dbUnavailable→503。
+private func makeStoredDataResponse(
+    _ result: StoredDataServeResult, notFoundMessage: String
+) -> Response {
+    switch result {
+    case .ok(let value):
+        return jsonResponse(value, status: .ok)
+    case .notFound:
+        return errorResponse(.notFound, message: notFoundMessage)
+    case .dbUnavailable:
+        return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
     }
 }
 

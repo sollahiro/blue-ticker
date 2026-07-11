@@ -16,21 +16,22 @@
 | Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
+| MCP | **Phase 1 完了**。`blt-server`（Vapor）に `POST /mcp` を埋め込み。6 ツール（`search_companies` 等）。認証は `/v1` と同一の env 駆動グループを共有し、新規 Cloudflare Tunnel Public Hostname は未追加。Claude.ai / ChatGPT 等の OAuth 2.1 前提クライアント向け境界は Phase 2（未着手・下記 TODO） |
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
 ## 方針: サーバー集約とローカル CLI 廃止
 
-到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP は REST クライアント**」。
+到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP は REST クライアント相当の経路で同じデータへアクセスする**」。
 
 | 区分 | 対象 | 扱い |
 |---|---|---|
 | 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（デバッグ・テスト・フィクスチャ） | 維持 |
 | 切る | **ユーザー向けローカル分析 CLI**（`backend=local`） | **全銘柄が read 床以上で servable になったら廃止**（下記ゲート） |
-| ユーザー接点 | remote CLI / GUI / MCP | すべて REST API 経由 |
+| ユーザー接点 | remote CLI / GUI / MCP | REST API、または `blt-server` に同居する MCP プロトコル経由 |
 
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
-- 旧 MCP プロトコルサーバーは復活させない。将来の MCP は REST クライアントとして実装する。
+- **方針転換（2026-07-11）**: 「旧 MCP プロトコルサーバーは復活させない」という非ゴールは撤回した。`blt-server`（Vapor）に `POST /mcp` を埋め込む形で MCP プロトコルサーバーを再構築した（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。旧実装（`Sources/BlueTicker/MCPServer/`、Vapor 導入前の生 swift-nio）とは異なり、ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有し、ロジックの重複はない。詳細は `docs/architecture.md`「MCP」節を参照
 - オンデマンド ingest は非同期（404 → 将来 202＋キュー。公開スキーマ追加のため実装前に確認）。
 
 ### Stage 4 / Stage 5 read 床（min servable）
@@ -117,7 +118,6 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 **非ゴール**
 
-- 旧 MCP プロトコルサーバーの復活
 - 各サブコマンドへの backend 選択オプション追加
 - servable 一巡前のユーザー向け local 即時削除
 - 床を「現行から N つ前」の機械オフセットにすること（明示定数のみ）
@@ -145,6 +145,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
+- [ ] **MCP Phase 2（OAuth 2.1 境界）** — Claude.ai / ChatGPT 等のリモートクライアント向け認可。Cloudflare `Access for SaaS (OIDC)` か `MCP Server Portal`（admin credential モードの詳細確認要）のどちらを使うか調査し、新規サブドメイン（`mcp.<domain>` 等）に設定する
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 - [ ] **`sector` の REST 化**（任意・優先度低）
 - [ ] remote 時の `ticker cache status` 表示内容（未決）
@@ -155,7 +156,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] ストレージ強化の方式選定（#22 本丸）
 - [ ] REST API の公開 API 化（スキーマ安定化・レート制御）
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
-- [ ] MCP クライアント復活（REST クライアントとして）
+- [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張（retention / 半期 160 / ユニバース）
 - [ ] Stage 6: 事業別・地域別売上の LLM 構造化
 - [ ] 抽出ロジック変更時の差分検証ツール

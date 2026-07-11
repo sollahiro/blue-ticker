@@ -17,11 +17,12 @@ swift test                   # 全テスト（Swift Testing）
 | ターゲット | 内容 |
 |---|---|
 | `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・REST サーバーのファサード（`Server/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
-| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードを呼ぶ。Web/DB 依存（Vapor・Fluent）をここに閉じ込める |
+| `BltMcpServerCore`（`Sources/BltMcpServerCore/`） | MCP プロトコル層（ツールカタログ・`MCP.Server` ファクトリ）。ビジネスロジック・DB は持たない。**Vapor/Fluent には依存しない** |
+| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。`POST /mcp` もここで Vapor ルートとして配線する。Web/DB 依存（Vapor・Fluent）をここに閉じ込める |
 | `BlueTicker`（`Sources/BlueTickerMain/`） | `ticker` CLI のエントリポイントのみ |
 | `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ |
 
-ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。これにより `ticker` CLI に Web/DB 依存がリンクされない。
+ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。これにより `ticker` CLI に Web/DB 依存がリンクされない。
 
 `BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
 

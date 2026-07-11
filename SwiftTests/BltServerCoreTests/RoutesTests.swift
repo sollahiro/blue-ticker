@@ -39,7 +39,7 @@ private func withApp(
             app.migrations.add(CreateCompanyFilingSections())
             try await app.autoMigrate()
         }
-        registerRoutes(
+        try await registerRoutes(
             app, context: makeContext(),
             cfAccessTeamDomain: cfAccessTeamDomain, bltAuthToken: bltAuthToken)
         try await body(app)
