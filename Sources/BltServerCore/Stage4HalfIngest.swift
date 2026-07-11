@@ -16,9 +16,25 @@ import Logging
 /// read 時に要求年数へ縮める（REST の half-financials は years 既定 3）。
 let stage4HalfIngestYears = Api.halfMaxYears
 
-/// 証券コードを受けて半期財務サマリを返す計算器（成功で response、失敗で nil）。
+/// Stage 4-half 取り込み結果のサマリ。`notApplicable`（半期報告書未提出等、設計通り）を
+/// `failed`（抽出できず要調査）と分けて数える点が通期 Stage 4 の `Stage4IngestSummary` と異なる
+/// （issue #73 フォローアップ）。
+public struct Stage4HalfIngestSummary: Sendable, Equatable {
+    /// 計算を試みた企業数（skip を除く。notApplicable も含む＝実際に compute を呼んだ数）。
+    public let attempted: Int
+    /// 計算・格納に成功した企業数。
+    public let stored: Int
+    /// 書類はあるが抽出できず失敗した企業数（要調査）。
+    public let failed: Int
+    /// 半期報告書が未提出等、計算対象外だった企業数（設計通り・failed に含めない）。
+    public let notApplicable: Int
+    /// 既に現行バージョン・十分な年数で計算済みのためスキップした企業数。
+    public let skipped: Int
+}
+
+/// 証券コードを受けて半期財務サマリを返す計算器（成功／対象外／失敗を区別する）。
 /// 本番は `context.computeHalfFinancials`、テストはフェイクを注入する。
-public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinancialsResponse?
+public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinancialsComputeResult
 
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 Stage 4 と同ロジック。
@@ -27,7 +43,7 @@ public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinanc
 func runStage4HalfIngest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
     logger: Logger? = nil, compute: HalfFinancialsComputer
-) async throws -> Stage4IngestSummary {
+) async throws -> Stage4HalfIngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
         db: db, docTypes: Api.stage4HalfFreshnessDocTypes, logger: logger)
     let codes = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
@@ -35,6 +51,7 @@ func runStage4HalfIngest(
     var attempted = 0
     var stored = 0
     var failed = 0
+    var notApplicable = 0
     var skipped = 0
     var unhealthyRetries = 0
     var missing: [(code: String, highWater: String?)] = []
@@ -95,23 +112,28 @@ func runStage4HalfIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        guard let response = await compute(code) else {
+        switch await compute(code) {
+        case .success(let response):
+            try await withDbRetry(
+                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyHalfFinancials(
+                    existing: existing, code: code, years: years, response: response,
+                    highWater: highWater, db: db)
+            }
+            stored += 1
+        case .notApplicable:
+            // 半期報告書未提出等、設計通りの対象外。ノイズになるため warning ログは出さない。
+            notApplicable += 1
+        case .failed:
             failed += 1
             logger?.warning("Stage 4-half 取り込み失敗: code=\(code)")
-            continue
         }
-        try await withDbRetry(
-            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeCompanyHalfFinancials(
-                existing: existing, code: code, years: years, response: response,
-                highWater: highWater, db: db)
-        }
-        stored += 1
     }
 
-    return Stage4IngestSummary(
-        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
+    return Stage4HalfIngestSummary(
+        attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
+        skipped: skipped)
 }
 
 /// 計算済み半期サマリを company_half_financials へ書き込む（既存行があれば更新、無ければ作成）。

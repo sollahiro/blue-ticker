@@ -7,6 +7,22 @@ import Foundation
 private let _halfCacheVersion = blueTickerVersion
 private let _halfDiscoveryYears = Api.halfMaxYears
 
+/// `HalfYearAnalyzer.fetchAndBuild` の結果。「半期報告書が未提出」（対象外）と
+/// 「書類はあるが抽出できない」（失敗）を呼び出し元が区別できるようにする。
+enum HalfYearFetchOutcome {
+    case periods([HalfPeriod])
+    case notApplicable
+    case failed
+}
+
+extension HalfYearFetchOutcome {
+    /// 対象外・失敗の区別が不要な呼び出し元向けの Optional 変換。
+    var periodsOrNil: [HalfPeriod]? {
+        if case .periods(let periods) = self { return periods }
+        return nil
+    }
+}
+
 struct HalfYearAnalyzer {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
@@ -17,7 +33,7 @@ struct HalfYearAnalyzer {
         code: String,
         analysisYears: Int = 3,
         useCache: Bool = true
-    ) async -> [HalfPeriod]? {
+    ) async -> HalfYearFetchOutcome {
         let cacheKey = "half_year_periods_\(code)"
 
         if useCache {
@@ -25,11 +41,12 @@ struct HalfYearAnalyzer {
                (cached["_cache_version"] as? String) == _halfCacheVersion,
                let data = try? JSONSerialization.data(withJSONObject: cached),
                let wrapper = try? JSONDecoder().decode(HalfYearCache.self, from: data) {
-                return trimPeriods(wrapper.periods, to: analysisYears)
+                return .periods(trimPeriods(wrapper.periods, to: analysisYears))
             }
         }
 
-        guard let periods = await fetchAndBuild(code: code) else { return nil }
+        let outcome = await fetchAndBuild(code: code)
+        guard case .periods(let periods) = outcome else { return outcome }
 
         let wrapper = HalfYearCache(periods: periods)
         if let data = try? JSONEncoder().encode(wrapper),
@@ -37,22 +54,22 @@ struct HalfYearAnalyzer {
             dict["_cache_version"] = _halfCacheVersion
             await cacheManager.setJSON(cacheKey, value: dict)
         }
-        return trimPeriods(periods, to: analysisYears)
+        return .periods(trimPeriods(periods, to: analysisYears))
     }
 
     // MARK: - Fetch and Build
 
-    private func fetchAndBuild(code: String) async -> [HalfPeriod]? {
+    private func fetchAndBuild(code: String) async -> HalfYearFetchOutcome {
         let annualDocs = await EdinetDiscovery.buildDocumentIndexForCode(
             code: code, client: edinetClient, analysisYears: _halfDiscoveryYears
         )
-        guard !annualDocs.isEmpty else { return nil }
+        guard !annualDocs.isEmpty else { return .notApplicable }
 
         let halfDocs = await EdinetDiscovery.buildHalfYearDocumentIndexForCode(
             code: code, client: edinetClient, analysisYears: _halfDiscoveryYears,
             prebuiltAnnualDocs: annualDocs
         )
-        guard !halfDocs.isEmpty else { return nil }
+        guard !halfDocs.isEmpty else { return .notApplicable }
 
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
 
@@ -85,7 +102,7 @@ struct HalfYearAnalyzer {
         }
         var q2Entries: [String: YearEntry] = [:]
         for (k, v) in q2Pairs { q2Entries[k] = v }
-        guard !q2Entries.isEmpty else { return nil }
+        guard !q2Entries.isEmpty else { return .failed }
 
         // H1: 全 Q2 エントリ（FY 有無を問わず）
         let h1Pairs = q2Entries.sorted { $0.key > $1.key }.map { (fyEnd: $0.key, entry: $0.value) }
@@ -122,7 +139,7 @@ struct HalfYearAnalyzer {
             return ($0.fyEnd ?? "") < ($1.fyEnd ?? "")
         }
 
-        return periods.isEmpty ? nil : periods
+        return periods.isEmpty ? .failed : .periods(periods)
     }
 
     // MARK: - H2 Derivation

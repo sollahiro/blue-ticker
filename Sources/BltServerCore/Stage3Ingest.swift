@@ -199,7 +199,7 @@ public func runStage3IngestCommand(
             }
             logIngestSummary(
                 app.logger, stage: "4half", attempted: s4h.attempted, stored: s4h.stored,
-                failed: s4h.failed, skipped: s4h.skipped)
+                failed: s4h.failed, skipped: s4h.skipped, notApplicable: s4h.notApplicable)
         }
         if stages.contains(.sections) {
             // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。

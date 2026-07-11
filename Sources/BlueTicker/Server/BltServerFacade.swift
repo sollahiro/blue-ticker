@@ -125,14 +125,20 @@ public extension BltServerContext {
     /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。
     /// 半期 Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。HalfYearAnalyzer は
     /// 内部で 5 年分を構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば
-    /// 全集合が返る。EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
-    func computeHalfFinancials(code: String, years: Int) async -> HalfFinancialsResponse? {
+    /// 全集合が返る。EDINET 取得・XBRL パースを伴う高コスト処理。
+    /// 「半期報告書未提出」（対象外）と「抽出失敗」を区別して返す（戻り値パターン、issue #73 フォローアップ）。
+    func computeHalfFinancials(code: String, years: Int) async -> HalfFinancialsComputeResult {
         let analyzer = HalfYearAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
-        guard let periods = await analyzer.analyze(code: code, analysisYears: years) else {
-            return nil
+        switch await analyzer.analyze(code: code, analysisYears: years) {
+        case .periods(let periods):
+            let stock = await masterDataManager.getByCode(code)
+            return .success(
+                HalfFinancialsResponse(code: code, name: stock?.coName ?? "", periods: periods))
+        case .notApplicable:
+            return .notApplicable
+        case .failed:
+            return .failed
         }
-        let stock = await masterDataManager.getByCode(code)
-        return HalfFinancialsResponse(code: code, name: stock?.coName ?? "", periods: periods)
     }
 
     /// Stage 5: 書類1件分の XBRL を取得（Stage 2 キャッシュ経由）し、全セクションを抽出して

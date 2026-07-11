@@ -14,6 +14,15 @@
 
 import Foundation
 
+/// 半期 Stage 4 の計算結果。「対象外」（半期報告書が未提出等、設計通りで再提出待ち）と
+/// 「失敗」（書類はあるが抽出できない、要調査）を区別する（issue #73 のフォローアップ）。
+/// ingest サマリで前者を failed カウントへ混入させないために使う。
+public enum HalfFinancialsComputeResult: Sendable {
+    case success(HalfFinancialsResponse)
+    case notApplicable
+    case failed
+}
+
 /// Neon の半期 Stage 4 キャッシュ（`company_half_financials.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、半期計算ロジック（HalfYearAnalyzer / buildH2Entry）または
 /// 本契約型（HalfFinancialsResponse / HalfFinancialsPeriod）の意味を変えたときのみバンプする
