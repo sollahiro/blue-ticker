@@ -4,6 +4,12 @@
 import Foundation
 import MCP
 
+/// `Server(name:)` に渡す固定名。MCPRoute.swift の initialize 再送シムでも同じ値を使うため公開する。
+public let bltMcpServerName = "blt-mcp-server"
+
+/// `Server(capabilities:)` に渡す固定値。MCPRoute.swift の initialize 再送シムでも同じ値を使うため公開する。
+public let bltMcpServerCapabilities = Server.Capabilities(tools: .init(listChanged: false))
+
 /// Vapor の MCP ルート（ルートパス `POST /`）に埋め込むための、ソケットを持たない HTTP トランスポートを組み立てる。
 /// 返す `StatelessHTTPServerTransport` の `handleRequest(_:)` を Vapor ルートから直接呼ぶ。
 public func makeBltMcpTransport(
@@ -12,9 +18,9 @@ public func makeBltMcpTransport(
     callTool: @escaping @Sendable (CallTool.Parameters) async -> CallTool.Result
 ) async throws -> StatelessHTTPServerTransport {
     let server = Server(
-        name: "blt-mcp-server",
+        name: bltMcpServerName,
         version: version,
-        capabilities: .init(tools: .init(listChanged: false))
+        capabilities: bltMcpServerCapabilities
     )
 
     await server.withMethodHandler(ListTools.self) { _ in

@@ -119,4 +119,31 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             #expect((tools ?? []).count == 6)
         }
     }
+
+    // MARK: - initialize 再送（Grok 等、ツール呼び出しのたびに initialize を再送するクライアント対応）
+
+    @Test func secondInitializeRequestSucceedsInsteadOfAlreadyInitializedError() async throws {
+        try await withMcpApp { app in
+            let initBody: [String: Any] = [
+                "jsonrpc": "2.0", "id": 0, "method": "initialize",
+                "params": [
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": [String: Any](),
+                    "clientInfo": ["name": "test-client", "version": "1.0"],
+                ],
+            ]
+
+            let first = try await postMcp(app, initBody)
+            #expect(first.status == .ok)
+            #expect(first.json?["error"] == nil)
+
+            let second = try await postMcp(app, initBody)
+            #expect(second.status == .ok)
+            #expect(second.json?["error"] == nil)
+            let result = second.json?["result"] as? [String: Any]
+            #expect(result?["protocolVersion"] as? String == "2025-06-18")
+            let serverInfo = result?["serverInfo"] as? [String: Any]
+            #expect(serverInfo?["name"] as? String == "blt-mcp-server")
+        }
+    }
 }
