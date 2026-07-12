@@ -2,6 +2,14 @@
 
 Swift 6 言語モードへの移行を見据え、`StrictConcurrency` を有効にしている。コンパイラ警告を増やさないこと。
 
+## 命名規則（頭字語）
+
+Swift API Design Guidelines に従い、頭字語は識別子内で大文字小文字を混ぜず一貫して扱う。
+
+- **頭字語（XBRL・API・URL・JSON・HTTP・CSV 等）は全大文字**にする（例: `XBRLParser`、`EdinetAPIClient`）。lowerCamelCase の先頭に来る場合のみ全小文字（例: `xbrlDir`、`apiKey`）
+- **例外: EDINET は `Edinet`（単語扱い）で統一**する。既存コード全域（`EdinetAPIClient`・`EdinetDiscovery` 等）で一貫しているため、全大文字化しない
+- **既存の不一致はリネームしない**（例: `XbrlFactRecord`・`enum Xbrl`・`resolveEdinetApiKey`）。一括リネームは diff が大きい割に実利がないため、既存名は現状維持とし、**新規宣言にのみ**この規則を適用する。既存の不一致名を参照する新規コードは既存名をそのまま使う
+
 ## 設計ガイダンス
 
 ### struct / Codable と辞書の使い分け
