@@ -11,25 +11,40 @@ func resolveEdinetCSVURL(
     executableURL: URL? = Bundle.main.executableURL,
     fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
 ) -> URL? {
+    resolveAssetFileURL(
+        filename: edinetCsvFilename, environment: environment,
+        currentDirectoryPath: currentDirectoryPath, executableURL: executableURL,
+        fileExists: fileExists)
+}
+
+/// `assets/` 配下のファイルを env → CWD → 実行ファイル隣接 → Homebrew share の順で探す共通探索。
+/// `resolveEdinetCSVURL` と `resolvePriorityCodesCSVURL`（`PriorityIngestCodes.swift`）で共有する。
+func resolveAssetFileURL(
+    filename: String,
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    currentDirectoryPath: String = FileManager.default.currentDirectoryPath,
+    executableURL: URL? = Bundle.main.executableURL,
+    fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+) -> URL? {
     if let dir = environment[assetsPathEnv], !dir.isEmpty {
-        let url = URL(fileURLWithPath: dir).appendingPathComponent(edinetCsvFilename)
+        let url = URL(fileURLWithPath: dir).appendingPathComponent(filename)
         if fileExists(url.path) { return url }
     }
 
     var candidates: [URL] = [
         URL(fileURLWithPath: currentDirectoryPath)
-            .appendingPathComponent("assets/\(edinetCsvFilename)")
+            .appendingPathComponent("assets/\(filename)")
     ]
 
     if let executableURL {
         let executableDir = executableURL.deletingLastPathComponent()
         candidates.append(
-            executableDir.appendingPathComponent("assets/\(edinetCsvFilename)")
+            executableDir.appendingPathComponent("assets/\(filename)")
         )
         candidates.append(
             executableDir
                 .deletingLastPathComponent()
-                .appendingPathComponent("share/blue-ticker/assets/\(edinetCsvFilename)")
+                .appendingPathComponent("share/blue-ticker/assets/\(filename)")
         )
     }
 

@@ -36,9 +36,11 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 
 /// 上場企業の有報（直近 years 年ぶん）を走査し、未抽出 or バージョン／セクション集合不一致のものを
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
+/// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 func runStage5Ingest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
-    limit: Int?, logger: Logger? = nil, extract: FilingSectionsExtractor
+    limit: Int?, priorityCodes: Set<String> = [], logger: Logger? = nil,
+    extract: FilingSectionsExtractor
 ) async throws -> Stage5IngestSummary {
     let baseCandidates = try await stage5Candidates(
         db: db, listedCodes: listedCodes, years: years, logger: logger)
@@ -73,7 +75,8 @@ func runStage5Ingest(
             skipped += 1
         }
     }
-    let candidates = missing + staleVersion + staleSectionKeys
+    let candidates = prioritized(
+        missing + staleVersion + staleSectionKeys, codeOf: \.code, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0

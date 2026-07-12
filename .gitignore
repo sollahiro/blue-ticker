@@ -12,6 +12,9 @@ reports/
 reports/*_edinet/
 data/
 
+# 日経225構成銘柄リスト（編集著作物のため非公開・ローカル専用。ingest優先ソートの入力）
+/assets/nikkei225.csv
+
 # Local app state (when MEBUKI_USER_DATA_PATH points at the repo)
 /config.json
 /config.json.bak

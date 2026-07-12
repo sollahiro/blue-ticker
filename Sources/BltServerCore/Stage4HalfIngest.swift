@@ -40,9 +40,10 @@ public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinanc
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 Stage 4 と同ロジック。
 /// `listedCodes` を渡すと候補をその集合に絞る（上場廃止・外国法人等、二度と成功しない企業への
 /// 無駄なリトライを避ける。`nil` は絞り込みなし＝従来どおり全企業）。
+/// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 func runStage4HalfIngest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
-    logger: Logger? = nil, compute: HalfFinancialsComputer
+    priorityCodes: Set<String> = [], logger: Logger? = nil, compute: HalfFinancialsComputer
 ) async throws -> Stage4HalfIngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
         db: db, docTypes: Api.stage4HalfFreshnessDocTypes, logger: logger)
@@ -85,7 +86,9 @@ func runStage4HalfIngest(
             skipped += 1
         }
     }
-    let candidates = missing + staleVersion + staleYears + staleHighWater
+    let candidates = prioritized(
+        missing + staleVersion + staleYears + staleHighWater, codeOf: \.code,
+        priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0
