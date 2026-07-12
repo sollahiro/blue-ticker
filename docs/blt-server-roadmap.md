@@ -6,7 +6,7 @@
 
 | 項目 | 状態 |
 |---|---|
-| 本番 | Fly.io (nrt) + Neon + Cloudflare Access/Tunnel。`api.sollahiro.com` 稼働。main push で自動デプロイ |
+| 本番 | Fly.io (nrt) + Neon + Cloudflare Access/Tunnel。`api.sollahiro.com` 稼働。main push（CI 成功後）で自動デプロイ |
 | CLI 既定 | `backend=remote`（`ticker login` で SSO） |
 | Stage 1 | 同期済み（~3,944 社）。launchd が日次増分 sync |
 | Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |

@@ -52,7 +52,7 @@ CI から使う secrets（`fly secrets` とは別物。`gh secret set` で登録
 
 | secret | 役割 | 使用箇所 |
 |---|---|---|
-| `FLY_API_TOKEN` | `flyctl deploy` の認証（`fly tokens create deploy` で発行したデプロイ専用トークンを推奨） | `.github/workflows/deploy.yml`（main push 時の自動デプロイ） |
+| `FLY_API_TOKEN` | `flyctl deploy` の認証（`fly tokens create deploy` で発行したデプロイ専用トークンを推奨） | `.github/workflows/deploy.yml`（main の CI 成功後の自動デプロイ） |
 | `BLT_API_DOMAIN` | 外形監視が無認証アクセスを試す本番ホスト名（現在 `api.sollahiro.com`。値自体は CLI のビルド時既定値として上記「環境変数」節や `blt-server-roadmap.md` に既出で秘匿情報ではない）。secret にするのは値を隠すためではなく、ホスト切り替え時に secret 更新だけで済み、ワークフロー本体の変更が要らないようにするため | `.github/workflows/edge-security-smoke.yml`（Cloudflare Access 生存確認） |
 
 ## self-host（Docker）
@@ -211,7 +211,7 @@ tail -f .build/blt-scheduled.log
 
 plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ### ingest の優先順位（任意・ローカル専用）
 
@@ -241,7 +241,7 @@ DATABASE_URL=... .build/release/blt-server master-data-upload assets/EdinetcodeD
 
 ### 1. Postgres スキーマ検証（ローカル Docker・EDINET 不要）
 
-マイグレーション・JSONB round-trip・索引を実 Postgres で検証する統合テスト（`PostgresIntegrationTests`）。ローカルでは `BLT_TEST_POSTGRES_URL` 未設定なら skip。CI（`.github/workflows/ci.yml` の `postgres-integration`）では Postgres 16 サービスコンテナ付きで常時実行する。
+マイグレーション・JSONB round-trip・索引を実 Postgres で検証する統合テスト（`PostgresIntegrationTests`）。ローカルでは `BLT_TEST_POSTGRES_URL` 未設定なら skip。CI（`.github/workflows/ci.yml` の `swift-linux`）では Postgres 16 サービスコンテナ付きで常時実行する。
 
 ```bash
 docker run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine
