@@ -1,5 +1,5 @@
 // REST トランスポート層（Routes.swift）の仕様。
-// 認証（Bearer 検証・Cloudflare Access モード・無認証モード）、エラー封筒
+// 認証（Cloudflare Access モード・無認証モード）、エラー封筒
 // （{"error":...,"status":N}）、DB 非接続時の 503、格納済みデータなしの 404 を、
 // インメモリ Application + responder 直叩きで（ネットワーク非依存に）検証する。
 // ファサード呼び出しが必要なエンドポイント（companies / filings のライブ探索）は
@@ -25,7 +25,6 @@ private func makeContext() -> BltServerContext {
 private func withApp(
     databases: Bool = false,
     cfAccessTeamDomain: String? = nil,
-    bltAuthToken: String? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -40,8 +39,7 @@ private func withApp(
             try await app.autoMigrate()
         }
         try await registerRoutes(
-            app, context: makeContext(),
-            cfAccessTeamDomain: cfAccessTeamDomain, bltAuthToken: bltAuthToken)
+            app, context: makeContext(), cfAccessTeamDomain: cfAccessTeamDomain)
         try await body(app)
     } catch {
         try? await app.asyncShutdown()
@@ -52,10 +50,9 @@ private func withApp(
 
 /// responder 経由でリクエストを送り、ステータスとデコード済み JSON を返す。
 private func send(
-    _ app: Application, _ path: String, bearer: String? = nil
+    _ app: Application, _ path: String
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
-    var headers = HTTPHeaders()
-    if let bearer { headers.bearerAuthorization = BearerAuthorization(token: bearer) }
+    let headers = HTTPHeaders()
     let request = Request(
         application: app, method: .GET, url: URI(string: path), headers: headers,
         on: app.eventLoopGroup.next())
@@ -72,7 +69,7 @@ private func send(
     // MARK: - healthz（認証不要）
 
     @Test func healthzRespondsWithoutAuthAndExposesCacheVersions() async throws {
-        try await withApp(bltAuthToken: "secret-token") { app in
+        try await withApp { app in
             let (status, json) = try await send(app, "/healthz")
             #expect(status == .ok)
             #expect(json?["status"] as? String == "ok")
@@ -86,35 +83,6 @@ private func send(
                     == companyHalfFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
-        }
-    }
-
-    // MARK: - 認証（静的 Bearer モード）
-
-    @Test func v1RejectsMissingTokenWith401Envelope() async throws {
-        try await withApp(bltAuthToken: "secret-token") { app in
-            let (status, json) = try await send(app, "/v1/companies/7203/financials")
-            #expect(status == .unauthorized)
-            #expect(json?["error"] as? String == "認証が必要です")
-            #expect(json?["status"] as? Int == 401)
-        }
-    }
-
-    @Test func v1RejectsWrongTokenEvenWithSameLength() async throws {
-        try await withApp(bltAuthToken: "secret-token") { app in
-            let (status, _) = try await send(
-                app, "/v1/companies/7203/financials", bearer: "secret-tokem")
-            #expect(status == .unauthorized)
-        }
-    }
-
-    @Test func v1AcceptsCorrectToken() async throws {
-        // 認証通過後、DB 非接続の financials は 503 になる（401 でないことが通過の証明）
-        try await withApp(bltAuthToken: "secret-token") { app in
-            let (status, json) = try await send(
-                app, "/v1/companies/7203/financials", bearer: "secret-token")
-            #expect(status == .serviceUnavailable)
-            #expect(json?["status"] as? Int == 503)
         }
     }
 

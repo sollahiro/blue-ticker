@@ -133,11 +133,9 @@ import Testing
         let cmd = try ConfigSet.parse([
             "--backend", "remote",
             "--server-url", "https://example.com",
-            "--auth-token", "abc123",
         ])
         #expect(cmd.backend == "remote")
         #expect(cmd.serverUrl == "https://example.com")
-        #expect(cmd.authToken == "abc123")
         #expect(cmd.edinetApiKey == nil)
     }
 

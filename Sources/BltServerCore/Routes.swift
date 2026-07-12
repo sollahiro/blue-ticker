@@ -12,14 +12,13 @@ import Vapor
 // MARK: - ルート登録
 
 /// `/v1/` 配下の REST API ルートと MCP プロトコル（ルートパス `POST /`）を Application へ登録する。
-/// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN / BLT_AUTH_TOKEN）から読む。
+/// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN）から読む。
 /// テストからは引数で注入する（プロセス環境の書き換えは並列実行と競合するため）。
 /// `/v1` と MCP は同じ認証グループ配下に置く（同一の認証ポリシーを適用する）。
 func registerRoutes(
     _ app: Application,
     context: BltServerContext,
-    cfAccessTeamDomain: String? = Environment.get("CF_ACCESS_TEAM_DOMAIN"),
-    bltAuthToken: String? = Environment.get("BLT_AUTH_TOKEN")
+    cfAccessTeamDomain: String? = Environment.get("CF_ACCESS_TEAM_DOMAIN")
 ) async throws {
     // Vapor デフォルトの ErrorMiddleware（`{"error":true,"reason":...}`）を、
     // 公開契約のエラー封筒（`{"error":"...","status":N}`）に置き換える。
@@ -51,15 +50,11 @@ func registerRoutes(
     //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
     //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
     //      ※安全要件: 公開ポートを閉じ Cloudflare Tunnel 経由限定にすること（origin 非公開が前提）。
-    //   2. BLT_AUTH_TOKEN 設定 → 静的 Bearer（self-host）。
-    //   3. どちらも無し → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
-    var authenticated: RoutesBuilder = app
+    //   2. 未設定 → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
+    let authenticated: RoutesBuilder = app
     if cfAccessTeamDomain?.isEmpty == false {
         app.logger.notice(
             "認証モード: Cloudflare Access（エッジ信頼）。Tunnel 経由・公開ポート閉鎖が前提です。")
-    } else if let token = bltAuthToken, !token.isEmpty {
-        authenticated = app.grouped(BltBearerAuthMiddleware(token: token))
-        app.logger.notice("認証モード: 静的 Bearer（BLT_AUTH_TOKEN）。")
     } else {
         app.logger.warning("認証モード: 無認証。/v1・MCP は保護されていません（ローカル開発専用）。")
     }
@@ -242,33 +237,6 @@ func serveFilings(
         }
     }
     return await context.getFilings(code: code, maxYears: maxYears)
-}
-
-// MARK: - 認証ミドルウェア
-
-/// Authorization: Bearer <token> を検証する。BLT_AUTH_TOKEN が設定されたときのみ /v1 へ適用する。
-/// 失敗時は 401 を投げ、BltErrorMiddleware が公開契約のエラー封筒へ変換する。
-private struct BltBearerAuthMiddleware: AsyncMiddleware {
-    let token: String
-
-    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
-        guard let presented = request.headers.bearerAuthorization?.token,
-            constantTimeEquals(presented, token)
-        else {
-            throw Abort(.unauthorized, reason: "認証が必要です")
-        }
-        return try await next.respond(to: request)
-    }
-}
-
-/// トークン比較のタイミング攻撃を避ける定数時間比較（長さの違いのみ早期に返す）。
-private func constantTimeEquals(_ a: String, _ b: String) -> Bool {
-    let ab = Array(a.utf8)
-    let bb = Array(b.utf8)
-    guard ab.count == bb.count else { return false }
-    var diff: UInt8 = 0
-    for i in 0..<ab.count { diff |= ab[i] ^ bb[i] }
-    return diff == 0
 }
 
 // MARK: - エラーミドルウェア

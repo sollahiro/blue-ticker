@@ -25,7 +25,6 @@ struct ConfigShow: AsyncParsableCommand {
         let cacheEnabled = await settingsStore.getBool(.cacheEnabled)
         let backend = await settingsStore.get(.edinetBackend) ?? "remote"
         let serverURL = await settingsStore.get(.serverURL) ?? ""
-        let authToken = await settingsStore.maskedAuthToken()
         let ssoEnabled = await settingsStore.getBool(.cfAccessSsoEnabled)
 
         if json {
@@ -35,7 +34,6 @@ struct ConfigShow: AsyncParsableCommand {
                 "cacheEnabled": cacheEnabled,
                 "edinetBackend": backend,
                 "serverURL": serverURL,
-                "authToken": authToken,
                 "cfAccessSsoEnabled": ssoEnabled,
             ])
         } else {
@@ -45,7 +43,6 @@ struct ConfigShow: AsyncParsableCommand {
             print("  キャッシュ有効    : \(cacheEnabled)")
             print("  バックエンド      : \(backend)")
             print("  サーバーURL       : \(serverURL.isEmpty ? "(未設定)" : serverURL)")
-            print("  認証トークン      : \(authToken)")
             print("  SSO ログイン      : \(ssoEnabled ? "有効（ticker login 済み）" : "無効")")
         }
     }
@@ -65,9 +62,6 @@ struct ConfigSet: AsyncParsableCommand {
 
     @Option(name: .long, help: "remote バックエンドの blt-server URL (例: https://blt-server.fly.dev)")
     var serverUrl: String?
-
-    @Option(name: .long, help: "remote バックエンドの Bearer 認証トークン")
-    var authToken: String?
 
     @Flag(name: .long, help: "キャッシュを無効化")
     var disableCache = false
@@ -90,10 +84,6 @@ struct ConfigSet: AsyncParsableCommand {
         if let url = serverUrl {
             try await settingsStore.set(.serverURL, value: url)
             print("サーバーURLを \(url) に設定しました。")
-        }
-        if let token = authToken {
-            try await settingsStore.set(.authToken, value: token)
-            print("認証トークンを保存しました。")
         }
         if disableCache {
             await settingsStore.set(.cacheEnabled, value: false)

@@ -27,14 +27,14 @@ Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-ha
 | 代替先の例 | 任意の Docker ホスト（VPS、自宅サーバー、他 PaaS） |
 | 切り替え手順の骨子 | ① 新ホストで同一イメージを起動（`deploy.md` self-host 節）② secrets を env として注入 ③ `/data` は EDINET キャッシュのためコピー不要（再取得で埋まる）④ Tunnel トークンはそのまま使える（Cloudflare 側の設定変更不要）。DNS 切り替えすら発生しない |
 
-### Cloudflare（エッジ認証 + Tunnel）— 切り替え予定なし・撤退経路は実装済み
+### Cloudflare（エッジ認証 + Tunnel）— 切り替え予定なし・撤退経路なし（Bearer 認証は廃止済み）
 
 切り替えは想定しない（ユーザー方針）。ただし構造上のロックイン範囲は以下に限定されている。
 
 | 観点 | 内容 |
 |---|---|
 | 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の SSO 付与（`RemoteAPIClient.swift`・`LoginCommand.swift`）: `ticker login` → `CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存（Service Token は v26.7.2 で廃止済み）④ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP 設定 |
-| 撤退経路（実装済み） | 認証モード②の静的 Bearer（`BLT_AUTH_TOKEN`）へ切り替え + `fly.toml` に `[http_service]` を復活させて公開ポートを開ける。コード変更不要・env と toml のみ |
+| 撤退経路 | **なし**。静的 Bearer（`BLT_AUTH_TOKEN`）モードは廃止済み（`Routes.swift`・`ticker` CLI 双方から削除）。Cloudflare Access を撤退する場合は代替の認証機構をコードから再実装する必要がある |
 | 不変条件 | 方式A は origin が JWT を検証しない。安全性は「**Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー**」の 3 点セットで成立する。**どれか 1 つでも欠けると無認証素通りになる**ため、fly.toml へのサービスブロック追加・ポート公開は単独で行ってはならない |
 
 R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結合はない。
@@ -59,5 +59,5 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 | Fly secrets | `BLT_EDINET_API_KEY` / `DATABASE_URL` / `CF_ACCESS_TEAM_DOMAIN` / `CLOUDFLARE_TUNNEL_TOKEN` | 各サービスで再発行・`fly secrets set`（`deploy.md` 環境変数表） |
 | Neon | 全テーブルのデータ | dump/restore または EDINET から再 ingest |
 | Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
-| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`・keychain（EDINET キー / Bearer トークン）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
+| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`・keychain（EDINET キー）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
 | Fly Volume `/data` | EDINET 取得キャッシュ | 再取得（コピー不要） |

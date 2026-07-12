@@ -45,12 +45,12 @@ remote モードは、計算済みの結果を blt-server（REST API）から受
 
 ```bash
 ticker config set --backend remote --server-url https://blt-server.example.com
-ticker config set --auth-token <token>   # サーバーが Bearer 認証を要求する場合
-ticker config show                        # 設定確認（トークンはマスク表示）
+ticker login                              # サーバーが Cloudflare Access で保護されている場合の SSO ログイン
+ticker config show                        # 設定確認
 ticker config set --backend local         # local へ戻す
 ```
 
-- 接続情報は環境変数 `BLT_SERVER_URL` / `BLT_AUTH_TOKEN` でも指定でき、設定より優先されます。
+- 接続情報は環境変数 `BLT_SERVER_URL` でも指定でき、設定より優先されます。
 - 対応コマンド: `search` / `filings` / `filing` / `analyze` / `summarize`。`sector`（業種一覧）は常に local、`analyze`/`summarize` の `--half`（半期）は remote 非対応です。
 - 自分で blt-server を立てる手順は [`docs/deploy.md`](docs/deploy.md) を参照してください。
 

@@ -33,7 +33,7 @@ public func makeBltMcpTransport(
     // デフォルトの検証パイプラインは OriginValidator.localhost() を含み、Host ヘッダーが
     // localhost/127.0.0.1/[::1] 以外だと 421 を返す（DNS rebinding 対策）。本サーバーは
     // Cloudflare Tunnel 経由で実ホスト名（例: api.<domain>）がそのまま Host ヘッダーに載って届き、
-    // 信頼境界は Cloudflare Access / Bearer 認証（MCP ルートも /v1 と同じ認証グループ）が担うため、
+    // 信頼境界は Cloudflare Access（MCP ルートも /v1 と同じ認証グループ）が担うため、
     // OriginValidator は無効化する（SDK が「cloud deployments」向けと明記する設定）。
     let transport = StatelessHTTPServerTransport(
         validationPipeline: StandardValidationPipeline(validators: [

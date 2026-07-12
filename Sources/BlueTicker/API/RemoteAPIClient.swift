@@ -52,16 +52,13 @@ struct RemoteFilingContent {
 
 struct RemoteAPIClient: Sendable {
     let baseURL: String
-    let authToken: String?
     let cfAccessJwt: String?
 
-    /// baseURL が空・不正なら nil。各認証情報は空なら未設定扱い。
-    /// authToken（Bearer）・SSO JWT は独立に付与される。
-    init?(baseURLString: String, authToken: String?, cfAccessJwt: String? = nil) {
+    /// baseURL が空・不正なら nil。cfAccessJwt は空なら未設定扱い。
+    init?(baseURLString: String, cfAccessJwt: String? = nil) {
         let trimmed = baseURLString.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, URL(string: trimmed) != nil else { return nil }
         baseURL = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
-        self.authToken = (authToken?.isEmpty == false) ? authToken : nil
         self.cfAccessJwt = (cfAccessJwt?.isEmpty == false) ? cfAccessJwt : nil
     }
 
@@ -139,8 +136,7 @@ struct RemoteAPIClient: Sendable {
                 return .ok(data)
             case 401:
                 return .failure(
-                    "認証に失敗しました。ticker config set --auth-token <token> を確認するか、"
-                        + "SSO ログインの場合は ticker login を再実行してください。")
+                    "認証に失敗しました。ticker login を再実行してください。")
             case 404:
                 return .notFound(errorMessage(data) ?? "見つかりませんでした")
             default:
@@ -160,9 +156,6 @@ struct RemoteAPIClient: Sendable {
         guard let url = comps.url else { return nil }
 
         var request = URLRequest(url: url)
-        if let token = authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
         // Cloudflare Access SSO（ticker login 経由の JWT）。
         // エッジでの認証は Cookie `CF_Authorization` を見る（`Cf-Access-Jwt-Assertion` ヘッダーは
         // Access が認証済みリクエストを origin に転送する際に付与するものであり、クライアントが

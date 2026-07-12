@@ -49,9 +49,6 @@ actor SettingsStore {
             return values.edinetBackend
         case .serverURL:
             return values.serverURL.isEmpty ? nil : values.serverURL
-        case .authToken:
-            return Keystore.getPassword(service: keychainService, key: key.rawValue)
-                ?? (values.authToken.isEmpty ? nil : values.authToken)
         }
     }
 
@@ -76,9 +73,6 @@ actor SettingsStore {
             values.edinetBackend = value
         case .serverURL:
             values.serverURL = value
-        case .authToken:
-            try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
-            values.authToken = ""
         }
     }
 
@@ -113,10 +107,6 @@ actor SettingsStore {
         mask(get(.edinetApiKey))
     }
 
-    func maskedAuthToken() -> String {
-        mask(get(.authToken))
-    }
-
     private func mask(_ secret: String?) -> String {
         guard let s = secret, !s.isEmpty else { return "****" }
         return s.count > 8 ? String(s.prefix(4)) + "****" + String(s.suffix(4)) : "****"
@@ -131,7 +121,6 @@ enum SettingsKey: String {
     case cacheDir
     case edinetBackend
     case serverURL
-    case authToken
 }
 
 enum SettingsBoolKey {
@@ -147,8 +136,6 @@ private struct SettingsValues {
     // インストール直後は `ticker login` のみで使い始められるようにする（architecture.md 参照）。
     var edinetBackend: String = "remote"
     var serverURL: String = Api.defaultRemoteServerURL
-    // 機密のため通常は keychain に保存し、values には載せない（keychain 不在環境のフォールバックのみ）。
-    var authToken: String = ""
     // ticker login（cloudflared access login）成功時に立てるフラグ。秘密情報ではなく
     // JWT 自体は cloudflared 側のローカルストレージが保持するため config.json に保存してよい。
     var cfAccessSsoEnabled: Bool = false
@@ -160,7 +147,6 @@ private struct SettingsFile: Codable {
     var edinetBackend: String?
     var serverURL: String?
     var cfAccessSsoEnabled: Bool?
-    // authToken は config ファイルに保存しない（keychain 管理。edinetApiKey と同様）。
 }
 
 // MARK: - Global singleton

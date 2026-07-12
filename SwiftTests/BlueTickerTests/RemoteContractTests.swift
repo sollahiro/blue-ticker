@@ -97,7 +97,7 @@ import Testing
     /// Access のエッジ認証は Cookie を見るため（`Cf-Access-Jwt-Assertion` ヘッダーでは通らないことを実機で確認済み）。
     @Test func buildRequestAddsCfAuthorizationCookieWhenSsoJwtSet() throws {
         let client = try #require(
-            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: "jwt-token"))
+            RemoteAPIClient(baseURLString: "https://api.example.com", cfAccessJwt: "jwt-token"))
         let request = try #require(client.buildRequest("/v1/companies", query: [:]))
 
         #expect(request.value(forHTTPHeaderField: "Cookie") == "CF_Authorization=jwt-token")
@@ -106,19 +106,10 @@ import Testing
     /// 空文字は未設定扱い（Cookie を付与しない）。
     @Test func buildRequestOmitsCfAuthorizationCookieWhenEmpty() throws {
         let client = try #require(
-            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: nil, cfAccessJwt: ""))
+            RemoteAPIClient(baseURLString: "https://api.example.com", cfAccessJwt: ""))
         let request = try #require(client.buildRequest("/v1/companies", query: [:]))
 
         #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
-    }
-
-    /// Bearer（静的トークン）は Authorization ヘッダーへ付与される（既存経路の回帰確認）。
-    @Test func buildRequestAddsAuthorizationHeaderForBearerToken() throws {
-        let client = try #require(
-            RemoteAPIClient(baseURLString: "https://api.example.com", authToken: "bearer-token"))
-        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
-
-        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer bearer-token")
     }
 
     /// filings の公開 JSON が RemoteFilings へデコードできる。
