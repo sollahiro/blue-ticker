@@ -137,7 +137,7 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 | `IBDExtractor` | 有利子負債合計（直接法→積み上げ法のフォールバック、銀行固有コンポーネント含む） |
 | `TangibleFixedAssetsExtractor`（PPE） | 有形固定資産合計・内訳 |
 | `EmployeesExtractor` | 従業員数（連結→個別フォールバック） |
-| `SegmentExtractor`（`SegmentExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact） |
+| `SegmentExtractor`（`SegmentExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/segment-normalization-concept.md` |
 
 ### 4.3 売上総利益（`GrossProfitExtractor`）
 

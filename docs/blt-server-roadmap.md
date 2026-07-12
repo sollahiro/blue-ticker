@@ -157,7 +157,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張（retention / 半期 160 / ユニバース）
-- [ ] Stage 6: 事業別・地域別売上の LLM 構造化
+- [ ] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。構想は `docs/segment-normalization-concept.md`
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価
 
@@ -166,4 +166,5 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - `docs/architecture.md` — 構成スナップショット
 - `docs/deploy.md` — デプロイ・定期同期・E2E
 - `docs/operations.md` — 外部サービス結合と定常運用
+- `docs/segment-normalization-concept.md` — Stage 6 正規化構想（比較・推移）
 - `.agents/rules/project/caching.md` / `versioning.md` / `dependencies.md`
