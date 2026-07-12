@@ -19,7 +19,6 @@ private func makeMcpContext() -> BltServerContext {
 
 private func withMcpApp(
     databases: Bool = false,
-    bltAuthToken: String? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -33,7 +32,7 @@ private func withMcpApp(
             app.migrations.add(CreateCompanyFilingSections())
             try await app.autoMigrate()
         }
-        try await registerRoutes(app, context: makeMcpContext(), bltAuthToken: bltAuthToken)
+        try await registerRoutes(app, context: makeMcpContext())
         try await body(app)
     } catch {
         try? await app.asyncShutdown()
@@ -44,12 +43,11 @@ private func withMcpApp(
 
 /// ルートパス（`/`）へ JSON-RPC ボディを POST し、ステータスとデコード済み JSON を返す。
 private func postMcp(
-    _ app: Application, _ bodyObject: [String: Any], bearer: String? = nil
+    _ app: Application, _ bodyObject: [String: Any]
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
     var headers = HTTPHeaders()
     headers.contentType = .json
     headers.add(name: "Accept", value: "application/json, text/event-stream")
-    if let bearer { headers.bearerAuthorization = BearerAuthorization(token: bearer) }
     let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
     let request = Request(
         application: app, method: .POST, url: URI(string: "/"), headers: headers,
@@ -70,30 +68,6 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
 }
 
 @Suite struct MCPRouteTests {
-
-    // MARK: - 認証（/v1 と同じ認証グループ配下）
-
-    @Test func mcpRejectsMissingTokenWith401Envelope() async throws {
-        try await withMcpApp(bltAuthToken: "secret-token") { app in
-            let (status, json) = try await postMcp(
-                app, toolCallBody(name: "search_companies", arguments: ["query": "toyota"]))
-            #expect(status == .unauthorized)
-            #expect(json?["error"] as? String == "認証が必要です")
-        }
-    }
-
-    @Test func mcpAcceptsCorrectToken() async throws {
-        try await withMcpApp(bltAuthToken: "secret-token") { app in
-            let (status, json) = try await postMcp(
-                app, toolCallBody(name: "get_financial_summary", arguments: ["code": "7203"]),
-                bearer: "secret-token")
-            // 認証通過後、DB 非接続の financials は isError:true の JSON-RPC result になる
-            // （401 でないことが認証通過の証明。REST の 503 相当を JSON-RPC の isError で表現する）。
-            #expect(status == .ok)
-            let result = json?["result"] as? [String: Any]
-            #expect(result?["isError"] as? Bool == true)
-        }
-    }
 
     // MARK: - DB 読み取り共通ロジック（REST と同じ意味論）
 

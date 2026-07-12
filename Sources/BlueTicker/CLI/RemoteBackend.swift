@@ -15,7 +15,7 @@ enum RemoteBackend {
     }
 
     /// remote バックエンドが有効ならクライアントを返す（local なら nil）。
-    /// 接続情報の解決順位は env（BLT_SERVER_URL / BLT_AUTH_TOKEN）> config。
+    /// 接続情報の解決順位は env（BLT_SERVER_URL）> config。
     /// remote だが server-url が未解決なら stderr へ出して `ExitCode.failure` を投げる。
     static func clientIfEnabled() async throws -> RemoteAPIClient? {
         let backend = await settingsStore.get(.edinetBackend) ?? "remote"
@@ -27,13 +27,6 @@ enum RemoteBackend {
             url = envURL
         } else {
             url = (await settingsStore.get(.serverURL)) ?? ""
-        }
-        // env が指定されていれば keychain を読まない（各認証情報は keychain 保存のため）。
-        let token: String?
-        if let envToken = nonEmpty(env["BLT_AUTH_TOKEN"]) {
-            token = envToken
-        } else {
-            token = await settingsStore.get(.authToken)
         }
         // Cloudflare Access SSO（ticker login 経由）。有効なら cloudflared から都度 JWT を取得する。
         var cfJwt: String?
@@ -54,7 +47,7 @@ enum RemoteBackend {
         }
 
         guard
-            let client = RemoteAPIClient(baseURLString: url, authToken: token, cfAccessJwt: cfJwt)
+            let client = RemoteAPIClient(baseURLString: url, cfAccessJwt: cfJwt)
         else {
             printError(
                 "エラー: remote バックエンドですが server-url が未設定です。"

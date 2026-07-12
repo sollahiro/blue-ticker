@@ -86,7 +86,7 @@ flowchart LR
     server -.->|"filings/financials read<br/>（財務系は DB 専用）"| pg[("Neon Postgres")]
 ```
 
-接続情報の解決順位: env（`BLT_SERVER_URL` / `BLT_AUTH_TOKEN`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > `BLT_AUTH_TOKEN` 設定なら静的 Bearer > どちらも無しなら無認証（dev）。クラウド本番は Cloudflare Access + IdP（CLI/iOS とも SSO）、self-host は Bearer。詳細は `blt-server-roadmap.md`「認証」。
+接続情報の解決順位: env（`BLT_SERVER_URL`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > 未設定なら無認証（dev）。CLI/iOS とも Cloudflare Access + IdP（SSO）で認証する（Bearer トークンによる self-host 認証は廃止済み）。詳細は `blt-server-roadmap.md`「認証」。
 
 ### REST エンドポイント（`/v1/`、公開契約）
 
@@ -104,7 +104,7 @@ flowchart LR
 
 ### MCP エンドポイント（ルートパス `POST /`）
 
-`blt-server`（Vapor）に MCP プロトコル（[modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)、`StatelessHTTPServerTransport`）をルートパス（`POST /`）として埋め込んでいる。`/v1` と同じ認証グループ配下（`CF_ACCESS_TEAM_DOMAIN` / `BLT_AUTH_TOKEN` の env 駆動モードをそのまま共有）。
+`blt-server`（Vapor）に MCP プロトコル（[modelcontextprotocol/swift-sdk](https://github.com/modelcontextprotocol/swift-sdk)、`StatelessHTTPServerTransport`）をルートパス（`POST /`）として埋め込んでいる。`/v1` と同じ認証グループ配下（`CF_ACCESS_TEAM_DOMAIN` の env 駆動モードをそのまま共有）。
 
 Vapor のルーティングはホスト名では分岐しないため、`api.<domain>` と `mcp.<domain>`（後述）は同一のルートテーブルを共有する。`mcp.<domain>` は MCP 専用サブドメインのため、パスなしでそのまま接続できるようルートパスに統一した（旧 `/mcp` パスは廃止）。
 

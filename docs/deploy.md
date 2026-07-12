@@ -10,14 +10,13 @@
 | `BLUE_TICKER_ASSETS_PATH` | EDINET コード CSV の場所（既定 `/app/assets`） | Dockerfile 既定 |
 | `BLUE_TICKER_USER_DATA_PATH` | キャッシュ・設定の永続先（既定 `/data`） | Volume をここにマウント |
 | `BLT_EDINET_API_KEY` | EDINET API キー | **secret**（必須） |
-| `BLT_AUTH_TOKEN` | Bearer トークン。設定時のみ `/v1` を保護 | **secret**（self-host で公開時は必須） |
-| `CF_ACCESS_TEAM_DOMAIN` | 設定時は Cloudflare Access モード（方式A・エッジ信頼）。origin は JWT 検証せず Tunnel + Access に委ねる | **secret**（Cloudflare 本番時。`BLT_AUTH_TOKEN` とは排他） |
+| `CF_ACCESS_TEAM_DOMAIN` | 設定時は Cloudflare Access モード（方式A・エッジ信頼）。origin は JWT 検証せず Tunnel + Access に委ねる | **secret**（公開デプロイでは必須。未設定だと `/v1`・MCP は無認証になる） |
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared サイドカーの Tunnel トークン。設定時のみコンテナ内で cloudflared を起動 | **secret**（Cloudflare 本番時） |
 | `DATABASE_URL` | Neon Postgres 接続文字列 | **secret**（未設定なら DB なしのステートレス動作） |
 
 `/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
 
-認証モードは `/v1` 配下で起動時に env から1つ選ばれる（優先順）: ① `CF_ACCESS_TEAM_DOMAIN` → Cloudflare Access、② `BLT_AUTH_TOKEN` → 静的 Bearer、③ どちらも無し → 無認証（ローカル開発専用・起動時 warning）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
+認証モードは `/v1` 配下で起動時に env から1つ選ばれる: ① `CF_ACCESS_TEAM_DOMAIN` 設定時 → Cloudflare Access、② 未設定 → 無認証（ローカル開発専用・起動時 warning）。**公開デプロイは常に `CF_ACCESS_TEAM_DOMAIN` を設定すること**（Bearer トークンによる self-host 認証は廃止済み）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
 
 ## Fly.io
 
@@ -25,10 +24,9 @@
 # 1. 初回のみアプリ作成（fly.toml の app 名が重複する場合はここで変更）
 fly launch --no-deploy --copy-config --name blt-server --region nrt
 
-# 2. シークレット注入
+# 2. シークレット注入（公開デプロイの認証は下記「Cloudflare Access」節の B で別途設定する）
 fly secrets set \
   BLT_EDINET_API_KEY=xxxxx \
-  BLT_AUTH_TOKEN=$(openssl rand -hex 32) \
   DATABASE_URL='postgres://...neon.tech/...?sslmode=require'
 
 # 3. 永続 Volume（/data）。nrt に作成
@@ -59,6 +57,8 @@ CI から使う secrets（`fly secrets` とは別物。`gh secret set` で登録
 
 ## self-host（Docker）
 
+`/v1`・MCP の認証は `CF_ACCESS_TEAM_DOMAIN`（Cloudflare Access）のみ対応する。未設定のまま公開ネットワークへ晒すと無認証になるため、社内ネットワーク限定などアクセス経路自体で保護できる場合を除き、公開する際は Cloudflare Tunnel + Access を前段に置くこと（手順は下記「Cloudflare Access」節）。
+
 ```bash
 # ビルド
 docker build -t blt-server .
@@ -66,7 +66,6 @@ docker build -t blt-server .
 # 起動（キャッシュ永続化のため /data をボリュームマウント）
 docker run -d --name blt-server -p 8080:8080 \
   -e BLT_EDINET_API_KEY=xxxxx \
-  -e BLT_AUTH_TOKEN=xxxxx \
   -e DATABASE_URL='postgres://...' \
   -v blt_data:/data \
   blt-server
@@ -96,7 +95,6 @@ docker exec blt-server /app/blt-server ingest --limit 50
 fly secrets set \
   CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com \
   CLOUDFLARE_TUNNEL_TOKEN=<tunnel-token>
-# Cloudflare Access モードでは BLT_AUTH_TOKEN は設定しない（排他・前者が優先）
 ```
 
 ### C. Dockerfile に cloudflared サイドカーを同梱（実装済み）

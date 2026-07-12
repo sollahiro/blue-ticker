@@ -3,7 +3,7 @@
 # ここでは Fly 固有の設定（Volume・VM）のみを定義する。
 #
 # 機密は fly secrets で注入する（イメージ・このファイルに焼かない）:
-#   fly secrets set BLT_EDINET_API_KEY=... BLT_AUTH_TOKEN=... DATABASE_URL=...
+#   fly secrets set BLT_EDINET_API_KEY=... CF_ACCESS_TEAM_DOMAIN=... CLOUDFLARE_TUNNEL_TOKEN=... DATABASE_URL=...
 # 手順は docs/deploy.md を参照。
 #
 # 本番認証は Cloudflare Access（方式A・エッジ信頼）。到達は Cloudflare Tunnel 一本に絞る。
