@@ -1,6 +1,7 @@
 // withDbRetry の再試行挙動（一過性失敗から回復・規定回数で打ち切り）を検証する。
 // backoff は maxBackoffSeconds: 0 で無効化し、待ち時間なしで回す。
 
+import Foundation
 import Logging
 import Testing
 
@@ -10,9 +11,24 @@ private struct RetryTestError: Error, CustomDebugStringConvertible {
     var debugDescription: String { "RetryTestError詳細" }
 }
 
-/// 連続失敗回数を数える非並行カウンタ（順次 await されるため lock 不要）。
+/// 呼び出し回数を数えるカウンタ。多くのテストでは順次 await されるため競合しないが、タイムアウト
+/// テストでは「見捨てられた旧試行のタスク」と「新しい試行」が重なって存在しうるため lock で守る。
 private final class Counter: @unchecked Sendable {
-    var calls = 0
+    private let lock = NSLock()
+    private var _calls = 0
+
+    var calls: Int {
+        get { lock.lock(); defer { lock.unlock() }; return _calls }
+        set { lock.lock(); defer { lock.unlock() }; _calls = newValue }
+    }
+
+    @discardableResult
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        _calls += 1
+        return _calls
+    }
 }
 
 /// ログメッセージを蓄積するだけの非並行 LogHandler（順次 await されるため lock 不要）。
@@ -41,7 +57,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
     @Test func returnsImmediatelyWhenOperationSucceedsFirstTry() async throws {
         let counter = Counter()
         let value = try await withDbRetry(maxBackoffSeconds: 0) {
-            counter.calls += 1
+            counter.increment()
             return 42
         }
         #expect(value == 42)
@@ -51,7 +67,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
     @Test func recoversAfterTransientFailures() async throws {
         let counter = Counter()
         let value = try await withDbRetry(maxAttempts: 5, maxBackoffSeconds: 0) {
-            counter.calls += 1
+            counter.increment()
             if counter.calls < 3 { throw RetryTestError() }  // 1,2 回目は失敗、3 回目で成功
             return "ok"
         }
@@ -63,7 +79,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         let counter = Counter()
         await #expect(throws: RetryTestError.self) {
             try await withDbRetry(maxAttempts: 4, maxBackoffSeconds: 0) {
-                counter.calls += 1
+                counter.increment()
                 throw RetryTestError()
             }
         }
@@ -76,7 +92,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         let counter = Counter()
         var retryCount = 0
         let value = try await withDbRetry(maxAttempts: 5, maxBackoffSeconds: 0, onRetry: { retryCount += 1 }) {
-            counter.calls += 1
+            counter.increment()
             if counter.calls < 3 { throw RetryTestError() }  // 1,2 回目失敗、3 回目成功
             return "ok"
         }
@@ -99,7 +115,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         _ = try await withDbRetry(
             maxAttempts: 3, maxBackoffSeconds: 0, logger: logger, context: "code=7203"
         ) {
-            counter.calls += 1
+            counter.increment()
             if counter.calls < 2 { throw RetryTestError() }
             return "ok"
         }
@@ -125,5 +141,37 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         #expect(errorLog.metadata["event"] == .string("db_retry_exhausted"))
         #expect(errorLog.metadata["label"] == .string("\(expectedCaller) docID=S1"))
         #expect(errorLog.metadata["error"]?.description.contains("RetryTestError詳細") == true)
+    }
+
+    // MARK: - 応答なしタイムアウト（無応答のまま死んだ接続への対策）
+    //
+    // 「例外を投げずに無期限へ待ち続ける」ハングを Task.sleep で模擬する。実運用の時間感覚では
+    // ないため operationTimeoutSeconds を短縮してテスト時間を抑える（0.2秒: CI の混雑したスケジューラ
+    // でも最初の Task が起動して増分するまでの猶予を確保しつつ、テスト自体は高速に保つ）。
+
+    @Test func operationTimeoutIsTreatedAsRetryableWhenOperationNeverReturns() async throws {
+        let counter = Counter()
+        let value = try await withDbRetry(
+            maxAttempts: 2, maxBackoffSeconds: 0, operationTimeoutSeconds: 0.2
+        ) {
+            counter.increment()
+            if counter.calls == 1 {
+                try await Task.sleep(nanoseconds: 3_600_000_000_000)  // 応答なしハングの模擬
+            }
+            return "recovered"
+        }
+        #expect(value == "recovered")
+        #expect(counter.calls == 2)  // 1回目はタイムアウトで見切り、2回目で成功
+    }
+
+    @Test func operationTimeoutExhaustsAttemptsAndThrowsTimeoutError() async {
+        await #expect(throws: DbOperationTimeoutError.self) {
+            try await withDbRetry(
+                maxAttempts: 2, maxBackoffSeconds: 0, operationTimeoutSeconds: 0.2
+            ) {
+                try await Task.sleep(nanoseconds: 3_600_000_000_000)  // 応答なしハングの模擬
+                return "unreachable"
+            }
+        }
     }
 }

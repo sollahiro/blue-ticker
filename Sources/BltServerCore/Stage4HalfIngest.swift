@@ -158,6 +158,31 @@ func storeCompanyHalfFinancials(
     }
 }
 
+// MARK: - servable/unservable 集計
+
+/// `cache_version` のみを対象にした軽量射影（`response` の JSONB を転送しない）。
+/// company_half_financials 全件の servable/unservable 集計用（通期 Stage 4 と同型）。
+final class CompanyHalfFinancialsCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyHalfFinancials.schema
+
+    @ID(custom: "code", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
+}
+
+/// company_half_financials 全件を read 床（`companyHalfFinancialsMinServableVersion`）で集計する。
+/// ingest サマリログに DB 全体のカバレッジを添えるため、`response` を転送しない軽量クエリで行う。
+func countServableCompanyHalfFinancials(db: Database) async throws -> (servable: Int, unservable: Int) {
+    let versions = try await CompanyHalfFinancialsCacheVersionOnly.query(on: db).all()
+        .map(\.cacheVersion)
+    let servable = versions.filter(isServableCompanyHalfFinancialsCacheVersion).count
+    return (servable, versions.count - servable)
+}
+
 // MARK: - read 経路（REST half-financials）
 
 /// 格納済み半期 Stage 4 結果を code で引き、read 床（`companyHalfFinancialsMinServableVersion`）以上 &

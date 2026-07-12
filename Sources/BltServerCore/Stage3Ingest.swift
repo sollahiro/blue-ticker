@@ -197,9 +197,16 @@ public func runStage3IngestCommand(
             ) { code in
                 await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
             }
+            let halfCoverage = try? await withDbRetry(
+                logger: app.logger, context: "company_half_financials 集計"
+            ) {
+                try await countServableCompanyHalfFinancials(db: app.db)
+            }
             logIngestSummary(
                 app.logger, stage: "4half", attempted: s4h.attempted, stored: s4h.stored,
-                failed: s4h.failed, skipped: s4h.skipped, notApplicable: s4h.notApplicable)
+                failed: s4h.failed, skipped: s4h.skipped,
+                servable: halfCoverage?.servable, unservable: halfCoverage?.unservable,
+                notApplicable: s4h.notApplicable)
         }
         if stages.contains(.sections) {
             // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
