@@ -35,7 +35,7 @@ private func send(
         method: "POST",
         headers: headers,
         body: data,
-        path: "/mcp"
+        path: "/"
     )
     let response = await transport.handleRequest(request)
     var json: [String: Any]?

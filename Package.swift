@@ -44,7 +44,7 @@ let package = Package(
             ]
         ),
         // MCP プロトコル層。ツールカタログと MCP.Server ファクトリのみを持つ。
-        // Vapor/Fluent には依存しない（BltServerCore が /mcp ルートとして埋め込む）。
+        // Vapor/Fluent には依存しない（BltServerCore がルートパス POST / として埋め込む）。
         .target(
             name: "BltMcpServerCore",
             dependencies: [
