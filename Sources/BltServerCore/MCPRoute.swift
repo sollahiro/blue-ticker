@@ -34,16 +34,64 @@ func registerMcpRoute(
     )
 
     group.post { req async -> Vapor.Response in
+        let requestBody = bodyData(from: req)
         let httpRequest = MCP.HTTPRequest(
             method: req.method.rawValue,
             headers: Dictionary(
                 req.headers.map { ($0.name, $0.value) }, uniquingKeysWith: { first, _ in first }),
-            body: bodyData(from: req),
+            body: requestBody,
             path: req.url.path
         )
         let httpResponse = await transport.handleRequest(httpRequest)
-        return vaporResponse(from: httpResponse)
+        let response =
+            reinitializeShimResponse(requestBody: requestBody, response: httpResponse, version: blueTickerVersion)
+            ?? httpResponse
+        return vaporResponse(from: response)
     }
+}
+
+/// 一部の MCP クライアント（Grok 等）はツール呼び出しのたびに `initialize` を再送する。
+/// swift-sdk の `Server` はプロセス生存期間で単一インスタンスを共有し、`isInitialized` を
+/// 一度きりのフラグとして扱うため、2 回目以降の `initialize` は毎回
+/// `-32600 Server is already initialized` で失敗する（`tools/list` / `tools/call` 自体は
+/// `strict: false` のためこのフラグの影響を受けず成功する）。initialize の結果は
+/// capabilities/serverInfo が固定・protocolVersion もネゴシエーションのみで決定的なため、
+/// このケースに限り成功レスポンスへ差し替える。
+private func reinitializeShimResponse(
+    requestBody: Data?, response: MCP.HTTPResponse, version: String
+) -> MCP.HTTPResponse? {
+    guard let requestBody,
+        let request = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any],
+        request["method"] as? String == Initialize.name,
+        let id = request["id"]
+    else { return nil }
+
+    guard let responseBody = response.bodyData,
+        let parsed = try? JSONSerialization.jsonObject(with: responseBody) as? [String: Any],
+        let error = parsed["error"] as? [String: Any],
+        (error["code"] as? Int) == -32600,
+        (error["message"] as? String)?.contains("already initialized") == true
+    else { return nil }
+
+    let requestedVersion = (request["params"] as? [String: Any])?["protocolVersion"] as? String
+    let negotiatedVersion =
+        requestedVersion.map { MCP.Version.supported.contains($0) ? $0 : MCP.Version.latest }
+        ?? MCP.Version.latest
+
+    // capabilities/serverInfo は ServerFactory.swift の makeBltMcpTransport と同じ固定値を使う
+    // （BltMcpServerCore が公開する定数を再利用し、二重管理を避ける）。
+    let initResult = Initialize.Result(
+        protocolVersion: negotiatedVersion,
+        capabilities: bltMcpServerCapabilities,
+        serverInfo: Server.Info(name: bltMcpServerName, version: version)
+    )
+    guard let resultData = try? JSONEncoder().encode(initResult),
+        let resultJSON = try? JSONSerialization.jsonObject(with: resultData)
+    else { return nil }
+
+    let envelope: [String: Any] = ["jsonrpc": "2.0", "id": id, "result": resultJSON]
+    guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return nil }
+    return .data(data, headers: [HTTPHeaderName.contentType: "application/json"])
 }
 
 /// Vapor の `Request.body`（`ByteBuffer?`）を `Data?` へ変換する。
