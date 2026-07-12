@@ -87,8 +87,8 @@ docker exec blt-server /app/blt-server ingest --limit 50
 1. **前提**: ドメイン（zone）が Cloudflare 管理下にあること（未移管なら zone 追加が先）。
 2. **Tunnel 作成**（Networks → Tunnels → Cloudflared）→ **トークン**を取得。Public hostname を1本追加: `api.<domain>` → サービス `http://localhost:8080`（コンテナ内 blt-server）。token モードのためルーティングはダッシュボードが保持し、コンテナ内に config/credentials ファイルは不要。
 3. **Access アプリ作成**（Access → Applications → Self-hosted）= `api.<domain>`。
-4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*・rule = emails / group）を1本作成。CLI（`ticker login`）・iOS とも同じ SSO 経路を使う。
-5. **IdP 接続**（Settings → Authentication）でログイン方式（Google / OIDC 等）を追加。
+4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*）を1本以上作成。`api.<domain>` の実運用では2ポリシーを併存させている（OR条件）— ①本人メール限定・長期セッション（`ticker login` の CLI/iOS 用）、②One-Time PIN 経由なら誰でも許可・短期セッション（不特定多数への公開用、2026-07-12〜）。
+5. **IdP 接続**（Settings → Authentication）: 現状は **One-Time PIN**（メールにコード送信、外部設定不要）と、Cloudflare アカウントメンバー限定の組み込み IdP（`type: cloudflare`）の2つ。Google/Apple 等の外部 IdP は未接続（Googleは要 Google Cloud Console 側OAuthクライアント作成、Appleは汎用OIDCで代替可だがClient SecretがJWTで最長6ヶ月ごとの再生成が必要、といった追加コストがあり今回は見送り）。
 
 ### B. origin（Fly）側 secrets
 
@@ -123,6 +123,12 @@ cloudflared は接続断を内部で自動再接続する。blt-server が落ち
 
 - **Phase 2（公開ポート閉鎖・経路を tunnel に一本化・適用済み）**: Phase 1 を確認後にのみ実施。`fly.toml` から `[http_service]`（＝公開 LB・ポート 80/443）を**丸ごと撤去**する。サービスが1つも無くなることで Fly の auto-stop 対象から外れ、マシンは **always-on**（Tunnel 維持に必須）になる（`min_machines_running` はサービスブロック内の field なので `[http_service]` 撤去後は置き場が無い。serviceless＝常駐が正しい機構）。`/healthz` の Fly HTTP チェックも service 撤去で失われるため可用性は Tunnel + Access に委ねる。再 `fly deploy` 後、`https://blt-server.fly.dev` への直アクセスが到達不能・`api.<domain>` のみ生存を確認する。
 
+### E. レート制限（エッジ・実装済み／要検討）
+
+`api.<domain>` / `mcp.<domain>` を One-Time PIN で不特定多数に開放したため、ゾーンの Rate Limiting Rules（`http_ratelimit` フェーズ）で IP 単位の簡易レート制限を設定済み（`http.host in {"api.<domain>" "mcp.<domain>"}` → block）。
+
+**検討事項（後日）**: ゾーンが Cloudflare **Free プラン**のため、`period`（集計期間）・`mitigation_timeout`（ブロック時間）とも **10秒固定**しか使えない（60秒や10分を指定すると `not entitled` で拒否される）。現状のルールは5リクエスト/10秒・ブロック10秒というごく緩い制限に留まる。origin（blt-server）側にもレート制限・クォータは無いため、実際の悪用が観測された場合は Pro プラン以上へのアップグレード（長い period/timeout が使える）を検討する。
+
 ### クライアント設定（CLI・SSO ログイン・実装済み）
 
 CLI は `ticker login` でブラウザ経由の SSO ログインができる。内部的には `cloudflared`（要インストール。`brew install cloudflared` 等）の `access login` / `access token` を呼び出す薄いラッパーで、JWT 自体の保管・更新は cloudflared に委ねる（blue_ticker 側は `config.json` に「SSO 有効」フラグのみ持つ）。AI エージェント経由での利用も、その場にいる人間が初回ログイン時にブラウザ操作を行う想定（Service Token は廃止済み。ブラウザ操作できない完全無人の自動化には非対応）。
@@ -151,8 +157,9 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
 
 1. **Cloudflare Tunnel に Public Hostname を追加**（Networks → Tunnels → 該当 Tunnel → Public Hostname → Add）: `mcp.<domain>` → サービス `http://localhost:8080`（`api.<domain>` と同じ origin・同じポート。MCP ルートは既にこのポートにマウント済みのため Vapor 側の変更は不要）。
 2. **Access アプリ作成**（Access controls → Applications → Create new application → **Public DNS**）= `mcp.<domain>`（**パスなし**。ここに path を付けると Managed OAuth が有効化できない）。
-3. **Access ポリシー**: 既存 `api.<domain>` アプリとは別のポリシーを作成する（Action = **Allow**。全 Access アプリは deny-by-default のため、Include ルールに一致した相手にのみ許可する。許可範囲は運用者が決める）。
+3. **Access ポリシー**: 既存 `api.<domain>` アプリとは別のポリシーを作成する（Action = **Allow**。全 Access アプリは deny-by-default のため、Include ルールに一致した相手にのみ許可する）。**現在の確定運用（2026-07-12）は `everyone` 許可 ＋ 許可 IdP を One-Time PIN のみに限定**（下記4b）。「メールを受け取れる不特定多数」への公開を意図した設定であり暫定ではない。導入初期は許可 IdP が Cloudflare アカウントメンバー限定の組み込み IdP しかなく、`everyone` ポリシーでも実質メンバー以外は弾かれていた（Managed OAuth のログイン画面自体は Access の IdP 選択に委譲されるため）。
 4. **Managed OAuth 有効化**: 作成したアプリの編集画面 → Advanced settings → **Managed OAuth** をトグル ON。
+   - **4b. 許可 IdP を確認**: アプリの `allowed_idps` に **One-Time PIN** を含める（外部クライアントが実際にログインできるようにする必須設定。Cloudflare アカウントメンバー限定の組み込み IdP だけでは不特定多数は入れない）。
 5. **許可 redirect URI を登録**（DCR で各クライアントが登録するコールバック URL を許可リストに追加しないと `invalid_client_metadata: redirect_uri is not allowed by the account configuration` で失敗する）:
    - `https://claude.ai/api/mcp/auth_callback` — Claude.ai Web / Desktop / モバイル用
    - `http://localhost/callback`・`http://127.0.0.1/callback` — Claude Code 用。**ポート番号やワイルドカード（`:*`）は付けない**こと（`http://localhost:*/callback` は無効な URI として拒否される）。Cloudflare は RFC 8252 のループバック例外を実装しており、ポートなしでこの2つを登録するだけで実際のコールバックの任意ポート（`:54321` 等）を自動的に許可する（実機で確認済み）
