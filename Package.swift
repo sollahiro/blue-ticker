@@ -99,6 +99,7 @@ let package = Package(
             name: "BlueTickerTests",
             dependencies: [
                 "BlueTickerCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "ZIPFoundation",
                 "SwiftSoup",
             ],
