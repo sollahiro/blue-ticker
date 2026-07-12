@@ -1,14 +1,17 @@
 name: Deploy
 
+# CI（テスト）成功後にのみデプロイする。push 直結だとテストが落ちるコミットでも
+# Docker ビルドさえ通れば本番へ出てしまうため、workflow_run で CI をゲートにする。
+# workflow_run はパスフィルタ非対応のため、「前回成功した Deploy run の head_sha からの
+# 差分にデプロイ関連パスが含まれるか」をジョブ内で判定する（スキップで終わった成功 run も
+# 基準にしてよい: その run 自身が「基準〜その時点に関連差分なし」を検証済みのため）。
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'Sources/**'
-      - 'Dockerfile'
-      - 'fly.toml'
-      - 'Package.swift'
-      - 'Package.resolved'
+  # パス判定の誤りや手動再デプロイ用の逃げ道（パス判定をスキップして必ずデプロイする）
+  workflow_dispatch:
 
 concurrency:
   group: fly-deploy
@@ -17,17 +20,58 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     steps:
       - uses: actions/checkout@v4
+        with:
+          # CI が検証した commit を明示的に checkout する（workflow_run の checkout は
+          # 既定でデフォルトブランチ最新を見るため、後続 push とのレースを避ける）。
+          # workflow_dispatch では head_sha が空 = デフォルトブランチ HEAD。
+          ref: ${{ github.event.workflow_run.head_sha }}
+          # パス判定で過去コミットとの diff を取るため全履歴が必要
+          fetch-depth: 0
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: デプロイ関連パスの変更有無を判定
+        id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch: パス判定をスキップしてデプロイします"
+            exit 0
+          fi
+          base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?status=success&branch=main&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "基準となる成功 run が見つからないためデプロイします"
+            exit 0
+          fi
+          # Dockerfile が COPY する scripts/・assets/ もデプロイ関連パスに含める
+          if git diff --name-only "$base" HEAD | \
+             grep -qE '^(Sources/|scripts/|assets/|Dockerfile$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "デプロイ関連パスに変更なし（base=$base）"
+          fi
+
+      # FLY_API_TOKEN を扱うジョブのため mutable な @master 参照を避け、コミット SHA に固定する
+      - uses: superfly/flyctl-actions/setup-flyctl@dfdfedc86b296f5e5384f755a18bf400409a15d0 # v1.4
+        if: steps.paths.outputs.changed == 'true'
 
       - name: Deploy to Fly.io
+        if: steps.paths.outputs.changed == 'true'
         run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Ensure machine is running
+        if: steps.paths.outputs.changed == 'true'
         # serviceless 構成（[http_service] 撤去済み・docs/deploy.md「D. fly.toml の段階カットオーバー」）
         # のため、fly deploy 後にマシンが stopped のままになることがある（docs/operations.md「保守ポイント」）。
         # `flyctl machine status` に汎用 --json フラグは無いため、id/state を含む `machine list --json` のみで完結させる。

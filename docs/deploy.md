@@ -52,7 +52,7 @@ CI から使う secrets（`fly secrets` とは別物。`gh secret set` で登録
 
 | secret | 役割 | 使用箇所 |
 |---|---|---|
-| `FLY_API_TOKEN` | `flyctl deploy` の認証（`fly tokens create deploy` で発行したデプロイ専用トークンを推奨） | `.github/workflows/deploy.yml`（main push 時の自動デプロイ） |
+| `FLY_API_TOKEN` | `flyctl deploy` の認証（`fly tokens create deploy` で発行したデプロイ専用トークンを推奨） | `.github/workflows/deploy.yml`（main の CI 成功後の自動デプロイ） |
 | `BLT_API_DOMAIN` | 外形監視が無認証アクセスを試す本番ホスト名（現在 `api.sollahiro.com`。値自体は CLI のビルド時既定値として上記「環境変数」節や `blt-server-roadmap.md` に既出で秘匿情報ではない）。secret にするのは値を隠すためではなく、ホスト切り替え時に secret 更新だけで済み、ワークフロー本体の変更が要らないようにするため | `.github/workflows/edge-security-smoke.yml`（Cloudflare Access 生存確認） |
 
 ## self-host（Docker）
