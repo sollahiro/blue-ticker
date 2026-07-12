@@ -211,7 +211,7 @@ tail -f .build/blt-scheduled.log
 
 plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
 ### ingest の優先順位（任意・ローカル専用）
 

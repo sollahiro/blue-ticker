@@ -20,6 +20,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # パス判定が過去の Deploy run を gh api で読むため
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -29,7 +32,7 @@ jobs:
         with:
           # CI が検証した commit を明示的に checkout する（workflow_run の checkout は
           # 既定でデフォルトブランチ最新を見るため、後続 push とのレースを避ける）。
-          # workflow_dispatch では head_sha が空 = デフォルトブランチ HEAD。
+          # workflow_dispatch では head_sha が空 = 起動時に選んだ ref を checkout する。
           ref: ${{ github.event.workflow_run.head_sha }}
           # パス判定で過去コミットとの diff を取るため全履歴が必要
           fetch-depth: 0
@@ -44,15 +47,26 @@ jobs:
             echo "workflow_dispatch: パス判定をスキップしてデプロイします"
             exit 0
           fi
+          # gh api の一時障害では「デプロイする」側に倒す（デプロイは冪等・空 base 分岐へ）
           base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?status=success&branch=main&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty')
+            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "基準となる成功 run が見つからないためデプロイします"
             exit 0
           fi
-          # Dockerfile が COPY する scripts/・assets/ もデプロイ関連パスに含める
-          if git diff --name-only "$base" HEAD | \
+          # 連続 push X→Y で CI(Y) が先に完了した後、遅れて CI(X) が完了するケースでは
+          # HEAD(X) が base(Y) の祖先になる。diff には Y の巻き戻しが現れるが、古い X を
+          # 上書きデプロイしてはならないためスキップする（同一 sha もここで弾く）。
+          if git merge-base --is-ancestor HEAD "$base"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "HEAD は既にデプロイ済みの $base に含まれるためスキップします"
+            exit 0
+          fi
+          # Dockerfile が COPY する scripts/・assets/ もデプロイ関連パスに含める。
+          # --no-renames: rename 検出時に旧パス（Sources/ からの移動元等）が出力から
+          # 消えて取りこぼすのを防ぎ、両側を列挙させる
+          if git diff --no-renames --name-only "$base" HEAD | \
              grep -qE '^(Sources/|scripts/|assets/|Dockerfile$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
