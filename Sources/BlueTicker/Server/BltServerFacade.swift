@@ -171,6 +171,13 @@ public extension BltServerContext {
     func listedCompanyCodes() async -> Set<String> {
         await masterDataManager.listedCodes()
     }
+
+    /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
+    /// Stage 4/4-half/5 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
+    /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
+    func priorityIngestCodes() async -> Set<String> {
+        loadPriorityIngestCodes()
+    }
 }
 
 /// 内部型 SegmentResult を公開格納用 SegmentPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。

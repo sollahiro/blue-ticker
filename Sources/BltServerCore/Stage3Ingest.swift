@@ -163,6 +163,14 @@ public func runStage3IngestCommand(
         // 上場・国内法人の対象ユニバース。Stage 4/4-half/5 共通で候補を絞り込み、
         // 上場廃止・外国法人など二度と成功しない企業への無駄なリトライを避ける。
         let listed = await context.listedCompanyCodes()
+        // ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）。対象選定ではなく
+        // Stage 4/4-half/5 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
+        let priority = await context.priorityIngestCodes()
+        if !priority.isEmpty {
+            app.logger.notice(
+                "Priority ingest codes loaded",
+                metadata: ["event": "priority_codes_loaded", "count": "\(priority.count)"])
+        }
         if includeFacts {
             let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
@@ -178,7 +186,7 @@ public func runStage3IngestCommand(
         if stages.contains(.financials) {
             let s4 = try await runStage4Ingest(
                 db: app.db, years: stage4IngestYears, limit: limit, listedCodes: listed,
-                logger: app.logger
+                priorityCodes: priority, logger: app.logger
             ) { code in
                 await context.computeFinancials(code: code, years: stage4IngestYears)
             }
@@ -193,7 +201,7 @@ public func runStage3IngestCommand(
         if stages.contains(.half) {
             let s4h = try await runStage4HalfIngest(
                 db: app.db, years: stage4HalfIngestYears, limit: limit, listedCodes: listed,
-                logger: app.logger
+                priorityCodes: priority, logger: app.logger
             ) { code in
                 await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
             }
@@ -212,7 +220,8 @@ public func runStage3IngestCommand(
             // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
             let s5 = try await runStage5Ingest(
                 db: app.db, listedCodes: listed, years: stage5IngestYears,
-                sectionKeys: currentFilingSectionKeys(), limit: limit, logger: app.logger
+                sectionKeys: currentFilingSectionKeys(), limit: limit, priorityCodes: priority,
+                logger: app.logger
             ) { docID in
                 await context.extractFilingSections(docID: docID)
             }

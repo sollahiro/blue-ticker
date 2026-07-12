@@ -387,6 +387,26 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
+    @Test func ingestProcessesPriorityCodesFirstWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            try await seedDocument("S2", secCode: "67580", db: app.db)
+            try await seedDocument("S3", secCode: "99840", db: app.db)  // 優先指定・投入順は最後
+
+            let summary = try await runStage4Ingest(
+                db: app.db, years: 5, limit: 1, priorityCodes: ["9984"]
+            ) { code in
+                try? makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyFinancials.find("9984", on: app.db) != nil)
+            #expect(try await CompanyFinancials.find("7203", on: app.db) == nil)
+            #expect(try await CompanyFinancials.find("6758", on: app.db) == nil)
+        }
+    }
+
     // MARK: - servable/unservable 集計
 
     @Test func countServableCompanyFinancialsSplitsByReadFloor() async throws {
