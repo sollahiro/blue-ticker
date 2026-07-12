@@ -18,7 +18,7 @@ swift test                   # 全テスト（Swift Testing）
 |---|---|
 | `BlueTickerCore`（`Sources/BlueTicker/`） | CLI・XBRL解析・サービス・REST サーバーのファサード（`Server/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
 | `BltMcpServerCore`（`Sources/BltMcpServerCore/`） | MCP プロトコル層（ツールカタログ・`MCP.Server` ファクトリ）。ビジネスロジック・DB は持たない。**Vapor/Fluent には依存しない** |
-| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。`POST /mcp` もここで Vapor ルートとして配線する。Web/DB 依存（Vapor・Fluent）をここに閉じ込める |
+| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。MCP プロトコルもここでルートパス（`POST /`）として Vapor ルートに配線する。Web/DB 依存（Vapor・Fluent）をここに閉じ込める |
 | `BlueTicker`（`Sources/BlueTickerMain/`） | `ticker` CLI のエントリポイントのみ |
 | `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ |
 

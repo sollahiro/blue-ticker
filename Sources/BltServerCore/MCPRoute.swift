@@ -1,7 +1,12 @@
-// /mcp ルート（MCP プロトコル）の配線。
+// MCP プロトコルルート（ルートパス `POST /`）の配線。
 // BltMcpServerCore が持つツールカタログ・transport を Vapor にアダプトする。
 // ツールディスパッチは Routes.swift の共有関数（serveStoredFinancials 等）を呼び、
 // REST と DB 読み取りロジックを重複させない。
+//
+// ルートパスに置く理由: Vapor のルーティングはホスト名では分岐しない（`api.<domain>` と
+// `mcp.<domain>` は同じルートテーブルを共有し、Cloudflare Access のポリシーだけが異なる）。
+// `mcp.<domain>` は MCP 専用サブドメインのため、パスを付けず `mcp.<domain>` そのもので
+// 接続できるようにルートパスへ統一した（`/mcp` は廃止）。
 
 import BlueTickerCore
 import BltMcpServerCore
@@ -11,8 +16,8 @@ import Logging
 import MCP
 import Vapor
 
-/// `/mcp` をルートグループへ登録する。`group` は Routes.swift 側で構成済みの認証グループを渡す
-/// （`/v1` と同じ認証ポリシーを適用するため）。
+/// MCP プロトコルをルートグループのルートパス（`POST /`）へ登録する。`group` は Routes.swift 側で
+/// 構成済みの認証グループを渡す（`/v1` と同じ認証ポリシーを適用するため）。
 func registerMcpRoute(
     _ group: RoutesBuilder, app: Application, context: BltServerContext, dbAvailable: Bool
 ) async throws {
@@ -28,7 +33,7 @@ func registerMcpRoute(
         }
     )
 
-    group.post("mcp") { req async -> Vapor.Response in
+    group.post { req async -> Vapor.Response in
         let httpRequest = MCP.HTTPRequest(
             method: req.method.rawValue,
             headers: Dictionary(
