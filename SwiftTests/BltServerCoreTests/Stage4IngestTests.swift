@@ -133,6 +133,46 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
+    // MARK: - explicitCodes 絞り込み（--codes 手動指定）
+
+    @Test func ingestSkipsCompaniesNotInExplicitCodes() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // explicitCodes に含む
+            try await seedDocument("S2", secCode: "67580", db: app.db)  // 含まない
+
+            let summary = try await runStage4Ingest(
+                db: app.db, years: 5, limit: nil, explicitCodes: ["7203"]
+            ) { code in
+                try? makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyFinancials.find("7203", on: app.db) != nil)
+            #expect(try await CompanyFinancials.find("6758", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestCombinesListedAndExplicitCodesFilters() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // 両方に含む
+            try await seedDocument("S2", secCode: "67580", db: app.db)  // listedCodes に含まない
+            try await seedDocument("S3", secCode: "99840", db: app.db)  // explicitCodes に含まない
+
+            let summary = try await runStage4Ingest(
+                db: app.db, years: 5, limit: nil, listedCodes: ["7203", "9984"],
+                explicitCodes: ["7203"]
+            ) { code in
+                try? makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyFinancials.find("7203", on: app.db) != nil)
+            #expect(try await CompanyFinancials.find("6758", on: app.db) == nil)
+            #expect(try await CompanyFinancials.find("9984", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestDedupesMultipleDocumentsOfSameCompany() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
