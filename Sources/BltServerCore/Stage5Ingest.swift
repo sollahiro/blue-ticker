@@ -36,14 +36,15 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 
 /// 上場企業の有報（直近 years 年ぶん）を走査し、未抽出 or バージョン／セクション集合不一致のものを
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
+/// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 func runStage5Ingest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
-    limit: Int?, priorityCodes: Set<String> = [], logger: Logger? = nil,
-    extract: FilingSectionsExtractor
+    limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> Stage5IngestSummary {
     let baseCandidates = try await stage5Candidates(
-        db: db, listedCodes: listedCodes, years: years, logger: logger)
+        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
 
     var attempted = 0
     var stored = 0
@@ -124,8 +125,10 @@ func runStage5Ingest(
 
 /// 取り込み候補（docID, 4桁コード, 提出日時）を返す。
 /// 「上場（listedCodes）× 有報(120) × 各社 提出日時降順の直近 years 件」に絞る。
+/// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 func stage5Candidates(
-    db: Database, listedCodes: Set<String>, years: Int, logger: Logger? = nil
+    db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
+    logger: Logger? = nil
 ) async throws -> [(docID: String, code: String, submitDateTime: String)] {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocument.query(on: db)
@@ -141,6 +144,7 @@ func stage5Candidates(
         else { continue }
         let code = String(sec.dropLast())
         guard listedCodes.contains(code) else { continue }
+        if let explicit = explicitCodes, !explicit.contains(code) { continue }
         byCode[code, default: []].append((docID, doc.submitDateTime))
     }
 

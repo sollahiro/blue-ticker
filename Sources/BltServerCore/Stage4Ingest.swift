@@ -31,14 +31,17 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsResp
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。
 /// `listedCodes` を渡すと候補をその集合に絞る（上場廃止・外国法人等、二度と成功しない企業への
 /// 無駄なリトライを避ける。`nil` は絞り込みなし＝従来どおり全企業）。
+/// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 func runStage4Ingest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
-    priorityCodes: Set<String> = [], logger: Logger? = nil, compute: FinancialsComputer
+    explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [], logger: Logger? = nil,
+    compute: FinancialsComputer
 ) async throws -> Stage4IngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
         db: db, docTypes: Api.stage4FreshnessDocTypes, logger: logger)
-    let codes = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
+    let listedFiltered = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
+    let codes = explicitCodes.map { explicit in listedFiltered.filter { explicit.contains($0) } } ?? listedFiltered
 
     var attempted = 0
     var stored = 0

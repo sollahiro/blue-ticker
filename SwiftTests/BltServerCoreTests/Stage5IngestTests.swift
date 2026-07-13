@@ -83,6 +83,22 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    @Test func ingestExcludesCompaniesNotInExplicitCodes() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)  // explicitCodes に含む
+            try await seedDoc("S2", secCode: "67580", db: app.db)  // 含まない
+
+            let summary = try await runStage5Ingest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: nil,
+                explicitCodes: ["7203"]
+            ) { _ in fakePayload() }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyFilingSections.find("S1", on: app.db) != nil)
+            #expect(try await CompanyFilingSections.find("S2", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestExcludesNonAnnualDocTypes() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)  // 有報120

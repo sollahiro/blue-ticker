@@ -143,10 +143,15 @@ let stage4IngestYears = 6
 /// `stages` は実行する Stage 4/4-half/5 の集合（CLI: `--stages 5` 等）。既定は全ステージ。
 /// 例えば Stage 5 だけを先に流したいとき、重い Stage 4/4-half の全件 drain を挟まずに済む。
 /// Stage 3 は `stages` に含めず、従来どおり `includeFacts` で別制御する。
+/// `codes` は Stage 4/4-half/5 の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
+/// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
+/// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
+/// Stage 3 は `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runStage3IngestCommand(
     limit: Int?, includeFacts: Bool = false,
-    stages: Set<IngestStage> = Set(IngestStage.allCases)
+    stages: Set<IngestStage> = Set(IngestStage.allCases),
+    codes: Set<String>? = nil
 ) async throws {
     guard let context = await makeBltServerContext() else {
         throw Stage1SyncError.apiKeyMissing
@@ -171,6 +176,14 @@ public func runStage3IngestCommand(
                 "Priority ingest codes loaded",
                 metadata: ["event": "priority_codes_loaded", "count": "\(priority.count)"])
         }
+        // `--codes` 指定時は Stage 4/4-half/5 の対象をその集合へ絞り、`limit` は無視して全件処理する
+        // （手動・単発の対象は小さい前提。Stage 3 は doc 単位のためスコープ外）。
+        let stageLimit = codes == nil ? limit : nil
+        if let codes {
+            app.logger.notice(
+                "Explicit ingest codes specified",
+                metadata: ["event": "explicit_codes_loaded", "count": "\(codes.count)"])
+        }
         if includeFacts {
             let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
@@ -185,8 +198,8 @@ public func runStage3IngestCommand(
         }
         if stages.contains(.financials) {
             let s4 = try await runStage4Ingest(
-                db: app.db, years: stage4IngestYears, limit: limit, listedCodes: listed,
-                priorityCodes: priority, logger: app.logger
+                db: app.db, years: stage4IngestYears, limit: stageLimit, listedCodes: listed,
+                explicitCodes: codes, priorityCodes: priority, logger: app.logger
             ) { code in
                 await context.computeFinancials(code: code, years: stage4IngestYears)
             }
@@ -200,8 +213,8 @@ public func runStage3IngestCommand(
         }
         if stages.contains(.half) {
             let s4h = try await runStage4HalfIngest(
-                db: app.db, years: stage4HalfIngestYears, limit: limit, listedCodes: listed,
-                priorityCodes: priority, logger: app.logger
+                db: app.db, years: stage4HalfIngestYears, limit: stageLimit, listedCodes: listed,
+                explicitCodes: codes, priorityCodes: priority, logger: app.logger
             ) { code in
                 await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
             }
@@ -220,8 +233,8 @@ public func runStage3IngestCommand(
             // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
             let s5 = try await runStage5Ingest(
                 db: app.db, listedCodes: listed, years: stage5IngestYears,
-                sectionKeys: currentFilingSectionKeys(), limit: limit, priorityCodes: priority,
-                logger: app.logger
+                sectionKeys: currentFilingSectionKeys(), limit: stageLimit, explicitCodes: codes,
+                priorityCodes: priority, logger: app.logger
             ) { docID in
                 await context.extractFilingSections(docID: docID)
             }

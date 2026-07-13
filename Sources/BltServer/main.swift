@@ -2,9 +2,11 @@
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    Stage 1 書類一覧を DB へ同期
-//   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5]
+//   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5] [--codes 7203,6758]
 //                                                            Stage 4/4-half/5 を DB へ取り込み（--stages で対象を選択、既定は全て。
-//                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22）
+//                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22。
+//                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
+//                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
 //
@@ -52,10 +54,20 @@ do {
             printError("blt-server error: --stages は 4,4half,5 のカンマ区切りで指定してください\n")
             exit(1)
         }
+        // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。
+        // 「値なしの裸 --codes」を絞り込みなし（全企業対象）へ誤って縮退させないよう、
+        // フラグの有無は argv.contains で別途判定する。
+        let codesPresent = argv.contains("--codes")
+        let codes = parseIngestCodes(optionValue("--codes", in: argv))
+        if codesPresent, codes?.isEmpty ?? true {
+            printError("blt-server error: --codes は証券コードのカンマ区切りで指定してください\n")
+            exit(1)
+        }
         try await runStage3IngestCommand(
             limit: optionValue("--limit", in: argv).flatMap(Int.init),
             includeFacts: argv.contains("--with-facts"),
-            stages: stages
+            stages: stages,
+            codes: codes
         )
     } else if argv.count > 1, argv[1] == "master-data-upload" {
         guard argv.count > 2 else {
