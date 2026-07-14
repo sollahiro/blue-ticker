@@ -10,7 +10,8 @@ import Testing
 
 private let expectedToolNames: Set<String> = [
     "search_companies", "search_by_sector", "get_filings",
-    "get_financial_summary", "get_half_financial_summary", "get_filing_content",
+    "get_financial_summary", "get_half_financial_summary",
+    "get_analysis", "get_half_analysis", "get_filing_content",
 ]
 
 private func makeTransport(
@@ -47,7 +48,7 @@ private func send(
 
 @Suite struct McpServerFactoryTests {
 
-    @Test func toolsListReturnsAllSixTools() async throws {
+    @Test func toolsListReturnsAllExpectedTools() async throws {
         let transport = try await makeTransport()
         let (status, json) = try await send(
             transport, ["jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": [String: Any]()])
@@ -113,6 +114,6 @@ private func send(
 
         #expect(status == 200)
         let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
-        #expect((tools ?? []).count == 6)
+        #expect((tools ?? []).count == expectedToolNames.count)
     }
 }

@@ -122,6 +122,8 @@ private func send(
             for path in [
                 "/v1/companies/7203/financials",
                 "/v1/companies/7203/half-financials",
+                "/v1/companies/7203/analysis",
+                "/v1/companies/7203/half-analysis",
                 "/v1/companies/7203/filing-content",
             ] {
                 let (status, json) = try await send(app, path)
@@ -146,6 +148,22 @@ private func send(
     @Test func halfFinancialsReturns404WhenNotStored() async throws {
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/half-financials")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "半期財務データは未集計です")
+        }
+    }
+
+    @Test func analysisReturns404WhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/analysis")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "財務データは未集計です")
+        }
+    }
+
+    @Test func halfAnalysisReturns404WhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/half-analysis")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "半期財務データは未集計です")
         }

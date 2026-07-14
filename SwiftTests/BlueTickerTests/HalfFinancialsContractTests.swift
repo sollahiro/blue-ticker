@@ -83,6 +83,51 @@ import Testing
         #expect(current >= companyHalfFinancialsMinServableVersion)
     }
 
+    // MARK: - Summarize / Analyze の境界（docs/feature-tiers.md）
+
+    @Test func summaryJsonObjectExcludesAnalysisOnlyKeys() throws {
+        var p = period("2024-03-31", "H1", sales: 100, roe: 5)
+        p.yearEntry.calculatedData.businessProfitChange = 3
+        p.yearEntry.calculatedData.workingCapital = 50
+        let resp = HalfFinancialsResponse(code: "7203", name: "トヨタ", periods: [p])
+
+        let periods = try #require(resp.summaryJsonObject()["periods"] as? [[String: Any]])
+        let year = try #require(periods[0]["year"] as? [String: Any])
+        for key in FinancialsYear.analysisOnlyKeys {
+            #expect(year.keys.contains(key) == false, "\(key) は Analyze 専用のため Summarize に含めない")
+        }
+        #expect(year["roe"] as? Double == 5)
+    }
+
+    /// ④⑤の前期は「隣接期」ではなく「同じ半期の直近過去期」でなければならない。
+    /// H1・H2 が交互に並ぶ列で、隣接インデックスの差分を取ると誤った値になる退行を検出する。
+    @Test func analysisJsonObjectUsesSameHalfPriorNotAdjacentPeriod() throws {
+        func withNetCash(_ p: HalfPeriod, _ value: Double) -> HalfPeriod {
+            var copy = p
+            copy.yearEntry.calculatedData.netCash = value
+            return copy
+        }
+        let periods = [
+            withNetCash(period("2023-03-31", "H1", sales: 80, roe: 4), 10),
+            withNetCash(period("2023-03-31", "H2", sales: 90, roe: 4), 20),
+            withNetCash(period("2024-03-31", "H1", sales: 100, roe: 5), 30),
+            withNetCash(period("2024-03-31", "H2", sales: 120, roe: 6), 40),
+        ]
+        let resp = HalfFinancialsResponse(code: "7203", name: "トヨタ", periods: periods)
+        let json = try #require(resp.analysisJsonObject()["periods"] as? [[String: Any]])
+        #expect(json.count == 4)
+
+        // 先頭の H1/H2（同じ半期の前期が無い）は null。
+        #expect((json[0]["year"] as? [String: Any])?["net_cash_change"] is NSNull)
+        #expect((json[1]["year"] as? [String: Any])?["net_cash_change"] is NSNull)
+
+        // 2024H1 の前期は 2023H1（隣接の 2023H2 ではない）: 30 - 10 = 20。
+        #expect((json[2]["year"] as? [String: Any])?["net_cash_change"] as? Double == 20)
+        // 2024H2 の前期は 2023H2（隣接の 2024H1 ではない）: 40 - 20 = 20。
+        // 隣接誤りなら 40 - 30 = 10 になってしまう。
+        #expect((json[3]["year"] as? [String: Any])?["net_cash_change"] as? Double == 20)
+    }
+
     /// trimmed は halfYearTrimPeriods に委譲する（完結 H1+H2 ペアを新しい順に n 件）。
     @Test func trimmedKeepsLatestNFiscalYears() {
         let periods = [

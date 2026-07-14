@@ -77,6 +77,16 @@ struct HalfFinancialsPeriod: Codable, Sendable {
     func jsonObject() -> [String: Any] {
         ["label": label, "half": half as Any? ?? NSNull(), "year": year.jsonObject()]
     }
+
+    /// Summarize（half-financials）応答用 JSON。`year` から Analyze 専用フィールドを除く。
+    func summaryJsonObject() -> [String: Any] {
+        ["label": label, "half": half as Any? ?? NSNull(), "year": year.summaryJsonObject()]
+    }
+
+    /// Analyze（half-analysis）応答用 JSON。`prior` は「同じ半期の直近過去期」（隣接期ではない）。
+    func analysisJsonObject(prior: HalfFinancialsPeriod?) -> [String: Any] {
+        ["label": label, "half": half as Any? ?? NSNull(), "year": year.analysisJsonObject(prior: prior?.year)]
+    }
 }
 
 // MARK: - レスポンス（トップレベル封筒）
@@ -122,6 +132,37 @@ extension HalfFinancialsResponse {
             "currency": currency,
             "unit": unit,
             "periods": periods.map { $0.jsonObject() },
+        ]
+    }
+
+    /// Summarize（half-financials）応答用の全キー JSON オブジェクト（`periods` 各要素の `year` は
+    /// Analyze 専用フィールドを除いた水準値のみ）。public: BltServerCore の half-financials read 経路が使う。
+    public func summaryJsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name,
+            "currency": currency,
+            "unit": unit,
+            "periods": periods.map { $0.summaryJsonObject() },
+        ]
+    }
+
+    /// Analyze（half-analysis）応答用の全キー JSON オブジェクト。`periods`（古い順）を走査し、
+    /// 各期に「同じ半期の直近過去期」との増減分解フィールド（④⑤ブロック含む）を付与する。
+    /// 呼び出し側は `trimmed(toYears:)` を先に適用してから呼ぶこと。
+    /// public: BltServerCore の half-analysis read 経路が使う。
+    public func analysisJsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name,
+            "currency": currency,
+            "unit": unit,
+            "periods": periods.indices.map { i in
+                let prior = periods[..<i].last { $0.half == periods[i].half }
+                return periods[i].analysisJsonObject(prior: prior)
+            },
         ]
     }
 

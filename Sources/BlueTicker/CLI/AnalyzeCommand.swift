@@ -59,7 +59,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
 
         if half {
             let resp: HalfFinancialsResponse
-            switch await remote.getHalfFinancials(code: codeTrimmed, years: years) {
+            switch await remote.getHalfAnalysis(code: codeTrimmed, years: years) {
             case .ok(let r): resp = r
             case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
             }
@@ -75,7 +75,7 @@ struct AnalyzeCommand: AsyncParsableCommand {
         }
 
         let resp: FinancialsResponse
-        switch await remote.getFinancials(code: codeTrimmed, years: years) {
+        switch await remote.getAnalysis(code: codeTrimmed, years: years) {
         case .ok(let r): resp = r
         case .notFound(let m), .failure(let m): printError(m + "\n"); throw ExitCode.failure
         }

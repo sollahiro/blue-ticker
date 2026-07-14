@@ -14,6 +14,13 @@
 
 - 課金方針は **monetize gateway 実装後に有効化する。実装前は全機能を無料で提供する**（表の「有料」は現時点では未発効）。
 - 課金要否はクライアント（Remote CLI / MCP 等）非依存。同一機能はクライアントによらず同一方針。
+- 課金境界は **呼び出すエンドポイント/ツール単位**で決める（フィールド単位のマスキングではない）。
+
+## Summarize / Analyze の境界
+
+- Summarize（`GET /v1/companies/{code}/financials`・`/half-financials`、MCP `get_financial_summary`・`get_half_financial_summary`）は水準値のみ（`ticker summarize` の表示項目と同じ）。
+- Analyze（`GET /v1/companies/{code}/analysis`・`/half-analysis`、MCP `get_analysis`・`get_half_analysis`）は Summarize と同じ水準値に加え、前年差・要因分解（事業利益ウォーターフォール・ROIC/ROE分解・ネットキャッシュ/運転資本/CCC前年差）を含む（`ticker analyze` と同じ内容）。
+- 実装詳細は `FinancialsYear.analysisOnlyKeys`（`Sources/BlueTicker/Models/FinancialsContract.swift`）。DBスキーマ・cache_versionは変更していない（read時の投影のみ）。
 
 ## 関連
 

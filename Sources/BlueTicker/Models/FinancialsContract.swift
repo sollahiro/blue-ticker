@@ -370,6 +370,51 @@ extension FinancialsYear {
         }
         return dict
     }
+
+    /// Analyze（`docs/feature-tiers.md`）専用の増減分解フィールド。Summarize（financials）の応答からは
+    /// これらを外す。値自体は Stage 4 ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
+    /// 対象は `AnalyzeCommand`（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
+    /// 注意: 「`SummarizeCommand.levelMetrics` に無いフィールド」全般ではない
+    /// （`eps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
+    static let analysisOnlyKeys: Set<String> = [
+        "business_profit", "business_profit_margin",
+        "business_profit_change", "sales_change_impact",
+        "gross_margin_change_impact", "sga_change_impact",
+        "net_margin", "asset_turnover", "financial_leverage",
+        "roic_delta", "roic_margin_effect", "roic_turnover_effect",
+        "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
+        "working_capital", "dso", "dio", "dpo", "ccc",
+    ]
+
+    /// Summarize（financials）応答用 JSON。`analysisOnlyKeys` を除いた水準値のみを返す。
+    func summaryJsonObject() -> [String: Any] {
+        var dict = jsonObject()
+        for key in Self.analysisOnlyKeys { dict.removeValue(forKey: key) }
+        return dict
+    }
+
+    /// Analyze（analysis）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker analyze` の
+    /// ④⑤ブロック（ネットキャッシュ差分・運転資本/CCC差分の要因分解）を `prior`（直前期。無ければ nil）
+    /// との差分からその場で計算して追加する。DB には保存しない（read 時のみの投影）。
+    func analysisJsonObject(prior: FinancialsYear?) -> [String: Any] {
+        var dict = jsonObject()
+        func delta(_ a: Double?, _ b: Double?) -> Any {
+            guard let a, let b else { return NSNull() }
+            return a - b
+        }
+        dict["net_cash_change"] = delta(netCash, prior?.netCash)
+        dict["cash_change_impact"] = delta(cashEquivalents, prior?.cashEquivalents)
+        dict["debt_change_impact"] = delta(prior?.interestBearingDebt, interestBearingDebt)
+        dict["working_capital_change"] = delta(workingCapital, prior?.workingCapital)
+        dict["accounts_receivable_change_impact"] = delta(accountsReceivable, prior?.accountsReceivable)
+        dict["inventory_change_impact"] = delta(inventory, prior?.inventory)
+        dict["accounts_payable_change_impact"] = delta(prior?.accountsPayable, accountsPayable)
+        dict["ccc_change"] = delta(ccc, prior?.ccc)
+        dict["dso_change_impact"] = delta(dso, prior?.dso)
+        dict["dio_change_impact"] = delta(dio, prior?.dio)
+        dict["dpo_change_impact"] = delta(prior?.dpo, dpo)
+        return dict
+    }
 }
 
 // MARK: - レスポンス（トップレベル封筒）
@@ -425,6 +470,41 @@ extension FinancialsResponse {
             "currency": currency,
             "unit": unit,
             "years": years.map { $0.jsonObject() },
+        ]
+    }
+
+    /// Summarize（financials）応答用の全キー JSON オブジェクト（`years` 各要素は
+    /// `analysisOnlyKeys` を除いた水準値のみ）。public: BltServerCore の financials read 経路が使う。
+    public func summaryJsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name,
+            "sector": sector,
+            "market": market,
+            "currency": currency,
+            "unit": unit,
+            "years": years.map { $0.summaryJsonObject() },
+        ]
+    }
+
+    /// Analyze（analysis）応答用の全キー JSON オブジェクト。`years`（新しい順）を隣接ペアで走査し、
+    /// 各年度に増減分解フィールド（④⑤ブロック含む）を付与する。呼び出し側は `trimmed(toYears:)` を
+    /// 先に適用してから呼ぶこと（trim 後の集合内で前年差を計算するため。`FinancialsYear.jsonObject()`
+    /// が保持する①②③の増減分解フィールドは ingest 時に計算済みで、trim 済みの集合とも整合している）。
+    /// public: BltServerCore の analysis read 経路が使う。
+    public func analysisJsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name,
+            "sector": sector,
+            "market": market,
+            "currency": currency,
+            "unit": unit,
+            "years": years.indices.map { i in
+                years[i].analysisJsonObject(prior: i + 1 < years.count ? years[i + 1] : nil)
+            },
         ]
     }
 

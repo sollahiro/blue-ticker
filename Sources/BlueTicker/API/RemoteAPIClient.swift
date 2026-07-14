@@ -81,6 +81,20 @@ struct RemoteAPIClient: Sendable {
             "/v1/companies/\(escape(code))/half-financials", query: ["years": String(years)])
     }
 
+    /// Analyze（`docs/feature-tiers.md`）。financials の水準値に加え、増減分解フィールド
+    /// （事業利益ウォーターフォール・ROIC/ROE分解・ネットキャッシュ/運転資本/CCC前年差）を含む。
+    /// `FinancialsResponse` でデコードするため、④⑤ブロックの新規キーはデコード時に無視される
+    /// （render() は既存の水準値フィールドから自前で ④⑤ を再計算するため問題ない）。
+    func getAnalysis(code: String, years: Int) async -> RemoteOutcome<FinancialsResponse> {
+        await getDecoding("/v1/companies/\(escape(code))/analysis", query: ["years": String(years)])
+    }
+
+    /// Analyze の半期版。デコード形の扱いは `getAnalysis` 参照。
+    func getHalfAnalysis(code: String, years: Int) async -> RemoteOutcome<HalfFinancialsResponse> {
+        await getDecoding(
+            "/v1/companies/\(escape(code))/half-analysis", query: ["years": String(years)])
+    }
+
     func getFilingContent(code: String, docId: String?, sections: [String]?)
         async -> RemoteOutcome<RemoteFilingContent>
     {

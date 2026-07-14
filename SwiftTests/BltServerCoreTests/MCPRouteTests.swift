@@ -9,6 +9,7 @@ import Testing
 import Vapor
 
 @testable import BlueTickerCore
+@testable import BltMcpServerCore
 @testable import BltServerCore
 
 private func makeMcpContext() -> BltServerContext {
@@ -84,13 +85,39 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
+    @Test func getAnalysisReturnsErrorResultWhenNotStored() async throws {
+        try await withMcpApp(databases: true) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_analysis", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("未集計") == true)
+        }
+    }
+
+    @Test func getHalfAnalysisReturnsErrorResultWhenNotStored() async throws {
+        try await withMcpApp(databases: true) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_half_analysis", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("未集計") == true)
+        }
+    }
+
     @Test func toolsListIsReachableWithoutDatabase() async throws {
         try await withMcpApp { app in
             let (status, json) = try await postMcp(
                 app, ["jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": [String: Any]()])
             #expect(status == .ok)
             let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
-            #expect((tools ?? []).count == 6)
+            #expect((tools ?? []).count == mcpToolCatalog().count)
         }
     }
 

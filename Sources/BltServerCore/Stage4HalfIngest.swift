@@ -205,5 +205,18 @@ func loadStoredHalfFinancials(code: String, years: Int, db: Database) async thro
         isServableCompanyHalfFinancialsCacheVersion(row.cacheVersion),
         row.requestedYears >= effectiveYears
     else { return nil }
-    return row.response.trimmed(toYears: effectiveYears).jsonObject()
+    return row.response.trimmed(toYears: effectiveYears).summaryJsonObject()
+}
+
+/// 格納済み半期 Stage 4 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
+/// 含めた JSON を返す。読み取り床・年数要件・クランプは `loadStoredHalfFinancials` と同一
+/// （同じ格納行を使う。新規テーブル・cache_version は導入しない）。
+func loadStoredHalfAnalysis(code: String, years: Int, db: Database) async throws -> [String: Any]? {
+    let effectiveYears = min(years, Api.halfMaxYears)
+    guard effectiveYears > 0,
+        let row = try await CompanyHalfFinancials.find(code, on: db),
+        isServableCompanyHalfFinancialsCacheVersion(row.cacheVersion),
+        row.requestedYears >= effectiveYears
+    else { return nil }
+    return row.response.trimmed(toYears: effectiveYears).analysisJsonObject()
 }

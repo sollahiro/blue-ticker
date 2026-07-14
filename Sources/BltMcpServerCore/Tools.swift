@@ -64,7 +64,8 @@ public func mcpToolCatalog() -> [Tool] {
             name: "get_financial_summary",
             description: """
                 銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
-                損益・CF・バランスシート・収益性指標を含みます。
+                損益・CF・バランスシート・収益性指標（水準値）を含みます。
+                前年差・要因分解（増減分析）は get_analysis を使ってください。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 """,
             inputSchema: .object([
@@ -87,6 +88,57 @@ public func mcpToolCatalog() -> [Tool] {
             name: "get_half_financial_summary",
             description: """
                 銘柄コードの半期財務サマリーを返します（格納済みデータのみ。未集計の場合は空を返します）。
+                損益・CF・バランスシート・収益性指標（水準値）を含みます。
+                前年差・要因分解（増減分析）は get_half_analysis を使ってください。
+                years は最大 \(Api.halfMaxYears) 年にクランプされます。
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "code": .object([
+                        "type": .string("string"),
+                        "description": .string("銘柄コード（例: 6103）"),
+                    ]),
+                    "years": .object([
+                        "type": .string("integer"),
+                        "description": .string("取得年数（最大 \(Api.halfMaxYears)）"),
+                        "default": .int(Api.halfFinancialsYearsDefault),
+                    ]),
+                ]),
+                "required": .array([.string("code")]),
+            ])
+        ),
+        Tool(
+            name: "get_analysis",
+            description: """
+                銘柄コードの増減分析（前年差分解）を年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
+                get_financial_summary と同じ水準値に加え、事業利益ウォーターフォール（売上差/粗利率差/販管費差影響）、
+                ROIC・ROE前年差の要因分解、ネットキャッシュ前年差（現金差/負債差影響）、
+                運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、DSO/DIO/DPO差影響）を含みます。
+                金額単位は百万円（JPY）、比率は%、日数は日。
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "code": .object([
+                        "type": .string("string"),
+                        "description": .string("銘柄コード（例: 6103）"),
+                    ]),
+                    "years": .object([
+                        "type": .string("integer"),
+                        "description": .string("取得年数"),
+                        "default": .int(Api.financialsYearsDefault),
+                    ]),
+                ]),
+                "required": .array([.string("code")]),
+            ])
+        ),
+        Tool(
+            name: "get_half_analysis",
+            description: """
+                銘柄コードの半期増減分析（前年差分解）を返します（格納済みデータのみ。未集計の場合は空を返します）。
+                get_half_financial_summary と同じ水準値に加え、get_analysis と同じ増減分解フィールドを含みます
+                （前期は「同じ半期の直近過去期」）。
                 years は最大 \(Api.halfMaxYears) 年にクランプされます。
                 """,
             inputSchema: .object([

@@ -582,9 +582,9 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// trim で最古になった年は前年依存フィールドが null 化され、ライブ経路（最古年は前年なし）と一致する。
-    /// 前年非依存の項目（sales 等）と、最古でない年の前年依存値は保持される。
-    @Test func loadStoredFinancialsClearsPriorDependentMetricsOnTrimmedOldestYear() async throws {
+    /// financials（Summarize）は増減分解フィールド（Analyze 専用、`docs/feature-tiers.md`）を
+    /// trim の有無に関わらず一切含まない。
+    @Test func loadStoredFinancialsExcludesAnalysisOnlyFields() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
@@ -595,6 +595,32 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
             let json = try #require(
                 try await loadStoredFinancials(code: "7203", years: 3, db: app.db))
+            let years = try #require(json["years"] as? [[String: Any]])
+            #expect(years.count == 3)
+            for year in years {
+                for key in priorDependentKeys {
+                    #expect(year.keys.contains(key) == false, "\(key) は Summarize に含めない")
+                }
+            }
+            // 前年非依存の項目は保持。
+            #expect(years[2]["sales"] as? Double != nil)
+        }
+    }
+
+    /// trim で最古になった年は前年依存フィールドが null 化され、ライブ経路（最古年は前年なし）と一致する。
+    /// 前年非依存の項目（sales 等）と、最古でない年の前年依存値は保持される。Analyze 専用フィールドは
+    /// `loadStoredAnalysis` からのみ確認できる（`loadStoredFinancials` は含めない）。
+    @Test func loadStoredAnalysisClearsPriorDependentMetricsOnTrimmedOldestYear() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyFinancials()
+            row.id = "7203"
+            row.response = try makeResponseWithChanges(code: "7203", years: 6)
+            row.cacheVersion = companyFinancialsCacheVersion
+            row.requestedYears = 6
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredAnalysis(code: "7203", years: 3, db: app.db))
             let years = try #require(json["years"] as? [[String: Any]])
             #expect(years.count == 3)
             // 最新2年（前年あり）は前年依存値を保持。
@@ -610,7 +636,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
     }
 
     /// trim が起きない（要求年数 >= 格納年数）ときは最古年の前年依存値をそのまま返す。
-    @Test func loadStoredFinancialsKeepsMetricsWhenNotTrimmed() async throws {
+    @Test func loadStoredAnalysisKeepsMetricsWhenNotTrimmed() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
@@ -620,7 +646,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await row.create(on: app.db)
 
             let json = try #require(
-                try await loadStoredFinancials(code: "7203", years: 3, db: app.db))
+                try await loadStoredAnalysis(code: "7203", years: 3, db: app.db))
             let years = try #require(json["years"] as? [[String: Any]])
             #expect(years.count == 3)
             #expect(years[2]["business_profit_change"] as? Double != nil)
