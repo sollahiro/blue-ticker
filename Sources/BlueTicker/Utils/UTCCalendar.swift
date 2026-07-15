@@ -15,3 +15,16 @@ let utcCalendar: Calendar = {
 func elapsedDaysUTC(since date: Date, now: Date = Date()) -> Int {
     max(0, utcCalendar.dateComponents([.day], from: date, to: now).day ?? 0)
 }
+
+/// 過去日時（ファイル mtime など）から現在までの経過時間（時間単位）。負にはならない。
+/// 当日分キャッシュの TTL 判定で使う（日単位の `elapsedDaysUTC` は同一暦日内の経過を
+/// 検知できないため、EDINET 日次キャッシュの当日分だけ時間単位で区切る）。
+func elapsedHoursUTC(since date: Date, now: Date = Date()) -> Double {
+    max(0, now.timeIntervalSince(date) / 3600)
+}
+
+/// 指定日時を UTC の暦日の開始（0時）へ切り詰める。
+func utcStartOfDay(_ date: Date) -> Date {
+    let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
+    return utcCalendar.date(from: comps)!
+}

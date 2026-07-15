@@ -11,6 +11,12 @@ public enum Api {
     static let searchHitTTLDays = 30
     static let searchPastTTLDays = 3650
 
+    /// 当日分キャッシュの有効期間（時間）。EDINET は当日の書類一覧を営業時間中随時更新するため、
+    /// 日単位 TTL（searchHitTTLDays）だと同一日内の複数回 sync 実行（launchd 6時間間隔）で
+    /// 再取得されず、後から提出された書類が同日キャッシュに永久に欠落する
+    /// （実例: 2026-06-29 提出の有報が欠落）。launchd の実行間隔より短くし、次回実行で必ず再取得させる。
+    static let searchTodayTTLHours = 4
+
     // 年次書類インデックス
     static let documentIndexVersion = "edinet-doc-index-v1"
     static let documentIndexBatchSize = 2

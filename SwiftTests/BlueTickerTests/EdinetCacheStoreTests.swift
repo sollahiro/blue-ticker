@@ -22,6 +22,7 @@ import Foundation
         searchEmptyTTLDays: Int = 1,
         searchHitTTLDays: Int = 30,
         searchPastTTLDays: Int = 3650,
+        searchTodayTTLHours: Int = 4,
         maxXbrlBytes: Int64? = nil
     ) -> EdinetCacheStore {
         EdinetCacheStore(
@@ -29,6 +30,7 @@ import Foundation
             searchEmptyTTLDays: searchEmptyTTLDays,
             searchHitTTLDays: searchHitTTLDays,
             searchPastTTLDays: searchPastTTLDays,
+            searchTodayTTLHours: searchTodayTTLHours,
             maxXbrlBytes: maxXbrlBytes
         )
     }
@@ -39,6 +41,10 @@ import Foundation
 
     private func todayStr() -> String {
         ServiceTestSupport.iso(Date())
+    }
+
+    private func yesterdayStr() -> String {
+        ServiceTestSupport.iso(Date().addingTimeInterval(-86400))
     }
 
     // MARK: - 日別検索キャッシュ
@@ -77,11 +83,27 @@ import Foundation
 
     @Test func testLoadSearchCacheKeepsHitResultLongerThanEmptyResult() throws {
         let store = makeStore()
-        let filename = store.searchCacheKey(todayStr())
+        // 当日分は searchTodayTTLHours で別扱いになるため、この日単位 TTL の
+        // 比較（hit が empty より長持ちする）は前日分の日付で検証する。
+        let filename = store.searchCacheKey(yesterdayStr())
         store.saveSearchCache(filename, data: [["docID": "S100TEST", "docTypeCode": "120"]])
         try ServiceTestSupport.age(searchCachePath(store, filename), days: 1)
 
         #expect(store.loadSearchCache(filename)?.first?["docID"] as? String == "S100TEST")
+    }
+
+    @Test func testLoadSearchCacheExpiresTodayHitResultWithinSameDay() throws {
+        // 実例: EDINET は当日の書類一覧を営業時間中随時更新するため、朝の sync 実行で
+        // 得た非空結果が日単位 TTL（30日）のまま固定されると、同日午後に提出された
+        // 書類が同日中の再実行（launchd 6時間間隔）で永久に取りこぼされる
+        // （2026-06-29 提出の有報欠落）。当日分は時間単位 TTL で早く失効させる。
+        let store = makeStore(searchTodayTTLHours: 4)
+        let filename = store.searchCacheKey(todayStr())
+        store.saveSearchCache(filename, data: [["docID": "S100TEST", "docTypeCode": "120"]])
+        try ServiceTestSupport.setMtime(
+            searchCachePath(store, filename), Date().addingTimeInterval(-5 * 3600))
+
+        #expect(store.loadSearchCache(filename) == nil)
     }
 
     @Test func testLoadSearchCacheExpiresOldHitResult() throws {

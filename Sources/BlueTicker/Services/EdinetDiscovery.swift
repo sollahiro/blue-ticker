@@ -240,11 +240,7 @@ enum EdinetDiscovery {
 
     // MARK: - Date helpers
     // 日付処理は共有 `utcCalendar`（Utils/UTCCalendar.swift）を使う。
-
-    private static func utcStartOfDay(_ date: Date) -> Date {
-        let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
-        return utcCalendar.date(from: comps)!
-    }
+    // utcStartOfDay は Utils/UTCCalendar.swift の共有関数。
 
     private static func addDays(_ date: Date, _ days: Int) -> Date {
         utcCalendar.date(byAdding: .day, value: days, to: date)!
