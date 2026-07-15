@@ -42,9 +42,7 @@ public struct BltServerContext: Sendable {
 // MARK: - Factory
 
 /// EDINET API キーを解決する。blt-server はヘッドレスなサーバープロセスのため、
-/// 対話的な `ticker config set` 用の keychain（settingsStore）には一切フォールバックしない。
-/// BLT_EDINET_API_KEY 環境変数のみを見る（ローカル macOS でのビルドのたびに ad-hoc 署名が
-/// 変わり keychain アクセス許可を毎回求められる問題を避けるため）。
+/// BLT_EDINET_API_KEY 環境変数のみを見る。
 private func resolveEdinetApiKey() async -> String? {
     let envKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"]
     return (envKey?.isEmpty == false) ? envKey : nil

@@ -36,6 +36,5 @@ throw AnalysisError.insufficientData(required: 5, available: 2)
 
 ## 例外（throws を使ってよい箇所）
 
-- `Infrastructure/Keystore.swift` の `KeystoreError`（OS キーチェーンの失敗は呼び出し元で分岐が必要）
 - `ArgumentParser` の `ExitCode`（CLI 終了コード）
 - SwiftSoup 等の外部ライブラリ境界（`try?` で Optional に落としてよい）

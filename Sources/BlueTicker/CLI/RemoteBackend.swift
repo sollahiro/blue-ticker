@@ -1,9 +1,8 @@
 import ArgumentParser
 import Foundation
 
-// remote / local バックエンドの切り替え解決。
-// 各コマンドは run() 冒頭で clientIfEnabled() を呼び、非 nil なら remote 経路、
-// nil ならローカル経路（従来の Services 直呼び）を実行する。
+// ticker（配布 CLI）は remote 専用。各コマンドは run() 冒頭で client() を呼び、
+// blt-server への接続を解決する。ローカル解析は TickerDev（配布しない開発用 CLI）が担う。
 
 enum RemoteBackend {
     private enum CloudflaredTokenFailureKind {
@@ -14,13 +13,9 @@ enum RemoteBackend {
         case invocationFailed
     }
 
-    /// remote バックエンドが有効ならクライアントを返す（local なら nil）。
-    /// 接続情報の解決順位は env（BLT_SERVER_URL）> config。
-    /// remote だが server-url が未解決なら stderr へ出して `ExitCode.failure` を投げる。
-    static func clientIfEnabled() async throws -> RemoteAPIClient? {
-        let backend = await settingsStore.get(.edinetBackend) ?? "remote"
-        guard backend == "remote" else { return nil }
-
+    /// remote クライアントを構築する。接続情報の解決順位は env（BLT_SERVER_URL）> config。
+    /// server-url が未解決なら stderr へ出して `ExitCode.failure` を投げる。
+    static func client() async throws -> RemoteAPIClient {
         let env = ProcessInfo.processInfo.environment
         let url: String
         if let envURL = nonEmpty(env["BLT_SERVER_URL"]) {
