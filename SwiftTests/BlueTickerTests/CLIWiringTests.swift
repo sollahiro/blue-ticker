@@ -14,8 +14,15 @@ import Testing
         let names = Set(Ticker.configuration.subcommands.compactMap { $0.configuration.commandName })
         let expected: Set = [
             "search", "analyze", "summarize", "config", "login",
-            "cache", "filings", "filing", "sector", "skill",
+            "filings", "filing", "sector", "skill",
         ]
+        #expect(names == expected)
+    }
+
+    /// TickerDev（配布しない開発用ローカル解析 CLI）側のサブコマンド登録。
+    @Test func devRootRegistersAllDocumentedSubcommands() {
+        let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
+        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing"]
         #expect(names == expected)
     }
 
@@ -32,7 +39,7 @@ import Testing
     }
 
     @Test func cacheWithoutSubcommandDefaultsToStatus() throws {
-        let cmd = try Ticker.parseAsRoot(["cache"])
+        let cmd = try DevCLIEntry.parseAsRoot(["cache"])
         #expect(cmd is CacheStatus)
     }
 
@@ -42,15 +49,13 @@ import Testing
         let cmd = try AnalyzeCommand.parse(["7203"])
         #expect(cmd.years == Api.analyzeDefaultYears)
         #expect(!cmd.json)
-        #expect(!cmd.noCache)
         #expect(!cmd.half)
     }
 
     @Test func analyzeParsesLongOptionsAndFlags() throws {
-        let cmd = try AnalyzeCommand.parse(["7203", "--years", "3", "--json", "--no-cache", "--half"])
+        let cmd = try AnalyzeCommand.parse(["7203", "--years", "3", "--json", "--half"])
         #expect(cmd.years == 3)
         #expect(cmd.json)
-        #expect(cmd.noCache)
         #expect(cmd.half)
     }
 
@@ -129,14 +134,9 @@ import Testing
         #expect(cmd.edinetDocIndexYears == Api.documentIndexKeepYears)
     }
 
-    @Test func configSetParsesRemoteBackendOptions() throws {
-        let cmd = try ConfigSet.parse([
-            "--backend", "remote",
-            "--server-url", "https://example.com",
-        ])
-        #expect(cmd.backend == "remote")
+    @Test func configSetParsesServerUrlOption() throws {
+        let cmd = try ConfigSet.parse(["--server-url", "https://example.com"])
         #expect(cmd.serverUrl == "https://example.com")
-        #expect(cmd.edinetApiKey == nil)
     }
 
     // MARK: - 表示列ラベル（analyze / summarize の列見出し）

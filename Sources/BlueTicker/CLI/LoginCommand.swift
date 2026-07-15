@@ -8,13 +8,7 @@ struct LoginCommand: AsyncParsableCommand {
     )
 
     func run() async throws {
-        guard await settingsStore.get(.edinetBackend) == "remote" else {
-            printError(
-                "エラー: remote バックエンドではありません。"
-                    + "ticker config set --backend remote を先に設定してください。\n")
-            throw ExitCode.failure
-        }
-        // RemoteBackend.clientIfEnabled() と同じ解決順位（env > config）。
+        // RemoteBackend.client() と同じ解決順位（env > config）。
         // ずれると login した URL と後続リクエストの token 取得 URL が食い違うため揃える。
         let envURL = ProcessInfo.processInfo.environment["BLT_SERVER_URL"]
         let configURL = await settingsStore.get(.serverURL)

@@ -5,9 +5,8 @@ BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 CLI �
 ## 主な機能
 
 - **銘柄検索**: 社名・証券コードから日本株を検索
-- **財務分析**: EDINET XBRL/HTML から年次・半期の財務指標を取得
+- **財務分析**: 年次・半期の財務指標を取得
 - **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
-- **キャッシュ管理**: EDINET 年次インデックス、XBRL 展開、分析結果キャッシュを確認・準備・整理
 
 ## インストール
 
@@ -22,36 +21,14 @@ brew install blue-ticker
 
 ## 初期設定
 
-EDINET APIキーを設定し、直近5年分のEDINET年次インデックスを準備します。
+`ticker` は blt-server（REST API）へ接続して動作します。サーバーが Cloudflare Access で保護されている場合は SSO ログインを行ってください。
 
 ```bash
-ticker config init
-ticker cache status
-ticker cache prepare --years 5
+ticker login          # Cloudflare Access SSO ログイン
+ticker config show     # 接続先・ログイン状態を確認
 ```
 
-EDINET APIキーは [EDINET公式サイト](https://disclosure2.edinet-fsa.go.jp/) で取得してください。
-
-## バックエンド（local / remote）
-
-`ticker` は2つのモードで動作します。既定は **local**（このマシンで EDINET を直接叩いて計算）です。
-
-| モード | 計算 | EDINET APIキー | 用途 |
-|---|---|---|---|
-| `local`（既定） | このマシン | 必要 | オフライン・単体利用 |
-| `remote` | blt-server | 不要（サーバー側で保持） | 共有サーバー経由・キー管理不要 |
-
-remote モードは、計算済みの結果を blt-server（REST API）から受け取り、local と同じ整形で表示します。
-
-```bash
-ticker config set --backend remote --server-url https://blt-server.example.com
-ticker login                              # サーバーが Cloudflare Access で保護されている場合の SSO ログイン
-ticker config show                        # 設定確認
-ticker config set --backend local         # local へ戻す
-```
-
-- 接続情報は環境変数 `BLT_SERVER_URL` でも指定でき、設定より優先されます。
-- 対応コマンド: `search` / `filings` / `filing` / `analyze` / `summarize`。`sector`（業種一覧）は常に local、`analyze`/`summarize` の `--half`（半期）は remote 非対応です。
+- サーバーURLの既定値は組み込み済みです。別サーバーに接続する場合は `ticker config set --server-url <url>` または環境変数 `BLT_SERVER_URL` で上書きしてください（環境変数が優先されます）。
 - 自分で blt-server を立てる手順は [`docs/deploy.md`](docs/deploy.md) を参照してください。
 
 ## 使い方
@@ -66,12 +43,10 @@ ticker search 7203 --json
 ### 財務分析
 
 ```bash
-ticker cache status
 ticker summarize 7203          # 主要財務指標の網羅表（水準値）
 ticker analyze 7203            # 増減分析（前年差分解）
 ticker analyze 7203 --years 6
 ticker analyze 7203 --half
-ticker analyze 7203 --no-cache
 ```
 
 - `summarize`: 売上・利益・BS・CF など主要指標の水準値を年度横断で一覧表示
@@ -83,7 +58,6 @@ ticker analyze 7203 --no-cache
   - ⑤ 運転資本・CCC増減（売掛金・棚卸資産・買掛金の前年差、DSO/DIO/DPO/CCC）
 - `--years N`: 分析年数（デフォルト6年、通期・半期共通）
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示（前年同期差）
-- `--no-cache`: 分析結果キャッシュを使わず再計算
 - `--json`: JSON 形式で出力
 
 ### EDINET書類
@@ -108,25 +82,6 @@ ticker filing 7203 --doc-id S100XXXX --sections segments geography
 | `segments` | 報告セグメント別情報（Markdown 表または dimension 付きファクト） |
 | `geography` | 地域別情報（同上） |
 
-### キャッシュ管理
-
-```bash
-ticker cache status
-ticker cache prepare --years 5
-ticker cache catchup --years 5
-ticker cache refresh --years 5
-ticker cache clean
-ticker cache clean --execute --edinet-xbrl-days 30
-```
-
-- `status`: キャッシュ状態と次の推奨アクションを表示
-- `prepare`: EDINET年次インデックスを事前準備
-- `catchup`: 不足分だけ差分更新
-- `refresh`: EDINET年次インデックスを作り直して更新
-- `clean`: 不要なキャッシュを削除。`--execute` 未指定時は dry-run
-
-日本株の分析やEDINET書類抽出の前には、API負荷を抑えるため `ticker cache status` を確認し、表示された `next action` を先に実行してください。
-
 ### 業種一覧
 
 東証33業種と各業種の銘柄数を一覧表示します。
@@ -135,6 +90,10 @@ ticker cache clean --execute --edinet-xbrl-days 30
 ticker sector
 ticker sector --json
 ```
+
+## 開発者向け
+
+ソースからのビルド・テスト、EDINET を直接叩くローカル解析用の開発専用 CLI（`TickerDev`、配布しない）については [`CLAUDE.md`](CLAUDE.md) を参照してください。
 
 ## 免責事項
 

@@ -95,6 +95,18 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
+        // 開発用ローカル解析 CLI（配布しない）。products に含めないため
+        // release ビルド・Homebrew formula から到達不能。BlueTickerCore/DevCLI/ を薄く呼ぶだけ。
+        .executableTarget(
+            name: "TickerDev",
+            dependencies: [
+                "BlueTickerCore",
+            ],
+            path: "Sources/TickerDevMain",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
         .testTarget(
             name: "BlueTickerTests",
             dependencies: [

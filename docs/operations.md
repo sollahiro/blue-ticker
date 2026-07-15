@@ -59,5 +59,5 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 | Fly secrets | `BLT_EDINET_API_KEY` / `DATABASE_URL` / `CF_ACCESS_TEAM_DOMAIN` / `CLOUDFLARE_TUNNEL_TOKEN` | 各サービスで再発行・`fly secrets set`（`deploy.md` 環境変数表） |
 | Neon | 全テーブルのデータ | dump/restore または EDINET から再 ingest |
 | Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
-| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`・keychain（EDINET キー）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
+| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`（`BLT_EDINET_API_KEY`）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
 | Fly Volume `/data` | EDINET 取得キャッシュ | 再取得（コピー不要） |

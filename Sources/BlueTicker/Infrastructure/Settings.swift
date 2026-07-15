@@ -1,7 +1,5 @@
 import Foundation
 
-private let keychainService = "blue-ticker"
-
 actor SettingsStore {
     private var values: SettingsValues
     let userDataPath: URL
@@ -19,10 +17,6 @@ actor SettingsStore {
            let data = try? Data(contentsOf: configPath),
            let file = try? JSONDecoder().decode(SettingsFile.self, from: data) {
             v.cacheDir = file.cacheDir ?? v.cacheDir
-            v.cacheEnabled = file.cacheEnabled ?? v.cacheEnabled
-            if let backend = file.edinetBackend, backend == "local" || backend == "remote" {
-                v.edinetBackend = backend
-            }
             v.serverURL = file.serverURL ?? v.serverURL
             v.cfAccessSsoEnabled = file.cfAccessSsoEnabled ?? v.cfAccessSsoEnabled
         }
@@ -40,13 +34,8 @@ actor SettingsStore {
 
     func get(_ key: SettingsKey) -> String? {
         switch key {
-        case .edinetApiKey:
-            return Keystore.getPassword(service: keychainService, key: key.rawValue)
-                ?? (values.edinetApiKey.isEmpty ? nil : values.edinetApiKey)
         case .cacheDir:
             return values.cacheDir
-        case .edinetBackend:
-            return values.edinetBackend
         case .serverURL:
             return values.serverURL.isEmpty ? nil : values.serverURL
         }
@@ -54,23 +43,15 @@ actor SettingsStore {
 
     func getBool(_ key: SettingsBoolKey) -> Bool {
         switch key {
-        case .cacheEnabled:
-            return values.cacheEnabled
         case .cfAccessSsoEnabled:
             return values.cfAccessSsoEnabled
         }
     }
 
-    func set(_ key: SettingsKey, value: String) throws {
+    func set(_ key: SettingsKey, value: String) {
         switch key {
-        case .edinetApiKey:
-            try Keystore.setPassword(service: keychainService, key: key.rawValue, value: value)
-            values.edinetApiKey = ""
         case .cacheDir:
             values.cacheDir = value
-        case .edinetBackend:
-            guard value == "local" || value == "remote" else { return }
-            values.edinetBackend = value
         case .serverURL:
             values.serverURL = value
         }
@@ -78,8 +59,6 @@ actor SettingsStore {
 
     func set(_ key: SettingsBoolKey, value: Bool) {
         switch key {
-        case .cacheEnabled:
-            values.cacheEnabled = value
         case .cfAccessSsoEnabled:
             values.cfAccessSsoEnabled = value
         }
@@ -89,8 +68,6 @@ actor SettingsStore {
     func save() -> Bool {
         let payload = SettingsFile(
             cacheDir: values.cacheDir,
-            cacheEnabled: values.cacheEnabled,
-            edinetBackend: values.edinetBackend,
             serverURL: values.serverURL.isEmpty ? nil : values.serverURL,
             cfAccessSsoEnabled: values.cfAccessSsoEnabled ? true : nil
         )
@@ -103,38 +80,21 @@ actor SettingsStore {
         }
     }
 
-    func maskedApiKey() -> String {
-        mask(get(.edinetApiKey))
-    }
-
-    private func mask(_ secret: String?) -> String {
-        guard let s = secret, !s.isEmpty else { return "****" }
-        return s.count > 8 ? String(s.prefix(4)) + "****" + String(s.suffix(4)) : "****"
-    }
-
 }
 
 // MARK: - Supporting types
 
-enum SettingsKey: String {
-    case edinetApiKey
+enum SettingsKey {
     case cacheDir
-    case edinetBackend
     case serverURL
 }
 
 enum SettingsBoolKey {
-    case cacheEnabled
     case cfAccessSsoEnabled
 }
 
 private struct SettingsValues {
-    var edinetApiKey: String = ""
     var cacheDir: String
-    var cacheEnabled: Bool = true
-    // local モードのユーザー向け分析 CLI は段階的に廃止方針のため、既定を remote にし
-    // インストール直後は `ticker login` のみで使い始められるようにする（architecture.md 参照）。
-    var edinetBackend: String = "remote"
     var serverURL: String = Api.defaultRemoteServerURL
     // ticker login（cloudflared access login）成功時に立てるフラグ。秘密情報ではなく
     // JWT 自体は cloudflared 側のローカルストレージが保持するため config.json に保存してよい。
@@ -143,8 +103,6 @@ private struct SettingsValues {
 
 private struct SettingsFile: Codable {
     var cacheDir: String?
-    var cacheEnabled: Bool?
-    var edinetBackend: String?
     var serverURL: String?
     var cfAccessSsoEnabled: Bool?
 }

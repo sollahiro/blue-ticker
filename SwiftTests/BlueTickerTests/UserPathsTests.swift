@@ -1,8 +1,4 @@
 // Python tests/test_user_paths.py の移植
-//
-// 移植対象外:
-// - test_settings_store_reads_blue_ticker_keychain_value
-//   （Swift の SettingsStore は Keystore に静的依存しており、実 Keychain に触れずに検証できないため）
 
 import Testing
 import Foundation

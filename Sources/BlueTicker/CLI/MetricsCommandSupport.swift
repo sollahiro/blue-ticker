@@ -1,47 +1,9 @@
 import ArgumentParser
 import Foundation
 
-// analyze / summarize コマンドが共有する財務データ取得・テーブル描画ヘルパー。
-// 両コマンドは取得処理・JSON 出力・表組みプリミティブが共通で、
-// 人間向けテーブルの中身だけが異なる。
-
-// MARK: - データ取得
-
-/// 銘柄分析に必要なクライアント群と会社メタ情報。
-struct AnalysisContext {
-    let code: String
-    let name: String
-    let client: EdinetAPIClient
-    let cacheManager: CacheManager
-}
-
-enum MetricsLoader {
-    /// API キー検証・銘柄コード検証・クライアント構築・会社名解決をまとめて行う。
-    /// 失敗時は stderr へ出力し `ExitCode.failure` を投げる。
-    static func prepare(rawCode: String) async throws -> AnalysisContext {
-        // キー検証・クライアント構築は EdinetClientLoader に集約（キー未設定を先に弾く）。
-        let (client, cacheDir) = try await EdinetClientLoader.make()
-
-        let codeTrimmed = rawCode.trimmingCharacters(in: .whitespaces)
-        guard !codeTrimmed.isEmpty else {
-            printError("エラー: 銘柄コードを指定してください。\n")
-            throw ExitCode.failure
-        }
-
-        let cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
-
-        let masterDataManager = MasterDataManager()
-        await masterDataManager.loadIfNeeded()
-        let info = await masterDataManager.getByCode(codeTrimmed)
-
-        return AnalysisContext(
-            code: codeTrimmed,
-            name: info?.coName ?? codeTrimmed,
-            client: client,
-            cacheManager: cacheManager
-        )
-    }
-}
+// analyze / summarize コマンドが共有する JSON 出力・表組みプリミティブ。
+// remote 経路（Ticker* コマンド）とローカル経路（Dev* コマンド、DevCLI/MetricsLoader.swift）の
+// 両方から使われる。データ取得側（MetricsLoader/AnalysisContext）は DevCLI/ へ移設済み。
 
 // MARK: - JSON 出力
 

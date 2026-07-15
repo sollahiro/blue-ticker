@@ -15,14 +15,12 @@ BLUE TICKER CLIで日本株を調査するときの実行手順を定める。�
 - 日本株の財務推移を確認する
 - 有価証券報告書のMD&A、事業等のリスク、経営方針を抽出する
 - 同業・同セクター銘柄を比較する
-- EDINETデータや分析キャッシュの状態を確認・準備する
 
 ## 基本姿勢
 
 - 売買推奨はしない。事実、指標、提出書類の内容を整理し、最終判断はユーザーに委ねる。
 - BLUE TICKER CLIの出力を主情報源にする。数値を勝手に補完したり、CLIにない結論を断定しない。
 - `ticker summarize`、`ticker analyze`、`ticker filings`、`ticker filing` を使う調査では、原則としてWeb検索を使わない。ユーザーが「ニュースも検索して」「Webも見て」などと明示した場合だけ、CLI結果とは別枠で扱う。
-- EDINET APIへの負荷を抑える。分析・書類抽出の前にはキャッシュ状態を確認し、必要な準備を先に済ませる。
 - 出力が長い場合は、重要な数値・変化・リスク記述を要約する。必要に応じて、実行したコマンドも明記する。
 
 ## 事前確認
@@ -33,24 +31,7 @@ BLUE TICKER CLIで日本株を調査するときの実行手順を定める。�
 ticker config show
 ```
 
-設定が未完了なら、ユーザーに初期化を案内する。
-
-```bash
-ticker config init
-```
-
-銘柄検索だけで終わる場合を除き、調査前にキャッシュ状態を確認する。
-
-```bash
-ticker cache status
-```
-
-`next_action` が表示されたら、分析や書類抽出へ進む前にその内容を実行する。代表例:
-
-```bash
-ticker cache prepare --years 5
-ticker cache catchup --years 5
-```
+サーバーURLが未設定、または `ticker login` が必要と表示された場合は、ユーザーに案内する。
 
 `--years` はユーザーの希望に合わせる。指定がなければ、通常の調査は5年、財務推移をしっかり見る場合は6年を目安にする。
 
@@ -85,12 +66,6 @@ ticker analyze <code> --years 6
 
 ```bash
 ticker analyze <code> --half
-```
-
-キャッシュ済み分析ではなく再計算したい場合に使う。
-
-```bash
-ticker analyze <code> --no-cache
 ```
 
 回答では、CLIの表やJSONをそのまま長く貼るより、ユーザーの問いに合わせて以下を中心に整理する。
@@ -155,20 +130,14 @@ ticker sector --json
 ### 会社名から財務と有報を調べる
 
 ```bash
-ticker config show
-ticker cache status
-ticker cache catchup --years 5
 ticker search <社名>
 ticker analyze <code> --years 6
 ticker filing <code> --sections business_risks mda segments geography management_policy
 ```
 
-`cache status` が準備不要を示す場合は、`cache catchup` や `cache prepare` は省略してよい。
-
 ### 証券コードが分かっている銘柄を素早く見る
 
 ```bash
-ticker cache status
 ticker analyze <code> --years 6
 ```
 
@@ -182,7 +151,6 @@ ticker filing <code> --sections mda
 ### 複数銘柄を比較する
 
 ```bash
-ticker cache status
 ticker search <社名A>
 ticker search <社名B>
 ticker analyze <codeA> --years 6
@@ -200,48 +168,9 @@ ticker filing <code> --sections business_risks management_policy
 
 回答では、リスク項目を羅列するだけでなく、事業環境、財務への影響可能性、会社の対処方針が分かるように整理する。
 
-## キャッシュ管理
-
-キャッシュ状態を見る。
-
-```bash
-ticker cache status
-```
-
-不足分を準備・更新する。
-
-```bash
-ticker cache prepare --years 5
-ticker cache catchup --years 5
-ticker cache refresh --years 5
-```
-
-不要キャッシュの削除対象を確認する（dry-run）。
-
-```bash
-ticker cache clean --dry-run
-ticker cache clean --dry-run --edinet-doc-index-years 3
-```
-
-確認後に実際に削除する（`--dry-run` を外すと実行される）。
-
-```bash
-ticker cache clean
-ticker cache clean --edinet-xbrl-days 30
-ticker cache clean --edinet-search-days 90 --edinet-doc-index-years 3
-```
-
-主なオプション:
-
-| オプション | 意味 |
-|---|---|
-| `--edinet-search-days N` | N 日より古い検索キャッシュを削除 |
-| `--edinet-xbrl-days N` | N 日より古い XBRL ディレクトリを削除 |
-| `--edinet-doc-index-years N` | 年次インデックスを直近 N 年分だけ残す（デフォルト: 6） |
-
 ## トラブル時
 
-- 設定エラーやAPIキー不足の場合は、`ticker config show` で現状を確認し、未設定なら `ticker config init` を案内する。
-- EDINETデータ不足やキャッシュ不足が出た場合は、`ticker cache status` の `next_action` に従う。
+- 接続エラーの場合は、`ticker config show` で `サーバーURL` と `SSO ログイン` の状態を確認し、未ログインなら `ticker login` を案内する。
+- 銘柄が見つからない・データ未格納のエラーが出た場合は、証券コードや検索語を再確認し、それでも解決しない場合はその旨をユーザーに伝える。
 - CLIがエラーを返した場合は、エラー内容を要約し、次に試すコマンドを1つか2つに絞って提示する。
 """

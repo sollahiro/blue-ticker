@@ -1,10 +1,11 @@
 import ArgumentParser
 import Foundation
 
-struct SearchCommand: AsyncParsableCommand {
+/// `ticker search` のローカル版（開発用。EDINET master data をローカルから検索する）。
+struct DevSearchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "search",
-        abstract: "銘柄コードまたは名称で企業を検索します"
+        abstract: "銘柄コードまたは名称で企業を検索します（ローカル）"
     )
 
     @Argument(help: "銘柄コードまたは名称")
@@ -14,13 +15,7 @@ struct SearchCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let remote = try await RemoteBackend.client()
-        let results: [StockSearchResult]
-        switch await remote.searchCompanies(q: query) {
-        case .ok(let r): results = r
-        case .notFound: results = []
-        case .failure(let m): printError(m + "\n"); throw ExitCode.failure
-        }
+        let results = await CompanyInfoService().searchCompanies(query)
 
         if results.isEmpty {
             printError("該当する銘柄が見つかりませんでした: \(query)\n")
