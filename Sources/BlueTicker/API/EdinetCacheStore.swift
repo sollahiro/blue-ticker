@@ -15,6 +15,7 @@ final class EdinetCacheStore: Sendable {
     private let searchEmptyTTLDays: Int
     private let searchHitTTLDays: Int
     private let searchPastTTLDays: Int
+    private let searchTodayTTLHours: Int
     private let maxXbrlBytes: Int64?
 
     init(
@@ -22,6 +23,7 @@ final class EdinetCacheStore: Sendable {
         searchEmptyTTLDays: Int = Api.searchEmptyTTLDays,
         searchHitTTLDays: Int = Api.searchHitTTLDays,
         searchPastTTLDays: Int = Api.searchPastTTLDays,
+        searchTodayTTLHours: Int = Api.searchTodayTTLHours,
         maxXbrlBytes: Int64? = Api.xbrlMaxBytes
     ) {
         self.cacheDir = cacheDir
@@ -32,6 +34,7 @@ final class EdinetCacheStore: Sendable {
         self.searchEmptyTTLDays = searchEmptyTTLDays
         self.searchHitTTLDays = searchHitTTLDays
         self.searchPastTTLDays = searchPastTTLDays
+        self.searchTodayTTLHours = searchTodayTTLHours
         self.maxXbrlBytes = maxXbrlBytes
     }
 
@@ -204,15 +207,20 @@ final class EdinetCacheStore: Sendable {
     private var fm: FileManager { .default }
 
     private func isSearchCacheExpired(_ path: URL, hasResults: Bool) -> Bool {
-        let ttl = searchCacheTTL(path, hasResults: hasResults)
         guard let mtime = (try? fm.attributesOfItem(atPath: path.path))?[.modificationDate] as? Date
         else { return true }
+        let stem = path.deletingPathExtension().lastPathComponent
+        let datePart = stem.hasPrefix("search_") ? String(stem.dropFirst("search_".count)) : stem
+        // 当日分は EDINET が営業時間中随時更新するため、日単位 TTL（暦日境界でしか経過を
+        // 検知できない）では同日内の複数回 sync 実行で再取得されない。時間単位で区切る。
+        if let date = parseDateString(datePart), utcCalendar.isDate(date, inSameDayAs: Date()) {
+            return elapsedHoursUTC(since: mtime) >= Double(searchTodayTTLHours)
+        }
+        let ttl = searchCacheTTL(datePart, hasResults: hasResults)
         return elapsedDaysUTC(since: mtime) >= ttl
     }
 
-    private func searchCacheTTL(_ path: URL, hasResults: Bool) -> Int {
-        let stem = path.deletingPathExtension().lastPathComponent
-        let datePart = stem.hasPrefix("search_") ? String(stem.dropFirst("search_".count)) : stem
+    private func searchCacheTTL(_ datePart: String, hasResults: Bool) -> Int {
         if let date = parseDateString(datePart), date < utcCalendar.date(byAdding: .day, value: -1, to: Date())! {
             return searchPastTTLDays
         }

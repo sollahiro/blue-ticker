@@ -87,7 +87,8 @@ import Foundation
         // Python は「リクエスト不発行」を検証するが、Swift では観測できないため
         // 「取得失敗時に期限切れキャッシュへフォールバックする」ことを検証する
         // hit TTL 0 → 保存直後でも期限切れ。API キーなし → 取得失敗 → 期限切れキャッシュへフォールバック
-        let staleStore = EdinetCacheStore(cacheDir: tmpDir, searchHitTTLDays: 0)
+        // today() は当日分 TTL（searchTodayTTLHours）で判定されるため、こちらも 0 にして即時失効させる。
+        let staleStore = EdinetCacheStore(cacheDir: tmpDir, searchHitTTLDays: 0, searchTodayTTLHours: 0)
         let staleClient = EdinetAPIClient(apiKey: nil, cacheStore: staleStore)
         let today = ServiceTestSupport.iso(Date())
         let filename = staleStore.searchCacheKey(today)
@@ -104,12 +105,35 @@ import Foundation
         let documents: [[String: Any]] = [["docID": "S100STALE", "docTypeCode": "120"]]
         store.saveDocumentIndex(year, documents: documents, builtThrough: "\(year)-01-01")
 
-        // built_through が古くても再構築せずにインデックスを返す
-        // （API キーなしのため、再構築に走ると空配列になる）
+        // built_through が古いため差分取得を試みるが、API キーなしのため取得失敗 →
+        // 既存キャッシュへフォールバックする（オフライン時にデータを失わない）
         let docs = await client.ensureDocumentIndexForYear(year)
 
         #expect(docs.count == 1)
         #expect(docs.first?["docID"] as? String == "S100STALE")
+    }
+
+    @Test func testEnsureDocumentIndexForYearCatchesUpMissingDates() async throws {
+        // 実例: 年次インデックスが built_through 以降に提出された書類（有報等）を
+        // 拾わないまま固定される不具合の回帰テスト。ensure は catchup と同じく
+        // 差分日を追補しなければならない（かつては既存キャッシュをそのまま返していた）。
+        let support = ServiceTestSupport.self
+        let today = support.utcToday()
+        let yesterday = support.addDays(today, -1)
+        let year = support.utcCalendar.component(.year, from: today)
+        store.saveDocumentIndex(
+            year,
+            documents: [["docID": "OLD", "_edinet_list_date": support.iso(yesterday)]],
+            builtThrough: support.iso(yesterday)
+        )
+        store.saveSearchCache(
+            store.searchCacheKey(support.iso(today)),
+            data: [["docID": "NEW", "submitDateTime": "\(support.iso(today)) 10:00"]]
+        )
+
+        let docs = await client.ensureDocumentIndexForYear(year)
+
+        #expect(docs.compactMap { $0["docID"] as? String } == ["OLD", "NEW"])
     }
 
     @Test func testDocumentIndexCatchupFetchesOnlyMissingDates() async throws {
@@ -132,7 +156,45 @@ import Foundation
         let cachedInfo = store.loadDocumentIndexInfo(year, allowStale: true)
 
         #expect(docs.compactMap { $0["docID"] as? String } == ["OLD", "NEW"])
-        #expect(cachedInfo?["built_through"] as? String == support.iso(today))
+        // 当日は「未確定」として built_through には反映されない（前日のまま）。
+        // EDINET は当日の書類一覧を随時更新するため、当日を確定扱いにすると
+        // 後から提出された書類を二度と取り込めなくなる（監査で発見された不具合の修正）。
+        #expect(cachedInfo?["built_through"] as? String == support.iso(yesterday))
+    }
+
+    @Test func testCatchupPicksUpDocumentAddedLaterTheSameDay() async throws {
+        // 回帰テスト: 当日分を built_through に確定させてしまうと、同日中に後から
+        // 提出された書類（有報等）が二度と取り込めなくなる不具合があった
+        // （実例: 6/27 構築の年次インデックスに 6/29 15:36 提出の有報が反映されず、
+        // Stage 4 の財務計算が恒久的に失敗し続けた）。当日は確定扱いにしないため、
+        // 同日内に catchup を複数回呼んでも、後から追加された書類を拾えなければならない。
+        let support = ServiceTestSupport.self
+        let today = support.utcToday()
+        let yesterday = support.addDays(today, -1)
+        let year = support.utcCalendar.component(.year, from: today)
+        store.saveDocumentIndex(
+            year,
+            documents: [["docID": "OLD", "_edinet_list_date": support.iso(yesterday)]],
+            builtThrough: support.iso(yesterday)
+        )
+        let todayKey = store.searchCacheKey(support.iso(today))
+        store.saveSearchCache(todayKey, data: [["docID": "MORNING", "submitDateTime": "\(support.iso(today)) 10:00"]])
+
+        let firstPass = await client.catchupDocumentIndexForYear(year)
+        #expect(firstPass.compactMap { $0["docID"] as? String } == ["OLD", "MORNING"])
+
+        // 同日午後に新たな書類が提出された状況をシミュレート
+        store.saveSearchCache(
+            todayKey,
+            data: [
+                ["docID": "MORNING", "submitDateTime": "\(support.iso(today)) 10:00"],
+                ["docID": "AFTERNOON", "submitDateTime": "\(support.iso(today)) 15:36"],
+            ]
+        )
+
+        let secondPass = await client.catchupDocumentIndexForYear(year)
+
+        #expect(secondPass.compactMap { $0["docID"] as? String } == ["OLD", "MORNING", "AFTERNOON"])
     }
 
     // MARK: - XBRL ダウンロード
