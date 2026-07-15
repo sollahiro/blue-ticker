@@ -24,6 +24,7 @@ func registerRoutes(
     // 公開契約のエラー封筒（`{"error":"...","status":N}`）に置き換える。
     // 未知パスの 404・メソッド不一致の 405 もこの形式で返る。
     app.middleware = .init()
+    app.middleware.use(RequestTimingMiddleware())
     app.middleware.use(BltErrorMiddleware())
 
     // GET /healthz: 認証不要のヘルスチェック（Fly.io / ロードバランサ用）。
@@ -302,6 +303,29 @@ func serveFilings(
         }
     }
     return await context.getFilings(code: code, maxYears: maxYears)
+}
+
+// MARK: - リクエスト計測ミドルウェア
+
+/// リクエスト単位の所要時間ログ（観測性のみ・挙動は変えない）。
+/// これまでアクセスログが存在せず、MCP 経由のレイテンシがサーバー内部（DB/計算）起因か
+/// エッジ（Cloudflare Access/Tunnel）起因かを切り分ける手段がなかったため追加する。
+/// BltErrorMiddleware より前段に登録し、エラー応答（404/503 等）も含めて計測する。
+private struct RequestTimingMiddleware: AsyncMiddleware {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        let start = Date()
+        let response = try await next.respond(to: request)
+        let durationMs = Date().timeIntervalSince(start) * 1000
+        request.logger.info(
+            "http_request",
+            metadata: [
+                "method": .string(request.method.rawValue),
+                "path": .string(request.url.path),
+                "status": .stringConvertible(response.status.code),
+                "duration_ms": .stringConvertible(Int(durationMs.rounded())),
+            ])
+        return response
+    }
 }
 
 // MARK: - エラーミドルウェア
