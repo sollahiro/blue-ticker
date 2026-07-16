@@ -31,11 +31,6 @@ import Foundation
         #expect(calculateFiscalYear(fyEnd: "2023-12-31") == 2023)
     }
 
-    @Test func testCalculateFiscalYearWithStart() {
-        // fyStart が提供された場合は開始年を優先
-        #expect(calculateFiscalYear(fyEnd: "2024-03-31", fyStart: "2023-04-01") == 2023)
-    }
-
     @Test func testExtractYearMonth() {
         let (year, month) = extractYearMonth("20231231")
         #expect(year == 2023)
@@ -109,6 +104,12 @@ import Foundation
         // ハイフン区切り入力は DateFormatter によるカレンダー妥当性検証を通る
         // （存在しない13月・45日は拒否される）。
         #expect(normalizeDateFormat("2023-13-45") == nil)
+    }
+
+    @Test func normalizeDateFormatReturnsNilForInvalidCompactCalendarDate() {
+        // コンパクト形式も同様にカレンダー妥当性検証を通る
+        // （存在しない13月・45日は拒否される）。
+        #expect(normalizeDateFormat("20231345") == nil)
     }
 
     // MARK: - calculateFiscalYear（異常系）

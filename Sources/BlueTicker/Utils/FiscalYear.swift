@@ -20,6 +20,7 @@ private let compactFormatter: DateFormatter = {
 func normalizeDateFormat(_ dateStr: String?) -> String? {
     guard let s = dateStr, !s.isEmpty else { return nil }
     if s.count == DateFormat.compactLength, s.allSatisfy(\.isNumber) {
+        guard compactFormatter.date(from: s) != nil else { return nil }
         let y = s.prefix(4), m = s.dropFirst(4).prefix(2), d = s.dropFirst(6).prefix(2)
         return "\(y)-\(m)-\(d)"
     }
@@ -60,10 +61,7 @@ func extractYearMonth(_ dateStr: String?) -> (Int?, Int?) {
 }
 
 /// 年度終了日から年度を返す（期末月 < 12 なら year-1、12月なら year）。
-func calculateFiscalYear(fyEnd: String?, fyStart: String? = nil) -> Int? {
-    if let start = fyStart, let normalized = normalizeDateFormat(start) {
-        return Int(normalized.prefix(4))
-    }
+func calculateFiscalYear(fyEnd: String?) -> Int? {
     guard let end = fyEnd,
           let normalized = normalizeDateFormat(end),
           let date = isoFormatter.date(from: normalized)
