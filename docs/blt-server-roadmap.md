@@ -58,7 +58,9 @@ financials / filing-content の REST read は現行版との完全一致では�
 - `edinet_documents` から導出できる証券コードについて、`company_financials.cache_version` が床以上（いま `fin-v2`+）
 - 残欠は恒久 failed（財務報告書なし等）として切り分け済みで、定期 ingest の Stage 4 **missing** が実質ゼロ（床未満だけの行は「空白一巡」に数えない）
 
-**実施時点の実測**（2026-07-16、Neon `company_financials` 直接集計）: servable 3,870 / ユニバース 3,944 = **98.1%**。未格納 74 社は「恒久 failed」への切り分けが済んでおらず、ウエルシアHD(3141)・ホギメディカル(3593) 等の実在事業会社を含む genuine な欠落。厳密には上記「完了の定義」の missing 実質ゼロを満たしていないが、ユーザー判断で**既知の残欠として許容し実施した**（定期 ingest が引き続き埋める。issue 化は別途検討）。
+**実施時点の実測**（2026-07-16、Neon `company_financials` 直接集計）: servable 3,870 / ユニバース 3,944 = **98.1%**。
+
+**未格納 73 社の切り分け完了**（2026-07-17）: 71 社は EDINET マスタで上場廃止・外国法人に該当し `listedCodes` フィルタで恒久的に対象外（設計通り。ウエルシアHD(3141)・イオンモール(8905) 等は実在の上場廃止・株式交換による完全子会社化を実データで確認済み）。残り 2 社（436A・441A）は新規上場で初回有報未提出のため一時的に failed（提出後に自然解消見込み）。ユニバース分母（3,944）は過去に書類提出歴のある全銘柄の延べ数で、実質対象ユニバースは ~3,874 社（servable 3,872 / 3,874 = **99.9%**）。追加対応不要。
 
 補足:
 
@@ -71,7 +73,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 1. ~~`backend=local` を deprecation（警告＋ドキュメント）~~ → 経由せず直接撤去（2026-07-16 時点で `backend=local` の実利用報告なし）
 2. `ticker`（配布 CLI）からユーザー向け local 経路を削除。EDINET 直叩きロジックは `Sources/BlueTicker/DevCLI/`（`BlueTickerCore` 内・internal）へ移設し、配布しない新ターゲット `TickerDev`（`Package.swift` の `products` 非搭載）からのみ呼べる。詳細は `docs/architecture.md`「ターゲット構成と依存方向」
 3. remote 未格納／床未満は 404 のまま。local フォールバックは戻さない
-4. 未格納 74 社の残欠は本ゲートの遂行条件から除外し別途追跡する（issue 化は別途検討。定期 ingest が引き続き埋める）
+4. 未格納 73 社は切り分け済み（上記参照）。本ゲートの遂行条件から除外して実施し、追加対応は不要と判断
 
 ## デプロイモード
 
@@ -139,7 +141,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 ### 進行中
 
 - [~] Stage 4 現行版への stale 消化 / Stage 4-half / Stage 5 — 同ジョブが継続
-- [ ] 未格納 74 社（servable 98.1% の残欠）の切り分け・解消 — 恒久 failed か ingest 未着手かを判別
 
 ### 次（優先度順）
 
