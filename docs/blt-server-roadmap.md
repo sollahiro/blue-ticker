@@ -150,7 +150,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 - [ ] 生 XBRL 中央永続化（目標 A）＋ Stage 4 のデータ源見直し（タグ系→facts）
 - [ ] ストレージ強化の方式選定（#22 本丸）
-- [ ] REST API の公開 API 化（スキーマ安定化・レート制御）
+- [ ] REST API の公開 API 化 — 現時点では不要と判断（需要なし・土台未成熟）。構想・判断根拠は `docs/public-api-concept.md`
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張（retention / 半期 160 / ユニバース）
