@@ -111,7 +111,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 公開契約は financials / half-financials レスポンス（`schema_version` 独立採番）。Stage 3 RAW は非公開。
 
-`sector` は REST 未整備のため remote でも CSV オフライン算出（機能欠落ではない・優先度低）。
+`sector` は REST 化済み（`GET /v1/sectors`）。CLI 配布物からも `EdinetcodeDlInfo.csv` の同梱を撤去した。
 
 ## ゴール / 非ゴール
 
@@ -145,7 +145,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 ### 次（優先度順）
 
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
-- [ ] **`sector` の REST 化**（任意・優先度低）
 
 ### 将来
 

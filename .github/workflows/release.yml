@@ -74,15 +74,8 @@ jobs:
         run: |
           mkdir -p release
           cp .build/release/ticker release/
-          cp -R assets release/
           cd release
-          COPYFILE_DISABLE=1 tar -czvf blue-ticker-macos-arm64.tar.gz ticker assets
-        shell: bash
-
-      - name: Verify Package Contents
-        run: |
-          test -f release/assets/EdinetcodeDlInfo.csv
-          tar -tzf release/blue-ticker-macos-arm64.tar.gz | grep -qx "assets/EdinetcodeDlInfo.csv"
+          COPYFILE_DISABLE=1 tar -czvf blue-ticker-macos-arm64.tar.gz ticker
         shell: bash
 
       - name: Upload Artifacts
