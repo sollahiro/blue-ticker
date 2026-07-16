@@ -43,7 +43,7 @@ enum EdinetDiscovery {
         var allDocs: [[String: Any]] = []
         await withTaskGroup(of: YearDocs.self) { group in
             for year in scanStartYear...todayYear {
-                group.addTask { YearDocs(docs: await client.ensureDocumentIndexForYear(year)) }
+                group.addTask { YearDocs(docs: await client.catchupDocumentIndexForYear(year)) }
             }
             for await r in group {
                 allDocs.append(contentsOf: r.docs)

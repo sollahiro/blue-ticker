@@ -57,17 +57,6 @@ actor EdinetAPIClient {
 
     // MARK: - 年次書類インデックス
 
-    /// 年次書類インデックスを返す。`catchupDocumentIndexForYear` と同一実装に委譲し、
-    /// 既存キャッシュがあっても built_through 以降の不足分を差分取得して追補する。
-    ///
-    /// かつては「キャッシュファイルが存在すれば古さを問わず返す」別実装だったため、EDINET が
-    /// 当日の書類一覧を随時更新しても年次インデックス側は古いまま固定され、後から提出された
-    /// 書類（有報等）が Stage 4/4-half の計算対象から永久に漏れる不具合があった
-    /// （日次検索キャッシュ側の TTL を直しても、この年次インデックス側は別キャッシュのため直らなかった）。
-    func ensureDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
-        await catchupDocumentIndexForYear(year)
-    }
-
     func refreshDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
         let requiredDate = min(yearEnd, utcStartOfDay(Date()))
@@ -336,7 +325,7 @@ actor EdinetAPIClient {
         // 同一日付バケットの docs は単一年からのみ来る（出力は逐次処理時と等価）。
         let yearDocs = await withTaskGroup(of: YearDocsResult.self, returning: [YearDocsResult].self) { group in
             for year in yearRange(start: start, end: end) {
-                group.addTask { YearDocsResult(docs: await self.ensureDocumentIndexForYear(year)) }
+                group.addTask { YearDocsResult(docs: await self.catchupDocumentIndexForYear(year)) }
             }
             var results: [YearDocsResult] = []
             for await r in group { results.append(r) }

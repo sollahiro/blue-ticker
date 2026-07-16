@@ -71,7 +71,7 @@ struct CachePrepare: AsyncParsableCommand {
         let currentYear = utcCalendar.component(.year, from: Date())
         for year in (currentYear - years + 1)...currentYear {
             print("  \(year)年 のインデックスを構築中...")
-            let docs = await client.ensureDocumentIndexForYear(year)
+            let docs = await client.catchupDocumentIndexForYear(year)
             print("    → \(docs.count) 件")
         }
         print("完了しました。")

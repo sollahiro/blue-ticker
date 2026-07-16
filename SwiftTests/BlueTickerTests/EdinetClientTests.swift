@@ -50,7 +50,7 @@ import Foundation
             current = support.addDays(current, 1)
         }
 
-        let docs = await client.ensureDocumentIndexForYear(2024)
+        let docs = await client.catchupDocumentIndexForYear(2024)
         let cached = store.loadDocumentIndex(2024, requiredThrough: "2024-12-31")
 
         #expect(docs.count == 1)
@@ -107,33 +107,10 @@ import Foundation
 
         // built_through が古いため差分取得を試みるが、API キーなしのため取得失敗 →
         // 既存キャッシュへフォールバックする（オフライン時にデータを失わない）
-        let docs = await client.ensureDocumentIndexForYear(year)
+        let docs = await client.catchupDocumentIndexForYear(year)
 
         #expect(docs.count == 1)
         #expect(docs.first?["docID"] as? String == "S100STALE")
-    }
-
-    @Test func testEnsureDocumentIndexForYearCatchesUpMissingDates() async throws {
-        // 実例: 年次インデックスが built_through 以降に提出された書類（有報等）を
-        // 拾わないまま固定される不具合の回帰テスト。ensure は catchup と同じく
-        // 差分日を追補しなければならない（かつては既存キャッシュをそのまま返していた）。
-        let support = ServiceTestSupport.self
-        let today = support.utcToday()
-        let yesterday = support.addDays(today, -1)
-        let year = support.utcCalendar.component(.year, from: today)
-        store.saveDocumentIndex(
-            year,
-            documents: [["docID": "OLD", "_edinet_list_date": support.iso(yesterday)]],
-            builtThrough: support.iso(yesterday)
-        )
-        store.saveSearchCache(
-            store.searchCacheKey(support.iso(today)),
-            data: [["docID": "NEW", "submitDateTime": "\(support.iso(today)) 10:00"]]
-        )
-
-        let docs = await client.ensureDocumentIndexForYear(year)
-
-        #expect(docs.compactMap { $0["docID"] as? String } == ["OLD", "NEW"])
     }
 
     @Test func testDocumentIndexCatchupFetchesOnlyMissingDates() async throws {
