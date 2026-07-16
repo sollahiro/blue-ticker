@@ -148,6 +148,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 将来
 
+- [ ] MCP/REST 速度改善（Cloudflare Tunnel/Access 区間のレイテンシ調査）— issue #84
 - [ ] 生 XBRL 中央永続化（目標 A）＋ Stage 4 のデータ源見直し（タグ系→facts）
 - [ ] ストレージ強化の方式選定（#22 本丸）
 - [ ] REST API の公開 API 化 — 現時点では不要と判断（需要なし・土台未成熟）。構想・判断根拠は `docs/public-api-concept.md`
