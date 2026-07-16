@@ -153,7 +153,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] REST API の公開 API 化 — 現時点では不要と判断（需要なし・土台未成熟）。構想・判断根拠は `docs/public-api-concept.md`
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
-- [ ] Stage 5 拡張（retention / 半期 160 / ユニバース）
+- [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
 - [ ] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。構想は `docs/segment-normalization-concept.md`
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価

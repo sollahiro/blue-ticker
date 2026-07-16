@@ -244,7 +244,7 @@ public func runStage3IngestCommand(
             logIngestSummary(
                 app.logger, stage: "5", attempted: s5.attempted, stored: s5.stored,
                 failed: s5.failed, skipped: s5.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable)
+                servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
     } catch {
         try? await app.asyncShutdown()

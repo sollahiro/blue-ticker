@@ -6,17 +6,19 @@
 // DB read-only（loadStoredFilingSections）へ移した。抽出（重い SwiftSoup）はローカル等の余裕ある
 // 環境で ingest し、Neon へ保存する。
 //
-// 対象は「東証上場（EDINET 上場区分）× 有報(120) × 直近 years 年ぶん」。過去書類も docID 単位で保持する。
-// 容量（Neon 512MB）のため当面 years を絞る（ストレージ強化＝issue #22 決定後に緩められる）。
+// 対象は「東証上場（EDINET 上場区分）× 有報(120) × 直近 years 件（≈ years 年。有報は通常年1件）」。
+// 直近 years 件を超えた過去書類は既存行があれば purge（削除）し、無期限累積を防ぐ。窓は Stage 4
+// （financials 6年）と揃え、トレンド分析と同じ期間分の本文を読めるようにする。
+// 容量（Neon 512MB）のため上限を設ける。ストレージ強化＝issue #22 決定後に緩められる。
 
 import BlueTickerCore
 import Fluent
 import Foundation
 import Logging
 
-/// Stage 5 取り込みで保持する有報の年数（1社あたり直近 N 件の有報）。
-/// 全書類を持つと容量超過（issue #22）のため直近に絞る。ストレージ強化後に緩められる。
-let stage5IngestYears = 3
+/// Stage 5 取り込みで保持する有報の件数（1社あたり直近 N 件。有報は通常年1件のため ≈ N 年）。
+/// Stage 4 の financials 計算年数（6年）と揃える。ストレージ強化後に緩められる。
+let stage5IngestYears = 6
 
 /// Stage 5 取り込み結果のサマリ。
 public struct Stage5IngestSummary: Sendable, Equatable {
@@ -28,6 +30,8 @@ public struct Stage5IngestSummary: Sendable, Equatable {
     public let failed: Int
     /// 既に現行バージョン・同一セクション集合で抽出済みのためスキップした書類数。
     public let skipped: Int
+    /// 保持窓（直近 years 件）を超えたため削除した既存行数。
+    public let purged: Int
 }
 
 /// docID を受けてセクション本文 payload を返す抽出器（成功で payload、失敗で nil）。
@@ -43,8 +47,9 @@ func runStage5Ingest(
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> Stage5IngestSummary {
-    let baseCandidates = try await stage5Candidates(
+    let sets = try await stage5Candidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    let baseCandidates = sets.keep
 
     var attempted = 0
     var stored = 0
@@ -119,17 +124,41 @@ func runStage5Ingest(
         stored += 1
     }
 
+    // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
+    unhealthyRetries = 0
+    var purged = 0
+    for docID in sets.purge {
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error("DB接続が不安定なため Stage 5 purge を中断します(リトライ\(unhealthyRetries)回)")
+            break
+        }
+        let deleted = try await withDbRetry(
+            logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) { () -> Bool in
+            guard let row = try await CompanyFilingSections.find(docID, on: db) else { return false }
+            try await row.delete(on: db)
+            return true
+        }
+        if deleted { purged += 1 }
+    }
+
     return Stage5IngestSummary(
-        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
+        attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
 }
 
-/// 取り込み候補（docID, 4桁コード, 提出日時）を返す。
-/// 「上場（listedCodes）× 有報(120) × 各社 提出日時降順の直近 years 件」に絞る。
+/// 取り込み候補（保持窓内。docID・4桁コード・提出日時）と、保持窓を超えた既存書類の docID（purge 対象）。
+struct Stage5CandidateSets {
+    let keep: [(docID: String, code: String, submitDateTime: String)]
+    let purge: [String]
+}
+
+/// 取り込み候補（保持窓内）と purge 対象をまとめて返す。
+/// 「上場（listedCodes）× 有報(120) × 各社 提出日時降順の直近 years 件」を keep、それを超えた分を purge とする。
 /// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 func stage5Candidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
     logger: Logger? = nil
-) async throws -> [(docID: String, code: String, submitDateTime: String)] {
+) async throws -> Stage5CandidateSets {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocument.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
@@ -148,17 +177,22 @@ func stage5Candidates(
         byCode[code, default: []].append((docID, doc.submitDateTime))
     }
 
-    var result: [(docID: String, code: String, submitDateTime: String)] = []
+    var keep: [(docID: String, code: String, submitDateTime: String)] = []
+    var purge: [String] = []
     for (code, docs) in byCode {
-        let recent = docs.sorted { $0.submitDateTime > $1.submitDateTime }.prefix(years)
-        for d in recent {
-            result.append((docID: d.docID, code: code, submitDateTime: d.submitDateTime))
+        let sorted = docs.sorted { $0.submitDateTime > $1.submitDateTime }
+        for d in sorted.prefix(years) {
+            keep.append((docID: d.docID, code: code, submitDateTime: d.submitDateTime))
+        }
+        for d in sorted.dropFirst(years) {
+            purge.append(d.docID)
         }
     }
-    return result.sorted {
+    let sortedKeep = keep.sorted {
         if $0.submitDateTime != $1.submitDateTime { return $0.submitDateTime > $1.submitDateTime }
         return $0.docID < $1.docID
     }
+    return Stage5CandidateSets(keep: sortedKeep, purge: purge)
 }
 
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。
