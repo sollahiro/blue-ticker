@@ -74,6 +74,13 @@ public extension BltServerContext {
         return .ok(json)
     }
 
+    /// 東証33業種の一覧と業種別銘柄数。CLI `sector` コマンドが使う（remote 専用化に伴い REST 化）。
+    func allSectors() async -> BltServerResponse {
+        let results = await masterDataManager.allSectors()
+        let json = results.map { ["code": $0.code, "name": $0.name, "count": $0.count] as [String: Any] }
+        return .ok(json)
+    }
+
     func getFilings(code: String, maxYears: Int) async -> BltServerResponse {
         let stock = await masterDataManager.getByCode(code)
         let service = FilingService(edinetClient: edinetClient)

@@ -177,6 +177,23 @@ private func send(
         }
     }
 
+    // MARK: - sectors（EDINET マスタ CSV 未配置でも 200・空配列で応答する）
+
+    @Test func sectorsReturnsOkWithArrayBody() async throws {
+        try await withApp { app in
+            let headers = HTTPHeaders()
+            let request = Request(
+                application: app, method: .GET, url: URI(string: "/v1/sectors"), headers: headers,
+                on: app.eventLoopGroup.next())
+            let response = try await app.responder.respond(to: request).get()
+            #expect(response.status == .ok)
+            let string = try #require(response.body.string)
+            let data = try #require(string.data(using: .utf8))
+            let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            #expect(array != nil)
+        }
+    }
+
     @Test func financialsWithInvalidYearsReturns404() async throws {
         // years <= 0 は無効要求として 404（空 years の 200 を返さない）
         try await withApp(databases: true) { app in

@@ -104,6 +104,7 @@ flowchart LR
 | `GET /healthz` | — | ヘルスチェック（認証不要） |
 | `GET /v1/companies?q=` | `searchCompanies` | 企業検索 |
 | `GET /v1/sectors/{sector}/companies` | `searchBySector` | セクター別企業 |
+| `GET /v1/sectors` | `allSectors` | 東証33業種の一覧と業種別銘柄数（CLI `sector` コマンド用） |
 | `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
 | `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4）。read 床は `companyFinancialsMinServableVersion` |
 | `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |

@@ -93,6 +93,14 @@ import Testing
         #expect(arr.first?.location == "愛知県")
     }
 
+    /// sectors の公開 JSON（`GET /v1/sectors`）が SectorSummary へデコードできる（CLI `sector` コマンド用）。
+    @Test func sectorsJSONDecodesToSectorSummary() throws {
+        let json = #"[{"code":"輸送用機器","name":"輸送用機器","count":42}]"#
+        let arr = try JSONDecoder().decode([SectorSummary].self, from: Data(json.utf8))
+        #expect(arr.first?.name == "輸送用機器")
+        #expect(arr.first?.count == 42)
+    }
+
     /// Cloudflare Access SSO（ticker login 経由）が有効なとき、JWT が CF_Authorization Cookie で付与される。
     /// Access のエッジ認証は Cookie を見るため（`Cf-Access-Jwt-Assertion` ヘッダーでは通らないことを実機で確認済み）。
     @Test func buildRequestAddsCfAuthorizationCookieWhenSsoJwtSet() throws {

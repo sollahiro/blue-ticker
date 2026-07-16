@@ -11,7 +11,13 @@ struct SectorCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let sectors = await masterDataManager.allSectors()
+        let remote = try await RemoteBackend.client()
+        let sectors: [SectorSummary]
+        switch await remote.getSectors() {
+        case .ok(let r): sectors = r
+        case .notFound: sectors = []
+        case .failure(let m): printError(m + "\n"); throw ExitCode.failure
+        }
 
         if json {
             printJSON(sectors)
