@@ -143,10 +143,51 @@ private let keys = "business_risks,mda,segments"
 
             #expect(summary.attempted == 3)
             #expect(summary.stored == 3)
+            // 窓外の S22 は行が未格納のため purge 対象ではあるが削除実行数には数えない。
+            #expect(summary.purged == 0)
             #expect(try await CompanyFilingSections.find("S25", on: app.db) != nil)
             #expect(try await CompanyFilingSections.find("S24", on: app.db) != nil)
             #expect(try await CompanyFilingSections.find("S23", on: app.db) != nil)
             #expect(try await CompanyFilingSections.find("S22", on: app.db) == nil)  // 4件目は対象外
+        }
+    }
+
+    @Test func ingestPurgesExistingRowsBeyondRetentionWindow() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S22", secCode: "72030", submit: "2022-06-20 09:00", db: app.db)
+            try await seedDoc("S23", secCode: "72030", submit: "2023-06-20 09:00", db: app.db)
+            try await seedDoc("S24", secCode: "72030", submit: "2024-06-20 09:00", db: app.db)
+            try await seedDoc("S25", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            // S22 は窓外だが、以前の ingest で格納済みの行が残っている想定。
+            let old = CompanyFilingSections()
+            old.id = "S22"
+            old.code = "7203"
+            old.submitDateTime = "2022-06-20 09:00"
+            old.payload = fakePayload("old")
+            old.cacheVersion = filingSectionsCacheVersion
+            old.sectionKeys = keys
+            try await old.create(on: app.db)
+
+            let summary = try await runStage5Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in fakePayload() }
+
+            #expect(summary.purged == 1)
+            #expect(try await CompanyFilingSections.find("S22", on: app.db) == nil)
+            #expect(try await CompanyFilingSections.find("S23", on: app.db) != nil)
+        }
+    }
+
+    @Test func ingestPurgeCountIsZeroWhenNoRowsExistOutsideWindow() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S22", secCode: "72030", submit: "2022-06-20 09:00", db: app.db)
+            try await seedDoc("S23", secCode: "72030", submit: "2023-06-20 09:00", db: app.db)
+
+            let summary = try await runStage5Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in fakePayload() }
+
+            #expect(summary.purged == 0)
         }
     }
 
