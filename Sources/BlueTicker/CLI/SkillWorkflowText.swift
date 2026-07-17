@@ -33,7 +33,7 @@ ticker config show
 
 サーバーURLが未設定、または `ticker login` が必要と表示された場合は、ユーザーに案内する。
 
-`--years` はユーザーの希望に合わせる。指定がなければ、通常の調査は5年、財務推移をしっかり見る場合は6年を目安にする。
+`summarize`・`analyze` は直近5年分を固定で返す（年数指定オプションはない）。
 
 ## 調査フロー
 
@@ -53,13 +53,13 @@ ticker search <社名またはコード> --json
 主要財務指標の水準値（売上・利益・BS・CF など）を年度横断で一覧する。
 
 ```bash
-ticker summarize <code> --years 6
+ticker summarize <code>
 ```
 
 増減分析（前年差分解）を見る。事業利益増減・ROIC増減・ROE増減・ネットキャッシュ増減・運転資本/CCC増減の5ブロックを表示する。
 
 ```bash
-ticker analyze <code> --years 6
+ticker analyze <code>
 ```
 
 半期の季節性や直近の変化を見る（`summarize`・`analyze` とも `--half` 対応。半期は前年同期差）。
@@ -131,14 +131,14 @@ ticker sector --json
 
 ```bash
 ticker search <社名>
-ticker analyze <code> --years 6
+ticker analyze <code>
 ticker filing <code> --sections business_risks mda segments geography management_policy
 ```
 
 ### 証券コードが分かっている銘柄を素早く見る
 
 ```bash
-ticker analyze <code> --years 6
+ticker analyze <code>
 ```
 
 必要に応じて、半期分析や有報抽出を追加する。
@@ -153,8 +153,8 @@ ticker filing <code> --sections mda
 ```bash
 ticker search <社名A>
 ticker search <社名B>
-ticker analyze <codeA> --years 6
-ticker analyze <codeB> --years 6
+ticker analyze <codeA>
+ticker analyze <codeB>
 ```
 
 比較結果は、同じ指標を横並びで説明する。数値差だけでなく、推移の方向、安定性、キャッシュフローとの整合、有報に書かれた要因を分けて述べる。

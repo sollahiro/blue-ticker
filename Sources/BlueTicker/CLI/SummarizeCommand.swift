@@ -10,9 +10,6 @@ struct SummarizeCommand: AsyncParsableCommand {
     @Argument(help: "銘柄コード")
     var code: String
 
-    @Option(name: .shortAndLong, help: "分析年数")
-    var years: Int = Api.analyzeDefaultYears
-
     @Flag(name: .long, help: "JSON 形式で出力")
     var json = false
 
@@ -24,6 +21,7 @@ struct SummarizeCommand: AsyncParsableCommand {
         let codeTrimmed = code.trimmingCharacters(in: .whitespaces)
 
         if half {
+            let years = Api.halfMaxYears
             let resp: HalfFinancialsResponse
             switch await remote.getHalfFinancials(code: codeTrimmed, years: years) {
             case .ok(let r): resp = r
@@ -41,6 +39,7 @@ struct SummarizeCommand: AsyncParsableCommand {
             return
         }
 
+        let years = Api.financialsYearsDefault
         let resp: FinancialsResponse
         switch await remote.getFinancials(code: codeTrimmed, years: years) {
         case .ok(let r): resp = r

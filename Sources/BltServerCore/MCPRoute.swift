@@ -141,30 +141,30 @@ private func dispatchMcpTool(
 
     case "get_financial_summary":
         let code = args["code"]?.stringValue ?? ""
-        let years = args["years"]?.intValue ?? Api.financialsYearsDefault
         return mapStoredResult(
-            await serveStoredFinancials(code: code, years: years, db: db, logger: logger),
+            await serveStoredFinancials(
+                code: code, years: Api.financialsYearsDefault, db: db, logger: logger),
             notFoundMessage: "財務データは未集計です")
 
     case "get_half_financial_summary":
         let code = args["code"]?.stringValue ?? ""
-        let years = args["years"]?.intValue ?? Api.halfFinancialsYearsDefault
         return mapStoredResult(
-            await serveStoredHalfFinancials(code: code, years: years, db: db, logger: logger),
+            await serveStoredHalfFinancials(
+                code: code, years: Api.halfMaxYears, db: db, logger: logger),
             notFoundMessage: "半期財務データは未集計です")
 
     case "get_analysis":
         let code = args["code"]?.stringValue ?? ""
-        let years = args["years"]?.intValue ?? Api.financialsYearsDefault
         return mapStoredResult(
-            await serveStoredAnalysis(code: code, years: years, db: db, logger: logger),
+            await serveStoredAnalysis(
+                code: code, years: Api.financialsYearsDefault, db: db, logger: logger),
             notFoundMessage: "財務データは未集計です")
 
     case "get_half_analysis":
         let code = args["code"]?.stringValue ?? ""
-        let years = args["years"]?.intValue ?? Api.halfFinancialsYearsDefault
         return mapStoredResult(
-            await serveStoredHalfAnalysis(code: code, years: years, db: db, logger: logger),
+            await serveStoredHalfAnalysis(
+                code: code, years: Api.halfMaxYears, db: db, logger: logger),
             notFoundMessage: "半期財務データは未集計です")
 
     case "get_filing_content":

@@ -45,23 +45,22 @@ import Testing
 
     // MARK: - analyze の引数パース
 
-    @Test func analyzeDefaultsMatchApiConstantsAndFlagsAreOff() throws {
+    @Test func analyzeDefaultsFlagsAreOff() throws {
         let cmd = try AnalyzeCommand.parse(["7203"])
-        #expect(cmd.years == Api.analyzeDefaultYears)
         #expect(!cmd.json)
         #expect(!cmd.half)
     }
 
     @Test func analyzeParsesLongOptionsAndFlags() throws {
-        let cmd = try AnalyzeCommand.parse(["7203", "--years", "3", "--json", "--half"])
-        #expect(cmd.years == 3)
+        let cmd = try AnalyzeCommand.parse(["7203", "--json", "--half"])
         #expect(cmd.json)
         #expect(cmd.half)
     }
 
-    @Test func analyzeAcceptsShortYearsOption() throws {
-        let cmd = try AnalyzeCommand.parse(["7203", "-y", "4"])
-        #expect(cmd.years == 4)
+    @Test func analyzeRejectsYearsOptionSinceYearsIsFixed() {
+        #expect(throws: (any Error).self) {
+            _ = try AnalyzeCommand.parse(["7203", "--years", "4"])
+        }
     }
 
     @Test func analyzeWithoutCodeFailsToParse() {
