@@ -427,6 +427,42 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
+    /// 新規有報(high-water 不一致)は cache_version 不一致より優先して処理される
+    /// （225 等の priorityCodes 以外の一般企業の優先順位: missing > high-water > years > version）。
+    @Test func ingestPrioritizesNewFilingOverStaleVersionWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)  // high-water 変化なし
+            try await seedDocument("S2", secCode: "67580", submitDateTime: "2026-01-15 09:00", db: app.db)  // 新規有報
+
+            let staleVersion = CompanyFinancials()
+            staleVersion.id = "7203"
+            staleVersion.response = try makeResponse(code: "7203", years: 6)
+            staleVersion.cacheVersion = "0.0.0"
+            staleVersion.requestedYears = 6
+            staleVersion.highWater = "2025-06-20 09:00"  // seedDocument のデフォルトと一致 → high-water は非stale
+            try await staleVersion.create(on: app.db)
+
+            let staleHighWater = CompanyFinancials()
+            staleHighWater.id = "6758"
+            staleHighWater.response = try makeResponse(code: "6758", years: 6)
+            staleHighWater.cacheVersion = companyFinancialsCacheVersion
+            staleHighWater.requestedYears = 6
+            staleHighWater.highWater = "2025-06-01 09:00"  // 現在の提出日時より古い → 新規有報あり
+            try await staleHighWater.create(on: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
+                try? makeResponse(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let processed = try #require(try await CompanyFinancials.find("6758", on: app.db))
+            #expect(processed.cacheVersion == companyFinancialsCacheVersion)
+            let untouched = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(untouched.cacheVersion == "0.0.0")  // version stale は後回しのまま未処理
+        }
+    }
+
     @Test func ingestProcessesPriorityCodesFirstWhenLimited() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
