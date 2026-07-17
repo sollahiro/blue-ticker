@@ -533,6 +533,33 @@ enum Xbrl {
         "BusinessSegment",
         "ReportableSegment",
     ]
+    static let businessSegmentMixedTextBlockTags: Set<String> = [
+        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  // US-GAAP 連結財務諸表注記（事業別セグメントを内包）
+    ]
+    static let businessSegmentHeadingKeywords: [String] = [
+        "セグメント情報",
+        "事業の種類別",
+        "報告セグメント",
+    ]
+    // 事業別セグメントの見出し候補文字列に含まれていたら除外する（「地域別セグメント情報」等、
+    // 地域別注記の見出しが「セグメント情報」を部分文字列として含むため誤って拾わないようにする）。
+    static let businessSegmentHeadingExclusionKeywords: [String] = [
+        "地域",
+    ]
+
+    // mixedTags 経由の見出し一致で次の <table> を無条件採用すると、巨大な注記内の無関係な表
+    // （収益認識の時期別内訳・ストックオプションの評価前提・投資有価証券の公正価値等）を誤って
+    // 拾うことがある。いずれも会計基準の定型文言のため、これらを含む表は候補から除外する。
+    static let noteTableExclusionKeywords: [String] = [
+        "一時点で認識する収益",              // 収益認識の時期別内訳（企業会計基準第29号）
+        "一定期間にわたり認識する収益",
+        "予想残存期間",                    // ストックオプションの公正価値評価前提
+        "総未実現利益",                    // 投資有価証券の公正価値内訳（ASC 320/321 相当）
+        "償却累計額",                     // 無形固定資産・有形固定資産の取得原価/償却累計額/帳簿価額の内訳
+    ]
+    // 見出し直後の表が noteTableExclusionKeywords に該当した場合、次の表を何個先まで
+    // 試すか（無関係な後続表まで際限なく拾わないための上限）。
+    static let noteTableLookaheadLimit = 5
 
     // 地域別
     static let geographyTextBlockTags: Set<String> = [
