@@ -341,6 +341,50 @@ import Foundation
         }
     }
 
+    @Test func geographyChainsSecondTableWhenDivWrappedWithShortLabelBetween() {
+        // キヤノン型の回帰: 1つの見出し文が前期・当期の両方を紹介し（「第124期及び第125期に
+        // おける地域別セグメント情報は...」）、表がそれぞれ個別の <div> でラップされた上で
+        // 短いラベル（「第125期」）だけを挟んで連続する。table 自身の nextElementSibling では
+        // 2枚目に辿り着けないため、findImmediatelyChainedTable が親（ラッパー div）の兄弟まで
+        // 遡って探索し、見出し行が完全一致する場合のみ「同じ開示の続き」として拾う。
+        let escaped =
+            "&lt;p&gt;第124期及び第125期における地域別セグメント情報は以下のとおりであります。&lt;/p&gt;" +
+            "&lt;div&gt;&lt;p&gt;第124期&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;p&gt;第125期&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
+            #expect(result.tables[1].markdown.contains("| 110 | 210 |"))
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+        }
+    }
+
+    @Test func geographyDoesNotChainWhenFollowingTableHasDifferentShape() {
+        // 直後に続く表があっても見出し行（列構成）が異なれば「別の開示」とみなし、
+        // 連結ロジック追加前と同じく1枚目だけを採用する（過検出防止の回帰）。
+        let escaped =
+            "&lt;p&gt;地域別セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;p&gt;短い注記&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
+        }
+    }
+
     @Test func segmentInfoFallsBackToDimensionFacts() throws {
         // TextBlock がない場合は dimension 付き fact にフォールバックする
         let xml = """

@@ -215,7 +215,7 @@ enum SegmentExtractor {
             } else {
                 continue
             }
-            if text.isEmpty || text.unicodeScalars.count > 100 { continue }
+            if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
             if currentPeriodKeywords.contains(where: text.contains) {
                 result = "当期"
             } else if priorPeriodKeywords.contains(where: text.contains) {
@@ -242,6 +242,29 @@ enum SegmentExtractor {
             if s.tagName() == "table" { return s }
             if let found = (try? s.select("table"))?.first() { return found }
             sibling = try? s.nextElementSibling()
+        }
+        return nil
+    }
+
+    /// table の直後に、短いラベル（例:「第125期」）だけを挟んで次の表が続いていないかを調べる。
+    /// 「第n期及び第n+1期における...は以下のとおりであります」のように前期・当期を1つの見出しで
+    /// まとめて紹介し、表ごとに個別の <div> でラップされているケースで必要（実データ: キヤノン
+    /// 地域別注記）。table 自身の nextElementSibling だけでは辿れない（table が div の唯一の
+    /// 子だと兄弟が無い）ため、table 自身の兄弟 → 1段親（ラッパー div 等）の兄弟の順に探す。
+    /// 挟まる要素のテキストが長ければ無関係な話題への移行とみなし nil を返す。
+    private static func findImmediatelyChainedTable(after table: Element) -> Element? {
+        let startPoints: [Element] = [table, table.parent()].compactMap { $0 }
+        for start in startPoints {
+            var sibling = try? start.nextElementSibling()
+            var hops = 0
+            while let s = sibling, hops < Xbrl.noteTableChainMaxGapElements {
+                hops += 1
+                if s.tagName() == "table" { return s }
+                if let found = (try? s.select("table"))?.first() { return found }
+                let text = bs4Text(s, strip: true)
+                if text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { return nil }
+                sibling = try? s.nextElementSibling()
+            }
         }
         return nil
     }
@@ -299,6 +322,19 @@ enum SegmentExtractor {
                     }
                     let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
                     tables.append(SegmentTable(heading: keyword, markdown: md, period: period))
+
+                    // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
+                    // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
+                    // （grid 先頭行）が完全一致するなら「同じ表の続き」とみなして拾い続ける。
+                    // 見出し行が違う/直後に表が続かないなら別の開示とみなし打ち切る。
+                    if let chained = findImmediatelyChainedTable(after: table),
+                       !seen.contains(ObjectIdentifier(chained)) {
+                        let chainedGrid = expandTable(chained)
+                        if chainedGrid.first == grid.first {
+                            candidate = chained
+                            continue
+                        }
+                    }
                     break
                 }
             }

@@ -561,6 +561,16 @@ enum Xbrl {
     // 試すか（無関係な後続表まで際限なく拾わないための上限）。
     static let noteTableLookaheadLimit = 5
 
+    // 「第n期及び第n+1期における...は以下のとおりであります」のように、前期・当期を
+    // 1つの見出しでまとめて紹介し、表ごとに個別の <div> でラップされた表が短いラベル
+    // （「第125期」等）だけを挟んで連続するケースがある（実データ: キヤノン地域別注記）。
+    // 直後の表の見出し行が一致する場合に限り「同じ開示の続き」とみなして追加で拾う。
+    // 何段階（何要素）先まで許容するか。
+    static let noteTableChainMaxGapElements = 5
+    // 挟まる要素のテキストがこの文字数を超えたら、無関係な話題への移行とみなし打ち切る
+    // （detectPeriodFromPreceding の短キャプション判定と同じ考え方の閾値を共有）。
+    static let noteShortCaptionMaxLength = 100
+
     // 地域別
     static let geographyTextBlockTags: Set<String> = [
         "InformationAboutGeographicalAreasIFRSTextBlock",                  // IFRS
