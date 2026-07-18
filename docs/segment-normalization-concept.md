@@ -67,11 +67,23 @@
 6. 時系列はスナップショット列でよい（再編の連続補正なし）。
 7. **小計・調整行の除外は名称リストより数値判定が頑健**。`ReportableSegmentsMember` / `ReconcilingItemsMember` 等の命名は会社で揺れるが、「金額が分母候補と一致する」「他行の合計と一致する」といった数値的判定なら会社をまたいで機械的に効く。
 8. **金融機関（銀行等）は Stage 6 v1 の対象外とする（確定）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（純収益）や `ConsolidatedGrossProfit`（連結粗利益）という別概念で、連結損益計算書の売上を分母にする設計とは整合しない。smoke 検証（三菱UFJ・三井住友）でシェア合計がそれぞれ 1.08 / 0.41 に破綻することを確認済み。銀行固有ロジックは既存の `Extractors.swift` 銀行系抽出と同様、後続の別トラックとして切り出す。
-9. **実装コストの重心は `xbrl_facts` ではなく `html_table` 側にある。** smoke 11社中 `geography` は10社が `html_table`（fact なし）、`segments` も US-GAAP 企業（富士フイルム・キヤノン）は `html_table`。現状 `SegmentResult.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
+9. **実装コストの重心は `segments` の `xbrl_facts` ではなく `geography` の `html_table` 側にある。** smoke 11社では `segments` は会計基準（J-GAAP/IFRS/US-GAAP）を問わず **11社中11社が `xbrl_facts`**。一方 `geography` は9社が `html_table`（fact なし）・2社が `not_found`（AZplanning・東邦レマックは小規模で海外拠点なし＝正当な欠測、抽出漏れではない）。現状 `SegmentResult.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
+10. **`segments` キーの軸（business/geography）は member 名のキーワード判定で機械的に決まる。** smoke 11社中10社は事業名（例: `SeasoningsAndFoodsReportableSegmentMember`）、オークマ1社のみ地域名（`JapanReportableSegmentsMember` 等）。小計・調整行を除いた member 全部が地域キーワードに一致する（オークマ: 4/4）か、1つも一致しない（他10社: 0/N）かで完全に分かれ、混在ケースは smoke 内では0件だった。→ 詳細は下記「軸判定ルール（案）」。
 
 ### smoke 検証（2026-07-18）
 
 smoke fixture の非金融7社（味の素・ニチレイ・AZplanning・オークマ・クボタ・スズキ・東邦レマック、IFRS/J-GAAP 混在）に対し、正しい外部顧客売上タグ＋数値判定による小計除外を適用したところ、事業別シェア合計は **0.98〜1.00 に収束**（クボタ・スズキ・オークマ・東邦レマックは 1.000）。コモンモデルの骨格が非金融企業には実データで機能することを確認した（銀行2社の破綻は学び8参照）。
+
+### 軸判定ルール（案・2026-07-18 検証）
+
+`segments` キーは報告セグメント（マネジメント・アプローチ）のため、中身が事業別とは限らない（学び10）。判定ルール案:
+
+1. `row_kind=segment`（小計・調整行を除く）の member ラベルを地域名キーワード（`Japan`・`Americas`・`Europe`・`Asia`・`AsiaAndPacific`・`China`・`NorthAmerica`・`Emea`・`Domestic`・`Overseas` 等）と照合する
+2. **全 member が一致** → `axis=geography` として扱う
+3. **1つも一致しない** → `axis=business`
+4. **一部だけ一致**（混在） → `axis=business` をデフォルトにしつつ `needs_review=true`・`warnings=["axis_ambiguous"]` を立てて後続確認に回す（LLM が効く場面はここに限定できる）
+
+smoke 11社で検証: オークマ（4/4 一致・地域名）以外の10社は0/N一致（事業名）。**ルールのみで11/11正しく分類**（混在ケースは今回のサンプルには存在しなかったため、ルール4の実効性は未検証）。既存の `Xbrl.geographyDimensionKeywords`（XBRL dimension 軸名の判定用）とは別レイヤーの、member ラベル文字列に対する新規キーワード表として実装する。
 
 ## 正規化契約（草案）
 
@@ -135,7 +147,7 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 優先度は未確定。実装前に決めること:
 
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定。smoke 非金融7社で実データ検証済み、契約は上記「正規化契約（草案）」を正本とする。残課題: 売上系タグの候補リストと小計判定の数値ルールを `Xbrl.swift` 相当の別名表へ実装に落とす作業自体は未着手）
-2. **軸判定ルール** — 報告セグメント member / 見出しから `business` vs `geography` をどう決めるか（コモンモデルの `denominator_tag` 解決とは別レイヤーの判断）
+2. ~~**軸判定ルール**~~（2026-07-18 一次確定。member ラベルの地域名キーワード一致で smoke 11/11 正しく分類。詳細は上記「軸判定ルール（案）」）。残課題: 混在ケース（ルール4）は smoke サンプルに存在せず未検証。キーワード表自体の実装は未着手
 3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か。US-GAAP 企業（富士フイルム・キヤノン）は `html_table` 行パース未実装のため、着手前提として #9（学び）の行パースが要る
 4. **`SegmentExtractor` の前処理欠陥** — period 誤ラベル・US-GAAP 巨大注記未対応・geography への表混入は解消済み（別 worktree `worktree-fix-segment-extractor-defects`、main 未マージ）。残るのは巨大注記内の見出し・テーブル意味的関連性の構造的限界のみ
 5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
