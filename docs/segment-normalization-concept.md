@@ -60,11 +60,18 @@
 ## 学び
 
 1. **比較に必須な揃えは構造側**（軸・外部売上・分母・割合）。会社間の行ラベル一致は必須ではない（許容する）。
-2. **`xbrl_facts` の整形は決定的処理で足りる**（期分割・軸ピボット・円→百万円・tag 別名表）。LLM 必須ではない。
-3. **LLM が効くのは意味の写像**（軸判定、変則表ヘッダ）。入力帰属が壊れていると救えない（オークマ geography の全表 `前期`、キヤノンの表取り違え）。
+2. **`xbrl_facts` の整形自体は決定的処理で足りるが、売上系タグの選択が最初の関門**。1メンバーに資産・持分法損益・研究開発費・従業員数など無関係タグが大量に紐づくため、候補タグリストで絞らないと事故る。会社間でタグ表記も割れる（IFRS の外部顧客売上は `SalesToExternalCustomersIFRS` と `RevenueFromExternalCustomersIFRS` が混在）。単一タグ決め打ちは不可（下記 smoke 検証参照）。
+3. **LLM が効くのは意味の写像**（軸判定、変則表ヘッダ）。入力帰属が壊れていると救えない（オークマ geography の全表 `前期`、キヤノンの表取り違え。いずれも 2026-07 の `SegmentExtractor` 前処理修正で解消済み）。
 4. **全社で事業×地域の両軸がある前提は置けない。** 軸ごとに欠測を許す。
 5. **ミソはプロンプト単体ではなく正規化契約**（スキーマ・分母・指標・軸判定）。LLM を使うなら契約を `json_schema` / プロンプトに落とす。使わないなら同じ契約をコードと別名表に落とす。
 6. 時系列はスナップショット列でよい（再編の連続補正なし）。
+7. **小計・調整行の除外は名称リストより数値判定が頑健**。`ReportableSegmentsMember` / `ReconcilingItemsMember` 等の命名は会社で揺れるが、「金額が分母候補と一致する」「他行の合計と一致する」といった数値的判定なら会社をまたいで機械的に効く。
+8. **金融機関（銀行等）は Stage 6 v1 の対象外とする（確定）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（純収益）や `ConsolidatedGrossProfit`（連結粗利益）という別概念で、連結損益計算書の売上を分母にする設計とは整合しない。smoke 検証（三菱UFJ・三井住友）でシェア合計がそれぞれ 1.08 / 0.41 に破綻することを確認済み。銀行固有ロジックは既存の `Extractors.swift` 銀行系抽出と同様、後続の別トラックとして切り出す。
+9. **実装コストの重心は `xbrl_facts` ではなく `html_table` 側にある。** smoke 11社中 `geography` は10社が `html_table`（fact なし）、`segments` も US-GAAP 企業（富士フイルム・キヤノン）は `html_table`。現状 `SegmentResult.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
+
+### smoke 検証（2026-07-18）
+
+smoke fixture の非金融7社（味の素・ニチレイ・AZplanning・オークマ・クボタ・スズキ・東邦レマック、IFRS/J-GAAP 混在）に対し、正しい外部顧客売上タグ＋数値判定による小計除外を適用したところ、事業別シェア合計は **0.98〜1.00 に収束**（クボタ・スズキ・オークマ・東邦レマックは 1.000）。コモンモデルの骨格が非金融企業には実データで機能することを確認した（銀行2社の破綻は学び8参照）。
 
 ## 正規化契約（草案）
 
@@ -75,8 +82,9 @@ BreakdownSnapshot
   code, doc_id, fy_end
   axis: business | geography | product   # 欠ける軸は出さない
   unit: 百万円
-  denominator: external_revenue          # 連結外部売上
-  rows: [{ id?, label_raw, amount, share }]   # label は開示どおりでよい
+  denominator: external_revenue          # 連結外部売上（金融機関は対象外＝スナップショット自体を作らない）
+  denominator_tag: string                # 採用した売上系タグ名（候補リストのどれを使ったか。監査・再現用）
+  rows: [{ id?, label_raw, amount, share, row_kind: segment | subtotal | reconciling }]
   source: { kind: html_table | xbrl_facts | revenue_recognition | usgaap_note, ref }
   as_reported: true                      # 組替補正しない
   needs_review: bool                     # 例: section 期待軸と判定軸のずれ
@@ -89,9 +97,10 @@ BreakdownSnapshot
 |---|---|
 | 行の単位 | 軸ごと（事業 / 地域 / 製品）。報告セグメントが地域なら `geography` 側に載せるか、`axis=geography` の snapshot として出す |
 | 行ラベル | 開示の表記をそのまま使う。会社間の共通名への強制マップはしない |
-| 売上 | 外部顧客売上を優先（`RevenuesFromExternalCustomers*` 等） |
+| 売上タグ解決 | 会計基準ごとの**候補タグリスト**から優先順で選ぶ（単一タグ決め打ちにしない）。例: IFRS→`SalesToExternalCustomersIFRS`/`RevenueFromExternalCustomersIFRS`、J-GAAP→`RevenuesFromExternalCustomers`。採用タグは `denominator_tag` に残す |
+| 小計・調整行 | `row_kind` で区別して rows には残すが、比較の分母・シェア計算には使わない。判定は名称リストではなく数値判定（学び7参照） |
 | 利益 | 比較の第一指標は売上割合。利益割合は任意・定義を明示 |
-| 調整・消去 | rows に混ぜず reconciling / denominator 計算に使う |
+| 対象外 | 金融機関（銀行等）。セグメント指標が外部顧客売上と別概念のため v1 では非対応（学び8参照） |
 
 `segments` / `geography` 生データは raw として残し、比較用は `BreakdownSnapshot` に写す二層が安全。
 
@@ -125,10 +134,10 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 
 優先度は未確定。実装前に決めること:
 
-1. **比較用コモンモデルの確定** — 上記草案のフィールド・欠測表現・API 形
-2. **軸判定ルール** — 報告セグメント member / 見出しから `business` vs `geography` をどう決めるか
-3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か
-4. **`SegmentExtractor` の前処理欠陥** — period 誤ラベル、US-GAAP 巨大注記未対応、geography への表混入。正規化より先に直す対象の切り分け
+1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定。smoke 非金融7社で実データ検証済み、契約は上記「正規化契約（草案）」を正本とする。残課題: 売上系タグの候補リストと小計判定の数値ルールを `Xbrl.swift` 相当の別名表へ実装に落とす作業自体は未着手）
+2. **軸判定ルール** — 報告セグメント member / 見出しから `business` vs `geography` をどう決めるか（コモンモデルの `denominator_tag` 解決とは別レイヤーの判断）
+3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か。US-GAAP 企業（富士フイルム・キヤノン）は `html_table` 行パース未実装のため、着手前提として #9（学び）の行パースが要る
+4. **`SegmentExtractor` の前処理欠陥** — period 誤ラベル・US-GAAP 巨大注記未対応・geography への表混入は解消済み（別 worktree `worktree-fix-segment-extractor-defects`、main 未マージ）。残るのは巨大注記内の見出し・テーブル意味的関連性の構造的限界のみ
 5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
 7. **検証セット** — 最低でも事業型・地域型報告セグメント・US-GAAP・収益認識製品別を含む書類セット
@@ -170,6 +179,7 @@ LLM 経路を同じ感覚で `llm-v1` / `llm-v2` バンプすると問題が二�
 - 会社間行ラベルの統一・共通バケットへの強制写像
 - 全企業・全期での事業×地域の完全充足保証
 - 生 XBRL を渡して LLM に一発抽出させる経路（現行 HTML/fact 前段を捨てない）
+- **金融機関（銀行等）のセグメント正規化**（v1）。セグメント指標が外部顧客売上と別概念のため対象外（学び8参照）
 
 ## 関連
 
