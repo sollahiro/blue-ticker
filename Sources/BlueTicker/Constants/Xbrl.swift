@@ -559,6 +559,57 @@ enum Xbrl {
         "Region",
         "NoncurrentAssetsByLocation",
     ]
+
+    // MARK: - セグメント正規化（Stage 6, docs/segment-normalization-concept.md）
+
+    /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
+    /// （netSalesTags と同様、resolveItemPreferCurrent 相当の走査で先頭から一致するものを採用）。
+    /// 銀行等はここに一致するタグを持たない（NetRevenue / ConsolidatedGrossProfit 等）ため、
+    /// Stage 6 v1 の対象外は本リストとの不一致という形で自然に成立する。
+    static let segmentExternalRevenueTags: [String] = [
+        "SalesToExternalCustomersIFRS",
+        "RevenueFromExternalCustomersIFRS",
+        "RevenuesFromExternalCustomers",
+    ]
+
+    /// セグメント別の利益タグ（優先順）。IFRS でも会社により表記が割れる
+    /// （味の素は BusinessProfitLossIFRS、クボタ・スズキは OperatingProfitLossIFRS）。
+    /// 任意フィールドのため、一致するタグが無くても snapshot 自体は成立する（rows[].profit が nil になるだけ）。
+    static let segmentProfitTags: [String] = [
+        "BusinessProfitLossIFRS",
+        "OperatingProfitLossIFRS",
+        "OperatingIncome",
+    ]
+
+    /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
+    /// これらは比較の分母・シェア計算から除外する（行自体は保持する）。
+    static let segmentSubtotalMemberNames: Set<String> = [
+        "ReportableSegmentsMember",
+        "TotalOfReportableSegmentsAndOthersMember",
+        "CorporateSharedMember",
+        "UnallocatedAmountsAndEliminationMember",
+        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+    ]
+
+    /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。
+    static let segmentReconcilingMemberNames: Set<String> = [
+        "ReconcilingItemsMember",
+    ]
+
+    /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。
+    static let segmentGeographyMemberKeywords: [String] = [
+        "Japan",
+        "Americas",
+        "America",
+        "Europe",
+        "Asia",
+        "China",
+        "NorthAmerica",
+        "Emea",
+        "Domestic",
+        "Overseas",
+        "Pacific",
+    ]
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）
