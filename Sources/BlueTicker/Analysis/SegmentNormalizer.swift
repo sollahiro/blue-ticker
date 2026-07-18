@@ -11,6 +11,7 @@ struct BreakdownRow: Equatable {
     var labelRaw: String
     var amount: Double
     var share: Double?
+    var profit: Double?  // 対応する利益タグが無ければ nil（任意フィールド）
     var rowKind: String  // "segment" | "subtotal" | "reconciling"
 }
 
@@ -36,12 +37,14 @@ enum SegmentNormalizer {
             result.facts.contains(where: { $0.tag == tag })
         }) else { return nil }
 
-        // 連結を優先し、連結コンテキストが1件もなければ非連結（子会社を持たない小規模企業）にフォールバックする。
-        // resolveItemPreferCurrent と同じ「優先→フォールバック」の非対称ルール。
-        let candidateFacts = result.facts.filter { $0.tag == denominatorTag && isCurrentPeriod($0.contextRef) }
-        let consolidatedFacts = candidateFacts.filter(isConsolidated)
-        let perMember = buildPerMember(from: consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts)
+        let perMember = resolvePerMember(facts: result.facts, tag: denominatorTag)
         guard !perMember.isEmpty else { return nil }
+
+        // 利益は任意フィールド（対応する利益タグが無い/取れない member は profit=nil のまま）。
+        let profitTag = Xbrl.segmentProfitTags.first(where: { tag in
+            result.facts.contains(where: { $0.tag == tag })
+        })
+        let profitByMember = profitTag.map { resolvePerMember(facts: result.facts, tag: $0) } ?? [:]
 
         // 1次判定: タクソノミ標準の小計・調整 member を名称で分類する。
         var kinds: [String: String] = [:]
@@ -73,6 +76,7 @@ enum SegmentNormalizer {
                 labelRaw: member,
                 amount: fact.value,
                 share: fact.value / consolidatedSales,
+                profit: profitByMember[member]?.value,
                 rowKind: kinds[member]!
             )
         }
@@ -99,10 +103,17 @@ enum SegmentNormalizer {
         fact.dimensions["ConsolidatedOrNonConsolidatedAxis"] != "NonConsolidatedMember"
     }
 
-    /// member ごとに最初に見つかった fact を採用する（facts は tag+contextRef でソート済みのため決定的）。
-    private static func buildPerMember(from facts: [SegmentFact]) -> [String: SegmentFact] {
+    /// 指定タグの当期 fact を member ごとに解決する。連結を優先し、連結コンテキストが
+    /// 1件もなければ非連結（子会社を持たない小規模企業）にフォールバックする
+    /// （resolveItemPreferCurrent と同じ「優先→フォールバック」の非対称ルール）。
+    /// facts は tag+contextRef でソート済みのため、member 内の採用順は決定的。
+    private static func resolvePerMember(facts: [SegmentFact], tag: String) -> [String: SegmentFact] {
+        let candidateFacts = facts.filter { $0.tag == tag && isCurrentPeriod($0.contextRef) }
+        let consolidatedFacts = candidateFacts.filter(isConsolidated)
+        let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
+
         var perMember: [String: SegmentFact] = [:]
-        for fact in facts {
+        for fact in source {
             guard let member = primaryMember(fact.dimensions), perMember[member] == nil else { continue }
             perMember[member] = fact
         }

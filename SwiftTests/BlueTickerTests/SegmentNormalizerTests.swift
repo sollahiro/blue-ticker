@@ -102,4 +102,36 @@ import Foundation
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
     }
+
+    // MARK: - ゴールデン値回帰（ユーザー確認済み、2026-07-18）
+    //
+    // smoke/segment_breakdown_expected.json は sales/profit の実額をユーザーが目視確認して
+    // 記録したゴールデン値（share・利益率のような派生値は含めない）。オークマは segments の
+    // 軸が地域別（既知）で事業別ブレークダウンではないため、このゴールデン集合から除外する。
+
+    @Test func matchesUserConfirmedGoldenSalesAndProfit() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let path = root.appendingPathComponent("smoke/segment_breakdown_expected.json")
+        let data = try Data(contentsOf: path)
+        let golden = try #require(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
+
+        for (docID, entry) in golden {
+            let code = try #require(entry["code"] as? String)
+            let name = try #require(entry["name"] as? String)
+            let expectedRows = try #require(entry["rows"] as? [[String: Any]])
+
+            let snap = try #require(try Self.snapshot(code: code, docID: docID), "\(name): snapshot が nil")
+            let actualByLabel = Dictionary(uniqueKeysWithValues: snap.rows.map { ($0.labelRaw, $0) })
+
+            for expectedRow in expectedRows {
+                let label = try #require(expectedRow["label"] as? String)
+                let expectedSales = try #require((expectedRow["sales"] as? NSNumber)?.doubleValue)
+                let expectedProfit = (expectedRow["profit"] as? NSNumber)?.doubleValue
+
+                let actual = try #require(actualByLabel[label], "\(name): row \(label) が見つからない")
+                #expect(actual.amount == expectedSales, "\(name)/\(label): sales \(actual.amount) != \(expectedSales)")
+                #expect(actual.profit == expectedProfit, "\(name)/\(label): profit \(String(describing: actual.profit)) != \(String(describing: expectedProfit))")
+            }
+        }
+    }
 }

@@ -1,0 +1,58 @@
+{
+  "S100VXJA": {
+    "code": "2802",
+    "name": "味の素",
+    "rows": [
+      { "label": "FrozenFoodsReportableSegmentMember", "sales": 289388000000.0, "profit": 8040000000.0 },
+      { "label": "HealthcareAndOthersReportableSegmentMember", "sales": 328397000000.0, "profit": 31795000000.0 },
+      { "label": "SeasoningsAndFoodsReportableSegmentMember", "sales": 896012000000.0, "profit": 113997000000.0 }
+    ]
+  },
+  "S100VYA0": {
+    "code": "2871",
+    "name": "ニチレイ",
+    "rows": [
+      { "label": "LogisticsReportableSegmentsMember", "sales": 259551000000.0, "profit": 15749000000.0 },
+      { "label": "MarineProductsReportableSegmentsMember", "sales": 58472000000.0, "profit": 1413000000.0 },
+      { "label": "MeatAndPoultryProductsReportableSegmentsMember", "sales": 63836000000.0, "profit": 1082000000.0 },
+      { "label": "ProcessedFoodsReportableSegmentsMember", "sales": 311342000000.0, "profit": 18792000000.0 },
+      { "label": "RealEstateReportableSegmentsMember", "sales": 3275000000.0, "profit": 1900000000.0 }
+    ]
+  },
+  "S100VU4O": {
+    "code": "3490",
+    "name": "AZplanning",
+    "rows": [
+      { "label": "RealEstateLeasingReportableSegmentMember", "sales": 712449000.0, "profit": 128790000.0 },
+      { "label": "RealEstateManagementReportableSegmentMember", "sales": 223608000.0, "profit": 81259000.0 },
+      { "label": "RealEstateSalesReportableSegmentMember", "sales": 11494243000.0, "profit": 1031670000.0 }
+    ]
+  },
+  "S100XR0M": {
+    "code": "6326",
+    "name": "クボタ",
+    "rows": [
+      { "label": "MachineryReportableSegmentMember", "sales": 2628618000000.0, "profit": 253638000000.0 },
+      { "label": "OtherReportableSegmentsMember", "sales": 15921000000.0, "profit": 824000000.0 },
+      { "label": "WaterAndEnvironmentReportableSegmentMember", "sales": 374352000000.0, "profit": 32983000000.0 }
+    ]
+  },
+  "S100W4MT": {
+    "code": "7269",
+    "name": "スズキ",
+    "rows": [
+      { "label": "AutomobileBusinessReportableSegmentMember", "sales": 5305217000000.0, "profit": 567634000000.0 },
+      { "label": "MarineBusinessReportableSegmentMember", "sales": 109684000000.0, "profit": 30568000000.0 },
+      { "label": "MotorcycleBusinessReportableSegmentMember", "sales": 398131000000.0, "profit": 40822000000.0 },
+      { "label": "OtherBusinessReportableSegmentMember", "sales": 12128000000.0, "profit": 3825000000.0 }
+    ]
+  },
+  "S100XRD8": {
+    "code": "7422",
+    "name": "東邦レマック",
+    "rows": [
+      { "label": "RealEstateBusinessReportableSegmentMember", "sales": 94774000.0, "profit": 12385000.0 },
+      { "label": "ShoesBusinessReportableSegmentMember", "sales": 4452824000.0, "profit": -133019000.0 }
+    ]
+  }
+}
