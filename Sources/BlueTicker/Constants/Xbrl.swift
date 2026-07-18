@@ -597,6 +597,8 @@ enum Xbrl {
     ]
 
     /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。
+    /// XBRL member 名（英語識別子）向け。html_table の日本語行ラベル判定には
+    /// `segmentGeographyLabelKeywordsJa` を使う（別レイヤーのキーワード表）。
     static let segmentGeographyMemberKeywords: [String] = [
         "Japan",
         "Americas",
@@ -609,6 +611,19 @@ enum Xbrl {
         "Domestic",
         "Overseas",
         "Pacific",
+    ]
+
+    /// html_table 由来の行ラベル（日本語表記）が地域名らしいかの判定キーワード。
+    /// `segmentGeographyMemberKeywords`（英語 member 名用）とは別レイヤー。
+    /// LLM 正規化（`SegmentBreakdownLLMNormalizer`）が誤った表を選んでいないかの
+    /// 決定的ガードに使う（分母整合性だけでは検知できない事故対策。学び参照）。
+    /// 「その他」は意図的に含めない — 事業別表にも「その他及び全社」等の形でほぼ必ず出現し、
+    /// 固有の地域名が最低1つ一致することを要求するガードの意味を失わせるため
+    /// （実データ: キヤノンの事業別表に「その他及び全社」列があり、これを許すと誤検知が起きる）。
+    static let segmentGeographyLabelKeywordsJa: [String] = [
+        "日本", "米国", "米州", "アメリカ", "北米", "南米",
+        "欧州", "ヨーロッパ", "アジア", "中国", "オセアニア",
+        "パシフィック", "中近東", "中東", "海外", "国内",
     ]
 }
 
