@@ -259,7 +259,7 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
         axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
         rows: s.rows.map {
             BreakdownRowPayload(
-                labelRaw: $0.labelRaw, amount: $0.amount, share: $0.share, profit: $0.profit,
+                labelRaw: $0.labelRaw, amount: $0.amount, profit: $0.profit,
                 rowKind: $0.rowKind)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)

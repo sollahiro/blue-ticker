@@ -54,14 +54,12 @@ public func isServableSegmentBreakdown(source: String, cacheVersion: String) -> 
 public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
     public var amount: Double
-    public var share: Double?
     public var profit: Double?
     public var rowKind: String
 
-    public init(labelRaw: String, amount: Double, share: Double?, profit: Double?, rowKind: String) {
+    public init(labelRaw: String, amount: Double, profit: Double?, rowKind: String) {
         self.labelRaw = labelRaw
         self.amount = amount
-        self.share = share
         self.profit = profit
         self.rowKind = rowKind
     }
@@ -119,7 +117,6 @@ public extension BreakdownRowPayload {
         [
             "label_raw": labelRaw,
             "amount": amount,
-            "share": share ?? NSNull(),
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,
         ]

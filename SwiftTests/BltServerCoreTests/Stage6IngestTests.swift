@@ -51,13 +51,13 @@ private func seedDoc(
 }
 
 private func fakePayload(
-    needsReview: Bool = false, share: Double = 0.5
+    needsReview: Bool = false
 ) -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
         axis: "business", denominator: 1_000_000, denominatorTag: "income_statement.sales",
         rows: [
             BreakdownRowPayload(
-                labelRaw: "セグメントA", amount: 500_000, share: share, profit: nil, rowKind: "segment")
+                labelRaw: "セグメントA", amount: 500_000, profit: nil, rowKind: "segment")
         ],
         sourceKind: "test", needsReview: needsReview, warnings: needsReview ? ["test_flag"] : [])
 }
@@ -292,7 +292,7 @@ private func seedRow(
         }
     }
 
-    @Test func consolidatedSalesForDocReturnsMatchingYearSales() async throws {
+    @Test func consolidatedSalesForDocReturnsMatchingYearSalesConvertedToYen() async throws {
         try await withMigratedApp { app in
             let json = """
                 {"code":"7203","years":[
@@ -312,10 +312,12 @@ private func seedRow(
             row.requestedYears = 6
             try await row.create(on: app.db)
 
+            // RawData.Sales は百万円建て（FinancialsResponse.unit）。consolidatedSalesForDoc は
+            // Stage 6 正規化器が期待する円単位へ変換して返す。
             let sales = try await consolidatedSalesForDoc(code: "7203", docID: "S1", db: app.db)
-            #expect(sales == 4_624_727)
+            #expect(sales == 4_624_727 * Financial.millionYen)
             let salesOtherYear = try await consolidatedSalesForDoc(code: "7203", docID: "S0", db: app.db)
-            #expect(salesOtherYear == 4_000_000)
+            #expect(salesOtherYear == 4_000_000 * Financial.millionYen)
             let salesUnknownDoc = try await consolidatedSalesForDoc(code: "7203", docID: "S9", db: app.db)
             #expect(salesUnknownDoc == nil)
         }

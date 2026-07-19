@@ -458,11 +458,12 @@ extension FinancialsResponse {
         return result
     }
 
-    /// 指定 docID の年度エントリの売上高。public: Stage 6（BltServerCore）が事業別内訳の分母
+    /// 指定 docID の年度エントリの売上高（円）。public: Stage 6（BltServerCore）が事業別内訳の分母
     /// （連結外部売上）を Stage 4 の計算済み結果から再利用するために使う（自前で XBRL から
-    /// 再抽出しない。重複ロジック回避）。該当年度が無ければ nil。
+    /// 再抽出しない。重複ロジック回避）。`years[].sales` は `unit`（百万円）建てのため、Stage 6 の
+    /// 正規化器が期待する円単位へここで変換する。該当年度が無ければ nil。
     public func salesForDoc(_ docID: String) -> Double? {
-        years.first { $0.docId == docID }?.sales
+        years.first { $0.docId == docID }?.sales.map { $0 * Financial.millionYen }
     }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
