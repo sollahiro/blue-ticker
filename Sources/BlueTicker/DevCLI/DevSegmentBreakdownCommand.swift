@@ -46,7 +46,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         }
 
         let client = try LLMClientLoader.make()
-        let (snapshotOrNil, audit) = await SegmentBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+        let (snapshotOrNil, audit) = await SegmentBreakdownLLMNormalizer.normalize(result, axis: "geography", consolidatedSales: sales, client: client)
 
         if let audit {
             print("LLM が採用した表: source_table_index=\(audit.sourceTableIndex.map(String.init) ?? "不明") period_column=\(audit.periodColumn ?? "不明") unit=\(audit.unit)")

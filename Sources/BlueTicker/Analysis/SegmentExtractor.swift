@@ -133,6 +133,25 @@ enum SegmentExtractor {
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
     }
 
+    /// 収益認識注記（顧客との契約から生じる収益の分解）から表を抽出する。
+    /// `segments` キーの axis が geography 判定になるケース（例: オークマ）の事業別内訳
+    /// フォールバック用（今後の検討事項3）。表の形（単純な製品別表 or 事業×収益種別のクロス表）
+    /// は会社によって異なるため、意味の判定は呼び出し側の LLM 正規化に委ねる。
+    static func extractRevenueRecognitionInfo(xbrlDir: URL) -> SegmentResult {
+        let tables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.revenueRecognitionTextBlockTags,
+            mixedTags: [],
+            dedicatedHeading: "収益認識関係",
+            mixedKeywords: []
+        )
+        // dimension fact フォールバックは無し（この注記に対応する意味のある dimension が無いため）。
+        // buildResult 経由だと tables が空のときに全 XBRL ファイルを無駄に SAX パースしてしまうので、
+        // ここで直接返す（キャッシュ済み書類のワーキングセット節約）。
+        guard !tables.isEmpty else { return SegmentResult(method: "not_found", tables: [], facts: []) }
+        return SegmentResult(method: "html_table", tables: tables, facts: [])
+    }
+
     // MARK: - HTML 表の構造化
 
     /// rowspan / colspan を展開してセル文字列の二次元グリッドにする。

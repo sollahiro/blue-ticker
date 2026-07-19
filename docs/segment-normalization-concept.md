@@ -50,7 +50,9 @@
 | 日立 | `xbrl_facts`（事業） | `html_table`（比較表） | 報告セグメント |
 | オークマ | `xbrl_facts`（**地域**） | `html_table`（細かい地域。period 誤ラベルあり） | **収益認識関係 １**（製品別） |
 | ヒューリック | `xbrl_facts`（事業） | `not_found` | 報告セグメント。収益認識１は事業×収益種別クロス |
-| キヤノン | fact は設備・人員等のみ（主数値なし） | 表が混線（収益タイミング表が混入） | **US-GAAP 連結注記** 注23。収益は注15 |
+| キヤノン | fact は設備・人員等のみ（主数値なし）※ | 表が混線（収益タイミング表が混入） | **US-GAAP 連結注記** 注23。収益は注15 |
+
+※ この行は 07 月時点の調査記録。07-19 の `SegmentExtractor` 前処理修正後は `segments` も実際には `html_table`（注23の事業別セグメント表を正しく抽出）になっている。詳細は「今後の検討事項3」参照。
 
 追加ソースの例:
 
@@ -157,8 +159,12 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定・実装済み。`Sources/BlueTicker/Analysis/SegmentNormalizer.swift` + 定数は `Xbrl.swift`、テストは smoke 実データ照合で5件パス）
 2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `SegmentNormalizer.classifyAxis`）。残課題: 混在ケース（ルール4）は smoke サンプルに存在せず未検証のまま
-3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か。US-GAAP 企業（富士フイルム・キヤノン）は `segments` の `xbrl_facts` に売上自体が無い（設備・人員等のみ）ため `SegmentNormalizer` は自然に nil を返す。html_table 行パース未実装のため、着手前提として #9（学び）の行パースが要る
-   - **オークマ型（`segments` キーの axis が geography と判定される）の配線方針（未着手・2026-07-19 決定）**: `segments` キー呼び出しの結果が `axis == "geography"` になった場合、その snapshot を「事業別（business）」として採用してはならない。`SegmentNormalizer.normalize()` 自体の挙動（axis をデータから判定して返す。学び10・`okumaSegmentsAxisIsGeography` テストで固定済みの仕様）は変更しない — 採用可否の判断は呼び出し側（ingest/配線コード）の責務とする。オークマの本当の事業別（製品別）データは「収益認識関係１」（学び冒頭の会社差表を参照）にあり、これは上記の追加ソース採用が決まってから初めて拾える。配線時のチェックリスト: (a) `segments` 結果の axis が geography なら business breakdown は "not found" 扱い（geography-labeled snapshot をそのまま business として出さない）、(b) 可能なら収益認識１から business breakdown を再抽出する、(c) 地域別（geography）は常に `geography` キー由来（html_table/xbrl_facts）を正とする
+3. ~~**追加ソースの採用範囲**~~（2026-07-19 確定・実装済み）: US-GAAP 企業（キヤノン）は `segments` が実は `method == "html_table"` で注23の事業別セグメント表（外部顧客向け行）を既に正しく抽出できていた（07-19 の `SegmentExtractor` 前処理修正の副産物。当時の学び9記述は古い調査時点の情報で現状と食い違っていたため本項で更新）。オークマ型（`segments` の axis が geography 判定）は収益認識注記（`NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock`、`SegmentExtractor.extractRevenueRecognitionInfo` で新規抽出）から製品別内訳を拾う。
+   - `SegmentBreakdownLLMNormalizer` を `axis: "geography" | "business"` パラメータで汎化（システムプロンプト・ラベル妥当性ガードとも軸ごとに分離。business 側は「事業名が列見出しの表は外部顧客向け行を転置して1事業=1行にする」指示を追加）
+   - `SegmentBusinessBreakdownResolver`（新規）が下記チェックリストをそのまま実装: (a) `segments` の axis が geography なら business としては採用しない、(b) 収益認識注記があれば LLM で business breakdown を再抽出する、(c) 地域別は常に `geography` キー由来を正とする（本リゾルバは触れない）
+   - 実データで検証済み（xAI Grok, needsReview=false）: キヤノン（`segments` html_table 経由、注23表を列→行に転置。プリンティング/メディカル/イメージング/インダストリアル/その他及び全社が正しく分離、シェア合計 1.0）、オークマ（収益認識注記フォールバック経由、NC旋盤/マシニングセンタ/複合加工機/NC研削盤/その他が正しく分離）
+   - ユニットテストは smoke golden（`smoke/segment_expected.json`）+ モック `ChatCompleting` で決定的に検証（`SegmentExtractorTests.swift`・`SegmentBreakdownLLMNormalizerTests.swift`・`SegmentBusinessBreakdownResolverTests.swift`）。実 LLM 呼び出しへの回帰テスト化は他の html_table 経路と同様に未実施（ネットワーク・APIキー依存のため）
+   - ingest/CLI/REST への配線は今後の検討事項1（未着手）のまま。本項は抽出・正規化・呼び出し側判断ロジックの実装までがスコープ
 4. **`SegmentExtractor` の前処理欠陥**（2026-07-19、解消済み） — period 誤ラベル・US-GAAP 巨大注記未対応・geography への無関係表混入・見出し1致1表限定によるチェイン漏れ（1つの見出しが前期/当期両方を紹介し div ラップされた表が短いラベルだけ挟んで連続するケース）の4件を修正。経緯・検証詳細はコミット `e550665`/`ceaa31c` を参照。残るのは巨大注記内の見出し・テーブル意味的関連性を保証できない構造的限界のみ
 5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す

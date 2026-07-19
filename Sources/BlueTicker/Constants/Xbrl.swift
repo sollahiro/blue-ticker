@@ -597,6 +597,13 @@ enum Xbrl {
         "NoncurrentAssetsByLocation",
     ]
 
+    // 収益認識注記（顧客との契約から生じる収益の分解）。segments キーの axis が geography
+    // 判定になるケース（例: オークマ）の事業別内訳フォールバック用
+    // （docs/segment-normalization-concept.md「今後の検討事項3」）。
+    static let revenueRecognitionTextBlockTags: Set<String> = [
+        "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+    ]
+
     // MARK: - セグメント正規化（Stage 6, docs/segment-normalization-concept.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない

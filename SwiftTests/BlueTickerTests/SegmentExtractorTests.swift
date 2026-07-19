@@ -188,6 +188,35 @@ import Foundation
         }
     }
 
+    @Test func revenueRecognitionInfoFromDedicatedTextBlock() throws {
+        // オークマ型: segments キーの axis が geography 判定になるケースの事業別内訳
+        // フォールバック用（今後の検討事項3）。専用 TextBlock のため table 探索は見出し不要（dedicated）。
+        let xml = textBlockXml(
+            tag: "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+            escapedHtml: Self.escapedSegmentTable
+        )
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].heading == "収益認識関係")
+            #expect(result.tables[0].markdown.contains("| 事業A | 100 |"))
+            #expect(result.tables[0].period == "前期")
+            #expect(result.tables[1].markdown.contains("| 事業A | 120 |"))
+            #expect(result.tables[1].period == "当期")
+        }
+    }
+
+    @Test func revenueRecognitionInfoNotFoundWhenTagAbsent() {
+        let xml = textBlockXml(tag: "SegmentInformationTextBlock", escapedHtml: Self.escapedSegmentTable)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "not_found")
+            #expect(result.tables.isEmpty)
+            #expect(result.facts.isEmpty)
+        }
+    }
+
     @Test func geographyMixedBlockFiltersByKeyword() {
         // RelatedInformationTextBlock（混在）は見出しキーワードに続く table のみ抽出する
         let escaped =
