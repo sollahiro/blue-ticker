@@ -23,7 +23,7 @@ struct BreakdownSnapshot: Equatable {
     // sentinel 文字列 "income_statement.sales" を使う（意図的な語彙の使い分け）。
     var denominatorTag: String
     var rows: [BreakdownRow]
-    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（SegmentBreakdownLLMNormalizer）
+    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（SegmentBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionLLMNormalizer）
     var needsReview: Bool
     var warnings: [String]
 }

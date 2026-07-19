@@ -21,9 +21,14 @@ import Foundation
         ("8316", "S100W0S7", "三井住友"),
     ]
 
-    /// segmentExternalRevenueTags に一致するタグを持たず normalize が nil を返す会社
-    /// （銀行2社は指標概念が別、US-GAAP 2社は segments facts に売上自体が無い）。
-    private static let expectedNilCodes: Set<String> = ["4901", "7751", "8306", "8316"]
+    /// normalize が nil を返す会社（銀行2社は指標概念が別、US-GAAP 2社は segments facts に
+    /// 売上自体が無く、いずれも segmentExternalRevenueTags に一致するタグを持たない）。
+    /// オークマ（6103）は別の理由で nil: `SegmentExtractor.extractSegmentInfo` の
+    /// axis-aware swap（docs/segment-normalization-concept.md 今後の検討事項3）により、
+    /// golden の "segments" が xbrl_facts（地域別）から html_table（収益認識１由来の製品別）
+    /// に変わった。SegmentNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
+    /// （html_table 側の正規化は RevenueRecognitionLLMNormalizer が別途担う）。
+    private static let expectedNilCodes: Set<String> = ["4901", "6103", "7751", "8306", "8316"]
 
     private static func loadGolden() throws -> [String: [String: Any]] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -72,15 +77,49 @@ import Foundation
         }
     }
 
+    /// オークマ実データ（学び10）を smoke golden から切り離してハードコードする。
+    /// `SegmentExtractor.extractSegmentInfo`（`Sources/BlueTicker/Analysis/SegmentExtractor.swift`）
+    /// が axis-aware swap（収益認識関係注記へのフォールバック）を持つようになったため、
+    /// `smoke/segment_expected.json["S100W043"]["segments"]` の中身は将来 xbrl_facts から
+    /// html_table（収益認識１由来）に変わりうる。このテストは `SegmentNormalizer.classifyAxis`
+    /// 自体の分類ロジック（「地域名 member のみなら geography」）をロックインするためのものなので、
+    /// ライブ抽出結果が更新されても独立して守られるよう、既知の地域名 member を直接構築する。
     @Test func okumaSegmentsAxisIsGeography() throws {
-        let snap = try #require(try Self.snapshot(code: "6103", docID: "S100W043"))
+        let result = SegmentResult(
+            method: "xbrl_facts",
+            tables: [],
+            facts: [
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
+                    value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
+                    value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_EuropeReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "EuropeReportableSegmentsMember"],
+                    value: 33_386_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AsiaAndPacificReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"],
+                    value: 48_665_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+            ]
+        )
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 206_820_000_000))
         #expect(snap.axis == "geography")
         #expect(snap.needsReview == false)
     }
 
     @Test func businessTypeCompaniesAxisIsBusiness() throws {
+        // 6103（オークマ）は expectedNilCodes に含まれるため自動的に除外される。
         let businessCodes: [(code: String, docID: String, name: String)] = Self.fullYearCompanies.filter {
-            $0.code != "6103" && !Self.expectedNilCodes.contains($0.code)
+            !Self.expectedNilCodes.contains($0.code)
         }
         for (code, docID, name) in businessCodes {
             let snap = try #require(try Self.snapshot(code: code, docID: docID), "\(name): snapshot が nil")

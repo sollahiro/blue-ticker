@@ -427,6 +427,115 @@ import Foundation
         }
     }
 
+    // MARK: - 収益認識関係（オークマ型: docs/segment-normalization-concept.md 今後の検討事項3）
+
+    @Test func revenueRecognitionInfoFromTextBlock() {
+        let xml = textBlockXml(
+            tag: "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+            escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ＮＣ旋盤&lt;/td&gt;&lt;td&gt;34304&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("ＮＣ旋盤"))
+        }
+    }
+
+    @Test func notFoundWhenNoRevenueRecognitionTextBlock() {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs_cor:NetSales>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "not_found")
+        }
+    }
+
+    /// オークマ型（報告セグメントの member が全て地域名）+ 収益認識関係注記ありの合成 XBRL。
+    /// `includeRevenueRecognitionBlock: false` で「見つからない」ケースを作れる。
+    private func okumaLikeXml(includeRevenueRecognitionBlock: Bool) -> String {
+        let revenueBlock = includeRevenueRecognitionBlock
+            ? """
+              <jpcrp_cor:NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;ＮＣ旋盤&lt;/td&gt;&lt;td&gt;34304&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock>
+              """
+            : ""
+        return """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_JapanMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:JapanReportableSegmentsMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration_AmericasMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:AmericasReportableSegmentsMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:NetSales contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">600000</jppfs_cor:NetSales>
+          <jppfs_cor:NetSales contextRef="CurrentYearDuration_AmericasMember" unitRef="JPY" decimals="-6">400000</jppfs_cor:NetSales>
+          \(revenueBlock)
+        </xbrli:xbrl>
+        """
+    }
+
+    @Test func segmentInfoSwapsToRevenueRecognitionWhenAxisIsGeography() throws {
+        // オークマ型の回帰: 報告セグメントの member が全て地域名（Japan/Americas）だと、
+        // 収益認識関係注記に本当の事業別（製品別）データが見つかればそちらを segments として返す。
+        let xml = okumaLikeXml(includeRevenueRecognitionBlock: true)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.facts.isEmpty)
+            let table = try #require(result.tables.first)
+            #expect(table.markdown.contains("ＮＣ旋盤"))
+        }
+    }
+
+    @Test func segmentInfoKeepsGeographyFactsWhenRevenueRecognitionNotFound() throws {
+        // 収益認識関係注記が見つからない場合は、表示が消える(not_found)のではなく
+        // 元の地域別 xbrl_facts をそのまま維持する（未検証企業での誤判定時の regression 回避）。
+        let xml = okumaLikeXml(includeRevenueRecognitionBlock: false)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "xbrl_facts")
+            #expect(result.facts.count == 2)
+            let members = result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] }.sorted()
+            #expect(members == ["AmericasReportableSegmentsMember", "JapanReportableSegmentsMember"])
+        }
+    }
+
     // MARK: - toDictionary（JSON 出力）
 
     @Test func toDictionarySerializesWithOptionalKeysOmitted() throws {

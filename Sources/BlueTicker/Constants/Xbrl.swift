@@ -597,6 +597,12 @@ enum Xbrl {
         "NoncurrentAssetsByLocation",
     ]
 
+    // 収益認識関係（顧客との契約から生じる収益を分解した情報）。報告セグメントが地域別の会社
+    // （オークマ型）で、本当の事業別（製品別）データがここにしかないケースの追加ソース。
+    static let revenueRecognitionTextBlockTags: Set<String> = [
+        "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+    ]
+
     // MARK: - セグメント正規化（Stage 6, docs/segment-normalization-concept.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
