@@ -42,6 +42,8 @@ func registerRoutes(
                 "company_half_financials_min_servable": companyHalfFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
+                "segment_breakdown": segmentBreakdownCacheVersion,
+                "segment_breakdown_min_servable": segmentBreakdownMinServableVersion,
             ],
         ], status: .ok)
     }
@@ -164,6 +166,21 @@ func registerRoutes(
             notFoundMessage: "書類本文は未抽出です")
     }
 
+    // GET /v1/companies/{code}/segment-breakdown?axis=business&doc_id=...
+    // DB（Stage 6 company_segment_breakdowns）の格納済み事業別内訳のみを返す。
+    // axis は現状 business のみ（省略時 business）。geography は未配線のため行が無く 404 になる。
+    // Stage 6 の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/segment-normalization-concept.md）。
+    v1.get("companies", ":code", "segment-breakdown") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let docId = req.query[String.self, at: "doc_id"]
+        let axis = req.query[String.self, at: "axis"] ?? segmentBreakdownAxisBusiness
+        return makeStoredDataResponse(
+            await serveStoredSegmentBreakdown(
+                code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            notFoundMessage: "事業別内訳は未算出です")
+    }
+
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
@@ -277,6 +294,27 @@ func serveStoredFilingSections(
         ) {
             try await loadStoredFilingSections(
                 code: code, docId: docId, sections: sections, db: db)
+        }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `segment-breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+/// ライブ解決へのフォールバックは行わない（Stage 5 と同じ理由。LLM 呼び出しを serving 経路に持ち込まない）。
+func serveStoredSegmentBreakdown(
+    code: String, docId: String?, axis: String, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredSegmentBreakdown(code: code, docId: docId, axis: axis, db: db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)

@@ -16,12 +16,14 @@ struct IngestStageTests {
         #expect(parseIngestStages("5") == [.sections])
         #expect(parseIngestStages("4") == [.financials])
         #expect(parseIngestStages("4half") == [.half])
+        #expect(parseIngestStages("6") == [.breakdowns])
     }
 
     @Test("複数ステージをカンマ区切りで選択")
     func multipleStages() {
         #expect(parseIngestStages("4,5") == [.financials, .sections])
-        #expect(parseIngestStages("5,4,4half") == Set(IngestStage.allCases))
+        #expect(parseIngestStages("5,4,4half") == [.sections, .financials, .half])
+        #expect(parseIngestStages("5,4,4half,6") == Set(IngestStage.allCases))
     }
 
     @Test("前後空白と重複を許容する")

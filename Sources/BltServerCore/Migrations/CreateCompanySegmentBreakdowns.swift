@@ -2,9 +2,8 @@
 // スナップショットを JSONB 1 セルに持つ。company_filing_sections（Stage 5, 生のsegments/geography表）
 // とは別テーブル（docs/segment-normalization-concept.md「今後の検討事項5」参照）。
 //
-// このマイグレーションは Database.swift の app.migrations には未登録（意図的）。
-// Neon への実際の migrate は今後の検討事項1（ingest/CLI/REST 配線）に着手する際、
-// 別途ユーザー確認のうえ登録・適用する。
+// Database.swift の app.migrations に登録済み（今後の検討事項1、business 軸の ingest/CLI/REST 配線）。
+// geography 軸は未配線のため、当面 axis="business" の行のみが書き込まれる。
 
 import Fluent
 

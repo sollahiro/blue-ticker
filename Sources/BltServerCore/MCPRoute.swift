@@ -176,6 +176,14 @@ private func dispatchMcpTool(
                 code: code, docId: docId, sections: sections, db: db, logger: logger),
             notFoundMessage: "書類本文は未抽出です")
 
+    case "get_segment_breakdown":
+        let code = args["code"]?.stringValue ?? ""
+        let docId = args["doc_id"]?.stringValue
+        let axis = args["axis"]?.stringValue ?? segmentBreakdownAxisBusiness
+        return mapStoredResult(
+            await serveStoredSegmentBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
+            notFoundMessage: "事業別内訳は未算出です")
+
     default:
         return errorToolResult("Unknown tool: \(params.name)")
     }

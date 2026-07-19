@@ -1,6 +1,6 @@
 // Stage 6 の永続化スキーマ（company_segment_breakdowns）が意図どおり動くかを検証する。
-// docs/segment-normalization-concept.md「今後の検討事項5」参照。ingest/read の実配線
-// （今後の検討事項1）はまだ無いため、ここではモデル・マイグレーション・合成主キーのみを見る。
+// docs/segment-normalization-concept.md「今後の検討事項5」参照。モデル・マイグレーション・
+// 合成主キーのみを見る（ingest/read の実配線の検証は Stage6IngestTests.swift）。
 
 import BlueTickerCore
 import Fluent
@@ -33,8 +33,8 @@ private func fakeSnapshot(
         denominator: 4_624_727_000_000,
         denominatorTag: "income_statement.sales",
         rows: [
-            BreakdownRowPayload(labelRaw: "プリンティング", amount: 2_487_885_000_000, share: 0.538, profit: nil, rowKind: "segment"),
-            BreakdownRowPayload(labelRaw: "メディカル", amount: 579_723_000_000, share: 0.125, profit: nil, rowKind: "segment"),
+            BreakdownRowPayload(labelRaw: "プリンティング", amount: 2_487_885_000_000, profit: nil, rowKind: "segment"),
+            BreakdownRowPayload(labelRaw: "メディカル", amount: 579_723_000_000, profit: nil, rowKind: "segment"),
         ],
         sourceKind: sourceKind,
         needsReview: needsReview,

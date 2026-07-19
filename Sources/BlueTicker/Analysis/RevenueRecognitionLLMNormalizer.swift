@@ -93,6 +93,7 @@ enum RevenueRecognitionLLMNormalizer {
             }
             response = parsed
         } catch {
+            printError("RevenueRecognitionLLMNormalizer: LLM呼び出し失敗: \(error)\n")
             return (nil, nil)
         }
 

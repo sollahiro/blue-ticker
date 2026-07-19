@@ -2,8 +2,9 @@
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    Stage 1 書類一覧を DB へ同期
-//   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5] [--codes 7203,6758]
-//                                                            Stage 4/4-half/5 を DB へ取り込み（--stages で対象を選択、既定は全て。
+//   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5,6] [--codes 7203,6758]
+//                                                            Stage 4/4-half/5/6 を DB へ取り込み（--stages で対象を選択、既定は全て。
+//                                                            Stage 6 は日経225構成銘柄限定（LLM費用抑制）。
 //                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
@@ -51,7 +52,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let stages = parseIngestStages(optionValue("--stages", in: argv)) else {
-            printError("blt-server error: --stages は 4,4half,5 のカンマ区切りで指定してください\n")
+            printError("blt-server error: --stages は 4,4half,5,6 のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

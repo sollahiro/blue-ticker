@@ -131,7 +131,8 @@ func storeXbrlFacts(
 let stage4IngestYears = 6
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
-/// Stage 4（計算済み財務サマリ）→ Stage 4-half（半期）を取り込む。
+/// Stage 4（計算済み財務サマリ）→ Stage 4-half（半期）→ Stage 5（有報セクション）→
+/// Stage 6（事業別内訳・business軸のみ・日経225構成銘柄限定）を取り込む。
 ///
 /// Stage 3（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
 /// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
@@ -140,13 +141,15 @@ let stage4IngestYears = 6
 /// 再開できる。Stage 4 の `computeFinancials` は自前で生 XBRL を DL するため、Stage 3 を
 /// 飛ばしても Stage 4/4-half は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
 ///
-/// `stages` は実行する Stage 4/4-half/5 の集合（CLI: `--stages 5` 等）。既定は全ステージ。
+/// `stages` は実行する Stage 4/4-half/5/6 の集合（CLI: `--stages 5` 等）。既定は全ステージ。
 /// 例えば Stage 5 だけを先に流したいとき、重い Stage 4/4-half の全件 drain を挟まずに済む。
 /// Stage 3 は `stages` に含めず、従来どおり `includeFacts` で別制御する。
-/// `codes` は Stage 4/4-half/5 の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
+/// `codes` は Stage 4/4-half/5/6 の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// Stage 3 は `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
+/// Stage 6 の対象母集団は `listed`（上場全体）ではなく `priority`（日経225構成銘柄）に限定する
+/// （LLM 呼び出し費用抑制。`priority` 空集合＝`assets/nikkei225.csv` 未配置時は Stage 6 対象0件）。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runStage3IngestCommand(
     limit: Int?, includeFacts: Bool = false,
@@ -245,6 +248,28 @@ public func runStage3IngestCommand(
                 app.logger, stage: "5", attempted: s5.attempted, stored: s5.stored,
                 failed: s5.failed, skipped: s5.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
+        }
+        if stages.contains(.breakdowns) {
+            // Stage 6: 日経225構成銘柄（`priority`）の有報について business 軸の事業別内訳を解決・格納。
+            // 上場全体ではなく priority（`assets/nikkei225.csv`）を対象母集団として渡す（LLM 費用抑制）。
+            // 年数は Stage 5 と同じ集合から取るため stage5IngestYears を共用する。
+            let s6 = try await runStage6Ingest(
+                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                explicitCodes: codes, logger: app.logger
+            ) { docID, consolidatedSales in
+                await context.resolveSegmentBusinessBreakdown(
+                    docID: docID, consolidatedSales: consolidatedSales)
+            }
+            let coverage = try? await withDbRetry(
+                logger: app.logger, context: "company_segment_breakdowns 集計"
+            ) {
+                try await countServableSegmentBreakdowns(db: app.db)
+            }
+            logIngestSummary(
+                app.logger, stage: "6", attempted: s6.attempted, stored: s6.stored,
+                failed: s6.failed, skipped: s6.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6.notApplicable, purged: s6.purged)
         }
     } catch {
         try? await app.asyncShutdown()

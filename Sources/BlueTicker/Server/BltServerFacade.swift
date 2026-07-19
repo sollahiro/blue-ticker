@@ -30,12 +30,16 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
+    /// Stage 6 の html_table 正規化（LLM）に使うクライアント。XAI_API_KEY/XAI_MODEL 未設定時は
+    /// `UnavailableChatClient`（即座に失敗する）が入る。xbrl_facts 経路はこのフィールドに触れない。
+    let chatClient: ChatCompleting
 
-    init(apiKey: String, cacheDir: URL) {
+    init(apiKey: String, cacheDir: URL, chatClient: ChatCompleting) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         self.edinetClient = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
         self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
+        self.chatClient = chatClient
     }
 }
 
@@ -48,8 +52,31 @@ private func resolveEdinetApiKey() async -> String? {
     return (envKey?.isEmpty == false) ? envKey : nil
 }
 
+/// Stage 6 の LLM（Chat Completions 互換）エンドポイントを環境変数から解決する。
+/// `DevCLI/LLMClientLoader` と同じ env 変数名（XAI_API_KEY / XAI_MODEL / XAI_BASE_URL）を見るが、
+/// blt-server はヘッドレスサーバーのため ArgumentParser には依存しない別実装を持つ
+/// （EDINET キー解決が Server/DevCLI で個別に存在するのと同じ設計）。未設定なら nil。
+private func resolveXaiEndpoint() -> ChatCompletionEndpoint? {
+    let env = ProcessInfo.processInfo.environment
+    guard let apiKey = env["XAI_API_KEY"], !apiKey.isEmpty,
+        let model = env["XAI_MODEL"], !model.isEmpty
+    else { return nil }
+    let baseURL = env["XAI_BASE_URL"]?.isEmpty == false ? env["XAI_BASE_URL"]! : Api.xaiBaseURL
+    return ChatCompletionEndpoint(baseURL: baseURL, apiKey: apiKey, model: model)
+}
+
+/// XAI_API_KEY 未設定時のプレースホルダ。`SegmentBusinessBreakdownResolver` は xbrl_facts 経路では
+/// client に触れないため、html_table 経路（LLM 必須）に到達した場合のみネットワーク I/O なしで
+/// 即座に失敗する（呼び出し側は notApplicable として扱う）。
+private struct UnavailableChatClient: ChatCompleting {
+    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
+        throw ChatCompletionError.invalidResponse
+    }
+}
+
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
+/// XAI_API_KEY 未設定でも Stage 6 の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
 public func makeBltServerContext() async -> BltServerContext? {
     guard let key = await resolveEdinetApiKey() else {
         return nil
@@ -57,7 +84,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
     let cacheDir = URL(
         fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
-    return BltServerContext(apiKey: key, cacheDir: cacheDir)
+    let chatClient: ChatCompleting =
+        resolveXaiEndpoint().map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
+    return BltServerContext(apiKey: key, cacheDir: cacheDir, chatClient: chatClient)
 }
 
 // MARK: - REST Facade
@@ -183,6 +212,86 @@ public extension BltServerContext {
     func priorityIngestCodes() async -> Set<String> {
         loadPriorityIngestCodes()
     }
+}
+
+// MARK: - Stage 6 取り込み（事業別内訳）
+
+/// Stage 6 business 軸内訳の解決結果（`computeHalfFinancials` と同じ3値パターン）。
+public enum SegmentBusinessBreakdownResult: Sendable {
+    /// 解決成功。格納用ペイロード一式。
+    case resolved(
+        payload: BreakdownSnapshotPayload, source: String, contentHash: String,
+        audit: LLMBreakdownAuditPayload?)
+    /// 書類の取得・抽出自体は成功したが、当該書類に business 軸の内訳が無い
+    /// （地域別報告セグメントで収益認識注記への swap も失敗、銀行・US-GAAP補助指標のみ等）。
+    /// 失敗ではない（`not_found` は行を作らない方針。docs/segment-normalization-concept.md）。
+    case notApplicable
+    /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。
+    case failed
+}
+
+public extension BltServerContext {
+    /// Stage 6: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
+    /// segment_info LLM のいずれかへ `SegmentBusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
+    /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
+    /// `consolidatedSales` は呼び出し側（Stage 4 で計算済みの当該書類の連結売上高）が渡す
+    /// （Stage 6 は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
+    func resolveSegmentBusinessBreakdown(
+        docID: String, consolidatedSales: Double?
+    ) async -> SegmentBusinessBreakdownResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        guard let segments = SegmentExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
+        else { return .notApplicable }
+
+        let hash = segmentBreakdownContentHash(segments: segments, consolidatedSales: consolidatedSales)
+        let result = await SegmentBusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: consolidatedSales, client: chatClient)
+        guard let snapshot = result.snapshot else { return .notApplicable }
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+    }
+}
+
+/// 内部型 BreakdownSnapshot を公開格納用 BreakdownSnapshotPayload へ写経する。
+private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSnapshotPayload {
+    BreakdownSnapshotPayload(
+        axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
+        rows: s.rows.map {
+            BreakdownRowPayload(
+                labelRaw: $0.labelRaw, amount: $0.amount, profit: $0.profit,
+                rowKind: $0.rowKind)
+        },
+        sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
+}
+
+/// 内部型 LLMBreakdownAudit を公開格納用 LLMBreakdownAuditPayload へ写経する。
+private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdownAuditPayload {
+    LLMBreakdownAuditPayload(
+        sourceTableIndex: a.sourceTableIndex, periodColumn: a.periodColumn, unit: a.unit,
+        profitDisclosed: a.profitDisclosed, notes: a.notes)
+}
+
+/// 生入力（segments SegmentResult + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
+/// スキーマは含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になる。
+/// docs/segment-normalization-concept.md「今後の検討事項8」）。SegmentResult は Codable ではないため
+/// 既存の SegmentPayload 写経を経由する。CryptoKit は Linux（Fly.io 配信）で使えないため、
+/// 非暗号学的だが決定的な FNV-1a を使う（目的は変更検知であり耐改ざん性は不要）。
+private func segmentBreakdownContentHash(segments: SegmentResult, consolidatedSales: Double?) -> String {
+    struct HashInput: Codable {
+        let segments: SegmentPayload
+        let consolidatedSales: Double?
+    }
+    let input = HashInput(segments: segmentPayload(from: segments), consolidatedSales: consolidatedSales)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(input) else { return "" }
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in data {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x0000_0100_0000_01b3
+    }
+    return String(format: "%016llx", hash)
 }
 
 /// 内部型 SegmentResult を公開格納用 SegmentPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。

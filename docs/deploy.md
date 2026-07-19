@@ -187,9 +187,9 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` はステージ別に分けて実行し、既定値は `Stage 4=80` / `Stage 4-half=80` / `Stage 5=50`（空白解消優先・Mac 負荷抑制）。上書きは env `BLT_INGEST_LIMIT_STAGE4` / `BLT_INGEST_LIMIT_STAGE4_HALF` / `BLT_INGEST_LIMIT_STAGE5` を使う。`BLT_INGEST_LIMIT` は後方互換として「3ステージの共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` はステージ別に分けて実行し、既定値は `Stage 4=80` / `Stage 4-half=80` / `Stage 5=50` / `Stage 6=30`（空白解消優先・Mac 負荷抑制。Stage 6 は日経225構成銘柄限定・LLM 呼び出しを伴うためより保守的な既定値）。上書きは env `BLT_INGEST_LIMIT_STAGE4` / `BLT_INGEST_LIMIT_STAGE4_HALF` / `BLT_INGEST_LIMIT_STAGE5` / `BLT_INGEST_LIMIT_STAGE6` を使う。`BLT_INGEST_LIMIT` は後方互換として「4ステージの共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。Stage 6 の LLM 呼び出しには `.env` に `XAI_API_KEY` / `XAI_MODEL`（任意で `XAI_BASE_URL`）も必要（未設定でも xbrl_facts 経路は動くが html_table 経路は notApplicable になる）。
 
-> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` をステージ別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（4=80 / 4-half=80 / 5=50）から始め、必要なら `.env` の stage 別 limit を下げる。
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` をステージ別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（4=80 / 4-half=80 / 5=50 / 6=30）から始め、必要なら `.env` の stage 別 limit を下げる。
 
 各ステージには実行時間の上限（既定 5400 秒＝90 分）を設けており、Mac のスリープ等で Neon 接続がハングして超過した場合は SIGTERM→SIGKILL で強制終了し次のステージへ進む。上書きは `.env` の `BLT_STAGE_TIMEOUT_SECONDS` を使う。また実行中は `caffeinate -i -s -w $$` でシステム/アイドルスリープを抑止する（スクリプト終了時に自動解除）。
 
@@ -211,11 +211,13 @@ tail -f .build/blt-scheduled.log
 
 plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-初回バックフィル中（全 ~3,944 社）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+初回バックフィル中（全 ~3,944 社。Stage 6 は日経225構成銘柄のみ）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50 / Stage 6=30）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
-### ingest の優先順位（任意・ローカル専用）
+### ingest の優先順位・Stage 6 の対象選定（任意・ローカル専用）
 
 `assets/nikkei225.csv`（証券コード列を含む CSV。日経225等、ユーザーが用意する任意ファイル）を配置すると、Stage 4/4-half/5 の取り込み候補のうちそのコードに一致する企業を候補列の先頭へ寄せる（対象選定ではなく処理順序のみ変える）。`limit` 付きバッチで全社バックフィルが終わっていない間、主要銘柄を優先的に埋めたい場合に使う。
+
+**Stage 6 のみ用途が異なる**: 同じ `assets/nikkei225.csv` を、処理順序ではなく取り込み対象そのものの絞り込みに使う（LLM 呼び出し費用抑制。東証上場全体ではなく当該ファイルに一致する企業のみが Stage 6 の候補になる）。ファイル未配置なら Stage 6 の対象は 0 件（Stage 4/4-half/5 のような「優先なしで全社対象」へのフォールバックはしない）。
 
 指数構成銘柄リストは編集著作物のため、このファイルは `.gitignore` 済み（git 管理・リリース配布物に含めない）。未配置なら従来どおり優先なしで動作する。取得元 CSV のフォーマットが多少崩れていても（Web からのコピペ由来のセクション見出し行・ヘッダー行・改行混入等）、先頭列が証券コード形式（先頭が数字の英数字4文字）の行だけを拾うため実用上問題にならない。
 

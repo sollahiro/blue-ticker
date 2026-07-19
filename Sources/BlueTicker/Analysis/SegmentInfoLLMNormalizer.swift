@@ -94,6 +94,7 @@ enum SegmentInfoLLMNormalizer {
             }
             response = parsed
         } catch {
+            printError("SegmentInfoLLMNormalizer: LLM呼び出し失敗: \(error)\n")
             return (nil, nil)
         }
 

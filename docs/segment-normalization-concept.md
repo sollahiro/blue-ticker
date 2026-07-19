@@ -171,7 +171,7 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - `not_found`は行を作らない（欠ける軸は出さない原則と整合）。再計算ルール: `content_hash`一致 かつ `needs_review=false` ならスキップ。プロンプト/モデル改善は`needs_review=true`行だけを狙い撃ちで再処理する
    - 設計は Cursor Grok 4.5 にレビューを依頼（`cursor-agent --model cursor-grok-4.5-high`）。初期案の`input_hash`にプロンプト/モデルを含めていた設計ミスを指摘され修正。生LLM応答ログの全文保持は引き続き別テーブル案のまま未着手（`llm_audit`は軽量な監査情報のみ）
    - 公開Codable契約は `Sources/BlueTicker/Models/SegmentBreakdownContract.swift`（`FilingSectionsContract.swift`と同型: 内部型`BreakdownSnapshot`/`BreakdownRow`/`LLMBreakdownAudit`を公開Payload型へ写す層）
-   - **`Database.swift`の`app.migrations`には未登録**（意図的）。Neonへの実際のmigrateは今後の検討事項1（ingest/CLI/REST配線）着手時に別途ユーザー確認のうえ登録・適用する
+   - `Database.swift`の`app.migrations`に登録済み（ingest/CLI/REST配線と同時に着手。下記9参照）
    - テストは`SwiftTests/BltServerCoreTests/CompanySegmentBreakdownTests.swift`（SQLite in-memory、スキーマ・Payload往復・needs_reviewクエリ・同一docID異軸の共存を検証）
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
 7. ~~**検証セット**~~（2026-07-19 最低ラインを充足・実装済み）: 挙げられていた4パターン（事業型・地域型報告セグメント・US-GAAP・収益認識製品別）をsmokeコーパスで充足確認
@@ -179,6 +179,13 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - `smoke/segment_breakdown_business_expected.json`（新規、geography版`segment_breakdown_geography_expected.json`と同型）にキヤノン・オークマの事業別BreakdownSnapshot確認済み値を記録。実LLM呼び出し（xAI Grok）で検証: キヤノン5事業合計=連結売上高4,624,727百万円と完全一致、オークマ5製品合計=206,821（連結206,822と丸め±1）。ユーザー目視確認済み
    - LLM経由ゴールデンは自動pass/fail回帰ではなくスポット監査用（geography版と同じ設計判断）
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
+9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 軸のみ確定・実装済み。geography 軸は未着手のまま） — `Sources/BltServerCore/Stage6Ingest.swift`（`runStage6Ingest`）が対象選定（`stage5Candidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages 6`（`IngestStage.breakdowns`）。REST は `GET /v1/companies/{code}/segment-breakdown?axis=business&doc_id=...`、MCP は `get_segment_breakdown`（いずれも`serveStoredSegmentBreakdown`/`loadStoredSegmentBreakdown`を共有）
+   - **対象は日経225構成銘柄限定**（東証上場全体ではない。LLM呼び出し費用抑制のため）。`priorityIngestCodes()`（`assets/nikkei225.csv`）を対象母集団として渡す（Stage4/5の「優先度のみ」用途とは異なる使い方）。年数はStage5と共通の`stage5IngestYears`を使う（Stage6専用の別定数は持たない）
+   - staleness判定はStage5と非対称: xbrl_facts経由（決定的）は`cache_version`不一致で再試行してよいが、LLM経由（source≠xbrl_facts）は`needs_review=true`のときのみ再試行する（`cache_version`バンプだけでは触らない）。read側の servable 判定も同型の非対称性を持つ（`isServableSegmentBreakdown`: xbrl_factsはバージョン床、LLM経由は存在すれば常にservable）
+   - 分母（連結外部売上）はStage6独自に再抽出せず、Stage4（`company_financials`）の計算済み結果を`FinancialsResponse.salesForDoc(_:)`経由で再利用する（重複ロジック回避）
+   - `content_hash`はFNV-1a（非暗号学的・決定的）。CryptoKitはLinux（Fly.io配信ターゲット）で使えないため採用しなかった
+   - LLMクライアント（`XAI_API_KEY`/`XAI_MODEL`/`XAI_BASE_URL`）はServer側で独自に環境変数解決する（`BltServerFacade.resolveXaiEndpoint`。DevCLIの`LLMClientLoader`とは意図的に別実装。EDINETキー解決がServer/DevCLIで個別に存在するのと同じ設計）。未設定時は`UnavailableChatClient`が即座に失敗し、html_table経路（LLM必須）のみ`notApplicable`になる（xbrl_facts経路は影響を受けない）
+   - geography軸は未配線のまま（`SegmentBreakdownLLMNormalizer`はStage6 ingestから未呼び出し）。残作業として残る
 
 ### キャッシュ・再計算（メモ）
 

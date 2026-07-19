@@ -163,5 +163,31 @@ public func mcpToolCatalog() -> [Tool] {
                 "required": .array([.string("code")]),
             ])
         ),
+        Tool(
+            name: "get_segment_breakdown",
+            description: """
+                有価証券報告書から事業別売上高の内訳を取得します（格納済みデータのみ）。
+                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                axis は現状 business のみ対応（地域別は未対応）。
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "code": .object([
+                        "type": .string("string"),
+                        "description": .string("銘柄コード（例: 6758）"),
+                    ]),
+                    "doc_id": .object([
+                        "type": .string("string"),
+                        "description": .string("書類ID（省略時は最新の有価証券報告書）"),
+                    ]),
+                    "axis": .object([
+                        "type": .string("string"),
+                        "description": .string("内訳の軸（現状 business のみ。省略時 business）"),
+                    ]),
+                ]),
+                "required": .array([.string("code")]),
+            ])
+        ),
     ]
 }
