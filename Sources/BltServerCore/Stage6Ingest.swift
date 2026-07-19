@@ -174,8 +174,11 @@ func runStage6Ingest(
 
 /// company_financials（Stage 4）から当該書類（docID）の連結売上高を引く。Stage 6 は自前で
 /// XBRL から売上を再抽出せず、既に計算済みの Stage 4 の値を再利用する（重複ロジック回避）。
-/// Stage 4 が当該コード・当該書類をまだ計算していない場合は nil（呼び出し側は分母欠落のまま解決を試みる。
-/// `SegmentNormalizer` は分母 nil を許容する）。
+/// Stage 4 が当該コード・当該書類をまだ計算していない場合は nil。`SegmentNormalizer` /
+/// 両 LLM 正規化器はいずれも分母 nil（または 0）を許容せず即 nil を返す（=`.notApplicable`）ため、
+/// Stage 4 未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
+/// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、Stage 4 が先に
+/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（4→4half→5→6）はこれを満たす）。
 func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
     return financials.response.salesForDoc(docID)
