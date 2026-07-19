@@ -92,11 +92,16 @@ enum SegmentExtractor {
     /// filing コマンド・REST API の sections で使う特殊セクション名（XBRLSectionDef 非経由）。
     static let specialSectionKeys = ["segments", "geography", "revenue_recognition"]
 
+    /// 収益認識関係注記の見出し文字列。`extractRevenueRecognitionInfo` の dedicatedHeading と
+    /// `specialSectionTitles` の双方、および `SegmentBusinessBreakdownResolver` の見出し判定
+    /// （swap 済み segments かどうかの振り分け）が同じ文字列を参照する単一の真実源。
+    static let revenueRecognitionHeading = "収益認識関係"
+
     /// 特殊セクションの表示タイトル。
     static let specialSectionTitles: [String: String] = [
         "segments": "セグメント情報",
         "geography": "地域別情報",
-        "revenue_recognition": "収益認識関係",
+        "revenue_recognition": revenueRecognitionHeading,
     ]
 
     /// 特殊セクション名に対応する抽出を実行する。未対応の名前は nil。
@@ -152,7 +157,7 @@ enum SegmentExtractor {
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.revenueRecognitionTextBlockTags,
             mixedTags: [],
-            dedicatedHeading: "収益認識関係",
+            dedicatedHeading: revenueRecognitionHeading,
             mixedKeywords: []
         )
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: [])

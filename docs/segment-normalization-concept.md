@@ -157,12 +157,27 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定・実装済み。`Sources/BlueTicker/Analysis/SegmentNormalizer.swift` + 定数は `Xbrl.swift`、テストは smoke 実データ照合で5件パス）
 2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `SegmentNormalizer.classifyAxis`）。残課題: 混在ケース（ルール4）は smoke サンプルに存在せず未検証のまま
-3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か。US-GAAP 企業（富士フイルム・キヤノン）は `segments` の `xbrl_facts` に売上自体が無い（設備・人員等のみ）ため `SegmentNormalizer` は自然に nil を返す。html_table 行パース未実装のため、着手前提として #9（学び）の行パースが要る
-   - **オークマ型（`segments` キーの axis が geography と判定される）の配線方針（未着手・2026-07-19 決定）**: `segments` キー呼び出しの結果が `axis == "geography"` になった場合、その snapshot を「事業別（business）」として採用してはならない。`SegmentNormalizer.normalize()` 自体の挙動（axis をデータから判定して返す。学び10・`okumaSegmentsAxisIsGeography` テストで固定済みの仕様）は変更しない — 採用可否の判断は呼び出し側（ingest/配線コード）の責務とする。オークマの本当の事業別（製品別）データは「収益認識関係１」（学び冒頭の会社差表を参照）にあり、これは上記の追加ソース採用が決まってから初めて拾える。配線時のチェックリスト: (a) `segments` 結果の axis が geography なら business breakdown は "not found" 扱い（geography-labeled snapshot をそのまま business として出さない）、(b) 可能なら収益認識１から business breakdown を再抽出する、(c) 地域別（geography）は常に `geography` キー由来（html_table/xbrl_facts）を正とする
+3. ~~**追加ソースの採用範囲**~~（2026-07-19 確定・実装済み）: オークマ型（`segments` の axis が geography 判定）は `SegmentExtractor.extractSegmentInfo` 自体が axis-aware に収益認識関係注記（`extractRevenueRecognitionInfo`）へ swap する（PR #89）。見つからない場合は元の xbrl_facts（geography）へフォールバックし、表示が消える regression を避ける。キヤノン（US-GAAP企業）は `segments` が実は `method == "html_table"` で注23の事業別セグメント表（外部顧客向け行）を既に正しく抽出できていた（07-19前処理修正の副産物）
+   - LLM 正規化器は用途別に3クラス: `SegmentBreakdownLLMNormalizer`（geography 専用）・`RevenueRecognitionLLMNormalizer`（オークマ型、収益認識注記由来。swap 済み `segments` の見出しが "収益認識関係" であることで判別）・`SegmentInfoLLMNormalizer`（キヤノン型、`segments` キー自体が html_table。列見出しが事業名の表を転置）
+   - `SegmentBusinessBreakdownResolver`（新規）が振り分けを実装: (a) xbrl_facts で axis=business なら決定的経路をそのまま採用、(b) axis=geography のまま（swap 失敗）なら business としては採用しない、(c) html_table なら見出しで2種のLLM正規化器へ振り分ける
+   - 実データで検証済み（xAI Grok, needsReview=false）: キヤノン（`SegmentInfoLLMNormalizer`経由、注23表を列→行に転置。プリンティング/メディカル/イメージング/インダストリアル/その他及び全社が正しく分離、シェア合計 1.0、営業利益も同時取得）、オークマ（`RevenueRecognitionLLMNormalizer`経由、NC旋盤/マシニングセンタ/複合加工機/NC研削盤/その他が正しく分離、利益は源泉に無いため`profit_disclosed=false`）
+   - **利益（profit）とその開示有無の区別**: LLM 経路（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）も `xbrl_facts` 経路（学び参照）と同様、任意フィールドとして profit を拾う。`profit == nil` だけでは「未開示（確認済み）」と「LLM の見落とし」を区別できないため、LLM に `profit_disclosed`（bool の自己申告）も返させ `LLMBreakdownAudit`/`LLMBreakdownAuditPayload` に保持。rows の実際の profit 値との矛盾は決定的ガードで検知（`profit_disclosed_but_row_missing`/`profit_present_despite_not_disclosed`）。キー欠落・型不正も silent に「確認済み未開示」扱いせず `llm_profit_disclosed_unresolved` で「不明」を明示する（`unit` の "other" フラグ付けと同じ考え方）
+   - ユニットテストは smoke golden（`smoke/segment_expected.json`）+ モック `ChatCompleting` で決定的に検証（`RevenueRecognitionLLMNormalizerTests.swift`・`SegmentInfoLLMNormalizerTests.swift`・`SegmentBusinessBreakdownResolverTests.swift`）
+   - ingest/CLI/REST への配線のうち、`specialSectionKeys`（`revenue_recognition`）は PR #89 で既に完了。永続化配線は本項の下（検討事項5）を参照
 4. **`SegmentExtractor` の前処理欠陥**（2026-07-19、解消済み） — period 誤ラベル・US-GAAP 巨大注記未対応・geography への無関係表混入・見出し1致1表限定によるチェイン漏れ（1つの見出しが前期/当期両方を紹介し div ラップされた表が短いラベルだけ挟んで連続するケース）の4件を修正。経緯・検証詳細はコミット `e550665`/`ceaa31c` を参照。残るのは巨大注記内の見出し・テーブル意味的関連性を保証できない構造的限界のみ
-5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
+5. ~~**永続化**~~（2026-07-19 確定・実装済み）: `company_filing_sections`（Stage 5, 生のsegments/geography表）とは**別テーブル** `company_segment_breakdowns` を新設（`Sources/BltServerCore/Models/CompanySegmentBreakdown.swift` + `Migrations/CreateCompanySegmentBreakdowns.swift`）。分離理由: LLM経由の行（source≠xbrl_facts）はfiling-sectionsのcache_versionバンプ（決定的抽出ロジック変更）に連動して全件再計算させたくないため（検討事項8参照）
+   - 主キー: `"doc_id#axis"` 合成文字列（本プロジェクトの既存テーブルは単一String IDの慣習のため、複合IDではなくこの合成キーで揃える）。1書類につきbusiness/geography最大2行
+   - カラム: `code`/`submit_date_time`（company_filing_sectionsと同じ非正規化、code別最新選択用）、`payload`(JSONB, `BreakdownSnapshotPayload`)、`needs_review`(bool, payloadから複製したトップレベル列。JSONBを掘らずに再処理キューを引ける)、`source`(`xbrl_facts`\|`revenue_recognition_llm`\|`segment_info_llm`。`SegmentBusinessBreakdownResolver`の解決経路)、`content_hash`(生入力+分母のみのハッシュ。**プロンプト/モデル/スキーマは含めない**)、`cache_version`(`breakdown-v1`。契約の破壊的変更のみバンプ)、`llm_audit`(JSONB nullable, `LLMBreakdownAuditPayload`。LLM経由の行のみ)
+   - `not_found`は行を作らない（欠ける軸は出さない原則と整合）。再計算ルール: `content_hash`一致 かつ `needs_review=false` ならスキップ。プロンプト/モデル改善は`needs_review=true`行だけを狙い撃ちで再処理する
+   - 設計は Cursor Grok 4.5 にレビューを依頼（`cursor-agent --model cursor-grok-4.5-high`）。初期案の`input_hash`にプロンプト/モデルを含めていた設計ミスを指摘され修正。生LLM応答ログの全文保持は引き続き別テーブル案のまま未着手（`llm_audit`は軽量な監査情報のみ）
+   - 公開Codable契約は `Sources/BlueTicker/Models/SegmentBreakdownContract.swift`（`FilingSectionsContract.swift`と同型: 内部型`BreakdownSnapshot`/`BreakdownRow`/`LLMBreakdownAudit`を公開Payload型へ写す層）
+   - **`Database.swift`の`app.migrations`には未登録**（意図的）。Neonへの実際のmigrateは今後の検討事項1（ingest/CLI/REST配線）着手時に別途ユーザー確認のうえ登録・適用する
+   - テストは`SwiftTests/BltServerCoreTests/CompanySegmentBreakdownTests.swift`（SQLite in-memory、スキーマ・Payload往復・needs_reviewクエリ・同一docID異軸の共存を検証）
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
-7. **検証セット** — 最低でも事業型・地域型報告セグメント・US-GAAP・収益認識製品別を含む書類セット
+7. ~~**検証セット**~~（2026-07-19 最低ラインを充足・実装済み）: 挙げられていた4パターン（事業型・地域型報告セグメント・US-GAAP・収益認識製品別）をsmokeコーパスで充足確認
+   - 事業型（xbrl_facts, axis=business）: 味の素ほか非金融10社。地域型報告セグメント（オークマ型）・US-GAAP（キヤノン）: いずれも`smoke/segment_expected.json`の`S100W043`/`S100XTLJ`
+   - `smoke/segment_breakdown_business_expected.json`（新規、geography版`segment_breakdown_geography_expected.json`と同型）にキヤノン・オークマの事業別BreakdownSnapshot確認済み値を記録。実LLM呼び出し（xAI Grok）で検証: キヤノン5事業合計=連結売上高4,624,727百万円と完全一致、オークマ5製品合計=206,821（連結206,822と丸め±1）。ユーザー目視確認済み
+   - LLM経由ゴールデンは自動pass/fail回帰ではなくスポット監査用（geography版と同じ設計判断）
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
 
 ### キャッシュ・再計算（メモ）
