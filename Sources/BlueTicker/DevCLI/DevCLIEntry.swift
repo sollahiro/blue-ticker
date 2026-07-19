@@ -18,6 +18,7 @@ public struct DevCLIEntry: AsyncParsableCommand {
             CacheCommand.self,
             DevFilingsCommand.self,
             DevFilingCommand.self,
+            DevSegmentBreakdownCommand.self,
         ]
     )
 

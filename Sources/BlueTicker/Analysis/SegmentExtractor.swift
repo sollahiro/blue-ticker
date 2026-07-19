@@ -112,9 +112,10 @@ enum SegmentExtractor {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.businessSegmentTextBlockTags,
-            mixedTags: [],
+            mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
             dedicatedHeading: "セグメント情報",
-            mixedKeywords: []
+            mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
+            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords
         )
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
     }
@@ -199,9 +200,11 @@ enum SegmentExtractor {
     }
 
     /// テーブル前の兄弟要素（短いもの）から当期/前期を判定する。
-    /// Python 同様、親要素の先頭側の兄弟から順に走査する。
+    /// 同じ親の下に複数テーブルが並ぶ場合、テーブルに最も近い（最後に見つかった）
+    /// 見出しを採用する（先頭の見出しに固定されるとテーブルが増えるほど誤判定が広がるため）。
     private static func detectPeriodFromPreceding(_ table: Element) -> String? {
         guard let parent = table.parent() else { return nil }
+        var result: String?
         for node in parent.getChildNodes() {
             guard node.siblingIndex < table.siblingIndex else { break }
             let text: String
@@ -212,11 +215,14 @@ enum SegmentExtractor {
             } else {
                 continue
             }
-            if text.isEmpty || text.unicodeScalars.count > 100 { continue }
-            if currentPeriodKeywords.contains(where: text.contains) { return "当期" }
-            if priorPeriodKeywords.contains(where: text.contains) { return "前期" }
+            if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
+            if currentPeriodKeywords.contains(where: text.contains) {
+                result = "当期"
+            } else if priorPeriodKeywords.contains(where: text.contains) {
+                result = "前期"
+            }
         }
-        return nil
+        return result
     }
 
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
@@ -240,6 +246,31 @@ enum SegmentExtractor {
         return nil
     }
 
+    /// table の直後に、短いラベル（例:「第125期」）だけを挟んで次の表が続いていないかを調べる。
+    /// 「第n期及び第n+1期における...は以下のとおりであります」のように前期・当期を1つの見出しで
+    /// まとめて紹介し、表ごとに個別の <div> でラップされているケースで必要（実データ: キヤノン
+    /// 地域別注記）。table 自身の nextElementSibling だけでは辿れない（table が div の唯一の
+    /// 子だと兄弟が無い）ため、table 自身の兄弟 → 1段親（ラッパー div 等）の兄弟の順に探す。
+    /// 挟まる要素のテキストが長ければ無関係な話題への移行とみなし nil を返す。
+    private static func findImmediatelyChainedTable(after table: Element) -> Element? {
+        let startPoints: [Element] = [table, table.parent()].compactMap { $0 }
+        for start in startPoints {
+            var sibling = try? start.nextElementSibling()
+            var hops = 0
+            while let s = sibling, hops < Xbrl.noteTableChainMaxGapElements {
+                hops += 1
+                if s.tagName() == "table" { return s }
+                if let found = (try? s.select("table"))?.first() { return found }
+                let text = bs4Text(s, strip: true)
+                // この起点（table 自身 or 1段親）での探索を打ち切るだけで、次の起点は引き続き試す
+                // （1段目で長文に当たっても、2段目（親の兄弟）側は無関係とは限らないため）。
+                if text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { break }
+                sibling = try? s.nextElementSibling()
+            }
+        }
+        return nil
+    }
+
     /// HTML内の全 <table> を Markdown 化して返す。
     static func allTablesFromHtml(_ html: String, defaultHeading: String) -> [SegmentTable] {
         guard let soup = try? SwiftSoup.parse(html),
@@ -257,7 +288,14 @@ enum SegmentExtractor {
     }
 
     /// 見出しキーワードに続く <table> を Markdown 化して返す。
-    static func keywordTablesFromHtml(_ html: String, keywords: [String]) -> [SegmentTable] {
+    ///
+    /// headingExclusionKeywords: 見出し候補の文字列がこれらを含む場合はスキップする
+    /// （例: 事業別セグメント用の検索で「地域別セグメント情報」という地域注記の見出しを誤って拾わないようにする）。
+    static func keywordTablesFromHtml(
+        _ html: String,
+        keywords: [String],
+        headingExclusionKeywords: [String] = []
+    ) -> [SegmentTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         var tables: [SegmentTable] = []
         var seen = Set<ObjectIdentifier>()
@@ -266,14 +304,41 @@ enum SegmentExtractor {
             for elem in elems {
                 let text = bs4Text(elem, strip: false)
                 guard text.contains(keyword), text.unicodeScalars.count <= 300 else { continue }
-                guard let table = findNextTable(after: elem),
-                      !seen.contains(ObjectIdentifier(table)) else { continue }
-                seen.insert(ObjectIdentifier(table))
-                let grid = expandTable(table)
-                let md = gridToMarkdown(grid)
-                if md.isEmpty { continue }
-                let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
-                tables.append(SegmentTable(heading: keyword, markdown: md, period: period))
+                if headingExclusionKeywords.contains(where: text.contains) { continue }
+                // 直後の表が除外対象（ノイズ）だった場合、同じ見出しの下にある次の表を
+                // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
+                var candidate = findNextTable(after: elem)
+                var attempts = 0
+                while let table = candidate, attempts < Xbrl.noteTableLookaheadLimit {
+                    attempts += 1
+                    guard !seen.contains(ObjectIdentifier(table)) else {
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
+                    seen.insert(ObjectIdentifier(table))
+                    let grid = expandTable(table)
+                    let md = gridToMarkdown(grid)
+                    if md.isEmpty || Xbrl.noteTableExclusionKeywords.contains(where: md.contains) {
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
+                    let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
+                    tables.append(SegmentTable(heading: keyword, markdown: md, period: period))
+
+                    // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
+                    // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
+                    // （grid 先頭行）が完全一致するなら「同じ表の続き」とみなして拾い続ける。
+                    // 見出し行が違う/直後に表が続かないなら別の開示とみなし打ち切る。
+                    if let chained = findImmediatelyChainedTable(after: table),
+                       !seen.contains(ObjectIdentifier(chained)) {
+                        let chainedGrid = expandTable(chained)
+                        if chainedGrid.first == grid.first {
+                            candidate = chained
+                            continue
+                        }
+                    }
+                    break
+                }
             }
         }
         applyPeriodOrdering(&tables)
@@ -289,7 +354,8 @@ enum SegmentExtractor {
         dedicatedTags: Set<String>,
         mixedTags: Set<String>,
         dedicatedHeading: String,
-        mixedKeywords: [String]
+        mixedKeywords: [String],
+        mixedHeadingExclusionKeywords: [String] = []
     ) -> [SegmentTable] {
         var tables: [SegmentTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -305,7 +371,11 @@ enum SegmentExtractor {
                 if dedicatedTags.contains(block.tag) {
                     tables.append(contentsOf: allTablesFromHtml(block.content, defaultHeading: dedicatedHeading))
                 } else if mixedTags.contains(block.tag) {
-                    tables.append(contentsOf: keywordTablesFromHtml(block.content, keywords: mixedKeywords))
+                    tables.append(contentsOf: keywordTablesFromHtml(
+                        block.content,
+                        keywords: mixedKeywords,
+                        headingExclusionKeywords: mixedHeadingExclusionKeywords
+                    ))
                 }
             }
         }

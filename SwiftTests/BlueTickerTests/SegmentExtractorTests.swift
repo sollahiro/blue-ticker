@@ -206,6 +206,185 @@ import Foundation
         }
     }
 
+    @Test func detectPeriodFromPrecedingUsesClosestHeadingNotFirst() {
+        // オークマ型の回帰: 同じ親の下に複数テーブルが並ぶとき、
+        // 先頭の見出し「前期」に固定されず、各テーブル直前の見出しを個別に拾う。
+        let escaped =
+            "&lt;p&gt;前連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;当連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;120&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "InformationAboutGeographicalAreasTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+        }
+    }
+
+    @Test func segmentInfoFromUSGAAPNoteMixedBlock() {
+        // キヤノン型の回帰: 事業別セグメントがUS-GAAP巨大注記(NotesToConsolidatedFinancialStatementsUSGAAPTextBlock)
+        // に内包されている場合でも見出しキーワードで発見できる。
+        let escaped =
+            "&lt;p&gt;収益認識&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;一時点で認識する収益&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;報告セグメント&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+            #expect(!result.tables[0].markdown.contains("一時点で認識する収益"))
+        }
+    }
+
+    @Test func geographyMixedBlockExcludesRevenueTimingTable() {
+        // キヤノン型の回帰: 見出しキーワード一致直後に事業別収益認識タイミング表が
+        // 挟まっていても、地域別テーブルとして誤って混入させない。
+        let escaped =
+            "&lt;p&gt;地域別&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;一時点で認識する収益&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;地域別&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("日本"))
+        }
+    }
+
+    @Test func segmentInfoExcludesStockOptionAssumptionTable() {
+        // キヤノン型の回帰: 見出しキーワード一致直後にストックオプションの評価前提表が
+        // 挟まっていても、事業別セグメントとして誤って混入させない。
+        let escaped =
+            "&lt;p&gt;報告セグメント&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;予想残存期間&lt;/td&gt;&lt;td&gt;4.0年&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoSkipsToNextTableWhenSameHeadingsImmediateTableIsExcluded() {
+        // 見出しが1つしかなく、その直後にノイズ表→本表の順で並ぶ場合でも、
+        // ノイズ表を除外した後に本表を拾えることを確認する（別見出しがない構成の回帰）。
+        let escaped =
+            "&lt;p&gt;報告セグメント&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;予想残存期間&lt;/td&gt;&lt;td&gt;4.0年&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoExcludesInvestmentFairValueTable() {
+        // 富士フイルム型の回帰: 見出しキーワード一致直後に投資有価証券の公正価値内訳表が
+        // 挟まっていても、事業別セグメントとして誤って混入させない。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;総未実現利益&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;事業の種類別&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoExcludesFixedAssetBreakdownTable() {
+        // 富士フイルム型の回帰: 見出しキーワード一致直後に無形固定資産の
+        // 取得原価/償却累計額/帳簿価額の内訳表が挟まっていても、事業別セグメントとして混入させない。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;償却累計額&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;事業の種類別&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoExcludesGeographyHeadedTableFromBusinessSegment() {
+        // キヤノン型の回帰: 「地域別セグメント情報」という見出しは部分文字列として
+        // 「セグメント情報」を含むため、事業別セグメントの検索に誤って混入させない。
+        let escaped =
+            "&lt;p&gt;地域別セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;報告セグメント&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+            #expect(!result.tables[0].markdown.contains("日本"))
+        }
+    }
+
+    @Test func geographyChainsSecondTableWhenDivWrappedWithShortLabelBetween() {
+        // キヤノン型の回帰: 1つの見出し文が前期・当期の両方を紹介し（「第124期及び第125期に
+        // おける地域別セグメント情報は...」）、表がそれぞれ個別の <div> でラップされた上で
+        // 短いラベル（「第125期」）だけを挟んで連続する。table 自身の nextElementSibling では
+        // 2枚目に辿り着けないため、findImmediatelyChainedTable が親（ラッパー div）の兄弟まで
+        // 遡って探索し、見出し行が完全一致する場合のみ「同じ開示の続き」として拾う。
+        let escaped =
+            "&lt;p&gt;第124期及び第125期における地域別セグメント情報は以下のとおりであります。&lt;/p&gt;" +
+            "&lt;div&gt;&lt;p&gt;第124期&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;p&gt;第125期&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
+            #expect(result.tables[1].markdown.contains("| 110 | 210 |"))
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+        }
+    }
+
+    @Test func geographyDoesNotChainWhenFollowingTableHasDifferentShape() {
+        // 直後に続く表があっても見出し行（列構成）が異なれば「別の開示」とみなし、
+        // 連結ロジック追加前と同じく1枚目だけを採用する（過検出防止の回帰）。
+        let escaped =
+            "&lt;p&gt;地域別セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;米州&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;p&gt;短い注記&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
+        }
+    }
+
     @Test func segmentInfoFallsBackToDimensionFacts() throws {
         // TextBlock がない場合は dimension 付き fact にフォールバックする
         let xml = """

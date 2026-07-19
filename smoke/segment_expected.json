@@ -15232,232 +15232,20 @@
    ]
   },
   "segments": {
-   "facts": [
+   "facts": [],
+   "method": "html_table",
+   "tables": [
     {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000HealthcareReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "HealthcareReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 21369.0
+     "heading": "セグメント情報",
+     "markdown": "|                 |  | 前連結会計年度（百万円） |  | 当連結会計年度（百万円） |\n|-----------------|--|--------------|--|--------------|\n| ヘルスケア           |  |              |  |              |\n| メディカルシステム       |  | 659,563      |  | 693,241      |\n| バイオCDMO         |  | 203,448      |  | 219,513      |\n| LSソリューション       |  | 112,070      |  | 109,810      |\n| 計               |  | 975,081      |  | 1,022,564    |\n| エレクトロニクス        |  |              |  |              |\n| 半導体材料           |  | 199,724      |  | 250,413      |\n| AF材料            |  | 158,703      |  | 182,384      |\n| 計               |  | 358,427      |  | 432,797      |\n| ビジネスイノベーション     |  |              |  |              |\n| オフィスソリューション     |  | 524,383      |  | 522,928      |\n| ビジネスソリューション     |  | 301,753      |  | 330,886      |\n| グラフィックコミュニケーション |  | 331,614      |  | 344,680      |\n| 計               |  | 1,157,750    |  | 1,198,494    |\n| イメージング          |  |              |  |              |\n| コンシューマーイメージング   |  | 297,569      |  | 327,963      |\n| プロフェッショナルイメージング |  | 172,089      |  | 214,010      |\n| 計               |  | 469,658      |  | 541,973      |\n| 売上高　合計          |  | 2,960,916    |  | 3,195,828    |",
+     "period": "比較"
     },
     {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000ElectronicsReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ElectronicsReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 6472.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000BusinessInnovationReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "BusinessInnovationReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 34173.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000ImagingReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 6450.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_CorporateSharedMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "CorporateSharedMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 4129.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "CorporateSharedMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 1198.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000HealthcareReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "HealthcareReportableSegmentsMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 2105.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000ElectronicsReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ElectronicsReportableSegmentsMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 607.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000BusinessInnovationReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "BusinessInnovationReportableSegmentsMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 5077.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E00988-000ImagingReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingReportableSegmentsMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 936.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_CorporateSharedMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "CorporateSharedMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 584.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "CorporateSharedMember"
-     },
-     "tag": "AverageNumberOfTemporaryWorkers",
-     "unitRef": "pure",
-     "value": 96.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000HealthcareReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "HealthcareReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 60698000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000ElectronicsReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ElectronicsReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 25760000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000BusinessInnovationReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "BusinessInnovationReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 54507000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000ImagingReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 13329000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000HealthcareReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "HealthcareReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 448362000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000ElectronicsReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ElectronicsReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 39812000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000BusinessInnovationReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "BusinessInnovationReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 25912000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00988-000ImagingReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 15447000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_ReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 529533000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_UnallocatedAmountsAndEliminationMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "UnallocatedAmountsAndEliminationMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 2605000000.0
+     "heading": "セグメント情報",
+     "markdown": "|             |  | 前連結会計年度(百万円) |  | 当連結会計年度(百万円) |\n|-------------|--|--------------|--|--------------|\n| ヘルスケア       |  | 975,081      |  | 1,022,564    |\n| エレクトロニクス    |  | 358,427      |  | 432,797      |\n| ビジネスイノベーション |  | 1,157,750    |  | 1,198,494    |\n| イメージング      |  | 469,658      |  | 541,973      |\n| 売上高 計       |  | 2,960,916    |  | 3,195,828    |\n| ヘルスケア       |  | 55,709       |  | 60,698       |\n| エレクトロニクス    |  | 26,432       |  | 25,760       |\n| ビジネスイノベーション |  | 53,850       |  | 54,507       |\n| イメージング      |  | 11,095       |  | 13,329       |\n| 研究開発費 計     |  | 147,086      |  | 154,294      |\n| ヘルスケア       |  | 821,983      |  | 884,231      |\n| エレクトロニクス    |  | 285,725      |  | 329,722      |\n| ビジネスイノベーション |  | 1,036,475    |  | 1,069,373    |\n| イメージング      |  | 356,530      |  | 389,430      |\n| その他費用 計     |  | 2,500,713    |  | 2,672,756    |\n| ヘルスケア       |  | 97,389       |  | 77,635       |\n| エレクトロニクス    |  | 46,270       |  | 77,315       |\n| ビジネスイノベーション |  | 67,425       |  | 74,614       |\n| イメージング      |  | 102,033      |  | 139,214      |\n| 営業利益 計      |  | 313,117      |  | 368,778      |\n| 全社費用等       |  | △36,392      |  | △38,623      |\n| 連結営業利益      |  | 276,725      |  | 330,155      |\n| 営業外収益及び費用   |  | 40,563       |  | 10,439       |\n| 税金等調整前当期純利益 |  | 317,288      |  | 340,594      |",
+     "period": "比較"
     }
-   ],
-   "method": "xbrl_facts",
-   "tables": []
+   ]
   }
  },
  "S100W4FB": {
@@ -21959,216 +21747,31 @@
    "tables": [
     {
      "heading": "地域別",
-     "markdown": "|                | プリンティング   |  | メディカル   |  | イメージング  |  | インダストリアル |  | その他及び全社 |  | 消去       |  | 連結        |\n|----------------|-----------|--|---------|--|---------|--|----------|--|---------|--|----------|--|-----------|\n| 一時点で認識する収益     | 1,845,411 |  | 380,598 |  | 928,462 |  | 278,369  |  | 222,415 |  | △104,579 |  | 3,550,676 |\n| 一定期間にわたり認識する収益 | 677,314   |  | 188,210 |  | 8,929   |  | 73,361   |  | 11,331  |  | -        |  | 959,145   |\n| 合計             | 2,522,725 |  | 568,808 |  | 937,391 |  | 351,730  |  | 233,746 |  | △104,579 |  | 4,509,821 |",
+     "markdown": "|       | 日本      |  | 米州        |  | 欧州        |  | アジア・　オセアニア |  | 計         |  |\n|-------|---------|--|-----------|--|-----------|--|------------|--|-----------|--|\n| 売上高   | 955,456 |  | 1,429,201 |  | 1,184,389 |  | 940,775    |  | 4,509,821 |  |\n| 長期性資産 | 998,506 |  | 191,000   |  | 223,922   |  | 146,059    |  | 1,559,487 |  |",
      "period": "前期"
     },
     {
      "heading": "地域別",
-     "markdown": "|       | 日本      |  | 米州        |  | 欧州        |  | アジア・　オセアニア |  | 計         |  |\n|-------|---------|--|-----------|--|-----------|--|------------|--|-----------|--|\n| 売上高   | 955,456 |  | 1,429,201 |  | 1,184,389 |  | 940,775    |  | 4,509,821 |  |\n| 長期性資産 | 998,506 |  | 191,000   |  | 223,922   |  | 146,059    |  | 1,559,487 |  |",
+     "markdown": "|       | 日本        |  | 米州        |  | 欧州        |  | アジア・　オセアニア |  | 計         |  |\n|-------|-----------|--|-----------|--|-----------|--|------------|--|-----------|--|\n| 売上高   | 961,480   |  | 1,489,639 |  | 1,225,475 |  | 948,133    |  | 4,624,727 |  |\n| 長期性資産 | 1,027,857 |  | 172,634   |  | 236,704   |  | 140,144    |  | 1,577,339 |  |",
      "period": "当期"
     }
    ]
   },
   "segments": {
-   "facts": [
+   "facts": [],
+   "method": "html_table",
+   "tables": [
     {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E02274-000PrintingBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "PrintingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 105938.0
+     "heading": "セグメント情報",
+     "markdown": "|           | プリンティング   |  | メディカル    |  | イメージング  |  | インダストリアル |  | その他及び全社   |  | 消去       |  | 連結        |\n|-----------|-----------|--|----------|--|---------|--|----------|--|-----------|--|----------|--|-----------|\n| 売上高       |           |  |          |  |         |  |          |  |           |  |          |  |           |\n| 外部顧客向け    | 2,515,543 |  | 568,260  |  | 937,028 |  | 345,863  |  | 143,127   |  | -        |  | 4,509,821 |\n| セグメント間取引  | 7,182     |  | 548      |  | 363     |  | 5,867    |  | 90,619    |  | △104,579 |  | -         |\n| 計         | 2,522,725 |  | 568,808  |  | 937,391 |  | 351,730  |  | 233,746   |  | △104,579 |  | 4,509,821 |\n| 売上原価      | 1,356,530 |  | 308,642  |  | 425,663 |  | 196,393  |  | 186,273   |  | △106,775 |  | 2,366,726 |\n| 売上総利益     | 1,166,195 |  | 260,166  |  | 511,728 |  | 155,337  |  | 47,473    |  | 2,196    |  | 2,143,095 |\n| 研究開発費     | 100,361   |  | 52,639   |  | 101,200 |  | 30,559   |  | 52,589    |  | -        |  | 337,348   |\n| その他営業費用   | 775,950   |  | 347,964  |  | 259,224 |  | 55,875   |  | 86,058    |  | 922      |  | 1,525,993 |\n| 営業利益      | 289,884   |  | △140,437 |  | 151,304 |  | 68,903   |  | △91,174   |  | 1,274    |  | 279,754   |\n| 営業外収益及び費用 | 14,262    |  | 929      |  | 3,004   |  | 1,500    |  | 1,712     |  | -        |  | 21,407    |\n| 税引前当期純利益  | 304,146   |  | △139,508 |  | 154,308 |  | 70,403   |  | △89,462   |  | 1,274    |  | 301,161   |\n| 総資産       | 1,354,948 |  | 421,453  |  | 425,515 |  | 238,625  |  | 3,329,047 |  | △3,342   |  | 5,766,246 |\n| 減価償却費     | 63,356    |  | 13,132   |  | 19,984  |  | 11,590   |  | 127,403   |  | -        |  | 235,465   |\n| 資本的支出     | 70,075    |  | 16,663   |  | 38,922  |  | 13,109   |  | 117,498   |  | -        |  | 256,267   |",
+     "period": "前期"
     },
     {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E02274-000MedicalBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "MedicalBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 13347.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E02274-000ImagingBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 26367.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E02274-000IndustryBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "IndustryBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 7757.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_jpcrp030000-asr_E02274-000OtherAndCorporateMember",
-     "decimals": "0",
-     "dimensions": {
-      "OperatingSegmentsAxis": "OtherAndCorporateMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 12138.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E02274-000PrintingBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "PrintingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 8873.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E02274-000MedicalBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "MedicalBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 604.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E02274-000ImagingBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "ImagingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 3899.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E02274-000IndustryBusinessUnitReportableSegmentsMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "IndustryBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 2558.0
-    },
-    {
-     "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E02274-000OtherAndCorporateMember",
-     "decimals": "0",
-     "dimensions": {
-      "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
-      "OperatingSegmentsAxis": "OtherAndCorporateMember"
-     },
-     "tag": "NumberOfEmployees",
-     "unitRef": "pure",
-     "value": 6987.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000PrintingBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "PrintingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 94762000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000MedicalBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "MedicalBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 46971000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000ImagingBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 112298000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000IndustryBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "IndustryBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-     "unitRef": "JPY",
-     "value": 32286000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000PrintingBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "PrintingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 66669000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000MedicalBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "MedicalBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 11803000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000ImagingBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "ImagingBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 39022000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000IndustryBusinessUnitReportableSegmentsMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "IndustryBusinessUnitReportableSegmentsMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 14137000000.0
-    },
-    {
-     "contextRef": "CurrentYearDuration_jpcrp030000-asr_E02274-000OtherAndCorporateMember",
-     "decimals": "-6",
-     "dimensions": {
-      "OperatingSegmentsAxis": "OtherAndCorporateMember"
-     },
-     "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
-     "unitRef": "JPY",
-     "value": 80042000000.0
+     "heading": "セグメント情報",
+     "markdown": "|           | プリンティング   |  | メディカル   |  | イメージング    |  | インダストリアル |  | その他及び全社   |  | 消去       |  | 連結        |\n|-----------|-----------|--|---------|--|-----------|--|----------|--|-----------|--|----------|--|-----------|\n| 売上高       |           |  |         |  |           |  |          |  |           |  |          |  |           |\n| 外部顧客向け    | 2,487,885 |  | 579,723 |  | 1,054,513 |  | 357,924  |  | 144,682   |  | -        |  | 4,624,727 |\n| セグメント間取引  | 6,513     |  | 899     |  | 387       |  | 3,204    |  | 92,434    |  | △103,437 |  | -         |\n| 計         | 2,494,398 |  | 580,622 |  | 1,054,900 |  | 361,128  |  | 237,116   |  | △103,437 |  | 4,624,727 |\n| 売上原価      | 1,362,457 |  | 316,368 |  | 491,391   |  | 205,926  |  | 191,298   |  | △104,668 |  | 2,462,772 |\n| 売上総利益     | 1,131,941 |  | 264,254 |  | 563,509   |  | 155,202  |  | 45,818    |  | 1,231    |  | 2,161,955 |\n| 研究開発費     | 94,762    |  | 46,971  |  | 112,298   |  | 32,286   |  | 52,971    |  | -        |  | 339,288   |\n| その他営業費用   | 781,420   |  | 184,508 |  | 278,340   |  | 60,391   |  | 62,298    |  | 320      |  | 1,367,277 |\n| 営業利益      | 255,759   |  | 32,775  |  | 172,871   |  | 62,525   |  | △69,451   |  | 911      |  | 455,390   |\n| 営業外収益及び費用 | 17,844    |  | 1,287   |  | 3,888     |  | 2,300    |  | 1,350     |  | -        |  | 26,669    |\n| 税引前当期純利益  | 273,603   |  | 34,062  |  | 176,759   |  | 64,825   |  | △68,101   |  | 911      |  | 482,059   |\n| 総資産       | 1,360,992 |  | 434,929 |  | 504,267   |  | 231,431  |  | 3,606,118 |  | △2,693   |  | 6,135,044 |\n| 減価償却費     | 65,486    |  | 13,928  |  | 21,615    |  | 13,938   |  | 124,269   |  | -        |  | 239,236   |\n| 資本的支出     | 71,372    |  | 16,434  |  | 41,274    |  | 15,759   |  | 104,691   |  | -        |  | 249,530   |",
+     "period": "当期"
     }
-   ],
-   "method": "xbrl_facts",
-   "tables": []
+   ]
   }
  },
  "S100XUDW": {

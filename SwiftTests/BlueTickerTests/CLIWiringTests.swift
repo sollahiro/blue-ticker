@@ -22,7 +22,7 @@ import Testing
     /// TickerDev（配布しない開発用ローカル解析 CLI）側のサブコマンド登録。
     @Test func devRootRegistersAllDocumentedSubcommands() {
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
-        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing"]
+        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing", "segment-breakdown"]
         #expect(names == expected)
     }
 

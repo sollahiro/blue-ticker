@@ -533,6 +533,43 @@ enum Xbrl {
         "BusinessSegment",
         "ReportableSegment",
     ]
+    static let businessSegmentMixedTextBlockTags: Set<String> = [
+        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  // US-GAAP 連結財務諸表注記（事業別セグメントを内包）
+    ]
+    static let businessSegmentHeadingKeywords: [String] = [
+        "セグメント情報",
+        "事業の種類別",
+        "報告セグメント",
+    ]
+    // 事業別セグメントの見出し候補文字列に含まれていたら除外する（「地域別セグメント情報」等、
+    // 地域別注記の見出しが「セグメント情報」を部分文字列として含むため誤って拾わないようにする）。
+    static let businessSegmentHeadingExclusionKeywords: [String] = [
+        "地域",
+    ]
+
+    // mixedTags 経由の見出し一致で次の <table> を無条件採用すると、巨大な注記内の無関係な表
+    // （収益認識の時期別内訳・ストックオプションの評価前提・投資有価証券の公正価値等）を誤って
+    // 拾うことがある。いずれも会計基準の定型文言のため、これらを含む表は候補から除外する。
+    static let noteTableExclusionKeywords: [String] = [
+        "一時点で認識する収益",              // 収益認識の時期別内訳（企業会計基準第29号）
+        "一定期間にわたり認識する収益",
+        "予想残存期間",                    // ストックオプションの公正価値評価前提
+        "総未実現利益",                    // 投資有価証券の公正価値内訳（ASC 320/321 相当）
+        "償却累計額",                     // 無形固定資産・有形固定資産の取得原価/償却累計額/帳簿価額の内訳
+    ]
+    // 見出し直後の表が noteTableExclusionKeywords に該当した場合、次の表を何個先まで
+    // 試すか（無関係な後続表まで際限なく拾わないための上限）。
+    static let noteTableLookaheadLimit = 5
+
+    // 「第n期及び第n+1期における...は以下のとおりであります」のように、前期・当期を
+    // 1つの見出しでまとめて紹介し、表ごとに個別の <div> でラップされた表が短いラベル
+    // （「第125期」等）だけを挟んで連続するケースがある（実データ: キヤノン地域別注記）。
+    // 直後の表の見出し行が一致する場合に限り「同じ開示の続き」とみなして追加で拾う。
+    // 何段階（何要素）先まで許容するか。
+    static let noteTableChainMaxGapElements = 5
+    // 挟まる要素のテキストがこの文字数を超えたら、無関係な話題への移行とみなし打ち切る
+    // （detectPeriodFromPreceding の短キャプション判定と同じ考え方の閾値を共有）。
+    static let noteShortCaptionMaxLength = 100
 
     // 地域別
     static let geographyTextBlockTags: Set<String> = [
@@ -597,6 +634,8 @@ enum Xbrl {
     ]
 
     /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。
+    /// XBRL member 名（英語識別子）向け。html_table の日本語行ラベル判定には
+    /// `segmentGeographyLabelKeywordsJa` を使う（別レイヤーのキーワード表）。
     static let segmentGeographyMemberKeywords: [String] = [
         "Japan",
         "Americas",
@@ -609,6 +648,19 @@ enum Xbrl {
         "Domestic",
         "Overseas",
         "Pacific",
+    ]
+
+    /// html_table 由来の行ラベル（日本語表記）が地域名らしいかの判定キーワード。
+    /// `segmentGeographyMemberKeywords`（英語 member 名用）とは別レイヤー。
+    /// LLM 正規化（`SegmentBreakdownLLMNormalizer`）が誤った表を選んでいないかの
+    /// 決定的ガードに使う（分母整合性だけでは検知できない事故対策。学び参照）。
+    /// 「その他」は意図的に含めない — 事業別表にも「その他及び全社」等の形でほぼ必ず出現し、
+    /// 固有の地域名が最低1つ一致することを要求するガードの意味を失わせるため
+    /// （実データ: キヤノンの事業別表に「その他及び全社」列があり、これを許すと誤検知が起きる）。
+    static let segmentGeographyLabelKeywordsJa: [String] = [
+        "日本", "米国", "米州", "アメリカ", "北米", "南米",
+        "欧州", "ヨーロッパ", "アジア", "中国", "オセアニア",
+        "パシフィック", "中近東", "中東", "海外", "国内",
     ]
 }
 

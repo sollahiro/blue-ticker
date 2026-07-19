@@ -92,6 +92,7 @@ smoke 11社で検証: オークマ（4/4 一致・地域名）以外の10社は0
 - **小計・調整行の数値判定は「他に segment 候補が2件以上あるとき」に限定する。** 単一セグメント企業では売上高がそのまま分母と一致するのが正しい姿であり、数値近似だけで判定すると単一行を誤って小計扱いしてしまう
 - **member ラベルの選択は Dictionary 走査順に依存させない。** dimension が複数ある fact（smoke には無いが実データでは起こりうる）で行ラベルが実行ごとに揺れないよう、dimension キー名の辞書順で決定的に選ぶ
 - **利益（事業利益・営業利益）は売上と同じ仕組みでほぼ無料で乗る。** 売上と同様タグ表記が会社で割れる（IFRS でも味の素は `BusinessProfitLossIFRS`、クボタ・スズキは `OperatingProfitLossIFRS`）ため候補リスト化し、`resolvePerMember` を売上・利益で共有した。任意フィールド（`BreakdownRow.profit`）とし、一致するタグが無くても snapshot 自体は成立する。smoke 6社（オークマ除く、非金融のIFRS/J-GAAP企業）の実額をユーザーが目視確認し、`smoke/segment_breakdown_expected.json` にゴールデン値として記録・回帰テスト化済み（利益率などの派生値は含めない）
+- **geography（html_table 経路）のゴールデン値も smoke 9社分（味の素・ニチレイ・富士フイルム・オークマ・クボタ・スズキ・キヤノン・三菱UFJ・三井住友）記録済み（2026-07-19）**: `smoke/segment_breakdown_geography_expected.json`（`segment_breakdown_expected.json` と同型: docID キー、`code`/`name`/`rows: [{label, sales}]`。集計行は含めない）。ラベルはユーザー指示通り最も粒度の細かい表記（例: 味の素は「タイ」「アジアその他」等、上位区分への集約はしない）。値は各社の表セルをそのまま円換算した実額で、表自体の「合計」セルとの数百万円規模の端数差（開示元の丸め誤差）は許容する。**回帰テスト化は未実施**（LLM呼び出しがネットワーク・APIキー依存のため。ingest配線が決まった段階で、記録済みの入出力をカセット化してテストに組み込むことを検討）
 
 ## 正規化契約（草案）
 
@@ -157,7 +158,8 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定・実装済み。`Sources/BlueTicker/Analysis/SegmentNormalizer.swift` + 定数は `Xbrl.swift`、テストは smoke 実データ照合で5件パス）
 2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `SegmentNormalizer.classifyAxis`）。残課題: 混在ケース（ルール4）は smoke サンプルに存在せず未検証のまま
 3. **追加ソースの採用範囲** — 収益認識１・US-GAAP 注15/23 を Stage 6 に含めるか、後続か。US-GAAP 企業（富士フイルム・キヤノン）は `segments` の `xbrl_facts` に売上自体が無い（設備・人員等のみ）ため `SegmentNormalizer` は自然に nil を返す。html_table 行パース未実装のため、着手前提として #9（学び）の行パースが要る
-4. **`SegmentExtractor` の前処理欠陥** — period 誤ラベル・US-GAAP 巨大注記未対応・geography への表混入は解消済み（別 worktree `worktree-fix-segment-extractor-defects`、main 未マージ）。残るのは巨大注記内の見出し・テーブル意味的関連性の構造的限界のみ
+   - **オークマ型（`segments` キーの axis が geography と判定される）の配線方針（未着手・2026-07-19 決定）**: `segments` キー呼び出しの結果が `axis == "geography"` になった場合、その snapshot を「事業別（business）」として採用してはならない。`SegmentNormalizer.normalize()` 自体の挙動（axis をデータから判定して返す。学び10・`okumaSegmentsAxisIsGeography` テストで固定済みの仕様）は変更しない — 採用可否の判断は呼び出し側（ingest/配線コード）の責務とする。オークマの本当の事業別（製品別）データは「収益認識関係１」（学び冒頭の会社差表を参照）にあり、これは上記の追加ソース採用が決まってから初めて拾える。配線時のチェックリスト: (a) `segments` 結果の axis が geography なら business breakdown は "not found" 扱い（geography-labeled snapshot をそのまま business として出さない）、(b) 可能なら収益認識１から business breakdown を再抽出する、(c) 地域別（geography）は常に `geography` キー由来（html_table/xbrl_facts）を正とする
+4. **`SegmentExtractor` の前処理欠陥**（2026-07-19、解消済み） — period 誤ラベル・US-GAAP 巨大注記未対応・geography への無関係表混入・見出し1致1表限定によるチェイン漏れ（1つの見出しが前期/当期両方を紹介し div ラップされた表が短いラベルだけ挟んで連続するケース）の4件を修正。経緯・検証詳細はコミット `e550665`/`ceaa31c` を参照。残るのは巨大注記内の見出し・テーブル意味的関連性を保証できない構造的限界のみ
 5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
 7. **検証セット** — 最低でも事業型・地域型報告セグメント・US-GAAP・収益認識製品別を含む書類セット
