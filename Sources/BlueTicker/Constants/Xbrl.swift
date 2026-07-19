@@ -612,16 +612,22 @@ enum Xbrl {
     static let segmentExternalRevenueTags: [String] = [
         "SalesToExternalCustomersIFRS",
         "RevenueFromExternalCustomersIFRS",
+        "RevenueFromExternalCustomers2IFRS",  // 伊藤忠など
+        "OperatingRevenueFromExternalCustomersIFRS",  // トヨタなど
         "RevenuesFromExternalCustomers",
     ]
 
     /// セグメント別の利益タグ（優先順）。IFRS でも会社により表記が割れる
-    /// （味の素は BusinessProfitLossIFRS、クボタ・スズキは OperatingProfitLossIFRS）。
+    /// （味の素は BusinessProfitLossIFRS、クボタ・スズキは OperatingProfitLossIFRS、
+    /// 日立は SegmentProfitLossIFRS＝セグメント損益、
+    /// ソフトバンクGは ProfitLossBeforeTaxIFRS＝税引前利益）。
     /// 任意フィールドのため、一致するタグが無くても snapshot 自体は成立する（rows[].profit が nil になるだけ）。
     static let segmentProfitTags: [String] = [
         "BusinessProfitLossIFRS",
+        "SegmentProfitLossIFRS",
         "OperatingProfitLossIFRS",
         "OperatingIncome",
+        "ProfitLossBeforeTaxIFRS",
     ]
 
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
