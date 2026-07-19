@@ -21,8 +21,13 @@ struct ChatCompletionEndpoint: Sendable {
 
 /// Analysis/ 層はこのプロトコルだけを見る。具体の HTTP 実装は API/ に閉じ込め、
 /// テスト時のモック差し替えも容易にする。
+/// jsonSchema・戻り値は `Data`（JSON エンコード済み）でやり取りする。`[String: Any]` は
+/// Sendable ではなく、actor が満たすプロトコル要件の引数・戻り値に使うと
+/// （Swift ツールチェーンのバージョンにより）`sending` を付けても型検査に通らないことがある
+/// （実例: Xcode 同梱の新しい Swift では通るが、CI の `swift:6.1` では
+/// 「non-sendable type ... cannot be returned/sent」でビルド失敗した）。
 protocol ChatCompleting: Sendable {
-    func complete(system: String, user: String, jsonSchema: sending [String: Any], schemaName: String) async throws -> sending [String: Any]
+    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data
 }
 
 enum ChatCompletionError: Error {
@@ -42,9 +47,12 @@ actor ChatCompletionClient: ChatCompleting {
         self.endpoint = endpoint
     }
 
-    func complete(system: String, user: String, jsonSchema: sending [String: Any], schemaName: String) async throws -> sending [String: Any] {
+    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
         guard let url = URL(string: endpoint.baseURL + "/chat/completions") else {
             throw ChatCompletionError.invalidURL
+        }
+        guard let jsonSchemaObject = try? JSONSerialization.jsonObject(with: jsonSchema) else {
+            throw ChatCompletionError.decodingFailed("invalid jsonSchema")
         }
 
         var body: [String: Any] = [
@@ -60,7 +68,7 @@ actor ChatCompletionClient: ChatCompleting {
                 "type": "json_schema",
                 "json_schema": [
                     "name": schemaName,
-                    "schema": jsonSchema,
+                    "schema": jsonSchemaObject,
                     "strict": true,
                 ],
             ]
@@ -90,10 +98,12 @@ actor ChatCompletionClient: ChatCompleting {
               !content.isEmpty
         else { throw ChatCompletionError.emptyContent }
 
-        guard let parsed = Self.parseJSONObject(from: content) else {
+        guard let parsed = Self.parseJSONObject(from: content),
+              let reencoded = try? JSONSerialization.data(withJSONObject: parsed)
+        else {
             throw ChatCompletionError.decodingFailed(content)
         }
-        return parsed
+        return reencoded
     }
 
     /// `response_format` が無視され、コードフェンス付きテキストで返ってきた場合の防御的パース。

@@ -81,14 +81,20 @@ enum SegmentBreakdownLLMNormalizer {
 
         let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
 
+        guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
+
         let response: [String: Any]
         do {
-            response = try await client.complete(
+            let responseData = try await client.complete(
                 system: systemPrompt,
                 user: userPrompt,
-                jsonSchema: jsonSchema,
+                jsonSchema: jsonSchemaData,
                 schemaName: "geography_breakdown"
             )
+            guard let parsed = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+                return (nil, nil)
+            }
+            response = parsed
         } catch {
             return (nil, nil)
         }
