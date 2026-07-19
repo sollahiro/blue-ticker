@@ -458,6 +458,13 @@ extension FinancialsResponse {
         return result
     }
 
+    /// 指定 docID の年度エントリの売上高。public: Stage 6（BltServerCore）が事業別内訳の分母
+    /// （連結外部売上）を Stage 4 の計算済み結果から再利用するために使う（自前で XBRL から
+    /// 再抽出しない。重複ロジック回避）。該当年度が無ければ nil。
+    public func salesForDoc(_ docID: String) -> Double? {
+        years.first { $0.docId == docID }?.sales
+    }
+
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
     /// public: BltServerCore の Stage 4 read 経路が格納済みレスポンスを JSON へ落とすために使う。
     public func jsonObject() -> [String: Any] {

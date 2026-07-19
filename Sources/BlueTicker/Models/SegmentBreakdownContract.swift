@@ -26,6 +26,30 @@ public let segmentBreakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `SegmentBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
 public let segmentBreakdownSourceGeographyLLM = "geography_llm"
 
+/// segment-breakdown read（REST/MCP）が xbrl_facts 経由の行に適用する最低スキーマバージョン番号
+/// （`breakdown-vN` の N）。**明示指定**。LLM 経由の行（source != xbrl_facts）には適用しない
+/// （`isServableSegmentBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き運用のため、
+/// cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
+/// 不変条件: `segmentBreakdownMinServableVersion` ≤ 現行 `breakdown-vN` の N。
+public let segmentBreakdownMinServableVersion = 1
+
+/// `breakdown-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+public func segmentBreakdownCacheVersionNumber(_ version: String) -> Int? {
+    guard version.hasPrefix("breakdown-v") else { return nil }
+    let suffix = version.dropFirst("breakdown-v".count)
+    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+    return n
+}
+
+/// 格納行が read 可能か。xbrl_facts 経由（決定的）は cache_version が床以上のときのみ
+/// （バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
+/// docs/segment-normalization-concept.md「今後の検討事項8」参照）。
+public func isServableSegmentBreakdown(source: String, cacheVersion: String) -> Bool {
+    guard source == segmentBreakdownSourceXbrlFacts else { return true }
+    guard let n = segmentBreakdownCacheVersionNumber(cacheVersion) else { return false }
+    return n >= segmentBreakdownMinServableVersion
+}
+
 /// BreakdownRow（内部型）の公開 Codable 写経。
 public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
@@ -85,5 +109,34 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
         self.unit = unit
         self.profitDisclosed = profitDisclosed
         self.notes = notes
+    }
+}
+
+public extension BreakdownRowPayload {
+    /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。欠損は NSNull（`FinancialsYear` の
+    /// delta フィールドと同じ表現方針）。
+    func jsonObject() -> [String: Any] {
+        [
+            "label_raw": labelRaw,
+            "amount": amount,
+            "share": share ?? NSNull(),
+            "profit": profit ?? NSNull(),
+            "row_kind": rowKind,
+        ]
+    }
+}
+
+public extension BreakdownSnapshotPayload {
+    /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。
+    func jsonObject() -> [String: Any] {
+        [
+            "axis": axis,
+            "denominator": denominator,
+            "denominator_tag": denominatorTag,
+            "rows": rows.map { $0.jsonObject() },
+            "source_kind": sourceKind,
+            "needs_review": needsReview,
+            "warnings": warnings,
+        ]
     }
 }
