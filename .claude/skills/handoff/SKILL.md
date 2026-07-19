@@ -11,6 +11,7 @@ description: 現在のセッションの途中状態を別セッションへ引�
 
 1. **git 文脈を取り込む**（読み取りのみ）:
    - `git rev-parse --abbrev-ref HEAD`（branch）
+   - `git rev-parse HEAD`（フル SHA。鮮度判定に使うので必ずテンプレの `HEAD:` に埋め込む）
    - `git status --porcelain`（未コミット変更）
    - `git log --oneline -5`（直近コミット）
    - `git diff --stat`（差分規模）
@@ -31,6 +32,7 @@ description: 現在のセッションの途中状態を別セッションへ引�
 # 引き継ぎ — <一行サマリ>
 
 - branch: <branch> / 最終更新: <UTC>
+- HEAD: <git rev-parse HEAD のフル SHA>
 - 元セッションの目的: <何をしようとしていたか>
 
 ## 現在のゴール
@@ -66,3 +68,4 @@ description: 現在のセッションの途中状態を別セッションへ引�
 ## 注意
 - ファイルは `.claude/handoff.local.md`（gitignore 済み・非追跡）。パスを変えない。
 - ギリギリを狙わず「ちょっと怪しいくらい」でこまめに更新する。トークン切れではフックが発火しないため、頻度が唯一の防御。
+- **`HEAD:` 行を必ず埋める**。SessionStart フック（`session-start-handoff.sh`）は mtime ではなく「記録した `HEAD:` から現在の HEAD までのコミット距離」で鮮度を判定する（mtime は cp・エディタ保存等コミットを伴わない操作でも更新され、内容が古いのに新しく見える誤検知があったため）。`HEAD:` 行を書き忘れると mtime 判定にフォールバックし、この誤検知が再発する。
