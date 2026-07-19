@@ -262,7 +262,9 @@ enum SegmentExtractor {
                 if s.tagName() == "table" { return s }
                 if let found = (try? s.select("table"))?.first() { return found }
                 let text = bs4Text(s, strip: true)
-                if text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { return nil }
+                // この起点（table 自身 or 1段親）での探索を打ち切るだけで、次の起点は引き続き試す
+                // （1段目で長文に当たっても、2段目（親の兄弟）側は無関係とは限らないため）。
+                if text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { break }
                 sibling = try? s.nextElementSibling()
             }
         }

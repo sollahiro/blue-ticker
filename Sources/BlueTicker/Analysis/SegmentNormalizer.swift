@@ -18,9 +18,12 @@ struct BreakdownRow: Equatable {
 struct BreakdownSnapshot: Equatable {
     var axis: String  // "business" | "geography"
     var denominator: Double
+    // 採用した分母の出所（監査・再現用）。xbrl_facts 経路は実際に使った XBRL タグ名
+    // （例: "SalesToExternalCustomersIFRS"）、html_table 経路は XBRL タグが存在しないため
+    // sentinel 文字列 "income_statement.sales" を使う（意図的な語彙の使い分け）。
     var denominatorTag: String
     var rows: [BreakdownRow]
-    var sourceKind: String  // 現状 "xbrl_facts" のみ
+    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（SegmentBreakdownLLMNormalizer）
     var needsReview: Bool
     var warnings: [String]
 }
