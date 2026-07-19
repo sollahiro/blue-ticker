@@ -59,7 +59,7 @@ private func fakeSnapshot(
             row.source = segmentBreakdownSourceHtmlTableLLM
             row.contentHash = "abc123"
             row.cacheVersion = segmentBreakdownCacheVersion
-            row.llmAudit = LLMBreakdownAuditPayload(sourceTableIndex: 1, periodColumn: "当期", unit: "million_yen", notes: "test")
+            row.llmAudit = LLMBreakdownAuditPayload(sourceTableIndex: 1, periodColumn: "当期", unit: "million_yen", profitDisclosed: true, notes: "test")
             try await row.create(on: app.db)
 
             let found = try #require(try await CompanySegmentBreakdown.find("S100XTLJ#business", on: app.db))

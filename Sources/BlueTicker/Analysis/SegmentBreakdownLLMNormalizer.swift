@@ -19,6 +19,11 @@ struct LLMBreakdownAudit {
     var sourceTableIndex: Int?
     var periodColumn: String?
     var unit: String
+    /// 表がそもそも事業別/製品別の利益情報を含んでいたか（LLM の自己申告）。
+    /// `BreakdownRow.profit == nil` だけでは「未開示（確認済み）」と「LLM が見落とした・非該当」を
+    /// 区別できないため、この申告と実際の rows の整合性を決定的に検証する
+    /// （`profit_disclosed_but_row_missing` / `profit_present_despite_not_disclosed` 警告）。
+    var profitDisclosed: Bool
     var notes: String
 }
 
@@ -37,6 +42,7 @@ enum SegmentBreakdownLLMNormalizer {
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
     - 該当する地域別データが候補テーブル群に存在しない場合は applicable=false を返すこと
+    - profit フィールドは常に null、profit_disclosed は常に false にすること（地域別の比較では利益は対象外）
     - notes フィールドに、表選択・期間列選択の根拠を短く日本語で記すこと
     """
 
@@ -52,6 +58,8 @@ enum SegmentBreakdownLLMNormalizer {
     - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・期間列（多くは「当期」列）を選ぶこと。売上に関係しない表（債権・契約負債の残高等）は無視すること
     - 事業名・製品名が表の列見出しになっている場合（各列が1事業に対応し、行が売上高・利益等の指標になっている表）は、外部顧客向け売上高の行を選び、各列見出しを行ラベルとして1事業=1行になるよう転置して出力すること
     - 事業名・製品名が表の行になっている場合（1行=1事業/製品の単純な表）はそのまま行として使うこと。「顧客との契約から生じる収益」「外部顧客への売上高」等の集計行は row_kind="subtotal" とすること
+    - 売上と同じ表内に事業別・製品別の営業利益（またはセグメント利益に相当する指標。例:「営業利益」「税引前当期純利益」）が並んで開示されている場合は、売上行と同じ転置ルールで対応する profit フィールドに設定し、profit_disclosed を true にすること。該当する利益指標がその表に存在しない場合（収益認識注記の製品別売上高表など、利益が開示されていない表が多い）は profit を null のままにし、profit_disclosed を false にすること。無関係な指標（総資産・減価償却費等）を流用してはならない
+    - profit_disclosed は「この表に利益情報が存在するか」の申告であり、rows の profit 値と矛盾させないこと（true なら最低1行は profit を埋めること、false なら全行 null のままにすること）
     - 前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
     - 行ラベルは事業名・製品名であるべきで、地域名ではないこと。事業別のはずが実際には地域別の表（見出しの取り違え）である場合は applicable=false を返すこと
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること
@@ -69,6 +77,7 @@ enum SegmentBreakdownLLMNormalizer {
             "unit": ["type": "string", "enum": ["yen", "million_yen", "other"]],
             "source_table_index": ["type": "integer"],
             "period_column": ["type": "string"],
+            "profit_disclosed": ["type": "boolean"],
             "rows": [
                 "type": "array",
                 "items": [
@@ -76,15 +85,16 @@ enum SegmentBreakdownLLMNormalizer {
                     "properties": [
                         "label": ["type": "string"],
                         "amount": ["type": "number"],
+                        "profit": ["type": ["number", "null"]],
                         "row_kind": ["type": "string", "enum": ["segment", "subtotal", "reconciling"]],
                     ],
-                    "required": ["label", "amount", "row_kind"],
+                    "required": ["label", "amount", "profit", "row_kind"],
                     "additionalProperties": false,
                 ],
             ],
             "notes": ["type": "string"],
         ],
-        "required": ["applicable", "unit", "source_table_index", "period_column", "rows", "notes"],
+        "required": ["applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows", "notes"],
         "additionalProperties": false,
     ]
 
@@ -126,10 +136,17 @@ enum SegmentBreakdownLLMNormalizer {
         }
 
         let unit = response["unit"] as? String ?? "other"
+        // geography 軸は profit 対象外（学び参照）。プロンプトでも指示するが、LLM の自己申告だけに
+        // 頼らずここでも固定する（Fable監査指摘: プロンプト任せにしない決定的ガード）。
+        // キー欠落・型不正は「未開示（確認済み）」ではなく「不明」なので、下で silent に false 扱い
+        // せず llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
+        let profitDisclosedRaw = response["profit_disclosed"] as? Bool
+        let profitDisclosed = axis == "business" && (profitDisclosedRaw ?? false)
         let audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
+            profitDisclosed: profitDisclosed,
             notes: response["notes"] as? String ?? ""
         )
 
@@ -138,6 +155,11 @@ enum SegmentBreakdownLLMNormalizer {
         else { return (nil, audit) }
         var warnings: [String] = []
         var needsReview = false
+
+        if axis == "business" && profitDisclosedRaw == nil {
+            needsReview = true
+            warnings.append("llm_profit_disclosed_unresolved")
+        }
 
         let unitMultiplier: Double
         switch unit {
@@ -157,9 +179,27 @@ enum SegmentBreakdownLLMNormalizer {
                   let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
                   let rowKind = raw["row_kind"] as? String
             else { continue }
-            rows.append(BreakdownRow(labelRaw: label, amount: rawAmount * unitMultiplier, share: nil, profit: nil, rowKind: rowKind))
+            // profit は任意（JSON null も許容。null なら raw["profit"] as? NSNumber が自然に nil になる）。
+            // geography 軸は常に nil に固定する（プロンプト任せにしない。上の profitDisclosed 算出と同じ理由）。
+            let rawProfit = axis == "business" ? (raw["profit"] as? NSNumber)?.doubleValue : nil
+            rows.append(BreakdownRow(
+                labelRaw: label, amount: rawAmount * unitMultiplier, share: nil,
+                profit: rawProfit.map { $0 * unitMultiplier }, rowKind: rowKind
+            ))
         }
         guard !rows.isEmpty else { return (nil, audit) }
+
+        // profit_disclosed の自己申告と実際の rows の整合性チェック（決定的）。
+        // 「未開示（確認済み）」と「LLM が見落としただけ」を区別する主目的のフィールドが
+        // rows と矛盾していては意味がないため、矛盾自体を needs_review で拾う。
+        let hasAnySegmentProfit = rows.contains { $0.rowKind == "segment" && $0.profit != nil }
+        if profitDisclosed && !hasAnySegmentProfit {
+            needsReview = true
+            warnings.append("profit_disclosed_but_row_missing")
+        } else if !profitDisclosed && hasAnySegmentProfit {
+            needsReview = true
+            warnings.append("profit_present_despite_not_disclosed")
+        }
 
         // ラベル妥当性チェック（決定的、追加ガード）。分母一致だけでは表の取り違えを検知できないため
         // （例: 誤って選ばれた事業別表の合計が、地域別表の合計とたまたま一致するケース）。

@@ -70,12 +70,16 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     public var sourceTableIndex: Int?
     public var periodColumn: String?
     public var unit: String
+    /// 表がそもそも事業別/製品別の利益情報を含んでいたか。`profit == nil` だけでは
+    /// 「未開示（確認済み）」と「見落とし」を区別できないため独立して持つ。
+    public var profitDisclosed: Bool
     public var notes: String
 
-    public init(sourceTableIndex: Int?, periodColumn: String?, unit: String, notes: String) {
+    public init(sourceTableIndex: Int?, periodColumn: String?, unit: String, profitDisclosed: Bool, notes: String) {
         self.sourceTableIndex = sourceTableIndex
         self.periodColumn = periodColumn
         self.unit = unit
+        self.profitDisclosed = profitDisclosed
         self.notes = notes
     }
 }
