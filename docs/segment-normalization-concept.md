@@ -175,7 +175,18 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - **`Database.swift`の`app.migrations`には未登録**（意図的）。Neonへの実際のmigrateは今後の検討事項1（ingest/CLI/REST配線）着手時に別途ユーザー確認のうえ登録・適用する
    - テストは`SwiftTests/BltServerCoreTests/CompanySegmentBreakdownTests.swift`（SQLite in-memory、スキーマ・Payload往復・needs_reviewクエリ・同一docID異軸の共存を検証）
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
-7. **検証セット** — 最低でも事業型・地域型報告セグメント・US-GAAP・収益認識製品別を含む書類セット
+7. ~~**検証セット**~~（2026-07-19 最低ラインを充足・実装済み）: 挙げられていた4パターンをsmokeコーパスで確認済み
+
+   | パターン | 会社/docID | 生抽出ゴールデン | BreakdownSnapshotゴールデン |
+   |---|---|---|---|
+   | 事業型（xbrl_facts, axis=business） | 味の素ほか非金融10社 | `smoke/segment_expected.json` | `smoke/segment_breakdown_expected.json` |
+   | 地域型報告セグメント（xbrl_facts, axis=geography、オークマ型） | オークマ / S100W043 | `smoke/segment_expected.json` | `smoke/segment_breakdown_business_expected.json`（本項で追加。収益認識注記フォールバック経由） |
+   | US-GAAP（segments が html_table） | キヤノン / S100XTLJ | `smoke/segment_expected.json`（既存） | `smoke/segment_breakdown_business_expected.json`（本項で追加。注23表を列→行に転置） |
+   | 収益認識製品別（`extractRevenueRecognitionInfo`） | オークマ / S100W043 | `smoke/segment_expected.json`（本項で`revenue_recognition`キーを追加・`SegmentParityTests`に組み込み実データ回帰化済み） | 上記オークマ行と同じ |
+
+   - `revenue_recognition`キー追加により`SegmentExtractor.extractRevenueRecognitionInfo`は初めて実データでの自動回帰テストを獲得（合成XBRLフィクスチャのみだった状態を解消）
+   - `segment_breakdown_business_expected.json`（新規）はgeography側の`segment_breakdown_geography_expected.json`と同型。LLM経由（Canon/オークマとも）のため自動pass/fail回帰ではなくスポット監査用の確認済み値（`segment_breakdown_geography_expected.json`と同じ位置づけ）
+   - 銀行（金融機関）・単一セグメント企業（東邦レマック）は学び8・実装知見で別途カバー済みのため本項の対象外
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
 
 ### キャッシュ・再計算（メモ）

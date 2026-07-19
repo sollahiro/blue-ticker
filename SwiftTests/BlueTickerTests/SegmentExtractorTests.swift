@@ -501,8 +501,10 @@ import Foundation
 
 // MARK: - Python ゴールデンファイルとのパリティ検証
 
-/// smoke/segment_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
-/// キャッシュ済み XBRL から Swift 実装の出力を突き合わせる。
+/// smoke/segment_expected.json（大半は Python 実装の出力。`revenue_recognition` キーのみ
+/// Python に対応物が無く Swift 実装の実データ抽出結果をそのまま記録した回帰用ゴールデン。
+/// 今後の検討事項7「検証セット」参照）と tmp_cache/edinet/ のキャッシュ済み XBRL から
+/// Swift 実装の出力を突き合わせる。
 /// BLT_EDINET_API_KEY が設定されていれば不足分を自動ダウンロードする（SmokeCacheSupport）。
 /// 未設定かつキャッシュも無い docID は個別に SKIP する。
 @Suite struct SegmentParityTests {
@@ -535,6 +537,7 @@ import Foundation
             let actuals = [
                 ("segments", SegmentExtractor.extractSegmentInfo(xbrlDir: xbrlDir)),
                 ("geography", SegmentExtractor.extractGeographyInfo(xbrlDir: xbrlDir)),
+                ("revenue_recognition", SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: xbrlDir)),
             ]
             for (kind, actual) in actuals {
                 guard let exp = expected[kind] as? [String: Any] else { continue }
