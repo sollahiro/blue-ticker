@@ -12,10 +12,15 @@ import Foundation
 
 /// LLM がどの表・どの期間列・どの単位を採用したかの監査情報（目視検証用）。
 /// `BreakdownSnapshot` 自体（xbrl_facts 経路と共有する契約型）は汚さず、別チャネルで返す。
+/// business 軸の正規化器（`RevenueRecognitionLLMNormalizer` 等）と共有する型。
 struct LLMBreakdownAudit {
     var sourceTableIndex: Int?
     var periodColumn: String?
     var unit: String
+    /// 表がそもそも事業別/製品別の利益情報を含んでいたか。`BreakdownRow.profit == nil` だけでは
+    /// 「未開示（確認済み）」と「LLM の見落とし」を区別できないため独立して持つ。
+    /// geography 軸（本ファイル）は利益比較の対象外のため常に false。
+    var profitDisclosed: Bool
     var notes: String
 }
 
@@ -104,6 +109,7 @@ enum SegmentBreakdownLLMNormalizer {
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
+            profitDisclosed: false,
             notes: response["notes"] as? String ?? ""
         )
 

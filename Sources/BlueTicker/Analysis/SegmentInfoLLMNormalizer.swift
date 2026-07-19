@@ -1,38 +1,39 @@
-// 収益認識関係注記（「顧客との契約から生じる収益を分解した情報」）の html_table 結果を
+// `segments` キー自体が html_table を返すケース（例: キヤノンの US-GAAP 連結注記23。事業名が
+// 列見出しで指標が行という向きの表が、巨大注記内に直接内包されている）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/segment-normalization-concept.md 参照。SegmentBreakdownLLMNormalizer.swift（geography 用）
-// と同型だが、対象は「本来 segments キーが事業別のはずが地域別だった」オークマ型の会社で、
-// 収益認識関係注記から本当の事業別（製品別）データを拾うためのもの。
+// docs/segment-normalization-concept.md 参照。SegmentBreakdownLLMNormalizer.swift（geography 用）・
+// RevenueRecognitionLLMNormalizer.swift（オークマ型、収益認識注記由来）と同型だが、対象は
+// `segments` キー自体（オークマ型のような axis-aware swap を経ていない、素の segments 結果）
+// が html_table になっているケース。
 //
-// 呼び出し側の責務: この正規化器は「収益認識注記に事業別breakdownが存在するか」だけを判定する。
-// segments キーの axis が実際に geography かどうかの判定（SegmentNormalizer.classifyAxis /
-// SegmentExtractor の axis-aware swap）とは別レイヤーで、呼び出し側が組み合わせて使う。
-//
-// ライブ read 経路（REST/MCP）や ingest には配線しない（concept doc で確定済み: LLM は
-// Stage 4/5 と同じ ingest バッチ経路に置く方針だが、永続化スキーマは未確定のため現時点では
-// dev ツールでの手動検証のみ）。
+// ライブ read 経路（REST/MCP）や ingest には配線しない（他の LLM 正規化器と同じ理由。
+// concept doc で確定済み: LLM は Stage 4/5 と同じ ingest バッチ経路に置く方針だが、
+// 永続化スキーマ配線自体は今後の検討事項1で未着手）。
 
 import Foundation
 
-enum RevenueRecognitionLLMNormalizer {
+enum SegmentInfoLLMNormalizer {
 
     private static let systemPrompt = """
-    あなたは日本の有価証券報告書の「収益認識関係」注記（顧客との契約から生じる収益を分解した情報）から、
+    あなたは日本の有価証券報告書の「セグメント情報」注記（US-GAAP連結注記に内包されている場合を含む）から、
     事業別・製品別の外部売上（または相当する主要指標）を構造化するアシスタントです。
 
-    入力として、同一書類から抽出された収益認識関係注記の候補テーブル（Markdown形式、見出し・期間ラベル・表インデックス付き）と、
-    連結の外部売上高（円単位、比較の分母）が与えられます。
+    入力として、同一書類から抽出された候補テーブル（Markdown形式、見出し・期間ラベル・表インデックス付き）と、
+    連結の外部売上高（円単位、比較の分母）が与えられます。候補テーブルには無関係な表
+    （債権残高・契約負債の期首期末残高など）が混ざっていることもある。
 
     ルール:
-    - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・列（多くは「当期」列）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
-    - 行ラベルは製品名・事業区分名であるべきで、「日本」「米国」「欧州」「アジア」等の地域名ではないこと。地域別に分解した表しか無い場合は applicable=false を返すこと
-    - **報告セグメント（事業区分）を列に、収益区分（物件売却収入・その他等）を行に持つクロス集計表**（例: 不動産事業／保険事業／ホテル事業を列にした表）は対象外。この形は既に別経路（segments キー）で事業別データが取得できているため、ここでは扱わない。applicable=false を返すこと
-    - 売上と同じ表内に製品別・事業別の営業利益（またはセグメント利益に相当する指標）が並んで開示されている場合は、対応する profit フィールドに設定し、profit_disclosed を true にすること。該当する利益指標がその表に存在しない場合（収益認識注記の製品別売上高表は利益が開示されていないことが多い）は profit を null のままにし、profit_disclosed を false にすること
+    - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・期間列（多くは「当期」列）を選ぶこと。売上に関係しない表は無視すること
+    - 事業名・製品名が表の列見出しになっている場合（各列が1事業に対応し、行が売上高・利益等の指標になっている表）は、外部顧客向け売上高の行を選び、各列見出しを行ラベルとして1事業=1行になるよう転置して出力すること
+    - 事業名・製品名が表の行になっている場合（1行=1事業/製品の単純な表）はそのまま行として使うこと
+    - 売上と同じ表内に事業別・製品別の営業利益（またはセグメント利益に相当する指標。例:「営業利益」「税引前当期純利益」）が並んで開示されている場合は、売上行と同じ転置ルールで対応する profit フィールドに設定し、profit_disclosed を true にすること。該当する利益指標がその表に存在しない場合は profit を null のままにし、profit_disclosed を false にすること。無関係な指標（総資産・減価償却費等）を流用してはならない
     - profit_disclosed は「この表に利益情報が存在するか」の申告であり、rows の profit 値と矛盾させないこと（true なら最低1行は profit を埋めること、false なら全行 null のままにすること）
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
-    - 合計・小計・連結合計を表す行（例: 「顧客との契約から生じる収益」「外部顧客への売上高」）は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な製品・事業区分の行は row_kind="segment" とすること
-    - 該当する事業別・製品別データが候補テーブル群に存在しない場合は applicable=false を返すこと
-    - notes フィールドに、表選択・期間列選択の根拠を短く日本語で記すこと
+    - 前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
+    - 行ラベルは事業名・製品名であるべきで、地域名ではないこと。事業別のはずが実際には地域別の表（見出しの取り違え）である場合は applicable=false を返すこと
+    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること
+    - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
+    - 該当する事業別データが候補テーブル群に存在しない場合は applicable=false を返すこと
+    - notes フィールドに、表選択・期間列選択・転置有無の根拠を短く日本語で記すこと
     """
 
     // 中身は文字列・数値・配列・辞書のリテラルのみで実質不変（生成後に変更しない）。
@@ -65,10 +66,10 @@ enum RevenueRecognitionLLMNormalizer {
         "additionalProperties": false,
     ]
 
-    /// 分母整合性チェックの許容範囲。SegmentBreakdownLLMNormalizer と同じ許容幅を使う。
+    /// 分母整合性チェックの許容範囲。他の LLM 正規化器と同じ許容幅を使う。
     private static let denominatorTolerance = 0.90...1.10
 
-    /// revenue_recognition の SegmentResult（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
+    /// segments の SegmentResult（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     static func normalize(
         _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
@@ -86,7 +87,7 @@ enum RevenueRecognitionLLMNormalizer {
                 system: systemPrompt,
                 user: userPrompt,
                 jsonSchema: jsonSchemaData,
-                schemaName: "revenue_recognition_breakdown"
+                schemaName: "segment_info_breakdown"
             )
             guard let parsed = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
                 return (nil, nil)
@@ -97,8 +98,8 @@ enum RevenueRecognitionLLMNormalizer {
         }
 
         let unit = response["unit"] as? String ?? "other"
-        // キー欠落・型不正は「未開示（確認済み）」ではなく「不明」なので、下で silent に false 扱い
-        // せず llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
+        // キー欠落・型不正は「未開示（確認済み）」ではなく「不明」なので、silent に false 扱いせず
+        // llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
         let profitDisclosedRaw = response["profit_disclosed"] as? Bool
         let profitDisclosed = profitDisclosedRaw ?? false
         let audit = LLMBreakdownAudit(
@@ -157,15 +158,18 @@ enum RevenueRecognitionLLMNormalizer {
             warnings.append("profit_present_despite_not_disclosed")
         }
 
-        // ラベル妥当性チェック（決定的、追加ガード）。geography 正規化器の逆方向チェック:
-        // 地域別表を誤って拾っていないかを検知する（分母一致だけでは表の取り違えを検知できないため）。
+        // ラベル妥当性チェック（決定的、追加ガード）。全行が地域名に一致するなら、地域別の表を
+        // 誤って business として採用した疑いがある。「その他」「その他の地域」を含むラベルは
+        // 判定から除外する — 事業別表にも「その他及び全社」等の形でほぼ必ず出現するため
+        // （固有の地域名が最低1つ一致することを要求する設計を骨抜きにしないため）。
         let segmentLabels = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
-        let hasGeographyLikeLabel = segmentLabels.contains { label in
+        let labelsExcludingOther = segmentLabels.filter { !$0.contains("その他") }
+        let allLabelsLookLikeGeography = !labelsExcludingOther.isEmpty && labelsExcludingOther.allSatisfy { label in
             Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
         }
-        if hasGeographyLikeLabel {
+        if allLabelsLookLikeGeography {
             needsReview = true
-            warnings.append("business_label_mismatch")
+            warnings.append("business_label_looks_like_geography")
         }
 
         // 分母整合性チェック。
@@ -186,7 +190,7 @@ enum RevenueRecognitionLLMNormalizer {
             denominator: consolidatedSales,
             denominatorTag: "income_statement.sales",
             rows: rowsWithShare,
-            sourceKind: "revenue_recognition",
+            sourceKind: "segment_info",
             needsReview: needsReview,
             warnings: warnings
         )
