@@ -64,7 +64,7 @@ private struct UncheckedSendableBox<T>: @unchecked Sendable {
 /// 同一の可変オブジェクト（例: Fluent モデルインスタンス）を複数回のリトライ試行にまたがって
 /// 再利用していると、切り離されたタスクの遅延完了とリトライ試行が当該オブジェクトへ同時にアクセス
 /// する競合窓が理論上ありうる。`withDbRetry` の呼び出し元はいずれも冪等な find/upsert で、かつ
-/// タイムアウトは滅多に起きない前提（既定30秒）のため許容している。
+/// タイムアウトは滅多に起きない前提（既定は `Api.dbOperationTimeoutSeconds`）のため許容している。
 private func withOperationTimeout<T>(
     seconds: Double,
     operation: @escaping @Sendable () async throws -> T

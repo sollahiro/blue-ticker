@@ -66,17 +66,27 @@ public enum Api {
     /// 閾値超で早期中断し、残りは次回スケジュールに委ねる。
     public static let ingestDbUnhealthyRetryThreshold = 10
 
-    /// Postgres 接続プールの設定（Neon 向け・現状 FluentPostgresDriver の既定値と同一）。
-    /// 挙動を変えず、起動時ログで可視化するために明示値として持つ。
+    /// Postgres 接続プールの設定（Neon 向け）。
+    /// `maxConnectionsPerEventLoop` は FluentPostgresDriver 既定と同一。
+    /// `connectionPoolTimeout` は既定 10s だと Neon cold start（ap-southeast-1）の
+    /// 初回接続待ちに足りず、launchd の sync/ingest 起動直後に
+    /// `connectionRequestTimeout` でプロセスが落ちるため延長する。
     public static let dbMaxConnectionsPerEventLoop = 1
-    public static let dbConnectionPoolTimeoutSeconds: Int64 = 10
+    public static let dbConnectionPoolTimeoutSeconds: Int64 = 45
 
     /// `withDbRetry` の1試行あたりに許容する DB 操作の応答待ち上限（秒）。
     /// Neon 接続が TCP 的に無応答のまま死ぬ（FIN/RST が来ない）と、クエリの await が
     /// 例外を投げずに無期限へ待ち続け、`withDbRetry` のリトライが一切発動しない
     /// （catch に入れないため）。この上限を超えたら強制的にタイムアウト例外を投げ、
     /// 通常のリトライ経路に載せる。
-    public static let dbOperationTimeoutSeconds: Double = 30
+    /// `dbConnectionPoolTimeoutSeconds` より長く保つ（短いとプール待ち中に
+    /// `withOperationTimeout` が先に切れ、切り離された要求がプールを占有する）。
+    public static let dbOperationTimeoutSeconds: Double = 60
+
+    /// プロセス起動時 `autoMigrate` 用の操作タイムアウト。
+    /// 通常の `dbOperationTimeoutSeconds` より長く取り、cold start 直後の migrate を許容する。
+    /// いずれも `dbConnectionPoolTimeoutSeconds` より長く保つこと。
+    public static let dbBootstrapOperationTimeoutSeconds: Double = 75
 
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 

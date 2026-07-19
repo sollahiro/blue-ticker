@@ -2,6 +2,10 @@
 // DATABASE_URL（Neon の Postgres 接続文字列）が設定されているときのみ Postgres を登録し、
 // Stage 1 のマイグレーションを適用する。
 // 未設定なら DB なしで起動する（現行のステートレス EDINET プロキシ動作を維持）。
+//
+// `autoMigrate` は withDbRetry で包む。ingest 本体の DB 操作は既にリトライ済みだが、
+// プロセス起動直後の初回接続（Neon cold start）はここが唯一の接点で、失敗すると
+// sync/ingest 全体が connectionRequestTimeout で即死するため。
 
 import BlueTickerCore
 import Fluent
@@ -42,7 +46,13 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyFilingSections())
     // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。
     app.migrations.add(CreateEdinetMasterSnapshot())
-    try await app.autoMigrate()
+    try await withDbRetry(
+        operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
+        logger: app.logger,
+        context: "autoMigrate"
+    ) {
+        try await app.autoMigrate()
+    }
 
     app.logger.notice("Postgres (Neon) を登録し、マイグレーションを適用しました。")
 }

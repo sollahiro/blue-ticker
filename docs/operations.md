@@ -48,7 +48,7 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 - **cloudflared のバージョン固定更新**: `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` の固定運用は `deploy.md`「C. Dockerfile に cloudflared サイドカーを同梱」を参照。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
 - **Cloudflare SSO セッションの失効**: Access の Session Duration 経過で失効したら `ticker login` を再実行する。手順・完全無人自動化の非対応は `deploy.md`「クライアント設定（CLI・SSO ログイン）」を参照。
 - **Fly serviceless の再起動挙動（自動化済み）**: `[http_service]` が無いため `fly deploy` 後にマシンが stopped のままになることがある。`deploy.yml` の「Ensure machine is running」ステップが stopped を検知して `fly machine start` する。
-- **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 側）と HTTP read 4 ルートのリトライで吸収済み。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
+- **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 本体・`configureDatabase` の `autoMigrate`）と HTTP read 4 ルートのリトライで吸収済み。接続プール待ちは `Api.dbConnectionPoolTimeoutSeconds`（45s。Fluent 既定 10s では cold start に不足）。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
 - **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`dependencies.md`）。
 
 ## Git の外にある状態（棚卸し）
