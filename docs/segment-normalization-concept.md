@@ -166,7 +166,14 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - ユニットテストは smoke golden（`smoke/segment_expected.json`）+ モック `ChatCompleting` で決定的に検証（`SegmentExtractorTests.swift`・`SegmentBreakdownLLMNormalizerTests.swift`・`SegmentBusinessBreakdownResolverTests.swift`）。実 LLM 呼び出しへの回帰テスト化は他の html_table 経路と同様に未実施（ネットワーク・APIキー依存のため）
    - ingest/CLI/REST への配線は今後の検討事項1（未着手）のまま。本項は抽出・正規化・呼び出し側判断ロジックの実装までがスコープ
 4. **`SegmentExtractor` の前処理欠陥**（2026-07-19、解消済み） — period 誤ラベル・US-GAAP 巨大注記未対応・geography への無関係表混入・見出し1致1表限定によるチェイン漏れ（1つの見出しが前期/当期両方を紹介し div ラップされた表が短いラベルだけ挟んで連続するケース）の4件を修正。経緯・検証詳細はコミット `e550665`/`ceaa31c` を参照。残るのは巨大注記内の見出し・テーブル意味的関連性を保証できない構造的限界のみ
-5. **永続化** — filing-sections 派生か別テーブルか、cache_version 方針
+5. ~~**永続化**~~（2026-07-19 確定・実装済み）: `company_filing_sections`（Stage 5, 生のsegments/geography表）とは**別テーブル** `company_segment_breakdowns` を新設（`Sources/BltServerCore/Models/CompanySegmentBreakdown.swift` + `Migrations/CreateCompanySegmentBreakdowns.swift`）。分離理由: LLM経由の行（source≠xbrl_facts）はfiling-sectionsのcache_versionバンプ（決定的抽出ロジック変更）に連動して全件再計算させたくないため（今後の検討事項8参照）
+   - 主キー: `"doc_id#axis"` 合成文字列（本プロジェクトの既存テーブルは単一String IDの慣習のため、複合IDではなくこの合成キーで揃える）。1書類につきbusiness/geography最大2行
+   - カラム: `code`/`submit_date_time`（company_filing_sectionsと同じ非正規化、code別最新選択用）、`payload`(JSONB, `BreakdownSnapshotPayload`)、`needs_review`(bool, payloadから複製したトップレベル列。JSONBを掘らずに再処理キューを引ける)、`source`(`xbrl_facts`\|`html_table_llm`\|`revenue_recognition_llm`。`SegmentBusinessBreakdownResolver`の解決経路)、`content_hash`(生入力+分母のみのハッシュ。**プロンプト/モデル/スキーマは含めない**)、`cache_version`(`breakdown-v1`。契約の破壊的変更のみバンプ)、`llm_audit`(JSONB nullable, `LLMBreakdownAuditPayload`。LLM経由の行のみ)
+   - `not_found`は行を作らない（欠ける軸は出さない原則と整合）。再計算ルール: `content_hash`一致 かつ `needs_review=false` ならスキップ。プロンプト/モデル改善は`needs_review=true`行だけを狙い撃ちで再処理する
+   - 設計は Cursor Grok 4.5 にレビューを依頼（`cursor-agent --model cursor-grok-4.5-high`）。初期案の`input_hash`にプロンプト/モデルを含めていた設計ミス（プロンプト微修正のたびに正しい行まで再計算対象になり検討事項8の目的と自己矛盾）を指摘され修正。生LLM応答ログの全文保持は引き続き別テーブル案のまま未着手（`llm_audit`は軽量な監査情報のみ）
+   - 公開Codable契約は `Sources/BlueTicker/Models/SegmentBreakdownContract.swift`（`FilingSectionsContract.swift`と同型: 内部型`BreakdownSnapshot`/`BreakdownRow`/`LLMBreakdownAudit`を公開Payload型へ写す層）
+   - **`Database.swift`の`app.migrations`には未登録**（意図的）。Neonへの実際のmigrateは今後の検討事項1（ingest/CLI/REST配線）着手時に別途ユーザー確認のうえ登録・適用する
+   - テストは`SwiftTests/BltServerCoreTests/CompanySegmentBreakdownTests.swift`（SQLite in-memory、スキーマ・Payload往復・needs_reviewクエリ・同一docID異軸の共存を検証）
 6. **LLM の位置づけ**（確定） — read API（本番配信経路）には載せない。Stage 4/5 と同じ ingest バッチ内で計算し、結果を Neon に書いて Fly は読み取り専用配信のまま変えない。実行場所は現時点では Mac launchd 想定（Stage 4/5 と同一経路）。LLM 呼び出し自体は XBRL 解析のワーキングセットと違いメモリを食わないため実行場所の制約はゆるいが、呼び出し実装は場所に依存しない形（インターフェース越し）にしておき、将来 Fly 等へ移設する余地を残す
 7. **検証セット** — 最低でも事業型・地域型報告セグメント・US-GAAP・収益認識製品別を含む書類セット
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
