@@ -92,6 +92,7 @@ smoke 11社で検証: オークマ（4/4 一致・地域名）以外の10社は0
 - **小計・調整行の数値判定は「他に segment 候補が2件以上あるとき」に限定する。** 単一セグメント企業では売上高がそのまま分母と一致するのが正しい姿であり、数値近似だけで判定すると単一行を誤って小計扱いしてしまう
 - **member ラベルの選択は Dictionary 走査順に依存させない。** dimension が複数ある fact（smoke には無いが実データでは起こりうる）で行ラベルが実行ごとに揺れないよう、dimension キー名の辞書順で決定的に選ぶ
 - **利益（事業利益・営業利益）は売上と同じ仕組みでほぼ無料で乗る。** 売上と同様タグ表記が会社で割れる（IFRS でも味の素は `BusinessProfitLossIFRS`、クボタ・スズキは `OperatingProfitLossIFRS`）ため候補リスト化し、`resolvePerMember` を売上・利益で共有した。任意フィールド（`BreakdownRow.profit`）とし、一致するタグが無くても snapshot 自体は成立する。smoke 6社（オークマ除く、非金融のIFRS/J-GAAP企業）の実額をユーザーが目視確認し、`smoke/segment_breakdown_expected.json` にゴールデン値として記録・回帰テスト化済み（利益率などの派生値は含めない）
+- **geography（html_table 経路）のゴールデン値も smoke 9社分（味の素・ニチレイ・富士フイルム・オークマ・クボタ・スズキ・キヤノン・三菱UFJ・三井住友）記録済み（2026-07-19）**: `smoke/segment_breakdown_geography_expected.json`（`segment_breakdown_expected.json` と同型: docID キー、`code`/`name`/`rows: [{label, sales}]`。集計行は含めない）。ラベルはユーザー指示通り最も粒度の細かい表記（例: 味の素は「タイ」「アジアその他」等、上位区分への集約はしない）。値は各社の表セルをそのまま円換算した実額で、表自体の「合計」セルとの数百万円規模の端数差（開示元の丸め誤差）は許容する。**回帰テスト化は未実施**（LLM呼び出しがネットワーク・APIキー依存のため。ingest配線が決まった段階で、記録済みの入出力をカセット化してテストに組み込むことを検討）
 
 ## 正規化契約（草案）
 
