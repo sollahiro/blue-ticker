@@ -1,18 +1,22 @@
 #!/bin/zsh
 # blt-server 定期同期ジョブ（ローカル launchd 用）。
 #
-# Stage 1 (sync: 書類一覧 → Neon) → Stage 4/4-half (ingest: 計算済み財務サマリ
-# → Neon) をローカルで実行する。重い ingest を Fly(1GB) で走らせると OOM するため、
-# 計算はローカル・Fly は company_financials を読むだけ。
+# Stage 1 (sync: 書類一覧 → Neon) → Stage 4/4-half/5/6 (ingest: 計算済み財務サマリ・
+# 有報セクション・事業別内訳 → Neon) をローカルで実行する。重い ingest を Fly(1GB) で
+# 走らせると OOM するため、計算はローカル・Fly は company_financials 等を読むだけ。
 # Stage 3（XBRL 数値 fact）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
-# 機密（DATABASE_URL / BLT_EDINET_API_KEY）はリポジトリ直下 .env から読む。
+# Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・LLM 呼び出しを伴う
+# （docs/segment-normalization-concept.md）。XAI_API_KEY/XAI_MODEL 未設定でも
+# xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
+#
+# 機密（DATABASE_URL / BLT_EDINET_API_KEY / XAI_API_KEY 等）はリポジトリ直下 .env から読む。
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:
 #   swift build -c release --product blt-server
 #
-# ingest 件数はステージ別に .env で上書きできる（既定: Stage4=80 / Stage4-half=80 / Stage5=50）。
-# BLT_INGEST_LIMIT がある場合は後方互換として全ステージ既定値に使う。
+# ingest 件数はステージ別に .env で上書きできる（既定: Stage4=80 / Stage4-half=80 /
+# Stage5=50 / Stage6=30）。BLT_INGEST_LIMIT がある場合は後方互換として全ステージ既定値に使う。
 #
 # 各ステージには実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
 # 強制終了して次のステージへ進む（Neon 接続不安定によるハング対策）。上書きは
@@ -43,7 +47,7 @@ if [ ! -f "$REPO/.env" ]; then
 fi
 
 # .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）。
-# BLT_INGEST_LIMIT_STAGE4 / _STAGE4_HALF / _STAGE5（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
+# BLT_INGEST_LIMIT_STAGE4 / _STAGE4_HALF / _STAGE5 / _STAGE6（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
 # 生成する共有ファイルのため、マシン固有のチューニング値は .env 側に置く）。
 set -a
 . "$REPO/.env"
@@ -53,6 +57,7 @@ DEFAULT_LIMIT="${BLT_INGEST_LIMIT:-}"
 LIMIT_STAGE4="${BLT_INGEST_LIMIT_STAGE4:-${DEFAULT_LIMIT:-80}}"
 LIMIT_STAGE4_HALF="${BLT_INGEST_LIMIT_STAGE4_HALF:-${DEFAULT_LIMIT:-80}}"
 LIMIT_STAGE5="${BLT_INGEST_LIMIT_STAGE5:-${DEFAULT_LIMIT:-50}}"
+LIMIT_STAGE6="${BLT_INGEST_LIMIT_STAGE6:-${DEFAULT_LIMIT:-30}}"
 STAGE_TIMEOUT_SECONDS="${BLT_STAGE_TIMEOUT_SECONDS:-5400}"
 
 # コマンドをバックグラウンドで実行し、$STAGE_TIMEOUT_SECONDS 秒経っても生きていれば
@@ -86,5 +91,7 @@ run_with_timeout() {
   run_with_timeout "$BIN" ingest --stages 4half --limit "$LIMIT_STAGE4_HALF"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage5 --limit $LIMIT_STAGE5 開始 ====="
   run_with_timeout "$BIN" ingest --stages 5 --limit "$LIMIT_STAGE5"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage6 --limit $LIMIT_STAGE6 開始 ====="
+  run_with_timeout "$BIN" ingest --stages 6 --limit "$LIMIT_STAGE6"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
 } >> "$LOG" 2>&1
