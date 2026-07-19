@@ -73,6 +73,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v2"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
+| `company_segment_breakdowns`（Stage 6 事業別・地域別正規化） | `segmentBreakdownCacheVersion` | `Models/SegmentBreakdownContract.swift` | `"breakdown-v1"`（スキーマのみ実装済み。`app.migrations` 未登録・ingest/CLI/REST 未配線。詳細は `docs/segment-normalization-concept.md`） |
 
 ### バンプ規則
 
@@ -85,6 +86,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 - `companyHalfFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。half financials read が 200 を返す最低世代 N を人手で上げるとき。規則は financials 床と同型（`half-v2` バンプ時に導入・床は `1` のまま据え置き）
 - `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `SegmentExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `SegmentPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
 - `filingSectionsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。filing-content read の最低世代 N。規則は financials 床と同型
+- `segmentBreakdownCacheVersion`: `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。LLM 経由の行（source ≠ `xbrl_facts`）はバンプだけでは再計算しない（content_hash 一致・needs_review=false の行は据え置き。詳細は `docs/segment-normalization-concept.md`「今後の検討事項8」）
 
 ### 運用上の注意（バンプ時の一度きり再 ingest）
 
