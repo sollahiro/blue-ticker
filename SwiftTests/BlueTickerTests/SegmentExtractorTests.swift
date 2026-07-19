@@ -536,6 +536,22 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoFallsBackToRevenueRecognitionWhenSegmentsNotFound() throws {
+        // 東京エレクトロン型: 単一セグメントで報告セグメント事実が無く not_found だが、
+        // 収益認識関係に製品・サービス別（新規装置等）があればそちらを segments として返す。
+        let xml = textBlockXml(
+            tag: "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+            escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;新規装置&lt;/td&gt;&lt;td&gt;1817250&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;フィールドソリューション他&lt;/td&gt;&lt;td&gt;626282&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        )
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let markdown = try #require(result.tables.first?.markdown)
+            #expect(markdown.contains("新規装置"))
+            #expect(markdown.contains("フィールドソリューション他"))
+        }
+    }
+
     // MARK: - toDictionary（JSON 出力）
 
     @Test func toDictionarySerializesWithOptionalKeysOmitted() throws {
