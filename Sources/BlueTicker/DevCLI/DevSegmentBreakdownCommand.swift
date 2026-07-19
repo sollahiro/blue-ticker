@@ -1,15 +1,27 @@
 import ArgumentParser
 import Foundation
 
-/// Stage 6 の geography html_table LLM 正規化（`SegmentBreakdownLLMNormalizer`）を
+/// Stage 6 の html_table LLM 正規化（`SegmentBreakdownLLMNormalizer` / `RevenueRecognitionLLMNormalizer`）を
 /// smoke fixture に対して実行し、結果を目視確認するための一時的な開発用コマンド。
 /// EDINET を叩かない（`smoke/segment_expected.json` + `smoke/smoke_expected/` のみ使用）。
 /// リポジトリルートで実行すること（`smoke/` 相対パス依存）。
 struct DevSegmentBreakdownCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "segment-breakdown",
-        abstract: "Stage 6 geography html_table の LLM 正規化を smoke fixture に対して実行し目視確認する（開発用・EDINET不要）"
+        abstract: "Stage 6 の html_table LLM 正規化を smoke fixture に対して実行し目視確認する（開発用・EDINET不要）"
     )
+
+    enum Source: String, ExpressibleByArgument {
+        case geography
+        case revenueRecognition = "revenue_recognition"
+
+        var goldenKey: String {
+            switch self {
+            case .geography: return "geography"
+            case .revenueRecognition: return "revenue_recognition"
+            }
+        }
+    }
 
     @Argument(help: "銘柄コード（smoke/smoke_expected の連結売上フィクスチャ検索キー）")
     var code: String
@@ -17,24 +29,30 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
     @Argument(help: "書類ID（smoke/segment_expected.json のキー）")
     var docID: String
 
+    @Option(help: "正規化対象: geography（地域別注記） | revenue_recognition（収益認識関係注記、オークマ型の事業別再抽出）")
+    var source: Source = .geography
+
+    @Option(help: "smoke/smoke_expected の連結売上フィクスチャを fy_end で絞り込む（例: 2026-03-31）。code に複数年度の fixture がある場合に必須")
+    var fyEnd: String?
+
     func run() async throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 
         guard let golden = try? loadGolden(root: root), let entry = golden[docID],
-              let geoDict = entry["geography"] as? [String: Any]
+              let sourceDict = entry[source.goldenKey] as? [String: Any]
         else {
-            printError("エラー: \(docID) の smoke/segment_expected.json に geography フィクスチャがありません。\n")
+            printError("エラー: \(docID) の smoke/segment_expected.json に \(source.goldenKey) フィクスチャがありません。\n")
             throw ExitCode.failure
         }
-        let result = SegmentResult(dictionary: geoDict)
+        let result = SegmentResult(dictionary: sourceDict)
 
-        printError("geography method: \(result.method)\n")
+        printError("\(source.goldenKey) method: \(result.method)\n")
         printError("候補テーブル数: \(result.tables.count)\n")
         for (i, table) in result.tables.enumerated() {
             printError("  [\(i)] heading=\(table.heading) period=\(table.period ?? "不明")\n")
         }
 
-        guard let sales = loadSales(root: root, code: code) else {
+        guard let sales = loadSales(root: root, code: code, fyEnd: fyEnd) else {
             printError("エラー: \(code) の smoke/smoke_expected に連結売上フィクスチャがありません。\n")
             throw ExitCode.failure
         }
@@ -46,7 +64,13 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         }
 
         let client = try LLMClientLoader.make()
-        let (snapshotOrNil, audit) = await SegmentBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+        let (snapshotOrNil, audit): (BreakdownSnapshot?, LLMBreakdownAudit?)
+        switch source {
+        case .geography:
+            (snapshotOrNil, audit) = await SegmentBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+        case .revenueRecognition:
+            (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+        }
 
         if let audit {
             print("LLM が採用した表: source_table_index=\(audit.sourceTableIndex.map(String.init) ?? "不明") period_column=\(audit.periodColumn ?? "不明") unit=\(audit.unit)")
@@ -79,12 +103,17 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         return obj
     }
 
-    /// code に複数の fixture ファイルがある場合に備え、ファイル名でソートした上で
-    /// 売上が取れる最初のファイルを決定的に採用する（`SegmentNormalizerTests.loadSales` と同じ規約）。
-    private func loadSales(root: URL, code: String) -> Double? {
+    /// code に複数の fixture ファイルがある場合、fyEnd（例: "2026-03-31"）が指定されていれば
+    /// ファイル名の年度部分で絞り込む。未指定時はファイル名でソートした上で売上が取れる最初の
+    /// ファイルを決定的に採用する（`SegmentNormalizerTests.loadSales` と同じ規約。ただし
+    /// 同一銘柄に複数年度の fixture がある場合は fyEnd 指定を推奨する）。
+    private func loadSales(root: URL, code: String, fyEnd: String?) -> Double? {
         let dir = root.appendingPathComponent("smoke/smoke_expected")
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return nil }
-        let matches = files.filter { $0.hasPrefix("\(code)_") }.sorted()
+        var matches = files.filter { $0.hasPrefix("\(code)_") }.sorted()
+        if let fyEnd {
+            matches = matches.filter { $0 == "\(code)_\(fyEnd).json" }
+        }
         for file in matches {
             guard let data = try? Data(contentsOf: dir.appendingPathComponent(file)),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

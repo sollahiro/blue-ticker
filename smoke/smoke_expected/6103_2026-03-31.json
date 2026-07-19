@@ -1,0 +1,9 @@
+{
+  "_comment": "金額は円単位。sales は tmp/6103_S100YFQC_revenue_recognition_1.md の当期「外部顧客への売上高」235,888百万円をそのまま円換算（他の科目は未確認のため含めない。RevenueRecognitionLLMNormalizer の手動検証専用フィクスチャ）。",
+  "code": "6103",
+  "name": "オークマ",
+  "fy_end": "2026-03-31",
+  "income_statement": {
+    "sales": 235888000000.0
+  }
+}

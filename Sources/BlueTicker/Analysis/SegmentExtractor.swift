@@ -90,12 +90,13 @@ enum SegmentExtractor {
     // MARK: - 公開 API
 
     /// filing コマンド・REST API の sections で使う特殊セクション名（XBRLSectionDef 非経由）。
-    static let specialSectionKeys = ["segments", "geography"]
+    static let specialSectionKeys = ["segments", "geography", "revenue_recognition"]
 
     /// 特殊セクションの表示タイトル。
     static let specialSectionTitles: [String: String] = [
         "segments": "セグメント情報",
         "geography": "地域別情報",
+        "revenue_recognition": "収益認識関係",
     ]
 
     /// 特殊セクション名に対応する抽出を実行する。未対応の名前は nil。
@@ -103,11 +104,18 @@ enum SegmentExtractor {
         switch section {
         case "segments": return extractSegmentInfo(xbrlDir: xbrlDir)
         case "geography": return extractGeographyInfo(xbrlDir: xbrlDir)
+        case "revenue_recognition": return extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
         default: return nil
         }
     }
 
     /// 連結財務諸表注記から事業別（報告セグメント別）情報を抽出する。
+    ///
+    /// 報告セグメント（xbrl_facts 経路）のメンバーが全て地域名の場合（オークマ型:
+    /// docs/segment-normalization-concept.md 学び10）、その内容は「事業別」ではなく
+    /// 「地域別」であるため、収益認識関係注記（`extractRevenueRecognitionInfo`）に本当の
+    /// 事業別（製品別）データがあればそちらを優先する。見つからない場合は元の地域別
+    /// xbrl_facts をそのまま返す（未検証企業での誤判定時に表示が消える regression を避けるため）。
     static func extractSegmentInfo(xbrlDir: URL) -> SegmentResult {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -117,7 +125,11 @@ enum SegmentExtractor {
             mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
             mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords
         )
-        return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+
+        guard result.method == "xbrl_facts", isGeographyAxis(result.facts) else { return result }
+        let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
+        return revenueRecognition.method == "html_table" ? revenueRecognition : result
     }
 
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
@@ -131,6 +143,47 @@ enum SegmentExtractor {
             mixedKeywords: Xbrl.geographyHeadingKeywords
         )
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
+    }
+
+    /// 連結財務諸表注記（収益認識関係）から「顧客との契約から生じる収益を分解した情報」を抽出する。
+    /// オークマ型（報告セグメントが地域別）の会社で、本当の事業別（製品別）データの実在ソース。
+    static func extractRevenueRecognitionInfo(xbrlDir: URL) -> SegmentResult {
+        let tables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.revenueRecognitionTextBlockTags,
+            mixedTags: [],
+            dedicatedHeading: "収益認識関係",
+            mixedKeywords: []
+        )
+        return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: [])
+    }
+
+    /// segment 行（小計・調整行を除く）の member ラベルが全て地域名キーワードに一致するか。
+    /// `SegmentNormalizer.classifyAxis` と同じ「全一致 → geography」判定だが、数値による
+    /// 小計判定（consolidatedSales が要る2次判定）は使わず、標準タクソノミの小計・調整
+    /// member 名（1次判定）のみで segment 行を絞る。raw 抽出層では sales を持たないため。
+    private static func isGeographyAxis(_ facts: [SegmentFact]) -> Bool {
+        let segmentMembers = facts.compactMap { fact -> String? in
+            guard let member = primaryMember(fact.dimensions),
+                  !Xbrl.segmentSubtotalMemberNames.contains(member),
+                  !Xbrl.segmentReconcilingMemberNames.contains(member)
+            else { return nil }
+            return member
+        }
+        guard !segmentMembers.isEmpty else { return false }
+        let uniqueMembers = Set(segmentMembers)
+        return uniqueMembers.allSatisfy { member in
+            Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
+        }
+    }
+
+    /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
+    /// `SegmentNormalizer.primaryMember` と同じ規約（dimension キー名の辞書順で先頭を採用）。
+    private static func primaryMember(_ dimensions: [String: String]) -> String? {
+        dimensions
+            .filter { $0.key != "ConsolidatedOrNonConsolidatedAxis" }
+            .sorted { $0.key < $1.key }
+            .first?.value
     }
 
     // MARK: - HTML 表の構造化
