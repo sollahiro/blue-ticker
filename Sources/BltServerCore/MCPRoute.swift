@@ -42,12 +42,42 @@ func registerMcpRoute(
             body: requestBody,
             path: req.url.path
         )
-        let httpResponse = await transport.handleRequest(httpRequest)
-        let response =
-            reinitializeShimResponse(requestBody: requestBody, response: httpResponse, version: blueTickerVersion)
-            ?? httpResponse
-        return vaporResponse(from: response)
+        do {
+            let httpResponse = try await withOperationTimeout(
+                label: "MCPリクエスト処理", seconds: Api.mcpRequestTimeoutSeconds
+            ) {
+                await transport.handleRequest(httpRequest)
+            }
+            let response =
+                reinitializeShimResponse(requestBody: requestBody, response: httpResponse, version: blueTickerVersion)
+                ?? httpResponse
+            return vaporResponse(from: response)
+        } catch {
+            return mcpTimeoutResponse(requestBody: requestBody)
+        }
     }
+}
+
+/// MCP ルートの応答待ちが `Api.mcpRequestTimeoutSeconds` を超えたときの JSON-RPC エラーレスポンス。
+/// 依存 `modelcontextprotocol/swift-sdk` の `StatelessHTTPServerTransport` に waiter deadline が
+/// 実装されておらず（upstream issue #254 / #255、blue-ticker issue #84）、特定条件下で応答待ちの
+/// continuation が永久に resume されないことへの緩和策。リクエストの `id` を可能な限り引き継ぎ、
+/// JSON-RPC のエラー封筒として返す（`id` が取れない場合は `null`）。
+func mcpTimeoutResponse(requestBody: Data?) -> Vapor.Response {
+    let id: Any =
+        requestBody
+        .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["id"]
+        ?? NSNull()
+    let envelope: [String: Any] = [
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": ["code": -32000, "message": "リクエスト処理がタイムアウトしました"],
+    ]
+    let data = (try? JSONSerialization.data(withJSONObject: envelope)) ?? Data()
+    let response = Vapor.Response(status: .internalServerError)
+    response.headers.contentType = .json
+    response.body = .init(data: data)
+    return response
 }
 
 /// 一部の MCP クライアント（Grok 等）はツール呼び出しのたびに `initialize` を再送する。

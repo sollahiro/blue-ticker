@@ -88,6 +88,18 @@ public enum Api {
     /// いずれも `dbConnectionPoolTimeoutSeconds` より長く保つこと。
     public static let dbBootstrapOperationTimeoutSeconds: Double = 75
 
+    /// MCP ルート（`POST /`）1リクエストあたりの HTTP 応答待ち上限（秒）。
+    /// 依存 `modelcontextprotocol/swift-sdk`（0.12.1）の `StatelessHTTPServerTransport` に
+    /// waiter deadline が実装されておらず、クライアントの `notifications/cancelled`（issue #255）や
+    /// 同一 JSON-RPC id の同時リクエスト（issue #254）で応答待ちの継続（continuation）が永久に
+    /// resume されず、HTTP リクエストが無期限にハングすることがある（upstream 未修正・
+    /// blue-ticker issue #84 で追跡）。
+    /// この上限は「格納データ系ツール（get_analysis 等）が `withDbRetry` 経由で DB 再接続を
+    /// 最大3回試行し、1回あたり `dbOperationTimeoutSeconds`（60秒）まで正常に待つ」既存仕様上の
+    /// 理論上限（60×3+backoff ≈ 183秒）より長く取り、正常だが遅い応答を誤ってタイムアウト扱い
+    /// しないようにする。
+    public static let mcpRequestTimeoutSeconds: Double = 200
+
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
     /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
