@@ -637,12 +637,20 @@ enum Xbrl {
         "TotalOfReportableSegmentsAndOthersMember",
         "CorporateSharedMember",
         "UnallocatedAmountsAndEliminationMember",
-        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
     ]
 
     /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。
     static let segmentReconcilingMemberNames: Set<String> = [
         "ReconcilingItemsMember",
+    ]
+
+    /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。
+    /// `SegmentNormalizer` では rowKind を `segment` として扱う（実データ検証: この member を
+    /// 加算しないと `sum(segment) ≠ denominator` になる企業が多数あった）。一方で事業/地域いずれの
+    /// 軸にも属すると断定できない「その他」バケツのため、`SegmentExtractor.isGeographyAxis` の
+    /// 軸判定候補からは `segmentSubtotalMemberNames` と同様に除外し続ける（軸判定への影響を避ける）。
+    static let segmentOtherBusinessMemberNames: Set<String> = [
+        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
     ]
 
     /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。

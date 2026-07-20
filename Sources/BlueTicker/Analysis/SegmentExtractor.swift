@@ -187,7 +187,8 @@ enum SegmentExtractor {
         let segmentMembers = facts.compactMap { fact -> String? in
             guard let member = primaryMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
-                  !Xbrl.segmentReconcilingMemberNames.contains(member)
+                  !Xbrl.segmentReconcilingMemberNames.contains(member),
+                  !Xbrl.segmentOtherBusinessMemberNames.contains(member)
             else { return nil }
             return member
         }

@@ -73,7 +73,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v2"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_segment_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `segmentBreakdownCacheVersion` | `Models/SegmentBreakdownContract.swift` | `"breakdown-v1"`（ingest/CLI(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/segment-normalization-concept.md`） |
+| `company_segment_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `segmentBreakdownCacheVersion` | `Models/SegmentBreakdownContract.swift` | `"breakdown-v2"`（ingest/CLI(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/segment-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts 経由のみ適用） | `segmentBreakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
 
 ### バンプ規則
@@ -87,7 +87,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 - `companyHalfFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。half financials read が 200 を返す最低世代 N を人手で上げるとき。規則は financials 床と同型（`half-v2` バンプ時に導入・床は `1` のまま据え置き）
 - `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `SegmentExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `SegmentPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
 - `filingSectionsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。filing-content read の最低世代 N。規則は financials 床と同型
-- `segmentBreakdownCacheVersion`: `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。LLM 経由の行（source ≠ `xbrl_facts`）はバンプだけでは再計算しない（needs_review=false の行は据え置き。詳細は `docs/segment-normalization-concept.md`「今後の検討事項8」）
+- `segmentBreakdownCacheVersion`: xbrl_facts 経路の分類・正規化ロジック（`SegmentNormalizer` / `Xbrl.segmentSubtotalMemberNames` 等の member 分類定数）、または `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。LLM 経由の行（source ≠ `xbrl_facts`）はバンプだけでは再計算しない（needs_review=false の行は据え置き。詳細は `docs/segment-normalization-concept.md`「今後の検討事項8」）
 - `segmentBreakdownMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。xbrl_facts 経由の行にのみ適用（LLM 経由は常に servable。規則は financials 床と同型）
 
 ### 運用上の注意（バンプ時の一度きり再 ingest）
