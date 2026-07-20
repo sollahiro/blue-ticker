@@ -129,7 +129,18 @@ func runStage4HalfIngest(
             }
             stored += 1
         case .notApplicable:
-            // 半期報告書未提出等、設計通りの対象外。ノイズになるため warning ログは出さない。
+            // 半期報告書未提出等、設計通りの対象外。プレースホルダ行（periods 空）を保存し、
+            // 次回 ingest で highWater 一致のまま無駄な再試行を繰り返さないようにする
+            // （読み取り経路 loadStoredHalfFinancials/loadStoredHalfAnalysis は periods 空を検出し
+            // 404 を維持する。annual 側 Stage4Ingest.swift の notApplicable と同型、issue #86 派生）。
+            // ノイズになるため warning ログは出さない。
+            try await withDbRetry(
+                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyHalfFinancials(
+                    existing: existing, code: code, years: years,
+                    response: .notApplicablePlaceholder(code: code), highWater: highWater, db: db)
+            }
             notApplicable += 1
         case .failed:
             failed += 1
@@ -194,6 +205,7 @@ func countServableCompanyHalfFinancials(db: Database) async throws -> (servable:
 /// 格納済み半期 Stage 4 結果を code で引き、read 床（`companyHalfFinancialsMinServableVersion`）以上 &
 /// 要求年数を満たすなら years に縮めた JSON を返す。
 /// 無い・床未満・年数不足なら nil（呼び出し側は 404 を返す。ライブ計算へはフォールバックしない）。
+/// `periods` 空（半期報告書未提出の notApplicable プレースホルダ）も nil（404）とする。
 ///
 /// 要求年数は半期算出上限（`Api.halfMaxYears`）へクランプする。半期はこの年数までしか作れず
 /// 格納（`stage4HalfIngestYears`）もそこで頭打ちのため、上限超の要求でも上限ぶんを warm read で返す。
@@ -203,7 +215,8 @@ func loadStoredHalfFinancials(code: String, years: Int, db: Database) async thro
     guard effectiveYears > 0,
         let row = try await CompanyHalfFinancials.find(code, on: db),
         isServableCompanyHalfFinancialsCacheVersion(row.cacheVersion),
-        row.requestedYears >= effectiveYears
+        row.requestedYears >= effectiveYears,
+        row.response.periodCount > 0
     else { return nil }
     return row.response.trimmed(toYears: effectiveYears).summaryJsonObject()
 }
@@ -216,7 +229,8 @@ func loadStoredHalfAnalysis(code: String, years: Int, db: Database) async throws
     guard effectiveYears > 0,
         let row = try await CompanyHalfFinancials.find(code, on: db),
         isServableCompanyHalfFinancialsCacheVersion(row.cacheVersion),
-        row.requestedYears >= effectiveYears
+        row.requestedYears >= effectiveYears,
+        row.response.periodCount > 0
     else { return nil }
     return row.response.trimmed(toYears: effectiveYears).analysisJsonObject()
 }

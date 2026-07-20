@@ -254,6 +254,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
     }
 
     /// 対象外（例: 半期報告書未提出）は failed に混入させず notApplicable として数える（issue #73 フォローアップ）。
+    /// プレースホルダ行（periods 空）を保存する点は issue #86 派生（無駄な再試行を防ぐ）。
     @Test func ingestCountsNotApplicableSeparatelyFromFailed() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
@@ -264,7 +265,45 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             #expect(summary.notApplicable == 1)
             #expect(summary.failed == 0)
             #expect(summary.stored == 0)
-            #expect(try await CompanyHalfFinancials.query(on: app.db).count() == 0)
+            let row = try #require(try await CompanyHalfFinancials.find("7203", on: app.db))
+            #expect(row.cacheVersion == companyHalfFinancialsCacheVersion)
+            #expect(row.response.periodCount == 0)
+        }
+    }
+
+    /// プレースホルダ行が既にあり highWater が一致するなら、次回 ingest は missing として
+    /// 再試行しない（skip される）。issue #86 派生（毎回無条件リトライの再発防止）。
+    @Test func ingestSkipsNotApplicablePlaceholderWhenHighWaterMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+
+            let first = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            #expect(first.notApplicable == 1)
+
+            let second = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run again when high-water is unchanged")
+                return .notApplicable
+            }
+
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 0)
+            #expect(second.notApplicable == 0)
+        }
+    }
+
+    /// notApplicable プレースホルダ行は REST read で 200（空 periods）を返さず 404 のまま
+    /// （公開インターフェースの挙動は変えない。issue #86 派生）。
+    @Test func loadStoredHalfFinancialsReturnsNilForNotApplicablePlaceholder() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            _ = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+
+            #expect(try await loadStoredHalfFinancials(code: "7203", years: 5, db: app.db) == nil)
+            #expect(try await loadStoredHalfAnalysis(code: "7203", years: 5, db: app.db) == nil)
         }
     }
 
