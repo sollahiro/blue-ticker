@@ -114,7 +114,9 @@ import MCP
 
         // 同じハング状況でも、withOperationTimeout でラップすると
         // 60秒(ハンドラのスリープ)ではなく約1秒(テスト用の短い timeout)で打ち切られる。
+        // 境界は 60 秒ハングとの弁別だけが目的で正確な秒数は問わないため、CI ランナー混雑時の
+        // スケジューリング遅延を吸収できるよう余裕を持たせる（issue #99: 3秒境界で2回連続 flake）。
         #expect(response == nil)
-        #expect(elapsed < 3)
+        #expect(elapsed < 10)
     }
 }
