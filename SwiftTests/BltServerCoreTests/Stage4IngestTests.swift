@@ -65,6 +65,12 @@ private let priorDependentKeys = [
     "sga_change_impact", "roic_delta", "roic_margin_effect", "roic_turnover_effect",
     "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
 ]
+/// フェイク計算器のヘルパー: makeResponse の結果を FinancialsComputeResult でラップする。
+private func fakeSuccess(code: String, years: Int) -> FinancialsComputeResult {
+    guard let response = try? makeResponse(code: code, years: years) else { return .failed }
+    return .success(response)
+}
+
 private func makeResponseWithChanges(code: String, years: Int) throws -> FinancialsResponse {
     let yrs = (0..<years).map { i -> [String: Any] in
         var y: [String: Any] = ["fy_end": "20\(25 - i)-03-31", "sales": 1000.0 + Double(i)]
@@ -86,7 +92,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -109,7 +115,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             let summary = try await runStage4Ingest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -125,7 +131,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -143,7 +149,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             let summary = try await runStage4Ingest(
                 db: app.db, years: 5, limit: nil, explicitCodes: ["7203"]
             ) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -163,7 +169,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203", "9984"],
                 explicitCodes: ["7203"]
             ) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -179,7 +185,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "72030", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -195,7 +201,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S3", secCode: "12345", db: app.db)  // 末尾 0 でない
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 0)
@@ -216,7 +222,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for a fresh company")
-                return try? makeResponse(code: "x", years: 5)
+                return fakeSuccess(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -242,7 +248,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
-                return try? makeResponse(code: "x", years: 5)
+                return fakeSuccess(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -269,7 +275,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
                 submitDateTime: "2026-01-15 09:00", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -300,7 +306,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when only a non-consumed doc type arrives")
-                return try? makeResponse(code: "x", years: 5)
+                return fakeSuccess(code: "x", years: 5)
             }
 
             #expect(summary.skipped == 1)
@@ -321,7 +327,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in nil }
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -342,7 +348,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await pre.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -363,7 +369,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await stale.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -378,12 +384,83 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in nil }
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
             #expect(summary.stored == 0)
             #expect(try await CompanyFinancials.query(on: app.db).count() == 0)
+        }
+    }
+
+    // MARK: - notApplicable（有価証券報告書未提出、issue #86）
+
+    /// notApplicable（新規上場等で初回本決算前）は failed に混入せず、専用カウンタに計上される。
+    @Test func ingestCountsNotApplicableSeparatelyFromFailed() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            #expect(summary.failed == 0)
+            #expect(summary.stored == 0)
+        }
+    }
+
+    /// notApplicable はプレースホルダ行（years 空）を保存する。次回 ingest で highWater が
+    /// 変わらない限り、無駄な再計算（missing 扱いでの再試行）を防ぐのが目的。
+    @Test func ingestStoresPlaceholderRowOnNotApplicable() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+
+            #expect(summary.notApplicable == 1)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.cacheVersion == companyFinancialsCacheVersion)
+            #expect(row.requestedYears == 5)
+            #expect(row.highWater == "2025-06-20 09:00")
+            #expect(row.response.yearCount == 0)
+        }
+    }
+
+    /// プレースホルダ行が既にあり highWater が一致するなら、次回 ingest は missing として
+    /// 再試行しない（skip される）。issue #86 の症状（毎回無条件リトライ）の再発防止。
+    @Test func ingestSkipsNotApplicablePlaceholderWhenHighWaterMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+
+            let first = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            #expect(first.notApplicable == 1)
+
+            let second = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run again when high-water is unchanged")
+                return .notApplicable
+            }
+
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 0)
+            #expect(second.notApplicable == 0)
+        }
+    }
+
+    /// notApplicable プレースホルダ行は REST read で 200（空 years）を返さず 404 のまま
+    /// （公開インターフェースの挙動は変えない。issue #86）。
+    @Test func loadStoredFinancialsReturnsNilForNotApplicablePlaceholder() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", docTypeCode: "120",
+                submitDateTime: "2025-06-20 09:00", db: app.db)
+            _ = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+
+            #expect(try await loadStoredFinancials(code: "7203", years: 5, db: app.db) == nil)
+            #expect(try await loadStoredAnalysis(code: "7203", years: 5, db: app.db) == nil)
         }
     }
 
@@ -394,7 +471,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 2) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 2)
@@ -416,7 +493,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await stale.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -451,7 +528,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await staleHighWater.create(on: app.db)
 
             let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)
@@ -472,7 +549,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             let summary = try await runStage4Ingest(
                 db: app.db, years: 5, limit: 1, priorityCodes: ["9984"]
             ) { code in
-                try? makeResponse(code: code, years: 5)
+                fakeSuccess(code: code, years: 5)
             }
 
             #expect(summary.attempted == 1)

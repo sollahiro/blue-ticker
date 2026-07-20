@@ -14,6 +14,15 @@
 
 import Foundation
 
+/// Stage 4（通期）の計算結果。「対象外」（有価証券報告書が未提出、新規上場等で設計通り・再提出待ち）と
+/// 「失敗」（書類はあるが抽出できない、要調査）を区別する（`HalfFinancialsComputeResult` と同型。issue #86）。
+/// ingest サマリで前者を failed カウントへ混入させないために使う。
+public enum FinancialsComputeResult: Sendable {
+    case success(FinancialsResponse)
+    case notApplicable
+    case failed
+}
+
 /// Neon Stage 4 キャッシュ（`company_financials.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）
 /// または本契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変えたときのみバンプする。
@@ -465,6 +474,21 @@ extension FinancialsResponse {
     public func salesForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.sales.map { $0 * Financial.millionYen }
     }
+
+    /// 有価証券報告書未提出等、計算対象外だった企業のプレースホルダ（`years` 空）。
+    /// public: Stage 4 ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
+    /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う
+    /// （読み取り経路 `loadStoredFinancials`/`loadStoredAnalysis` は `years` 空を検出し 404 を維持する。
+    /// issue #86）。
+    public static func notApplicablePlaceholder(code: String) -> FinancialsResponse {
+        FinancialsResponse(
+            schemaVersion: Api.financialsSchemaVersion, code: code, name: "", sector: "", market: "",
+            currency: "JPY", unit: "百万円", years: [])
+    }
+
+    /// 格納済み `years` の件数。public: Stage 4 read 経路（BltServerCore）が
+    /// notApplicable プレースホルダ（`years` 空）を検出して 404 を維持するために使う（issue #86）。
+    public var yearCount: Int { years.count }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
     /// public: BltServerCore の Stage 4 read 経路が格納済みレスポンスを JSON へ落とすために使う。

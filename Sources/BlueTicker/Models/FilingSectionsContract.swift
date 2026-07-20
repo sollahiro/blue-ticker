@@ -12,7 +12,12 @@ import Foundation
 /// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / SegmentExtractor /
 /// cleanText の cap 等）または本 payload スキーマの意味を変えたときのみバンプする。
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
-public let filingSectionsCacheVersion = "sections-v2"
+///
+/// v2 → v3（issue #93）: SegmentExtractor.extractSegmentInfo に東京エレクトロン型
+/// （単一セグメントで報告セグメント開示省略・method == "not_found"）の収益認識関係注記
+/// フォールバックを追加した抽出ロジック変更を反映する。該当企業の Stage 5 `segments` は
+/// 既に `section_keys` に "segments" を含むため、キー集合不一致による自動再抽出の対象にならない。
+public let filingSectionsCacheVersion = "sections-v3"
 
 /// filing-content read（REST）が 200 を返す最低抽出バージョン番号（`sections-vN` の N）。
 /// **明示指定**であり、「現行から N つ前」の機械オフセットではない。人手で上げる。

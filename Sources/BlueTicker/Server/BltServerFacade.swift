@@ -141,19 +141,25 @@ public extension BltServerContext {
 
     /// 財務サマリ（公開契約 `FinancialsResponse`）を計算する。
     /// Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。
-    /// EDINET 取得・XBRL パースを伴う高コスト処理。失敗・データ無しは nil（戻り値パターン）。
-    func computeFinancials(code: String, years: Int) async -> FinancialsResponse? {
+    /// EDINET 取得・XBRL パースを伴う高コスト処理。「有価証券報告書未提出」（対象外）と
+    /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
+    func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
-        guard let result = await analyzer.analyze(code: code, analysisYears: years) else {
-            return nil
+        switch await analyzer.analyze(code: code, analysisYears: years) {
+        case .result(let result):
+            let stock = await masterDataManager.getByCode(code)
+            return .success(
+                FinancialsResponse(
+                    code: code,
+                    name: stock?.coName ?? result.code ?? "",
+                    sector: stock?.s33nm ?? "",
+                    market: stock?.mktNm ?? "",
+                    result: result))
+        case .notApplicable:
+            return .notApplicable
+        case .failed:
+            return .failed
         }
-        let stock = await masterDataManager.getByCode(code)
-        return FinancialsResponse(
-            code: code,
-            name: stock?.coName ?? result.code ?? "",
-            sector: stock?.s33nm ?? "",
-            market: stock?.mktNm ?? "",
-            result: result)
     }
 
     /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。

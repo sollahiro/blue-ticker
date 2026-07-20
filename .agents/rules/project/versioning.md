@@ -71,7 +71,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `2`（`fin-v2` 以上を 200） |
 | `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
-| `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v2"` |
+| `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v3"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
 | `company_segment_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `segmentBreakdownCacheVersion` | `Models/SegmentBreakdownContract.swift` | `"breakdown-v3"`（ingest/CLI(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/segment-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts 経由のみ適用） | `segmentBreakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |

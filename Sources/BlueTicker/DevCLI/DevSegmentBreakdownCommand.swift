@@ -211,7 +211,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
     /// RawData.sales は百万円単位なので `millionYen` を掛けて円に戻す。
     private func loadLiveSales(ctx: AnalysisContext, docID: String) async -> Double? {
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: 3, useCache: true),
+        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: 3, useCache: true).resultOrNil,
               let years = result.years, !years.isEmpty
         else { return nil }
 
