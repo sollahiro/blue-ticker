@@ -11,21 +11,25 @@ import Fluent
 import Foundation
 import Logging
 
-/// Stage 4 取り込み結果のサマリ。
+/// Stage 4 取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
+/// `failed`（抽出できず要調査）と分けて数える点が Stage 4-half の `Stage4HalfIngestSummary` と同型
+/// （issue #86）。
 public struct Stage4IngestSummary: Sendable, Equatable {
-    /// 計算を試みた企業数（skip を除く）。
+    /// 計算を試みた企業数（skip を除く。notApplicable も含む＝実際に compute を呼んだ数）。
     public let attempted: Int
     /// 計算・格納に成功した企業数。
     public let stored: Int
-    /// データ無し等で計算できずスキップした企業数。
+    /// 書類はあるが抽出できず失敗した企業数（要調査）。
     public let failed: Int
+    /// 有価証券報告書が未提出等、計算対象外だった企業数（設計通り・failed に含めない）。
+    public let notApplicable: Int
     /// 既に現行バージョン・十分な年数で計算済みのためスキップした企業数。
     public let skipped: Int
 }
 
-/// 証券コードを受けて財務サマリを返す計算器（成功で response、失敗で nil）。
+/// 証券コードを受けて財務サマリを返す計算器（成功／対象外／失敗を区別する）。
 /// 本番は `context.computeFinancials`、テストはフェイクを注入する。
-public typealias FinancialsComputer = @Sendable (String) async -> FinancialsResponse?
+public typealias FinancialsComputer = @Sendable (String) async -> FinancialsComputeResult
 
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
 /// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。
@@ -46,6 +50,7 @@ func runStage4Ingest(
     var attempted = 0
     var stored = 0
     var failed = 0
+    var notApplicable = 0
     var skipped = 0
     var unhealthyRetries = 0
     var missing: [(code: String, highWater: String?)] = []
@@ -108,23 +113,38 @@ func runStage4Ingest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        guard let response = await compute(code) else {
+        switch await compute(code) {
+        case .success(let response):
+            try await withDbRetry(
+                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyFinancials(
+                    existing: existing, code: code, years: years, response: response,
+                    highWater: highWater, db: db)
+            }
+            stored += 1
+        case .notApplicable:
+            // 有価証券報告書未提出等、設計通りの対象外。プレースホルダ行（years 空）を保存し、
+            // 次回 ingest で highWater 一致のまま無駄な再試行を繰り返さないようにする
+            // （読み取り経路 loadStoredFinancials/loadStoredAnalysis は years 空を検出し 404 を維持する）。
+            // ノイズになるため warning ログは出さない。
+            try await withDbRetry(
+                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyFinancials(
+                    existing: existing, code: code, years: years,
+                    response: .notApplicablePlaceholder(code: code), highWater: highWater, db: db)
+            }
+            notApplicable += 1
+        case .failed:
             failed += 1
             logger?.warning("Stage 4 取り込み失敗: code=\(code)")
-            continue
         }
-        try await withDbRetry(
-            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeCompanyFinancials(
-                existing: existing, code: code, years: years, response: response,
-                highWater: highWater, db: db)
-        }
-        stored += 1
     }
 
     return Stage4IngestSummary(
-        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
+        attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
+        skipped: skipped)
 }
 
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
@@ -210,12 +230,14 @@ func countServableCompanyFinancials(db: Database) async throws -> (servable: Int
 /// 格納済み Stage 4 結果を code で引き、read 床以上 & 要求年数を満たすなら years に縮めた JSON を返す。
 /// 床は `companyFinancialsMinServableVersion`（明示定数。現行版との完全一致ではない）。
 /// 無い・床未満・年数不足なら nil（呼び出し側は 404。ライブ計算へはフォールバックしない）。
+/// `years` 空（有価証券報告書未提出の notApplicable プレースホルダ、issue #86）も nil（404）とする。
 func loadStoredFinancials(code: String, years: Int, db: Database) async throws -> [String: Any]? {
     // years <= 0 は無効要求として nil（呼び出し側 404）。空 years の 200 を返さない。
     guard years > 0,
         let row = try await CompanyFinancials.find(code, on: db),
         isServableCompanyFinancialsCacheVersion(row.cacheVersion),
-        row.requestedYears >= years
+        row.requestedYears >= years,
+        row.response.yearCount > 0
     else { return nil }
     return row.response.trimmed(toYears: years).summaryJsonObject()
 }
@@ -227,7 +249,8 @@ func loadStoredAnalysis(code: String, years: Int, db: Database) async throws -> 
     guard years > 0,
         let row = try await CompanyFinancials.find(code, on: db),
         isServableCompanyFinancialsCacheVersion(row.cacheVersion),
-        row.requestedYears >= years
+        row.requestedYears >= years,
+        row.response.yearCount > 0
     else { return nil }
     return row.response.trimmed(toYears: years).analysisJsonObject()
 }

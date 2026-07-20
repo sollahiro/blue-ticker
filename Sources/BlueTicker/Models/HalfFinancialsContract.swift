@@ -173,4 +173,19 @@ extension HalfFinancialsResponse {
         copy.periods = halfYearTrimPeriods(toPeriods(), to: n).map { HalfFinancialsPeriod($0) }
         return copy
     }
+
+    /// 半期報告書未提出等、計算対象外だった企業のプレースホルダ（`periods` 空）。
+    /// public: Stage 4-half ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
+    /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う
+    /// （読み取り経路 `loadStoredHalfFinancials`/`loadStoredHalfAnalysis` は `periods` 空を検出し
+    /// 404 を維持する。annual 側の `FinancialsResponse.notApplicablePlaceholder` と同型）。
+    public static func notApplicablePlaceholder(code: String) -> HalfFinancialsResponse {
+        HalfFinancialsResponse(
+            schemaVersion: Api.halfFinancialsSchemaVersion, code: code, name: "",
+            currency: "JPY", unit: "百万円", periods: [])
+    }
+
+    /// 格納済み `periods` の件数。public: Stage 4-half read 経路（BltServerCore）が
+    /// notApplicable プレースホルダ（`periods` 空）を検出して 404 を維持するために使う。
+    public var periodCount: Int { periods.count }
 }

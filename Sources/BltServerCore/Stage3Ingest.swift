@@ -212,7 +212,8 @@ public func runStage3IngestCommand(
             logIngestSummary(
                 app.logger, stage: "4", attempted: s4.attempted, stored: s4.stored,
                 failed: s4.failed, skipped: s4.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable)
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s4.notApplicable)
         }
         if stages.contains(.half) {
             let s4h = try await runStage4HalfIngest(
