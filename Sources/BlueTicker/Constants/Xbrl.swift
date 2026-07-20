@@ -637,12 +637,20 @@ enum Xbrl {
         "TotalOfReportableSegmentsAndOthersMember",
         "CorporateSharedMember",
         "UnallocatedAmountsAndEliminationMember",
-        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
     ]
 
     /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。
     static let segmentReconcilingMemberNames: Set<String> = [
         "ReconcilingItemsMember",
+    ]
+
+    /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。
+    /// `SegmentNormalizer` では rowKind を `segment` として扱う（実データ検証: この member を
+    /// 加算しないと `sum(segment) ≠ denominator` になる企業が多数あった）。一方で事業/地域いずれの
+    /// 軸にも属すると断定できない「その他」バケツのため、`SegmentExtractor.isGeographyAxis` の
+    /// 軸判定候補からは `segmentSubtotalMemberNames` と同様に除外し続ける（軸判定への影響を避ける）。
+    static let segmentOtherBusinessMemberNames: Set<String> = [
+        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
     ]
 
     /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。
@@ -661,6 +669,17 @@ enum Xbrl {
         "Overseas",
         "Pacific",
     ]
+
+    /// `segmentGeographyMemberKeywords` から「国内」「海外」相当の汎用修飾語（`Domestic`/`Overseas`）
+    /// を除いた、特定の国・地域名のみのサブセット（学び11、実データ検証: 1802/1812/1808/2413）。
+    /// 建設業等では「国内建築」「海外建築」のように Domestic/Overseas が事業区分名の接頭辞になる
+    /// ケースや、「海外事業」のように事業区分の1つとして海外を単独カテゴリ化するケースが多数あり、
+    /// これらは事業軸のクロス集計・カテゴリ分けであって地域軸との真の混在ではない。
+    /// `SegmentNormalizer.classifyAxis` の部分一致（混在）判定では、この特定地域名サブセットに
+    /// 一致する行が1件も無ければ needs_review を立てない（Domestic/Overseas のみの一致は
+    /// axis 判定のシグナルとして弱すぎるため）。
+    static let segmentSpecificGeographyMemberKeywords: [String] = segmentGeographyMemberKeywords
+        .filter { $0 != "Domestic" && $0 != "Overseas" }
 
     /// html_table 由来の行ラベル（日本語表記）が地域名らしいかの判定キーワード。
     /// `segmentGeographyMemberKeywords`（英語 member 名用）とは別レイヤー。
