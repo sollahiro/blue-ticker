@@ -116,6 +116,51 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    /// `OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember`
+    /// は rowKind としては `segment` に分類される（分母への合算対象）が、事業/地域いずれの軸にも
+    /// 断定できないため `classifyAxis` の判定候補からは除外され続けるべき。除外しないと、この
+    /// member を持つ地域別報告企業が誤って business + needs_review に分類されてしまう。
+    @Test func geographyAxisUnaffectedByOtherBusinessMember() throws {
+        let result = SegmentResult(
+            method: "xbrl_facts",
+            tables: [],
+            facts: [
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
+                    value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
+                    value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_EuropeReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "EuropeReportableSegmentsMember"],
+                    value: 33_386_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AsiaAndPacificReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"],
+                    value: 48_665_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                SegmentFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    dimensions: ["OperatingSegmentsAxis": "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"],
+                    value: 5_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+            ]
+        )
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 211_820_000_000))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+        let other = try #require(
+            snap.rows.first { $0.labelRaw == "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember" })
+        #expect(other.rowKind == "segment")
+    }
+
     @Test func businessTypeCompaniesAxisIsBusiness() throws {
         // 6103（オークマ）は expectedNilCodes に含まれるため自動的に除外される。
         let businessCodes: [(code: String, docID: String, name: String)] = Self.fullYearCompanies.filter {

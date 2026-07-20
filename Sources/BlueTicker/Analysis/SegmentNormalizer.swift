@@ -141,8 +141,14 @@ enum SegmentNormalizer {
 
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、
     /// 一致なしなら business、一部一致（混在）は business + needs_review。
+    /// `segmentOtherBusinessMemberNames`（rowKind は segment だが事業/地域いずれの軸にも
+    /// 断定できない「その他」）は候補から除外する。`SegmentExtractor.isGeographyAxis` と同じ理由
+    /// （軸判定への影響を避ける）。除外しないと、地域別報告企業にこの member が同居する場合に
+    /// 全一致判定が崩れ、本来 geography のスナップショットが business + needs_review へ誤分類される。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
-        let segmentMembers = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        let segmentMembers = rows
+            .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
+            .map(\.labelRaw)
         guard !segmentMembers.isEmpty else { return ("business", false) }
 
         let geoMatches = segmentMembers.filter { member in
