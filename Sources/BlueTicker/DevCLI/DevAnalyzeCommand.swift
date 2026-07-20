@@ -41,7 +41,7 @@ struct DevAnalyzeCommand: AsyncParsableCommand {
         printError("分析対象期間: 直近 \(years) 年分\n")
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache),
+        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).resultOrNil,
               let yearsData = result.years, !yearsData.isEmpty else {
             printError("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
             throw ExitCode.failure

@@ -121,6 +121,10 @@ enum SegmentExtractor {
     /// 「地域別」であるため、収益認識関係注記（`extractRevenueRecognitionInfo`）に本当の
     /// 事業別（製品別）データがあればそちらを優先する。見つからない場合は元の地域別
     /// xbrl_facts をそのまま返す（未検証企業での誤判定時に表示が消える regression を避けるため）。
+    ///
+    /// 単一セグメントで報告セグメント開示が省略される場合（東京エレクトロン型）も
+    /// `not_found` のままでは製品別が取れないため、収益認識関係注記に製品・サービス別の
+    /// 分解表があればそちらへフォールバックする。
     static func extractSegmentInfo(xbrlDir: URL) -> SegmentResult {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -132,9 +136,21 @@ enum SegmentExtractor {
         )
         let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
 
-        guard result.method == "xbrl_facts", isGeographyAxis(result.facts) else { return result }
-        let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
-        return revenueRecognition.method == "html_table" ? revenueRecognition : result
+        // オークマ型: 報告セグメントが地域別 → 収益認識の製品別へ
+        if result.method == "xbrl_facts", isGeographyAxis(result.facts) {
+            let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
+            return revenueRecognition.method == "html_table" ? revenueRecognition : result
+        }
+
+        // 東京エレクトロン型: 単一セグメントで報告セグメント開示省略 → 収益認識の製品別へ
+        if result.method == "not_found" {
+            let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
+            if revenueRecognition.method == "html_table" {
+                return revenueRecognition
+            }
+        }
+
+        return result
     }
 
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
@@ -171,7 +187,8 @@ enum SegmentExtractor {
         let segmentMembers = facts.compactMap { fact -> String? in
             guard let member = primaryMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
-                  !Xbrl.segmentReconcilingMemberNames.contains(member)
+                  !Xbrl.segmentReconcilingMemberNames.contains(member),
+                  !Xbrl.segmentOtherBusinessMemberNames.contains(member)
             else { return nil }
             return member
         }

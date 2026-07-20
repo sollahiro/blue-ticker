@@ -155,6 +155,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
+- [ ] Stage 5 `segments` セクションの `filingSectionsCacheVersion` バンプ（東京エレクトロン型企業が not_found のまま） — issue #93
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。**未着手**: geography 軸の ingest 配線。構想と残タスクは `docs/segment-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価

@@ -8,6 +8,23 @@ private let _cacheVersion = blueTickerVersion
 private let millionYen = 1_000_000.0
 private let percent = 100.0
 
+/// `IndividualAnalyzer.fetchAndBuild` の結果。「有価証券報告書が未提出」（対象外、新規上場等で
+/// 初回本決算前）と「書類はあるが抽出できない」（失敗、要調査）を呼び出し元が区別できるようにする
+/// （`HalfYearFetchOutcome` と同型。issue #86）。
+enum IndividualAnalyzeOutcome {
+    case result(MetricsResult)
+    case notApplicable
+    case failed
+}
+
+extension IndividualAnalyzeOutcome {
+    /// 対象外・失敗の区別が不要な呼び出し元向けの Optional 変換。
+    var resultOrNil: MetricsResult? {
+        if case .result(let result) = self { return result }
+        return nil
+    }
+}
+
 struct IndividualAnalyzer {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
@@ -19,37 +36,37 @@ struct IndividualAnalyzer {
         code: String,
         analysisYears: Int = Api.analyzeDefaultYears,
         useCache: Bool = true
-    ) async -> MetricsResult? {
+    ) async -> IndividualAnalyzeOutcome {
         let cacheKey = "individual_analysis_\(code)"
 
         if useCache {
             let cached = await cacheManager.getJSON(cacheKey)
             if individualCacheIsReusable(cached, cacheVersion: _cacheVersion, requestedYears: analysisYears),
                let result = decodeMetricsResult(cached!) {
-                return trimMetrics(result, to: analysisYears)
+                return .result(trimMetrics(result, to: analysisYears))
             }
         }
 
-        let result = await fetchAndBuild(code: code, analysisYears: analysisYears)
-        if let r = result {
+        let outcome = await fetchAndBuild(code: code, analysisYears: analysisYears)
+        if case .result(let r) = outcome {
             if var dict = encodeMetricsResult(r) {
                 dict["_cache_version"] = _cacheVersion
                 dict["_requested_years"] = analysisYears
                 await cacheManager.setJSON(cacheKey, value: dict)
             }
         }
-        return result
+        return outcome
     }
 
     // MARK: - Fetch and Build
 
-    private func fetchAndBuild(code: String, analysisYears: Int) async -> MetricsResult? {
+    private func fetchAndBuild(code: String, analysisYears: Int) async -> IndividualAnalyzeOutcome {
         let docs = await EdinetDiscovery.buildDocumentIndexForCode(
             code: code,
             client: edinetClient,
             analysisYears: analysisYears
         )
-        guard !docs.isEmpty else { return nil }
+        guard !docs.isEmpty else { return .notApplicable }
 
         // 最新 analysisYears 件に絞る（EdinetDiscovery は最大件数を返すが多い場合もある）
         let targetDocs = Array(docs.prefix(analysisYears))
@@ -64,7 +81,7 @@ struct IndividualAnalyzer {
             await self.processDocument(d.value)
         }
 
-        guard !yearEntries.isEmpty else { return nil }
+        guard !yearEntries.isEmpty else { return .failed }
 
         // fyEnd 降順ソート（最新が先頭）
         yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
@@ -82,7 +99,7 @@ struct IndividualAnalyzer {
         result.availableYears = yearEntries.count
         result.years = yearEntries
         result.dataValid = !yearEntries.isEmpty
-        return result
+        return .result(result)
     }
 
     // MARK: - Document Processing

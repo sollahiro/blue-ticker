@@ -40,7 +40,7 @@ struct DevSummarizeCommand: AsyncParsableCommand {
         }
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache) else {
+        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).resultOrNil else {
             printError("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
             throw ExitCode.failure
         }

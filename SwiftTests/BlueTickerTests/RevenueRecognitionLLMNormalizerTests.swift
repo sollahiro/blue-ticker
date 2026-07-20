@@ -41,6 +41,44 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(audit == nil)
     }
 
+    /// ファナック型: 部門が列・地域が行のマトリクス表から、合計行の列金額を転置した LLM 応答を受け入れる。
+    /// （プロンプト側で転置を指示。本テストは決定的ガードが転置後の事業ラベルを通すことだけを見る。）
+    @Test func acceptsTransposedDepartmentColumnsFromGeographyMatrix() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 1,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "ＦＡ", "amount": 208_478, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "ロボット", "amount": 378_610, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "ロボマシン", "amount": 129_600, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "サービス", "amount": 141_143, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "外部顧客への売上高", "amount": 857_831, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "当期表の外部顧客への売上高行から部門列を転置",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 857_831 * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.axis == "business")
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("business_label_mismatch"))
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.map(\.labelRaw) == ["ＦＡ", "ロボット", "ロボマシン", "サービス"])
+        #expect(segments.map(\.amount) == [
+            208_478 * Financial.millionYen,
+            378_610 * Financial.millionYen,
+            129_600 * Financial.millionYen,
+            141_143 * Financial.millionYen,
+        ])
+        #expect(audit?.sourceTableIndex == 1)
+    }
+
     /// オークマ型: 収益認識注記には製品別の利益が無いため、LLM が profit=null・profit_disclosed=false
     /// を返す。「未開示（確認済み）」を表す組み合わせであり needsReview は立たない。
     @Test func leavesProfitNilWhenNotDisclosed() async throws {

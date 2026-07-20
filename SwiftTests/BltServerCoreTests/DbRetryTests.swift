@@ -173,7 +173,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
     }
 
     @Test func operationTimeoutExhaustsAttemptsAndThrowsTimeoutError() async {
-        await #expect(throws: DbOperationTimeoutError.self) {
+        await #expect(throws: OperationTimeoutError.self) {
             try await withDbRetry(
                 maxAttempts: 2, maxBackoffSeconds: 0, operationTimeoutSeconds: 0.2
             ) {
@@ -235,6 +235,29 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
                 create: { throw FakeDatabaseError(isConstraintFailure: true) },
                 recover: { false }
             )
+        }
+    }
+
+    // MARK: - withOperationTimeout の汎用性（DB 以外の呼び出し元、例: MCP ルート）
+
+    @Test func withOperationTimeoutReturnsResultWhenOperationCompletesInTime() async throws {
+        let value = try await withOperationTimeout(label: "テスト操作", seconds: 5) {
+            "ok"
+        }
+        #expect(value == "ok")
+    }
+
+    @Test func withOperationTimeoutUsesCallerSuppliedLabelInErrorDescription() async {
+        do {
+            _ = try await withOperationTimeout(label: "MCPリクエスト処理", seconds: 0.2) {
+                try await Task.sleep(nanoseconds: 3_600_000_000_000)  // 応答なしハングの模擬
+                return "unreachable"
+            }
+            Issue.record("タイムアウトが発生するはずだった")
+        } catch let error as OperationTimeoutError {
+            #expect(error.description.contains("MCPリクエスト処理"))
+        } catch {
+            Issue.record("想定外のエラー: \(error)")
         }
     }
 }

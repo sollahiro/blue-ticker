@@ -19,10 +19,12 @@ import Fluent
 import Foundation
 import Logging
 
-/// `withOperationTimeout` が上限超過時に投げるエラー。
-struct DbOperationTimeoutError: Error, CustomStringConvertible {
+/// `withOperationTimeout` が上限超過時に投げるエラー。DB 以外（MCP ルートの HTTP タイムアウト等）
+/// からも再利用するため、対象を表す `label` を持たせている。
+struct OperationTimeoutError: Error, CustomStringConvertible {
+    let label: String
     let seconds: Double
-    var description: String { "DB操作が\(Int(seconds))秒応答なしのためタイムアウト" }
+    var description: String { "\(label)が\(Int(seconds))秒応答なしのためタイムアウト" }
 }
 
 /// 継続を高々1回だけ resume することを保証する箱。
@@ -52,7 +54,7 @@ private struct UncheckedSendableBox<T>: @unchecked Sendable {
     let value: T
 }
 
-/// `operation` の応答待ちに上限を設ける。超過時は `DbOperationTimeoutError` を投げて先に返る
+/// `operation` の応答待ちに上限を設ける。超過時は `OperationTimeoutError` を投げて先に返る
 /// （元の `operation` タスクは待ち合わせず切り離す＝無応答のまま死んだ接続を待ち続けない）。
 ///
 /// TaskGroup による構造化並行処理は使わない: グループのスコープを抜ける際に未完了の子タスクを
@@ -66,7 +68,11 @@ private struct UncheckedSendableBox<T>: @unchecked Sendable {
 /// 再利用していると、切り離されたタスクの遅延完了とリトライ試行が当該オブジェクトへ同時にアクセス
 /// する競合窓が理論上ありうる。`withDbRetry` の呼び出し元はいずれも冪等な find/upsert で、かつ
 /// タイムアウトは滅多に起きない前提（既定は `Api.dbOperationTimeoutSeconds`）のため許容している。
-private func withOperationTimeout<T>(
+///
+/// `withDbRetry` 専用ではなく、単発の操作に上限を設けたい他の呼び出し元（MCP ルートの HTTP
+/// タイムアウト等）からも再利用する。`label` はタイムアウト時のエラーメッセージに使う対象名。
+func withOperationTimeout<T>(
+    label: String,
     seconds: Double,
     operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
@@ -83,7 +89,7 @@ private func withOperationTimeout<T>(
         }
         Task {
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            resultBox.resume(with: .failure(DbOperationTimeoutError(seconds: seconds)))
+            resultBox.resume(with: .failure(OperationTimeoutError(label: label, seconds: seconds)))
         }
     }
     return box.value
@@ -116,7 +122,7 @@ func withDbRetry<T>(
     while true {
         do {
             return try await withOperationTimeout(
-                seconds: operationTimeoutSeconds, operation: operation)
+                label: "DB操作", seconds: operationTimeoutSeconds, operation: operation)
         } catch {
             guard attempt < maxAttempts else {
                 if let logger {

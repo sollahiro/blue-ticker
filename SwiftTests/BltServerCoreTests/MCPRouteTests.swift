@@ -63,6 +63,12 @@ private func postMcp(
     return (response.status, json)
 }
 
+/// `Vapor.Response` の本文を JSON デコードする（`mcpTimeoutResponse` 等、直接組み立てたレスポンスの検証用）。
+private func decodeJSON(_ response: Response) -> [String: Any]? {
+    guard let string = response.body.string, let data = string.data(using: .utf8) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
 private func toolCallBody(name: String, arguments: [String: Any]) -> [String: Any] {
     [
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
@@ -148,5 +154,37 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let serverInfo = result?["serverInfo"] as? [String: Any]
             #expect(serverInfo?["name"] as? String == "blt-mcp-server")
         }
+    }
+
+    // MARK: - タイムアウト時の JSON-RPC エラーレスポンス（依存SDKのwaiter leak緩和策、Api.mcpRequestTimeoutSeconds参照）
+
+    @Test func mcpTimeoutResponsePreservesRequestIdAndReturnsJsonRpcError() throws {
+        let requestBody = try JSONSerialization.data(
+            withJSONObject: ["jsonrpc": "2.0", "id": 42, "method": "tools/call"])
+        let response = mcpTimeoutResponse(requestBody: requestBody)
+        #expect(response.status == .internalServerError)
+
+        let json = try #require(decodeJSON(response))
+        #expect(json["id"] as? Int == 42)
+        let error = try #require(json["error"] as? [String: Any])
+        #expect(error["code"] as? Int == -32000)
+    }
+
+    @Test func mcpTimeoutResponseFallsBackToNullIdWhenBodyIsNil() throws {
+        let response = mcpTimeoutResponse(requestBody: nil)
+        let json = try #require(decodeJSON(response))
+        #expect(json["id"] is NSNull)
+    }
+
+    @Test func mcpTimeoutResponseFallsBackToNullIdWhenBodyIsMalformed() throws {
+        let response = mcpTimeoutResponse(requestBody: Data("not json".utf8))
+        let json = try #require(decodeJSON(response))
+        #expect(json["id"] is NSNull)
+    }
+
+    @Test func mcpTimeoutResponseFallsBackToNullIdWhenBodyIsNonObjectJson() throws {
+        let response = mcpTimeoutResponse(requestBody: Data("[1, 2, 3]".utf8))
+        let json = try #require(decodeJSON(response))
+        #expect(json["id"] is NSNull)
     }
 }
