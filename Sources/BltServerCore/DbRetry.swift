@@ -15,6 +15,7 @@
 // 応答待ちに上限を設け、超過時は強制的にタイムアウト例外を投げて通常のリトライ経路に載せる。
 
 import BlueTickerCore
+import Fluent
 import Foundation
 import Logging
 
@@ -156,5 +157,40 @@ func withDbRetry<T>(
             try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
             attempt += 1
         }
+    }
+}
+
+/// Postgres の整合性制約違反（一意制約違反を含む）かどうかを判定する。
+/// `create` の二重送信検出に使う（`createIdempotently` 参照）。対象テーブルはいずれも主キー以外の
+/// 一意制約を持たないため、実質的に主キー重複の検出として機能する。
+/// `FluentPostgresDriver` の `PSQLError: DatabaseError` 適合（`isConstraintFailure`）を使う。
+/// エラー文字列表現（`debugDescription` 等）への依存はドライバの内部実装詳細でありバージョン間で
+/// 変わりうるため避ける。
+func isPrimaryKeyConflict(_ error: Error) -> Bool {
+    (error as? DatabaseError)?.isConstraintFailure ?? false
+}
+
+/// `create`（非冪等な INSERT）を、主キー重複時は `recover` にフォールバックさせることで
+/// 実質的に冪等化する。
+///
+/// `withOperationTimeout`（本ファイル上部）の既知のトレードオフにより、クライアント側が
+/// タイムアウトと判定して `withDbRetry` がリトライを発行した後も、元の `create` はサーバー側で
+/// 実際には成功していることがある。この場合、リトライの 2 回目以降の `create` は主キー重複
+/// （sqlState 23505）で失敗する。これを「既に create 済み」とみなし、find し直して update に
+/// 切り替える。
+///
+/// `isPrimaryKeyConflict` は NOT NULL・FK・CHECK 違反等、一意制約違反以外の整合性制約違反にも
+/// true を返すため、`recover` が対象行を見つけられないケース（真に別要因で `create` が失敗した
+/// 場合）がありうる。この場合 `recover` は `false` を返し、`createIdempotently` は元のエラーを
+/// 再 throw する（黙って成功扱いにしない＝呼び出し元が `stored`/`created` を誤って加算するのを防ぐ）。
+func createIdempotently(
+    create: () async throws -> Void,
+    recover: () async throws -> Bool
+) async throws {
+    do {
+        try await create()
+    } catch {
+        guard isPrimaryKeyConflict(error) else { throw error }
+        guard try await recover() else { throw error }
     }
 }

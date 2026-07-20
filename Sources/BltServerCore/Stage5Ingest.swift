@@ -200,22 +200,29 @@ func storeCompanyFilingSections(
     existing: CompanyFilingSections?, docID: String, code: String, submitDateTime: String,
     payload: FilingSectionsPayload, sectionKeys: String, db: Database
 ) async throws {
-    if let row = existing {
+    let applyFields: (CompanyFilingSections) -> Void = { row in
         row.code = code
         row.submitDateTime = submitDateTime
         row.payload = payload
         row.cacheVersion = filingSectionsCacheVersion
         row.sectionKeys = sectionKeys
+    }
+    if let row = existing {
+        applyFields(row)
         try await row.update(on: db)
     } else {
         let model = CompanyFilingSections()
         model.id = docID
-        model.code = code
-        model.submitDateTime = submitDateTime
-        model.payload = payload
-        model.cacheVersion = filingSectionsCacheVersion
-        model.sectionKeys = sectionKeys
-        try await model.create(on: db)
+        applyFields(model)
+        try await createIdempotently(
+            create: { try await model.create(on: db) },
+            recover: {
+                guard let recovered = try await CompanyFilingSections.find(docID, on: db) else { return false }
+                applyFields(recovered)
+                try await recovered.update(on: db)
+                return true
+            }
+        )
     }
 }
 

@@ -111,16 +111,26 @@ func runStage3Ingest(
 func storeXbrlFacts(
     existing: EdinetXbrlFacts?, docID: String, facts: XbrlFactIndexPayload, db: Database
 ) async throws {
-    if let row = existing {
+    let applyFields: (EdinetXbrlFacts) -> Void = { row in
         row.facts = facts
         row.cacheVersion = xbrlFactsCacheVersion
+    }
+    if let row = existing {
+        applyFields(row)
         try await row.update(on: db)
     } else {
         let model = EdinetXbrlFacts()
         model.id = docID
-        model.facts = facts
-        model.cacheVersion = xbrlFactsCacheVersion
-        try await model.create(on: db)
+        applyFields(model)
+        try await createIdempotently(
+            create: { try await model.create(on: db) },
+            recover: {
+                guard let recovered = try await EdinetXbrlFacts.find(docID, on: db) else { return false }
+                applyFields(recovered)
+                try await recovered.update(on: db)
+                return true
+            }
+        )
     }
 }
 

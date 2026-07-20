@@ -1,6 +1,7 @@
 // withDbRetry の再試行挙動（一過性失敗から回復・規定回数で打ち切り）を検証する。
 // backoff は maxBackoffSeconds: 0 で無効化し、待ち時間なしで回す。
 
+import Fluent
 import Foundation
 import Logging
 import Testing
@@ -9,6 +10,13 @@ import Testing
 
 private struct RetryTestError: Error, CustomDebugStringConvertible {
     var debugDescription: String { "RetryTestError詳細" }
+}
+
+/// `DatabaseError` 適合の偽エラー。`isPrimaryKeyConflict`/`createIdempotently` のテスト用。
+private struct FakeDatabaseError: Error, DatabaseError {
+    var isConstraintFailure: Bool
+    var isSyntaxError: Bool = false
+    var isConnectionClosed: Bool = false
 }
 
 /// 呼び出し回数を数えるカウンタ。多くのテストでは順次 await されるため競合しないが、タイムアウト
@@ -172,6 +180,61 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
                 try await Task.sleep(nanoseconds: 3_600_000_000_000)  // 応答なしハングの模擬
                 return "unreachable"
             }
+        }
+    }
+
+    // MARK: - isPrimaryKeyConflict / createIdempotently
+    //
+    // タイムアウト後リトライで INSERT が二重送信され、実際にはサーバー側で先行試行が成功していた
+    // ケース（主キー重複として跳ね返る）を吸収する経路の検証。
+
+    @Test func isPrimaryKeyConflictTrueForConstraintFailure() {
+        #expect(isPrimaryKeyConflict(FakeDatabaseError(isConstraintFailure: true)) == true)
+    }
+
+    @Test func isPrimaryKeyConflictFalseForNonConstraintDatabaseError() {
+        #expect(isPrimaryKeyConflict(FakeDatabaseError(isConstraintFailure: false)) == false)
+    }
+
+    @Test func isPrimaryKeyConflictFalseForNonDatabaseError() {
+        #expect(isPrimaryKeyConflict(RetryTestError()) == false)
+    }
+
+    @Test func createIdempotentlySucceedsWithoutRecoverWhenCreateSucceeds() async throws {
+        var recoverCalled = false
+        try await createIdempotently(
+            create: {},
+            recover: { recoverCalled = true; return true }
+        )
+        #expect(recoverCalled == false)
+    }
+
+    @Test func createIdempotentlyFallsBackToRecoverOnPrimaryKeyConflict() async throws {
+        var recoverCalled = false
+        try await createIdempotently(
+            create: { throw FakeDatabaseError(isConstraintFailure: true) },
+            recover: { recoverCalled = true; return true }
+        )
+        #expect(recoverCalled == true)
+    }
+
+    @Test func createIdempotentlyRethrowsNonConflictErrorsWithoutCallingRecover() async {
+        var recoverCalled = false
+        await #expect(throws: RetryTestError.self) {
+            try await createIdempotently(
+                create: { throw RetryTestError() },
+                recover: { recoverCalled = true; return true }
+            )
+        }
+        #expect(recoverCalled == false)
+    }
+
+    @Test func createIdempotentlyRethrowsOriginalErrorWhenRecoverFindsNothing() async {
+        await #expect(throws: FakeDatabaseError.self) {
+            try await createIdempotently(
+                create: { throw FakeDatabaseError(isConstraintFailure: true) },
+                recover: { false }
+            )
         }
     }
 
