@@ -12,7 +12,7 @@ import Foundation
 /// blueTickerVersion 非連動。`BreakdownSnapshotPayload` の意味を変える破壊的変更のみバンプする。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
 /// （content_hash 一致・needs_review=false の行はそのまま据え置く。今後の検討事項8参照）。
-public let segmentBreakdownCacheVersion = "breakdown-v2"
+public let segmentBreakdownCacheVersion = "breakdown-v3"
 
 /// business 軸は `SegmentBusinessBreakdownResolver` が、geography 軸は呼び出し側が
 /// `SegmentBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`SegmentNormalizer`）で

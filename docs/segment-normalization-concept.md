@@ -69,6 +69,7 @@
 8. **金融機関（銀行等）は Stage 6 v1 の対象外とする（確定）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（純収益）や `ConsolidatedGrossProfit`（連結粗利益）という別概念で、連結損益計算書の売上を分母にする設計とは整合しない。smoke 検証（三菱UFJ・三井住友）でシェア合計がそれぞれ 1.08 / 0.41 に破綻することを確認済み。銀行固有ロジックは既存の `Extractors.swift` 銀行系抽出と同様、後続の別トラックとして切り出す。
 9. **実装コストの重心は `segments` の `xbrl_facts` ではなく `geography` の `html_table` 側にある。** smoke 11社では `segments` は会計基準（J-GAAP/IFRS/US-GAAP）を問わず **11社中11社が `xbrl_facts`**。一方 `geography` は9社が `html_table`（fact なし）・2社が `not_found`（AZplanning・東邦レマックは小規模で海外拠点なし＝正当な欠測、抽出漏れではない）。現状 `SegmentResult.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
 10. **`segments` キーの軸（business/geography）は member 名のキーワード判定で機械的に決まる。** smoke 11社中10社は事業名（例: `SeasoningsAndFoodsReportableSegmentMember`）、オークマ1社のみ地域名（`JapanReportableSegmentsMember` 等）。小計・調整行を除いた member 全部が地域キーワードに一致する（オークマ: 4/4）か、1つも一致しない（他10社: 0/N）かで完全に分かれ、混在ケースは smoke 内では0件だった。→ 詳細は下記「軸判定ルール（案）」。
+11. **混在（部分一致）ケースの needs_review は「Domestic/Overseas のみの一致」では立てない。** 2026-07-20、smoke 外の実データ（1802大林組・1812鹿島建設・1808長谷工・2413エムスリー）で軸判定ルール4（混在→business+needs_review）の偽陽性を確認。建設業等では「国内建築/海外建築/国内土木/海外土木/不動産」のように事業区分×国内海外のクロス集計になる例や、「海外事業」を単独の事業区分として括る例があり、いずれも axis=business が正しい（sum(segment)≈denominator で確認済み）にもかかわらず Domestic/Overseas という汎用修飾語がヒットして要確認扱いになっていた。`Xbrl.segmentSpecificGeographyMemberKeywords`（Domestic/Overseas を除いた特定地域名）で混在判定を絞り、特定地域名の一致が1件も無ければ needs_review を立てないよう `SegmentNormalizer.classifyAxis` を修正（`segmentBreakdownCacheVersion` を `breakdown-v3` へバンプ）。
 
 ### smoke 検証（2026-07-18）
 
@@ -156,7 +157,7 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 優先度は未確定。実装前に決めること:
 
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定・実装済み。`Sources/BlueTicker/Analysis/SegmentNormalizer.swift` + 定数は `Xbrl.swift`、テストは smoke 実データ照合で5件パス）
-2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `SegmentNormalizer.classifyAxis`）。残課題: 混在ケース（ルール4）は smoke サンプルに存在せず未検証のまま
+2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `SegmentNormalizer.classifyAxis`）。~~混在ケース（ルール4）~~（2026-07-20 実データ検証・偽陽性を修正済み。学び11参照）
 3. ~~**追加ソースの採用範囲**~~（2026-07-19 確定・実装済み）: オークマ型（`segments` の axis が geography 判定）は `SegmentExtractor.extractSegmentInfo` 自体が axis-aware に収益認識関係注記（`extractRevenueRecognitionInfo`）へ swap する（PR #89）。見つからない場合は元の xbrl_facts（geography）へフォールバックし、表示が消える regression を避ける。キヤノン（US-GAAP企業）は `segments` が実は `method == "html_table"` で注23の事業別セグメント表（外部顧客向け行）を既に正しく抽出できていた（07-19前処理修正の副産物）
    - LLM 正規化器は用途別に3クラス: `SegmentBreakdownLLMNormalizer`（geography 専用）・`RevenueRecognitionLLMNormalizer`（オークマ型、収益認識注記由来。swap 済み `segments` の見出しが "収益認識関係" であることで判別）・`SegmentInfoLLMNormalizer`（キヤノン型、`segments` キー自体が html_table。列見出しが事業名の表を転置）
    - `SegmentBusinessBreakdownResolver`（新規）が振り分けを実装: (a) xbrl_facts で axis=business なら決定的経路をそのまま採用、(b) axis=geography のまま（swap 失敗）なら business としては採用しない、(c) html_table なら見出しで2種のLLM正規化器へ振り分ける

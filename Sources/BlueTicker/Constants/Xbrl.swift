@@ -670,6 +670,17 @@ enum Xbrl {
         "Pacific",
     ]
 
+    /// `segmentGeographyMemberKeywords` から「国内」「海外」相当の汎用修飾語（`Domestic`/`Overseas`）
+    /// を除いた、特定の国・地域名のみのサブセット（学び11、実データ検証: 1802/1812/1808/2413）。
+    /// 建設業等では「国内建築」「海外建築」のように Domestic/Overseas が事業区分名の接頭辞になる
+    /// ケースや、「海外事業」のように事業区分の1つとして海外を単独カテゴリ化するケースが多数あり、
+    /// これらは事業軸のクロス集計・カテゴリ分けであって地域軸との真の混在ではない。
+    /// `SegmentNormalizer.classifyAxis` の部分一致（混在）判定では、この特定地域名サブセットに
+    /// 一致する行が1件も無ければ needs_review を立てない（Domestic/Overseas のみの一致は
+    /// axis 判定のシグナルとして弱すぎるため）。
+    static let segmentSpecificGeographyMemberKeywords: [String] = segmentGeographyMemberKeywords
+        .filter { $0 != "Domestic" && $0 != "Overseas" }
+
     /// html_table 由来の行ラベル（日本語表記）が地域名らしいかの判定キーワード。
     /// `segmentGeographyMemberKeywords`（英語 member 名用）とは別レイヤー。
     /// LLM 正規化（`SegmentBreakdownLLMNormalizer`）が誤った表を選んでいないかの

@@ -140,11 +140,22 @@ enum SegmentNormalizer {
     }
 
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、
-    /// 一致なしなら business、一部一致（混在）は business + needs_review。
+    /// 一致なしなら business、一部一致（混在）は business + needs_review（ただし下記の例外あり）。
     /// `segmentOtherBusinessMemberNames`（rowKind は segment だが事業/地域いずれの軸にも
     /// 断定できない「その他」）は候補から除外する。`SegmentExtractor.isGeographyAxis` と同じ理由
     /// （軸判定への影響を避ける）。除外しないと、地域別報告企業にこの member が同居する場合に
     /// 全一致判定が崩れ、本来 geography のスナップショットが business + needs_review へ誤分類される。
+    ///
+    /// 一部一致の needs_review 判定は `segmentGeographyMemberKeywords` 全体ではなく
+    /// `segmentSpecificGeographyMemberKeywords`（Domestic/Overseas を除いた特定地域名）で行う
+    /// （学び11、実データ検証: 1802大林組・1812鹿島建設・1808長谷工・2413エムスリー）。
+    /// 「国内◯◯事業」「海外◯◯事業」という事業区分名や「海外事業」という単独カテゴリは
+    /// Domestic/Overseas のみで一致するが、これらは事業軸の一部であって地域軸との真の混在ではない
+    /// （sum(segment) ≈ denominator で axis=business の正しさを別途確認済み）。
+    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」のように member ラベルが
+    /// Domestic/Overseas 単体（他の事業語を伴わない）で、かつ他の segment が事業名という
+    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃す。実データでは
+    /// 常に事業区分語との複合ラベルだったため、複合か単体かは判定に使っていない。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
@@ -156,6 +167,10 @@ enum SegmentNormalizer {
         }
         if geoMatches.count == segmentMembers.count { return ("geography", false) }
         if geoMatches.isEmpty { return ("business", false) }
-        return ("business", true)
+
+        let specificGeoMatches = segmentMembers.filter { member in
+            Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
+        }
+        return ("business", !specificGeoMatches.isEmpty)
     }
 }
