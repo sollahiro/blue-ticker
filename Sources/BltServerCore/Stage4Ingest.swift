@@ -179,9 +179,10 @@ func storeCompanyFinancials(
         try await createIdempotently(
             create: { try await model.create(on: db) },
             recover: {
-                guard let recovered = try await CompanyFinancials.find(code, on: db) else { return }
+                guard let recovered = try await CompanyFinancials.find(code, on: db) else { return false }
                 applyFields(recovered)
                 try await recovered.update(on: db)
+                return true
             }
         )
     }

@@ -210,9 +210,10 @@ func storeSegmentBreakdown(
             create: { try await model.create(on: db) },
             recover: {
                 let key = CompanySegmentBreakdown.compositeID(docID: docID, axis: axis)
-                guard let recovered = try await CompanySegmentBreakdown.find(key, on: db) else { return }
+                guard let recovered = try await CompanySegmentBreakdown.find(key, on: db) else { return false }
                 applyFields(recovered)
                 try await recovered.update(on: db)
+                return true
             }
         )
     }

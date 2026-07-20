@@ -204,7 +204,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         var recoverCalled = false
         try await createIdempotently(
             create: {},
-            recover: { recoverCalled = true }
+            recover: { recoverCalled = true; return true }
         )
         #expect(recoverCalled == false)
     }
@@ -213,7 +213,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         var recoverCalled = false
         try await createIdempotently(
             create: { throw FakeDatabaseError(isConstraintFailure: true) },
-            recover: { recoverCalled = true }
+            recover: { recoverCalled = true; return true }
         )
         #expect(recoverCalled == true)
     }
@@ -223,9 +223,18 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         await #expect(throws: RetryTestError.self) {
             try await createIdempotently(
                 create: { throw RetryTestError() },
-                recover: { recoverCalled = true }
+                recover: { recoverCalled = true; return true }
             )
         }
         #expect(recoverCalled == false)
+    }
+
+    @Test func createIdempotentlyRethrowsOriginalErrorWhenRecoverFindsNothing() async {
+        await #expect(throws: FakeDatabaseError.self) {
+            try await createIdempotently(
+                create: { throw FakeDatabaseError(isConstraintFailure: true) },
+                recover: { false }
+            )
+        }
     }
 }

@@ -102,20 +102,25 @@ func applyDocuments(
             ) { try await existing.update(on: db) }
             updated += 1
         } else {
-            let model = EdinetDocument()
-            model.id = record.docID
-            model.apply(record)
             try await withDbRetry(
                 logger: logger, context: "docID=\(record.docID)",
                 onRetry: { unhealthyRetries += 1 }
             ) {
+                // モデルはリトライ試行のたびに新規生成する（withOperationTimeout の既知の
+                // トレードオフにより、タイムアウト後も切り離されたタスクが遅延完了することがあり、
+                // 同一インスタンスを試行間で使い回すと Fluent の `_$idExists` 二重更新で precondition
+                // が trap しうるため）。
+                let model = EdinetDocument()
+                model.id = record.docID
+                model.apply(record)
                 try await createIdempotently(
                     create: { try await model.create(on: db) },
                     recover: {
                         guard let recovered = try await EdinetDocument.find(record.docID, on: db)
-                        else { return }
+                        else { return false }
                         recovered.apply(record)
                         try await recovered.update(on: db)
+                        return true
                     }
                 )
             }

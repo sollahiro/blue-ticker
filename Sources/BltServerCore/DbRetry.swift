@@ -171,16 +171,20 @@ func isPrimaryKeyConflict(_ error: Error) -> Bool {
 /// タイムアウトと判定して `withDbRetry` がリトライを発行した後も、元の `create` はサーバー側で
 /// 実際には成功していることがある。この場合、リトライの 2 回目以降の `create` は主キー重複
 /// （sqlState 23505）で失敗する。これを「既に create 済み」とみなし、find し直して update に
-/// 切り替える。`recover` 内で見つからない場合は何もしない（別要因のエラーとして元の catch へ委ねる
-/// のではなく、呼び出し元は通常 find 直後に create するため通常起こらない）。
+/// 切り替える。
+///
+/// `isPrimaryKeyConflict` は NOT NULL・FK・CHECK 違反等、一意制約違反以外の整合性制約違反にも
+/// true を返すため、`recover` が対象行を見つけられないケース（真に別要因で `create` が失敗した
+/// 場合）がありうる。この場合 `recover` は `false` を返し、`createIdempotently` は元のエラーを
+/// 再 throw する（黙って成功扱いにしない＝呼び出し元が `stored`/`created` を誤って加算するのを防ぐ）。
 func createIdempotently(
     create: () async throws -> Void,
-    recover: () async throws -> Void
+    recover: () async throws -> Bool
 ) async throws {
     do {
         try await create()
     } catch {
         guard isPrimaryKeyConflict(error) else { throw error }
-        try await recover()
+        guard try await recover() else { throw error }
     }
 }
