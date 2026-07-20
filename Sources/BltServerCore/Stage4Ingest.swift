@@ -163,20 +163,27 @@ func storeCompanyFinancials(
     existing: CompanyFinancials?, code: String, years: Int,
     response: FinancialsResponse, highWater: String?, db: Database
 ) async throws {
-    if let row = existing {
+    let applyFields: (CompanyFinancials) -> Void = { row in
         row.response = response
         row.cacheVersion = companyFinancialsCacheVersion
         row.requestedYears = years
         row.highWater = highWater
+    }
+    if let row = existing {
+        applyFields(row)
         try await row.update(on: db)
     } else {
         let model = CompanyFinancials()
         model.id = code
-        model.response = response
-        model.cacheVersion = companyFinancialsCacheVersion
-        model.requestedYears = years
-        model.highWater = highWater
-        try await model.create(on: db)
+        applyFields(model)
+        try await createIdempotently(
+            create: { try await model.create(on: db) },
+            recover: {
+                guard let recovered = try await CompanyFinancials.find(code, on: db) else { return }
+                applyFields(recovered)
+                try await recovered.update(on: db)
+            }
+        )
     }
 }
 

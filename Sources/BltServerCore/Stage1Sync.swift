@@ -108,7 +108,17 @@ func applyDocuments(
             try await withDbRetry(
                 logger: logger, context: "docID=\(record.docID)",
                 onRetry: { unhealthyRetries += 1 }
-            ) { try await model.create(on: db) }
+            ) {
+                try await createIdempotently(
+                    create: { try await model.create(on: db) },
+                    recover: {
+                        guard let recovered = try await EdinetDocument.find(record.docID, on: db)
+                        else { return }
+                        recovered.apply(record)
+                        try await recovered.update(on: db)
+                    }
+                )
+            }
             created += 1
         }
     }

@@ -190,7 +190,7 @@ func storeSegmentBreakdown(
     submitDateTime: String, payload: BreakdownSnapshotPayload, source: String, contentHash: String,
     cacheVersion: String, llmAudit: LLMBreakdownAuditPayload?, db: Database
 ) async throws {
-    if let row = existing {
+    let applyFields: (CompanySegmentBreakdown) -> Void = { row in
         row.code = code
         row.submitDateTime = submitDateTime
         row.payload = payload
@@ -199,18 +199,22 @@ func storeSegmentBreakdown(
         row.contentHash = contentHash
         row.cacheVersion = cacheVersion
         row.llmAudit = llmAudit
+    }
+    if let row = existing {
+        applyFields(row)
         try await row.update(on: db)
     } else {
         let model = CompanySegmentBreakdown(docID: docID, axis: axis)
-        model.code = code
-        model.submitDateTime = submitDateTime
-        model.payload = payload
-        model.needsReview = payload.needsReview
-        model.source = source
-        model.contentHash = contentHash
-        model.cacheVersion = cacheVersion
-        model.llmAudit = llmAudit
-        try await model.create(on: db)
+        applyFields(model)
+        try await createIdempotently(
+            create: { try await model.create(on: db) },
+            recover: {
+                let key = CompanySegmentBreakdown.compositeID(docID: docID, axis: axis)
+                guard let recovered = try await CompanySegmentBreakdown.find(key, on: db) else { return }
+                applyFields(recovered)
+                try await recovered.update(on: db)
+            }
+        )
     }
 }
 
