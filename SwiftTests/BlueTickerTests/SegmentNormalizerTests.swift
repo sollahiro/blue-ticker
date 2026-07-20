@@ -161,6 +161,74 @@ import Foundation
         #expect(other.rowKind == "segment")
     }
 
+    /// `SegmentFact` を (member, value) の組から組み立てて normalize する軽量ヘルパー。
+    /// 分母は行の合計値をそのまま使う（axis 判定のテストであり share の厳密検証は目的外）。
+    private static func snapshot(labelsAndValues: [(String, Double)]) -> BreakdownSnapshot? {
+        let facts = labelsAndValues.map { label, value in
+            SegmentFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(label)",
+                dimensions: ["OperatingSegmentsAxis": label],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let consolidatedSales = labelsAndValues.reduce(0.0) { $0 + $1.1 }
+        return SegmentNormalizer.normalize(result, consolidatedSales: consolidatedSales)
+    }
+
+    /// 学び11（`docs/segment-normalization-concept.md`）の回帰テスト。実データ検証（2026-07-20）:
+    /// 1802大林組・1812鹿島建設・1808長谷工・2413エムスリーはいずれも Domestic/Overseas を
+    /// 含む事業区分名（「国内建築」「海外事業」等）の混在で誤って needs_review=true になっていた。
+    /// axis=business の正しさは sum(segment)≈denominator でユーザーが確認済み。
+    @Test func domesticOverseasPrefixedBusinessSegmentsDoNotTriggerNeedsReview() throws {
+        let cases: [(name: String, rows: [(String, Double)])] = [
+            ("大林組(1802)", [
+                ("DomesticBuildingConstructionMember", 30_000_000_000),
+                ("OverseasBuildingConstructionMember", 20_000_000_000),
+                ("DomesticCivilEngineeringMember", 25_000_000_000),
+                ("OverseasCivilEngineeringMember", 15_000_000_000),
+                ("RealEstateMember", 10_000_000_000),
+            ]),
+            ("鹿島建設(1812)", [
+                ("CivilEngineeringBusinessMember", 30_000_000_000),
+                ("BuildingConstructionBusinessMember", 30_000_000_000),
+                ("DevelopmentBusinessEtcMember", 20_000_000_000),
+                ("DomesticAssociatedCompaniesMember", 10_000_000_000),
+                ("OverseasAssociatedCompaniesMember", 10_000_000_000),
+            ]),
+            ("長谷工コーポレーション(1808)", [
+                ("ConstructionRelatedBusinessMember", 40_000_000_000),
+                ("RealEstateRelatedBusinessMember", 30_000_000_000),
+                ("ManagementAndOperationBusinessMember", 20_000_000_000),
+                ("OverseasBusinessMember", 10_000_000_000),
+            ]),
+            ("エムスリー(2413)", [
+                ("CareerSolutionMember", 40_000_000_000),
+                ("EvidenceMember", 30_000_000_000),
+                ("MedicalPlatformMember", 20_000_000_000),
+                ("OverseasReportableSegmentMember", 10_000_000_000),
+            ]),
+        ]
+
+        for testCase in cases {
+            let snap = try #require(Self.snapshot(labelsAndValues: testCase.rows), "\(testCase.name): snapshot が nil")
+            #expect(snap.axis == "business", "\(testCase.name): expected business axis, got \(snap.axis)")
+            #expect(snap.needsReview == false, "\(testCase.name): expected needsReview=false")
+        }
+    }
+
+    /// 対照群: 特定地域名（Japan 等）が事業区分名の一部として混在する場合は、
+    /// これまで通り needs_review を立てる（学び11の緩和は Domestic/Overseas 限定）。
+    @Test func specificGeographyNameMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("FoodsBusinessMember", 40_000_000_000),
+            ("ChemicalsBusinessMember", 30_000_000_000),
+            ("JapanBusinessMember", 30_000_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == true)
+    }
+
     @Test func businessTypeCompaniesAxisIsBusiness() throws {
         // 6103（オークマ）は expectedNilCodes に含まれるため自動的に除外される。
         let businessCodes: [(code: String, docID: String, name: String)] = Self.fullYearCompanies.filter {
