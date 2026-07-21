@@ -36,9 +36,20 @@ enum SegmentNormalizer {
         guard result.method == "xbrl_facts", !result.facts.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return nil }
 
-        guard let denominatorTag = Xbrl.segmentExternalRevenueTags.first(where: { tag in
+        var denominatorNeedsReview = false
+        let denominatorTag: String
+        if let whitelisted = Xbrl.segmentExternalRevenueTags.first(where: { tag in
             result.facts.contains(where: { $0.tag == tag })
-        }) else { return nil }
+        }) {
+            denominatorTag = whitelisted
+        } else if let discovered = discoverDenominatorTagByCoverage(
+            facts: result.facts, consolidatedSales: consolidatedSales)
+        {
+            denominatorTag = discovered.tag
+            denominatorNeedsReview = discovered.needsReview
+        } else {
+            return nil
+        }
 
         let perMember = resolvePerMember(facts: result.facts, tag: denominatorTag)
         guard !perMember.isEmpty else { return nil }
@@ -87,6 +98,7 @@ enum SegmentNormalizer {
         let (axis, axisNeedsReview) = classifyAxis(rows: rows)
         var warnings: [String] = []
         if axisNeedsReview { warnings.append("axis_ambiguous") }
+        if denominatorNeedsReview { warnings.append("denominator_tag_ambiguous") }
 
         return BreakdownSnapshot(
             axis: axis,
@@ -94,7 +106,7 @@ enum SegmentNormalizer {
             denominatorTag: denominatorTag,
             rows: rows,
             sourceKind: "xbrl_facts",
-            needsReview: axisNeedsReview,
+            needsReview: axisNeedsReview || denominatorNeedsReview,
             warnings: warnings
         )
     }
@@ -121,6 +133,69 @@ enum SegmentNormalizer {
             perMember[member] = fact
         }
         return perMember
+    }
+
+    /// `Xbrl.segmentExternalRevenueTags` ホワイトリストに一致するタグが無い場合の候補発見。
+    /// 個別タグを都度ホワイトリストへ追加する Whac-A-Mole を避けるための一般化ルール
+    /// （実データ検証: NTT の `TransactionsWithExternalCustomersIFRS`、
+    /// ファーストリテイリングの `RevenueIFRS` はいずれも本ロジックで発見できることを確認済みだが、
+    /// 両者は確認済みのためホワイトリストにも追加済み。本関数は将来の未知タグ向け）。
+    ///
+    /// 判定: `segmentNonRevenueTagKeywords` に一致しないタグのうち、segment 行（小計・調整を除く）の
+    /// 合計が連結外部売上高の ±5% に収まるものを候補とする。複数候補が残った場合は
+    /// タグ名に External/Customers を含むものを優先し、次に分母比率が 1.0 に近い順、
+    /// 最後にタグ名の辞書順で決定的にタイブレークする（複数候補が残った事実自体は needsReview で示す）。
+    private static func discoverDenominatorTagByCoverage(
+        facts: [SegmentFact], consolidatedSales: Double
+    ) -> (tag: String, needsReview: Bool)? {
+        let candidateTags = Set(facts.map(\.tag))
+            .subtracting(Xbrl.segmentExternalRevenueTags)
+            .subtracting(Xbrl.segmentProfitTags)
+            .filter { tag in !Xbrl.segmentNonRevenueTagKeywords.contains { tag.contains($0) } }
+
+        let passing: [(tag: String, ratio: Double)] = candidateTags.compactMap { tag in
+            let perMember = resolvePerMember(facts: facts, tag: tag)
+            guard !perMember.isEmpty else { return nil }
+
+            var excluded = Set(perMember.keys.filter { member in
+                Xbrl.segmentSubtotalMemberNames.contains(member)
+                    || Xbrl.segmentReconcilingMemberNames.contains(member)
+            })
+            // 数値による小計除外の安全網（本処理と同じ非対称ルール、学び7）: 企業独自の合計行名が
+            // 上記の標準語彙に無くても、候補が複数あるときは金額が連結売上高に一致する member を
+            // 小計とみなして除外する（Grok 4.5 レビュー指摘: 除外しないと合計が概ね2倍になり、
+            // 正しい売上タグが ±5% 判定で誤って弾かれる）。
+            let unnamedCandidates = perMember.keys.filter { !excluded.contains($0) }
+            if unnamedCandidates.count > 1 {
+                for member in unnamedCandidates {
+                    let amount = perMember[member]!.value
+                    if abs(amount - consolidatedSales) / abs(consolidatedSales) < 0.01 {
+                        excluded.insert(member)
+                    }
+                }
+            }
+
+            let segmentSum = perMember.reduce(0.0) { total, entry in
+                let (member, fact) = entry
+                return excluded.contains(member) ? total : total + fact.value
+            }
+            guard segmentSum > 0 else { return nil }
+            let ratio = segmentSum / consolidatedSales
+            guard (0.95...1.05).contains(ratio) else { return nil }
+            return (tag, ratio)
+        }
+        guard !passing.isEmpty else { return nil }
+
+        let sorted = passing.sorted { a, b in
+            let aKeyword = a.tag.contains("External") || a.tag.contains("Customers")
+            let bKeyword = b.tag.contains("External") || b.tag.contains("Customers")
+            if aKeyword != bKeyword { return aKeyword }
+            let aDistance = abs(a.ratio - 1.0)
+            let bDistance = abs(b.ratio - 1.0)
+            if aDistance != bDistance { return aDistance < bDistance }
+            return a.tag < b.tag
+        }
+        return (sorted[0].tag, passing.count > 1)
     }
 
     /// 当期コンテキストかどうか（セグメント軸は Member 修飾があるため ContextHelpers は使わず判定する）。

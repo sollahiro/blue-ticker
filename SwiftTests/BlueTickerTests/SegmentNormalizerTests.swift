@@ -247,6 +247,127 @@ import Foundation
         }
     }
 
+    // MARK: - ホワイトリスト外タグのカバレッジ/金額整合性フォールバック（issue調査 2026-07-21）
+    //
+    // NTT の TransactionsWithExternalCustomersIFRS・ファーストリテイリングの RevenueIFRS は
+    // 実データ検証済みのためホワイトリストに追加済み（`segmentExternalRevenueTags`）。
+    // 以下は「将来の未知タグ」向けフォールバック（`discoverDenominatorTagByCoverage`）自体を
+    // ホワイトリストから独立して検証するため、架空のタグ名を使う。
+
+    @Test func unknownTagResolvedByRatioFallbackWhenUnambiguous() throws {
+        let facts = [
+            SegmentFact(
+                tag: "UnknownVendorSalesTag", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "UnknownVendorSalesTag", contextRef: "CurrentYearDuration_BetaMember",
+                dimensions: ["OperatingSegmentsAxis": "BetaMember"],
+                value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        #expect(snap.denominatorTag == "UnknownVendorSalesTag")
+        #expect(snap.needsReview == false)
+        #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 2)
+    }
+
+    @Test func nonRevenueBlacklistedTagIsNotAdoptedEvenWhenRatioMatches() throws {
+        // AssetsIFRS はブラックリスト対象。たまたま合計が連結売上と近い値でも採用しない。
+        let facts = [
+            SegmentFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+    }
+
+    @Test func noTagMeetsRatioToleranceReturnsNil() throws {
+        // 三菱商事型: セグメント別にタグ付けされているが売上系タグが1件も無い（実データ検証済み）。
+        let facts = [
+            SegmentFact(
+                tag: "GrossProfitIFRS", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 5_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "NumberOfEmployees", contextRef: "CurrentYearInstant_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 1200, label: nil, unitRef: "pure", decimals: "0"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+    }
+
+    @Test func netRevenueLikeTagIsNotAdoptedEvenWhenRatioMatches() throws {
+        // Grok 4.5 レビュー指摘の回帰テスト: 銀行等金融機関の NetRevenueIFRS は、比率がたまたま
+        // 一致してもブラックリストで除外され、外部売上として誤採用されない。
+        let facts = [
+            SegmentFact(
+                tag: "NetRevenueIFRS", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+    }
+
+    @Test func unnamedSubtotalRowExcludedByNumericSafetyNetDuringDiscovery() throws {
+        // Grok 4.5 レビュー指摘の回帰テスト: 企業独自の合計行名（標準語彙に無い）が discovery の
+        // 合計計算に混ざると比率が約2倍になり、正しい売上タグが誤って弾かれていた。
+        // 本処理と同じ数値安全網（分母一致 member を小計とみなす）を discovery 側にも適用済み。
+        let facts = [
+            SegmentFact(
+                tag: "VendorSalesTag", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "VendorSalesTag", contextRef: "CurrentYearDuration_BetaMember",
+                dimensions: ["OperatingSegmentsAxis": "BetaMember"],
+                value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                // 企業独自の合計行名（segmentSubtotalMemberNames に無い）。
+                tag: "VendorSalesTag", contextRef: "CurrentYearDuration_CompanyWideTotalMember",
+                dimensions: ["OperatingSegmentsAxis": "CompanyWideTotalMember"],
+                value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        #expect(snap.denominatorTag == "VendorSalesTag")
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.02)
+    }
+
+    @Test func multipleAmbiguousCandidatesSetNeedsReview() throws {
+        // 2つの未知タグが両方とも合計±5%以内に収まる（外部売上っぽい語を含まない名前で作為的に作る）。
+        let facts = [
+            SegmentFact(
+                tag: "VendorTagOne", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "VendorTagTwo", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 101_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("denominator_tag_ambiguous"))
+    }
+
     @Test func subtotalRowsExcludedFromDenominatorButKeptInRows() throws {
         // クボタ: ReconcilingItemsMember が rows に残るが share 合計には使われない。
         let snap = try #require(try Self.snapshot(code: "6326", docID: "S100XR0M"))

@@ -615,6 +615,18 @@ enum Xbrl {
         "RevenueFromExternalCustomers2IFRS",  // 伊藤忠など
         "OperatingRevenueFromExternalCustomersIFRS",  // トヨタなど
         "RevenuesFromExternalCustomers",
+        "TransactionsWithExternalCustomersIFRS",  // NTTなど（実データ検証済み、issue調査 2026-07-21）
+        "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
+    ]
+
+    /// 本リストに一致するタグが無い場合の候補発見（`SegmentNormalizer` のカバレッジ/金額整合性
+    /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
+    /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や
+    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/segment-normalization-concept.md）。
+    static let segmentNonRevenueTagKeywords: [String] = [
+        "Profit", "Loss", "Asset", "Employee", "Equity", "Depreciation",
+        "Impairment", "Expenditure", "Liabilit", "Capital", "Dividend",
+        "NetRevenue", "OrdinaryRevenue", "OrdinaryIncome",  // 銀行等金融機関の指標概念（Grok 4.5 レビュー指摘）
     ]
 
     /// セグメント別の利益タグ（優先順）。IFRS でも会社により表記が割れる
