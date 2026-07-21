@@ -2,7 +2,7 @@
 
 現在地と次の意思決定の索引。手順は `deploy.md` / `operations.md`、構成のスナップショットは `architecture.md`、完了履歴は Git。
 
-## 現在地（2026-07-09）
+## 現在地（2026-07-21）
 
 | 項目 | 状態 |
 |---|---|
@@ -13,7 +13,7 @@
 | Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
 | Stage 4 read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
 | Stage 4-half | 進行中。issue #73 の半期報告書マッチング修正で `half-v2` へバンプ（`half-v1` 行は全件 stale・再計算対象）。read 床 `companyHalfFinancialsMinServableVersion = 1` を新規導入し `half-v1` 行も引き続き 200 |
-| Stage 5 | 進行中。`sections-v2` 150 / 旧 `sections-v1` 1,574（stale 消化中） |
+| Stage 5 | 進行中。issue #86, #93 対応で `sections-v3` へバンプ（2026-07-20）。旧版行は stale 消化中 |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
 | MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。8 ツール（`search_companies`・`get_analysis`・`get_half_analysis` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
@@ -42,7 +42,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 |---|---|
 | `companyFinancialsCacheVersion`（いま `fin-v4`） | Stage 4 ingest の書き込み・stale 判定 |
 | `companyFinancialsMinServableVersion`（いま `2`） | financials read の最低 N（`fin-vN`） |
-| `filingSectionsCacheVersion`（いま `sections-v2`） | Stage 5 ingest の書き込み・stale 判定 |
+| `filingSectionsCacheVersion`（いま `sections-v3`） | Stage 5 ingest の書き込み・stale 判定 |
 | `filingSectionsMinServableVersion`（いま `1`） | filing-content read の最低 N（`sections-vN`） |
 
 - 比較は `*-vN` を数値パースして行う（文字列辞書順は使わない）。
@@ -155,7 +155,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
-- [ ] Stage 5 `segments` セクションの `filingSectionsCacheVersion` バンプ（東京エレクトロン型企業が not_found のまま） — issue #93
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。**未着手**: geography 軸の ingest 配線。構想と残タスクは `docs/segment-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価

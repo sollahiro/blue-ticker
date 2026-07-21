@@ -30,7 +30,7 @@ swift run TickerDev analyze <code>  # 開発用ローカル解析（配布しな
 
 - `Services/` は `CLI/` のコマンド型を参照してはならない
 - `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `CLI/`・`Services/`・`Server/`・`DevCLI/` を参照してはならない
-- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
+- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`、Stage 6 取り込み結果を表す `SegmentBusinessBreakdownResult` 等）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
 - `DevCLI/` は `TickerDev` ターゲット向けの **ファサード**。`Server/` と同型で、公開面は `DevCLIEntry` の1点のみに絞る。EDINET を直接叩くコマンド実装（旧 `CLI/` local 分岐）はここに internal のまま置き、新たに public 化しない
 
 @.agents/rules/generic/workflow.md
