@@ -300,6 +300,23 @@ enum SegmentExtractor {
         return result
     }
 
+    /// 見出し行に埋め込まれた西暦年度ラベル（例:「2024年度」「2025年度」）を除去した正規化文字列。
+    /// 年度が変わるたびに個別のタグ・表現を追加する Whac-A-Mole を避けるための一般化ルール。
+    private static let fiscalYearLabelPattern = "[0-9０-９]{4}年度?"
+
+    private static func stripFiscalYearLabel(_ text: String) -> String {
+        text.replacingOccurrences(of: fiscalYearLabelPattern, with: "", options: .regularExpression)
+    }
+
+    /// 2つの見出し行が「同一開示（前期・当期を並べた表）の続き」とみなせるか。
+    /// 完全一致に加え、西暦年度ラベルのみが異なる場合も同一とみなす（学び参照、実データ検証:
+    /// 小松製作所の US-GAAP セグメント注記）。どちらも空/nil の場合は判定材料が無いため false。
+    private static func headerRowsMatch(_ a: [String]?, _ b: [String]?) -> Bool {
+        guard let a, let b, !a.isEmpty, !b.isEmpty else { return false }
+        if a == b { return true }
+        return a.map(stripFiscalYearLabel) == b.map(stripFiscalYearLabel)
+    }
+
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
     static func applyPeriodOrdering(_ tables: inout [SegmentTable]) {
         var i = 0
@@ -402,12 +419,15 @@ enum SegmentExtractor {
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
-                    // （grid 先頭行）が完全一致するなら「同じ表の続き」とみなして拾い続ける。
-                    // 見出し行が違う/直後に表が続かないなら別の開示とみなし打ち切る。
+                    // （grid 先頭行）が完全一致するか、西暦年度ラベルだけが異なる（実データ検証:
+                    // 小松製作所の US-GAAP セグメント注記。「2024年度」「2025年度」のように
+                    // 見出し行自体に年度が埋め込まれ、前期・当期表で完全一致しないため見逃していた）
+                    // なら「同じ表の続き」とみなして拾い続ける。それ以外の違いがあれば別の開示と
+                    // みなし打ち切る。
                     if let chained = findImmediatelyChainedTable(after: table),
                        !seen.contains(ObjectIdentifier(chained)) {
                         let chainedGrid = expandTable(chained)
-                        if chainedGrid.first == grid.first {
+                        if headerRowsMatch(chainedGrid.first, grid.first) {
                             candidate = chained
                             continue
                         }

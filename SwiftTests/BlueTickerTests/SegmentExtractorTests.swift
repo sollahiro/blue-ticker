@@ -385,6 +385,81 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoChainsSecondTableWhenHeaderRowDiffersOnlyByFiscalYearLabel() {
+        // 小松製作所型の回帰（issue調査 2026-07-21）: US-GAAP のセグメント注記で前期・当期の表が
+        // 直後に連続するが、見出し行（表の1行目）自体に西暦年度ラベル（「2024年度」「2025年度」）が
+        // 埋め込まれており完全一致しないため、当期表を取りこぼしていた。年度ラベルのみの違いは
+        // 「同じ開示の続き」とみなして拾う必要がある。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2025年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+            #expect(result.tables[1].markdown.contains("110") && result.tables[1].markdown.contains("210"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenHeaderDiffersBeyondFiscalYearLabel() {
+        // 年度ラベル以外にも差異がある場合は「別の開示」とみなし1枚目だけを採用する
+        // （過検出防止の回帰。年度ラベル正規化を入れても厳密さを失っていないことを確認）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenSameShapeButNonYearHeaderTextDiffers() {
+        // Grok 4.5 レビュー指摘の回帰テスト: 列数は同じで年度以外の文言が異なる場合
+        // （「2024年度｜売上」対「2025年度｜資産」）は、年度ラベル除去後も不一致のままであるべき
+        // （年度ラベル正規化が過検出を広げていないことを、列構成が違う既存の負例より厳密に確認する）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;売上&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2025年度&lt;/td&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+        }
+    }
+
     @Test func segmentInfoFallsBackToDimensionFacts() throws {
         // TextBlock がない場合は dimension 付き fact にフォールバックする
         let xml = """
