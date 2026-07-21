@@ -272,6 +272,43 @@ import Foundation
         #expect(smfg.rows.contains { $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" && $0.rowKind == "reconciling" })
     }
 
+    @Test func mizuhoResolvesViaGrossProfitBasisWithBankSpecificTagNames() throws {
+        // みずほは三菱UFJ・三井住友とも異なる独自の長いタグ名を使う（実データ検証、issue調査
+        // 2026-07-21）。golden fixture が無いため実データ（S100YF8Y, 2026-06-19提出）の値を
+        // 直接使う合成テスト。「その他」（OtherReportableSegmentsMember）は小計ではなく
+        // 実際に粗利益を持つ事業区分として segment 扱いになる（合計と一致することを確認済み）。
+        let grossProfitTag =
+            "GrossProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation"
+        let netOperatingProfitTag =
+            "NetBusinessProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsBeforeReversalOfProvisionForGeneralAllowanceForLoanLossesIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation"
+        func fact(_ tag: String, _ member: String, _ value: Double) -> SegmentFact {
+            SegmentFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact(grossProfitTag, "RBCReportableSegmentMember", 984_610_000_000),
+            fact(grossProfitTag, "CIBCReportableSegmentMember", 739_268_000_000),
+            fact(grossProfitTag, "GCIBCReportableSegmentMember", 856_952_000_000),
+            fact(grossProfitTag, "GMCReportableSegmentMember", 664_856_000_000),
+            fact(grossProfitTag, "AMCReportableSegmentMember", 73_572_000_000),
+            fact(grossProfitTag, "OtherReportableSegmentsMember", 196_415_000_000),
+            fact(grossProfitTag, "ReportableSegmentsMember", 3_515_673_000_000),
+            fact(netOperatingProfitTag, "RBCReportableSegmentMember", 237_515_000_000),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominatorTag == grossProfitTag)
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(snap.rows.contains { $0.labelRaw == "OtherReportableSegmentsMember" && $0.rowKind == "segment" })
+        #expect(snap.rows.first { $0.labelRaw == "RBCReportableSegmentMember" }?.profit == 237_515_000_000)
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
     @Test func bankDenominatorPrefersTrueGrandTotalOverPartialTotalWhenSegmentIsNegative() throws {
         // 回帰テスト: 市場部門が赤字の期は「顧客部門のみの部分合計」が「全社合計」より大きくなり、
         // 単純な最大値採用だと部分合計を誤って分母に選んでしまう。segment 行の合計に最も近い値
