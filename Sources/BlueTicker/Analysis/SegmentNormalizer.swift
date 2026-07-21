@@ -31,19 +31,32 @@ struct BreakdownSnapshot: Equatable {
 enum SegmentNormalizer {
 
     /// SegmentResult（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
-    /// 適用不可（html_table / not_found / 該当タグなし＝銀行等）の場合は nil。
+    /// 適用不可（html_table / not_found / 該当タグなし）の場合は nil。
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関は `normalizeBankBasis`
+    /// （粗利益/営業純益基準）にフォールバックする。
     static func normalize(_ result: SegmentResult, consolidatedSales: Double?) -> BreakdownSnapshot? {
-        guard result.method == "xbrl_facts", !result.facts.isEmpty,
-              let consolidatedSales, consolidatedSales != 0 else { return nil }
+        guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
+        if let consolidatedSales, consolidatedSales != 0,
+           let snapshot = normalizeSalesBasis(facts: result.facts, consolidatedSales: consolidatedSales)
+        {
+            return snapshot
+        }
+        return normalizeBankBasis(facts: result.facts)
+    }
+
+    /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
+    private static func normalizeSalesBasis(
+        facts: [SegmentFact], consolidatedSales: Double
+    ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
         if let whitelisted = Xbrl.segmentExternalRevenueTags.first(where: { tag in
-            result.facts.contains(where: { $0.tag == tag })
+            facts.contains(where: { $0.tag == tag })
         }) {
             denominatorTag = whitelisted
         } else if let discovered = discoverDenominatorTagByCoverage(
-            facts: result.facts, consolidatedSales: consolidatedSales)
+            facts: facts, consolidatedSales: consolidatedSales)
         {
             denominatorTag = discovered.tag
             denominatorNeedsReview = discovered.needsReview
@@ -51,14 +64,14 @@ enum SegmentNormalizer {
             return nil
         }
 
-        let perMember = resolvePerMember(facts: result.facts, tag: denominatorTag)
+        let perMember = resolvePerMember(facts: facts, tag: denominatorTag)
         guard !perMember.isEmpty else { return nil }
 
         // 利益は任意フィールド（対応する利益タグが無い/取れない member は profit=nil のまま）。
         let profitTag = Xbrl.segmentProfitTags.first(where: { tag in
-            result.facts.contains(where: { $0.tag == tag })
+            facts.contains(where: { $0.tag == tag })
         })
-        let profitByMember = profitTag.map { resolvePerMember(facts: result.facts, tag: $0) } ?? [:]
+        let profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
 
         // 1次判定: タクソノミ標準の小計・調整 member を名称で分類する。
         var kinds: [String: String] = [:]
@@ -107,6 +120,87 @@ enum SegmentNormalizer {
             rows: rows,
             sourceKind: "xbrl_facts",
             needsReview: axisNeedsReview || denominatorNeedsReview,
+            warnings: warnings
+        )
+    }
+
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関向けの代替経路（実データ検証: 三菱UFJ
+    /// 「NetRevenue」＝粗利益／「OperatingProfit」＝営業純益、三井住友「ConsolidatedGrossProfit」／
+    /// 「ConsolidatedNetBusinessProfit」、issue調査 2026-07-21）。分母は外部から渡される連結売上高
+    /// ではなく、`segmentSubtotalMemberNames` に名称一致する小計 member 自身の値を使う。複数の
+    /// 小計候補がある場合（三菱UFJ: 全社合計と顧客部門のみの部分合計の2種）は、segment 行の
+    /// 合計に最も近い値（＝真の全社合計）を採用する。単純な最大値採用だと、市場部門が赤字の期に
+    /// 部分合計の方が全社合計より大きくなり誤って選ばれることがあるため（golden データ検証）。
+    /// 名称一致する小計が無い場合は segment 行の合計にフォールバックし needsReview を立てる
+    /// （裏取りが名称一致より弱いため）。軸は常に business 固定（`classifyAxis` は
+    /// 「Japanese...」のような事業本部名を地域名の部分一致で誤検知するため、この経路では
+    /// 地域別開示が来る想定が無く再利用しない）。
+    private static func normalizeBankBasis(facts: [SegmentFact]) -> BreakdownSnapshot? {
+        guard let amountTag = Xbrl.segmentBankGrossProfitTags.first(where: { tag in
+            facts.contains(where: { $0.tag == tag })
+        }) else { return nil }
+
+        let perMember = resolvePerMember(facts: facts, tag: amountTag)
+        guard !perMember.isEmpty else { return nil }
+
+        var kinds: [String: String] = [:]
+        for member in perMember.keys {
+            if Xbrl.segmentReconcilingMemberNames.contains(member) {
+                kinds[member] = "reconciling"
+            } else if Xbrl.segmentSubtotalMemberNames.contains(member) {
+                kinds[member] = "subtotal"
+            } else {
+                kinds[member] = "segment"
+            }
+        }
+
+        let subtotalCandidates = perMember.keys.filter { kinds[$0] == "subtotal" }
+        let segmentSum = perMember.keys.filter { kinds[$0] == "segment" }
+            .reduce(0.0) { $0 + perMember[$1]!.value }
+        let denominator: Double
+        var denominatorWarning: String?
+        if let closestToSegmentSum = subtotalCandidates.min(by: {
+            abs(perMember[$0]!.value - segmentSum) < abs(perMember[$1]!.value - segmentSum)
+        }) {
+            denominator = perMember[closestToSegmentSum]!.value
+            // Grok 4.5 レビュー指摘: 小計候補が1件しかない場合（例: 全社合計タグが名称未収載で
+            // 部分合計しか無い）、距離チェックそのものがスキップされ needsReview が立たない穴が
+            // あった。segment 行合計と大きく乖離する小計を採用したときは要確認とする。
+            if abs(denominator) > 0, abs(denominator - segmentSum) / abs(denominator) > 0.05 {
+                denominatorWarning = "bank_denominator_far_from_segment_sum"
+            }
+        } else {
+            denominator = segmentSum
+            denominatorWarning = "bank_denominator_derived_from_segment_sum"
+        }
+        guard denominator != 0 else { return nil }
+
+        let profitTag = Xbrl.segmentBankNetOperatingProfitTags.first(where: { tag in
+            facts.contains(where: { $0.tag == tag })
+        })
+        let profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
+
+        let rows = perMember.keys.sorted().map { member -> BreakdownRow in
+            let fact = perMember[member]!
+            return BreakdownRow(
+                labelRaw: member,
+                amount: fact.value,
+                share: fact.value / denominator,
+                profit: profitByMember[member]?.value,
+                rowKind: kinds[member]!
+            )
+        }
+
+        var warnings: [String] = []
+        if let denominatorWarning { warnings.append(denominatorWarning) }
+
+        return BreakdownSnapshot(
+            axis: "business",
+            denominator: denominator,
+            denominatorTag: amountTag,
+            rows: rows,
+            sourceKind: "xbrl_facts",
+            needsReview: denominatorWarning != nil,
             warnings: warnings
         )
     }

@@ -642,6 +642,20 @@ enum Xbrl {
         "ProfitLossBeforeTaxIFRS",
     ]
 
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
+    /// `SegmentNormalizer.normalizeBankBasis` が売上系タグ不一致時のフォールバックとして使う
+    /// （実データ検証: 三菱UFJ、issue調査 2026-07-21）。
+    static let segmentBankGrossProfitTags: [String] = [
+        "NetRevenue",  // 三菱UFJ
+        "ConsolidatedGrossProfit",  // 三井住友
+    ]
+
+    /// segmentBankGrossProfitTags と対になる営業純益タグ（優先順）。任意フィールド。
+    static let segmentBankNetOperatingProfitTags: [String] = [
+        "OperatingProfit",  // 三菱UFJ
+        "ConsolidatedNetBusinessProfit",  // 三井住友
+    ]
+
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
     /// これらは比較の分母・シェア計算から除外する（行自体は保持する）。
     static let segmentSubtotalMemberNames: Set<String> = [
@@ -649,11 +663,14 @@ enum Xbrl {
         "TotalOfReportableSegmentsAndOthersMember",
         "CorporateSharedMember",
         "UnallocatedAmountsAndEliminationMember",
+        "TotalMember",  // 三菱UFJ（粗利益/営業純益の総額）
+        "TotalOfCustomerBusinessUnitMember",  // 三菱UFJ（市場・その他を除く顧客部門合計）
     ]
 
     /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。
     static let segmentReconcilingMemberNames: Set<String> = [
         "ReconcilingItemsMember",
+        "HeadOfficeAccountsEtcReportableSegmentMember",  // 三井住友（本社勘定等）
     ]
 
     /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。

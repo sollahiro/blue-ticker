@@ -668,6 +668,30 @@ import Foundation
             #expect(result.facts.isEmpty)
         }
     }
+
+    @Test func detectSingleSegmentDisclosureFindsDedicatedTag() {
+        // 千葉銀行型の回帰（issue調査 2026-07-21）: 単一セグメントのため記載省略の旨は
+        // EDINET/JPCRP タクソノミの専用タグ（TextBlockではない）で開示される。
+        let xml = textBlockXml(
+            tag: "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment",
+            escapedHtml: "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
+            #expect(disclosure == "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。")
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureReturnsNilWhenTagAbsent() {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs_cor:NetSales>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
+        }
+    }
 }
 
 // MARK: - Python ゴールデンファイルとのパリティ検証

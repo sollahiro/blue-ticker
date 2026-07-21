@@ -21,14 +21,16 @@ import Foundation
         ("8316", "S100W0S7", "三井住友"),
     ]
 
-    /// normalize が nil を返す会社（銀行2社は指標概念が別、US-GAAP 2社は segments facts に
-    /// 売上自体が無く、いずれも segmentExternalRevenueTags に一致するタグを持たない）。
+    /// normalize が nil を返す会社（US-GAAP 2社は segments facts に売上自体が無く、
+    /// segmentExternalRevenueTags にも segmentBankGrossProfitTags にも一致するタグを持たない）。
     /// オークマ（6103）は別の理由で nil: `SegmentExtractor.extractSegmentInfo` の
     /// axis-aware swap（docs/segment-normalization-concept.md 今後の検討事項3）により、
     /// golden の "segments" が xbrl_facts（地域別）から html_table（収益認識１由来の製品別）
     /// に変わった。SegmentNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
     /// （html_table 側の正規化は RevenueRecognitionLLMNormalizer が別途担う）。
-    private static let expectedNilCodes: Set<String> = ["4901", "6103", "7751", "8306", "8316"]
+    /// 銀行2社（8306・8316）はここには含まれない: `normalizeBankBasis`（粗利益/営業純益基準）で
+    /// 解決できるようになったため（issue調査 2026-07-21、下記 bankCompaniesResolveViaGrossProfitBasis 参照）。
+    private static let expectedNilCodes: Set<String> = ["4901", "6103", "7751"]
 
     private static func loadGolden() throws -> [String: [String: Any]] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -245,6 +247,90 @@ import Foundation
             let snap = try Self.snapshot(code: code, docID: docID)
             #expect(snap == nil, "\(name): expected nil (対象外) だが snapshot が返された")
         }
+    }
+
+    // MARK: - 銀行の粗利益/営業純益基準（issue調査 2026-07-21）
+
+    @Test func bankCompaniesResolveViaGrossProfitBasis() throws {
+        // 三菱UFJ（NetRevenue）・三井住友（ConsolidatedGrossProfit）はいずれも外部売上高の
+        // 概念を持たないため通常経路では nil になっていたが、粗利益/営業純益基準で解決できる。
+        let mufg = try #require(try Self.snapshot(code: "8306", docID: "S100W4FB"))
+        #expect(mufg.denominatorTag == "NetRevenue")
+        #expect(mufg.axis == "business")
+        #expect(mufg.needsReview == false)
+        #expect(mufg.rows.contains { $0.labelRaw == "RetailAndDigitalBusinessGroupMember" && $0.rowKind == "segment" })
+        #expect(mufg.rows.contains { $0.labelRaw == "GlobalMarketsBusinessGroupMember" && $0.rowKind == "segment" })
+        let mufgSegmentShare = mufg.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(mufgSegmentShare - 1.0) < 0.02)
+
+        let smfg = try #require(try Self.snapshot(code: "8316", docID: "S100W0S7"))
+        #expect(smfg.denominatorTag == "ConsolidatedGrossProfit")
+        #expect(smfg.axis == "business")
+        #expect(smfg.needsReview == false)
+        #expect(smfg.rows.contains { $0.labelRaw == "WholesaleBusinessUnitReportableSegmentMember" && $0.rowKind == "segment" })
+        #expect(smfg.rows.contains { $0.labelRaw == "RetailBusinessUnitReportableSegmentMember" && $0.rowKind == "segment" })
+        #expect(smfg.rows.contains { $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" && $0.rowKind == "reconciling" })
+    }
+
+    @Test func bankDenominatorPrefersTrueGrandTotalOverPartialTotalWhenSegmentIsNegative() throws {
+        // 回帰テスト: 市場部門が赤字の期は「顧客部門のみの部分合計」が「全社合計」より大きくなり、
+        // 単純な最大値採用だと部分合計を誤って分母に選んでしまう。segment 行の合計に最も近い値
+        // （＝真の全社合計）を選ぶ必要がある。
+        let facts = [
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_RetailMember",
+                dimensions: ["OperatingSegmentsAxis": "RetailMember"],
+                value: 900_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_GlobalMarketsBusinessGroupMember",
+                dimensions: ["OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"],
+                value: -300_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalMember",
+                dimensions: ["OperatingSegmentsAxis": "TotalMember"],
+                value: 600_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalOfCustomerBusinessUnitMember",
+                dimensions: ["OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"],
+                value: 900_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominator == 600_000_000_000)
+    }
+
+    @Test func bankDenominatorFarFromSegmentSumSetsNeedsReview() throws {
+        // Grok 4.5 レビュー指摘の回帰テスト: 小計候補が1件しかない場合、距離チェックが
+        // スキップされて needsReview が立たない穴があった。名称一致する小計しか無く、
+        // それが segment 行合計から大きく乖離している（ここでは全社合計タグが部分合計しか
+        // 無いケースを模す）ときは、採用した値であっても要確認とする。
+        let facts = [
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_RetailMember",
+                dimensions: ["OperatingSegmentsAxis": "RetailMember"],
+                value: 500_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_WholesaleMember",
+                dimensions: ["OperatingSegmentsAxis": "WholesaleMember"],
+                value: 500_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                // 全社合計タグが名称未収載で、部分合計（顧客部門の一部のみ）しか無い状態を模す。
+                tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalOfCustomerBusinessUnitMember",
+                dimensions: ["OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"],
+                value: 600_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominator == 600_000_000_000)
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("bank_denominator_far_from_segment_sum"))
     }
 
     // MARK: - ホワイトリスト外タグのカバレッジ/金額整合性フォールバック（issue調査 2026-07-21）

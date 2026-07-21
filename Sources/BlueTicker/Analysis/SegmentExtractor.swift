@@ -153,6 +153,33 @@ enum SegmentExtractor {
         return result
     }
 
+    /// EDINET/JPCRP タクソノミの専用タグ。単一セグメント企業がセグメント情報の記載を省略する旨を
+    /// 開示する箇所（実データ確認: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、
+    /// 記載を省略しております。」、ユーザー確認2026-07-21）。
+    static let singleSegmentDisclosureTag = "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment"
+
+    /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
+    /// `extractSegmentInfo` は表(`<table>`)を持たないブロックを対象外とするため method="not_found"
+    /// になり、「省略の確認が取れた」場合と「タグ自体が無く原因不明」の場合が区別できない。
+    /// 本関数は永続化（company_segment_breakdowns）には使わず、開発ツール/ログでの
+    /// 診断表示専用（該当タグの内容が見つかれば返す、無ければ nil）。
+    static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let collector = TextBlockSAXCollector(targetTags: [singleSegmentDisclosureTag])
+            let parser = XMLParser(data: data)
+            parser.delegate = collector
+            parser.parse()
+            for block in collector.blocks {
+                let text = (try? SwiftSoup.parse(block.content))
+                    .map { bs4Text($0, strip: true) } ?? block.content
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return nil
+    }
+
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
     static func extractGeographyInfo(xbrlDir: URL) -> SegmentResult {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)

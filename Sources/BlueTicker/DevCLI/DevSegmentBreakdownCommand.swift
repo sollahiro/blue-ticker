@@ -149,6 +149,10 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
             let segments = SegmentExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
             printSegmentPreview(segments)
+            if segments.method == "not_found",
+               let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
+                printError("診断: 単一セグメントのため開示省略と明記されています: \(disclosure)\n")
+            }
 
             if let client = llmClient {
                 let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(

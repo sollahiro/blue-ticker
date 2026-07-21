@@ -66,7 +66,7 @@
 5. **ミソはプロンプト単体ではなく正規化契約**（スキーマ・分母・指標・軸判定）。LLM を使うなら契約を `json_schema` / プロンプトに落とす。使わないなら同じ契約をコードと別名表に落とす。
 6. 時系列はスナップショット列でよい（再編の連続補正なし）。
 7. **小計・調整行の除外は名称リストより数値判定が頑健**。`ReportableSegmentsMember` / `ReconcilingItemsMember` 等の命名は会社で揺れるが、「金額が分母候補と一致する」「他行の合計と一致する」といった数値的判定なら会社をまたいで機械的に効く。
-8. **金融機関（銀行等）は Stage 6 v1 の対象外とする（確定）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（純収益）や `ConsolidatedGrossProfit`（連結粗利益）という別概念で、連結損益計算書の売上を分母にする設計とは整合しない。smoke 検証（三菱UFJ・三井住友）でシェア合計がそれぞれ 1.08 / 0.41 に破綻することを確認済み。銀行固有ロジックは既存の `Extractors.swift` 銀行系抽出と同様、後続の別トラックとして切り出す。
+8. **金融機関（銀行等）は外部売上高ではなく粗利益/営業純益を分母・指標にする別経路が必要（2026-07-21 実装済み）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（三菱UFJ）や `ConsolidatedGrossProfit`（三井住友）という別概念のため、連結損益計算書の売上を分母にする通常経路（`normalizeSalesBasis`）では解決できない。`SegmentNormalizer.normalizeBankBasis` を専用フォールバックとして新設し、分母は `segmentSubtotalMemberNames` に名称一致する小計 member のうち segment 行合計に最も近い値（＝真の全社合計。単純な最大値だと市場部門赤字の期に部分合計を誤選択する）を採用する。単一セグメント銀行（例: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、記載を省略しております」）は EDINET/JPCRP タクソノミの専用タグ `DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` で検出できるが、DB 永続化はせず開発ツール診断表示のみに留める（`SegmentExtractor.detectSingleSegmentDisclosure`）。
 9. **実装コストの重心は `segments` の `xbrl_facts` ではなく `geography` の `html_table` 側にある。** smoke 11社では `segments` は会計基準（J-GAAP/IFRS/US-GAAP）を問わず **11社中11社が `xbrl_facts`**。一方 `geography` は9社が `html_table`（fact なし）・2社が `not_found`（AZplanning・東邦レマックは小規模で海外拠点なし＝正当な欠測、抽出漏れではない）。現状 `SegmentResult.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
 10. **`segments` キーの軸（business/geography）は member 名のキーワード判定で機械的に決まる。** smoke 11社中10社は事業名（例: `SeasoningsAndFoodsReportableSegmentMember`）、オークマ1社のみ地域名（`JapanReportableSegmentsMember` 等）。小計・調整行を除いた member 全部が地域キーワードに一致する（オークマ: 4/4）か、1つも一致しない（他10社: 0/N）かで完全に分かれ、混在ケースは smoke 内では0件だった。→ 詳細は下記「軸判定ルール（案）」。
 11. **混在（部分一致）ケースの needs_review は「Domestic/Overseas のみの一致」では立てない。** 2026-07-20、smoke 外の実データ（1802大林組・1812鹿島建設・1808長谷工・2413エムスリー）で軸判定ルール4（混在→business+needs_review）の偽陽性を確認。建設業等では「国内建築/海外建築/国内土木/海外土木/不動産」のように事業区分×国内海外のクロス集計になる例や、「海外事業」を単独の事業区分として括る例があり、いずれも axis=business が正しい（sum(segment)≈denominator で確認済み）にもかかわらず Domestic/Overseas という汎用修飾語がヒットして要確認扱いになっていた。`Xbrl.segmentSpecificGeographyMemberKeywords`（Domestic/Overseas を除いた特定地域名）で混在判定を絞り、特定地域名の一致が1件も無ければ needs_review を立てないよう `SegmentNormalizer.classifyAxis` を修正（`segmentBreakdownCacheVersion` を `breakdown-v3` へバンプ）。
@@ -224,7 +224,7 @@ LLM 経路を同じ感覚で `llm-v1` / `llm-v2` バンプすると問題が二�
 - 会社間行ラベルの統一・共通バケットへの強制写像
 - 全企業・全期での事業×地域の完全充足保証
 - 生 XBRL を渡して LLM に一発抽出させる経路（現行 HTML/fact 前段を捨てない）
-- **金融機関（銀行等）のセグメント正規化**（v1）。セグメント指標が外部顧客売上と別概念のため対象外（学び8参照）
+- 単一セグメント開示（千葉銀行型）の DB 永続化。開発ツールでの診断表示のみ（学び8参照）
 
 ## 関連
 
