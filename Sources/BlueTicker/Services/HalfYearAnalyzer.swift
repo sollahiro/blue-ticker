@@ -205,21 +205,21 @@ struct HalfYearAnalyzer {
 
         // 派生指標を再計算
         if let gp = calc.grossProfit, let s = raw.sales, s > 0 {
-            calc.grossProfitMargin = (gp / s) * 100
+            calc.grossProfitMargin = (gp / s) * Financial.percent
         }
         if let op = raw.op, let s = raw.sales, s > 0 {
-            calc.operatingMargin = (op / s) * 100
+            calc.operatingMargin = (op / s) * Financial.percent
         }
         if let pretax = calc.pretaxIncome, pretax != 0, let tax = calc.incomeTax {
-            calc.effectiveTaxRate = (tax / pretax) * 100
+            calc.effectiveTaxRate = (tax / pretax) * Financial.percent
         }
 
         if let op = raw.op {
             let taxRate: Double
             if let etr = calc.effectiveTaxRate {
-                taxRate = min(max(etr / 100, 0.2), 0.45)
+                taxRate = min(max(etr / Financial.percent, Financial.nopatMinNormalTaxRate), Financial.nopatMaxNormalTaxRate)
             } else {
-                taxRate = 0.3
+                taxRate = Financial.nopatFallbackTaxRate
             }
             calc.nopat = op * (1 - taxRate)
         }
@@ -238,15 +238,15 @@ struct HalfYearAnalyzer {
 
         // ROE: H2 フロー / FY 期末純資産。Python の _apply_bs_snapshot と同じ設計。
         if let np = raw.np, let na = raw.netAssets, na > 0 {
-            calc.roe = (np / na) * 100
+            calc.roe = (np / na) * Financial.percent
         }
 
         if let nopat = calc.nopat, let ibd = calc.interestBearingDebt, let na = calc.netAssets {
             let ic = ibd + na
             if ic > 0 {
-                calc.roic = (nopat / ic) * 100
+                calc.roic = (nopat / ic) * Financial.percent
                 if let s = raw.sales, s > 0 {
-                    calc.nopatMargin = (nopat / s) * 100
+                    calc.nopatMargin = (nopat / s) * Financial.percent
                     calc.investedCapitalTurnover = s / ic
                 }
             }
