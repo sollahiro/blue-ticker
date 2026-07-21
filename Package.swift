@@ -11,8 +11,11 @@ let package = Package(
         .executable(name: "blt-server", targets: ["BltServer"]),
     ],
     dependencies: [
+        // CLI コマンド体系（Apple 公式）。
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        // HTML/XML の柔軟なパース。XMLParser では壊れた HTML を扱えないため。
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
+        // EDINET XBRL ZIP の展開。標準ライブラリに ZIP 実装がないため。
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
         // REST サーバー（HTTP・ルーティング・ミドルウェア）と DB 層（Fluent ORM ＋ Neon 接続）。
         // BltServerCore ターゲットのみが使用。素 NIO は Vapor が内包するため個別依存は持たない。
