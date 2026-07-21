@@ -527,6 +527,7 @@ enum Xbrl {
         "SegmentInformationIFRSTextBlock",
         "SegmentInformationUSGAAPTextBlock",
         "SegmentInformationByBusinessSegmentTextBlock",
+        "NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock",  // 第一三共・塩野義（jpigp_corタクソノミ）
     ]
     static let businessSegmentDimensionKeywords: [String] = [
         "OperatingSegments",
@@ -649,6 +650,7 @@ enum Xbrl {
         "NetRevenue",  // 三菱UFJ
         "ConsolidatedGrossProfit",  // 三井住友
         "GrossProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation",  // みずほ
+        "GrossOperatingProfit",  // りそな
     ]
 
     /// segmentBankGrossProfitTags と対になる営業純益タグ（優先順）。任意フィールド。
@@ -656,6 +658,7 @@ enum Xbrl {
         "OperatingProfit",  // 三菱UFJ
         "ConsolidatedNetBusinessProfit",  // 三井住友
         "NetBusinessProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsBeforeReversalOfProvisionForGeneralAllowanceForLoanLossesIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation",  // みずほ
+        "ActualNetOperatingProfit",  // りそな（実質業務純益）
     ]
 
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
