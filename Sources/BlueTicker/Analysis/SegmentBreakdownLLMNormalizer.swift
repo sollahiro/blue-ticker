@@ -81,7 +81,9 @@ enum SegmentBreakdownLLMNormalizer {
     static func normalize(
         _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
-        guard result.method == "html_table", !result.tables.isEmpty,
+        // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
+        // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
+        guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
         let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)

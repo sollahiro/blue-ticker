@@ -385,6 +385,161 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoChainsSecondTableWhenHeaderRowDiffersOnlyByFiscalYearLabel() {
+        // 小松製作所型の回帰（issue調査 2026-07-21）: US-GAAP のセグメント注記で前期・当期の表が
+        // 直後に連続するが、見出し行（表の1行目）自体に西暦年度ラベル（「2024年度」「2025年度」）が
+        // 埋め込まれており完全一致しないため、当期表を取りこぼしていた。年度ラベルのみの違いは
+        // 「同じ開示の続き」とみなして拾う必要がある。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2025年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+            #expect(result.tables[1].markdown.contains("110") && result.tables[1].markdown.contains("210"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenHeaderDiffersBeyondFiscalYearLabel() {
+        // 年度ラベル以外にも差異がある場合は「別の開示」とみなし1枚目だけを採用する
+        // （過検出防止の回帰。年度ラベル正規化を入れても厳密さを失っていないことを確認）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenSameShapeButNonYearHeaderTextDiffers() {
+        // Grok 4.5 レビュー指摘の回帰テスト: 列数は同じで年度以外の文言が異なる場合
+        // （「2024年度｜売上」対「2025年度｜資産」）は、年度ラベル除去後も不一致のままであるべき
+        // （年度ラベル正規化が過検出を広げていないことを、列構成が違う既存の負例より厳密に確認する）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2024年度&lt;/td&gt;&lt;td&gt;売上&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;2025年度&lt;/td&gt;&lt;td&gt;資産&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;建設機械・車両&lt;/td&gt;&lt;td&gt;リテールファイナンス&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
+        }
+    }
+
+    @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
+        // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
+        // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`
+        // 等）由来の表と、`OperatingSegmentsAxis` 付き dimension fact の両方が存在する場合、
+        // method は決定的な facts を優先する（html_table への表スクレイピングより信頼性が高いため）。
+        // ただし tables は破棄せず保持する（Grok 4.5 レビュー指摘: facts の正規化が失敗した場合に
+        // LLM の表フォールバックへ回せるようにするため）。
+        let escapedTable =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ダミー&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpigp_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jpigp/2022-11-01/jpigp_cor">
+          <xbrli:context id="CurrentYearDuration_SegmentAMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:SegmentAMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:SalesToExternalCustomersIFRS contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000000</jppfs_cor:SalesToExternalCustomersIFRS>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration_SegmentAMember">\(escapedTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "xbrl_facts")
+            #expect(!result.tables.isEmpty)
+            let fact = try #require(result.facts.first)
+            #expect(fact.tag == "SalesToExternalCustomersIFRS")
+        }
+    }
+
+    @Test func segmentInfoPrefersTableWhenDimensionFactsHaveNoRecognizedAmountTag() throws {
+        // 実データ回帰（キヤノン・富士フイルム、CI parityWithPythonGolden 差分調査 2026-07-22）:
+        // OperatingSegmentsAxis 付き fact が存在しても、それが従業員数・設備投資額等の非売上系
+        // タグしかない場合は method を html_table のままにする（facts 優先化により誤って
+        // xbrl_facts へ倒れ、golden との method 不一致を起こした回帰の再発防止）。
+        let escapedTable =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ダミー&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpigp_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jpigp/2022-11-01/jpigp_cor">
+          <xbrli:context id="CurrentYearDuration_SegmentAMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:SegmentAMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:NumberOfEmployees contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000</jppfs_cor:NumberOfEmployees>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration_SegmentAMember">\(escapedTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(!result.tables.isEmpty)
+        }
+    }
+
     @Test func segmentInfoFallsBackToDimensionFacts() throws {
         // TextBlock がない場合は dimension 付き fact にフォールバックする
         let xml = """
@@ -591,6 +746,30 @@ import Foundation
             #expect(result.method == "not_found")
             #expect(result.tables.isEmpty)
             #expect(result.facts.isEmpty)
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureFindsDedicatedTag() {
+        // 千葉銀行型の回帰（issue調査 2026-07-21）: 単一セグメントのため記載省略の旨は
+        // EDINET/JPCRP タクソノミの専用タグ（TextBlockではない）で開示される。
+        let xml = textBlockXml(
+            tag: "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment",
+            escapedHtml: "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
+            #expect(disclosure == "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。")
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureReturnsNilWhenTagAbsent() {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs_cor:NetSales>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
         }
     }
 }

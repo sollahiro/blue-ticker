@@ -94,6 +94,34 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.warnings.contains("business_label_looks_like_geography"))
     }
 
+    @Test func doesNotFlagSuspicionWhenLabelsAreDomesticOverseasPrefixedBusinessNames() async throws {
+        // キッコーマン型の回帰（issue調査 2026-07-21）: 「国内食料品製造・販売」
+        // 「海外食料品製造・販売」のような事業区分×国内海外クロス集計は、全行が
+        // 「国内」「海外」を含むため誤って地域別表と判定されていた。特定の国・地域名
+        // （日本・米国等）を1件も伴わない場合は誤検知としてガードを立てない。
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "国内食料品製造・販売", "amount": 155_718, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "海外食料品製造・販売", "amount": 149_491, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "海外食料品卸売", "amount": 432_800, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(),
+            consolidatedSales: (155_718 + 149_491 + 432_800) * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains("business_label_looks_like_geography"))
+    }
+
     @Test func flagsInconsistencyWhenDisclosedButNoRowHasProfit() async throws {
         let response: [String: Any] = [
             "applicable": true,

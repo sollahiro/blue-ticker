@@ -527,6 +527,7 @@ enum Xbrl {
         "SegmentInformationIFRSTextBlock",
         "SegmentInformationUSGAAPTextBlock",
         "SegmentInformationByBusinessSegmentTextBlock",
+        "NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock",  // 第一三共・塩野義（jpigp_corタクソノミ）
     ]
     static let businessSegmentDimensionKeywords: [String] = [
         "OperatingSegments",
@@ -615,6 +616,18 @@ enum Xbrl {
         "RevenueFromExternalCustomers2IFRS",  // 伊藤忠など
         "OperatingRevenueFromExternalCustomersIFRS",  // トヨタなど
         "RevenuesFromExternalCustomers",
+        "TransactionsWithExternalCustomersIFRS",  // NTTなど（実データ検証済み、issue調査 2026-07-21）
+        "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
+    ]
+
+    /// 本リストに一致するタグが無い場合の候補発見（`SegmentNormalizer` のカバレッジ/金額整合性
+    /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
+    /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や
+    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/segment-normalization-concept.md）。
+    static let segmentNonRevenueTagKeywords: [String] = [
+        "Profit", "Loss", "Asset", "Employee", "Equity", "Depreciation",
+        "Impairment", "Expenditure", "Liabilit", "Capital", "Dividend",
+        "NetRevenue", "OrdinaryRevenue", "OrdinaryIncome",  // 銀行等金融機関の指標概念（Grok 4.5 レビュー指摘）
     ]
 
     /// セグメント別の利益タグ（優先順）。IFRS でも会社により表記が割れる
@@ -630,6 +643,40 @@ enum Xbrl {
         "ProfitLossBeforeTaxIFRS",
     ]
 
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
+    /// `SegmentNormalizer.normalizeInternalSubtotalBasis` が売上系タグ不一致時の
+    /// フォールバックとして使う（実データ検証: 三菱UFJ、issue調査 2026-07-21）。
+    static let segmentBankGrossProfitTags: [String] = [
+        "NetRevenue",  // 三菱UFJ
+        "ConsolidatedGrossProfit",  // 三井住友
+        "GrossProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation",  // みずほ
+        "GrossOperatingProfit",  // りそな
+    ]
+
+    /// segmentBankGrossProfitTags と対になる営業純益タグ（優先順）。任意フィールド。
+    static let segmentBankNetOperatingProfitTags: [String] = [
+        "OperatingProfit",  // 三菱UFJ
+        "ConsolidatedNetBusinessProfit",  // 三井住友
+        "NetBusinessProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsBeforeReversalOfProvisionForGeneralAllowanceForLoanLossesIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation",  // みずほ
+        "ActualNetOperatingProfit",  // りそな（実質業務純益）
+    ]
+
+    /// 保険会社（IFRS17）の保険収益タグ（優先順）。銀行と同じ理由で外部売上高の概念を持たない
+    /// ため `normalizeInternalSubtotalBasis` のフォールバックとして使う（実データ検証:
+    /// 東京海上ホールディングス、issue調査 2026-07-21）。
+    static let segmentInsuranceRevenueTags: [String] = [
+        "InsuranceRevenueIFRS",  // 東京海上
+    ]
+
+    /// segmentInsuranceRevenueTags と対になる保険サービス損益タグ（優先順）。任意フィールド。
+    /// 税引前利益（ProfitLossBeforeTaxIFRS）ではなくこちらを採用: 保険引受由来の業績を示す
+    /// IFRS17の中核指標で、投資損益等の変動を含まないため事業間比較に適する
+    /// （東京海上の実データでは ProfitLossBeforeTaxIFRS だと生保セグメントが会計上の理由で
+    /// 大幅赤字になり比較の意味が薄れる）。
+    static let segmentInsuranceServiceResultTags: [String] = [
+        "InsuranceServiceResultIFRS",  // 東京海上
+    ]
+
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
     /// これらは比較の分母・シェア計算から除外する（行自体は保持する）。
     static let segmentSubtotalMemberNames: Set<String> = [
@@ -637,11 +684,14 @@ enum Xbrl {
         "TotalOfReportableSegmentsAndOthersMember",
         "CorporateSharedMember",
         "UnallocatedAmountsAndEliminationMember",
+        "TotalMember",  // 三菱UFJ（粗利益/営業純益の総額）
+        "TotalOfCustomerBusinessUnitMember",  // 三菱UFJ（市場・その他を除く顧客部門合計）
     ]
 
     /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。
     static let segmentReconcilingMemberNames: Set<String> = [
         "ReconcilingItemsMember",
+        "HeadOfficeAccountsEtcReportableSegmentMember",  // 三井住友（本社勘定等）
     ]
 
     /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。
@@ -693,6 +743,16 @@ enum Xbrl {
         "欧州", "ヨーロッパ", "アジア", "中国", "オセアニア",
         "パシフィック", "中近東", "中東", "海外", "国内",
     ]
+
+    /// `segmentGeographyLabelKeywordsJa` から「国内」「海外」相当の汎用修飾語を除いた、
+    /// 特定の国・地域名のみのサブセット（`segmentSpecificGeographyMemberKeywords`の日本語版）。
+    /// 実データ検証（キッコーマン、issue調査 2026-07-21）: 「国内食料品製造・販売」
+    /// 「海外食料品製造・販売」のような事業区分×国内海外クロス集計の行ラベルは、全行が
+    /// 「国内」「海外」を含むため `segmentGeographyLabelKeywordsJa` の全一致判定に誤ってヒットし、
+    /// 事業別の表を地域別と誤認して needs_review になっていた。特定地域名の一致が無い場合は
+    /// 誤検知としてガードを立てない。
+    static let segmentSpecificGeographyLabelKeywordsJa: [String] =
+        segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

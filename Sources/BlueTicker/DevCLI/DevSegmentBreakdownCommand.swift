@@ -149,6 +149,10 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
             let segments = SegmentExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
             printSegmentPreview(segments)
+            if segments.method == "not_found",
+               let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
+                printError("診断: 単一セグメントのため開示省略と明記されています: \(disclosure)\n")
+            }
 
             if let client = llmClient {
                 let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
@@ -165,8 +169,8 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
                       snapshot.axis == "business" {
                 printError("source: xbrl_facts（LLM未設定・決定的経路のみ）\n")
                 printSnapshot(snapshot)
-            } else if segments.method == "html_table" {
-                printError("エラー: business が html_table のため LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
+            } else if !segments.tables.isEmpty {
+                printError("エラー: business の表フォールバックに LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
                 throw ExitCode.failure
             } else {
                 printError("business snapshot: nil\n")

@@ -153,6 +153,33 @@ enum SegmentExtractor {
         return result
     }
 
+    /// EDINET/JPCRP タクソノミの専用タグ。単一セグメント企業がセグメント情報の記載を省略する旨を
+    /// 開示する箇所（実データ確認: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、
+    /// 記載を省略しております。」、ユーザー確認2026-07-21）。
+    static let singleSegmentDisclosureTag = "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment"
+
+    /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
+    /// `extractSegmentInfo` は表(`<table>`)を持たないブロックを対象外とするため method="not_found"
+    /// になり、「省略の確認が取れた」場合と「タグ自体が無く原因不明」の場合が区別できない。
+    /// 本関数は永続化（company_segment_breakdowns）には使わず、開発ツール/ログでの
+    /// 診断表示専用（該当タグの内容が見つかれば返す、無ければ nil）。
+    static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let collector = TextBlockSAXCollector(targetTags: [singleSegmentDisclosureTag])
+            let parser = XMLParser(data: data)
+            parser.delegate = collector
+            parser.parse()
+            for block in collector.blocks {
+                let text = (try? SwiftSoup.parse(block.content))
+                    .map { bs4Text($0, strip: true) } ?? block.content
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return nil
+    }
+
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
     static func extractGeographyInfo(xbrlDir: URL) -> SegmentResult {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
@@ -192,11 +219,10 @@ enum SegmentExtractor {
             else { return nil }
             return member
         }
-        guard !segmentMembers.isEmpty else { return false }
-        let uniqueMembers = Set(segmentMembers)
-        return uniqueMembers.allSatisfy { member in
-            Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
-        }
+        // `SegmentNormalizer.classifyAxis` と同じ基準を使う（重複ロジック回避。以前は本関数だけ
+        // 独立した簡易版チェックを持っており、キッコーマン型「国内食品製造販売」等の事業区分×
+        // 国内海外クロス集計を誤って地域軸と判定し、classifyAxis 側の修正が反映されなかった）。
+        return SegmentNormalizer.allMembersAreGeography(Array(Set(segmentMembers)))
     }
 
     /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
@@ -298,6 +324,23 @@ enum SegmentExtractor {
             }
         }
         return result
+    }
+
+    /// 見出し行に埋め込まれた西暦年度ラベル（例:「2024年度」「2025年度」）を除去した正規化文字列。
+    /// 年度が変わるたびに個別のタグ・表現を追加する Whac-A-Mole を避けるための一般化ルール。
+    private static let fiscalYearLabelPattern = "[0-9０-９]{4}年度?"
+
+    private static func stripFiscalYearLabel(_ text: String) -> String {
+        text.replacingOccurrences(of: fiscalYearLabelPattern, with: "", options: .regularExpression)
+    }
+
+    /// 2つの見出し行が「同一開示（前期・当期を並べた表）の続き」とみなせるか。
+    /// 完全一致に加え、西暦年度ラベルのみが異なる場合も同一とみなす（学び参照、実データ検証:
+    /// 小松製作所の US-GAAP セグメント注記）。どちらも空/nil の場合は判定材料が無いため false。
+    private static func headerRowsMatch(_ a: [String]?, _ b: [String]?) -> Bool {
+        guard let a, let b, !a.isEmpty, !b.isEmpty else { return false }
+        if a == b { return true }
+        return a.map(stripFiscalYearLabel) == b.map(stripFiscalYearLabel)
     }
 
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
@@ -402,12 +445,15 @@ enum SegmentExtractor {
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
-                    // （grid 先頭行）が完全一致するなら「同じ表の続き」とみなして拾い続ける。
-                    // 見出し行が違う/直後に表が続かないなら別の開示とみなし打ち切る。
+                    // （grid 先頭行）が完全一致するか、西暦年度ラベルだけが異なる（実データ検証:
+                    // 小松製作所の US-GAAP セグメント注記。「2024年度」「2025年度」のように
+                    // 見出し行自体に年度が埋め込まれ、前期・当期表で完全一致しないため見逃していた）
+                    // なら「同じ表の続き」とみなして拾い続ける。それ以外の違いがあれば別の開示と
+                    // みなし打ち切る。
                     if let chained = findImmediatelyChainedTable(after: table),
                        !seen.contains(ObjectIdentifier(chained)) {
                         let chainedGrid = expandTable(chained)
-                        if chainedGrid.first == grid.first {
+                        if headerRowsMatch(chainedGrid.first, grid.first) {
                             candidate = chained
                             continue
                         }
@@ -500,20 +546,50 @@ enum SegmentExtractor {
         return results.sorted { ($0.tag, $0.contextRef) < ($1.tag, $1.contextRef) }
     }
 
+    /// facts に売上高/銀行/保険いずれかの認識可能なタグが含まれる場合に限り、
+    /// xbrl_facts（構造化・決定的）を html_table（表スクレイピング）より優先する。実データ検証:
+    /// 東京海上・第一三共・キッコーマン等は専用 TextBlock タグ（`NotesSegmentInformation
+    /// ConsolidatedFinancialStatementsIFRSTextBlock`）と `OperatingSegmentsAxis` 付き facts の
+    /// 両方を持ち、facts の方が決定的に解決できる（銀行・保険基準等）ため優先すべき
+    /// （issue調査 2026-07-21）。
+    ///
+    /// 「facts が非空なら無条件で優先」だと壊れる実例（CI で発覚、golden parity 回帰）:
+    /// キヤノン・富士フイルムは `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等
+    /// `OperatingSegmentsAxis` 付きだが売上に無関係な facts を持ち、無条件優先だと正しい
+    /// html_table（US-GAAP注記の事業別セグメント表）を差し置いて解決不能な facts を選んでしまう。
+    /// 認識可能なタグの有無で判定することで、この2社は従来どおり html_table のまま。
+    ///
+    /// facts 優先時も tables は破棄せず保持する（Grok 4.5 レビュー指摘: 破棄すると、facts が
+    /// 何らかの理由で正規化に失敗した会社が LLM フォールバックの手段を永久に失う）。
+    /// 呼び出し側（`SegmentBusinessBreakdownResolver` 等）は `method == "xbrl_facts"` を
+    /// 優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へフォールバックする。
     private static func buildResult(
         xbrlDir: URL,
         tables: [SegmentTable],
         dimensionKeywords: [String]
     ) -> SegmentResult {
+        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = extractFactsByDimension(xbrlDir: xbrlDir, dimensionKeywords: dimensionKeywords, contextMap: contextMap)
+        if !facts.isEmpty, factsContainRecognizedAmountTag(facts) {
+            return SegmentResult(method: "xbrl_facts", tables: tables, facts: facts)
+        }
         if !tables.isEmpty {
             return SegmentResult(method: "html_table", tables: tables, facts: [])
         }
-        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
-        let facts = extractFactsByDimension(xbrlDir: xbrlDir, dimensionKeywords: dimensionKeywords, contextMap: contextMap)
         if !facts.isEmpty {
             return SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
         }
         return SegmentResult(method: "not_found", tables: [], facts: [])
+    }
+
+    /// facts が `SegmentNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
+    /// 1つでも含むか。含まなければ `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等の
+    /// 売上に無関係な facts（キヤノン・富士フイルム型）とみなし、html_table を優先させる。
+    private static func factsContainRecognizedAmountTag(_ facts: [SegmentFact]) -> Bool {
+        let tags = Set(facts.map(\.tag))
+        return tags.contains(where: Xbrl.segmentExternalRevenueTags.contains)
+            || tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains)
+            || tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains)
     }
 
     // MARK: - bs4 互換テキスト抽出
