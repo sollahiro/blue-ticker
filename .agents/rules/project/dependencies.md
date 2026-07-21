@@ -11,17 +11,7 @@
 
 Foundation / 標準ライブラリで賄えるものは外部パッケージを追加しない。
 
-## 現在の依存関係（`Package.swift`）
-
-| パッケージ | 採用理由 |
-|---|---|
-| `swift-argument-parser` | CLI コマンド体系（Apple 公式） |
-| `SwiftSoup` | HTML/XML の柔軟なパース（`XMLParser` では壊れた HTML を扱えない） |
-| `ZIPFoundation` | EDINET XBRL ZIP の展開（標準ライブラリに ZIP なし） |
-| `vapor` | `blt-server`（REST HTTP API）の HTTP サーバー・ルーティング・ミドルウェア。`BltServerCore` ターゲットのみ |
-| `fluent` ＋ `fluent-postgres-driver` | `blt-server` の DB 層（ORM ＋ Neon Postgres 接続）。`BltServerCore` ターゲットのみ |
-| `fluent-sqlite-driver` | マイグレーションをインメモリ DB で実走検証するテスト専用。本番は Postgres。`BltServerCoreTests` ターゲットのみ |
-| `modelcontextprotocol/swift-sdk`（`MCP` product） | MCP プロトコル（JSON-RPC・ツールスキーマ・`StatelessHTTPServerTransport`）の公式実装。自前実装は現実的でない。`BltMcpServerCore` ターゲットのみ（`BlueTickerCore`・CLI には波及しない） |
+現在の依存パッケージと採用理由は `Package.swift` の各 `.package(...)` 宣言に付随するコメントを正本とする（ここに二重管理の一覧は置かない。過去に表だけ更新されず実態とズレた実績があるため）。
 
 ## 新規パッケージ追加の判断基準
 
