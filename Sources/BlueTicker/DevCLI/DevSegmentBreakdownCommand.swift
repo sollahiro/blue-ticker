@@ -169,8 +169,8 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
                       snapshot.axis == "business" {
                 printError("source: xbrl_facts（LLM未設定・決定的経路のみ）\n")
                 printSnapshot(snapshot)
-            } else if segments.method == "html_table" {
-                printError("エラー: business が html_table のため LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
+            } else if !segments.tables.isEmpty {
+                printError("エラー: business の表フォールバックに LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
                 throw ExitCode.failure
             } else {
                 printError("business snapshot: nil\n")

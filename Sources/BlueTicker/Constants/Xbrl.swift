@@ -644,8 +644,8 @@ enum Xbrl {
     ]
 
     /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
-    /// `SegmentNormalizer.normalizeBankBasis` が売上系タグ不一致時のフォールバックとして使う
-    /// （実データ検証: 三菱UFJ、issue調査 2026-07-21）。
+    /// `SegmentNormalizer.normalizeInternalSubtotalBasis` が売上系タグ不一致時の
+    /// フォールバックとして使う（実データ検証: 三菱UFJ、issue調査 2026-07-21）。
     static let segmentBankGrossProfitTags: [String] = [
         "NetRevenue",  // 三菱UFJ
         "ConsolidatedGrossProfit",  // 三井住友
@@ -659,6 +659,22 @@ enum Xbrl {
         "ConsolidatedNetBusinessProfit",  // 三井住友
         "NetBusinessProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsBeforeReversalOfProvisionForGeneralAllowanceForLoanLossesIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation",  // みずほ
         "ActualNetOperatingProfit",  // りそな（実質業務純益）
+    ]
+
+    /// 保険会社（IFRS17）の保険収益タグ（優先順）。銀行と同じ理由で外部売上高の概念を持たない
+    /// ため `normalizeInternalSubtotalBasis` のフォールバックとして使う（実データ検証:
+    /// 東京海上ホールディングス、issue調査 2026-07-21）。
+    static let segmentInsuranceRevenueTags: [String] = [
+        "InsuranceRevenueIFRS",  // 東京海上
+    ]
+
+    /// segmentInsuranceRevenueTags と対になる保険サービス損益タグ（優先順）。任意フィールド。
+    /// 税引前利益（ProfitLossBeforeTaxIFRS）ではなくこちらを採用: 保険引受由来の業績を示す
+    /// IFRS17の中核指標で、投資損益等の変動を含まないため事業間比較に適する
+    /// （東京海上の実データでは ProfitLossBeforeTaxIFRS だと生保セグメントが会計上の理由で
+    /// 大幅赤字になり比較の意味が薄れる）。
+    static let segmentInsuranceServiceResultTags: [String] = [
+        "InsuranceServiceResultIFRS",  // 東京海上
     ]
 
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
@@ -727,6 +743,16 @@ enum Xbrl {
         "欧州", "ヨーロッパ", "アジア", "中国", "オセアニア",
         "パシフィック", "中近東", "中東", "海外", "国内",
     ]
+
+    /// `segmentGeographyLabelKeywordsJa` から「国内」「海外」相当の汎用修飾語を除いた、
+    /// 特定の国・地域名のみのサブセット（`segmentSpecificGeographyMemberKeywords`の日本語版）。
+    /// 実データ検証（キッコーマン、issue調査 2026-07-21）: 「国内食料品製造・販売」
+    /// 「海外食料品製造・販売」のような事業区分×国内海外クロス集計の行ラベルは、全行が
+    /// 「国内」「海外」を含むため `segmentGeographyLabelKeywordsJa` の全一致判定に誤ってヒットし、
+    /// 事業別の表を地域別と誤認して needs_review になっていた。特定地域名の一致が無い場合は
+    /// 誤検知としてガードを立てない。
+    static let segmentSpecificGeographyLabelKeywordsJa: [String] =
+        segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

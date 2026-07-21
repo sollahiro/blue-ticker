@@ -460,6 +460,48 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
+        // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
+        // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`
+        // 等）由来の表と、`OperatingSegmentsAxis` 付き dimension fact の両方が存在する場合、
+        // method は決定的な facts を優先する（html_table への表スクレイピングより信頼性が高いため）。
+        // ただし tables は破棄せず保持する（Grok 4.5 レビュー指摘: facts の正規化が失敗した場合に
+        // LLM の表フォールバックへ回せるようにするため）。
+        let escapedTable =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ダミー&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpigp_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jpigp/2022-11-01/jpigp_cor">
+          <xbrli:context id="CurrentYearDuration_SegmentAMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:SegmentAMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:NetSales contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000000</jppfs_cor:NetSales>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration_SegmentAMember">\(escapedTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "xbrl_facts")
+            #expect(!result.tables.isEmpty)
+            let fact = try #require(result.facts.first)
+            #expect(fact.tag == "NetSales")
+        }
+    }
+
     @Test func segmentInfoFallsBackToDimensionFacts() throws {
         // TextBlock がない場合は dimension 付き fact にフォールバックする
         let xml = """

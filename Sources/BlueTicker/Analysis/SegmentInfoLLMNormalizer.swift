@@ -74,7 +74,9 @@ enum SegmentInfoLLMNormalizer {
     static func normalize(
         _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
-        guard result.method == "html_table", !result.tables.isEmpty,
+        // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
+        // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
+        guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
         let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
@@ -163,12 +165,18 @@ enum SegmentInfoLLMNormalizer {
         // 誤って business として採用した疑いがある。「その他」「その他の地域」を含むラベルは
         // 判定から除外する — 事業別表にも「その他及び全社」等の形でほぼ必ず出現するため
         // （固有の地域名が最低1つ一致することを要求する設計を骨抜きにしないため）。
+        // さらに「国内」「海外」のみの一致では立てない（実データ検証: キッコーマン、
+        // issue調査 2026-07-21。「国内食料品製造・販売」等の事業区分×国内海外クロス集計を
+        // 誤って地域別と誤認していた）。特定の国・地域名が最低1つ一致することを要求する。
         let segmentLabels = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         let labelsExcludingOther = segmentLabels.filter { !$0.contains("その他") }
         let allLabelsLookLikeGeography = !labelsExcludingOther.isEmpty && labelsExcludingOther.allSatisfy { label in
             Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
         }
-        if allLabelsLookLikeGeography {
+        let hasSpecificGeographyLabel = labelsExcludingOther.contains { label in
+            Xbrl.segmentSpecificGeographyLabelKeywordsJa.contains { label.contains($0) }
+        }
+        if allLabelsLookLikeGeography, hasSpecificGeographyLabel {
             needsReview = true
             warnings.append("business_label_looks_like_geography")
         }

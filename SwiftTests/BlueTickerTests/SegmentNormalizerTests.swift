@@ -219,6 +219,31 @@ import Foundation
         }
     }
 
+    @Test func allDomesticOverseasPrefixedBusinessSegmentsResolveAsBusinessNotGeography() throws {
+        // キッコーマン型の回帰（issue調査 2026-07-21）: 大林組等と異なり、全 member が
+        // Domestic/Overseas を含む（RealEstateMember のような非地域名の混入が無い）場合、
+        // 従来は「全メンバーが地域キーワードに一致 → geography」の完全一致判定が無条件に
+        // 発動し、事業区分×国内海外クロス集計を誤って地域軸と判定していた。
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("DomesticFoodsManufacturingAndSalesReportableSegmentMember", 155_718_000_000),
+            ("DomesticOthersReportableSegmentMember", 7_528_000_000),
+            ("OverseasFoodsManufacturingAndSalesReportableSegmentMember", 149_491_000_000),
+            ("OverseasFoodsWholesaleReportableSegmentMember", 432_800_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+    }
+
+    @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
+        // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
+        // 引き続き geography のまま（既知のトレードオフ、学び11参照）。
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("DomesticMember", 60_000_000_000),
+            ("OverseasMember", 40_000_000_000),
+        ]))
+        #expect(snap.axis == "geography")
+    }
+
     /// 対照群: 特定地域名（Japan 等）が事業区分名の一部として混在する場合は、
     /// これまで通り needs_review を立てる（学び11の緩和は Domestic/Overseas 限定）。
     @Test func specificGeographyNameMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
@@ -307,6 +332,59 @@ import Foundation
         #expect(snap.rows.first { $0.labelRaw == "RBCReportableSegmentMember" }?.profit == 237_515_000_000)
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
+    @Test func insuranceCompanyResolvesViaInsuranceRevenueBasis() throws {
+        // 東京海上型の回帰（issue調査 2026-07-21）: 保険会社は外部売上高の概念を持たず
+        // InsuranceRevenueIFRS（保険収益）/ InsuranceServiceResultIFRS（保険サービス損益）を使う。
+        // 銀行基準と同じ内部小計基準の経路（normalizeInternalSubtotalBasis）で解決できる。
+        func fact(_ tag: String, _ member: String, _ value: Double) -> SegmentFact {
+            SegmentFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("InsuranceRevenueIFRS", "JapanPCBusinessReportableSegmentMember", 3_040_655_000_000),
+            fact("InsuranceRevenueIFRS", "JapanLifeBusinessReportableSegmentMember", 265_448_000_000),
+            fact("InsuranceRevenueIFRS", "InternationalBusinessReportableSegmentMember", 4_448_332_000_000),
+            fact("InsuranceRevenueIFRS", "SolutionAndOtherBusinessReportableSegmentMember", 0),
+            fact("InsuranceRevenueIFRS", "ReconcilingItemsMember", -60_875_000_000),
+            fact("InsuranceRevenueIFRS", "ReportableSegmentsMember", 7_754_436_000_000),
+            fact("InsuranceServiceResultIFRS", "JapanPCBusinessReportableSegmentMember", 257_461_000_000),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominatorTag == "InsuranceRevenueIFRS")
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(snap.rows.first { $0.labelRaw == "JapanPCBusinessReportableSegmentMember" }?.profit == 257_461_000_000)
+        #expect(snap.rows.first { $0.labelRaw == "ReconcilingItemsMember" }?.rowKind == "reconciling")
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
+    @Test func salesBasisTakesPriorityOverInternalSubtotalBasisWhenBothTagsPresent() throws {
+        // 通常の売上高ホワイトリストタグが存在する会社（銀行・保険ではない大多数）は
+        // 引き続き normalizeSalesBasis を優先する（normalizeInternalSubtotalBasis に
+        // フォールバックしない）ことを確認する。
+        let facts = [
+            SegmentFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AlphaMember",
+                dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+                value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+            SegmentFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_BetaMember",
+                dimensions: ["OperatingSegmentsAxis": "BetaMember"],
+                value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+            ),
+        ]
+        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        #expect(snap.denominatorTag == "RevenuesFromExternalCustomers")
+        #expect(snap.denominator == 100_000_000_000)
     }
 
     @Test func bankDenominatorPrefersTrueGrandTotalOverPartialTotalWhenSegmentIsNegative() throws {

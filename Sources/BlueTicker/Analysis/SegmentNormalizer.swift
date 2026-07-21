@@ -42,7 +42,15 @@ enum SegmentNormalizer {
         {
             return snapshot
         }
-        return normalizeBankBasis(facts: result.facts)
+        if let bank = normalizeInternalSubtotalBasis(
+            facts: result.facts, amountTags: Xbrl.segmentBankGrossProfitTags,
+            profitTags: Xbrl.segmentBankNetOperatingProfitTags, warningPrefix: "bank")
+        {
+            return bank
+        }
+        return normalizeInternalSubtotalBasis(
+            facts: result.facts, amountTags: Xbrl.segmentInsuranceRevenueTags,
+            profitTags: Xbrl.segmentInsuranceServiceResultTags, warningPrefix: "insurance")
     }
 
     /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
@@ -124,10 +132,12 @@ enum SegmentNormalizer {
         )
     }
 
-    /// 銀行等、外部売上高に相当する概念を持たない金融機関向けの代替経路（実データ検証: 三菱UFJ
-    /// 「NetRevenue」＝粗利益／「OperatingProfit」＝営業純益、三井住友「ConsolidatedGrossProfit」／
-    /// 「ConsolidatedNetBusinessProfit」、issue調査 2026-07-21）。分母は外部から渡される連結売上高
-    /// ではなく、`segmentSubtotalMemberNames` に名称一致する小計 member 自身の値を使う。複数の
+    /// 銀行・保険等、外部売上高に相当する概念を持たない業種向けの共通フォールバック経路
+    /// （実データ検証: 三菱UFJ「NetRevenue」＝粗利益／「OperatingProfit」＝営業純益、
+    /// 三井住友「ConsolidatedGrossProfit」／「ConsolidatedNetBusinessProfit」、
+    /// 東京海上「InsuranceRevenueIFRS」＝保険収益／「InsuranceServiceResultIFRS」＝
+    /// 保険サービス損益、issue調査 2026-07-21）。分母は外部から渡される連結売上高ではなく、
+    /// `segmentSubtotalMemberNames` に名称一致する小計 member 自身の値を使う。複数の
     /// 小計候補がある場合（三菱UFJ: 全社合計と顧客部門のみの部分合計の2種）は、segment 行の
     /// 合計に最も近い値（＝真の全社合計）を採用する。単純な最大値採用だと、市場部門が赤字の期に
     /// 部分合計の方が全社合計より大きくなり誤って選ばれることがあるため（golden データ検証）。
@@ -135,8 +145,10 @@ enum SegmentNormalizer {
     /// （裏取りが名称一致より弱いため）。軸は常に business 固定（`classifyAxis` は
     /// 「Japanese...」のような事業本部名を地域名の部分一致で誤検知するため、この経路では
     /// 地域別開示が来る想定が無く再利用しない）。
-    private static func normalizeBankBasis(facts: [SegmentFact]) -> BreakdownSnapshot? {
-        guard let amountTag = Xbrl.segmentBankGrossProfitTags.first(where: { tag in
+    private static func normalizeInternalSubtotalBasis(
+        facts: [SegmentFact], amountTags: [String], profitTags: [String], warningPrefix: String
+    ) -> BreakdownSnapshot? {
+        guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
         }) else { return nil }
 
@@ -167,15 +179,15 @@ enum SegmentNormalizer {
             // 部分合計しか無い）、距離チェックそのものがスキップされ needsReview が立たない穴が
             // あった。segment 行合計と大きく乖離する小計を採用したときは要確認とする。
             if abs(denominator) > 0, abs(denominator - segmentSum) / abs(denominator) > 0.05 {
-                denominatorWarning = "bank_denominator_far_from_segment_sum"
+                denominatorWarning = "\(warningPrefix)_denominator_far_from_segment_sum"
             }
         } else {
             denominator = segmentSum
-            denominatorWarning = "bank_denominator_derived_from_segment_sum"
+            denominatorWarning = "\(warningPrefix)_denominator_derived_from_segment_sum"
         }
         guard denominator != 0 else { return nil }
 
-        let profitTag = Xbrl.segmentBankNetOperatingProfitTags.first(where: { tag in
+        let profitTag = profitTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
         })
         let profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
@@ -331,15 +343,55 @@ enum SegmentNormalizer {
             .map(\.labelRaw)
         guard !segmentMembers.isEmpty else { return ("business", false) }
 
+        if allMembersAreGeography(segmentMembers) { return ("geography", false) }
+
         let geoMatches = segmentMembers.filter { member in
             Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
         }
-        if geoMatches.count == segmentMembers.count { return ("geography", false) }
         if geoMatches.isEmpty { return ("business", false) }
 
         let specificGeoMatches = segmentMembers.filter { member in
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
         }
         return ("business", !specificGeoMatches.isEmpty)
+    }
+
+    /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
+    /// `SegmentExtractor` の axis-aware swap 判定（オークマ型検出）の双方が同じ基準を必要とする
+    /// ため一本化した（重複ロジック回避。以前は各所に同型のチェックが独立して存在し、片方だけ
+    /// 修正して食い違うバグがあった。issue調査 2026-07-21）。
+    ///
+    /// 全 member が地域キーワードにヒットしても、特定地域名（Japan 等）を1件も伴わず、かつ
+    /// Domestic/Overseas を除去した後に事業名らしき語幹が残るなら「国内食品製造販売」
+    /// 「海外食品製造販売」（キッコーマン型）のような事業区分×国内海外クロス集計であり、
+    /// 真の地域軸ではない。「DomesticMember」「OverseasMember」のような裸の地域区分
+    /// （除去後に何も残らない）はこの条件に当たらず地域軸のまま（既知のトレードオフ、学び11参照）。
+    static func allMembersAreGeography(_ members: [String]) -> Bool {
+        guard !members.isEmpty else { return false }
+        let geoMatches = members.filter { member in
+            Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
+        }
+        guard geoMatches.count == members.count else { return false }
+
+        let specificGeoMatches = members.filter { member in
+            Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
+        }
+        if specificGeoMatches.isEmpty, members.allSatisfy(hasSubstantiveNonGeographyContent) {
+            return false
+        }
+        return true
+    }
+
+    /// member 名から Domestic/Overseas と共通の member 接尾辞を除去した後、実質的な語幹が
+    /// 残るか（＝事業名等の修飾を伴う複合ラベルか）を判定する。
+    private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
+        var stripped = member
+        for keyword in ["Domestic", "Overseas"] {
+            stripped = stripped.replacingOccurrences(of: keyword, with: "")
+        }
+        for suffix in ["ReportableSegmentsMember", "ReportableSegmentMember", "Member"] {
+            stripped = stripped.replacingOccurrences(of: suffix, with: "")
+        }
+        return !stripped.isEmpty
     }
 }

@@ -39,7 +39,10 @@ enum SegmentBusinessBreakdownResolver {
 
         // 2) html_table 経路。見出しで「収益認識関係由来（swap 済み）」か
         //    「segments 自体が html_table（例: キヤノン注23）」かを振り分ける。
-        guard segments.method == "html_table" else { return (nil, .notFound, nil) }
+        // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
+        // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
+        // フォールバックできるようにするため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
+        guard !segments.tables.isEmpty else { return (nil, .notFound, nil) }
 
         if segments.tables.first?.heading == SegmentExtractor.revenueRecognitionHeading {
             let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(

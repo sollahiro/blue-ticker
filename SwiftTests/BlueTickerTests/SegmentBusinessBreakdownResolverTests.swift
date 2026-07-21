@@ -106,6 +106,47 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
+    /// Grok 4.5 レビュー指摘の回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
+    /// facts の正規化に失敗する（未知タグで売上高・銀行・保険いずれの経路にも一致しない）場合、
+    /// tables が非空なら LLM の表フォールバックへ回る（facts 優先化で tables を破棄していた頃は
+    /// ここで永久に notFound になっていた）。
+    @Test func xbrlFactsMethodFallsBackToSegmentInfoLLMWhenFactsDoNotNormalize() async throws {
+        let unresolvableFact = SegmentFact(
+            tag: "SomeUnknownProprietaryMetricNotInAnyWhitelist",
+            contextRef: "CurrentYearDuration_AlphaMember",
+            dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
+            value: 999, label: nil, unitRef: "JPY", decimals: "-6"
+        )
+        let table = SegmentTable(
+            heading: "セグメント情報",
+            markdown: "| 事業A | 事業B |\n|---|---|\n| 600 | 400 |",
+            period: "当期"
+        )
+        let segments = SegmentResult(method: "xbrl_facts", tables: [table], facts: [unresolvableFact])
+
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "事業A", "amount": 600, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "事業B", "amount": 400, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, _) = await SegmentBusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: 1_000_000_000, client: client
+        )
+
+        #expect(source == .segmentInfoLLM)
+        #expect(snapshot?.axis == "business")
+        #expect(await client.timesCalled() == 1)
+    }
+
     /// キヤノン（segments が html_table。US-GAAP 注23、見出しが「セグメント情報」で振り分けて
     /// SegmentInfoLLMNormalizer 経由で解決する）。
     @Test func canonSegmentInfoResolvesViaSegmentInfoLLM() async throws {

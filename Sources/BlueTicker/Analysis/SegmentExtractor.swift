@@ -219,11 +219,10 @@ enum SegmentExtractor {
             else { return nil }
             return member
         }
-        guard !segmentMembers.isEmpty else { return false }
-        let uniqueMembers = Set(segmentMembers)
-        return uniqueMembers.allSatisfy { member in
-            Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
-        }
+        // `SegmentNormalizer.classifyAxis` と同じ基準を使う（重複ロジック回避。以前は本関数だけ
+        // 独立した簡易版チェックを持っており、キッコーマン型「国内食品製造販売」等の事業区分×
+        // 国内海外クロス集計を誤って地域軸と判定し、classifyAxis 側の修正が反映されなかった）。
+        return SegmentNormalizer.allMembersAreGeography(Array(Set(segmentMembers)))
     }
 
     /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
@@ -547,18 +546,29 @@ enum SegmentExtractor {
         return results.sorted { ($0.tag, $0.contextRef) < ($1.tag, $1.contextRef) }
     }
 
+    /// xbrl_facts（構造化・決定的）を html_table（表スクレイピング）より優先する。実データ検証:
+    /// 東京海上・第一三共・キッコーマン等は専用 TextBlock タグ（`NotesSegmentInformation
+    /// ConsolidatedFinancialStatementsIFRSTextBlock`）と `OperatingSegmentsAxis` 付き facts の
+    /// 両方を持つが、facts の方が決定的に解決できる（銀行・保険基準等）ため優先すべき
+    /// （issue調査 2026-07-21。golden 27社では両方非空のケースが無く、影響は新規ケースのみ）。
+    ///
+    /// facts が非空でも tables は破棄せず保持する（Grok 4.5 レビュー指摘: facts 優先で tables を
+    /// 破棄すると、facts が売上系タグ不一致等で正規化に失敗した会社が LLM フォールバックの
+    /// 手段を永久に失う）。呼び出し側（`SegmentBusinessBreakdownResolver` 等）は
+    /// `method == "xbrl_facts"` を優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へ
+    /// フォールバックする。
     private static func buildResult(
         xbrlDir: URL,
         tables: [SegmentTable],
         dimensionKeywords: [String]
     ) -> SegmentResult {
-        if !tables.isEmpty {
-            return SegmentResult(method: "html_table", tables: tables, facts: [])
-        }
         let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = extractFactsByDimension(xbrlDir: xbrlDir, dimensionKeywords: dimensionKeywords, contextMap: contextMap)
         if !facts.isEmpty {
-            return SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+            return SegmentResult(method: "xbrl_facts", tables: tables, facts: facts)
+        }
+        if !tables.isEmpty {
+            return SegmentResult(method: "html_table", tables: tables, facts: [])
         }
         return SegmentResult(method: "not_found", tables: [], facts: [])
     }
