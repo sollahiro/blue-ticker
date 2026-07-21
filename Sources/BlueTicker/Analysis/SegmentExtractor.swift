@@ -546,17 +546,23 @@ enum SegmentExtractor {
         return results.sorted { ($0.tag, $0.contextRef) < ($1.tag, $1.contextRef) }
     }
 
+    /// facts に売上高/銀行/保険いずれかの認識可能なタグが含まれる場合に限り、
     /// xbrl_facts（構造化・決定的）を html_table（表スクレイピング）より優先する。実データ検証:
     /// 東京海上・第一三共・キッコーマン等は専用 TextBlock タグ（`NotesSegmentInformation
     /// ConsolidatedFinancialStatementsIFRSTextBlock`）と `OperatingSegmentsAxis` 付き facts の
-    /// 両方を持つが、facts の方が決定的に解決できる（銀行・保険基準等）ため優先すべき
-    /// （issue調査 2026-07-21。golden 27社では両方非空のケースが無く、影響は新規ケースのみ）。
+    /// 両方を持ち、facts の方が決定的に解決できる（銀行・保険基準等）ため優先すべき
+    /// （issue調査 2026-07-21）。
     ///
-    /// facts が非空でも tables は破棄せず保持する（Grok 4.5 レビュー指摘: facts 優先で tables を
-    /// 破棄すると、facts が売上系タグ不一致等で正規化に失敗した会社が LLM フォールバックの
-    /// 手段を永久に失う）。呼び出し側（`SegmentBusinessBreakdownResolver` 等）は
-    /// `method == "xbrl_facts"` を優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へ
-    /// フォールバックする。
+    /// 「facts が非空なら無条件で優先」だと壊れる実例（CI で発覚、golden parity 回帰）:
+    /// キヤノン・富士フイルムは `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等
+    /// `OperatingSegmentsAxis` 付きだが売上に無関係な facts を持ち、無条件優先だと正しい
+    /// html_table（US-GAAP注記の事業別セグメント表）を差し置いて解決不能な facts を選んでしまう。
+    /// 認識可能なタグの有無で判定することで、この2社は従来どおり html_table のまま。
+    ///
+    /// facts 優先時も tables は破棄せず保持する（Grok 4.5 レビュー指摘: 破棄すると、facts が
+    /// 何らかの理由で正規化に失敗した会社が LLM フォールバックの手段を永久に失う）。
+    /// 呼び出し側（`SegmentBusinessBreakdownResolver` 等）は `method == "xbrl_facts"` を
+    /// 優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へフォールバックする。
     private static func buildResult(
         xbrlDir: URL,
         tables: [SegmentTable],
@@ -564,13 +570,26 @@ enum SegmentExtractor {
     ) -> SegmentResult {
         let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = extractFactsByDimension(xbrlDir: xbrlDir, dimensionKeywords: dimensionKeywords, contextMap: contextMap)
-        if !facts.isEmpty {
+        if !facts.isEmpty, factsContainRecognizedAmountTag(facts) {
             return SegmentResult(method: "xbrl_facts", tables: tables, facts: facts)
         }
         if !tables.isEmpty {
             return SegmentResult(method: "html_table", tables: tables, facts: [])
         }
+        if !facts.isEmpty {
+            return SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        }
         return SegmentResult(method: "not_found", tables: [], facts: [])
+    }
+
+    /// facts が `SegmentNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
+    /// 1つでも含むか。含まなければ `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等の
+    /// 売上に無関係な facts（キヤノン・富士フイルム型）とみなし、html_table を優先させる。
+    private static func factsContainRecognizedAmountTag(_ facts: [SegmentFact]) -> Bool {
+        let tags = Set(facts.map(\.tag))
+        return tags.contains(where: Xbrl.segmentExternalRevenueTags.contains)
+            || tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains)
+            || tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains)
     }
 
     // MARK: - bs4 互換テキスト抽出

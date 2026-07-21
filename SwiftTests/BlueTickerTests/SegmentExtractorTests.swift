@@ -489,7 +489,7 @@ import Foundation
             </xbrli:scenario>
           </xbrli:context>
           <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
-          <jppfs_cor:NetSales contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000000</jppfs_cor:NetSales>
+          <jppfs_cor:SalesToExternalCustomersIFRS contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000000</jppfs_cor:SalesToExternalCustomersIFRS>
           <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration_SegmentAMember">\(escapedTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
         </xbrli:xbrl>
         """
@@ -498,7 +498,45 @@ import Foundation
             #expect(result.method == "xbrl_facts")
             #expect(!result.tables.isEmpty)
             let fact = try #require(result.facts.first)
-            #expect(fact.tag == "NetSales")
+            #expect(fact.tag == "SalesToExternalCustomersIFRS")
+        }
+    }
+
+    @Test func segmentInfoPrefersTableWhenDimensionFactsHaveNoRecognizedAmountTag() throws {
+        // 実データ回帰（キヤノン・富士フイルム、CI parityWithPythonGolden 差分調査 2026-07-22）:
+        // OperatingSegmentsAxis 付き fact が存在しても、それが従業員数・設備投資額等の非売上系
+        // タグしかない場合は method を html_table のままにする（facts 優先化により誤って
+        // xbrl_facts へ倒れ、golden との method 不一致を起こした回帰の再発防止）。
+        let escapedTable =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ダミー&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpigp_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jpigp/2022-11-01/jpigp_cor">
+          <xbrli:context id="CurrentYearDuration_SegmentAMember">
+            <xbrli:entity>
+              <xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier>
+            </xbrli:entity>
+            <xbrli:period>
+              <xbrli:startDate>2023-04-01</xbrli:startDate>
+              <xbrli:endDate>2024-03-31</xbrli:endDate>
+            </xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:SegmentAMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:NumberOfEmployees contextRef="CurrentYearDuration_SegmentAMember" unitRef="JPY" decimals="-6">1000</jppfs_cor:NumberOfEmployees>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration_SegmentAMember">\(escapedTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(!result.tables.isEmpty)
         }
     }
 
