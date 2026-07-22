@@ -614,6 +614,51 @@ import Foundation
         #expect(abs(segmentShare - 1.0) < 0.02)
     }
 
+    @Test func totoGlobalHousingEquipmentPluralMemberIsSubtotalNotSegment() throws {
+        // TOTO（5332）過去期分の回帰（2026-07-23、実データ再検証）: 2210e6bは単数形
+        // GlobalHousingEquipmentBusinessReportableSegmentMemberのみをホワイトリストに
+        // 追加したが、過去5期（2021〜2025年度、doc S100W0X9等）はmember名が複数形
+        // （...ReportableSegments Member）で、実際の格納済みDBを確認すると解消していなかった。
+        // 数値はdoc S100W0X9（2025年度）の実データ: Global住設673,852百万円 ≈
+        // 日本住設481,346＋米州70,478＋アジア・オセアニア50,220＋中国66,924＋欧州4,882
+        // （=673,850、差2は開示側の丸め）。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("AdvancedCeramicsBusinessReportableSegmentsMember", 50_325_000_000),
+            fact("AmericasBusinessReportableSegmentsMember", 70_478_000_000),
+            fact("AsiaOceaniaBusinessReportableSegmentsMember", 50_220_000_000),
+            fact("ChinaBusinessReportableSegmentsMember", 66_924_000_000),
+            fact("EuropeBusinessReportableSegmentsMember", 4_882_000_000),
+            fact("GlobalHousingEquipmentBusinessReportableSegmentsMember", 673_852_000_000),
+            fact("JapanHousingEquipmentBusinessReportableSegmentsMember", 481_346_000_000),
+            fact(
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                277_000_000),
+            fact("ReconcilingItemsMember", 0),
+            fact("ReportableSegmentsMember", 724_177_000_000),
+            fact("TotalOfReportableSegmentsAndOthersMember", 724_454_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 724_454_000_000))
+
+        let global = try #require(
+            snap.rows.first { $0.labelRaw == "GlobalHousingEquipmentBusinessReportableSegmentsMember" })
+        #expect(global.rowKind == "subtotal")
+        #expect(snap.axis == "business")
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.02)
+        // 注: 事業区分(セラミック等)と地域区分(米州/アジア・オセアニア/中国/欧州)が同居する
+        // 混在構造のため、axis_ambiguous 自体は別問題として残る（本コミットのスコープ外。
+        // 二重計上の解消のみを検証する）。
+        #expect(snap.warnings.contains("axis_ambiguous"))
+    }
+
     @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {
         // 丸井グループ（8252）: 分母タグが単数形の RevenueFromExternalCustomers（IFRS接尾辞なし）で、
         // ホワイトリスト未収載だった当時はカバレッジ発見フォールバックが複数候補を検出し
