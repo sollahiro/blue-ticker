@@ -181,23 +181,45 @@ enum SegmentInfoLLMNormalizer {
             warnings.append("business_label_looks_like_geography")
         }
 
-        // 分母整合性チェック。
-        let segmentShare = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount } / consolidatedSales
+        // 分母整合性チェック。証券会社等（例: 野村HD, issue #105）は資金調達費用が大きく、
+        // セグメント表の「収益合計（金融費用控除後）」が連結売上高（総額）の半分以下になり、
+        // consolidatedSales基準では必ず乖離する。この場合、表自身のsubtotal行（「計」等。
+        // segment+reconciling合計と一致するのが通例）を分母として使えないか試す
+        // （xbrl_facts経路の銀行・保険向けnormalizeInternalSubtotalBasisと同型の考え方）。
+        // ガード（5%。xbrl_facts経路と同じ閾値）を通らない場合は表取り違えの疑いが残るため
+        // フォールバックせず、従来どおりneeds_reviewを立てる。
+        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
+        let segmentShare = segmentSum / consolidatedSales
+
+        var denominator = consolidatedSales
+        var denominatorTag = "income_statement.sales"
+
         if !denominatorTolerance.contains(segmentShare) {
-            needsReview = true
-            warnings.append("llm_row_sum_mismatch")
+            let internalSum = segmentSum + reconcilingSum
+            let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
+            if let closest = subtotalCandidates.min(by: {
+                abs($0.amount - internalSum) < abs($1.amount - internalSum)
+            }), closest.amount != 0, abs(closest.amount - internalSum) / abs(closest.amount) <= 0.05 {
+                denominator = closest.amount
+                denominatorTag = "llm_table_subtotal"
+                warnings.append("llm_denominator_from_internal_subtotal")
+            } else {
+                needsReview = true
+                warnings.append("llm_row_sum_mismatch")
+            }
         }
 
         let rowsWithShare = rows.map { row -> BreakdownRow in
             var r = row
-            r.share = r.amount / consolidatedSales
+            r.share = r.amount / denominator
             return r
         }
 
         let snapshot = BreakdownSnapshot(
             axis: "business",
-            denominator: consolidatedSales,
-            denominatorTag: "income_statement.sales",
+            denominator: denominator,
+            denominatorTag: denominatorTag,
             rows: rowsWithShare,
             sourceKind: "segment_info",
             needsReview: needsReview,
