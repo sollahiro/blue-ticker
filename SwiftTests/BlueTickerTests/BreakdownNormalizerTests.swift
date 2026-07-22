@@ -669,6 +669,8 @@ import Foundation
 
         #expect(snap.axis == "geography")
         #expect(snap.needsReview == false)
+        let other = try #require(snap.rows.first { $0.labelRaw == "OtherReportableSegmentsMember" })
+        #expect(other.rowKind == "segment")
     }
 
     // MARK: - ゴールデン値回帰（ユーザー確認済み、2026-07-18）
