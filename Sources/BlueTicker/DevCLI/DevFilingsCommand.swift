@@ -78,7 +78,7 @@ struct DevFilingCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let validSections = Set(xbrlSections.keys).union(SegmentExtractor.specialSectionKeys)
+        let validSections = Set(xbrlSections.keys).union(BreakdownExtractor.specialSectionKeys)
         let unknown = sections.filter { !validSections.contains($0) }
         guard unknown.isEmpty else {
             printError("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n")
@@ -113,17 +113,17 @@ struct DevFilingCommand: AsyncParsableCommand {
 
         // セクション抽出
         let targetSections = sections.isEmpty
-            ? Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys
+            ? Array(xbrlSections.keys) + BreakdownExtractor.specialSectionKeys
             : sections
         let parser = XBRLParser()
         var result: [String: Any] = ["docID": targetDocID, "code": codeTrimmed]
         var extracted: [String: String] = [:]
-        var segmentResults: [String: SegmentResult] = [:]
+        var extractedBreakdowns: [String: ExtractedBreakdown] = [:]
         var sectionsOut: [String: Any] = [:]
 
         for sectionKey in targetSections {
-            if let seg = SegmentExtractor.extractSpecialSection(sectionKey, xbrlDir: xbrlDir) {
-                segmentResults[sectionKey] = seg
+            if let seg = BreakdownExtractor.extractSpecialSection(sectionKey, xbrlDir: xbrlDir) {
+                extractedBreakdowns[sectionKey] = seg
                 sectionsOut[sectionKey] = seg.toDictionary()
             } else if let sectionDef = xbrlSections[sectionKey] {
                 let text = parser.extractSection(in: xbrlDir, sectionName: sectionDef.title)
@@ -140,7 +140,7 @@ struct DevFilingCommand: AsyncParsableCommand {
                 print(str)
             }
         } else {
-            FilingRendering.renderSections(docID: targetDocID, extracted: extracted, segmentResults: segmentResults)
+            FilingRendering.renderSections(docID: targetDocID, extracted: extracted, extractedBreakdowns: extractedBreakdowns)
         }
     }
 }

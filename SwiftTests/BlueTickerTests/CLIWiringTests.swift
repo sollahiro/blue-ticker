@@ -22,7 +22,7 @@ import Testing
     /// TickerDev（配布しない開発用ローカル解析 CLI）側のサブコマンド登録。
     @Test func devRootRegistersAllDocumentedSubcommands() {
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
-        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing", "segment-breakdown"]
+        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing", "breakdown"]
         #expect(names == expected)
     }
 
@@ -93,7 +93,7 @@ import Testing
     /// ヘルプテキストに列挙している全セクションキーが実際のバリデーション集合に存在する
     /// （ヘルプと実装のドリフト検知）。
     @Test func documentedSectionKeysAreAllAccepted() {
-        let valid = Set(xbrlSections.keys).union(SegmentExtractor.specialSectionKeys)
+        let valid = Set(xbrlSections.keys).union(BreakdownExtractor.specialSectionKeys)
         let documented: Set = [
             "business_risks", "mda", "capex_overview", "major_facilities",
             "facility_plans", "research_and_development", "segments", "geography",

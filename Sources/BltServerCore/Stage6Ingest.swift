@@ -1,6 +1,6 @@
 // Stage 6 取り込み: 日経225構成銘柄の有報について business 軸の事業別内訳を解決し
-// company_segment_breakdowns へ upsert する。解決は BlueTickerCore のファサード
-// （resolveSegmentBusinessBreakdown）に委譲し、ここでは対象選定・staleness 判定・DB upsert のみを
+// company_breakdowns へ upsert する。解決は BlueTickerCore のファサード
+// （resolveBusinessBreakdown）に委譲し、ここでは対象選定・staleness 判定・DB upsert のみを
 // 担う（ネットワーク非依存でテスト可能）。geography 軸は今後の検討事項として未配線（行を作らない）。
 //
 // 対象は東証上場全体ではなく日経225構成銘柄に限定する（LLM 呼び出し費用を抑えるため。呼び出し元
@@ -11,7 +11,7 @@
 // （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が Stage 5 と同じ
 // `stage5IngestYears` を渡す想定（Stage 6 専用の別値は持たない）。
 //
-// staleness 判定は Stage 5 と異なる（docs/segment-normalization-concept.md「今後の検討事項8」）。
+// staleness 判定は Stage 5 と異なる（docs/breakdown-normalization-concept.md「今後の検討事項8」）。
 // - xbrl_facts 経由（決定的）: cache_version が現行と不一致なら再計算してよい（安価・再現可能）。
 // - LLM 経由（source != xbrl_facts）: cache_version のバンプだけでは再計算しない。needs_review が
 //   true の行のみ再試行対象にする（同一 docID の入力は不変のため、content_hash は書き込むが
@@ -23,8 +23,8 @@ import Fluent
 import Foundation
 import Logging
 
-/// company_segment_breakdowns の axis 値。geography 軸は未配線（今後の検討事項）。
-let segmentBreakdownAxisBusiness = "business"
+/// company_breakdowns の axis 値。geography 軸は未配線（今後の検討事項）。
+let breakdownAxisBusiness = "business"
 
 /// Stage 6 取り込み結果のサマリ。
 public struct Stage6IngestSummary: Sendable, Equatable {
@@ -43,9 +43,9 @@ public struct Stage6IngestSummary: Sendable, Equatable {
 }
 
 /// docID・consolidatedSales を受けて business 軸内訳の解決結果を返す関数。
-/// 本番は `context.resolveSegmentBusinessBreakdown`、テストはフェイクを注入する。
-public typealias SegmentBusinessBreakdownResolveFn =
-    @Sendable (String, Double?) async -> SegmentBusinessBreakdownResult
+/// 本番は `context.resolveBusinessBreakdown`、テストはフェイクを注入する。
+public typealias BusinessBreakdownResolveFn =
+    @Sendable (String, Double?) async -> BusinessBreakdownResult
 
 /// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定。ファイル名は Stage 5 と揃えて汎用化して
 /// いるが対象は上場全体ではない）の有報（直近 years 年ぶん）を走査し、未解決 or 再試行対象
@@ -54,7 +54,7 @@ public typealias SegmentBusinessBreakdownResolveFn =
 func runStage6Ingest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
-    logger: Logger? = nil, resolve: SegmentBusinessBreakdownResolveFn
+    logger: Logger? = nil, resolve: BusinessBreakdownResolveFn
 ) async throws -> Stage6IngestSummary {
     let sets = try await stage5Candidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
@@ -76,18 +76,18 @@ func runStage6Ingest(
                 "DB接続が不安定なため Stage 6 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
             break
         }
-        let key = CompanySegmentBreakdown.compositeID(docID: cand.docID, axis: segmentBreakdownAxisBusiness)
+        let key = CompanyBreakdown.compositeID(docID: cand.docID, axis: breakdownAxisBusiness)
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await CompanySegmentBreakdown.find(key, on: db)
+            try await CompanyBreakdown.find(key, on: db)
         }
         if existing == nil {
             missing.append(cand)
         } else if existing?.needsReview == true {
             flaggedForReview.append(cand)
-        } else if existing?.source == segmentBreakdownSourceXbrlFacts,
-            existing?.cacheVersion != segmentBreakdownCacheVersion
+        } else if existing?.source == breakdownSourceXbrlFacts,
+            existing?.cacheVersion != breakdownCacheVersion
         {
             staleVersion.append(cand)
         } else {
@@ -106,15 +106,15 @@ func runStage6Ingest(
             )
             break
         }
-        let key = CompanySegmentBreakdown.compositeID(docID: cand.docID, axis: segmentBreakdownAxisBusiness)
+        let key = CompanyBreakdown.compositeID(docID: cand.docID, axis: breakdownAxisBusiness)
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await CompanySegmentBreakdown.find(key, on: db)
+            try await CompanyBreakdown.find(key, on: db)
         }
         if let row = existing, row.needsReview == false,
-            row.source != segmentBreakdownSourceXbrlFacts
-                || row.cacheVersion == segmentBreakdownCacheVersion
+            row.source != breakdownSourceXbrlFacts
+                || row.cacheVersion == breakdownCacheVersion
         {
             skipped += 1
             continue
@@ -133,10 +133,10 @@ func runStage6Ingest(
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
-                try await storeSegmentBreakdown(
-                    existing: existing, docID: cand.docID, axis: segmentBreakdownAxisBusiness,
+                try await storeBreakdown(
+                    existing: existing, docID: cand.docID, axis: breakdownAxisBusiness,
                     code: cand.code, submitDateTime: cand.submitDateTime, payload: payload,
-                    source: source, contentHash: contentHash, cacheVersion: segmentBreakdownCacheVersion,
+                    source: source, contentHash: contentHash, cacheVersion: breakdownCacheVersion,
                     llmAudit: audit, db: db)
             }
             stored += 1
@@ -156,11 +156,11 @@ func runStage6Ingest(
             logger?.error("DB接続が不安定なため Stage 6 purge を中断します(リトライ\(unhealthyRetries)回)")
             break
         }
-        let key = CompanySegmentBreakdown.compositeID(docID: docID, axis: segmentBreakdownAxisBusiness)
+        let key = CompanyBreakdown.compositeID(docID: docID, axis: breakdownAxisBusiness)
         let deleted = try await withDbRetry(
             logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) { () -> Bool in
-            guard let row = try await CompanySegmentBreakdown.find(key, on: db) else { return false }
+            guard let row = try await CompanyBreakdown.find(key, on: db) else { return false }
             try await row.delete(on: db)
             return true
         }
@@ -174,7 +174,7 @@ func runStage6Ingest(
 
 /// company_financials（Stage 4）から当該書類（docID）の連結売上高を引く。Stage 6 は自前で
 /// XBRL から売上を再抽出せず、既に計算済みの Stage 4 の値を再利用する（重複ロジック回避）。
-/// Stage 4 が当該コード・当該書類をまだ計算していない場合は nil。`SegmentNormalizer` /
+/// Stage 4 が当該コード・当該書類をまだ計算していない場合は nil。`BreakdownNormalizer` /
 /// 両 LLM 正規化器はいずれも分母 nil（または 0）を許容せず即 nil を返す（=`.notApplicable`）ため、
 /// Stage 4 未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
 /// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、Stage 4 が先に
@@ -184,13 +184,13 @@ func consolidatedSalesForDoc(code: String, docID: String, db: Database) async th
     return financials.response.salesForDoc(docID)
 }
 
-/// 解決済み business 軸内訳を company_segment_breakdowns へ書き込む（既存行があれば更新、無ければ作成）。
-func storeSegmentBreakdown(
-    existing: CompanySegmentBreakdown?, docID: String, axis: String, code: String,
+/// 解決済み business 軸内訳を company_breakdowns へ書き込む（既存行があれば更新、無ければ作成）。
+func storeBreakdown(
+    existing: CompanyBreakdown?, docID: String, axis: String, code: String,
     submitDateTime: String, payload: BreakdownSnapshotPayload, source: String, contentHash: String,
     cacheVersion: String, llmAudit: LLMBreakdownAuditPayload?, db: Database
 ) async throws {
-    let applyFields: (CompanySegmentBreakdown) -> Void = { row in
+    let applyFields: (CompanyBreakdown) -> Void = { row in
         row.code = code
         row.submitDateTime = submitDateTime
         row.payload = payload
@@ -204,13 +204,13 @@ func storeSegmentBreakdown(
         applyFields(row)
         try await row.update(on: db)
     } else {
-        let model = CompanySegmentBreakdown(docID: docID, axis: axis)
+        let model = CompanyBreakdown(docID: docID, axis: axis)
         applyFields(model)
         try await createIdempotently(
             create: { try await model.create(on: db) },
             recover: {
-                let key = CompanySegmentBreakdown.compositeID(docID: docID, axis: axis)
-                guard let recovered = try await CompanySegmentBreakdown.find(key, on: db) else { return false }
+                let key = CompanyBreakdown.compositeID(docID: docID, axis: axis)
+                guard let recovered = try await CompanyBreakdown.find(key, on: db) else { return false }
                 applyFields(recovered)
                 try await recovered.update(on: db)
                 return true
@@ -222,9 +222,9 @@ func storeSegmentBreakdown(
 // MARK: - servable/unservable 集計
 
 /// `source`/`cache_version` のみを対象にした軽量射影（`payload` の JSONB を転送しない）。
-/// company_segment_breakdowns 全件の servable/unservable 集計用。
-final class CompanySegmentBreakdownSourceVersionOnly: Model, @unchecked Sendable {
-    static let schema = CompanySegmentBreakdown.schema
+/// company_breakdowns 全件の servable/unservable 集計用。
+final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyBreakdown.schema
 
     @ID(custom: "id", generatedBy: .user)
     var id: String?
@@ -238,44 +238,44 @@ final class CompanySegmentBreakdownSourceVersionOnly: Model, @unchecked Sendable
     init() {}
 }
 
-/// company_segment_breakdowns 全件を read 可否（`isServableSegmentBreakdown`）で集計する。
+/// company_breakdowns 全件を read 可否（`isServableBreakdown`）で集計する。
 /// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送しない軽量クエリで行う。
-func countServableSegmentBreakdowns(db: Database) async throws -> (servable: Int, unservable: Int) {
-    let rows = try await CompanySegmentBreakdownSourceVersionOnly.query(on: db).all()
-    let servable = rows.filter { isServableSegmentBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
+func countServableBreakdowns(db: Database) async throws -> (servable: Int, unservable: Int) {
+    let rows = try await CompanyBreakdownSourceVersionOnly.query(on: db).all()
+    let servable = rows.filter { isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
         .count
     return (servable, rows.count - servable)
 }
 
-// MARK: - read 経路（REST/MCP segment-breakdown）
+// MARK: - read 経路（REST/MCP breakdown）
 
 /// 格納済み Stage 6 business 軸内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
 /// axis は現状 "business" のみ受け付ける（geography は未配線のため行が無く、自然に nil になる）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
-/// read 可否は `isServableSegmentBreakdown`（xbrl_facts はバージョン床、LLM 経由は常に可）。
+/// read 可否は `isServableBreakdown`（xbrl_facts はバージョン床、LLM 経由は常に可）。
 /// 無い・read 不可なら nil（呼び出し側は 404。ライブ解決へはフォールバックしない）。
-func loadStoredSegmentBreakdown(
+func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
 ) async throws -> [String: Any]? {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
-    guard axis == segmentBreakdownAxisBusiness else { return nil }
+    guard axis == breakdownAxisBusiness else { return nil }
 
-    let row: CompanySegmentBreakdown?
+    let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {
-        let key = CompanySegmentBreakdown.compositeID(docID: docId, axis: axis)
-        let found = try await CompanySegmentBreakdown.find(key, on: db)
+        let key = CompanyBreakdown.compositeID(docID: docId, axis: axis)
+        let found = try await CompanyBreakdown.find(key, on: db)
         row = (found?.code == code4) ? found : nil
     } else {
-        let candidates = try await CompanySegmentBreakdown.query(on: db)
+        let candidates = try await CompanyBreakdown.query(on: db)
             .filter(\.$code == code4)
             .filter(\.$axis == axis)
             .sort(\.$submitDateTime, .descending)
             .all()
-        row = candidates.first { isServableSegmentBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
+        row = candidates.first { isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
     }
 
-    guard let row, isServableSegmentBreakdown(source: row.source, cacheVersion: row.cacheVersion),
+    guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion),
         let docID = row.id?.components(separatedBy: "#").first
     else { return nil }
     return [

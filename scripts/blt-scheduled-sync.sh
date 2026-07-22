@@ -8,7 +8,7 @@
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
 # Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・LLM 呼び出しを伴う
-# （docs/segment-normalization-concept.md）。XAI_API_KEY/XAI_MODEL 未設定でも
+# （docs/breakdown-normalization-concept.md）。XAI_API_KEY/XAI_MODEL 未設定でも
 # xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
 #
 # 機密（DATABASE_URL / BLT_EDINET_API_KEY / XAI_API_KEY 等）はリポジトリ直下 .env から読む。

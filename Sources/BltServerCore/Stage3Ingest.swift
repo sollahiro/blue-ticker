@@ -268,13 +268,13 @@ public func runStage3IngestCommand(
                 db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
                 explicitCodes: codes, logger: app.logger
             ) { docID, consolidatedSales in
-                await context.resolveSegmentBusinessBreakdown(
+                await context.resolveBusinessBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
             let coverage = try? await withDbRetry(
-                logger: app.logger, context: "company_segment_breakdowns 集計"
+                logger: app.logger, context: "company_breakdowns 集計"
             ) {
-                try await countServableSegmentBreakdowns(db: app.db)
+                try await countServableBreakdowns(db: app.db)
             }
             logIngestSummary(
                 app.logger, stage: "6", attempted: s6.attempted, stored: s6.stored,

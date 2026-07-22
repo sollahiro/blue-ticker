@@ -137,7 +137,7 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 | `IBDExtractor` | 有利子負債合計（直接法→積み上げ法のフォールバック、銀行固有コンポーネント含む） |
 | `TangibleFixedAssetsExtractor`（PPE） | 有形固定資産合計・内訳 |
 | `EmployeesExtractor` | 従業員数（連結→個別フォールバック） |
-| `SegmentExtractor`（`SegmentExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/segment-normalization-concept.md` |
+| `BreakdownExtractor`（`BreakdownExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/breakdown-normalization-concept.md` |
 
 ### 4.3 売上総利益（`GrossProfitExtractor`）
 
@@ -279,7 +279,7 @@ US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計
 smoke/
   smoke_expected/         # 年次期待値 JSON（{code}_{fy_end}.json）
   smoke_half_expected/    # 半期期待値 JSON
-  segment_expected.json   # セグメント・地域別抽出の期待値（書類ID別）
+  breakdown_extraction_expected.json   # セグメント・地域別抽出の期待値（書類ID別）
   smoke-field-values.md   # フィールド一覧とスモークテストの仕様説明
 ```
 
@@ -287,7 +287,7 @@ smoke/
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
 | 半期スモーク | 同 `testHalfSmokeAll` | `smoke_half_expected/` |
-| セグメントパリティ | `SegmentExtractorTests.swift` `SegmentParityTests` | `segment_expected.json` |
+| セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 

@@ -1,5 +1,5 @@
-// 事業別・地域別売上の比較用コモンモデル（Stage 6, docs/segment-normalization-concept.md）
-// SegmentExtractor の xbrl_facts 結果を BreakdownSnapshot（比較可能な正規化スナップショット）へ写す。
+// 事業別・地域別売上の比較用コモンモデル（Stage 6, docs/breakdown-normalization-concept.md）
+// BreakdownExtractor の xbrl_facts 結果を BreakdownSnapshot（比較可能な正規化スナップショット）へ写す。
 //
 // html_table 由来（method == "html_table"）は行パース未実装のため対象外（nil を返す）。
 // 銀行等の金融機関は segmentExternalRevenueTags に一致するタグを持たないため、
@@ -23,18 +23,18 @@ struct BreakdownSnapshot: Equatable {
     // sentinel 文字列 "income_statement.sales" を使う（意図的な語彙の使い分け）。
     var denominatorTag: String
     var rows: [BreakdownRow]
-    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（SegmentBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionLLMNormalizer） | "segment_info"（SegmentInfoLLMNormalizer）
+    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（GeographyBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionLLMNormalizer） | "segment_info"（SegmentInfoLLMNormalizer）
     var needsReview: Bool
     var warnings: [String]
 }
 
-enum SegmentNormalizer {
+enum BreakdownNormalizer {
 
-    /// SegmentResult（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
+    /// ExtractedBreakdown（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// 適用不可（html_table / not_found / 該当タグなし）の場合は nil。
     /// 銀行等、外部売上高に相当する概念を持たない金融機関は `normalizeBankBasis`
     /// （粗利益/営業純益基準）にフォールバックする。
-    static func normalize(_ result: SegmentResult, consolidatedSales: Double?) -> BreakdownSnapshot? {
+    static func normalize(_ result: ExtractedBreakdown, consolidatedSales: Double?) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
         if let consolidatedSales, consolidatedSales != 0,
@@ -55,7 +55,7 @@ enum SegmentNormalizer {
 
     /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
     private static func normalizeSalesBasis(
-        facts: [SegmentFact], consolidatedSales: Double
+        facts: [BreakdownFact], consolidatedSales: Double
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
@@ -146,7 +146,7 @@ enum SegmentNormalizer {
     /// 「Japanese...」のような事業本部名を地域名の部分一致で誤検知するため、この経路では
     /// 地域別開示が来る想定が無く再利用しない）。
     private static func normalizeInternalSubtotalBasis(
-        facts: [SegmentFact], amountTags: [String], profitTags: [String], warningPrefix: String
+        facts: [BreakdownFact], amountTags: [String], profitTags: [String], warningPrefix: String
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
@@ -220,7 +220,7 @@ enum SegmentNormalizer {
     // MARK: - 内部ロジック
 
     /// ConsolidatedOrNonConsolidatedAxis が明示的に非連結を指していないこと。
-    private static func isConsolidated(_ fact: SegmentFact) -> Bool {
+    private static func isConsolidated(_ fact: BreakdownFact) -> Bool {
         fact.dimensions["ConsolidatedOrNonConsolidatedAxis"] != "NonConsolidatedMember"
     }
 
@@ -228,12 +228,12 @@ enum SegmentNormalizer {
     /// 1件もなければ非連結（子会社を持たない小規模企業）にフォールバックする
     /// （resolveItemPreferCurrent と同じ「優先→フォールバック」の非対称ルール）。
     /// facts は tag+contextRef でソート済みのため、member 内の採用順は決定的。
-    private static func resolvePerMember(facts: [SegmentFact], tag: String) -> [String: SegmentFact] {
+    private static func resolvePerMember(facts: [BreakdownFact], tag: String) -> [String: BreakdownFact] {
         let candidateFacts = facts.filter { $0.tag == tag && isCurrentPeriod($0.contextRef) }
         let consolidatedFacts = candidateFacts.filter(isConsolidated)
         let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
 
-        var perMember: [String: SegmentFact] = [:]
+        var perMember: [String: BreakdownFact] = [:]
         for fact in source {
             guard let member = primaryMember(fact.dimensions), perMember[member] == nil else { continue }
             perMember[member] = fact
@@ -252,7 +252,7 @@ enum SegmentNormalizer {
     /// タグ名に External/Customers を含むものを優先し、次に分母比率が 1.0 に近い順、
     /// 最後にタグ名の辞書順で決定的にタイブレークする（複数候補が残った事実自体は needsReview で示す）。
     private static func discoverDenominatorTagByCoverage(
-        facts: [SegmentFact], consolidatedSales: Double
+        facts: [BreakdownFact], consolidatedSales: Double
     ) -> (tag: String, needsReview: Bool)? {
         let candidateTags = Set(facts.map(\.tag))
             .subtracting(Xbrl.segmentExternalRevenueTags)
@@ -323,7 +323,7 @@ enum SegmentNormalizer {
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、
     /// 一致なしなら business、一部一致（混在）は business + needs_review（ただし下記の例外あり）。
     /// `segmentOtherBusinessMemberNames`（rowKind は segment だが事業/地域いずれの軸にも
-    /// 断定できない「その他」）は候補から除外する。`SegmentExtractor.isGeographyAxis` と同じ理由
+    /// 断定できない「その他」）は候補から除外する。`BreakdownExtractor.isGeographyAxis` と同じ理由
     /// （軸判定への影響を避ける）。除外しないと、地域別報告企業にこの member が同居する場合に
     /// 全一致判定が崩れ、本来 geography のスナップショットが business + needs_review へ誤分類される。
     ///
@@ -357,7 +357,7 @@ enum SegmentNormalizer {
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
-    /// `SegmentExtractor` の axis-aware swap 判定（オークマ型検出）の双方が同じ基準を必要とする
+    /// `BreakdownExtractor` の axis-aware swap 判定（オークマ型検出）の双方が同じ基準を必要とする
     /// ため一本化した（重複ロジック回避。以前は各所に同型のチェックが独立して存在し、片方だけ
     /// 修正して食い違うバグがあった。issue調査 2026-07-21）。
     ///

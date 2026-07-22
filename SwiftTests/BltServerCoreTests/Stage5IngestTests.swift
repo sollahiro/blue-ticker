@@ -43,7 +43,7 @@ private func seedDoc(
 private func fakePayload(_ marker: String = "risk") -> FilingSectionsPayload {
     FilingSectionsPayload(
         texts: ["business_risks": marker, "mda": ""],
-        specials: ["segments": SegmentPayload(method: "not_found", tables: [], facts: [])])
+        specials: ["segments": ExtractedBreakdownPayload(method: "not_found", tables: [], facts: [])])
 }
 
 private let keys = "business_risks,mda,segments"

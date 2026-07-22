@@ -1,5 +1,5 @@
-// SegmentBusinessBreakdownResolver のユニットテスト。
-// `SegmentExtractor.extractSegmentInfo` の axis-aware swap（オークマ型は既に収益認識注記へ
+// BusinessBreakdownResolver のユニットテスト。
+// `BreakdownExtractor.extractSegmentInfo` の axis-aware swap（オークマ型は既に収益認識注記へ
 // swap 済みで返る）を前提に、以降の振り分け（xbrl_facts / revenue_recognition_llm /
 // segment_info_llm）を実データ golden + モック LLM で検証する。
 
@@ -24,11 +24,11 @@ private actor MockChatCompleting: ChatCompleting {
     func timesCalled() async -> Int { callCount }
 }
 
-@Suite struct SegmentBusinessBreakdownResolverTests {
+@Suite struct BusinessBreakdownResolverTests {
 
     private static func loadGolden() throws -> [String: [String: Any]] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let path = root.appendingPathComponent("smoke/segment_expected.json")
+        let path = root.appendingPathComponent("smoke/breakdown_extraction_expected.json")
         let data = try Data(contentsOf: path)
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
     }
@@ -47,11 +47,11 @@ private actor MockChatCompleting: ChatCompleting {
         return nil
     }
 
-    private static func segmentsResult(docID: String) throws -> SegmentResult {
+    private static func segmentsResult(docID: String) throws -> ExtractedBreakdown {
         let golden = try loadGolden()
         let entry = try #require(golden[docID])
         let segDict = try #require(entry["segments"] as? [String: Any])
-        return SegmentResult(dictionary: segDict)
+        return ExtractedBreakdown(dictionary: segDict)
     }
 
     /// 味の素（xbrl_facts, axis=business）: 決定的経路のみで解決し、LLM は一切呼ばれない。
@@ -60,7 +60,7 @@ private actor MockChatCompleting: ChatCompleting {
         let sales = try #require(try Self.loadSales(code: "2802"))
         let client = MockChatCompleting(responseJSON: nil)
 
-        let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client
         )
 
@@ -95,7 +95,7 @@ private actor MockChatCompleting: ChatCompleting {
         ]
         let client = MockChatCompleting(responseJSON: response)
 
-        let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client
         )
 
@@ -111,18 +111,18 @@ private actor MockChatCompleting: ChatCompleting {
     /// tables が非空なら LLM の表フォールバックへ回る（facts 優先化で tables を破棄していた頃は
     /// ここで永久に notFound になっていた）。
     @Test func xbrlFactsMethodFallsBackToSegmentInfoLLMWhenFactsDoNotNormalize() async throws {
-        let unresolvableFact = SegmentFact(
+        let unresolvableFact = BreakdownFact(
             tag: "SomeUnknownProprietaryMetricNotInAnyWhitelist",
             contextRef: "CurrentYearDuration_AlphaMember",
             dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
             value: 999, label: nil, unitRef: "JPY", decimals: "-6"
         )
-        let table = SegmentTable(
+        let table = BreakdownTable(
             heading: "セグメント情報",
             markdown: "| 事業A | 事業B |\n|---|---|\n| 600 | 400 |",
             period: "当期"
         )
-        let segments = SegmentResult(method: "xbrl_facts", tables: [table], facts: [unresolvableFact])
+        let segments = ExtractedBreakdown(method: "xbrl_facts", tables: [table], facts: [unresolvableFact])
 
         let response: [String: Any] = [
             "applicable": true,
@@ -138,7 +138,7 @@ private actor MockChatCompleting: ChatCompleting {
         ]
         let client = MockChatCompleting(responseJSON: response)
 
-        let (snapshot, source, _) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: 1_000_000_000, client: client
         )
 
@@ -172,7 +172,7 @@ private actor MockChatCompleting: ChatCompleting {
         ]
         let client = MockChatCompleting(responseJSON: response)
 
-        let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client
         )
 
@@ -183,21 +183,21 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
-    /// swap 対象の収益認識関係注記が見つからず `SegmentExtractor` 側のフォールバックで
+    /// swap 対象の収益認識関係注記が見つからず `BreakdownExtractor` 側のフォールバックで
     /// 元の地域別 xbrl_facts がそのまま返ってきたケース（今回の和解の核心セマンティクス）。
     /// axis が geography のままの xbrl_facts は business としては採用せず not_found にする。
     /// 合成 fact（実データ golden には該当書類が無いため）で決定的に検証する。
     @Test func geographyAxisFallbackWithoutSwapIsNotFound() async throws {
-        let segments = SegmentResult(
+        let segments = ExtractedBreakdown(
             method: "xbrl_facts",
             tables: [],
             facts: [
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
                     value: 600_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_OverseasReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "OverseasReportableSegmentsMember"],
                     value: 400_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
@@ -206,7 +206,7 @@ private actor MockChatCompleting: ChatCompleting {
         )
         let client = MockChatCompleting(responseJSON: nil)
 
-        let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: 1_000_000_000_000, client: client
         )
 
@@ -218,10 +218,10 @@ private actor MockChatCompleting: ChatCompleting {
 
     /// segments が not_found の場合は何も呼ばない。
     @Test func segmentsNotFoundReturnsNotFound() async throws {
-        let segments = SegmentResult(method: "not_found", tables: [], facts: [])
+        let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
         let client = MockChatCompleting(responseJSON: nil)
 
-        let (snapshot, source, _) = await SegmentBusinessBreakdownResolver.resolve(
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: 1_000_000, client: client
         )
 

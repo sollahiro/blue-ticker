@@ -2,18 +2,18 @@
 // filing-content を「serving=read-only」に載せるため、ingest 時に抽出したセクション本文を
 // この payload で Neon（company_filing_sections）へ格納し、read は DB から復元して返す。
 //
-// 内部型 SegmentResult（Analysis/SegmentExtractor.swift, internal）は露出させず、
-// Stage 3 の XbrlFact → XbrlFactRecord 写経と同じパターンで SegmentPayload へ写す。
+// 内部型 ExtractedBreakdown（Analysis/BreakdownExtractor.swift, internal）は露出させず、
+// Stage 3 の XbrlFact → XbrlFactRecord 写経と同じパターンで ExtractedBreakdownPayload へ写す。
 // Foundation のみ依存（BlueTickerCore/Models 配置。Fluent モデルは BltServerCore 側）。
 
 import Foundation
 
 /// Neon Stage 5 キャッシュ（company_filing_sections.cache_version）の抽出／スキーマバージョン。
-/// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / SegmentExtractor /
+/// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / BreakdownExtractor /
 /// cleanText の cap 等）または本 payload スキーマの意味を変えたときのみバンプする。
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
 ///
-/// v2 → v3（issue #93）: SegmentExtractor.extractSegmentInfo に東京エレクトロン型
+/// v2 → v3（issue #93）: BreakdownExtractor.extractSegmentInfo に東京エレクトロン型
 /// （単一セグメントで報告セグメント開示省略・method == "not_found"）の収益認識関係注記
 /// フォールバックを追加した抽出ロジック変更を反映する。該当企業の Stage 5 `segments` は
 /// 既に `section_keys` に "segments" を含むため、キー集合不一致による自動再抽出の対象にならない。
@@ -45,7 +45,7 @@ public func isServableFilingSectionsCacheVersion(_ version: String) -> Bool {
 /// セクションを追加すると本文字列が変わり、既存行が stale 判定され当該行のみ再抽出される
 /// （cache_version バンプ不要）。BltServerCore はこの値を受け取るだけで内部定数を知らない。
 public func currentFilingSectionKeys() -> String {
-    (Array(xbrlSections.keys) + SegmentExtractor.specialSectionKeys).sorted().joined(separator: ",")
+    (Array(xbrlSections.keys) + BreakdownExtractor.specialSectionKeys).sorted().joined(separator: ",")
 }
 
 /// 書類1件分の抽出済みセクション。texts（本文）と specials（セグメント・地域別表）を型分離して持つ。
@@ -55,9 +55,9 @@ public struct FilingSectionsPayload: Codable, Sendable, Equatable {
     /// xbrlSections 由来の本文テキスト（key → 本文）。ingest は全 key を格納する（未検出は ""）。
     public var texts: [String: String]
     /// segments / geography（key → セグメント表）。
-    public var specials: [String: SegmentPayload]
+    public var specials: [String: ExtractedBreakdownPayload]
 
-    public init(texts: [String: String], specials: [String: SegmentPayload]) {
+    public init(texts: [String: String], specials: [String: ExtractedBreakdownPayload]) {
         self.texts = texts
         self.specials = specials
     }
@@ -78,19 +78,19 @@ public struct FilingSectionsPayload: Codable, Sendable, Equatable {
     }
 }
 
-/// SegmentResult（内部型）の公開 Codable 写経。toDictionary() は SegmentResult と同一キー構造。
-public struct SegmentPayload: Codable, Sendable, Equatable {
+/// ExtractedBreakdown（内部型）の公開 Codable 写経。toDictionary() は ExtractedBreakdown と同一キー構造。
+public struct ExtractedBreakdownPayload: Codable, Sendable, Equatable {
     public var method: String
-    public var tables: [SegmentTablePayload]
-    public var facts: [SegmentFactPayload]
+    public var tables: [BreakdownTablePayload]
+    public var facts: [BreakdownFactPayload]
 
-    public init(method: String, tables: [SegmentTablePayload], facts: [SegmentFactPayload]) {
+    public init(method: String, tables: [BreakdownTablePayload], facts: [BreakdownFactPayload]) {
         self.method = method
         self.tables = tables
         self.facts = facts
     }
 
-    /// SegmentResult.toDictionary() と同じ形（remote CLI が SegmentResult(dictionary:) で復元できる）。
+    /// ExtractedBreakdown.toDictionary() と同じ形（remote CLI が ExtractedBreakdown(dictionary:) で復元できる）。
     public func toDictionary() -> [String: Any] {
         let tablesArr: [[String: Any]] = tables.map { t in
             var d: [String: Any] = ["heading": t.heading, "markdown": t.markdown]
@@ -111,7 +111,7 @@ public struct SegmentPayload: Codable, Sendable, Equatable {
     }
 }
 
-public struct SegmentTablePayload: Codable, Sendable, Equatable {
+public struct BreakdownTablePayload: Codable, Sendable, Equatable {
     public var heading: String
     public var markdown: String
     public var period: String?
@@ -123,7 +123,7 @@ public struct SegmentTablePayload: Codable, Sendable, Equatable {
     }
 }
 
-public struct SegmentFactPayload: Codable, Sendable, Equatable {
+public struct BreakdownFactPayload: Codable, Sendable, Equatable {
     public var tag: String
     public var contextRef: String
     public var dimensions: [String: String]

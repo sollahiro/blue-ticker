@@ -14,7 +14,7 @@
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared サイドカーの Tunnel トークン。設定時のみコンテナ内で cloudflared を起動 | **secret**（Cloudflare 本番時） |
 | `DATABASE_URL` | Neon Postgres 接続文字列 | **secret**（未設定なら DB なしのステートレス動作） |
 
-`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
+`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`・`breakdown`・`breakdown_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
 
 認証モードは `/v1` 配下で起動時に env から1つ選ばれる: ① `CF_ACCESS_TEAM_DOMAIN` 設定時 → Cloudflare Access、② 未設定 → 無認証（ローカル開発専用・起動時 warning）。**公開デプロイは常に `CF_ACCESS_TEAM_DOMAIN` を設定すること**（Bearer トークンによる self-host 認証は廃止済み）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
 

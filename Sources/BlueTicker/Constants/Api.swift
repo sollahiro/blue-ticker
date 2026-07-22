@@ -2,7 +2,7 @@ public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
     /// Chat Completions 互換エンドポイントの既定ベースURL（`XAI_BASE_URL` 未設定時のフォールバック）。
-    /// Stage 6 の html_table 正規化（`SegmentBreakdownLLMNormalizer`）でのみ使用。
+    /// Stage 6 の html_table 正規化（`GeographyBreakdownLLMNormalizer`）でのみ使用。
     static let xaiBaseURL = "https://api.x.ai/v1"
 
     /// remote バックエンドの既定 blt-server URL。インストール直後に `ticker login` だけで

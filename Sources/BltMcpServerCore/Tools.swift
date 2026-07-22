@@ -164,7 +164,7 @@ public func mcpToolCatalog() -> [Tool] {
             ])
         ),
         Tool(
-            name: "get_segment_breakdown",
+            name: "get_breakdown",
             description: """
                 有価証券報告書から事業別売上高の内訳を取得します（格納済みデータのみ）。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。

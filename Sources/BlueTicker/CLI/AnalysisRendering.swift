@@ -2,7 +2,7 @@ import Foundation
 
 // ticker analyze / summarize / filing の表示ロジック。remote 経路（Ticker* コマンド）と
 // ローカル経路（Dev* コマンド、DevCLI/）の両方から呼ばれる共通コード。取得手段（remote/local）に
-// 依存せず、共通のドメインモデル（YearEntry / HalfPeriod / SegmentResult 等）だけを受け取る。
+// 依存せず、共通のドメインモデル（YearEntry / HalfPeriod / ExtractedBreakdown 等）だけを受け取る。
 
 // MARK: - ticker analyze（増減分析）
 
@@ -262,7 +262,7 @@ enum SummarizeRendering {
 enum FilingRendering {
     /// セクション本文・セグメント表を人間向けに整形表示する。
     static func renderSections(
-        docID: String, extracted: [String: String], segmentResults: [String: SegmentResult]
+        docID: String, extracted: [String: String], extractedBreakdowns: [String: ExtractedBreakdown]
     ) {
         printError("\n[書類 \(docID)]\n")
         for (key, text) in extracted.sorted(by: { $0.key < $1.key }) {
@@ -276,14 +276,14 @@ enum FilingRendering {
                 printError(truncated + "\n")
             }
         }
-        for (key, seg) in segmentResults.sorted(by: { $0.key < $1.key }) {
-            let title = SegmentExtractor.specialSectionTitles[key] ?? key
+        for (key, seg) in extractedBreakdowns.sorted(by: { $0.key < $1.key }) {
+            let title = BreakdownExtractor.specialSectionTitles[key] ?? key
             printError("\n## \(title)\n")
-            printSegmentResult(seg)
+            printExtractedBreakdown(seg)
         }
     }
 
-    private static func printSegmentResult(_ seg: SegmentResult) {
+    private static func printExtractedBreakdown(_ seg: ExtractedBreakdown) {
         switch seg.method {
         case "html_table":
             for t in seg.tables {
@@ -292,13 +292,13 @@ enum FilingRendering {
             }
         case "xbrl_facts":
             printError("（HTML表未検出・dimensionファクト \(seg.facts.count) 件を集計）\n")
-            printSegmentFactsAsTable(seg.facts)
+            printBreakdownFactsAsTable(seg.facts)
         default:
             printError("（見つかりませんでした）\n")
         }
     }
 
-    private static func printSegmentFactsAsTable(_ facts: [SegmentFact]) {
+    private static func printBreakdownFactsAsTable(_ facts: [BreakdownFact]) {
         guard !facts.isEmpty else { return }
 
         func periodOf(_ ctx: String) -> (label: String, order: Int) {
@@ -347,7 +347,7 @@ enum FilingRendering {
         // primary segment member: prefer OperatingSegments/BusinessSegment/ReportableSegment axis
         let segAxisKeywords = ["OperatingSegments", "BusinessSegment", "ReportableSegment",
                                 "GeographicArea", "Geography", "Country", "Region"]
-        func primaryMember(_ f: SegmentFact) -> String? {
+        func primaryMember(_ f: BreakdownFact) -> String? {
             for (k, v) in f.dimensions {
                 if segAxisKeywords.contains(where: { k.contains($0) }) { return v }
             }

@@ -24,4 +24,4 @@
 
 ## 関連
 
-- `docs/segment-normalization-concept.md` — Segment / Geography の構造化構想（Stage 6）
+- `docs/breakdown-normalization-concept.md` — Segment / Geography の構造化構想（Stage 6）

@@ -33,16 +33,16 @@ XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以
 | `USGAAPHtmlFields.swift` | US-GAAP 連結 P/L・BS の iXBRL HTML テーブル抽出 |
 | `IFRSLease.swift` | IFRS リース負債（XBRL タグ → 注記 TextBlock → BS HTML の優先順） |
 | `BorrowingsSchedule.swift` | 借入金等明細表からの有利子負債フォールバック抽出 |
-| `SegmentExtractor.swift` | セグメント・地域別情報（TextBlock HTML表 → dimension 付き fact） |
+| `BreakdownExtractor.swift` | セグメント・地域別情報（TextBlock HTML表 → dimension 付き fact） |
 | `XBRLSectionParser.swift` | 有価証券報告書セクション（リスク・MD&A 等）テキスト抽出 |
 
-### Stage 6 セグメント正規化（`docs/segment-normalization-concept.md`）
+### Stage 6 事業別・地域別内訳の正規化（`docs/breakdown-normalization-concept.md`）
 
 | ファイル | 役割 |
 |---|---|
-| `SegmentNormalizer.swift` | `SegmentExtractor` の xbrl_facts 結果 → `BreakdownSnapshot`（比較可能な正規化スナップショット） |
-| `SegmentBusinessBreakdownResolver.swift` | `segments` キーの事業別内訳を、method に応じてどの正規化器（xbrl_facts / LLM 2種）に振り分けるか判定 |
-| `SegmentBreakdownLLMNormalizer.swift` | geography（地域別情報）の html_table を LLM で `BreakdownSnapshot` へ正規化 |
+| `BreakdownNormalizer.swift` | `BreakdownExtractor` の xbrl_facts 結果 → `BreakdownSnapshot`（比較可能な正規化スナップショット） |
+| `BusinessBreakdownResolver.swift` | `segments` キーの事業別内訳を、method に応じてどの正規化器（xbrl_facts / LLM 2種）に振り分けるか判定 |
+| `GeographyBreakdownLLMNormalizer.swift` | geography（地域別情報）の html_table を LLM で `BreakdownSnapshot` へ正規化 |
 | `SegmentInfoLLMNormalizer.swift` | `segments` キー自体が html_table を返すケースを LLM で `BreakdownSnapshot`（axis: business）へ正規化 |
 | `RevenueRecognitionLLMNormalizer.swift` | オークマ型（segments が実は地域別）の収益認識関係注記を LLM で事業別 `BreakdownSnapshot` へ正規化 |
 

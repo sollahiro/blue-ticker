@@ -65,7 +65,7 @@ private func resolveXaiEndpoint() -> ChatCompletionEndpoint? {
     return ChatCompletionEndpoint(baseURL: baseURL, apiKey: apiKey, model: model)
 }
 
-/// XAI_API_KEY 未設定時のプレースホルダ。`SegmentBusinessBreakdownResolver` は xbrl_facts 経路では
+/// XAI_API_KEY 未設定時のプレースホルダ。`BusinessBreakdownResolver` は xbrl_facts 経路では
 /// client に触れないため、html_table 経路（LLM 必須）に到達した場合のみネットワーク I/O なしで
 /// 即座に失敗する（呼び出し側は notApplicable として扱う）。
 private struct UnavailableChatClient: ChatCompleting {
@@ -197,10 +197,10 @@ public extension BltServerContext {
         var texts: [String: String] = [:]
         for key in xbrlSections.keys { texts[key] = found[key] ?? "" }  // 全 key 存在を維持
 
-        var specials: [String: SegmentPayload] = [:]
-        for key in SegmentExtractor.specialSectionKeys {
-            if let seg = SegmentExtractor.extractSpecialSection(key, xbrlDir: xbrlDir) {
-                specials[key] = segmentPayload(from: seg)
+        var specials: [String: ExtractedBreakdownPayload] = [:]
+        for key in BreakdownExtractor.specialSectionKeys {
+            if let seg = BreakdownExtractor.extractSpecialSection(key, xbrlDir: xbrlDir) {
+                specials[key] = extractedBreakdownPayload(from: seg)
             }
         }
         return FilingSectionsPayload(texts: texts, specials: specials)
@@ -223,14 +223,14 @@ public extension BltServerContext {
 // MARK: - Stage 6 取り込み（事業別内訳）
 
 /// Stage 6 business 軸内訳の解決結果（`computeHalfFinancials` と同じ3値パターン）。
-public enum SegmentBusinessBreakdownResult: Sendable {
+public enum BusinessBreakdownResult: Sendable {
     /// 解決成功。格納用ペイロード一式。
     case resolved(
         payload: BreakdownSnapshotPayload, source: String, contentHash: String,
         audit: LLMBreakdownAuditPayload?)
     /// 書類の取得・抽出自体は成功したが、当該書類に business 軸の内訳が無い
     /// （地域別報告セグメントで収益認識注記への swap も失敗、銀行・US-GAAP補助指標のみ等）。
-    /// 失敗ではない（`not_found` は行を作らない方針。docs/segment-normalization-concept.md）。
+    /// 失敗ではない（`not_found` は行を作らない方針。docs/breakdown-normalization-concept.md）。
     case notApplicable
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。
     case failed
@@ -238,19 +238,19 @@ public enum SegmentBusinessBreakdownResult: Sendable {
 
 public extension BltServerContext {
     /// Stage 6: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
-    /// segment_info LLM のいずれかへ `SegmentBusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
+    /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
     /// `consolidatedSales` は呼び出し側（Stage 4 で計算済みの当該書類の連結売上高）が渡す
     /// （Stage 6 は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
-    func resolveSegmentBusinessBreakdown(
+    func resolveBusinessBreakdown(
         docID: String, consolidatedSales: Double?
-    ) async -> SegmentBusinessBreakdownResult {
+    ) async -> BusinessBreakdownResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        guard let segments = SegmentExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
+        guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
         else { return .notApplicable }
 
-        let hash = segmentBreakdownContentHash(segments: segments, consolidatedSales: consolidatedSales)
-        let result = await SegmentBusinessBreakdownResolver.resolve(
+        let hash = breakdownContentHash(segments: segments, consolidatedSales: consolidatedSales)
+        let result = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: consolidatedSales, client: chatClient)
         guard let snapshot = result.snapshot else { return .notApplicable }
         return .resolved(
@@ -278,17 +278,17 @@ private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdown
         profitDisclosed: a.profitDisclosed, notes: a.notes)
 }
 
-/// 生入力（segments SegmentResult + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
+/// 生入力（segments ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
 /// スキーマは含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になる。
-/// docs/segment-normalization-concept.md「今後の検討事項8」）。SegmentResult は Codable ではないため
-/// 既存の SegmentPayload 写経を経由する。CryptoKit は Linux（Fly.io 配信）で使えないため、
+/// docs/breakdown-normalization-concept.md「今後の検討事項8」）。ExtractedBreakdown は Codable ではないため
+/// 既存の ExtractedBreakdownPayload 写経を経由する。CryptoKit は Linux（Fly.io 配信）で使えないため、
 /// 非暗号学的だが決定的な FNV-1a を使う（目的は変更検知であり耐改ざん性は不要）。
-private func segmentBreakdownContentHash(segments: SegmentResult, consolidatedSales: Double?) -> String {
+private func breakdownContentHash(segments: ExtractedBreakdown, consolidatedSales: Double?) -> String {
     struct HashInput: Codable {
-        let segments: SegmentPayload
+        let segments: ExtractedBreakdownPayload
         let consolidatedSales: Double?
     }
-    let input = HashInput(segments: segmentPayload(from: segments), consolidatedSales: consolidatedSales)
+    let input = HashInput(segments: extractedBreakdownPayload(from: segments), consolidatedSales: consolidatedSales)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     guard let data = try? encoder.encode(input) else { return "" }
@@ -300,15 +300,15 @@ private func segmentBreakdownContentHash(segments: SegmentResult, consolidatedSa
     return String(format: "%016llx", hash)
 }
 
-/// 内部型 SegmentResult を公開格納用 SegmentPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。
-private func segmentPayload(from r: SegmentResult) -> SegmentPayload {
-    SegmentPayload(
+/// 内部型 ExtractedBreakdown を公開格納用 ExtractedBreakdownPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。
+private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedBreakdownPayload {
+    ExtractedBreakdownPayload(
         method: r.method,
         tables: r.tables.map {
-            SegmentTablePayload(heading: $0.heading, markdown: $0.markdown, period: $0.period)
+            BreakdownTablePayload(heading: $0.heading, markdown: $0.markdown, period: $0.period)
         },
         facts: r.facts.map {
-            SegmentFactPayload(
+            BreakdownFactPayload(
                 tag: $0.tag, contextRef: $0.contextRef, dimensions: $0.dimensions,
                 value: $0.value, label: $0.label, unitRef: $0.unitRef, decimals: $0.decimals)
         })

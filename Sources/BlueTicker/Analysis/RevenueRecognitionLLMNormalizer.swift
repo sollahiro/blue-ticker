@@ -1,13 +1,13 @@
 // 収益認識関係注記（「顧客との契約から生じる収益を分解した情報」）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/segment-normalization-concept.md 参照。SegmentBreakdownLLMNormalizer.swift（geography 用）
+// docs/breakdown-normalization-concept.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）
 // と同型だが、対象は次の会社で収益認識関係注記から本当の事業別（製品・部門別）データを拾う:
 // - オークマ型: 報告セグメントが地域別のため、製品別が収益認識注記にある
 // - ファナック型: 単一セグメントで報告セグメント開示省略。部門が列・地域が行のマトリクス表
 //
 // 呼び出し側の責務: この正規化器は「収益認識注記に事業別breakdownが存在するか」だけを判定する。
-// segments キーの axis が実際に geography かどうかの判定（SegmentNormalizer.classifyAxis /
-// SegmentExtractor の axis-aware swap）とは別レイヤーで、呼び出し側が組み合わせて使う。
+// segments キーの axis が実際に geography かどうかの判定（BreakdownNormalizer.classifyAxis /
+// BreakdownExtractor の axis-aware swap）とは別レイヤーで、呼び出し側が組み合わせて使う。
 //
 // ライブ read 経路（REST/MCP）や ingest には配線しない（concept doc で確定済み: LLM は
 // Stage 4/5 と同じ ingest バッチ経路に置く方針だが、永続化スキーマは未確定のため現時点では
@@ -70,13 +70,13 @@ enum RevenueRecognitionLLMNormalizer {
         "additionalProperties": false,
     ]
 
-    /// 分母整合性チェックの許容範囲。SegmentBreakdownLLMNormalizer と同じ許容幅を使う。
+    /// 分母整合性チェックの許容範囲。GeographyBreakdownLLMNormalizer と同じ許容幅を使う。
     private static let denominatorTolerance = 0.90...1.10
 
-    /// revenue_recognition の SegmentResult（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
+    /// revenue_recognition の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     static func normalize(
-        _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
+        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
         // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
@@ -201,7 +201,7 @@ enum RevenueRecognitionLLMNormalizer {
         return (snapshot, audit)
     }
 
-    private static func buildUserPrompt(tables: [SegmentTable], consolidatedSales: Double) -> String {
+    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
         var lines: [String] = []
         lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
         lines.append("")
