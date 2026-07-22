@@ -278,10 +278,17 @@ func loadStoredBreakdown(
     guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion),
         let docID = row.id?.components(separatedBy: "#").first
     else { return nil }
-    return [
+    var result: [String: Any] = [
         "code": code4,
         "doc_id": docID,
         "axis": row.axis,
         "breakdown": row.payload.jsonObject(),
     ]
+    // LLM 経由の行のみ（xbrl_facts 経由は llmAudit が無い）。denominator_tag が
+    // "income_statement.sales" 以外（例: "llm_table_subtotal"）のとき、実際の指標名を
+    // notes から確認できるようにする（issue #105 のprofit指標区別ギャップ対応）。
+    if let llmAudit = row.llmAudit {
+        result["llm_audit"] = llmAudit.jsonObject()
+    }
+    return result
 }

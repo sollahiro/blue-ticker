@@ -137,3 +137,18 @@ public extension BreakdownSnapshotPayload {
         ]
     }
 }
+
+public extension LLMBreakdownAuditPayload {
+    /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。欠損は NSNull。
+    /// `notes` は「どの表・期間列・単位・転置有無を採用したか」の自由文で、`denominator_tag`が
+    /// "income_statement.sales" 以外（例: "llm_table_subtotal"）のときに実際の指標名を知る手がかりになる。
+    func jsonObject() -> [String: Any] {
+        [
+            "source_table_index": sourceTableIndex ?? NSNull(),
+            "period_column": periodColumn ?? NSNull(),
+            "unit": unit,
+            "profit_disclosed": profitDisclosed,
+            "notes": notes,
+        ]
+    }
+}
