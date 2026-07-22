@@ -643,6 +643,34 @@ import Foundation
         #expect(snap.rows.contains { $0.labelRaw == "RetailReportableSegmentMember" && $0.rowKind == "segment" })
     }
 
+    @Test func mazdaGeographySegmentsWithOtherBucketResolveAsGeographyNotBusiness() throws {
+        // マツダ（7261）: 有報に「単一の製品・サービスの区分（自動車関連事業）の外部顧客への
+        // 売上高が、連結損益計算書の売上高の90％を超えるため、事業種類別セグメント情報の記載を
+        // 省略しております」と明記されており、報告セグメントは地域別（Japan/NorthAmerica/Europe/
+        // Other）のみ。この「Other」（その他地域）は地理キーワードに一致しないため、
+        // allMembersAreGeography の完全一致判定が崩れ business+needsReview に誤分類されていた。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("EuropeReportableSegmentsMember", 859_557_000_000),
+            fact("JapanReportableSegmentsMember", 900_173_000_000),
+            fact("NorthAmericaReportableSegmentsMember", 2_561_746_000_000),
+            fact("OtherReportableSegmentsMember", 596_696_000_000),
+            fact("ReconcilingItemsMember", 0),
+            fact("ReportableSegmentsMember", 4_918_172_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 4_918_172_000_000))
+
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
+
     // MARK: - ゴールデン値回帰（ユーザー確認済み、2026-07-18）
     //
     // smoke/breakdown_expected.json は sales/profit の実額をユーザーが目視確認して

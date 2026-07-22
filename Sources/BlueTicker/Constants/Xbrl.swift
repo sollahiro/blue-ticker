@@ -706,6 +706,14 @@ enum Xbrl {
     /// 軸判定候補からは `segmentSubtotalMemberNames` と同様に除外し続ける（軸判定への影響を避ける）。
     static let segmentOtherBusinessMemberNames: Set<String> = [
         "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+        "OtherReportableSegmentsMember",
+        // マツダ等: 事業区分は単一区分（自動車関連事業）が連結売上高の90%超のため記載省略され、
+        // 報告セグメントは地域別（Japan/NorthAmerica/Europe/Other）のみになる。この「Other」は
+        // 「その他地域」であって「その他事業」ではなく、地理キーワード一致もしないため
+        // allMembersAreGeography の完全一致判定を壊し、真の geography 軸が business+要レビューへ
+        // 誤分類されていた（実データ検証済み、2026-07-22）。名称自体は事業/地域いずれの軸のカタログにも
+        // 汎用的に現れる（銀行のバケツ的「その他」事業区分としても実在、mizuhoResolvesViaGrossProfitBasisWithBankSpecificTagNames
+        // 参照）ため、他の member 同様に軸判定候補からのみ除外する。
     ]
 
     /// member ラベルがこのキーワードに一致すれば地域軸とみなす（軸判定ルール、学び10 参照）。
