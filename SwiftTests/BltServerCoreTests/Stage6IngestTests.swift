@@ -66,7 +66,7 @@ private func fakePayload(
 private func seedRow(
     _ docID: String, code: String, submit: String, db: Database,
     source: String = breakdownSourceXbrlFacts, cacheVersion: String = breakdownCacheVersion,
-    needsReview: Bool = false, contentHash: String = "h0"
+    needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil
 ) async throws {
     let row = CompanyBreakdown(docID: docID, axis: breakdownAxisBusiness)
     row.code = code
@@ -76,7 +76,7 @@ private func seedRow(
     row.source = source
     row.contentHash = contentHash
     row.cacheVersion = cacheVersion
-    row.llmAudit = nil
+    row.llmAudit = llmAudit
     try await row.create(on: db)
 }
 
@@ -431,6 +431,41 @@ private func seedRow(
             let json = try await loadStoredBreakdown(
                 code: "0000", docId: nil, axis: "business", db: app.db)
             #expect(json == nil)
+        }
+    }
+
+    /// xbrl_facts 経由の行には llm_audit が無いため、キー自体を出さない
+    /// （REST/MCP応答にnullを混ぜない。既存フィールドとの一貫性）。
+    @Test func loadOmitsLlmAuditKeyForXbrlFactsRow() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts)
+            let json = try #require(
+                try await loadStoredBreakdown(
+                    code: "7203", docId: nil, axis: "business", db: app.db))
+            #expect(json["llm_audit"] == nil)
+        }
+    }
+
+    /// LLM 経由の行は llm_audit を含む（issue #105 のprofit指標区別ギャップ対応。
+    /// denominator_tag が "income_statement.sales" 以外のとき、notes から実際の指標名を確認できる）。
+    @Test func loadIncludesLlmAuditForLLMRow() async throws {
+        try await withMigratedApp { app in
+            let audit = LLMBreakdownAuditPayload(
+                sourceTableIndex: 0, periodColumn: "2026年３月期", unit: "million_yen",
+                profitDisclosed: true,
+                notes: "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
+            try await seedRow(
+                "S1", code: "8604", submit: "2026-06-22 15:36", db: app.db,
+                source: breakdownSourceSegmentInfoLLM, llmAudit: audit)
+            let json = try #require(
+                try await loadStoredBreakdown(
+                    code: "8604", docId: nil, axis: "business", db: app.db))
+            let llmAuditJson = try #require(json["llm_audit"] as? [String: Any])
+            #expect(llmAuditJson["notes"] as? String == "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
+            #expect(llmAuditJson["profit_disclosed"] as? Bool == true)
+            #expect(llmAuditJson["source_table_index"] as? Int == 0)
         }
     }
 }
