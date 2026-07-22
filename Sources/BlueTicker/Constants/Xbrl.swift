@@ -616,6 +616,7 @@ enum Xbrl {
         "RevenueFromExternalCustomers2IFRS",  // 伊藤忠など
         "OperatingRevenueFromExternalCustomersIFRS",  // トヨタなど
         "RevenuesFromExternalCustomers",
+        "RevenueFromExternalCustomers",  // 丸井グループなど（単数形、IFRS接尾辞なし。実データ検証済み、2026-07-22）
         "TransactionsWithExternalCustomersIFRS",  // NTTなど（実データ検証済み、issue調査 2026-07-21）
         "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
     ]
@@ -686,6 +687,10 @@ enum Xbrl {
         "UnallocatedAmountsAndEliminationMember",
         "TotalMember",  // 三菱UFJ（粗利益/営業純益の総額）
         "TotalOfCustomerBusinessUnitMember",  // 三菱UFJ（市場・その他を除く顧客部門合計）
+        "GlobalHousingEquipmentBusinessReportableSegmentMember",
+        // TOTO: 日本住設(JapanHousingEquipmentBusiness)＋海外住設4地域(米州/アジア・オセアニア/
+        // 欧州/中国)の合計であり、独立した報告セグメントではない（実データ検証済み、
+        // 669,742百万円 ≈ 479,663+75,623+54,914+5,677+53,863 百万円、2026-07-22）。
     ]
 
     /// 小計・調整とは別に「除去・消去」を表す member（reconciling として区別する）。

@@ -577,6 +577,72 @@ import Foundation
         #expect(abs(segmentShare - 1.0) < 0.02)
     }
 
+    // MARK: - 個別企業の needs_review 是正（issue調査 2026-07-22、実データ検証済み）
+
+    @Test func totoGlobalHousingEquipmentMemberIsSubtotalNotSegment() throws {
+        // TOTO（5332）: GlobalHousingEquipmentBusinessReportableSegmentMember(669,742百万円)は
+        // 日本住設(479,663)＋海外住設4地域（米州75,623/アジア・オセアニア54,914/欧州5,677/
+        // 中国53,863＝計190,077）の合計に一致する独立していない集計行であり、真の報告セグメントは
+        // セラミック事業＋日本住設＋海外住設4地域の6行。Global を segment のまま数えると
+        // 売上が二重計上される。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("AdvancedCeramicsBusinessReportableSegmentMember", 67_414_000_000),
+            fact("AmericasReportableSegmentMember", 75_623_000_000),
+            fact("AsiaOceaniaReportableSegmentMember", 54_914_000_000),
+            fact("EuropeReportableSegmentMember", 5_677_000_000),
+            fact("GlobalHousingEquipmentBusinessReportableSegmentMember", 669_742_000_000),
+            fact("JapanHousingEquipmentBusinessReportableSegmentMember", 479_663_000_000),
+            fact("MainlandChinaBusinessReportableSegmentMember", 53_863_000_000),
+            fact("ReconcilingItemsMember", 0),
+            fact("ReportableSegmentsMember", 737_156_000_000),
+            fact("TotalOfReportableSegmentsAndOthersMember", 737_441_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 737_441_000_000))
+
+        let global = try #require(snap.rows.first { $0.labelRaw == "GlobalHousingEquipmentBusinessReportableSegmentMember" })
+        #expect(global.rowKind == "subtotal")
+        #expect(snap.axis == "business")
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.02)
+    }
+
+    @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {
+        // 丸井グループ（8252）: 分母タグが単数形の RevenueFromExternalCustomers（IFRS接尾辞なし）で、
+        // ホワイトリスト未収載だった当時はカバレッジ発見フォールバックが複数候補を検出し
+        // denominator_tag_ambiguous を立てていた。ホワイトリストに追加後は候補が一意に決まり
+        // needsReview が解消する。行内容自体（小売・フィンテック）は既に正しかった。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenueFromExternalCustomers", contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("FinTechReportableSegmentMember", 195_824_000_000),
+            fact("RetailReportableSegmentMember", 81_037_000_000),
+            fact("ReconcilingItemsMember", 0),
+            fact("TotalOfReportableSegmentsAndOthersMember", 276_862_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 276_862_000_000))
+
+        #expect(snap.denominatorTag == "RevenueFromExternalCustomers")
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.rows.contains { $0.labelRaw == "FinTechReportableSegmentMember" && $0.rowKind == "segment" })
+        #expect(snap.rows.contains { $0.labelRaw == "RetailReportableSegmentMember" && $0.rowKind == "segment" })
+    }
+
     // MARK: - ゴールデン値回帰（ユーザー確認済み、2026-07-18）
     //
     // smoke/breakdown_expected.json は sales/profit の実額をユーザーが目視確認して
