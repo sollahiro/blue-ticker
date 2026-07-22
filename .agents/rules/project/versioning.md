@@ -73,8 +73,8 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v3"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_segment_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `segmentBreakdownCacheVersion` | `Models/SegmentBreakdownContract.swift` | `"breakdown-v4"`（ingest/CLI(`--stages 6`)/REST(`segment-breakdown`)/MCP(`get_segment_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/segment-normalization-concept.md`） |
-| （同上・read 床。xbrl_facts 経由のみ適用） | `segmentBreakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
+| `company_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `breakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-v4"`（ingest/CLI(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/breakdown-normalization-concept.md`） |
+| （同上・read 床。xbrl_facts 経由のみ適用） | `breakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
 
 ### バンプ規則
 
@@ -85,10 +85,10 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 - `companyFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。financials read が 200 を返す最低世代 N を人手で上げるとき。現行から N つ前の機械オフセットにはしない。引き上げは該当旧版の stale 消化完了後（servable 穴を作らない）。不変条件: 床 ≤ 現行 `fin-vN` の N。比較は数値パース（文字列辞書順禁止）
 - `companyHalfFinancialsCacheVersion`: 半期計算ロジック（`HalfYearAnalyzer` / `buildH2Entry` / `EdinetDiscovery` の書類マッチング等、計算対象ドキュメントの選定を含む）、または公開契約型（`HalfFinancialsResponse` / `HalfFinancialsPeriod`）の意味を変更したとき
 - `companyHalfFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。half financials read が 200 を返す最低世代 N を人手で上げるとき。規則は financials 床と同型（`half-v2` バンプ時に導入・床は `1` のまま据え置き）
-- `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `SegmentExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `SegmentPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
+- `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `BreakdownExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `ExtractedBreakdownPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
 - `filingSectionsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。filing-content read の最低世代 N。規則は financials 床と同型
-- `segmentBreakdownCacheVersion`: xbrl_facts 経路の分類・正規化ロジック（`SegmentNormalizer` / `Xbrl.segmentSubtotalMemberNames` 等の member 分類定数）、または `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。LLM 経由の行（source ≠ `xbrl_facts`）はバンプだけでは再計算しない（needs_review=false の行は据え置き。詳細は `docs/segment-normalization-concept.md`「今後の検討事項8」）
-- `segmentBreakdownMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。xbrl_facts 経由の行にのみ適用（LLM 経由は常に servable。規則は financials 床と同型）
+- `breakdownCacheVersion`: xbrl_facts 経路の分類・正規化ロジック（`BreakdownNormalizer` / `Xbrl.segmentSubtotalMemberNames` 等の member 分類定数）、または `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。LLM 経由の行（source ≠ `xbrl_facts`）はバンプだけでは再計算しない（needs_review=false の行は据え置き。詳細は `docs/breakdown-normalization-concept.md`「今後の検討事項8」）
+- `breakdownMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。xbrl_facts 経由の行にのみ適用（LLM 経由は常に servable。規則は financials 床と同型）
 
 ### 運用上の注意（バンプ時の一度きり再 ingest）
 

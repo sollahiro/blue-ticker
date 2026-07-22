@@ -1,6 +1,6 @@
 // Stage 6 取り込みの DB ロジック（対象選定・staleness 判定・upsert・limit・purge）と
-// read 経路（loadStoredSegmentBreakdown）、および servable/unservable 集計を検証する。
-// 解決（resolveSegmentBusinessBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
+// read 経路（loadStoredBreakdown）、および servable/unservable 集計を検証する。
+// 解決（resolveBusinessBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
 // ネットワーク非依存で見る。
 //
 // Stage 5 との最大の違い（意図的に重点検証する）:
@@ -24,6 +24,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(CreateCompanySegmentBreakdowns())
+        app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
         app.migrations.add(CreateCompanyFinancials())
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
@@ -64,10 +65,10 @@ private func fakePayload(
 
 private func seedRow(
     _ docID: String, code: String, submit: String, db: Database,
-    source: String = segmentBreakdownSourceXbrlFacts, cacheVersion: String = segmentBreakdownCacheVersion,
+    source: String = breakdownSourceXbrlFacts, cacheVersion: String = breakdownCacheVersion,
     needsReview: Bool = false, contentHash: String = "h0"
 ) async throws {
-    let row = CompanySegmentBreakdown(docID: docID, axis: segmentBreakdownAxisBusiness)
+    let row = CompanyBreakdown(docID: docID, axis: breakdownAxisBusiness)
     row.code = code
     row.submitDateTime = submit
     row.payload = fakePayload(needsReview: needsReview)
@@ -90,14 +91,14 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
-            let key1 = CompanySegmentBreakdown.compositeID(docID: "S1", axis: "business")
-            let row = try #require(try await CompanySegmentBreakdown.find(key1, on: app.db))
+            let key1 = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key1, on: app.db))
             #expect(row.code == "7203")
-            #expect(row.source == segmentBreakdownSourceXbrlFacts)
+            #expect(row.source == breakdownSourceXbrlFacts)
         }
     }
 
@@ -108,11 +109,11 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
-            let key2 = CompanySegmentBreakdown.compositeID(docID: "S2", axis: "business")
-            #expect(try await CompanySegmentBreakdown.find(key2, on: app.db) == nil)
+            let key2 = CompanyBreakdown.compositeID(docID: "S2", axis: "business")
+            #expect(try await CompanyBreakdown.find(key2, on: app.db) == nil)
         }
     }
 
@@ -123,7 +124,7 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
         }
@@ -140,8 +141,8 @@ private func seedRow(
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
             #expect(summary.stored == 0)
-            let key = CompanySegmentBreakdown.compositeID(docID: "S1", axis: "business")
-            #expect(try await CompanySegmentBreakdown.find(key, on: app.db) == nil)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            #expect(try await CompanyBreakdown.find(key, on: app.db) == nil)
         }
     }
 
@@ -181,17 +182,17 @@ private func seedRow(
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceXbrlFacts, cacheVersion: "old-version")
+                source: breakdownSourceXbrlFacts, cacheVersion: "old-version")
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanySegmentBreakdown.compositeID(docID: "S1", axis: "business")
-            let row = try #require(try await CompanySegmentBreakdown.find(key, on: app.db))
-            #expect(row.cacheVersion == segmentBreakdownCacheVersion)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.cacheVersion == breakdownCacheVersion)
         }
     }
 
@@ -202,7 +203,7 @@ private func seedRow(
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceSegmentInfoLLM, cacheVersion: "old-version",
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: "old-version",
                 needsReview: false)
 
             let summary = try await runStage6Ingest(
@@ -222,17 +223,17 @@ private func seedRow(
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceSegmentInfoLLM, cacheVersion: segmentBreakdownCacheVersion,
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: breakdownCacheVersion,
                 needsReview: true)
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(needsReview: false), source: segmentBreakdownSourceSegmentInfoLLM, contentHash: "h3", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(needsReview: false), source: breakdownSourceSegmentInfoLLM, contentHash: "h3", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanySegmentBreakdown.compositeID(docID: "S1", axis: "business")
-            let row = try #require(try await CompanySegmentBreakdown.find(key, on: app.db))
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.needsReview == false)
         }
     }
@@ -245,7 +246,7 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: 2
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -262,11 +263,11 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.purged == 1)
-            let key22 = CompanySegmentBreakdown.compositeID(docID: "S22", axis: "business")
-            #expect(try await CompanySegmentBreakdown.find(key22, on: app.db) == nil)
+            let key22 = CompanyBreakdown.compositeID(docID: "S22", axis: "business")
+            #expect(try await CompanyBreakdown.find(key22, on: app.db) == nil)
         }
     }
 
@@ -277,7 +278,7 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: segmentBreakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.purged == 0)
         }
@@ -329,12 +330,12 @@ private func seedRow(
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
             try await seedRow(
                 "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceXbrlFacts, cacheVersion: "breakdown-v1")
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v1")
 
-            let coverage = try await countServableSegmentBreakdowns(db: app.db)
+            let coverage = try await countServableBreakdowns(db: app.db)
             #expect(coverage.servable == 1)
             #expect(coverage.unservable == 1)
         }
@@ -345,9 +346,9 @@ private func seedRow(
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
 
-            let coverage = try await countServableSegmentBreakdowns(db: app.db)
+            let coverage = try await countServableBreakdowns(db: app.db)
             #expect(coverage.servable == 1)
             #expect(coverage.unservable == 0)
         }
@@ -361,7 +362,7 @@ private func seedRow(
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let json = try #require(
-                try await loadStoredSegmentBreakdown(
+                try await loadStoredBreakdown(
                     code: "7203", docId: nil, axis: "business", db: app.db))
             #expect(json["doc_id"] as? String == "S25")
             #expect(json["code"] as? String == "7203")
@@ -377,7 +378,7 @@ private func seedRow(
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let json = try #require(
-                try await loadStoredSegmentBreakdown(
+                try await loadStoredBreakdown(
                     code: "7203", docId: "S24", axis: "business", db: app.db))
             #expect(json["doc_id"] as? String == "S24")
         }
@@ -386,7 +387,7 @@ private func seedRow(
     @Test func loadByDocIdRejectsMismatchedCode() async throws {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
-            let json = try await loadStoredSegmentBreakdown(
+            let json = try await loadStoredBreakdown(
                 code: "6758", docId: "S1", axis: "business", db: app.db)
             #expect(json == nil)
         }
@@ -395,7 +396,7 @@ private func seedRow(
     @Test func loadRejectsNonBusinessAxis() async throws {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
-            let json = try await loadStoredSegmentBreakdown(
+            let json = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "geography", db: app.db)
             #expect(json == nil)
         }
@@ -405,8 +406,8 @@ private func seedRow(
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
-            let json = try await loadStoredSegmentBreakdown(
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
+            let json = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "business", db: app.db)
             #expect(json == nil)
         }
@@ -417,9 +418,9 @@ private func seedRow(
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: segmentBreakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
             let json = try #require(
-                try await loadStoredSegmentBreakdown(
+                try await loadStoredBreakdown(
                     code: "7203", docId: nil, axis: "business", db: app.db))
             #expect(json["doc_id"] as? String == "S1")
         }
@@ -427,7 +428,7 @@ private func seedRow(
 
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
-            let json = try await loadStoredSegmentBreakdown(
+            let json = try await loadStoredBreakdown(
                 code: "0000", docId: nil, axis: "business", db: app.db)
             #expect(json == nil)
         }

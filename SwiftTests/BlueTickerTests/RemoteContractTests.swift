@@ -134,18 +134,18 @@ import Testing
         #expect(f.filings[0].submittedAt == "2025-06-20")
     }
 
-    /// SegmentResult.toDictionary() ↔ init(dictionary:) が往復する（remote filing の段差復元）。
-    @Test func segmentResultRoundTripsThroughDictionary() {
-        let original = SegmentResult(
+    /// ExtractedBreakdown.toDictionary() ↔ init(dictionary:) が往復する（remote filing の段差復元）。
+    @Test func extractedBreakdownRoundTripsThroughDictionary() {
+        let original = ExtractedBreakdown(
             method: "html_table",
-            tables: [SegmentTable(heading: "セグメント別売上", markdown: "| a | b |", period: "当期")],
+            tables: [BreakdownTable(heading: "セグメント別売上", markdown: "| a | b |", period: "当期")],
             facts: [
-                SegmentFact(
+                BreakdownFact(
                     tag: "Sales", contextRef: "CurrentYearDuration",
                     dimensions: ["Segment": "AutoMember"], value: 12345,
                     label: "売上", unitRef: "JPY", decimals: "-6")
             ])
-        let restored = SegmentResult(dictionary: original.toDictionary())
+        let restored = ExtractedBreakdown(dictionary: original.toDictionary())
         #expect(restored == original)
     }
 }

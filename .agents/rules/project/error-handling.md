@@ -12,7 +12,7 @@ func fetchAndBuild(code: String, years: Int) async -> [YearEntry] {
 }
 
 // 抽出結果は「見つからなかった」を値で表現する
-SegmentResult(method: "not_found", tables: [], facts: [])
+ExtractedBreakdown(method: "not_found", tables: [], facts: [])
 ```
 
 呼び出し元（CLI 層）が `nil` / 空を判定し、ユーザー向けメッセージを stderr へ出して `ExitCode.failure` を投げる。

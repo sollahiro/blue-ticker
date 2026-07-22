@@ -604,7 +604,7 @@ enum Xbrl {
         "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
     ]
 
-    // MARK: - セグメント正規化（Stage 6, docs/segment-normalization-concept.md）
+    // MARK: - 事業別・地域別内訳の正規化（Stage 6, docs/breakdown-normalization-concept.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
     /// （netSalesTags と同様、resolveItemPreferCurrent 相当の走査で先頭から一致するものを採用）。
@@ -620,10 +620,10 @@ enum Xbrl {
         "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
     ]
 
-    /// 本リストに一致するタグが無い場合の候補発見（`SegmentNormalizer` のカバレッジ/金額整合性
+    /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
     /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
     /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や
-    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/segment-normalization-concept.md）。
+    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/breakdown-normalization-concept.md）。
     static let segmentNonRevenueTagKeywords: [String] = [
         "Profit", "Loss", "Asset", "Employee", "Equity", "Depreciation",
         "Impairment", "Expenditure", "Liabilit", "Capital", "Dividend",
@@ -644,7 +644,7 @@ enum Xbrl {
     ]
 
     /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
-    /// `SegmentNormalizer.normalizeInternalSubtotalBasis` が売上系タグ不一致時の
+    /// `BreakdownNormalizer.normalizeInternalSubtotalBasis` が売上系タグ不一致時の
     /// フォールバックとして使う（実データ検証: 三菱UFJ、issue調査 2026-07-21）。
     static let segmentBankGrossProfitTags: [String] = [
         "NetRevenue",  // 三菱UFJ
@@ -695,9 +695,9 @@ enum Xbrl {
     ]
 
     /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。
-    /// `SegmentNormalizer` では rowKind を `segment` として扱う（実データ検証: この member を
+    /// `BreakdownNormalizer` では rowKind を `segment` として扱う（実データ検証: この member を
     /// 加算しないと `sum(segment) ≠ denominator` になる企業が多数あった）。一方で事業/地域いずれの
-    /// 軸にも属すると断定できない「その他」バケツのため、`SegmentExtractor.isGeographyAxis` の
+    /// 軸にも属すると断定できない「その他」バケツのため、`BreakdownExtractor.isGeographyAxis` の
     /// 軸判定候補からは `segmentSubtotalMemberNames` と同様に除外し続ける（軸判定への影響を避ける）。
     static let segmentOtherBusinessMemberNames: Set<String> = [
         "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
@@ -725,7 +725,7 @@ enum Xbrl {
     /// 建設業等では「国内建築」「海外建築」のように Domestic/Overseas が事業区分名の接頭辞になる
     /// ケースや、「海外事業」のように事業区分の1つとして海外を単独カテゴリ化するケースが多数あり、
     /// これらは事業軸のクロス集計・カテゴリ分けであって地域軸との真の混在ではない。
-    /// `SegmentNormalizer.classifyAxis` の部分一致（混在）判定では、この特定地域名サブセットに
+    /// `BreakdownNormalizer.classifyAxis` の部分一致（混在）判定では、この特定地域名サブセットに
     /// 一致する行が1件も無ければ needs_review を立てない（Domestic/Overseas のみの一致は
     /// axis 判定のシグナルとして弱すぎるため）。
     static let segmentSpecificGeographyMemberKeywords: [String] = segmentGeographyMemberKeywords
@@ -733,7 +733,7 @@ enum Xbrl {
 
     /// html_table 由来の行ラベル（日本語表記）が地域名らしいかの判定キーワード。
     /// `segmentGeographyMemberKeywords`（英語 member 名用）とは別レイヤー。
-    /// LLM 正規化（`SegmentBreakdownLLMNormalizer`）が誤った表を選んでいないかの
+    /// LLM 正規化（`GeographyBreakdownLLMNormalizer`）が誤った表を選んでいないかの
     /// 決定的ガードに使う（分母整合性だけでは検知できない事故対策。学び参照）。
     /// 「その他」は意図的に含めない — 事業別表にも「その他及び全社」等の形でほぼ必ず出現し、
     /// 固有の地域名が最低1つ一致することを要求するガードの意味を失わせるため

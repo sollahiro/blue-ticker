@@ -206,12 +206,12 @@ private func dispatchMcpTool(
                 code: code, docId: docId, sections: sections, db: db, logger: logger),
             notFoundMessage: "書類本文は未抽出です")
 
-    case "get_segment_breakdown":
+    case "get_breakdown":
         let code = args["code"]?.stringValue ?? ""
         let docId = args["doc_id"]?.stringValue
-        let axis = args["axis"]?.stringValue ?? segmentBreakdownAxisBusiness
+        let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
         return mapStoredResult(
-            await serveStoredSegmentBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
+            await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
             notFoundMessage: "事業別内訳は未算出です")
 
     default:

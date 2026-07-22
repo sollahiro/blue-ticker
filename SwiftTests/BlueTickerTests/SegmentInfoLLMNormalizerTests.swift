@@ -24,16 +24,16 @@ private actor MockChatCompleting: ChatCompleting {
 
 @Suite struct SegmentInfoLLMNormalizerTests {
 
-    private static func htmlTableResult(markdown: String = "| dummy |") -> SegmentResult {
-        SegmentResult(
+    private static func htmlTableResult(markdown: String = "| dummy |") -> ExtractedBreakdown {
+        ExtractedBreakdown(
             method: "html_table",
-            tables: [SegmentTable(heading: "セグメント情報", markdown: markdown, period: "当期")],
+            tables: [BreakdownTable(heading: "セグメント情報", markdown: markdown, period: "当期")],
             facts: []
         )
     }
 
     @Test func returnsNilWhenMethodIsNotHtmlTable() async {
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: [])
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: [])
         let client = MockChatCompleting(responseJSON: ["applicable": true])
         let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
             result, consolidatedSales: 1_000_000, client: client

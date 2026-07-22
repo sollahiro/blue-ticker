@@ -1,15 +1,21 @@
-// company_segment_breakdowns テーブルの作成。書類1件・軸1つ分の正規化済み事業別/地域別売上
-// スナップショットを JSONB 1 セルに持つ。company_filing_sections（Stage 5, 生のsegments/geography表）
-// とは別テーブル（docs/segment-normalization-concept.md「今後の検討事項5」参照）。
+// company_segment_breakdowns テーブルの作成（初回名。後に RenameCompanySegmentBreakdownsToCompanyBreakdowns
+// で company_breakdowns へ改名。docs/breakdown-normalization-concept.md「今後の検討事項5」参照）。
+// 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショットを JSONB 1 セルに持つ。
+// company_filing_sections（Stage 5, 生のsegments/geography表）とは別テーブル。
+//
+// 本番適用済みのため凍結: テーブル名は現行モデル（CompanyBreakdown）の schema に依存せず
+// リテラル文字列で固定する（モデル名が変わっても本マイグレーションの意味は変えない）。
 //
 // Database.swift の app.migrations に登録済み（今後の検討事項1、business 軸の ingest/CLI/REST 配線）。
 // geography 軸は未配線のため、当面 axis="business" の行のみが書き込まれる。
 
 import Fluent
 
+private let legacyCompanySegmentBreakdownsSchema = "company_segment_breakdowns"
+
 struct CreateCompanySegmentBreakdowns: AsyncMigration {
     func prepare(on database: Database) async throws {
-        try await database.schema(CompanySegmentBreakdown.schema)
+        try await database.schema(legacyCompanySegmentBreakdownsSchema)
             .field("id", .string, .identifier(auto: false))
             .field("doc_id", .string, .required)
             .field("axis", .string, .required)
@@ -26,6 +32,6 @@ struct CreateCompanySegmentBreakdowns: AsyncMigration {
     }
 
     func revert(on database: Database) async throws {
-        try await database.schema(CompanySegmentBreakdown.schema).delete()
+        try await database.schema(legacyCompanySegmentBreakdownsSchema).delete()
     }
 }

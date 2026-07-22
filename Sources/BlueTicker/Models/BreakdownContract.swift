@@ -1,40 +1,40 @@
 // Stage 6（事業別・地域別売上の正規化スナップショット）の格納用 Codable 契約。
-// docs/segment-normalization-concept.md「今後の検討事項5」参照。
+// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。
 //
-// 内部型 BreakdownSnapshot/BreakdownRow/LLMBreakdownAudit（Analysis/SegmentNormalizer.swift,
-// Analysis/SegmentBreakdownLLMNormalizer.swift, internal）は露出させず、Stage 5 の
-// SegmentResult → SegmentPayload 写経と同じパターンで公開 Codable 型へ写す。
+// 内部型 BreakdownSnapshot/BreakdownRow/LLMBreakdownAudit（Analysis/BreakdownNormalizer.swift,
+// Analysis/GeographyBreakdownLLMNormalizer.swift, internal）は露出させず、Stage 5 の
+// ExtractedBreakdown → ExtractedBreakdownPayload 写経と同じパターンで公開 Codable 型へ写す。
 // Foundation のみ依存（BlueTickerCore/Models 配置。Fluent モデルは BltServerCore 側）。
 
 import Foundation
 
-/// Neon Stage 6 キャッシュ（company_segment_breakdowns.cache_version）の契約スキーマバージョン。
+/// Neon Stage 6 キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// blueTickerVersion 非連動。`BreakdownSnapshotPayload` の意味を変える破壊的変更のみバンプする。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
 /// （content_hash 一致・needs_review=false の行はそのまま据え置く。今後の検討事項8参照）。
-public let segmentBreakdownCacheVersion = "breakdown-v4"
+public let breakdownCacheVersion = "breakdown-v4"
 
-/// business 軸は `SegmentBusinessBreakdownResolver` が、geography 軸は呼び出し側が
-/// `SegmentBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`SegmentNormalizer`）で
+/// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
+/// `GeographyBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`BreakdownNormalizer`）で
 /// 解決した経路。監査・再計算方針の判断に使う（xbrl_facts は決定的でバンプ全件再計算してよいが、
 /// LLM 経由（*_llm）は content_hash + needs_review でのみ再計算する）。
 /// `.notFound` は行を作らない方針のため、この文字列が DB に書かれることはない
 /// （欠ける軸は出さない）。
-public let segmentBreakdownSourceXbrlFacts = "xbrl_facts"
-public let segmentBreakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
-public let segmentBreakdownSourceSegmentInfoLLM = "segment_info_llm"
-/// geography 軸を `SegmentBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
-public let segmentBreakdownSourceGeographyLLM = "geography_llm"
+public let breakdownSourceXbrlFacts = "xbrl_facts"
+public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
+public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
+/// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
+public let breakdownSourceGeographyLLM = "geography_llm"
 
-/// segment-breakdown read（REST/MCP）が xbrl_facts 経由の行に適用する最低スキーマバージョン番号
+/// breakdown read（REST/MCP）が xbrl_facts 経由の行に適用する最低スキーマバージョン番号
 /// （`breakdown-vN` の N）。**明示指定**。LLM 経由の行（source != xbrl_facts）には適用しない
-/// （`isServableSegmentBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き運用のため、
+/// （`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き運用のため、
 /// cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
-/// 不変条件: `segmentBreakdownMinServableVersion` ≤ 現行 `breakdown-vN` の N。
-public let segmentBreakdownMinServableVersion = 1
+/// 不変条件: `breakdownMinServableVersion` ≤ 現行 `breakdown-vN` の N。
+public let breakdownMinServableVersion = 1
 
 /// `breakdown-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
-public func segmentBreakdownCacheVersionNumber(_ version: String) -> Int? {
+public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     guard version.hasPrefix("breakdown-v") else { return nil }
     let suffix = version.dropFirst("breakdown-v".count)
     guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
@@ -43,11 +43,11 @@ public func segmentBreakdownCacheVersionNumber(_ version: String) -> Int? {
 
 /// 格納行が read 可能か。xbrl_facts 経由（決定的）は cache_version が床以上のときのみ
 /// （バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
-/// docs/segment-normalization-concept.md「今後の検討事項8」参照）。
-public func isServableSegmentBreakdown(source: String, cacheVersion: String) -> Bool {
-    guard source == segmentBreakdownSourceXbrlFacts else { return true }
-    guard let n = segmentBreakdownCacheVersionNumber(cacheVersion) else { return false }
-    return n >= segmentBreakdownMinServableVersion
+/// docs/breakdown-normalization-concept.md「今後の検討事項8」参照）。
+public func isServableBreakdown(source: String, cacheVersion: String) -> Bool {
+    guard source == breakdownSourceXbrlFacts else { return true }
+    guard let n = breakdownCacheVersionNumber(cacheVersion) else { return false }
+    return n >= breakdownMinServableVersion
 }
 
 /// BreakdownRow（内部型）の公開 Codable 写経。
@@ -65,7 +65,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     }
 }
 
-/// BreakdownSnapshot（内部型）の公開 Codable 写経。company_segment_breakdowns.payload の中身。
+/// BreakdownSnapshot（内部型）の公開 Codable 写経。company_breakdowns.payload の中身。
 public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var axis: String
     public var denominator: Double

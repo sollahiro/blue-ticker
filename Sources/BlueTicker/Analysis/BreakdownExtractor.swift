@@ -13,13 +13,13 @@ import FoundationXML
 #endif
 import SwiftSoup
 
-struct SegmentTable: Equatable {
+struct BreakdownTable: Equatable {
     var heading: String
     var markdown: String
     var period: String?  // "当期" | "前期" | "比較"
 }
 
-struct SegmentFact: Equatable {
+struct BreakdownFact: Equatable {
     var tag: String
     var contextRef: String
     var dimensions: [String: String]
@@ -29,10 +29,10 @@ struct SegmentFact: Equatable {
     var decimals: String?
 }
 
-struct SegmentResult: Equatable {
+struct ExtractedBreakdown: Equatable {
     var method: String  // "html_table" | "xbrl_facts" | "not_found"
-    var tables: [SegmentTable]
-    var facts: [SegmentFact]
+    var tables: [BreakdownTable]
+    var facts: [BreakdownFact]
 
     /// JSONSerialization 互換の辞書に変換する（Python 出力と同じキー構造）。
     func toDictionary() -> [String: Any] {
@@ -57,19 +57,19 @@ struct SegmentResult: Equatable {
     }
 }
 
-extension SegmentResult {
+extension ExtractedBreakdown {
     /// toDictionary() の逆変換。remote CLI が filing-content の JSON をローカル同等に描画するために使う。
     init(dictionary: [String: Any]) {
         method = dictionary["method"] as? String ?? "not_found"
         tables = (dictionary["tables"] as? [[String: Any]] ?? []).map { t in
-            SegmentTable(
+            BreakdownTable(
                 heading: t["heading"] as? String ?? "",
                 markdown: t["markdown"] as? String ?? "",
                 period: t["period"] as? String
             )
         }
         facts = (dictionary["facts"] as? [[String: Any]] ?? []).map { f in
-            SegmentFact(
+            BreakdownFact(
                 tag: f["tag"] as? String ?? "",
                 contextRef: f["contextRef"] as? String ?? "",
                 dimensions: f["dimensions"] as? [String: String] ?? [:],
@@ -82,7 +82,7 @@ extension SegmentResult {
     }
 }
 
-enum SegmentExtractor {
+enum BreakdownExtractor {
 
     private static let currentPeriodKeywords = ["当連結会計年度", "当期"]
     private static let priorPeriodKeywords = ["前連結会計年度", "前期"]
@@ -93,7 +93,7 @@ enum SegmentExtractor {
     static let specialSectionKeys = ["segments", "geography", "revenue_recognition"]
 
     /// 収益認識関係注記の見出し文字列。`extractRevenueRecognitionInfo` の dedicatedHeading と
-    /// `specialSectionTitles` の双方、および `SegmentBusinessBreakdownResolver` の見出し判定
+    /// `specialSectionTitles` の双方、および `BusinessBreakdownResolver` の見出し判定
     /// （swap 済み segments かどうかの振り分け）が同じ文字列を参照する単一の真実源。
     static let revenueRecognitionHeading = "収益認識関係"
 
@@ -105,7 +105,7 @@ enum SegmentExtractor {
     ]
 
     /// 特殊セクション名に対応する抽出を実行する。未対応の名前は nil。
-    static func extractSpecialSection(_ section: String, xbrlDir: URL) -> SegmentResult? {
+    static func extractSpecialSection(_ section: String, xbrlDir: URL) -> ExtractedBreakdown? {
         switch section {
         case "segments": return extractSegmentInfo(xbrlDir: xbrlDir)
         case "geography": return extractGeographyInfo(xbrlDir: xbrlDir)
@@ -117,7 +117,7 @@ enum SegmentExtractor {
     /// 連結財務諸表注記から事業別（報告セグメント別）情報を抽出する。
     ///
     /// 報告セグメント（xbrl_facts 経路）のメンバーが全て地域名の場合（オークマ型:
-    /// docs/segment-normalization-concept.md 学び10）、その内容は「事業別」ではなく
+    /// docs/breakdown-normalization-concept.md 学び10）、その内容は「事業別」ではなく
     /// 「地域別」であるため、収益認識関係注記（`extractRevenueRecognitionInfo`）に本当の
     /// 事業別（製品別）データがあればそちらを優先する。見つからない場合は元の地域別
     /// xbrl_facts をそのまま返す（未検証企業での誤判定時に表示が消える regression を避けるため）。
@@ -125,7 +125,7 @@ enum SegmentExtractor {
     /// 単一セグメントで報告セグメント開示が省略される場合（東京エレクトロン型）も
     /// `not_found` のままでは製品別が取れないため、収益認識関係注記に製品・サービス別の
     /// 分解表があればそちらへフォールバックする。
-    static func extractSegmentInfo(xbrlDir: URL) -> SegmentResult {
+    static func extractSegmentInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.businessSegmentTextBlockTags,
@@ -161,7 +161,7 @@ enum SegmentExtractor {
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
     /// `extractSegmentInfo` は表(`<table>`)を持たないブロックを対象外とするため method="not_found"
     /// になり、「省略の確認が取れた」場合と「タグ自体が無く原因不明」の場合が区別できない。
-    /// 本関数は永続化（company_segment_breakdowns）には使わず、開発ツール/ログでの
+    /// 本関数は永続化（company_breakdowns）には使わず、開発ツール/ログでの
     /// 診断表示専用（該当タグの内容が見つかれば返す、無ければ nil）。
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
         for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
@@ -181,7 +181,7 @@ enum SegmentExtractor {
     }
 
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
-    static func extractGeographyInfo(xbrlDir: URL) -> SegmentResult {
+    static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -195,7 +195,7 @@ enum SegmentExtractor {
 
     /// 連結財務諸表注記（収益認識関係）から「顧客との契約から生じる収益を分解した情報」を抽出する。
     /// オークマ型（報告セグメントが地域別）の会社で、本当の事業別（製品別）データの実在ソース。
-    static func extractRevenueRecognitionInfo(xbrlDir: URL) -> SegmentResult {
+    static func extractRevenueRecognitionInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.revenueRecognitionTextBlockTags,
@@ -207,10 +207,10 @@ enum SegmentExtractor {
     }
 
     /// segment 行（小計・調整行を除く）の member ラベルが全て地域名キーワードに一致するか。
-    /// `SegmentNormalizer.classifyAxis` と同じ「全一致 → geography」判定だが、数値による
+    /// `BreakdownNormalizer.classifyAxis` と同じ「全一致 → geography」判定だが、数値による
     /// 小計判定（consolidatedSales が要る2次判定）は使わず、標準タクソノミの小計・調整
     /// member 名（1次判定）のみで segment 行を絞る。raw 抽出層では sales を持たないため。
-    private static func isGeographyAxis(_ facts: [SegmentFact]) -> Bool {
+    private static func isGeographyAxis(_ facts: [BreakdownFact]) -> Bool {
         let segmentMembers = facts.compactMap { fact -> String? in
             guard let member = primaryMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
@@ -219,14 +219,14 @@ enum SegmentExtractor {
             else { return nil }
             return member
         }
-        // `SegmentNormalizer.classifyAxis` と同じ基準を使う（重複ロジック回避。以前は本関数だけ
+        // `BreakdownNormalizer.classifyAxis` と同じ基準を使う（重複ロジック回避。以前は本関数だけ
         // 独立した簡易版チェックを持っており、キッコーマン型「国内食品製造販売」等の事業区分×
         // 国内海外クロス集計を誤って地域軸と判定し、classifyAxis 側の修正が反映されなかった）。
-        return SegmentNormalizer.allMembersAreGeography(Array(Set(segmentMembers)))
+        return BreakdownNormalizer.allMembersAreGeography(Array(Set(segmentMembers)))
     }
 
     /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
-    /// `SegmentNormalizer.primaryMember` と同じ規約（dimension キー名の辞書順で先頭を採用）。
+    /// `BreakdownNormalizer.primaryMember` と同じ規約（dimension キー名の辞書順で先頭を採用）。
     private static func primaryMember(_ dimensions: [String: String]) -> String? {
         dimensions
             .filter { $0.key != "ConsolidatedOrNonConsolidatedAxis" }
@@ -344,7 +344,7 @@ enum SegmentExtractor {
     }
 
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
-    static func applyPeriodOrdering(_ tables: inout [SegmentTable]) {
+    static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
         var i = 0
         for idx in tables.indices where tables[idx].period == nil {
             tables[idx].period = i % 2 == 0 ? "前期" : "当期"
@@ -390,16 +390,16 @@ enum SegmentExtractor {
     }
 
     /// HTML内の全 <table> を Markdown 化して返す。
-    static func allTablesFromHtml(_ html: String, defaultHeading: String) -> [SegmentTable] {
+    static func allTablesFromHtml(_ html: String, defaultHeading: String) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
-        var tables: [SegmentTable] = []
+        var tables: [BreakdownTable] = []
         for table in tableEls {
             let grid = expandTable(table)
             let md = gridToMarkdown(grid)
             if md.isEmpty { continue }
             let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
-            tables.append(SegmentTable(heading: defaultHeading, markdown: md, period: period))
+            tables.append(BreakdownTable(heading: defaultHeading, markdown: md, period: period))
         }
         applyPeriodOrdering(&tables)
         return tables
@@ -413,9 +413,9 @@ enum SegmentExtractor {
         _ html: String,
         keywords: [String],
         headingExclusionKeywords: [String] = []
-    ) -> [SegmentTable] {
+    ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
-        var tables: [SegmentTable] = []
+        var tables: [BreakdownTable] = []
         var seen = Set<ObjectIdentifier>()
         for keyword in keywords {
             guard let elems = try? soup.select("*") else { continue }
@@ -441,7 +441,7 @@ enum SegmentExtractor {
                         continue
                     }
                     let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
-                    tables.append(SegmentTable(heading: keyword, markdown: md, period: period))
+                    tables.append(BreakdownTable(heading: keyword, markdown: md, period: period))
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
@@ -477,8 +477,8 @@ enum SegmentExtractor {
         dedicatedHeading: String,
         mixedKeywords: [String],
         mixedHeadingExclusionKeywords: [String] = []
-    ) -> [SegmentTable] {
-        var tables: [SegmentTable] = []
+    ) -> [BreakdownTable] {
+        var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
         for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
             guard let data = try? Data(contentsOf: file) else { continue }
@@ -524,14 +524,14 @@ enum SegmentExtractor {
         xbrlDir: URL,
         dimensionKeywords: [String],
         contextMap: [String: [String: String]]
-    ) -> [SegmentFact] {
+    ) -> [BreakdownFact] {
         let allFacts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
-        var results: [SegmentFact] = []
+        var results: [BreakdownFact] = []
         for (tag, ctxMap) in allFacts {
             for (ctxID, fact) in ctxMap {
                 guard let dims = contextMap[ctxID], !dims.isEmpty else { continue }
                 guard dims.keys.contains(where: { dim in dimensionKeywords.contains(where: dim.contains) }) else { continue }
-                results.append(SegmentFact(
+                results.append(BreakdownFact(
                     tag: tag,
                     contextRef: ctxID,
                     dimensions: dims,
@@ -561,31 +561,31 @@ enum SegmentExtractor {
     ///
     /// facts 優先時も tables は破棄せず保持する（Grok 4.5 レビュー指摘: 破棄すると、facts が
     /// 何らかの理由で正規化に失敗した会社が LLM フォールバックの手段を永久に失う）。
-    /// 呼び出し側（`SegmentBusinessBreakdownResolver` 等）は `method == "xbrl_facts"` を
+    /// 呼び出し側（`BusinessBreakdownResolver` 等）は `method == "xbrl_facts"` を
     /// 優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へフォールバックする。
     private static func buildResult(
         xbrlDir: URL,
-        tables: [SegmentTable],
+        tables: [BreakdownTable],
         dimensionKeywords: [String]
-    ) -> SegmentResult {
+    ) -> ExtractedBreakdown {
         let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = extractFactsByDimension(xbrlDir: xbrlDir, dimensionKeywords: dimensionKeywords, contextMap: contextMap)
         if !facts.isEmpty, factsContainRecognizedAmountTag(facts) {
-            return SegmentResult(method: "xbrl_facts", tables: tables, facts: facts)
+            return ExtractedBreakdown(method: "xbrl_facts", tables: tables, facts: facts)
         }
         if !tables.isEmpty {
-            return SegmentResult(method: "html_table", tables: tables, facts: [])
+            return ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
         }
         if !facts.isEmpty {
-            return SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+            return ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         }
-        return SegmentResult(method: "not_found", tables: [], facts: [])
+        return ExtractedBreakdown(method: "not_found", tables: [], facts: [])
     }
 
-    /// facts が `SegmentNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
+    /// facts が `BreakdownNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
     /// 1つでも含むか。含まなければ `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等の
     /// 売上に無関係な facts（キヤノン・富士フイルム型）とみなし、html_table を優先させる。
-    private static func factsContainRecognizedAmountTag(_ facts: [SegmentFact]) -> Bool {
+    private static func factsContainRecognizedAmountTag(_ facts: [BreakdownFact]) -> Bool {
         let tags = Set(facts.map(\.tag))
         return tags.contains(where: Xbrl.segmentExternalRevenueTags.contains)
             || tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains)

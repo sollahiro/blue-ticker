@@ -2,10 +2,10 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-/// SegmentNormalizer を smoke/segment_expected.json（golden facts）+ smoke/smoke_expected/*.json
+/// BreakdownNormalizer を smoke/breakdown_extraction_expected.json（golden facts）+ smoke/smoke_expected/*.json
 /// （連結売上）に対して実行し、Stage 6 コモンモデルの挙動を検証する。
 /// ライブ XBRL キャッシュは不要（golden JSON のみで完結する）。
-@Suite struct SegmentNormalizerTests {
+@Suite struct BreakdownNormalizerTests {
 
     private static let fullYearCompanies: [(code: String, docID: String, name: String)] = [
         ("2802", "S100VXJA", "味の素"),
@@ -23,10 +23,10 @@ import Foundation
 
     /// normalize が nil を返す会社（US-GAAP 2社は segments facts に売上自体が無く、
     /// segmentExternalRevenueTags にも segmentBankGrossProfitTags にも一致するタグを持たない）。
-    /// オークマ（6103）は別の理由で nil: `SegmentExtractor.extractSegmentInfo` の
-    /// axis-aware swap（docs/segment-normalization-concept.md 今後の検討事項3）により、
+    /// オークマ（6103）は別の理由で nil: `BreakdownExtractor.extractSegmentInfo` の
+    /// axis-aware swap（docs/breakdown-normalization-concept.md 今後の検討事項3）により、
     /// golden の "segments" が xbrl_facts（地域別）から html_table（収益認識１由来の製品別）
-    /// に変わった。SegmentNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
+    /// に変わった。BreakdownNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
     /// （html_table 側の正規化は RevenueRecognitionLLMNormalizer が別途担う）。
     /// 銀行2社（8306・8316）はここには含まれない: `normalizeBankBasis`（粗利益/営業純益基準）で
     /// 解決できるようになったため（issue調査 2026-07-21、下記 bankCompaniesResolveViaGrossProfitBasis 参照）。
@@ -34,7 +34,7 @@ import Foundation
 
     private static func loadGolden() throws -> [String: [String: Any]] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let path = root.appendingPathComponent("smoke/segment_expected.json")
+        let path = root.appendingPathComponent("smoke/breakdown_extraction_expected.json")
         let data = try Data(contentsOf: path)
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
     }
@@ -60,15 +60,15 @@ import Foundation
     private static func snapshot(code: String, docID: String) throws -> BreakdownSnapshot? {
         let golden = try loadGolden()
         guard let entry = golden[docID], let segDict = entry["segments"] as? [String: Any] else {
-            Issue.record("\(code): smoke/segment_expected.json に segments フィクスチャがない")
+            Issue.record("\(code): smoke/breakdown_extraction_expected.json に segments フィクスチャがない")
             return nil
         }
-        let result = SegmentResult(dictionary: segDict)
+        let result = ExtractedBreakdown(dictionary: segDict)
         guard let sales = try loadSales(code: code) else {
             Issue.record("\(code): smoke/smoke_expected に売上フィクスチャがない")
             return nil
         }
-        return SegmentNormalizer.normalize(result, consolidatedSales: sales)
+        return BreakdownNormalizer.normalize(result, consolidatedSales: sales)
     }
 
     @Test func nonFinancialCompaniesConvergeToFullSegmentShare() throws {
@@ -80,40 +80,40 @@ import Foundation
     }
 
     /// オークマ実データ（学び10）を smoke golden から切り離してハードコードする。
-    /// `SegmentExtractor.extractSegmentInfo`（`Sources/BlueTicker/Analysis/SegmentExtractor.swift`）
+    /// `BreakdownExtractor.extractSegmentInfo`（`Sources/BlueTicker/Analysis/BreakdownExtractor.swift`）
     /// が axis-aware swap（収益認識関係注記へのフォールバック）を持つようになったため、
-    /// `smoke/segment_expected.json["S100W043"]["segments"]` の中身は将来 xbrl_facts から
-    /// html_table（収益認識１由来）に変わりうる。このテストは `SegmentNormalizer.classifyAxis`
+    /// `smoke/breakdown_extraction_expected.json["S100W043"]["segments"]` の中身は将来 xbrl_facts から
+    /// html_table（収益認識１由来）に変わりうる。このテストは `BreakdownNormalizer.classifyAxis`
     /// 自体の分類ロジック（「地域名 member のみなら geography」）をロックインするためのものなので、
     /// ライブ抽出結果が更新されても独立して守られるよう、既知の地域名 member を直接構築する。
     @Test func okumaSegmentsAxisIsGeography() throws {
-        let result = SegmentResult(
+        let result = ExtractedBreakdown(
             method: "xbrl_facts",
             tables: [],
             facts: [
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
                     value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
                     value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_EuropeReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "EuropeReportableSegmentsMember"],
                     value: 33_386_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AsiaAndPacificReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"],
                     value: 48_665_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
             ]
         )
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 206_820_000_000))
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 206_820_000_000))
         #expect(snap.axis == "geography")
         #expect(snap.needsReview == false)
     }
@@ -123,31 +123,31 @@ import Foundation
     /// 断定できないため `classifyAxis` の判定候補からは除外され続けるべき。除外しないと、この
     /// member を持つ地域別報告企業が誤って business + needs_review に分類されてしまう。
     @Test func geographyAxisUnaffectedByOtherBusinessMember() throws {
-        let result = SegmentResult(
+        let result = ExtractedBreakdown(
             method: "xbrl_facts",
             tables: [],
             facts: [
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
                     value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
                     value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_EuropeReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "EuropeReportableSegmentsMember"],
                     value: 33_386_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AsiaAndPacificReportableSegmentsMember",
                     dimensions: ["OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"],
                     value: 48_665_000_000, label: nil, unitRef: "JPY", decimals: "-6"
                 ),
-                SegmentFact(
+                BreakdownFact(
                     tag: "RevenuesFromExternalCustomers",
                     contextRef: "CurrentYearDuration_OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
                     dimensions: ["OperatingSegmentsAxis": "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"],
@@ -155,7 +155,7 @@ import Foundation
                 ),
             ]
         )
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 211_820_000_000))
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 211_820_000_000))
         #expect(snap.axis == "geography")
         #expect(snap.needsReview == false)
         let other = try #require(
@@ -163,22 +163,22 @@ import Foundation
         #expect(other.rowKind == "segment")
     }
 
-    /// `SegmentFact` を (member, value) の組から組み立てて normalize する軽量ヘルパー。
+    /// `BreakdownFact` を (member, value) の組から組み立てて normalize する軽量ヘルパー。
     /// 分母は行の合計値をそのまま使う（axis 判定のテストであり share の厳密検証は目的外）。
     private static func snapshot(labelsAndValues: [(String, Double)]) -> BreakdownSnapshot? {
         let facts = labelsAndValues.map { label, value in
-            SegmentFact(
+            BreakdownFact(
                 tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(label)",
                 dimensions: ["OperatingSegmentsAxis": label],
                 value: value, label: nil, unitRef: "JPY", decimals: "-6"
             )
         }
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let consolidatedSales = labelsAndValues.reduce(0.0) { $0 + $1.1 }
-        return SegmentNormalizer.normalize(result, consolidatedSales: consolidatedSales)
+        return BreakdownNormalizer.normalize(result, consolidatedSales: consolidatedSales)
     }
 
-    /// 学び11（`docs/segment-normalization-concept.md`）の回帰テスト。実データ検証（2026-07-20）:
+    /// 学び11（`docs/breakdown-normalization-concept.md`）の回帰テスト。実データ検証（2026-07-20）:
     /// 1802大林組・1812鹿島建設・1808長谷工・2413エムスリーはいずれも Domestic/Overseas を
     /// 含む事業区分名（「国内建築」「海外事業」等）の混在で誤って needs_review=true になっていた。
     /// axis=business の正しさは sum(segment)≈denominator でユーザーが確認済み。
@@ -306,8 +306,8 @@ import Foundation
             "GrossProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation"
         let netOperatingProfitTag =
             "NetBusinessProfitsExcludingTheAmountsOfCreditCostsOfTrustAccountsBeforeReversalOfProvisionForGeneralAllowanceForLoanLossesIncludingNetGainsLossesRelatedToETFsAndOthersSegmentInformation"
-        func fact(_ tag: String, _ member: String, _ value: Double) -> SegmentFact {
-            SegmentFact(
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
                 tag: tag, contextRef: "CurrentYearDuration_\(member)",
                 dimensions: ["OperatingSegmentsAxis": member],
                 value: value, label: nil, unitRef: "JPY", decimals: "-6"
@@ -323,8 +323,8 @@ import Foundation
             fact(grossProfitTag, "ReportableSegmentsMember", 3_515_673_000_000),
             fact(netOperatingProfitTag, "RBCReportableSegmentMember", 237_515_000_000),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominatorTag == grossProfitTag)
         #expect(snap.axis == "business")
         #expect(snap.needsReview == false)
@@ -338,8 +338,8 @@ import Foundation
         // 東京海上型の回帰（issue調査 2026-07-21）: 保険会社は外部売上高の概念を持たず
         // InsuranceRevenueIFRS（保険収益）/ InsuranceServiceResultIFRS（保険サービス損益）を使う。
         // 銀行基準と同じ内部小計基準の経路（normalizeInternalSubtotalBasis）で解決できる。
-        func fact(_ tag: String, _ member: String, _ value: Double) -> SegmentFact {
-            SegmentFact(
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
                 tag: tag, contextRef: "CurrentYearDuration_\(member)",
                 dimensions: ["OperatingSegmentsAxis": member],
                 value: value, label: nil, unitRef: "JPY", decimals: "-6"
@@ -354,8 +354,8 @@ import Foundation
             fact("InsuranceRevenueIFRS", "ReportableSegmentsMember", 7_754_436_000_000),
             fact("InsuranceServiceResultIFRS", "JapanPCBusinessReportableSegmentMember", 257_461_000_000),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominatorTag == "InsuranceRevenueIFRS")
         #expect(snap.axis == "business")
         #expect(snap.needsReview == false)
@@ -370,19 +370,19 @@ import Foundation
         // 引き続き normalizeSalesBasis を優先する（normalizeInternalSubtotalBasis に
         // フォールバックしない）ことを確認する。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_BetaMember",
                 dimensions: ["OperatingSegmentsAxis": "BetaMember"],
                 value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
         #expect(snap.denominatorTag == "RevenuesFromExternalCustomers")
         #expect(snap.denominator == 100_000_000_000)
     }
@@ -392,29 +392,29 @@ import Foundation
         // 単純な最大値採用だと部分合計を誤って分母に選んでしまう。segment 行の合計に最も近い値
         // （＝真の全社合計）を選ぶ必要がある。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_RetailMember",
                 dimensions: ["OperatingSegmentsAxis": "RetailMember"],
                 value: 900_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_GlobalMarketsBusinessGroupMember",
                 dimensions: ["OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"],
                 value: -300_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalMember",
                 dimensions: ["OperatingSegmentsAxis": "TotalMember"],
                 value: 600_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalOfCustomerBusinessUnitMember",
                 dimensions: ["OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"],
                 value: 900_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominator == 600_000_000_000)
     }
 
@@ -424,25 +424,25 @@ import Foundation
         // それが segment 行合計から大きく乖離している（ここでは全社合計タグが部分合計しか
         // 無いケースを模す）ときは、採用した値であっても要確認とする。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_RetailMember",
                 dimensions: ["OperatingSegmentsAxis": "RetailMember"],
                 value: 500_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_WholesaleMember",
                 dimensions: ["OperatingSegmentsAxis": "WholesaleMember"],
                 value: 500_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 // 全社合計タグが名称未収載で、部分合計（顧客部門の一部のみ）しか無い状態を模す。
                 tag: "NetRevenue", contextRef: "CurrentYearDuration_TotalOfCustomerBusinessUnitMember",
                 dimensions: ["OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"],
                 value: 600_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: nil))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominator == 600_000_000_000)
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains("bank_denominator_far_from_segment_sum"))
@@ -457,19 +457,19 @@ import Foundation
 
     @Test func unknownTagResolvedByRatioFallbackWhenUnambiguous() throws {
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "UnknownVendorSalesTag", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "UnknownVendorSalesTag", contextRef: "CurrentYearDuration_BetaMember",
                 dimensions: ["OperatingSegmentsAxis": "BetaMember"],
                 value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
         #expect(snap.denominatorTag == "UnknownVendorSalesTag")
         #expect(snap.needsReview == false)
         #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 2)
@@ -478,46 +478,46 @@ import Foundation
     @Test func nonRevenueBlacklistedTagIsNotAdoptedEvenWhenRatioMatches() throws {
         // AssetsIFRS はブラックリスト対象。たまたま合計が連結売上と近い値でも採用しない。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "AssetsIFRS", contextRef: "CurrentYearInstant_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
     }
 
     @Test func noTagMeetsRatioToleranceReturnsNil() throws {
         // 三菱商事型: セグメント別にタグ付けされているが売上系タグが1件も無い（実データ検証済み）。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "GrossProfitIFRS", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 5_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "NumberOfEmployees", contextRef: "CurrentYearInstant_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 1200, label: nil, unitRef: "pure", decimals: "0"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
     }
 
     @Test func netRevenueLikeTagIsNotAdoptedEvenWhenRatioMatches() throws {
         // Grok 4.5 レビュー指摘の回帰テスト: 銀行等金融機関の NetRevenueIFRS は、比率がたまたま
         // 一致してもブラックリストで除外され、外部売上として誤採用されない。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "NetRevenueIFRS", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        #expect(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        #expect(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000) == nil)
     }
 
     @Test func unnamedSubtotalRowExcludedByNumericSafetyNetDuringDiscovery() throws {
@@ -525,25 +525,25 @@ import Foundation
         // 合計計算に混ざると比率が約2倍になり、正しい売上タグが誤って弾かれていた。
         // 本処理と同じ数値安全網（分母一致 member を小計とみなす）を discovery 側にも適用済み。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "VendorSalesTag", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 60_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "VendorSalesTag", contextRef: "CurrentYearDuration_BetaMember",
                 dimensions: ["OperatingSegmentsAxis": "BetaMember"],
                 value: 40_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 // 企業独自の合計行名（segmentSubtotalMemberNames に無い）。
                 tag: "VendorSalesTag", contextRef: "CurrentYearDuration_CompanyWideTotalMember",
                 dimensions: ["OperatingSegmentsAxis": "CompanyWideTotalMember"],
                 value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
         #expect(snap.denominatorTag == "VendorSalesTag")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
@@ -552,19 +552,19 @@ import Foundation
     @Test func multipleAmbiguousCandidatesSetNeedsReview() throws {
         // 2つの未知タグが両方とも合計±5%以内に収まる（外部売上っぽい語を含まない名前で作為的に作る）。
         let facts = [
-            SegmentFact(
+            BreakdownFact(
                 tag: "VendorTagOne", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 100_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
-            SegmentFact(
+            BreakdownFact(
                 tag: "VendorTagTwo", contextRef: "CurrentYearDuration_AlphaMember",
                 dimensions: ["OperatingSegmentsAxis": "AlphaMember"],
                 value: 101_000_000_000, label: nil, unitRef: "JPY", decimals: "-6"
             ),
         ]
-        let result = SegmentResult(method: "xbrl_facts", tables: [], facts: facts)
-        let snap = try #require(SegmentNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 100_000_000_000))
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains("denominator_tag_ambiguous"))
     }
@@ -579,13 +579,13 @@ import Foundation
 
     // MARK: - ゴールデン値回帰（ユーザー確認済み、2026-07-18）
     //
-    // smoke/segment_breakdown_expected.json は sales/profit の実額をユーザーが目視確認して
+    // smoke/breakdown_expected.json は sales/profit の実額をユーザーが目視確認して
     // 記録したゴールデン値（share・利益率のような派生値は含めない）。オークマは segments の
     // 軸が地域別（既知）で事業別ブレークダウンではないため、このゴールデン集合から除外する。
 
     @Test func matchesUserConfirmedGoldenSalesAndProfit() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let path = root.appendingPathComponent("smoke/segment_breakdown_expected.json")
+        let path = root.appendingPathComponent("smoke/breakdown_expected.json")
         let data = try Data(contentsOf: path)
         let golden = try #require(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
 

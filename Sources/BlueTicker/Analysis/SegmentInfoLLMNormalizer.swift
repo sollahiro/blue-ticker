@@ -1,7 +1,7 @@
 // `segments` キー自体が html_table を返すケース（例: キヤノンの US-GAAP 連結注記23。事業名が
 // 列見出しで指標が行という向きの表が、巨大注記内に直接内包されている）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/segment-normalization-concept.md 参照。SegmentBreakdownLLMNormalizer.swift（geography 用）・
+// docs/breakdown-normalization-concept.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）・
 // RevenueRecognitionLLMNormalizer.swift（オークマ型、収益認識注記由来）と同型だが、対象は
 // `segments` キー自体（オークマ型のような axis-aware swap を経ていない、素の segments 結果）
 // が html_table になっているケース。
@@ -69,10 +69,10 @@ enum SegmentInfoLLMNormalizer {
     /// 分母整合性チェックの許容範囲。他の LLM 正規化器と同じ許容幅を使う。
     private static let denominatorTolerance = 0.90...1.10
 
-    /// segments の SegmentResult（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
+    /// segments の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     static func normalize(
-        _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
+        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
         // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
@@ -206,7 +206,7 @@ enum SegmentInfoLLMNormalizer {
         return (snapshot, audit)
     }
 
-    private static func buildUserPrompt(tables: [SegmentTable], consolidatedSales: Double) -> String {
+    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
         var lines: [String] = []
         lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
         lines.append("")

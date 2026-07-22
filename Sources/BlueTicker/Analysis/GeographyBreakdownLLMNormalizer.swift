@@ -1,12 +1,12 @@
 // geography（地域別情報）の html_table 結果を LLM で BreakdownSnapshot へ正規化する。
-// docs/segment-normalization-concept.md 参照。SegmentNormalizer.swift（xbrl_facts 経路）とは
+// docs/breakdown-normalization-concept.md 参照。BreakdownNormalizer.swift（xbrl_facts 経路）とは
 // 別経路。会社ごとに表の向き・表数・見出しキーワードの取り違えが不揃いなため、
 // 表全体（markdown）を LLM に渡して構造化させ、Swift 側は単位変換・分母整合性・
 // 地域ラベル妥当性のみ決定的に検証する（契約検証の増分。ingest/CLI/REST 配線は対象外）。
 //
 // segments（business）軸への適用は今回のスコープ外（smoke 11社中 0社が html_table のため）。
 // オークマ型（segments キーの axis が geography 判定になるケース）の配線方針は
-// docs/segment-normalization-concept.md「今後の検討事項3」に記載。ここでは扱わない。
+// docs/breakdown-normalization-concept.md「今後の検討事項3」に記載。ここでは扱わない。
 
 import Foundation
 
@@ -24,7 +24,7 @@ struct LLMBreakdownAudit {
     var notes: String
 }
 
-enum SegmentBreakdownLLMNormalizer {
+enum GeographyBreakdownLLMNormalizer {
 
     private static let systemPrompt = """
     あなたは日本の有価証券報告書の「地域ごとの情報」注記から、地域別の外部売上（または相当する主要指標）を構造化するアシスタントです。
@@ -75,11 +75,11 @@ enum SegmentBreakdownLLMNormalizer {
     /// （実データ: キヤノン地域別注記の計 4,509,821 百万円 vs 連結売上 4,624,727 百万円 ≈ 2.5%差）。
     private static let denominatorTolerance = 0.90...1.10
 
-    /// geography の SegmentResult（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
+    /// geography の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     /// audit は LLM が実際に選んだ表・期間列・単位・判断根拠（目視検証用。呼び出し失敗時のみ nil）。
     static func normalize(
-        _ result: SegmentResult, consolidatedSales: Double?, client: ChatCompleting
+        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
         // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
@@ -182,7 +182,7 @@ enum SegmentBreakdownLLMNormalizer {
         return (snapshot, audit)
     }
 
-    private static func buildUserPrompt(tables: [SegmentTable], consolidatedSales: Double) -> String {
+    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
         var lines: [String] = []
         lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
         lines.append("")

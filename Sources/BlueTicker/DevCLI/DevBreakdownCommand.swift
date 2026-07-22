@@ -3,13 +3,13 @@ import Foundation
 
 /// Stage 6 の事業別/地域別正規化を目視確認するための開発用コマンド。
 ///
-/// - smoke 経路（既定）: `smoke/segment_expected.json` + `smoke/smoke_expected/` のみ使用。EDINET 不要。
+/// - smoke 経路（既定）: `smoke/breakdown_extraction_expected.json` + `smoke/smoke_expected/` のみ使用。EDINET 不要。
 /// - live 経路（`--live`）: EDINET から最新（または指定）有報 XBRL を取得し、
-///   `SegmentBusinessBreakdownResolver` / `SegmentBreakdownLLMNormalizer` で両軸を正規化する。
+///   `BusinessBreakdownResolver` / `GeographyBreakdownLLMNormalizer` で両軸を正規化する。
 /// リポジトリルートで実行すること（smoke 経路は `smoke/` 相対パス依存）。
-struct DevSegmentBreakdownCommand: AsyncParsableCommand {
+struct DevBreakdownCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "segment-breakdown",
+        commandName: "breakdown",
         abstract: "Stage 6 の事業別/地域別正規化を実行し目視確認する（開発用）"
     )
 
@@ -70,10 +70,10 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         guard let golden = try? loadGolden(root: root), let entry = golden[docID],
               let sourceDict = entry[source.goldenKey] as? [String: Any]
         else {
-            printError("エラー: \(docID) の smoke/segment_expected.json に \(source.goldenKey) フィクスチャがありません。\n")
+            printError("エラー: \(docID) の smoke/breakdown_extraction_expected.json に \(source.goldenKey) フィクスチャがありません。\n")
             throw ExitCode.failure
         }
-        let result = SegmentResult(dictionary: sourceDict)
+        let result = ExtractedBreakdown(dictionary: sourceDict)
 
         printError("\(source.goldenKey) method: \(result.method)\n")
         printError("候補テーブル数: \(result.tables.count)\n")
@@ -96,7 +96,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         let (snapshotOrNil, audit): (BreakdownSnapshot?, LLMBreakdownAudit?)
         switch source {
         case .geography:
-            (snapshotOrNil, audit) = await SegmentBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+            (snapshotOrNil, audit) = await GeographyBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
         case .revenueRecognition:
             (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
         }
@@ -146,16 +146,16 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         let llmClient = LLMClientLoader.resolveEndpoint().map { ChatCompletionClient(endpoint: $0) }
 
         if axis == .all || axis == .business {
-            let segments = SegmentExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
+            let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
             printSegmentPreview(segments)
             if segments.method == "not_found",
-               let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
+               let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
                 printError("診断: 単一セグメントのため開示省略と明記されています: \(disclosure)\n")
             }
 
             if let client = llmClient {
-                let (snapshot, source, audit) = await SegmentBusinessBreakdownResolver.resolve(
+                let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
                     segments: segments, consolidatedSales: sales, client: client
                 )
                 printError("source: \(source.rawValue)\n")
@@ -165,7 +165,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
                 } else {
                     printError("business snapshot: nil\n")
                 }
-            } else if let snapshot = SegmentNormalizer.normalize(segments, consolidatedSales: sales),
+            } else if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: sales),
                       snapshot.axis == "business" {
                 printError("source: xbrl_facts（LLM未設定・決定的経路のみ）\n")
                 printSnapshot(snapshot)
@@ -178,7 +178,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         }
 
         if axis == .all || axis == .geography {
-            let geography = SegmentExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
+            let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
             printError("\n=== geography method=\(geography.method) ===\n")
             printSegmentPreview(geography)
 
@@ -186,7 +186,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
             case "not_found":
                 printError("geography: not_found（地域注記なし）\n")
             case "xbrl_facts":
-                if let snapshot = SegmentNormalizer.normalize(geography, consolidatedSales: sales) {
+                if let snapshot = BreakdownNormalizer.normalize(geography, consolidatedSales: sales) {
                     printSnapshot(snapshot)
                 } else {
                     printError("geography snapshot: nil（xbrl_facts 正規化失敗）\n")
@@ -196,7 +196,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
                     printError("エラー: geography が html_table のため LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
                     throw ExitCode.failure
                 }
-                let (snapshot, audit) = await SegmentBreakdownLLMNormalizer.normalize(
+                let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
                     geography, consolidatedSales: sales, client: client
                 )
                 printAudit(audit)
@@ -227,7 +227,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
     // MARK: - 共有ヘルパ
 
     private func loadGolden(root: URL) throws -> [String: [String: Any]] {
-        let path = root.appendingPathComponent("smoke/segment_expected.json")
+        let path = root.appendingPathComponent("smoke/breakdown_extraction_expected.json")
         let data = try Data(contentsOf: path)
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             throw ExitCode.failure
@@ -237,7 +237,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
 
     /// code に複数の fixture ファイルがある場合、fyEnd（例: "2026-03-31"）が指定されていれば
     /// ファイル名の年度部分で絞り込む。未指定時はファイル名でソートした上で売上が取れる最初の
-    /// ファイルを決定的に採用する（`SegmentNormalizerTests.loadSales` と同じ規約。ただし
+    /// ファイルを決定的に採用する（`BreakdownNormalizerTests.loadSales` と同じ規約。ただし
     /// 同一銘柄に複数年度の fixture がある場合は fyEnd 指定を推奨する）。
     private func loadSales(root: URL, code: String, fyEnd: String?) -> Double? {
         let dir = root.appendingPathComponent("smoke/smoke_expected")
@@ -257,7 +257,7 @@ struct DevSegmentBreakdownCommand: AsyncParsableCommand {
         return nil
     }
 
-    private func printSegmentPreview(_ result: SegmentResult) {
+    private func printSegmentPreview(_ result: ExtractedBreakdown) {
         if result.method == "html_table" {
             printError("候補テーブル数: \(result.tables.count)\n")
             for (i, table) in result.tables.enumerated() {

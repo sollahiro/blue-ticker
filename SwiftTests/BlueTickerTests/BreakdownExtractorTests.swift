@@ -1,4 +1,4 @@
-// SegmentExtractor のユニットテスト
+// BreakdownExtractor のユニットテスト
 // Python tests/test_segment_extractor.py 相当＋TextBlock/dimension fact 統合テスト
 
 // 注意: このファイルで SwiftSoup を import しないこと。
@@ -9,33 +9,33 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-@Suite struct SegmentExtractorTests {
+@Suite struct BreakdownExtractorTests {
 
     // MARK: - gridToMarkdown
 
     @Test func gridToMarkdownSimple2x2() {
-        let md = SegmentExtractor.gridToMarkdown([["A", "B"], ["1", "2"]])
+        let md = BreakdownExtractor.gridToMarkdown([["A", "B"], ["1", "2"]])
         #expect(md.contains("| A | B |"))
         #expect(md.contains("| 1 | 2 |"))
         #expect(md.contains("---"))
     }
 
     @Test func gridToMarkdownEmptyGridReturnsEmpty() {
-        #expect(SegmentExtractor.gridToMarkdown([]) == "")
+        #expect(BreakdownExtractor.gridToMarkdown([]) == "")
     }
 
     @Test func gridToMarkdownHeaderSeparatorAfterFirstRow() {
-        let md = SegmentExtractor.gridToMarkdown([["Header"], ["Value"]])
+        let md = BreakdownExtractor.gridToMarkdown([["Header"], ["Value"]])
         #expect(md.split(separator: "\n").count == 3)  // header / separator / value
     }
 
     @Test func gridToMarkdownColumnsArePaddedToMaxWidth() {
-        let md = SegmentExtractor.gridToMarkdown([["Short", "A very long column header"]])
+        let md = BreakdownExtractor.gridToMarkdown([["Short", "A very long column header"]])
         #expect(md.contains("A very long column header"))
     }
 
     @Test func gridToMarkdownSingleRow() {
-        let md = SegmentExtractor.gridToMarkdown([["Only", "Row"]])
+        let md = BreakdownExtractor.gridToMarkdown([["Only", "Row"]])
         #expect(md.contains("Only"))
         #expect(md.contains("Row"))
     }
@@ -43,27 +43,27 @@ import Foundation
     // MARK: - detectPeriodFromGrid
 
     @Test func detectPeriodCurrentPeriod() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["当連結会計年度", "数値"], ["売上高", "1000"]]) == "当期")
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["当連結会計年度", "数値"], ["売上高", "1000"]]) == "当期")
     }
 
     @Test func detectPeriodPriorPeriod() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["前連結会計年度", "数値"], ["売上高", "900"]]) == "前期")
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["前連結会計年度", "数値"], ["売上高", "900"]]) == "前期")
     }
 
     @Test func detectPeriodComparisonWhenBothPresent() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["前連結会計年度", "当連結会計年度"], ["900", "1000"]]) == "比較")
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["前連結会計年度", "当連結会計年度"], ["900", "1000"]]) == "比較")
     }
 
     @Test func detectPeriodShortFormCurrent() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["当期", "数値"]]) == "当期")
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["当期", "数値"]]) == "当期")
     }
 
     @Test func detectPeriodShortFormPrior() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["前期", "数値"]]) == "前期")
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["前期", "数値"]]) == "前期")
     }
 
     @Test func detectPeriodNoKeywordReturnsNil() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([["セグメント", "売上高"], ["事業A", "500"]]) == nil)
+        #expect(BreakdownExtractor.detectPeriodFromGrid([["セグメント", "売上高"], ["事業A", "500"]]) == nil)
     }
 
     @Test func detectPeriodOnlyChecksFirst3Rows() {
@@ -73,42 +73,42 @@ import Foundation
             ["事業B", "200"],
             ["当連結会計年度の合計", "300"],
         ]
-        #expect(SegmentExtractor.detectPeriodFromGrid(grid) == nil)
+        #expect(BreakdownExtractor.detectPeriodFromGrid(grid) == nil)
     }
 
     @Test func detectPeriodEmptyGridReturnsNil() {
-        #expect(SegmentExtractor.detectPeriodFromGrid([]) == nil)
+        #expect(BreakdownExtractor.detectPeriodFromGrid([]) == nil)
     }
 
     // MARK: - applyPeriodOrdering
 
     @Test func periodOrderingUnlabeledGetsAlternatingLabels() {
         var tables = ["A", "B", "C", "D"].map {
-            SegmentTable(heading: "セグメント情報", markdown: "| \($0) |", period: nil)
+            BreakdownTable(heading: "セグメント情報", markdown: "| \($0) |", period: nil)
         }
-        SegmentExtractor.applyPeriodOrdering(&tables)
+        BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables.map(\.period) == ["前期", "当期", "前期", "当期"])
     }
 
     @Test func periodOrderingAlreadyLabeledIsNotChanged() {
         var tables = [
-            SegmentTable(heading: "X", markdown: "| 1 |", period: "当期"),
-            SegmentTable(heading: "X", markdown: "| 2 |", period: nil),
+            BreakdownTable(heading: "X", markdown: "| 1 |", period: "当期"),
+            BreakdownTable(heading: "X", markdown: "| 2 |", period: nil),
         ]
-        SegmentExtractor.applyPeriodOrdering(&tables)
+        BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables[0].period == "当期")
         #expect(tables[1].period == "前期")
     }
 
     @Test func periodOrderingAllLabeledUnchanged() {
-        var tables = [SegmentTable(heading: "X", markdown: "| 1 |", period: "比較")]
-        SegmentExtractor.applyPeriodOrdering(&tables)
+        var tables = [BreakdownTable(heading: "X", markdown: "| 1 |", period: "比較")]
+        BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables[0].period == "比較")
     }
 
     @Test func periodOrderingEmptyListDoesNothing() {
-        var tables: [SegmentTable] = []
-        SegmentExtractor.applyPeriodOrdering(&tables)
+        var tables: [BreakdownTable] = []
+        BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables.isEmpty)
     }
 
@@ -116,19 +116,19 @@ import Foundation
 
     @Test func expandTableSimple() throws {
         let table = try XBRLTestSupport.parseFirstTable("<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>")
-        #expect(SegmentExtractor.expandTable(table) == [["A", "B"], ["1", "2"]])
+        #expect(BreakdownExtractor.expandTable(table) == [["A", "B"], ["1", "2"]])
     }
 
     @Test func expandTableColspanExpandsCell() throws {
         let table = try XBRLTestSupport.parseFirstTable("<table><tr><td colspan='2'>合計</td></tr><tr><td>事業A</td><td>100</td></tr></table>")
-        let grid = SegmentExtractor.expandTable(table)
+        let grid = BreakdownExtractor.expandTable(table)
         #expect(grid[0] == ["合計", "合計"])
         #expect(grid[1] == ["事業A", "100"])
     }
 
     @Test func expandTableRowspanRepeatsCellDownward() throws {
         let table = try XBRLTestSupport.parseFirstTable("<table><tr><td rowspan='2'>期間</td><td>Q1</td></tr><tr><td>Q2</td></tr></table>")
-        let grid = SegmentExtractor.expandTable(table)
+        let grid = BreakdownExtractor.expandTable(table)
         #expect(grid[0][0] == "期間")
         #expect(grid[1][0] == "期間")
         #expect(grid[0][1] == "Q1")
@@ -137,12 +137,12 @@ import Foundation
 
     @Test func expandTableEmptyTableReturnsEmpty() throws {
         let table = try XBRLTestSupport.parseFirstTable("<table></table>")
-        #expect(SegmentExtractor.expandTable(table).isEmpty)
+        #expect(BreakdownExtractor.expandTable(table).isEmpty)
     }
 
     @Test func expandTableStripsWhitespaceFromCells() throws {
         let table = try XBRLTestSupport.parseFirstTable("<table><tr><td>  事業A  </td><td>  100  </td></tr></table>")
-        #expect(SegmentExtractor.expandTable(table)[0] == ["事業A", "100"])
+        #expect(BreakdownExtractor.expandTable(table)[0] == ["事業A", "100"])
     }
 
     // MARK: - TextBlock 統合（J-GAAP / IFRS）
@@ -166,7 +166,7 @@ import Foundation
     @Test func segmentInfoFromJGAAPTextBlock() throws {
         let xml = textBlockXml(tag: "SegmentInformationTextBlock", escapedHtml: Self.escapedSegmentTable)
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 2)
             #expect(result.tables[0].heading == "セグメント情報")
@@ -181,7 +181,7 @@ import Foundation
     @Test func segmentInfoFromIFRSTextBlock() {
         let xml = textBlockXml(tag: "SegmentInformationIFRSTextBlock", escapedHtml: Self.escapedSegmentTable)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 2)
             #expect(result.tables.map(\.period) == ["前期", "当期"])
@@ -197,7 +197,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "RelatedInformationTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].heading == "地域ごとの情報")
@@ -216,7 +216,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;120&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "InformationAboutGeographicalAreasTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(result.tables.map(\.period) == ["前期", "当期"])
         }
     }
@@ -231,7 +231,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -249,7 +249,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("日本"))
@@ -266,7 +266,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -282,7 +282,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -299,7 +299,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -316,7 +316,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -333,7 +333,7 @@ import Foundation
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
@@ -357,7 +357,7 @@ import Foundation
             "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 2)
             #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
@@ -378,7 +378,7 @@ import Foundation
             "&lt;tr&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("| 100 | 200 |"))
@@ -404,7 +404,7 @@ import Foundation
             "&lt;/table&gt;&lt;/div&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 2)
             #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
@@ -428,7 +428,7 @@ import Foundation
             "&lt;/table&gt;&lt;/div&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
@@ -453,7 +453,7 @@ import Foundation
             "&lt;/table&gt;&lt;/div&gt;"
         let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("100") && result.tables[0].markdown.contains("200"))
@@ -494,7 +494,7 @@ import Foundation
         </xbrli:xbrl>
         """
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "xbrl_facts")
             #expect(!result.tables.isEmpty)
             let fact = try #require(result.facts.first)
@@ -534,7 +534,7 @@ import Foundation
         </xbrli:xbrl>
         """
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(!result.tables.isEmpty)
         }
@@ -565,7 +565,7 @@ import Foundation
         </xbrli:xbrl>
         """
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "xbrl_facts")
             #expect(result.tables.isEmpty)
             let fact = try #require(result.facts.first)
@@ -577,12 +577,12 @@ import Foundation
             #expect(fact.decimals == "-6")
 
             // 地域別 dimension ではないため geography は not_found
-            let geo = SegmentExtractor.extractGeographyInfo(xbrlDir: dir)
+            let geo = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
             #expect(geo.method == "not_found")
         }
     }
 
-    // MARK: - 収益認識関係（オークマ型: docs/segment-normalization-concept.md 今後の検討事項3）
+    // MARK: - 収益認識関係（オークマ型: docs/breakdown-normalization-concept.md 今後の検討事項3）
 
     @Test func revenueRecognitionInfoFromTextBlock() {
         let xml = textBlockXml(
@@ -590,7 +590,7 @@ import Foundation
             escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ＮＣ旋盤&lt;/td&gt;&lt;td&gt;34304&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         )
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("ＮＣ旋盤"))
@@ -604,7 +604,7 @@ import Foundation
             """
         )
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
             #expect(result.method == "not_found")
         }
     }
@@ -670,7 +670,7 @@ import Foundation
         // 収益認識関係注記に本当の事業別（製品別）データが見つかればそちらを segments として返す。
         let xml = okumaLikeXml(includeRevenueRecognitionBlock: true)
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.facts.isEmpty)
             let table = try #require(result.tables.first)
@@ -683,7 +683,7 @@ import Foundation
         // 元の地域別 xbrl_facts をそのまま維持する（未検証企業での誤判定時の regression 回避）。
         let xml = okumaLikeXml(includeRevenueRecognitionBlock: false)
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "xbrl_facts")
             #expect(result.facts.count == 2)
             let members = result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] }.sorted()
@@ -699,7 +699,7 @@ import Foundation
             escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;新規装置&lt;/td&gt;&lt;td&gt;1817250&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;フィールドソリューション他&lt;/td&gt;&lt;td&gt;626282&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
         )
         try XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             let markdown = try #require(result.tables.first?.markdown)
             #expect(markdown.contains("新規装置"))
@@ -710,14 +710,14 @@ import Foundation
     // MARK: - toDictionary（JSON 出力）
 
     @Test func toDictionarySerializesWithOptionalKeysOmitted() throws {
-        let result = SegmentResult(
+        let result = ExtractedBreakdown(
             method: "html_table",
             tables: [
-                SegmentTable(heading: "セグメント情報", markdown: "| A |", period: "当期"),
-                SegmentTable(heading: "セグメント情報", markdown: "| B |", period: nil),
+                BreakdownTable(heading: "セグメント情報", markdown: "| A |", period: "当期"),
+                BreakdownTable(heading: "セグメント情報", markdown: "| B |", period: nil),
             ],
             facts: [
-                SegmentFact(
+                BreakdownFact(
                     tag: "NetSales", contextRef: "ctx", dimensions: ["Axis": "Member"],
                     value: 100, label: nil, unitRef: nil, decimals: nil
                 ),
@@ -742,7 +742,7 @@ import Foundation
             """
         )
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = SegmentExtractor.extractSegmentInfo(xbrlDir: dir)
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "not_found")
             #expect(result.tables.isEmpty)
             #expect(result.facts.isEmpty)
@@ -757,7 +757,7 @@ import Foundation
             escapedHtml: "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。"
         )
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            let disclosure = SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
+            let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
             #expect(disclosure == "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。")
         }
     }
@@ -769,14 +769,14 @@ import Foundation
             """
         )
         XBRLTestSupport.withXbrlDir(xml) { dir in
-            #expect(SegmentExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
+            #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
         }
     }
 }
 
 // MARK: - Python ゴールデンファイルとのパリティ検証
 
-/// smoke/segment_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
+/// smoke/breakdown_extraction_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
 /// キャッシュ済み XBRL から Swift 実装の出力を突き合わせる。
 /// BLT_EDINET_API_KEY が設定されていれば不足分を自動ダウンロードする（SmokeCacheSupport）。
 /// 未設定かつキャッシュも無い docID は個別に SKIP する。
@@ -784,11 +784,11 @@ import Foundation
 
     @Test func parityWithPythonGolden() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let goldenPath = projectRoot.appendingPathComponent("smoke/segment_expected.json")
+        let goldenPath = projectRoot.appendingPathComponent("smoke/breakdown_extraction_expected.json")
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: goldenPath.path) else {
-            print("SKIP   smoke/segment_expected.json が見つかりません")
+            print("SKIP   smoke/breakdown_extraction_expected.json が見つかりません")
             return
         }
 
@@ -808,8 +808,8 @@ import Foundation
             checked += 1
 
             let actuals = [
-                ("segments", SegmentExtractor.extractSegmentInfo(xbrlDir: xbrlDir)),
-                ("geography", SegmentExtractor.extractGeographyInfo(xbrlDir: xbrlDir)),
+                ("segments", BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)),
+                ("geography", BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)),
             ]
             for (kind, actual) in actuals {
                 guard let exp = expected[kind] as? [String: Any] else { continue }
@@ -823,7 +823,7 @@ import Foundation
         #expect(diffs.isEmpty, Testing.Comment(rawValue: "パリティ差分:\n" + diffs.joined(separator: "\n")))
     }
 
-    private func compare(_ expected: [String: Any], _ actual: SegmentResult, label: String) -> [String] {
+    private func compare(_ expected: [String: Any], _ actual: ExtractedBreakdown, label: String) -> [String] {
         var diffs: [String] = []
 
         let expMethod = expected["method"] as? String ?? ""

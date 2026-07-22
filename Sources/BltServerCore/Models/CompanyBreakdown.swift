@@ -1,5 +1,5 @@
 // Stage 6: 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショット（BreakdownSnapshotPayload）= 1 行。
-// docs/segment-normalization-concept.md「今後の検討事項5」参照。company_filing_sections（Stage 5,
+// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。company_filing_sections（Stage 5,
 // 生のsegments/geography表）とは別テーブル — LLM 経由の行（source != xbrl_facts）は
 // content_hash + needs_review でのみ再計算し、cache_version バンプでの全件再計算対象にしない
 // ため（decisive/deterministic 経路と再計算経済性が違う。今後の検討事項8）。
@@ -12,8 +12,8 @@ import BlueTickerCore
 import Fluent
 import Foundation
 
-final class CompanySegmentBreakdown: Model, @unchecked Sendable {
-    static let schema = "company_segment_breakdowns"
+final class CompanyBreakdown: Model, @unchecked Sendable {
+    static let schema = "company_breakdowns"
 
     /// "\(docID)#\(axis)"。`compositeID(docID:axis:)` で構成する。
     @ID(custom: "id", generatedBy: .user)
@@ -44,17 +44,17 @@ final class CompanySegmentBreakdown: Model, @unchecked Sendable {
     var needsReview: Bool
 
     /// 解決経路（"xbrl_facts" | "revenue_recognition_llm" | "segment_info_llm"）。
-    /// `SegmentBusinessBreakdownResolver` の判断結果（監査・再計算方針の分岐に使う）。
+    /// `BusinessBreakdownResolver` の判断結果（監査・再計算方針の分岐に使う）。
     @Field(key: "source")
     var source: String
 
-    /// 生入力（SegmentResult）+ 採用した分母のみのハッシュ。プロンプト/モデル/スキーマは
+    /// 生入力（ExtractedBreakdown）+ 採用した分母のみのハッシュ。プロンプト/モデル/スキーマは
     /// 含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になってしまう）。
     /// LLM 経由の行の再計算スキップ判定に使う（content_hash 一致 かつ needs_review=false ならスキップ）。
     @Field(key: "content_hash")
     var contentHash: String
 
-    /// 契約スキーマ版（`segmentBreakdownCacheVersion`）。破壊的な契約変更のときのみバンプする。
+    /// 契約スキーマ版（`breakdownCacheVersion`）。破壊的な契約変更のときのみバンプする。
     @Field(key: "cache_version")
     var cacheVersion: String
 

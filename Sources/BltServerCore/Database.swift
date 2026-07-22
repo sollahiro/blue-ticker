@@ -46,8 +46,10 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyFilingSections())
     // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。
     app.migrations.add(CreateEdinetMasterSnapshot())
-    // Stage 6: 事業別内訳（company_segment_breakdowns、書類×軸単位 JSONB）。
+    // Stage 6: 事業別内訳（company_breakdowns、書類×軸単位 JSONB）。
     app.migrations.add(CreateCompanySegmentBreakdowns())
+    // company_segment_breakdowns → company_breakdowns へのテーブル名変更（Breakdown 系命名への統一）。
+    app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

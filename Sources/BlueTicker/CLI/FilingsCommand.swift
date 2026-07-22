@@ -64,7 +64,7 @@ struct FilingCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let validSections = Set(xbrlSections.keys).union(SegmentExtractor.specialSectionKeys)
+        let validSections = Set(xbrlSections.keys).union(BreakdownExtractor.specialSectionKeys)
         let unknown = sections.filter { !validSections.contains($0) }
         guard unknown.isEmpty else {
             printError("エラー: 不明なセクション: \(unknown.joined(separator: ", "))。有効: \(validSections.sorted().joined(separator: ", "))\n")
@@ -83,12 +83,12 @@ struct FilingCommand: AsyncParsableCommand {
 
         // sections は本文（文字列）とセグメント表（辞書）の混在。remote 共通の型へ復元する。
         var extracted: [String: String] = [:]
-        var segmentResults: [String: SegmentResult] = [:]
+        var extractedBreakdowns: [String: ExtractedBreakdown] = [:]
         for (key, value) in result.sections {
             if let text = value as? String {
                 extracted[key] = text
             } else if let dict = value as? [String: Any] {
-                segmentResults[key] = SegmentResult(dictionary: dict)
+                extractedBreakdowns[key] = ExtractedBreakdown(dictionary: dict)
             }
         }
 
@@ -97,7 +97,7 @@ struct FilingCommand: AsyncParsableCommand {
                 "code": result.code, "docID": result.docId, "sections": result.sections,
             ])
         } else {
-            FilingRendering.renderSections(docID: result.docId, extracted: extracted, segmentResults: segmentResults)
+            FilingRendering.renderSections(docID: result.docId, extracted: extracted, extractedBreakdowns: extractedBreakdowns)
         }
     }
 }
