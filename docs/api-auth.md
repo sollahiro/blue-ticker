@@ -19,8 +19,9 @@
 | ~~配布 `ticker`~~ | — | **廃止済み** | Homebrew / remote CLI 削除。代替は curl + Service Token または MCP |
 | ブラウザで api を直接 | `api.*` | SSO / OTP | 既存 |
 | 将来 iOS | `api.*` | ユーザー SSO 系（OIDC+PKCE 想定） | アプリに Service Token を焼かない |
-| Claude Desktop / ChatGPT（MCP） | `mcp.*` | Managed OAuth | 変更なし |
+| Claude Desktop / ChatGPT / Cursor（MCP） | `mcp.*` | Managed OAuth | Cursor は DCR 時に `cursor://` コールバックも送るため、許可 redirect URI への追加が必要（`docs/deploy.md`） |
 | Claude Code 等 api 上の remote MCP | `api.*` | 当面 SSO | 任意で後から Token も可だが必須ではない |
+| Cursor（OAuth 不可時の暫定） | `api.*` | Service Token（`headers`） | `mcp.json` の `headers` に `CF-Access-Client-Id` / `CF-Access-Client-Secret`。本線は `mcp.*` OAuth |
 | 第三者 REST アプリ | `api.*` | 段階 B / Gateway 後 | 案2または Gateway |
 | ローカル開発 | `127.0.0.1` | 無認証（`CF_ACCESS_TEAM_DOMAIN` 未設定） | 既存 |
 

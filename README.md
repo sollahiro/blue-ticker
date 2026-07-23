@@ -18,7 +18,7 @@
 | 用途 | ホスト | 認証 |
 |---|---|---|
 | curl / スクリプト / CI | `https://api.sollahiro.com` | Access Service Token |
-| Claude Desktop / Claude.ai / ChatGPT など | `https://mcp.sollahiro.com` | Managed OAuth（ブラウザで認可） |
+| Claude Desktop / Claude.ai / ChatGPT / Cursor など | `https://mcp.sollahiro.com` | Managed OAuth（ブラウザで認可） |
 
 ### REST API
 
@@ -49,7 +49,23 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
 
 ### MCP
 
-Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_analysis`）。
+Claude Desktop / Cursor などのカスタムコネクタに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_analysis`）。
+
+#### Cursor
+
+`~/.cursor/mcp.json`（またはプロジェクトの `.cursor/mcp.json`）:
+
+```json
+{
+  "mcpServers": {
+    "blue-ticker": {
+      "url": "https://mcp.sollahiro.com/"
+    }
+  }
+}
+```
+
+保存後に Cursor を再読み込みし、Customize → MCPs から OAuth 認可を完了します。接続に失敗する場合は Cloudflare 側の **許可 redirect URI** に Cursor 用コールバックが入っているか確認してください（手順・切り分けは [`docs/deploy.md`](docs/deploy.md)「MCP（Managed OAuth）」）。
 
 ## ドキュメント
 

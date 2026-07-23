@@ -171,11 +171,11 @@ curl -s "https://api.<domain>/v1/companies/7203/financials?years=1" \
 
 SSO 用 curl（Cookie）と Service Token 用 curl は用途が違う。製品の機械入口は後者。
 
-## MCP（Managed OAuth・Claude.ai / ChatGPT 向け）
+## MCP（Managed OAuth・Claude.ai / ChatGPT / Cursor 向け）
 
 MCP はルートパス（`POST /`）で公開する（`/mcp` は使わない。理由は後述）。`api.<domain>` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（ブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
 
-Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホスト `mcp.<domain>` を使う。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。**Claude Desktop での接続・OAuth 認可・ツール呼び出しまで実機確認済み**（2026-07-12）。
+Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタ・Cursor の remote MCP のように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホスト `mcp.<domain>` を使う。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。**Claude Desktop での接続・OAuth 認可・ツール呼び出しまで実機確認済み**（2026-07-12）。Cursor は許可 redirect URI の追加が必要（下記 5・「Cursor」節）。
 
 > **実機で判明した制約**: Managed OAuth は **パス指定のあるドメイン（例: `api.<domain>/mcp`）には設定できない**（`access.api.error.invalid_request: domain can not have a path if oauth is configured`）。Cloudflare Access 自体は同一ホスト名をパス単位で複数アプリに分けられるが、Managed OAuth はホスト名全体（パスなし）のアプリにしか有効化できない。そのため **新規サブドメイン `mcp.<domain>` が必須**（当初検討した「既存ホスト名のパス限定アプリ」案は不採用）。この制約は Cloudflare 側のドメイン保護（Access アプリのスコープ）の話であり、origin 側の URL パスとは独立の話だが、`mcp.<domain>` は MCP 専用サブドメインなのでパスなしで統一した（`Sources/BltServerCore/MCPRoute.swift` 参照）。
 
@@ -188,7 +188,11 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
    - **4b. 許可 IdP を確認**: アプリの `allowed_idps` に **One-Time PIN** を含める（外部クライアントが実際にログインできるようにする必須設定。Cloudflare アカウントメンバー限定の組み込み IdP だけでは不特定多数は入れない）。
 5. **許可 redirect URI を登録**（DCR で各クライアントが登録するコールバック URL を許可リストに追加しないと `invalid_client_metadata: redirect_uri is not allowed by the account configuration` で失敗する）:
    - `https://claude.ai/api/mcp/auth_callback` — Claude.ai Web / Desktop / モバイル用
-   - `http://localhost/callback`・`http://127.0.0.1/callback` — Claude Code 用。**ポート番号やワイルドカード（`:*`）は付けない**こと（`http://localhost:*/callback` は無効な URI として拒否される）。Cloudflare は RFC 8252 のループバック例外を実装しており、ポートなしでこの2つを登録するだけで実際のコールバックの任意ポート（`:54321` 等）を自動的に許可する（実機で確認済み）
+   - `http://localhost/callback`・`http://127.0.0.1/callback` — Claude Code 用。**ポート番号やワイルドカード（`:*`）は付けない**こと（`http://localhost:*/callback` は無効な URI として拒否される）。Cloudflare は RFC 8252 のループバック例外を実装しており、ポートなしでこの2つを登録するだけで実際のコールバックの任意ポート（`:54321` 等・Cursor の `:8787` 含む）を自動的に許可する（実機で確認済み）
+   - Cursor 用（**必須。未登録だと Cursor の remote MCP 接続が DCR で失敗する**）:
+     - `cursor://anysphere.cursor-mcp/oauth/callback` — Desktop の旧フロー／フォールバック。**これが無いと Cursor が送る3 URI セットの DCR が丸ごと拒否される**（2026-07-23 実測）
+     - `https://www.cursor.com/agents/mcp/oauth/callback` — Cursor Web / Agents 用
+     - （任意・明示）`http://localhost:8787/callback` — Desktop 現行の固定ポート。上記ポートなし `localhost` の RFC 8252 例外でも通るが、一覧に書いておくと切り分けが楽
    - ChatGPT コネクタが使うコールバック URL は未調査（利用する場合は別途確認する）
 6. **疎通確認**:
 
@@ -199,13 +203,54 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
      -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'   # 401（未認証で正しくブロック）
    ```
 
-   その後、実クライアント（Claude Desktop の「カスタムコネクタを追加」等）で `https://mcp.<domain>` を登録し、ブラウザでの OAuth 認可 → ツール呼び出しまで確認する。
+   Cursor 用 DCR の可否だけ切り分ける（registration endpoint は `oauth-authorization-server` の `registration_endpoint`）:
+
+   ```bash
+   # 期待: 200 + client_id。400 invalid_client_metadata なら許可 redirect URI 不足
+   curl -sS -X POST https://blue-ticker.cloudflareaccess.com/cdn-cgi/access/oauth/registration \
+     -H 'Content-Type: application/json' \
+     -d '{"redirect_uris":["http://localhost:8787/callback","cursor://anysphere.cursor-mcp/oauth/callback","https://www.cursor.com/agents/mcp/oauth/callback"],"token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"],"response_types":["code"],"client_name":"Cursor"}'
+   ```
+
+   その後、実クライアント（Claude Desktop の「カスタムコネクタを追加」、Cursor の `mcp.json` 等）で `https://mcp.<domain>` を登録し、ブラウザでの OAuth 認可 → ツール呼び出しまで確認する。
+
+### Cursor（`mcp.json`）
+
+```json
+{
+  "mcpServers": {
+    "blue-ticker": {
+      "url": "https://mcp.sollahiro.com/"
+    }
+  }
+}
+```
+
+- 置き場所: グローバル `~/.cursor/mcp.json`、またはプロジェクト `.cursor/mcp.json`
+- 保存後に Cursor を Reload。Customize → MCPs でサーバーを有効化し、求められたらブラウザで OAuth 認可する
+- 失敗時: Output → **MCP Logs**。DCR が `redirect_uri is not allowed` なら上記 5 の Cursor URI をダッシュボードへ追加して再試行
+- **暫定回避（OAuth を使わない）**: `api.<domain>` に Service Auth ポリシーがあるなら、同ホストの `POST /` に Service Token ヘッダーを付けて接続できる（本線は `mcp.*` OAuth。面の住み分けは `docs/api-auth.md`）
+
+  ```json
+  {
+    "mcpServers": {
+      "blue-ticker": {
+        "url": "https://api.sollahiro.com/",
+        "headers": {
+          "CF-Access-Client-Id": "${env:CF_ACCESS_CLIENT_ID}",
+          "CF-Access-Client-Secret": "${env:CF_ACCESS_CLIENT_SECRET}"
+        }
+      }
+    }
+  }
+  ```
 
 ### 既知の制限
 
 - Managed OAuth は本稿執筆時点で Cloudflare 側の表記が一貫しない（"open beta" 表記のページとそうでないページが混在）。GA 前提の運用にはしない。
 - 比較検討した「MCP Server Portal」（複数 MCP サーバーを1エンドポイントに集約する機能）は、本サーバーが1つしかなく集約の要求がないため不採用。Managed OAuth を Access アプリに直接足す方が単純（詳細は `blt-server-roadmap.md`）。
 - Claude.ai の Web/モバイル版コネクタでの検証は未実施（Claude Desktop のみ確認済み）。ChatGPT コネクタも未検証。
+- Cursor の DCR は現行ビルドで `http://localhost:8787/callback`・`cursor://anysphere.cursor-mcp/oauth/callback`・`https://www.cursor.com/agents/mcp/oauth/callback` の3つをまとめて送る。許可リストに1つでも無い URI があると **登録全体が 400** になる（2026-07-23 実測。`cursor://` 単独が未許可だった）。Cloudflare ダッシュボードがカスタムスキームを受け付けない場合は、上記 Service Token 暫定回避か、Static OAuth（`mcp.json` の `auth.CLIENT_ID` に `localhost:8787` のみで DCR した client_id を書く）で DCR をスキップする。
 
 ## 定期同期
 
