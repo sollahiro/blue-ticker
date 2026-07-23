@@ -4,38 +4,16 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// CLI 配線の仕様: サブコマンド登録・引数パース・デフォルト値・実行前バリデーション。
-/// run() のサービス呼び出し・ネットワークには踏み込まない（ロジックは Services/Analysis 層のテストが担う）。
+/// TickerDev（開発用 CLI）配線の仕様: サブコマンド登録・引数パース・デフォルト値。
+/// run() のサービス呼び出し・ネットワークには踏み込まない。
 @Suite struct CLIWiringTests {
 
     // MARK: - サブコマンド登録
 
-    @Test func rootRegistersAllDocumentedSubcommands() {
-        let names = Set(Ticker.configuration.subcommands.compactMap { $0.configuration.commandName })
-        let expected: Set = [
-            "search", "analyze", "summarize", "config", "login",
-            "filings", "filing", "sector", "skill",
-        ]
-        #expect(names == expected)
-    }
-
-    /// TickerDev（配布しない開発用ローカル解析 CLI）側のサブコマンド登録。
     @Test func devRootRegistersAllDocumentedSubcommands() {
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
         let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing", "breakdown"]
         #expect(names == expected)
-    }
-
-    @Test func parsingAnalyzeFromRootDispatchesToAnalyzeCommand() throws {
-        let parsed = try Ticker.parseAsRoot(["analyze", "7203"])
-        let cmd = try #require(parsed as? AnalyzeCommand)
-        #expect(cmd.code == "7203")
-    }
-
-    @Test func parsingSearchFromRootDispatchesToSearchCommandWithQuery() throws {
-        let parsed = try Ticker.parseAsRoot(["search", "トヨタ"])
-        let cmd = try #require(parsed as? SearchCommand)
-        #expect(cmd.query == "トヨタ")
     }
 
     @Test func cacheWithoutSubcommandDefaultsToStatus() throws {
@@ -43,49 +21,56 @@ import Testing
         #expect(cmd is CacheStatus)
     }
 
-    // MARK: - analyze の引数パース
+    @Test func parsingAnalyzeFromDevRootDispatchesToDevAnalyzeCommand() throws {
+        let parsed = try DevCLIEntry.parseAsRoot(["analyze", "7203"])
+        let cmd = try #require(parsed as? DevAnalyzeCommand)
+        #expect(cmd.code == "7203")
+    }
 
-    @Test func analyzeDefaultsFlagsAreOff() throws {
-        let cmd = try AnalyzeCommand.parse(["7203"])
+    @Test func parsingSearchFromDevRootDispatchesToDevSearchCommandWithQuery() throws {
+        let parsed = try DevCLIEntry.parseAsRoot(["search", "トヨタ"])
+        let cmd = try #require(parsed as? DevSearchCommand)
+        #expect(cmd.query == "トヨタ")
+    }
+
+    // MARK: - Dev analyze の引数パース
+
+    @Test func devAnalyzeDefaultsFlagsAreOff() throws {
+        let cmd = try DevAnalyzeCommand.parse(["7203"])
         #expect(!cmd.json)
         #expect(!cmd.half)
     }
 
-    @Test func analyzeParsesLongOptionsAndFlags() throws {
-        let cmd = try AnalyzeCommand.parse(["7203", "--json", "--half"])
+    @Test func devAnalyzeParsesLongOptionsAndFlags() throws {
+        let cmd = try DevAnalyzeCommand.parse(["7203", "--json", "--half", "--years", "4"])
         #expect(cmd.json)
         #expect(cmd.half)
+        #expect(cmd.years == 4)
     }
 
-    @Test func analyzeRejectsYearsOptionSinceYearsIsFixed() {
+    @Test func devAnalyzeWithoutCodeFailsToParse() {
         #expect(throws: (any Error).self) {
-            _ = try AnalyzeCommand.parse(["7203", "--years", "4"])
+            _ = try DevAnalyzeCommand.parse([])
         }
     }
 
-    @Test func analyzeWithoutCodeFailsToParse() {
-        #expect(throws: (any Error).self) {
-            _ = try AnalyzeCommand.parse([])
-        }
-    }
+    // MARK: - Dev filings / filing
 
-    // MARK: - filings / filing の引数パース
-
-    @Test func filingsDefaultsMatchApiConstants() throws {
-        let cmd = try FilingsCommand.parse(["7203"])
+    @Test func devFilingsDefaultsMatchApiConstants() throws {
+        let cmd = try DevFilingsCommand.parse(["7203"])
         #expect(cmd.years == Api.filingsDefaultYears)
         #expect(!cmd.json)
     }
 
-    @Test func filingParsesMultipleSectionsUpToNextOption() throws {
-        let cmd = try FilingCommand.parse(["7203", "--sections", "mda", "segments", "--json"])
+    @Test func devFilingParsesMultipleSectionsUpToNextOption() throws {
+        let cmd = try DevFilingCommand.parse(["7203", "--sections", "mda", "segments", "--json"])
         #expect(cmd.sections == ["mda", "segments"])
         #expect(cmd.json)
         #expect(cmd.docId == nil)
     }
 
-    @Test func filingParsesDocIdOption() throws {
-        let cmd = try FilingCommand.parse(["7203", "--doc-id", "S100ABC1"])
+    @Test func devFilingParsesDocIdOption() throws {
+        let cmd = try DevFilingCommand.parse(["7203", "--doc-id", "S100ABC1"])
         #expect(cmd.docId == "S100ABC1")
         #expect(cmd.sections.isEmpty)
     }
@@ -103,14 +88,14 @@ import Testing
     }
 
     /// 不明なセクション指定はネットワーク・バックエンド解決に入る前に失敗する。
-    @Test func filingRunRejectsUnknownSectionBeforeAnyFetch() async throws {
-        let cmd = try FilingCommand.parse(["7203", "--sections", "bogus_section"])
+    @Test func devFilingRunRejectsUnknownSectionBeforeAnyFetch() async throws {
+        let cmd = try DevFilingCommand.parse(["7203", "--sections", "bogus_section"])
         await #expect(throws: ExitCode.failure) {
             try await cmd.run()
         }
     }
 
-    // MARK: - cache clean / config set の引数パース
+    // MARK: - cache clean
 
     @Test func cacheCleanParsesRetentionOptionsAndDryRun() throws {
         let cmd = try CacheClean.parse([
@@ -131,11 +116,6 @@ import Testing
         #expect(cmd.edinetSearchDays == nil)
         #expect(cmd.edinetXbrlDays == nil)
         #expect(cmd.edinetDocIndexYears == Api.documentIndexKeepYears)
-    }
-
-    @Test func configSetParsesServerUrlOption() throws {
-        let cmd = try ConfigSet.parse(["--server-url", "https://example.com"])
-        #expect(cmd.serverUrl == "https://example.com")
     }
 
     // MARK: - 表示列ラベル（analyze / summarize の列見出し）

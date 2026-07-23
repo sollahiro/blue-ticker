@@ -154,7 +154,7 @@ struct RemoteAPIClient: Sendable {
                 return .ok(data)
             case 401:
                 return .failure(
-                    "認証に失敗しました。ticker login を再実行してください。")
+                    "認証に失敗しました。Access SSO または Service Token を確認してください。")
             case 404:
                 return .notFound(errorMessage(data) ?? "見つかりませんでした")
             default:
@@ -174,7 +174,7 @@ struct RemoteAPIClient: Sendable {
         guard let url = comps.url else { return nil }
 
         var request = URLRequest(url: url)
-        // Cloudflare Access SSO（ticker login 経由の JWT）。
+        // Cloudflare Access SSO（ブラウザ等）。Cookie CF_Authorization を付与。
         // エッジでの認証は Cookie `CF_Authorization` を見る（`Cf-Access-Jwt-Assertion` ヘッダーは
         // Access が認証済みリクエストを origin に転送する際に付与するものであり、クライアントが
         // 未認証状態でこれを送っても Access のログイン画面へ 302 されるだけで通らない。実機検証で確認済み）。

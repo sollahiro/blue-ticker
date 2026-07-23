@@ -382,7 +382,7 @@ extension FinancialsYear {
 
     /// Analyze（`docs/feature-tiers.md`）専用の増減分解フィールド。Summarize（financials）の応答からは
     /// これらを外す。値自体は Stage 4 ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
-    /// 対象は `AnalyzeCommand`（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
+    /// 対象は Analyze（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
     /// 注意: 「`SummarizeCommand.levelMetrics` に無いフィールド」全般ではない
     /// （`eps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
     static let analysisOnlyKeys: Set<String> = [

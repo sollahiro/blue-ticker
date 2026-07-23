@@ -5,9 +5,7 @@ public enum Api {
     /// Stage 6 の html_table 正規化（`GeographyBreakdownLLMNormalizer`）でのみ使用。
     static let xaiBaseURL = "https://api.x.ai/v1"
 
-    /// remote バックエンドの既定 blt-server URL。インストール直後に `ticker login` だけで
-    /// 使い始められるよう、config 未設定時のフォールバック先として組み込む
-    /// （`ticker config set --server-url` / `BLT_SERVER_URL` で上書き可能）。
+    /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
     static let defaultRemoteServerURL = "https://api.sollahiro.com"
 
     // 検索キャッシュ TTL（日）

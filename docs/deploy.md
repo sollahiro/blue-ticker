@@ -86,7 +86,7 @@ docker exec blt-server /app/blt-server ingest --limit 50
 1. **前提**: ドメイン（zone）が Cloudflare 管理下にあること（未移管なら zone 追加が先）。
 2. **Tunnel 作成**（Networks → Tunnels → Cloudflared）→ **トークン**を取得。Public hostname を1本追加: `api.<domain>` → サービス `http://localhost:8080`（コンテナ内 blt-server）。token モードのためルーティングはダッシュボードが保持し、コンテナ内に config/credentials ファイルは不要。
 3. **Access アプリ作成**（Access → Applications → Self-hosted）= `api.<domain>`。
-4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*）を1本以上作成。`api.<domain>` の実運用では2ポリシーを併存させている（OR条件）— ①本人メール限定・長期セッション（`ticker login` の CLI/iOS 用）、②One-Time PIN 経由なら誰でも許可・短期セッション（不特定多数への公開用、2026-07-12〜）。
+4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*）を1本以上作成。`api.<domain>` の実運用では2ポリシーを併存させている（OR条件）— ①本人メール限定・長期セッション（ユーザー介在クライアント / 将来 iOS 用）、②One-Time PIN 経由なら誰でも許可・短期セッション（不特定多数への公開用、2026-07-12〜）。
 5. **IdP 接続**（Settings → Authentication）: 現状は **One-Time PIN**（メールにコード送信、外部設定不要）と、Cloudflare アカウントメンバー限定の組み込み IdP（`type: cloudflare`）の2つ。Google/Apple 等の外部 IdP は未接続（Googleは要 Google Cloud Console 側OAuthクライアント作成、Appleは汎用OIDCで代替可だがClient SecretがJWTで最長6ヶ月ごとの再生成が必要、といった追加コストがあり今回は見送り）。
 
 ### B. origin（Fly）側 secrets
@@ -127,25 +127,40 @@ cloudflared は接続断を内部で自動再接続する。blt-server が落ち
 
 **検討事項（後日）**: ゾーンが Cloudflare **Free プラン**のため、`period`（集計期間）・`mitigation_timeout`（ブロック時間）とも **10秒固定**しか使えない（60秒や10分を指定すると `not entitled` で拒否される）。現状のルールは5リクエスト/10秒・ブロック10秒というごく緩い制限に留まる。origin（blt-server）側にもレート制限・クォータは無いため、実際の悪用が観測された場合は Pro プラン以上へのアップグレード（長い period/timeout が使える）を検討する。
 
-### クライアント設定（CLI・SSO ログイン・実装済み）
+### クライアント設定（ブラウザ SSO・参考）
 
-CLI は `ticker login` でブラウザ経由の SSO ログインができる。内部的には `cloudflared`（要インストール。`brew install cloudflared` 等）の `access login` / `access token` を呼び出す薄いラッパーで、JWT 自体の保管・更新は cloudflared に委ねる（blue_ticker 側は `config.json` に「SSO 有効」フラグのみ持つ）。AI エージェント経由での利用も、その場にいる人間が初回ログイン時にブラウザ操作を行う想定（Service Token は廃止済み。ブラウザ操作できない完全無人の自動化には非対応）。
+ユーザー介在クライアント向けの Cloudflare Access SSO（ブラウザログイン）は引き続き利用できる。機械向け REST は Service Token（下記）を使う。配布 CLI `ticker login` は廃止済み。
 
-**`server-url`（既定 `Api.defaultRemoteServerURL`、現在 `https://api.sollahiro.com`）は CLI にビルド時の既定値として組み込まれている**（`ticker` は remote 専用。`architecture.md` 参照）。そのため新規インストール後は `config set` 不要で以下だけで使い始められる。
+SSO 成功後のリクエストは `Cookie: CF_Authorization=<jwt>` を付与する（`Cf-Access-Jwt-Assertion` ヘッダーでは Access のログイン画面へ 302 されるだけで通らないことを実機検証済み）。origin（方式A）は JWT を検証しないため、安全性は「Tunnel + 公開ポート閉鎖 + Access ポリシー」に依存する。
+
+### REST Service Token（段階 A・機械向け）
+
+方針・クライアント別住み分けは `docs/api-auth.md`。origin への Service Token 実装は行わない（方式A・エッジのみ。旧 CLI Bearer は復活させない）。
+
+**ダッシュボード手順（未適用なら実施）**:
+
+1. Zero Trust → Access controls → Service credentials → **Service Tokens** → Create。名前例: `blt-rest-dev`。Client ID / Client Secret を控える（Secret は再表示不可）。
+2. `api.<domain>` の Access アプリにポリシーを **追加**（既存 SSO/OTP の Allow は残す）:
+   - Action = **Service Auth**（Allow に Token を混ぜない。機械は Service Auth が必要）
+   - Include → Service Token → 作成したトークン
+3. 疎通:
 
 ```bash
-ticker login   # ブラウザが開き、Access のログイン画面（IdP）で認証
+# 無認証 → Access にブロック（302/403）
+curl -si "https://api.<domain>/v1/companies/7203/financials?years=1" | head -n1
+
+# Service Token → 200（値は環境変数等に置く。リポジトリに書かない）
+curl -s "https://api.<domain>/v1/companies/7203/financials?years=1" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  | jq '.schema_version'
 ```
 
-既定と異なるサーバー・self-host 等を使う場合のみ `ticker config set --server-url <url>` で上書きする。
-
-ログイン成功後は remote 経路のリクエストのたびに `cloudflared access token -app=<server-url>` を呼び、`Cookie: CF_Authorization=<jwt>` として付与する。**`Cf-Access-Jwt-Assertion` ヘッダーでは Access のログイン画面へ 302 されるだけで通らない**ことを実機検証で確認済み（そのヘッダーは Access が認証済みリクエストを origin へ転送する際に付与するものであり、クライアントが未認証状態で送っても意味を持たない）。前提として Access アプリに **SSO（Allow）ポリシー**（上記 A-4）が当該ユーザーのメールに対して設定されている必要がある。無効化は `ticker config set --disable-sso`。
-
-セッションが失効した場合（Access の Session Duration 経過後など）は `ticker login` を再実行する。origin（方式A）は JWT を検証しないため、この機構の安全性は引き続き「Tunnel + 公開ポート閉鎖 + Access ポリシー」に依存する。
+SSO 用 curl（Cookie）と Service Token 用 curl は用途が違う。製品の機械入口は後者。
 
 ## MCP（Managed OAuth・Claude.ai / ChatGPT 向け）
 
-MCP はルートパス（`POST /`）で公開する（`/mcp` は使わない。理由は後述）。`api.<domain>` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
+MCP はルートパス（`POST /`）で公開する（`/mcp` は使わない。理由は後述）。`api.<domain>` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（ブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。
 
 Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのように MCP 認可仕様（OAuth 2.1 + Dynamic Client Registration 前提）でしか繋がらないリモートクライアントに対応するには、Cloudflare の **Managed OAuth for Access** を有効化した専用ホスト `mcp.<domain>` を使う。**origin（blt-server / Vapor）側のコード変更は不要**（discovery エンドポイント・`/authorize`・`/token`・DCR はすべて Cloudflare エッジ側で処理され origin には到達しない。OAuth フロー完了後に origin が受け取るリクエストは既存の SSO 経路と同じ＝エッジ信頼のまま）。**Claude Desktop での接続・OAuth 認可・ツール呼び出しまで実機確認済み**（2026-07-12）。
 

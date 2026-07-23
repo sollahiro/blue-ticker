@@ -1,97 +1,48 @@
-BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 CLI ツールです（Swift 製・単一バイナリ）。
+# BLUE TICKER
 
----
+日本株の財務データ基盤（Swift）。**blt-server** が EDINET 由来のデータを取り込み、**REST API** と **MCP** で提供します。配布 CLI（`ticker` / Homebrew）は廃止しました。
 
 ## 主な機能
 
-- **銘柄検索**: 社名・証券コードから日本株を検索
-- **財務分析**: 年次・半期の財務指標を取得
-- **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
+- 銘柄検索・業種一覧
+- 年次・半期の財務サマリ（Summarize）と増減分析（Analyze）
+- 有価証券報告書のセクション本文（Filing）
+- 事業別・地域別売上の内訳（Breakdown・整備中）
 
-## インストール
+機能の無料/有料方針は [`docs/feature-tiers.md`](docs/feature-tiers.md)。
 
-### Homebrew
+## 使い方（本番 REST）
 
-```bash
-brew tap sollahiro/blue-ticker
-brew install blue-ticker
-```
-
-短縮 alias として `blt` も利用できます。
-
-## 初期設定
-
-`ticker` は blt-server（REST API）へ接続して動作します。サーバーが Cloudflare Access で保護されている場合は SSO ログインを行ってください。
+本番ホストは Cloudflare Access 配下です。機械アクセスは **Service Token**（ブラウザ不要）。
 
 ```bash
-ticker login          # Cloudflare Access SSO ログイン
-ticker config show     # 接続先・ログイン状態を確認
+export CF_ACCESS_CLIENT_ID='....access'
+export CF_ACCESS_CLIENT_SECRET='...'
+
+curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  | jq '.schema_version, .code'
 ```
 
-- サーバーURLの既定値は組み込み済みです。別サーバーに接続する場合は `ticker config set --server-url <url>` または環境変数 `BLT_SERVER_URL` で上書きしてください（環境変数が優先されます）。
-- 自分で blt-server を立てる手順は [`docs/deploy.md`](docs/deploy.md) を参照してください。
+認証の住み分け・発行手順: [`docs/api-auth.md`](docs/api-auth.md) / [`docs/deploy.md`](docs/deploy.md)  
+互換ポリシー: [`docs/api-compatibility.md`](docs/api-compatibility.md)
 
-## 使い方
+ユーザー介在のブラウザ SSO / MCP（`mcp.sollahiro.com` の Managed OAuth）も利用できます。
 
-### 銘柄検索
+## サーバー運用
 
-```bash
-ticker search トヨタ
-ticker search 7203 --json
-```
-
-### 財務分析
-
-```bash
-ticker summarize 7203          # 主要財務指標の網羅表（水準値）
-ticker analyze 7203            # 増減分析（前年差分解）
-ticker analyze 7203 --half
-```
-
-- `summarize`: 売上・利益・BS・CF など主要指標の水準値を年度横断で一覧表示（直近5年分）
-- `analyze`: 5つの増減分析を表示（直近5年分）
-  - ① 事業利益増減（売上差・粗利率差・販管費差の3要因）
-  - ② ROIC増減（NOPATマージン差・投下資本回転率差）
-  - ③ ROE増減（純利益率差・総資産回転率差・財務レバレッジ差）
-  - ④ ネットキャッシュ増減（現金増減・有利子負債増減）
-  - ⑤ 運転資本・CCC増減（売掛金・棚卸資産・買掛金の前年差、DSO/DIO/DPO/CCC）
-- `--half`: 上半期(H1)・下半期(H2)の半期推移を表示（前年同期差）
-- `--json`: JSON 形式で出力
-
-### EDINET書類
-
-```bash
-ticker filings 7203
-ticker filings 7203 --years 6
-ticker filing 7203 --sections business_risks mda
-ticker filing 7203 --doc-id S100XXXX --sections segments geography
-```
-
-`ticker filing` の `--sections` には以下を指定できます。
-
-| section | 内容 |
-|---|---|
-| `business_risks` | 事業等のリスク |
-| `mda` | 経営者による財政状態・経営成績の分析 |
-| `capex_overview` | 設備投資等の概要 |
-| `major_facilities` | 主要な設備の状況 |
-| `facility_plans` | 設備の新設・除却等の計画 |
-| `research_and_development` | 研究開発活動 |
-| `segments` | 報告セグメント別情報（Markdown 表または dimension 付きファクト） |
-| `geography` | 地域別情報（同上） |
-
-### 業種一覧
-
-東証33業種と各業種の銘柄数を一覧表示します。
-
-```bash
-ticker sector
-ticker sector --json
-```
+`blt-server` のデプロイ・sync / ingest・Neon 接続は [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md)。
 
 ## 開発者向け
 
-ソースからのビルド・テスト、EDINET を直接叩くローカル解析用の開発専用 CLI（`TickerDev`、配布しない）については [`CLAUDE.md`](CLAUDE.md) を参照してください。
+```bash
+swift build                     # blt-server / TickerDev を生成
+swift test
+swift run TickerDev analyze 7203   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
+```
+
+構成の詳細は [`CLAUDE.md`](CLAUDE.md) / [`docs/architecture.md`](docs/architecture.md)。
 
 ## 免責事項
 

@@ -7,7 +7,7 @@
 | 項目 | 状態 |
 |---|---|
 | 本番 | Fly.io (nrt) + Neon + Cloudflare Access/Tunnel。`api.sollahiro.com` 稼働。main push（CI 成功後）で自動デプロイ |
-| CLI | `ticker` は remote 専用（`backend` 設定は撤去済み）。`ticker login` で SSO。開発用ローカル解析は配布しない `TickerDev` |
+| CLI | 配布 `ticker` **廃止済み**。開発用は配布しない `TickerDev`。運用は `blt-server` sync/ingest |
 | Stage 1 | 同期済み（~3,944 社）。launchd が日次増分 sync |
 | Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
 | Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
@@ -20,19 +20,21 @@
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
-## 方針: サーバー集約とローカル CLI 廃止
+## 方針: サーバー集約とクライアント面
 
-到達点は「**Blue Ticker はサーバーで動く。CLI / GUI / MCP は REST クライアント相当の経路で同じデータへアクセスする**」。
+到達点は「**Blue Ticker はサーバーで動く。クライアントは同じ REST 契約（とそれを写す MCP）経由でデータへアクセスする**」。
 
 | 区分 | 対象 | 扱い |
 |---|---|---|
-| 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（デバッグ・テスト・フィクスチャ） | 維持 |
-| 切る | **ユーザー向けローカル分析 CLI**（`backend=local`） | **全銘柄が read 床以上で servable になったら廃止**（下記ゲート） |
-| ユーザー接点 | remote CLI / GUI / MCP | REST API、または `blt-server` に同居する MCP プロトコル経由 |
+| 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（`TickerDev`）・**運用 CLI**（`blt-server` sync/ingest） | 維持 |
+| 切済み | **ユーザー向けローカル分析 CLI**（`backend=local`） | 2026-07-16 実施（下記ゲート） |
+| 切済み | **配布 `ticker`**（Homebrew / release / remote CLI） | 廃止済み。構想は `docs/public-api-concept.md` |
+| ユーザー接点 | **REST（契約の正）** / MCP（追従） / 将来 GUI・iOS | MCP は一過性のプロトコル面とみなす。新機能は REST 先 |
 
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
-- **方針転換（2026-07-11）**: 「旧 MCP プロトコルサーバーは復活させない」という非ゴールは撤回した。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込む形で MCP プロトコルサーバーを再構築した（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。旧実装（`Sources/BlueTicker/MCPServer/`、Vapor 導入前の生 swift-nio）とは異なり、ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有し、ロジックの重複はない。詳細は `docs/architecture.md`「MCP」節を参照
+- MCP は `blt-server` のルートパス（`POST /`）に同居。ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。詳細は `docs/architecture.md`「MCP」節。
 - オンデマンド ingest は非同期（404 → 将来 202＋キュー。公開スキーマ追加のため実装前に確認）。
+- **REST 本線（段階 A）→ 第三者公開（段階 B）** の判断と着手順は `docs/public-api-concept.md`。段階 A の機械認証は Access Service Token（`docs/api-auth.md`）。origin APIキーは Monetize Gateway 公開後に再判断。
 
 ### Stage 4 / Stage 5 read 床（min servable）
 
@@ -102,14 +104,16 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 ## クライアントと計算の責務
 
-| クライアント | 計算 | データ源 |
-|---|---|---|
-| `TickerDev`（開発用・配布しない） | in-process | `Services/` 直呼び（`DevCLI/` facade 経由） |
-| `ticker`（配布 CLI） | しない | REST |
-| iOS | しない | REST |
-| blt-server | **唯一の計算者** | ingest ＋ DB read |
+| クライアント | 計算 | データ源 | 位置づけ |
+|---|---|---|---|
+| `TickerDev`（開発用・配布しない） | in-process | `Services/` 直呼び（`DevCLI/` facade 経由） | 開発専用・維持 |
+| REST `/v1` | しない | blt-server DB read | **契約の正・本線** |
+| MCP `POST /` | しない | REST と同じ serve 関数 | 追従面（一過性とみなす） |
+| ~~`ticker`（配布 CLI）~~ | — | — | **廃止済み** |
+| iOS（将来） | しない | REST | 予定 |
+| blt-server | **唯一の計算者** | ingest ＋ DB read | サーバー |
 
-公開契約は financials / half-financials レスポンス（`schema_version` 独立採番）。Stage 3 RAW は非公開。
+公開契約は financials / half-financials 等の REST レスポンス（`schema_version` 独立採番）。Stage 3 RAW は非公開。人間向け Access SSO は維持（CLI 廃止後もブラウザ・MCP OAuth 用）。
 
 `sector` は REST 化済み（`GET /v1/sectors`）。CLI 配布物からも `EdinetcodeDlInfo.csv` の同梱を撤去した。
 
@@ -144,6 +148,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
+- [~] **REST 本線化（段階 A）** — 互換・Service Token 疎通・配布 `ticker` 廃止まで完了。任意で OpenAPI 下書き。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 
 ### 将来
@@ -151,9 +156,9 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] MCP/REST 速度改善（Cloudflare Tunnel/Access 区間のレイテンシ調査）— issue #84
 - [ ] 生 XBRL 中央永続化（目標 A）＋ Stage 4 のデータ源見直し（タグ系→facts）
 - [ ] ストレージ強化の方式選定（#22 本丸）
-- [ ] REST API の公開 API 化 — 現時点では不要と判断（需要なし・土台未成熟）。構想・判断根拠は `docs/public-api-concept.md`
+- [ ] REST API の第三者公開（段階 B）— 段階 A のあと。レート制限・外部ドキュメント等。`docs/public-api-concept.md`
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
-- [ ] Cloudflare Monetize Gateway 連携検討（MCP アクセス単位課金。情報未公開のため詳細設計は保留）
+- [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。origin APIキー要否もここで再判断。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。**未着手**: geography 軸の ingest 配線、オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103）、野村の金融費用控除後分母取り違え（issue #105）。構想と残タスクは `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
@@ -162,6 +167,9 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 ## 関連ドキュメント
 
 - `docs/architecture.md` — 構成スナップショット
+- `docs/public-api-concept.md` — REST 本線化（段階 A）と第三者公開（段階 B）
+- `docs/api-auth.md` — REST / MCP 認証の住み分け（段階 A）
+- `docs/api-compatibility.md` — REST 互換ポリシー（段階 A）
 - `docs/deploy.md` — デプロイ・定期同期・E2E
 - `docs/operations.md` — 外部サービス結合と定常運用
 - `docs/breakdown-normalization-concept.md` — Stage 6 正規化構想（比較・推移）

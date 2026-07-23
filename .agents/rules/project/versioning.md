@@ -37,10 +37,9 @@ git push origin vYY.M.Micro
 ```
 
 - `git push origin main` ではタグは送られない。**タグは必ず `git push origin <tag>` で明示的にプッシュする**
-- タグをプッシュすると `release.yml` が `swift build -c release` でバイナリを生成し、GitHub Release と Homebrew tap を更新する
+- `blueTickerVersion` は MCP 表示・ローカル derived キャッシュ無効化などに使う。**Homebrew / 配布 `ticker` バイナリの release パイプラインは廃止済み**（`blt-server` は Docker / Fly の `deploy.yml`）
 - タグは軽量タグ（annotated 不要）で統一
 - **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
-  - タグを付け直すと GitHub が tarball を再生成して SHA256 が変わり、Homebrew formula との checksum 不一致が発生する
 - タグ後に間違いを見つけた場合もタグを削除せず、バージョンを上げて新タグを切ること
 
 ## キャッシュバージョンの埋め込み（derived キャッシュ）
