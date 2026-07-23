@@ -36,7 +36,7 @@ programmatic 認証の具体方式（origin 発行 APIキー / Cloudflare Access
 |---|---|
 | 認証 | Cloudflare Access の人間ブラウザ SSO / MCP Managed OAuth。**機械向け programmatic 認証は未整備**（Service Token / Bearer は v26.7.2 で廃止済み） |
 | レート制御 | 独自実装ゼロ。Cloudflare Free のゾーン制限のみ |
-| スキーマバージョニング | 応答の `schema_version` は実装済み。足りないのは互換・非互換変更時の運用ポリシー明文化 |
+| スキーマバージョニング | 応答の `schema_version` は実装済み。互換ポリシーは `docs/api-compatibility.md`（段階 A） |
 | CORS | 未設定 |
 | API ドキュメント | 外部向け OpenAPI / リファレンスなし（`docs/` は運営・開発向け） |
 | エラー契約 | `{"error":...,"status":N}` に統一済み |
@@ -46,7 +46,7 @@ programmatic 認証の具体方式（origin 発行 APIキー / Cloudflare Access
 方式未決の項目は選定後に実装へ落とす。
 
 1. ~~**方針ドキュメント固定**（本ファイル・roadmap・architecture）~~
-2. **スキーマ互換ポリシーの明文化**（`schema_version` 運用。実装済みのため文書化が主）
+2. ~~**スキーマ互換ポリシーの明文化**~~ — `docs/api-compatibility.md`
 3. **programmatic 認証の方式選定 → 実装**（未決。選定時にユーザー確認）
 4. **配布 `ticker` の deprecation → 配布停止 → `CLI/` 削除**（完了条件は認証または代替導線の用意と紐づける）
 5. （必要なら）内部向け OpenAPI 下書き — 段階 B の外部公開ドキュメントの下地
@@ -62,6 +62,7 @@ programmatic 認証の具体方式（origin 発行 APIキー / Cloudflare Access
 
 ## 関連
 
+- `docs/api-compatibility.md` — REST 互換ポリシー（段階 A）
 - `docs/blt-server-roadmap.md`「クライアント面」「将来」TODO
 - `docs/architecture.md`
 - `docs/feature-tiers.md`

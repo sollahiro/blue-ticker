@@ -148,7 +148,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
-- [ ] **REST 本線化（段階 A）** — 互換ポリシー明文化 → programmatic 認証（方式未決・選定時に確認）→ 配布 `ticker` deprecation。構想は `docs/public-api-concept.md`
+- [~] **REST 本線化（段階 A）** — 互換ポリシーは `docs/api-compatibility.md`。次は programmatic 認証（方式未決・選定時に確認）→ 配布 `ticker` deprecation。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 
 ### 将来
@@ -168,6 +168,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 - `docs/architecture.md` — 構成スナップショット
 - `docs/public-api-concept.md` — REST 本線化（段階 A）と第三者公開（段階 B）
+- `docs/api-compatibility.md` — REST 互換ポリシー（段階 A）
 - `docs/deploy.md` — デプロイ・定期同期・E2E
 - `docs/operations.md` — 外部サービス結合と定常運用
 - `docs/breakdown-normalization-concept.md` — Stage 6 正規化構想（比較・推移）
