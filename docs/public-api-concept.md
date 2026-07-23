@@ -70,5 +70,4 @@
 - `docs/architecture.md`
 - `docs/feature-tiers.md`
 - `docs/deploy.md`
-- `Sources/BlueTicker/Infrastructure/CloudflaredAccess.swift`
 - `Sources/BltServerCore/Routes.swift`

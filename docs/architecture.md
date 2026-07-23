@@ -18,18 +18,16 @@ BLUE TICKER の全体構成。現在地のスナップショットであり、�
 
 ## ターゲット構成と依存方向
 
-`ticker` CLI に Web/DB 依存（Vapor/Fluent/NIO）をリンクさせないため、トランスポート層を `BltServerCore` に隔離する。依存は一方向（`BltServerCore` → `BlueTickerCore`、逆流不可）。
+Core に Web/DB 依存（Vapor/Fluent/NIO）をリンクさせないため、トランスポート層を `BltServerCore` に隔離する。依存は一方向（`BltServerCore` → `BlueTickerCore`、逆流不可）。
 
 ```mermaid
 graph TD
     subgraph exe["実行ターゲット"]
-        ticker["BlueTicker<br/>(ticker CLI @main, remote 専用)"]
         blt["BltServer<br/>(blt-server @main)"]
         tickerdev["TickerDev<br/>(開発用 CLI @main, 配布しない)"]
     end
 
     subgraph core["BlueTickerCore — NIO 非依存の共有ライブラリ"]
-        CLI["CLI/<br/>remote 専用コマンド"]
         DevCLI["DevCLI/<br/>唯一の public facade（DevCLIEntry）＋<br/>ローカル解析コマンド（internal）"]
         Server["Server/<br/>REST ファサード<br/>(BltServerContext)"]
         Services["Services/<br/>分析オーケストレーション"]
@@ -46,14 +44,12 @@ graph TD
 
     ext["外部パッケージ:<br/>Vapor · Fluent · Postgres"]
 
-    ticker --> core
     blt --> servercore
     blt --> core
     tickerdev --> core
     servercore --> core
     servercore --> ext
 
-    CLI --> API
     DevCLI --> Services
     DevCLI --> API
     Server --> Services
@@ -69,8 +65,8 @@ graph TD
 
 依存ルール（同一モジュール内は import 方向をレビューで担保）:
 
-- `Services/` は `CLI/` を参照しない
-- `Analysis/` `API/` `Infrastructure/` `Utils/` は `CLI/` `Services/` `Server/` `DevCLI/` を参照しない
+- `Services/` は `DevCLI/` のコマンド型を参照してはならない
+- `Analysis/` `API/` `Infrastructure/` `Utils/` は `Services/` `Server/` `DevCLI/` を参照してはならない
 - `Server/` は REST ファサードのみ（Vapor/Fluent は `BltServerCore` 側）
 - `DevCLI/` は `Server/` と同型のナロー facade パターン: `TickerDev` ターゲットへ渡す public 面は `DevCLIEntry` の1点のみ。ローカル解析コマンド実装自体は internal のまま `DevCLI/` に置く（`Services/`・`Analysis/` 等の内部型を新たに public 化しない）
 
@@ -80,12 +76,10 @@ graph TD
 
 ```mermaid
 flowchart LR
-    user(["ユーザー / iOS app"]) --> cli["ticker CLI（remote 専用）"]
+    user(["ユーザー / iOS / curl"]) -->|"HTTPS /v1/* または MCP POST /"| server["blt-server (Vapor)"]
     dev(["開発者"]) --> devcli["TickerDev（配布しない）"]
     devcli --> facade0["DevCLIEntry<br/>(唯一の public facade)"]
     facade0 --> svc["Services / Analysis<br/>(インプロセス)"]
-    cli --> rc["RemoteAPIClient"]
-    rc -->|"HTTPS /v1/*"| server["blt-server (Vapor)"]
     server --> facade["BltServerContext<br/>(REST ファサード)"]
     facade --> svc2["Services / Analysis"]
     svc --> edinet[("EDINET API v2")]
@@ -95,7 +89,7 @@ flowchart LR
     server -.->|"filings/financials read<br/>（財務系は DB 専用）"| pg[("Neon Postgres")]
 ```
 
-接続情報の解決順位: env（`BLT_SERVER_URL`）> config。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > 未設定なら無認証（dev）。CLI/iOS とも Cloudflare Access + IdP（SSO）で認証する（Bearer トークンによる self-host 認証は廃止済み）。詳細は `blt-server-roadmap.md`「認証」。
+本番 `api.*` の機械アクセスは Access Service Token（`docs/api-auth.md`）。ユーザー介在は Access SSO / MCP Managed OAuth。`/v1` の認証モードは起動時に env で決まる: `CF_ACCESS_TEAM_DOMAIN` 設定なら Cloudflare Access（エッジ信頼。origin 非検証） > 未設定なら無認証（dev）。詳細は `docs/deploy.md` / `docs/api-auth.md`。
 
 ### REST エンドポイント（`/v1/`、公開契約）
 
@@ -104,7 +98,7 @@ flowchart LR
 | `GET /healthz` | — | ヘルスチェック（認証不要） |
 | `GET /v1/companies?q=` | `searchCompanies` | 企業検索 |
 | `GET /v1/sectors/{sector}/companies` | `searchBySector` | セクター別企業 |
-| `GET /v1/sectors` | `allSectors` | 東証33業種の一覧と業種別銘柄数（CLI `sector` コマンド用） |
+| `GET /v1/sectors` | `allSectors` | 東証33業種の一覧と業種別銘柄数 |
 | `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
 | `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4）。read 床は `companyFinancialsMinServableVersion` |
 | `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |
