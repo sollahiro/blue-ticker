@@ -205,4 +205,40 @@ private func send(
             #expect(status == .notFound)
         }
     }
+
+    // MARK: - skills（使用方法カタログ）
+
+    @Test func skillsListReturnsCatalogWithOverview() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/skills")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == apiSkillsSchemaVersion)
+            #expect((json?["overview"] as? String)?.isEmpty == false)
+            let skills = json?["skills"] as? [[String: Any]]
+            let ids = Set((skills ?? []).compactMap { $0["id"] as? String })
+            #expect(ids == Set(apiSkillsCatalog().map(\.id)))
+            #expect(skills?.contains { $0["mcp_tool"] as? String == "search_companies" } == true)
+        }
+    }
+
+    @Test func skillsDetailReturnsParametersAndInstructions() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/skills/get-financials")
+            #expect(status == .ok)
+            #expect(json?["id"] as? String == "get-financials")
+            #expect(json?["path"] as? String == "/v1/companies/{code}/financials")
+            #expect(json?["mcp_tool"] as? String == "get_financial_summary")
+            #expect((json?["instructions"] as? String)?.contains("Summarize") == true)
+            let parameters = json?["parameters"] as? [[String: Any]]
+            #expect(parameters?.contains { $0["name"] as? String == "years" } == true)
+        }
+    }
+
+    @Test func skillsDetailUnknownIdReturns404() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/skills/does-not-exist")
+            #expect(status == .notFound)
+            #expect(json?["status"] as? Int == 404)
+        }
+    }
 }

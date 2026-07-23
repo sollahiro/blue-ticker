@@ -74,6 +74,21 @@ func registerRoutes(
         return makeResponse(await context.searchCompanies(q: q))
     }
 
+    // GET /v1/skills: MCP tools/list に相当する「いつ使うか／どう呼ぶか」カタログ（一覧）。
+    // 正本は BlueTickerCore の apiSkillsCatalog（MCP ツール説明と共有）。
+    v1.get("skills") { _ async -> Response in
+        jsonResponse(apiSkillsListJSON(), status: .ok)
+    }
+
+    // GET /v1/skills/{id}: 1 能力の詳細（parameters / instructions）。
+    v1.get("skills", ":id") { req async -> Response in
+        let id = req.parameters.get("id") ?? ""
+        guard let skill = apiSkill(id: id) else {
+            return errorResponse(.notFound, message: "unknown skill: \(id)")
+        }
+        return jsonResponse(apiSkillDetailJSON(skill), status: .ok)
+    }
+
     // GET /v1/sectors/{sector}/companies?limit=20
     v1.get("sectors", ":sector", "companies") { req async -> Response in
         let sector = req.parameters.get("sector") ?? ""
