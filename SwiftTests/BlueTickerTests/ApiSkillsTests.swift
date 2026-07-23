@@ -31,6 +31,20 @@ import Testing
         let skill = try #require(apiSkill(id: "search-companies"))
         let q = try #require(skill.parameters.first { $0.name == "q" })
         #expect(q.mcpName == "query")
+        // REST は省略可、MCP は required（Routes が q 省略を空文字で受ける事実に合わせる）
+        #expect(q.required == false)
+        #expect(q.effectiveMcpRequired == true)
+    }
+
+    @Test func filingContentSectionsTypeDiffersBetweenRestAndMcp() throws {
+        let skill = try #require(apiSkill(id: "get-filing-content"))
+        let sections = try #require(skill.parameters.first { $0.name == "sections" })
+        #expect(sections.type == .string)
+        #expect(sections.effectiveMcpType == .stringArray)
+        let detail = apiSkillDetailJSON(skill)
+        let parameters = try #require(detail["parameters"] as? [[String: Any]])
+        let sectionsJSON = try #require(parameters.first { $0["name"] as? String == "sections" })
+        #expect(sectionsJSON["type"] as? String == "string")
     }
 
     @Test func financialsYearsIsRestOnly() throws {

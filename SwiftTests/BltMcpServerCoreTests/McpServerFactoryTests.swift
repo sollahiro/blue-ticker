@@ -6,6 +6,7 @@ import Foundation
 import MCP
 import Testing
 
+@testable import BlueTickerCore
 @testable import BltMcpServerCore
 
 private let expectedToolNames: Set<String> = [
@@ -116,5 +117,44 @@ private func send(
         #expect(status == 200)
         let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
         #expect((tools ?? []).count == expectedToolNames.count)
+    }
+
+    /// ApiSkills → MCP 生成の schema 回帰（required / default / items）。
+    /// ツール名集合だけでは取りこぼす破壊を固定する。
+    @Test func toolSchemasPinRequiredDefaultsAndItems() throws {
+        let byName = Dictionary(uniqueKeysWithValues: mcpToolCatalog().map { ($0.name, $0) })
+
+        let search = try #require(byName["search_companies"])
+        let searchSchema = try #require(search.inputSchema.objectValue)
+        #expect(
+            Set((searchSchema["required"]?.arrayValue ?? []).compactMap(\.stringValue)) == ["query"])
+        #expect(searchSchema["properties"]?.objectValue?["query"]?.objectValue?["type"]?.stringValue == "string")
+        #expect(searchSchema["properties"]?.objectValue?["q"] == nil)
+
+        let sector = try #require(byName["search_by_sector"])
+        let sectorSchema = try #require(sector.inputSchema.objectValue)
+        #expect(
+            Set((sectorSchema["required"]?.arrayValue ?? []).compactMap(\.stringValue)) == ["sector"])
+        let limit = try #require(sectorSchema["properties"]?.objectValue?["limit"]?.objectValue)
+        #expect(limit["type"]?.stringValue == "integer")
+        #expect(limit["default"]?.intValue == Api.sectorCompaniesLimitDefault)
+
+        let financials = try #require(byName["get_financial_summary"])
+        let financialsProps = try #require(financials.inputSchema.objectValue?["properties"]?.objectValue)
+        #expect(financialsProps["code"] != nil)
+        #expect(financialsProps["years"] == nil)
+
+        let filing = try #require(byName["get_filing_content"])
+        let sections = try #require(
+            filing.inputSchema.objectValue?["properties"]?.objectValue?["sections"]?.objectValue)
+        #expect(sections["type"]?.stringValue == "array")
+        #expect(sections["items"]?.objectValue?["type"]?.stringValue == "string")
+
+        let breakdown = try #require(byName["get_breakdown"])
+        let axis = try #require(
+            breakdown.inputSchema.objectValue?["properties"]?.objectValue?["axis"]?.objectValue)
+        #expect(axis["type"]?.stringValue == "string")
+        // サーバー省略時 business と一致。旧 schema に無かった default を意図的に明示している。
+        #expect(axis["default"]?.stringValue == "business")
     }
 }

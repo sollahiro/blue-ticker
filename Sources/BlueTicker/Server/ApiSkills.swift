@@ -29,17 +29,24 @@ public enum ApiSkillParameterDefault: Sendable, Equatable {
 }
 
 /// 1 パラメータの説明。
+/// `type` / `required` / `name` は REST（`GET /v1/skills`）の契約。
+/// MCP 面だけ違う場合は `mcpName` / `mcpType` / `mcpRequired` で上書きする。
 public struct ApiSkillParameter: Sendable {
     /// REST 上の名前（パス変数・クエリキー）。
     public let name: String
     public let location: ApiSkillParameterLocation
+    /// REST ワイヤ上の型。
     public let type: ApiSkillParameterType
     public let description: String
+    /// REST 上で必須か（サーバーが省略を受け入れるなら false）。
     public let required: Bool
     public let defaultValue: ApiSkillParameterDefault?
     /// MCP inputSchema 上の名前。nil なら MCP には出さない（REST 専用）。
-    /// REST と別名のときだけ明示（例: REST `q` ↔ MCP `query`）。省略時は `name` と同名で出す。
     public let mcpName: String?
+    /// MCP 上の型。nil なら `type` を使う。
+    public let mcpType: ApiSkillParameterType?
+    /// MCP 上で必須か。nil なら `required` を使う。
+    public let mcpRequired: Bool?
 
     public init(
         name: String,
@@ -49,7 +56,9 @@ public struct ApiSkillParameter: Sendable {
         required: Bool,
         defaultValue: ApiSkillParameterDefault? = nil,
         mcpName: String? = nil,
-        mcpExposed: Bool = true
+        mcpExposed: Bool = true,
+        mcpType: ApiSkillParameterType? = nil,
+        mcpRequired: Bool? = nil
     ) {
         self.name = name
         self.location = location
@@ -59,6 +68,20 @@ public struct ApiSkillParameter: Sendable {
         self.defaultValue = defaultValue
         // mcpExposed=false で REST 専用。true かつ mcpName=nil なら REST 名をそのまま使う。
         self.mcpName = mcpExposed ? (mcpName ?? name) : nil
+        self.mcpType = mcpExposed ? mcpType : nil
+        self.mcpRequired = mcpExposed ? mcpRequired : nil
+    }
+
+    /// MCP 生成用の実効型。MCP 非公開なら nil。
+    public var effectiveMcpType: ApiSkillParameterType? {
+        guard mcpName != nil else { return nil }
+        return mcpType ?? type
+    }
+
+    /// MCP 生成用の実効 required。MCP 非公開なら nil。
+    public var effectiveMcpRequired: Bool? {
+        guard mcpName != nil else { return nil }
+        return mcpRequired ?? required
     }
 }
 
@@ -103,12 +126,15 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     location: .query,
                     type: .string,
                     description: "検索クエリ（銘柄コードまたは企業名）",
-                    required: true,
-                    mcpName: "query"
+                    // REST は省略時空文字で受け付ける（400 にはしない）。MCP は required。
+                    required: false,
+                    mcpName: "query",
+                    mcpRequired: true
                 ),
             ],
             instructions: """
                 銘柄コードが未知のときに最初に使う。ヒットした `code` を以降の financials / filings 等に渡す。
+                REST の `q` 省略は空検索になる（必須ではない）。実質的な検索には `q` を付ける。
                 例: GET /v1/companies?q=トヨタ
                 """
         ),
@@ -371,15 +397,17 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ApiSkillParameter(
                     name: "sections",
                     location: .query,
-                    type: .stringArray,
-                    description: "抽出セクションのリスト（省略時は全セクション）",
-                    required: false
+                    type: .string,
+                    description: "抽出セクション（カンマ区切り。省略時は全セクション）",
+                    required: false,
+                    // MCP は文字列配列。REST ワイヤはクエリ1文字列。
+                    mcpType: .stringArray
                 ),
             ],
             instructions: """
                 有報のテキスト抽出（Filing）。事業別売上の構造化数値は get-breakdown。
                 格納済みデータのみ。未抽出は 404、DB 非接続は 503。
-                REST では sections をカンマ区切りクエリ（例: business_risks,mda）。MCP では文字列配列。
+                REST: ?sections=mda,business_risks（カンマ区切り文字列）。MCP: 文字列配列。
                 例: GET /v1/companies/6103/filing-content?sections=mda,business_risks
                 """
         ),

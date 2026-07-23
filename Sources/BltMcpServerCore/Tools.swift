@@ -21,7 +21,7 @@ private func mcpTool(from skill: ApiSkill) -> Tool? {
     var required: [Value] = []
     for (mcpName, parameter) in mcpParams {
         properties[mcpName] = mcpPropertySchema(parameter)
-        if parameter.required {
+        if parameter.effectiveMcpRequired == true {
             required.append(.string(mcpName))
         }
     }
@@ -45,7 +45,7 @@ private func mcpPropertySchema(_ parameter: ApiSkillParameter) -> Value {
     var schema: [String: Value] = [
         "description": .string(parameter.description),
     ]
-    switch parameter.type {
+    switch parameter.effectiveMcpType ?? parameter.type {
     case .string:
         schema["type"] = .string("string")
     case .integer:
