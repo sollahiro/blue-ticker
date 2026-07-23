@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// remote CLI の公開契約（FinancialsResponse）とデコード仕様を検証する。
+/// REST 公開契約（FinancialsResponse）とデコード仕様を検証する。
 /// サーバー出力 → クライアント復元で、レンダラが使うフィールドが往復することを保証する。
 @Suite struct RemoteContractTests {
     /// MetricsResult → 契約 JSON → MetricsResult で、v2 で追加したフィールドを含め往復する。
@@ -93,7 +93,7 @@ import Testing
         #expect(arr.first?.location == "愛知県")
     }
 
-    /// sectors の公開 JSON（`GET /v1/sectors`）が SectorSummary へデコードできる（CLI `sector` コマンド用）。
+    /// sectors の公開 JSON（`GET /v1/sectors`）が SectorSummary へデコードできる。
     @Test func sectorsJSONDecodesToSectorSummary() throws {
         let json = #"[{"code":"輸送用機器","name":"輸送用機器","count":42}]"#
         let arr = try JSONDecoder().decode([SectorSummary].self, from: Data(json.utf8))
@@ -101,7 +101,7 @@ import Testing
         #expect(arr.first?.count == 42)
     }
 
-    /// Cloudflare Access SSO（ticker login 経由）が有効なとき、JWT が CF_Authorization Cookie で付与される。
+    /// Cloudflare Access SSO JWT が設定されているとき、JWT が CF_Authorization Cookie で付与される。
     /// Access のエッジ認証は Cookie を見るため（`Cf-Access-Jwt-Assertion` ヘッダーでは通らないことを実機で確認済み）。
     @Test func buildRequestAddsCfAuthorizationCookieWhenSsoJwtSet() throws {
         let client = try #require(

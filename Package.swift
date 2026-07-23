@@ -7,11 +7,10 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
-        .executable(name: "ticker", targets: ["BlueTicker"]),
         .executable(name: "blt-server", targets: ["BltServer"]),
     ],
     dependencies: [
-        // CLI コマンド体系（Apple 公式）。
+        // TickerDev（開発用 CLI）のコマンド体系（Apple 公式）。
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         // HTML/XML の柔軟なパース。XMLParser では壊れた HTML を扱えないため。
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
@@ -28,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
     ],
     targets: [
-        // 共有ライブラリ（CLI・REST サーバー共通のコア機能）。NIO には依存しない。
+        // 共有ライブラリ（TickerDev・REST サーバー共通のコア機能）。NIO には依存しない。
         .target(
             name: "BlueTickerCore",
             dependencies: [
@@ -60,7 +59,7 @@ let package = Package(
             ]
         ),
         // REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。
-        // Web/DB 依存をここに閉じ込め、CLI へ漏らさない。
+        // Web/DB 依存をここに閉じ込め、blt-server / TickerDev へ漏らさない。
         .target(
             name: "BltServerCore",
             dependencies: [
@@ -71,17 +70,6 @@ let package = Package(
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
             ],
             path: "Sources/BltServerCore",
-            swiftSettings: [
-                .swiftLanguageMode(.v6),
-            ]
-        ),
-        // CLI 実行可能ターゲット（@main エントリポイントのみ）
-        .executableTarget(
-            name: "BlueTicker",
-            dependencies: [
-                "BlueTickerCore",
-            ],
-            path: "Sources/BlueTickerMain",
             swiftSettings: [
                 .swiftLanguageMode(.v6),
             ]
@@ -98,8 +86,8 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-        // 開発用ローカル解析 CLI（配布しない）。products に含めないため
-        // release ビルド・Homebrew formula から到達不能。BlueTickerCore/DevCLI/ を薄く呼ぶだけ。
+        // 開発用ローカル解析 CLI（配布しない）。products に含めない。
+        // BlueTickerCore/DevCLI/ を薄く呼ぶだけ。
         .executableTarget(
             name: "TickerDev",
             dependencies: [
