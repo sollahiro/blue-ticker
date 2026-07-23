@@ -34,7 +34,7 @@
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
 - MCP は `blt-server` のルートパス（`POST /`）に同居。ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。詳細は `docs/architecture.md`「MCP」節。
 - オンデマンド ingest は非同期（404 → 将来 202＋キュー。公開スキーマ追加のため実装前に確認）。
-- **REST 本線（段階 A）→ 第三者公開（段階 B）** の判断と着手順は `docs/public-api-concept.md`。programmatic 認証方式は未決。
+- **REST 本線（段階 A）→ 第三者公開（段階 B）** の判断と着手順は `docs/public-api-concept.md`。段階 A の機械認証は Access Service Token（`docs/api-auth.md`）。origin APIキーは Monetize Gateway 公開後に再判断。
 
 ### Stage 4 / Stage 5 read 床（min servable）
 
@@ -148,7 +148,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
-- [~] **REST 本線化（段階 A）** — 互換ポリシーは `docs/api-compatibility.md`。次は programmatic 認証（方式未決・選定時に確認）→ 配布 `ticker` deprecation。構想は `docs/public-api-concept.md`
+- [~] **REST 本線化（段階 A）** — 互換は `docs/api-compatibility.md`、認証方針は `docs/api-auth.md`（Service Token）。次は Access へのポリシー適用＋curl 疎通 → 配布 `ticker` deprecation。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 
 ### 将来
@@ -158,7 +158,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] ストレージ強化の方式選定（#22 本丸）
 - [ ] REST API の第三者公開（段階 B）— 段階 A のあと。レート制限・外部ドキュメント等。`docs/public-api-concept.md`
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
-- [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。情報未公開のため詳細設計は保留）
+- [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。origin APIキー要否もここで再判断。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。**未着手**: geography 軸の ingest 配線、オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103）、野村の金融費用控除後分母取り違え（issue #105）。構想と残タスクは `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
@@ -168,6 +168,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 - `docs/architecture.md` — 構成スナップショット
 - `docs/public-api-concept.md` — REST 本線化（段階 A）と第三者公開（段階 B）
+- `docs/api-auth.md` — REST / MCP 認証の住み分け（段階 A）
 - `docs/api-compatibility.md` — REST 互換ポリシー（段階 A）
 - `docs/deploy.md` — デプロイ・定期同期・E2E
 - `docs/operations.md` — 外部サービス結合と定常運用

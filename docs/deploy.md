@@ -143,6 +143,31 @@ ticker login   # ブラウザが開き、Access のログイン画面（IdP）�
 
 セッションが失効した場合（Access の Session Duration 経過後など）は `ticker login` を再実行する。origin（方式A）は JWT を検証しないため、この機構の安全性は引き続き「Tunnel + 公開ポート閉鎖 + Access ポリシー」に依存する。
 
+### REST Service Token（段階 A・機械向け）
+
+方針・クライアント別住み分けは `docs/api-auth.md`。origin / `ticker` CLI への Service Token 実装は行わない（方式A・エッジのみ。旧 CLI Bearer は復活させない）。
+
+**ダッシュボード手順（未適用なら実施）**:
+
+1. Zero Trust → Access controls → Service credentials → **Service Tokens** → Create。名前例: `blt-rest-dev`。Client ID / Client Secret を控える（Secret は再表示不可）。
+2. `api.<domain>` の Access アプリにポリシーを **追加**（既存 SSO/OTP の Allow は残す）:
+   - Action = **Service Auth**（Allow に Token を混ぜない。機械は Service Auth が必要）
+   - Include → Service Token → 作成したトークン
+3. 疎通:
+
+```bash
+# 無認証 → Access にブロック（302/403）
+curl -si "https://api.<domain>/v1/companies/7203/financials?years=1" | head -n1
+
+# Service Token → 200（値は環境変数等に置く。リポジトリに書かない）
+curl -s "https://api.<domain>/v1/companies/7203/financials?years=1" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  | jq '.schema_version'
+```
+
+SSO 用 curl（Cookie）と Service Token 用 curl は用途が違う。製品の機械入口は後者。
+
 ## MCP（Managed OAuth・Claude.ai / ChatGPT 向け）
 
 MCP はルートパス（`POST /`）で公開する（`/mcp` は使わない。理由は後述）。`api.<domain>` は Phase 1 で `/v1` と同じ Access アプリ・SSO ポリシーの配下にある（`ticker login` と同じブラウザ SSO を自分でハンドリングできるクライアント、例: Claude Code の remote MCP 接続、はこのままで使える）。

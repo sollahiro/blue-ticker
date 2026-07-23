@@ -33,8 +33,8 @@ Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-ha
 
 | 観点 | 内容 |
 |---|---|
-| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の SSO 付与（`RemoteAPIClient.swift`・`LoginCommand.swift`）: `ticker login` → `CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存（Service Token は v26.7.2 で廃止済み）④ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP 設定 |
-| 撤退経路 | **なし**。静的 Bearer（`BLT_AUTH_TOKEN`）モードは廃止済み（`Routes.swift`・`ticker` CLI 双方から削除）。Cloudflare Access を撤退する場合は代替の認証機構をコードから再実装する必要がある |
+| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の SSO 付与（`RemoteAPIClient.swift`・`LoginCommand.swift`）: `ticker login` → `CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存 ④ 段階 A の機械向け REST: Access **Service Token**（エッジのみ・`docs/api-auth.md`。origin / CLI には載せず、curl 等が `CF-Access-Client-Id/Secret` を付与）⑤ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP / Service Token 設定 |
+| 撤退経路 | **なし（SSO 面）**。静的 Bearer（`BLT_AUTH_TOKEN`）モードは廃止済み。Access SSO を撤退する場合は代替の認証機構をコードから再実装する必要がある。Service Token 面の撤退はダッシュボードのポリシー削除で足りる（origin 非依存） |
 | 不変条件 | 方式A は origin が JWT を検証しない。安全性は「**Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー**」の 3 点セットで成立する。**どれか 1 つでも欠けると無認証素通りになる**ため、fly.toml へのサービスブロック追加・ポート公開は単独で行ってはならない |
 
 R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結合はない。
