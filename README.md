@@ -1,6 +1,6 @@
 # BLUE TICKER
 
-日本株の財務データ基盤（Swift）。**blt-server** が EDINET 由来のデータを取り込み、**REST API** と **MCP** で提供します。配布 CLI（`ticker` / Homebrew）は廃止しました。
+日本株の財務データ基盤。**Swift** 製の **REST API** と **MCP** サーバー（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。
 
 ## 主な機能
 
@@ -9,11 +9,20 @@
 - 有価証券報告書のセクション本文（Filing）
 - 事業別・地域別売上の内訳（Breakdown・整備中）
 
-機能の無料/有料方針は [`docs/feature-tiers.md`](docs/feature-tiers.md)。
+機能の無料/有料方針は [`docs/feature-tiers.md`](docs/feature-tiers.md)。利用可能な API / ツールの一覧は `GET /v1/skills`（MCP では `tools/list`）でも取得できます。
 
-## 使い方（本番 REST）
+## 使い方
 
-本番ホストは Cloudflare Access 配下です。機械アクセスは **Service Token**（ブラウザ不要）。
+本番ホストは Cloudflare Access 配下です。用途に応じて次のいずれかを使います。
+
+| 用途 | ホスト | 認証 |
+|---|---|---|
+| curl / スクリプト / CI | `https://api.sollahiro.com` | Access Service Token |
+| Claude Desktop / Claude.ai / ChatGPT など | `https://mcp.sollahiro.com` | Managed OAuth（ブラウザで認可） |
+
+### REST API
+
+機械アクセスは **Service Token**（ブラウザ不要）。ヘッダーに Client ID / Secret を付けて呼び出します。
 
 ```bash
 export CF_ACCESS_CLIENT_ID='....access'
@@ -25,24 +34,30 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
   | jq '.schema_version, .code'
 ```
 
-認証の住み分け・発行手順: [`docs/api-auth.md`](docs/api-auth.md) / [`docs/deploy.md`](docs/deploy.md)  
+よく使うエンドポイントの例:
+
+| メソッド | パス | 内容 |
+|---|---|---|
+| `GET` | `/v1/companies?q=` | 企業検索 |
+| `GET` | `/v1/companies/{code}/financials` | 年次財務サマリ |
+| `GET` | `/v1/companies/{code}/analysis` | 年次増減分析 |
+| `GET` | `/v1/companies/{code}/filings` | 提出書類一覧 |
+| `GET` | `/v1/skills` | 能力カタログ |
+
+認証の発行手順・住み分け: [`docs/api-auth.md`](docs/api-auth.md) / [`docs/deploy.md`](docs/deploy.md)  
 互換ポリシー: [`docs/api-compatibility.md`](docs/api-compatibility.md)
 
-ユーザー介在のブラウザ SSO / MCP（`mcp.sollahiro.com` の Managed OAuth）も利用できます。
+### MCP
 
-## サーバー運用
+Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_analysis`）。
 
-`blt-server` のデプロイ・sync / ingest・Neon 接続は [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md)。
+## ドキュメント
 
-## 開発者向け
+デプロイ・セルフホスト・開発用 CLI（`TickerDev`）などは [`docs/`](docs/) を参照してください。
 
-```bash
-swift build                     # blt-server / TickerDev を生成
-swift test
-swift run TickerDev analyze 7203   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
-```
-
-構成の詳細は [`CLAUDE.md`](CLAUDE.md) / [`docs/architecture.md`](docs/architecture.md)。
+- [`docs/architecture.md`](docs/architecture.md) — 構成
+- [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md) — 運用
+- [`CLAUDE.md`](CLAUDE.md) — ビルド・ターゲット構成
 
 ## 免責事項
 
