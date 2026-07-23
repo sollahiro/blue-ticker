@@ -16,7 +16,7 @@
 | クライアント | ホスト | 認証 | 備考 |
 |---|---|---|---|
 | curl / 自社スクリプト / CI | `api.*` | **Service Token** | 段階 A で開く主用途 |
-| 配布 `ticker`（廃止まで） | `api.*` | SSO（cloudflared） | Service Token に寄せない |
+| ~~配布 `ticker`~~ | — | **廃止済み** | Homebrew / remote CLI 削除。代替は curl + Service Token または MCP |
 | ブラウザで api を直接 | `api.*` | SSO / OTP | 既存 |
 | 将来 iOS | `api.*` | ユーザー SSO 系（OIDC+PKCE 想定） | アプリに Service Token を焼かない |
 | Claude Desktop / ChatGPT（MCP） | `mcp.*` | Managed OAuth | 変更なし |

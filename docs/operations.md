@@ -33,7 +33,7 @@ Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-ha
 
 | 観点 | 内容 |
 |---|---|
-| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ CLI 側の SSO 付与（`RemoteAPIClient.swift`・`LoginCommand.swift`）: `ticker login` → `CF_Authorization` Cookie。ローカルの `cloudflared` インストールに依存 ④ 段階 A の機械向け REST: Access **Service Token**（エッジのみ・`docs/api-auth.md`。origin / CLI には載せず、curl 等が `CF-Access-Client-Id/Secret` を付与）⑤ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP / Service Token 設定 |
+| 結合点 | ① `cloudflared` サイドカー（`Dockerfile` の ARG 固定 + `entrypoint.sh` の env ゲート）② 認証モード `CF_ACCESS_TEAM_DOMAIN`（`Routes.swift`）③ 機械向け REST: Access **Service Token**（エッジのみ・`docs/api-auth.md`。curl 等が `CF-Access-Client-Id/Secret` を付与）④ ユーザー介在: Access SSO / MCP Managed OAuth ⑤ Zero Trust ダッシュボード上の Tunnel / Access アプリ / ポリシー / IdP / Service Token 設定 |
 | 撤退経路 | **なし（SSO 面）**。静的 Bearer（`BLT_AUTH_TOKEN`）モードは廃止済み。Access SSO を撤退する場合は代替の認証機構をコードから再実装する必要がある。Service Token 面の撤退はダッシュボードのポリシー削除で足りる（origin 非依存） |
 | 不変条件 | 方式A は origin が JWT を検証しない。安全性は「**Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー**」の 3 点セットで成立する。**どれか 1 つでも欠けると無認証素通りになる**ため、fly.toml へのサービスブロック追加・ポート公開は単独で行ってはならない |
 
@@ -46,7 +46,7 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 - **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（Stage 3/4/4-half/5）はローカル Mac の launchd で回している（Fly 上では OOM・issue #34/#35 参照）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。外形監視は `scripts/check-ingest-freshness.sh`（`DATABASE_URL` 必須・既定 36h）。`company_financials` / `company_half_financials` / `company_filing_sections` / `edinet_sync_state` の `max(updated_at)` が閾値を超えると exit 1。cron / 手動で回す（Fly `/healthz` では検知できない）。
 - **キャッシュバージョンバンプと Fly デプロイの同期（自動化済み・2026-07-05）**: main への push で CI が成功すると、GitHub Actions（`.github/workflows/deploy.yml`、`workflow_run` トリガー）がデプロイ関連パス（`Sources/**`・`scripts/**`・`assets/**`・`Dockerfile`・`fly.toml`・`Package.*`）の変更を判定して `flyctl deploy --remote-only` を自動実行するため、手動 `fly deploy` は不要（`FLY_API_TOKEN` repo secret 必須）。CI が失敗した push はデプロイされない。手動再デプロイは deploy.yml の `workflow_dispatch`（パス判定をスキップして必ずデプロイ）。バンプ規則は `versioning.md`「Neon キャッシュバージョン」を参照。`/healthz` の `cache_versions` で今イメージが話しているバージョンを curl 一発で確認できる。
 - **cloudflared のバージョン固定更新**: `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` の固定運用は `deploy.md`「C. Dockerfile に cloudflared サイドカーを同梱」を参照。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
-- **Cloudflare SSO セッションの失効**: Access の Session Duration 経過で失効したら `ticker login` を再実行する。手順・完全無人自動化の非対応は `deploy.md`「クライアント設定（CLI・SSO ログイン）」を参照。
+- **Cloudflare SSO セッションの失効**: ユーザー介在クライアントは Access Session Duration 経過後に再ログイン。機械向けは Service Token（`docs/api-auth.md` / `deploy.md`）。
 - **Fly serviceless の再起動挙動（自動化済み）**: `[http_service]` が無いため `fly deploy` 後にマシンが stopped のままになることがある。`deploy.yml` の「Ensure machine is running」ステップが stopped を検知して `fly machine start` する。
 - **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 本体・`configureDatabase` の `autoMigrate`）と HTTP read 4 ルートのリトライで吸収済み。接続プール待ちは `Api.dbConnectionPoolTimeoutSeconds`（45s。Fluent 既定 10s では cold start に不足）。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
 - **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`dependencies.md`）。
@@ -60,5 +60,5 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 | Fly secrets | `BLT_EDINET_API_KEY` / `DATABASE_URL` / `CF_ACCESS_TEAM_DOMAIN` / `CLOUDFLARE_TUNNEL_TOKEN` | 各サービスで再発行・`fly secrets set`（`deploy.md` 環境変数表） |
 | Neon | 全テーブルのデータ | dump/restore または EDINET から再 ingest |
 | Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
-| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`（`BLT_EDINET_API_KEY`）・cloudflared の SSO ログイン状態 | plist は `deploy.md`「定期同期」から再作成、キーは再発行、SSO は `ticker login` |
+| ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`（`BLT_EDINET_API_KEY`） | plist は `deploy.md`「定期同期」から再作成、キーは再発行。機械 REST は Service Token |
 | Fly Volume `/data` | EDINET 取得キャッシュ | 再取得（コピー不要） |

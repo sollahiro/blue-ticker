@@ -4,7 +4,7 @@
 
 | 段階 | 到達点 | 状態 |
 |---|---|---|
-| **A（いま）** | 自社向けに REST を契約の正・主クライアント面にする。配布 `ticker` は段階廃止。本番機械到達は Access Service Token | **着手（方針・互換・認証方式まで固定）** |
+| **A（いま）** | 自社向けに REST を契約の正・主クライアント面にする。配布 `ticker` 廃止。本番機械到達は Access Service Token | **認証疎通済み・配布 CLI 削除** |
 | **B（ゆくゆく）** | 素性を知らない第三者が組み込める公開 API | 未着手。A の契約土台の上で再開。origin APIキー等は Monetize Gateway 公開後に再判断 |
 
 段階 A の programmatic 認証は **Cloudflare Access Service Token**（`api.*`）。クライアント別の住み分け・ポリシー同居は `docs/api-auth.md`。origin 発行 APIキーは先送り。
@@ -27,15 +27,15 @@
 |---|---|
 | **REST `/v1`** | 契約の正。自社クライアント（将来の iOS 等）・段階 B の第三者向けの本線 |
 | **MCP `POST /`** | REST を写す薄い追従面。プロトコル自体は一過性とみなす。新機能は REST 先・MCP は写経 |
-| **配布 `ticker`** | 段階廃止対象（Homebrew / release）。`TickerDev` と `blt-server` 運用 CLI（sync/ingest 等）は残す |
-| **Cloudflare Access SSO** | ユーザー介在クライアント向け。リモート MCP（Managed OAuth）もブラウザ経由は想定内 |
+| **配布 `ticker`** | **廃止済み**（Homebrew / release / `CLI/` 削除）。`TickerDev` と `blt-server` 運用 CLI は残す |
+| **Cloudflare Access SSO** | ユーザー介在クライアント向け（ブラウザ・将来 iOS）。リモート MCP（Managed OAuth）もブラウザ経由は想定内 |
 | **Access Service Token** | 本番 `api.*` の機械向け programmatic（curl / CI）。手順は `docs/api-auth.md` / `deploy.md` |
 
 ## 現状の実態（認証・制御・契約）
 
 | 項目 | 実態 |
 |---|---|
-| 認証 | SSO / MCP OAuth に加え、段階 A で **Service Token（`api.*`）** を機械向けに追加予定（origin 非検証・エッジ）。旧 CLI Bearer は復活しない。詳細 `docs/api-auth.md` |
+| 認証 | SSO / MCP OAuth ＋ **Service Token（`api.*`・疎通済み）**。origin 非検証・エッジ。旧 CLI Bearer は復活しない。詳細 `docs/api-auth.md` |
 | レート制御 | 独自実装ゼロ。Cloudflare Free のゾーン制限のみ |
 | スキーマバージョニング | 応答の `schema_version` は実装済み。互換ポリシーは `docs/api-compatibility.md`（段階 A） |
 | CORS | 未設定 |
@@ -48,8 +48,8 @@
 
 1. ~~**方針ドキュメント固定**（本ファイル・roadmap・architecture）~~
 2. ~~**スキーマ互換ポリシーの明文化**~~ — `docs/api-compatibility.md`
-3. ~~**programmatic 認証の方式選定**~~ — Service Token（`docs/api-auth.md`）。**実装（Access ポリシー＋疎通）が次**
-4. **配布 `ticker` の deprecation → 配布停止 → `CLI/` 削除**（完了条件は Service Token 導線の用意と紐づける）
+3. ~~**programmatic 認証の方式選定・疎通**~~ — Service Token（`docs/api-auth.md` / `deploy.md`）
+4. ~~**配布 `ticker` の廃止**~~ — product / Homebrew / release / `CLI/` 削除済み。`TickerDev`・`blt-server` ops は残置
 5. （必要なら）内部向け OpenAPI 下書き — 段階 B の外部公開ドキュメントの下地
 
 ## 段階 B で追加する着手順（暫定）

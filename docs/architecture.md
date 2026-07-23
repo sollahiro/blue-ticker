@@ -4,7 +4,7 @@ BLUE TICKER の全体構成。現在地のスナップショットであり、�
 
 ## デプロイモード
 
-`ticker`（配布 CLI）は remote 専用。EDINET を直接叩くローカル解析は、配布しない開発用 CLI `TickerDev`（`swift run TickerDev` でのみ実行可能。`Package.swift` の `products` に含まれず release ビルド・Homebrew formula からは到達不能）が担う。
+配布 CLI `ticker` は廃止済み。ユーザー接点は REST / MCP。EDINET を直接叩くローカル解析は、配布しない開発用 CLI `TickerDev`（`swift run TickerDev` でのみ実行。`Package.swift` の `products` に含めない）が担う。
 
 | モード | EDINET を叩くのは | blt-server | 状態 |
 |---|---|---|---|
@@ -14,9 +14,7 @@ BLUE TICKER の全体構成。現在地のスナップショットであり、�
 
 > **方針（2026-06-28 確定・2026-07-16 実施）**: ユーザー向けは remote（cloud）へ集約済み。**`ticker` からローカル分析経路（`backend=local` 設定）を撤去**し、EDINET 直叩きロジックは `Sources/BlueTicker/DevCLI/`（`BlueTickerCore` 内・internal）へ移設、唯一の public facade `DevCLIEntry`（`Server/BltServerFacade.swift` と同型のナロー facade）経由で `TickerDev` ターゲットから呼ぶ。完了記録は `blt-server-roadmap.md`「ローカル CLI 廃止ゲート」。
 >
-> **クライアント面（2026-07-23）**: **REST `/v1` が契約の正**。MCP はそれを写す追従面（一過性とみなす）。配布 `ticker` は段階廃止（`TickerDev`・`blt-server` 運用 CLI は残す）。Access SSO はユーザー介在クライアント向けに維持。本番機械到達は Access Service Token（`docs/api-auth.md`）。自社向け本線化（段階 A）→ 第三者公開（段階 B）は `docs/public-api-concept.md`。互換ルールは `docs/api-compatibility.md`。
->
-> **既定値（配布 `ticker` 存続中）**: `server-url`（既定 `Api.defaultRemoteServerURL`）。`ticker login`（Cloudflare Access SSO、`deploy.md` 参照）で開始。別サーバーは `ticker config set --server-url <url>` で上書き。
+> **クライアント面（2026-07-23）**: **REST `/v1` が契約の正**。MCP はそれを写す追従面（一過性とみなす）。配布 `ticker` は**廃止済み**（`TickerDev`・`blt-server` 運用 CLI は残す）。Access SSO はユーザー介在クライアント向けに維持。本番機械到達は Access Service Token（`docs/api-auth.md`）。構想は `docs/public-api-concept.md`。互換は `docs/api-compatibility.md`。
 
 ## ターゲット構成と依存方向
 
@@ -67,7 +65,7 @@ graph TD
     DB -.->|Stage1/3 永続化| Stages
 ```
 
-`Package.swift` の `products` には `ticker`（`BlueTicker`）と `blt-server`（`BltServer`）のみを載せ、`TickerDev` は載せない。`release.yml` は `swift build -c release --product ticker` という `--product` スコープ済みビルドのため、`TickerDev` は release ビルド・Homebrew formula から構造的に到達不能（`swift run TickerDev` でのみローカルビルド・実行できる）。
+`Package.swift` の `products` には `blt-server`（`BltServer`）のみを載せる。`TickerDev` は products 非搭載（`swift run TickerDev` のみ）。配布 `ticker` と Homebrew release パイプラインは廃止済み。
 
 依存ルール（同一モジュール内は import 方向をレビューで担保）:
 
@@ -76,9 +74,9 @@ graph TD
 - `Server/` は REST ファサードのみ（Vapor/Fluent は `BltServerCore` 側）
 - `DevCLI/` は `Server/` と同型のナロー facade パターン: `TickerDev` ターゲットへ渡す public 面は `DevCLIEntry` の1点のみ。ローカル解析コマンド実装自体は internal のまま `DevCLI/` に置く（`Services/`・`Analysis/` 等の内部型を新たに public 化しない）
 
-## リクエストフロー（ticker / TickerDev）
+## リクエストフロー（REST / TickerDev）
 
-`ticker`（配布 CLI）の各コマンドは `run()` 冒頭で `RemoteBackend.client()` を呼び、常に remote 経路（blt-server）へ接続する。**財務系（financials / half-financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
+クライアント（curl / MCP / 将来 iOS）は blt-server の REST（または MCP）を叩く。**財務系（financials / half-financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
 
 ```mermaid
 flowchart LR

@@ -7,7 +7,7 @@
 | 項目 | 状態 |
 |---|---|
 | 本番 | Fly.io (nrt) + Neon + Cloudflare Access/Tunnel。`api.sollahiro.com` 稼働。main push（CI 成功後）で自動デプロイ |
-| CLI | 配布 `ticker` は remote 専用（段階廃止方針。詳細は下記「クライアント面」）。開発用は配布しない `TickerDev`。運用は `blt-server` sync/ingest |
+| CLI | 配布 `ticker` **廃止済み**。開発用は配布しない `TickerDev`。運用は `blt-server` sync/ingest |
 | Stage 1 | 同期済み（~3,944 社）。launchd が日次増分 sync |
 | Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
 | Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
@@ -28,7 +28,7 @@
 |---|---|---|
 | 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（`TickerDev`）・**運用 CLI**（`blt-server` sync/ingest） | 維持 |
 | 切済み | **ユーザー向けローカル分析 CLI**（`backend=local`） | 2026-07-16 実施（下記ゲート） |
-| 切る（段階） | **配布 `ticker`**（Homebrew / release の remote シンクライアント） | REST 本線化に合わせて deprecation → 配布停止。構想は `docs/public-api-concept.md` |
+| 切済み | **配布 `ticker`**（Homebrew / release / remote CLI） | 廃止済み。構想は `docs/public-api-concept.md` |
 | ユーザー接点 | **REST（契約の正）** / MCP（追従） / 将来 GUI・iOS | MCP は一過性のプロトコル面とみなす。新機能は REST 先 |
 
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
@@ -109,7 +109,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 | `TickerDev`（開発用・配布しない） | in-process | `Services/` 直呼び（`DevCLI/` facade 経由） | 開発専用・維持 |
 | REST `/v1` | しない | blt-server DB read | **契約の正・本線** |
 | MCP `POST /` | しない | REST と同じ serve 関数 | 追従面（一過性とみなす） |
-| `ticker`（配布 CLI） | しない | REST | **段階廃止** |
+| ~~`ticker`（配布 CLI）~~ | — | — | **廃止済み** |
 | iOS（将来） | しない | REST | 予定 |
 | blt-server | **唯一の計算者** | ingest ＋ DB read | サーバー |
 
@@ -148,7 +148,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 次（優先度順）
 
-- [~] **REST 本線化（段階 A）** — 互換は `docs/api-compatibility.md`、認証方針は `docs/api-auth.md`（Service Token）。次は Access へのポリシー適用＋curl 疎通 → 配布 `ticker` deprecation。構想は `docs/public-api-concept.md`
+- [~] **REST 本線化（段階 A）** — 互換・Service Token 疎通・配布 `ticker` 廃止まで完了。任意で OpenAPI 下書き。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
 
 ### 将来

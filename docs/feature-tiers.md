@@ -1,6 +1,6 @@
 # 機能別提供価値と課金方針（構想）
 
-契約の正は REST。MCP は追従面。配布 Remote CLI（`ticker`）は段階廃止方針（`docs/public-api-concept.md`）。ローカル完結の開発用 CLI は対象外（`docs/architecture.md` 参照）。
+契約の正は REST。MCP は追従面。配布 Remote CLI（`ticker`）は**廃止済み**（`docs/public-api-concept.md`）。ローカル完結の開発用 CLI は対象外（`docs/architecture.md` 参照）。
 
 ## 機能表（最新）
 
@@ -22,8 +22,8 @@
 
 ## Summarize / Analyze の境界
 
-- Summarize（`GET /v1/companies/{code}/financials`・`/half-financials`、MCP `get_financial_summary`・`get_half_financial_summary`）は水準値のみ（`ticker summarize` の表示項目と同じ）。
-- Analyze（`GET /v1/companies/{code}/analysis`・`/half-analysis`、MCP `get_analysis`・`get_half_analysis`）は Summarize と同じ水準値に加え、前年差・要因分解（事業利益ウォーターフォール・ROIC/ROE分解・ネットキャッシュ/運転資本/CCC前年差）を含む（`ticker analyze` と同じ内容）。
+- Summarize（`GET /v1/companies/{code}/financials`・`/half-financials`、MCP `get_financial_summary`・`get_half_financial_summary`）は水準値のみ。
+- Analyze（`GET /v1/companies/{code}/analysis`・`/half-analysis`、MCP `get_analysis`・`get_half_analysis`）は Summarize と同じ水準値に加え、前年差・要因分解（事業利益ウォーターフォール・ROIC/ROE分解・ネットキャッシュ/運転資本/CCC前年差）を含む。
 - 実装詳細は `FinancialsYear.analysisOnlyKeys`（`Sources/BlueTicker/Models/FinancialsContract.swift`）。DBスキーマ・cache_versionは変更していない（read時の投影のみ）。
 
 ## Breakdown の境界
