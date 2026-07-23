@@ -27,19 +27,19 @@ import Testing
         #expect(apiSkill(id: "list-sectors")?.mcpTool == nil)
     }
 
-    @Test func searchCompaniesMapsQueryAliasForMcp() {
+    @Test func searchCompaniesMapsQueryAliasForMcp() throws {
         let skill = try #require(apiSkill(id: "search-companies"))
         let q = try #require(skill.parameters.first { $0.name == "q" })
         #expect(q.mcpName == "query")
     }
 
-    @Test func financialsYearsIsRestOnly() {
+    @Test func financialsYearsIsRestOnly() throws {
         let skill = try #require(apiSkill(id: "get-financials"))
         let years = try #require(skill.parameters.first { $0.name == "years" })
         #expect(years.mcpName == nil)
     }
 
-    @Test func listAndDetailJSONIncludeSchemaVersion() {
+    @Test func listAndDetailJSONIncludeSchemaVersion() throws {
         let list = apiSkillsListJSON()
         #expect(list["schema_version"] as? Int == apiSkillsSchemaVersion)
         let skill = try #require(apiSkill(id: "get-filings"))
