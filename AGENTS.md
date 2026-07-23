@@ -13,4 +13,6 @@
   `curl -s http://127.0.0.1:3000/healthz` /
   `curl -s "http://127.0.0.1:3000/v1/companies?q=<社名>"`。
   本番機械アクセスは Access Service Token（`docs/api-auth.md` / `docs/deploy.md`）。
-- DB 統合（`PostgresIntegrationTests`）や EDINET/LLM を伴うスモークテストは、それぞれ `BLT_TEST_POSTGRES_URL` / `BLT_EDINET_API_KEY`（実鍵）/ `XAI_API_KEY` 未設定時は自動 SKIP される（`swift test` は鍵なしでも緑になる）。
+- DB 統合（`PostgresIntegrationTests`）や EDINET/LLM を伴うスモークテストは、それぞれ `BLT_TEST_POSTGRES_URL` / `BLT_EDINET_API_KEY`（実鍵）/ `XAI_API_KEY` 未設定時は自動 SKIP される（`swift test` は鍵なしでも緑になる）。`PostgresIntegrationTests` は使い捨ての検証用 Postgres（`BLT_TEST_POSTGRES_URL`）を前提とし、本番 `DATABASE_URL` とは別物。
+- **`DATABASE_URL`（Secrets 経由）は書き込み検証用の使い捨て Neon ブランチを指す想定**（本番 `api.sollahiro.com` の DB とは隔離。値は運用で変わりうる）。使い捨てブランチである限り `blt-server sync` / `ingest` / `master-data-upload` をこのブランチへ実行して問題ない（本番には影響しない）。read 系（financials・filings 等）と起動時 `autoMigrate` はもちろん安全。live EDINET 経路だけを確認したいなら書き込みを伴わない `swift run TickerDev summarize <code>`（in-process 解析）でも良い。**もし `DATABASE_URL` が本番を指す設定になっている場合は、書き込み系コマンドは本番を汚すため実行しないこと。**
+  - **新規/空の Neon ブランチでハマる `autoMigrate` の注意点**: テーブルは存在するのに `_fluent_migrations` が空（過去のスキーマ痕跡が残った空ブランチ等）だと、起動時 `autoMigrate` が `CREATE TABLE ... relation "edinet_documents" already exists`（SQLSTATE 42P07）で失敗し、5 回リトライ後にサーバーが終了する。データが無い（空）ことを確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'` で作り直せば、次回起動時に `autoMigrate` がテーブル作成とマイグレーション記録をやり直して正常起動する（データが入っている DB では絶対に実行しないこと）。
