@@ -24,11 +24,12 @@
 バージョン更新を依頼されたら、以下のステップをすべて実行すること。
 
 0. **バンプは機能コミットとは分離し、後続の独立コミットとして行う**
-1. **リリース対象のコミットを main へプッシュし、CI（macOS + Linux）がグリーンであることを確認する**
+1. **対象コミットを main へプッシュし、CI（macOS + Linux）がグリーンであることを確認する**
    - ローカルの `swift test` 合格だけでタグを切らない。CI のツールチェーンはローカルより古く、ローカルで通るコードが CI で落ちることがある（実例: swift-testing マクロと SwiftSoup の `Comment` 型衝突で v26.6.1/26.6.2 を破棄）
+   - `blt-server` の本番反映は main push → CI 成功 → `.github/workflows/deploy.yml`（デプロイ関連パスに差分がある場合）。**`v*` タグではデプロイも成果物生成も走らない**
 2. `Sources/BlueTicker/Constants/Version.swift` の `blueTickerVersion` を更新する
 3. バンプコミットを作成する（`chore: bump version to YY.M.Micro`）
-4. タグを作成する（`git tag vYY.M.Micro`）
+4. タグを作成する（`git tag vYY.M.Micro`）— Git 上の版印のみ（Homebrew / 配布バイナリ用ではない）
 5. コミットとタグをリモートへプッシュする
 
 ```bash
@@ -37,7 +38,7 @@ git push origin vYY.M.Micro
 ```
 
 - `git push origin main` ではタグは送られない。**タグは必ず `git push origin <tag>` で明示的にプッシュする**
-- `blueTickerVersion` は MCP 表示・ローカル derived キャッシュ無効化などに使う。**Homebrew / 配布 `ticker` バイナリの release パイプラインは廃止済み**（`blt-server` は Docker / Fly の `deploy.yml`）
+- `blueTickerVersion` は MCP 表示・ローカル derived キャッシュ無効化などに使う。**Homebrew / 配布 `ticker` の release パイプライン（旧 `release.yml`）は廃止済み**
 - タグは軽量タグ（annotated 不要）で統一
 - **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
 - タグ後に間違いを見つけた場合もタグを削除せず、バージョンを上げて新タグを切ること

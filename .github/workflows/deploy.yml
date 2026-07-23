@@ -1,10 +1,12 @@
 name: Deploy
 
+# blt-server の唯一の出荷経路（配布 ticker / Homebrew の tag release は廃止済み）。
 # CI（テスト）成功後にのみデプロイする。push 直結だとテストが落ちるコミットでも
 # Docker ビルドさえ通れば本番へ出てしまうため、workflow_run で CI をゲートにする。
 # workflow_run はパスフィルタ非対応のため、「前回成功した Deploy run の head_sha からの
 # 差分にデプロイ関連パスが含まれるか」をジョブ内で判定する（スキップで終わった成功 run も
 # 基準にしてよい: その run 自身が「基準〜その時点に関連差分なし」を検証済みのため）。
+# `v*` タグ push では起動しない（旧 release.yml 相当の Homebrew 成果物は作らない）。
 on:
   workflow_run:
     workflows: [CI]

@@ -46,14 +46,27 @@ fly ssh console -C "/app/blt-server ingest --limit 50"
 
 ヘルスチェック・HTTPS・証明書は `fly.toml` と Fly が処理する。独自ドメインは `fly certs add <domain>`。
 
+### GitHub Actions のワークフロー
+
+| ワークフロー | 役割 |
+|---|---|
+| `ci.yml` | macOS / Linux の `swift test`、`Package.swift` の product が `blt-server` のみであることのガード、`fly.toml` serviceless 検証（`repo-invariants`） |
+| `deploy.yml` | CI 成功後の Fly 自動デプロイ（`blt-server` の唯一の出荷経路。`v*` タグでは起動しない） |
+| `edge-security-smoke.yml` | 本番 Access / serviceless の外形監視 |
+
+旧 `release.yml`（配布 `ticker` の codesign・Homebrew Formula 更新・GitHub Release）は削除済み。
+
 ### GitHub Actions の repo secrets
 
 CI から使う secrets（`fly secrets` とは別物。`gh secret set` で登録する）。
 
 | secret | 役割 | 使用箇所 |
 |---|---|---|
+| `BLT_EDINET_API_KEY` | macOS CI のスモークテストが不足 XBRL を EDINET から取得する鍵。未設定（fork PR 等）では該当テストが SKIP | `.github/workflows/ci.yml`（`swift-macos`） |
 | `FLY_API_TOKEN` | `flyctl deploy` の認証（`fly tokens create deploy` で発行したデプロイ専用トークンを推奨） | `.github/workflows/deploy.yml`（main の CI 成功後の自動デプロイ） |
-| `BLT_API_DOMAIN` | 外形監視が無認証アクセスを試す本番ホスト名（現在 `api.sollahiro.com`。値自体は CLI のビルド時既定値として上記「環境変数」節や `blt-server-roadmap.md` に既出で秘匿情報ではない）。secret にするのは値を隠すためではなく、ホスト切り替え時に secret 更新だけで済み、ワークフロー本体の変更が要らないようにするため | `.github/workflows/edge-security-smoke.yml`（Cloudflare Access 生存確認） |
+| `BLT_API_DOMAIN` | 外形監視が無認証アクセスを試す本番ホスト名（現在 `api.sollahiro.com`。値自体は公開ホスト名で秘匿情報ではない）。secret にするのはホスト切り替え時に secret 更新だけで済み、ワークフロー本体の変更が要らないようにするため | `.github/workflows/edge-security-smoke.yml`（Cloudflare Access 生存確認） |
+
+配布 CLI 廃止後に不要な旧 release 用 secrets（残っていれば削除してよい）: `DEVID_CERT_P12_BASE64` / `DEVID_CERT_PASSWORD` / `KEYCHAIN_PASSWORD` / `CODESIGN_IDENTITY` / `HOMEBREW_TAP_TOKEN`。
 
 ## self-host（Docker）
 

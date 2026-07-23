@@ -1,7 +1,7 @@
 name: Edge Security Smoke
 
 # 方式A（Cloudflare Access・エッジ信頼）の3点セット（Tunnel 経由限定 + 公開ポート閉鎖 +
-# Access ポリシー）が本番で実際に生きているかを外形監視する。fly-toml-guard（ci.yml）は
+# Access ポリシー）が本番で実際に生きているかを外形監視する。repo-invariants（ci.yml）は
 # リポジトリのファイル内容しか証明できず、`fly deploy -c 別ファイル` や Machines API 直変更
 # はすり抜けるため、実体を見るこちらが必要（docs/deploy.md「Cloudflare Access」）。
 # 失敗時は GitHub 標準の workflow failure メール通知で足りる（追加のアラート基盤は導入しない）。
