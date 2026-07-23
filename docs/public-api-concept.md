@@ -1,51 +1,69 @@
-# REST API の公開 API 化構想
+# REST API 本線化と公開 API 化構想
 
-現時点の判断: **不要（優先度低）**。今後の方向性の一つとして、判断根拠と再検討時の着手順を残す。
+## 現時点の判断（2026-07-23）
 
-## 「公開API化」の定義
+| 段階 | 到達点 | 状態 |
+|---|---|---|
+| **A（いま）** | 自社向けに REST を契約の正・主クライアント面にする。配布 `ticker` は段階廃止 | **着手（方針固定）** |
+| **B（ゆくゆく）** | 素性を知らない第三者が組み込める公開 API | 未着手。A の契約・認証土台の上で再開 |
 
-信頼済みの既知クライアント（自社 `ticker` CLI・自社 iOS アプリ・Claude 向け MCP）だけが使う内部APIから、素性を知らない第三者が自分のアプリ/サービスに組み込んで使えるAPIへ移行すること。3軸に分解できる。
+programmatic 認証の具体方式（origin 発行 APIキー / Cloudflare Access Service Token 再導入 / 他）は **未決**。方式選定は次段。
+
+## 「公開API化」（段階 B）の定義
+
+信頼済みの既知クライアントだけが使う内部APIから、素性が不明な第三者が自分のアプリ/サービスに組み込んで使えるAPIへ移行すること。3軸に分解できる。
 
 | 軸 | 内容 |
 |---|---|
-| 認証の主体転換 | 「人間が都度SSOログインする」前提から「開発者が自分のアプリに組み込める、機械的に発行・失効できる鍵/トークン」前提へ |
+| 認証の主体転換 | 「人間が都度SSOログインする」前提に加え、「開発者が自分のアプリに組み込める、機械的に発行・失効できる鍵/トークン」を用意する |
 | 契約の安定化 | 実装都合（`cache_version` 等）を漏らさず、後方互換を保つ「約束」として固定。breaking change時の扱い（バージョン番号・deprecation・移行期間）を明文化 |
 | 利用制御 | 不特定多数からの濫用・過負荷を防ぐレート制限・クォータ |
 
-## 現状の実態（2026-07-17 コード調査）
+段階 A では主に「契約の安定化」とクライアント面の整理を進め、認証・利用制御の本実装は方式決定後。
 
-`docs/blt-server-roadmap.md` の TODO 記述（「スキーマ安定化・レート制御」）は実態とややズレがあった。
+## クライアント面の方針
 
-| 項目 | 実態 | 根拠 |
-|---|---|---|
-| 認証 | Cloudflare Access の**人間ブラウザSSOログインのみ**。`cloudflared` バイナリのローカル実行が前提。Service Token / Bearer 認証は v26.7.2 で全面廃止済み。**第三者アプリから叩けるprogrammatic認証手段が皆無** | `Sources/BlueTicker/Infrastructure/CloudflaredAccess.swift`、memory `project_service_token_removal.md` |
-| レート制御 | 独自実装ゼロ。Cloudflare Free プランの固定値のみに依存 | `Sources/BltServerCore/` 内に rate limit 系ミドルウェア0件（grep確認） |
-| スキーマバージョニング | `schema_version` フィールドは実装済み。足りないのは互換保証・非互換変更時の運用ポリシーの明文化のみ | `Sources/BlueTicker/Models/FinancialsContract.swift` / `HalfFinancialsContract.swift` |
-| CORS | 未設定。ブラウザからの他オリジン呼び出しは現状不可 | `Sources/BltServerCore/Routes.swift`（`BltErrorMiddleware` のみ登録） |
-| API ドキュメント | 外部開発者向け OpenAPI / リファレンスは存在しない | `docs/` は社内向けのみ |
-| エラー契約 | `{"error":...,"status":N}` に統一済み。公開品質として問題なし | 同上 |
+| 面 | 役割 |
+|---|---|
+| **REST `/v1`** | 契約の正。自社クライアント（将来の iOS 等）・段階 B の第三者向けの本線 |
+| **MCP `POST /`** | REST を写す薄い追従面。プロトコル自体は一過性とみなす。新機能は REST 先・MCP は写経 |
+| **配布 `ticker`** | 段階廃止対象（Homebrew / release）。`TickerDev` と `blt-server` 運用 CLI（sync/ingest 等）は残す |
+| **Cloudflare Access SSO** | 人間向けブラウザ認証として維持。リモート MCP（Managed OAuth）もブラウザで Access を通る現状は想定内 |
 
-最も手前でブロックしているのは認証軸（programmatic 認証の不在）であり、ロードマップの記述はこれに触れていなかった。
+## 現状の実態（認証・制御・契約）
 
-## 現時点で不要と判断する理由
+| 項目 | 実態 |
+|---|---|
+| 認証 | Cloudflare Access の人間ブラウザ SSO / MCP Managed OAuth。**機械向け programmatic 認証は未整備**（Service Token / Bearer は v26.7.2 で廃止済み） |
+| レート制御 | 独自実装ゼロ。Cloudflare Free のゾーン制限のみ |
+| スキーマバージョニング | 応答の `schema_version` は実装済み。足りないのは互換・非互換変更時の運用ポリシー明文化 |
+| CORS | 未設定 |
+| API ドキュメント | 外部向け OpenAPI / リファレンスなし（`docs/` は運営・開発向け） |
+| エラー契約 | `{"error":...,"status":N}` に統一済み |
 
-1. **需要が実在しない** — 想定クライアントは自分自身（`ticker` CLI・iOS・MCP）のみで、外部第三者からの要求は出ていない
-2. **土台が未成熟** — Stage 3 は512MB制約で ingest 停止中（issue #22）、Stage 4/4-half/5 のバックフィルも進行中、ストレージ強化方針も未決定。この段階で不特定多数に開放すると、まだ枯れていないバックエンド（EDINET取得・Neon）が濫用・過負荷に晒されるリスクだけが先に立つ
+## 段階 A の着手順（暫定）
 
-先に着手すべきは issue #22（ストレージ方式決定）とバックフィル完了。
+方式未決の項目は選定後に実装へ落とす。
 
-## 再検討が必要になったときの着手順
+1. ~~**方針ドキュメント固定**（本ファイル・roadmap・architecture）~~
+2. **スキーマ互換ポリシーの明文化**（`schema_version` 運用。実装済みのため文書化が主）
+3. **programmatic 認証の方式選定 → 実装**（未決。選定時にユーザー確認）
+4. **配布 `ticker` の deprecation → 配布停止 → `CLI/` 削除**（完了条件は認証または代替導線の用意と紐づける）
+5. （必要なら）内部向け OpenAPI 下書き — 段階 B の外部公開ドキュメントの下地
 
-需要が具体化した時点で、以下の順で着手する（現状把握が前提の暫定順）。
+## 段階 B で追加する着手順（暫定）
 
-1. **programmatic 認証の追加**（APIキー or OAuth client credentials）— 一番手前のブロッカー
-2. **レート制御の実装**
-3. **CORS**（ブラウザ経由の第三者利用を想定するなら）
-4. **外部向け API ドキュメント**（OpenAPI 等）
-5. **スキーマ互換ポリシーの明文化**（`schema_version` の運用ルール。実装済みのため文書化のみ）
+1. レート制御・クォータ
+2. CORS（ブラウザ経由の第三者利用を想定するなら）
+3. 外部向け API ドキュメント（OpenAPI 等）
+4. 第三者向け鍵の発行・失効・サポート手順
+
+段階 B を急がない理由（変更なし）: バックフィル・ストレージ（#22）など土台が未成熟なうちに不特定多数へ開放すると、濫用・過負荷リスクが先に立つ。
 
 ## 関連
 
-- `docs/blt-server-roadmap.md`「将来」TODO
+- `docs/blt-server-roadmap.md`「クライアント面」「将来」TODO
+- `docs/architecture.md`
+- `docs/feature-tiers.md`
 - `Sources/BlueTicker/Infrastructure/CloudflaredAccess.swift`
 - `Sources/BltServerCore/Routes.swift`

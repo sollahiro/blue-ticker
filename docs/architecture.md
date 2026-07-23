@@ -12,9 +12,11 @@ BLUE TICKER の全体構成。現在地のスナップショットであり、�
 | **remote (self-host)** | blt-server | 同一マシン | 基盤実装済み |
 | **remote (cloud)** | blt-server | Fly.io (nrt) + Neon | **本番** |
 
-> **方針（2026-06-28 確定・2026-07-16 実施）**: ユーザー向けは remote（cloud）へ集約済み。**`ticker` からローカル分析経路（`backend=local` 設定）を撤去**し、EDINET 直叩きロジックは `Sources/BlueTicker/DevCLI/`（`BlueTickerCore` 内・internal）へ移設、唯一の public facade `DevCLIEntry`（`Server/BltServerFacade.swift` と同型のナロー facade）経由で `TickerDev` ターゲットから呼ぶ。完了記録は `blt-server-roadmap.md`「ローカル CLI 廃止ゲート」。到達点「Blue Ticker はサーバーで動き、CLI / GUI / MCP はそれを操作するクライアント」に到達。
+> **方針（2026-06-28 確定・2026-07-16 実施）**: ユーザー向けは remote（cloud）へ集約済み。**`ticker` からローカル分析経路（`backend=local` 設定）を撤去**し、EDINET 直叩きロジックは `Sources/BlueTicker/DevCLI/`（`BlueTickerCore` 内・internal）へ移設、唯一の public facade `DevCLIEntry`（`Server/BltServerFacade.swift` と同型のナロー facade）経由で `TickerDev` ターゲットから呼ぶ。完了記録は `blt-server-roadmap.md`「ローカル CLI 廃止ゲート」。
 >
-> **既定値**: `server-url`（既定 `Api.defaultRemoteServerURL`）。新規は `ticker login`（Cloudflare Access SSO、`deploy.md` 参照）だけで使い始められる。別サーバーは `ticker config set --server-url <url>` で上書き。
+> **クライアント面（2026-07-23）**: **REST `/v1` が契約の正**。MCP はそれを写す追従面（一過性とみなす）。配布 `ticker` は段階廃止（`TickerDev`・`blt-server` 運用 CLI は残す）。Access SSO は人間向けに維持。自社向け本線化（段階 A）→ 第三者公開（段階 B）は `docs/public-api-concept.md` / `docs/blt-server-roadmap.md`。
+>
+> **既定値（配布 `ticker` 存続中）**: `server-url`（既定 `Api.defaultRemoteServerURL`）。`ticker login`（Cloudflare Access SSO、`deploy.md` 参照）で開始。別サーバーは `ticker config set --server-url <url>` で上書き。
 
 ## ターゲット構成と依存方向
 

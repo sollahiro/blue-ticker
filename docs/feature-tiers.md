@@ -1,6 +1,6 @@
 # 機能別提供価値と課金方針（構想）
 
-クライアント種別（Remote CLI / MCP 等）を問わず、機能単位で提供価値と将来の課金方針を整理する。ここでの CLI は Remote CLI（サーバー API を叩くシンクライアント）を指す。ローカル完結の開発用 CLI は対象外（`docs/architecture.md` 参照）。
+クライアント種別（REST / MCP 等）を問わず、機能単位で提供価値と将来の課金方針を整理する。契約の正は REST。MCP は追従面。配布 Remote CLI（`ticker`）は段階廃止方針（`docs/public-api-concept.md`）。ローカル完結の開発用 CLI は対象外（`docs/architecture.md` 参照）。
 
 | 機能 | 課金方針（構想・gateway 実装後に有効化） | 実装状況 | 提供価値 |
 |---|---|---|---|
