@@ -1,5 +1,9 @@
 name: CI
 
+# 配布 `ticker` / Homebrew release は廃止済み（旧 release.yml 削除）。
+# 検証対象は blt-server（唯一の product）と TickerDev を含むテストスイート、
+# および fly.toml の serviceless 不変条件。デプロイは deploy.yml（CI 成功後）。
+
 on:
   push:
     branches: [main]
@@ -65,13 +69,15 @@ jobs:
         # 詳細: docs/blt-server-roadmap.md「Linux ビルドの既知の問題」
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
-  fly-toml-guard:
-    # 本番認証（方式A・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
+  repo-invariants:
+    # 方式A（Cloudflare Access・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
     # 3点セットで初めて成立する（docs/deploy.md「Cloudflare Access」）。fly.toml に
     # [http_service] / [[services]]（＝公開 LB・ポート）が復活すると、この前提が崩れ
     # origin が無検証で素通りになる。TOML としてパースして判定する（コメント中の文字列
     # 一致による誤検知を避けるため。fly.toml 自身の警告コメントが `[http_service]` という
     # 文字列を含む）。
+    # あわせて Package.swift の products が blt-server のみであることを検証する
+    #（配布 ticker の再追加を防ぐ。swift:6.1 コンテナに依存しない ubuntu ジョブへ置く）。
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +85,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Package products が blt-server のみであること
+        run: |
+          python3 - <<'PYEOF'
+          import pathlib
+          import re
+          import sys
+
+          text = pathlib.Path("Package.swift").read_text()
+          # products: [ ... ] をネスト深さで切り出す（targets: ["..."] の ] で途切れないようにする）
+          m = re.search(r"products:\s*\[", text)
+          if not m:
+              print("Package.swift に products 配列が見つかりません", file=sys.stderr)
+              sys.exit(1)
+          start = m.end()
+          depth = 1
+          i = start
+          while i < len(text) and depth:
+              ch = text[i]
+              if ch == "[":
+                  depth += 1
+              elif ch == "]":
+                  depth -= 1
+              i += 1
+          if depth:
+              print("Package.swift の products 配列が閉じられていません", file=sys.stderr)
+              sys.exit(1)
+          block = text[start : i - 1]
+          # product 宣言の name: のみ拾う（targets 配列内のターゲット名は除外）
+          names = re.findall(
+              r"\.(?:executable|library|plugin)\(\s*name:\s*\"([^\"]+)\"",
+              block,
+          )
+          if names != ["blt-server"]:
+              print(
+                  f"expected products=['blt-server'], got {names}. "
+                  "配布 ticker は廃止済みです（docs/architecture.md）。",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print("OK: Package.swift products =", names)
+          PYEOF
 
       - name: fly.toml が serviceless を維持しているか検証
         run: |
