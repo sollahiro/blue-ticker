@@ -94,13 +94,30 @@ jobs:
           import sys
 
           text = pathlib.Path("Package.swift").read_text()
-          # products: [ ... ], の先頭ブロックのみを対象にする（targets 内の name を拾わない）
-          m = re.search(r"products:\s*\[(.*?)\]", text, re.S)
+          # products: [ ... ] をネスト深さで切り出す（targets: ["..."] の ] で途切れないようにする）
+          m = re.search(r"products:\s*\[", text)
           if not m:
               print("Package.swift に products 配列が見つかりません", file=sys.stderr)
               sys.exit(1)
-          block = m.group(1)
-          names = re.findall(r'name:\s*"([^"]+)"', block)
+          start = m.end()
+          depth = 1
+          i = start
+          while i < len(text) and depth:
+              ch = text[i]
+              if ch == "[":
+                  depth += 1
+              elif ch == "]":
+                  depth -= 1
+              i += 1
+          if depth:
+              print("Package.swift の products 配列が閉じられていません", file=sys.stderr)
+              sys.exit(1)
+          block = text[start : i - 1]
+          # product 宣言の name: のみ拾う（targets 配列内のターゲット名は除外）
+          names = re.findall(
+              r"\.(?:executable|library|plugin)\(\s*name:\s*\"([^\"]+)\"",
+              block,
+          )
           if names != ["blt-server"]:
               print(
                   f"expected products=['blt-server'], got {names}. "
