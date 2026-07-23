@@ -158,7 +158,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] ストレージ強化の方式選定（#22 本丸）
 - [ ] REST API の第三者公開（段階 B）— 段階 A のあと。レート制限・外部ドキュメント等。`docs/public-api-concept.md`
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
-- [ ] Cloudflare Monetize Gateway 連携検討（課金境界は REST 本線に合わせる想定。情報未公開のため詳細設計は保留）
+- [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。**未着手**: geography 軸の ingest 配線、オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103）、野村の金融費用控除後分母取り違え（issue #105）。構想と残タスクは `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
