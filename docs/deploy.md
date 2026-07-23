@@ -228,6 +228,7 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタ・Curs
 
 - 置き場所: グローバル `~/.cursor/mcp.json`、またはプロジェクト `.cursor/mcp.json`
 - 保存後に Cursor を Reload。Customize → MCPs でサーバーを有効化し、求められたらブラウザで OAuth 認可する
+- **ツール一覧は数十秒〜数分遅れて埋まることがある**（OAuth 直後に 0 件でも、その後 `Found N tools` になれば正常）。クライアント往復が遅い一方で origin の `http_access.duration_ms` は短いことが多く、ボトルネックは Cloudflare Tunnel / Access 側（`operations.md` のレイテンシ切り分け参照）。焦って再追加するとトークン状態が乱れやすい
 - 失敗時: Output → **MCP Logs**。DCR が `redirect_uri is not allowed` なら上記 5 の Cursor URI をダッシュボードへ追加して再試行
 - **暫定回避（OAuth を使わない）**: `api.<domain>` に Service Auth ポリシーがあるなら、同ホストの `POST /` に Service Token ヘッダーを付けて接続できる（本線は `mcp.*` OAuth。面の住み分けは `docs/api-auth.md`）
 

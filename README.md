@@ -65,7 +65,7 @@ Claude Desktop / Cursor などのカスタムコネクタに **`https://mcp.soll
 }
 ```
 
-保存後に Cursor を再読み込みし、Customize → MCPs から OAuth 認可を完了します。接続に失敗する場合は Cloudflare 側の **許可 redirect URI** に Cursor 用コールバックが入っているか確認してください（手順・切り分けは [`docs/deploy.md`](docs/deploy.md)「MCP（Managed OAuth）」）。
+保存後に Cursor を再読み込みし、Customize → MCPs から OAuth 認可を完了します。認可直後はツール一覧が空に見えることがありますが、数十秒〜数分で埋まることが多いです。接続に失敗する場合は Cloudflare 側の **許可 redirect URI** に Cursor 用コールバック（特に `cursor://anysphere.cursor-mcp/oauth/callback`）が入っているか確認してください（手順・切り分けは [`docs/deploy.md`](docs/deploy.md)「MCP（Managed OAuth）」）。
 
 ## ドキュメント
 
