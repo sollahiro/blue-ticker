@@ -600,8 +600,14 @@ enum Xbrl {
 
     // 収益認識関係（顧客との契約から生じる収益を分解した情報）。報告セグメントが地域別の会社
     // （オークマ型）で、本当の事業別（製品別）データがここにしかないケースの追加ソース。
+    //
+    // `NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock`（IFRS「売上収益」注記）は
+    // ブリヂストン・デンソー型: J-GAAP の収益認識関係が「注記を省略」の stub で、製品・事業別の
+    // 分解表が IFRS 売上収益注記側にだけあるケース用（実データ検証 2026-07-24）。
+    // 見出しは抽出側で `収益認識関係` に揃えて RevenueRecognitionLLMNormalizer へ振る。
     static let revenueRecognitionTextBlockTags: Set<String> = [
         "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
+        "NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock",
     ]
 
     // MARK: - 事業別・地域別内訳の正規化（Stage 6, docs/breakdown-normalization-concept.md）
@@ -712,6 +718,10 @@ enum Xbrl {
     static let segmentOtherBusinessMemberNames: Set<String> = [
         "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
         "OtherReportableSegmentsMember",
+        // ブリヂストン等: OperatingSegmentsAxis の「その他」側ドメイン member。売上ではなく
+        // NumberOfEmployees 等にだけ付くことが多いが、軸判定候補に残すと地域別報告セグメントの
+        // geography 判定を壊す（実データ検証: S100XRPR、2026-07-24）。
+        "OtherOperatingSegmentsAxisMember",
         // マツダ等: 事業区分は単一区分（自動車関連事業）が連結売上高の90%超のため記載省略され、
         // 報告セグメントは地域別（Japan/NorthAmerica/Europe/Other）のみになる。この「Other」は
         // 「その他地域」であって「その他事業」ではなく、地理キーワード一致もしないため

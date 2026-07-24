@@ -136,16 +136,26 @@ enum BreakdownExtractor {
         )
         let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
 
-        // オークマ型: 報告セグメントが地域別 → 収益認識の製品別へ
+        // オークマ型 / ブリヂストン・デンソー型: 報告セグメントが地域別 → 収益認識（または
+        // IFRS 売上収益注記）の事業・製品別へ。ただし「製商品の販売 / 知的財産権収入」だけの
+        // 収益種類分解（住友ファーマ型）は製品別を取り逃すので swap せず、セグメント注記の
+        // tables を残して後段 LLM に委ねる（実データ検証 2026-07-24）。
         if result.method == "xbrl_facts", isGeographyAxis(result.facts) {
             let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
-            return revenueRecognition.method == "html_table" ? revenueRecognition : result
+            if revenueRecognition.method == "html_table",
+                !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
+            {
+                return revenueRecognition
+            }
+            return result
         }
 
         // 東京エレクトロン型: 単一セグメントで報告セグメント開示省略 → 収益認識の製品別へ
         if result.method == "not_found" {
             let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
-            if revenueRecognition.method == "html_table" {
+            if revenueRecognition.method == "html_table",
+                !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
+            {
                 return revenueRecognition
             }
         }
@@ -193,8 +203,10 @@ enum BreakdownExtractor {
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
     }
 
-    /// 連結財務諸表注記（収益認識関係）から「顧客との契約から生じる収益を分解した情報」を抽出する。
-    /// オークマ型（報告セグメントが地域別）の会社で、本当の事業別（製品別）データの実在ソース。
+    /// 連結財務諸表注記（収益認識関係 / IFRS 売上収益）から「顧客との契約から生じる収益を
+    /// 分解した情報」を抽出する。オークマ型（J-GAAP 収益認識関係）とブリヂストン・デンソー型
+    /// （IFRS 売上収益注記）の両方を `revenueRecognitionTextBlockTags` で拾い、見出しは
+    /// `revenueRecognitionHeading` に揃えて後段の LLM 振り分けを共通化する。
     static func extractRevenueRecognitionInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -206,13 +218,40 @@ enum BreakdownExtractor {
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: [])
     }
 
+    /// 収益の「種類」（製商品の販売 / 知的財産権収入 等）だけに分解した表か。
+    /// 住友ファーマの IFRS 売上収益注記はこの形で、製品別（ラツーダ等）はセグメント注記の
+    /// 「製品及びサービスごとの情報」側にある。種類分解へ swap すると製品別を取り逃す。
+    /// 契約負債残高など無関係な表が混ざっていても、連結 markdown に収益種類マーカーがあれば
+    /// 種類分解とみなし、事業・製品の粒度ヒントが併存すれば種類分解ではないとみなす。
+    static func isRevenueTypeOnlyDecomposition(_ tables: [BreakdownTable]) -> Bool {
+        guard !tables.isEmpty else { return false }
+        let joined = tables.map(\.markdown).joined(separator: "\n")
+        let revenueTypeMarkers = [
+            "製商品の販売", "物品の販売", "知的財産権収入", "知的財産収益", "ライセンス収入",
+        ]
+        guard revenueTypeMarkers.contains(where: { joined.contains($0) }) else { return false }
+        // 事業・製品の具体名が併記されていれば種類分解ではない（ブリヂストン: タイヤ、デンソー: サーマル…）
+        let businessHints = [
+            "タイヤ", "サーマル", "パワトレイン", "モビリティ", "エレクトリ", "ソリューション",
+            "化工品", "多角化", "スペシャリティ",
+        ]
+        if businessHints.contains(where: { joined.contains($0) }) { return false }
+        return true
+    }
+
     /// segment 行（小計・調整行を除く）の member ラベルが全て地域名キーワードに一致するか。
     /// `BreakdownNormalizer.classifyAxis` と同じ「全一致 → geography」判定だが、数値による
     /// 小計判定（consolidatedSales が要る2次判定）は使わず、標準タクソノミの小計・調整
     /// member 名（1次判定）のみで segment 行を絞る。raw 抽出層では sales を持たないため。
+    ///
+    /// 軸判定に使う facts は売上/銀行粗利/保険収益の認識タグに限定する。`NumberOfEmployees` 等の
+    /// 非金額ファクトに付く `OtherOperatingSegmentsAxisMember` が混ざると、報告セグメント自体は
+    /// 地域別なのに geography 判定が壊れ、IFRS 売上収益注記への swap が起きなくなる
+    /// （ブリヂストン S100XRPR 実データ検証 2026-07-24）。
     private static func isGeographyAxis(_ facts: [BreakdownFact]) -> Bool {
         let segmentMembers = facts.compactMap { fact -> String? in
-            guard let member = primaryMember(fact.dimensions),
+            guard factsContainRecognizedAmountTag([fact]),
+                  let member = primaryMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
                   !Xbrl.segmentReconcilingMemberNames.contains(member),
                   !Xbrl.segmentOtherBusinessMemberNames.contains(member)
@@ -390,7 +429,13 @@ enum BreakdownExtractor {
     }
 
     /// HTML内の全 <table> を Markdown 化して返す。
-    static func allTablesFromHtml(_ html: String, defaultHeading: String) -> [BreakdownTable] {
+    /// `includeFootnotes`: 表の外にある「(注1) …」形式の脚注段落も同じ見出しの末尾候補に残す。
+    /// 収益認識/IFRS 売上収益向け（ブリヂストン: タイヤ(注1)＝ソリューション、その他(注2)＝化工品・多角化。
+    /// 表セルには注番号しか無く細目本文は段落側。実データ検証 2026-07-24）。
+    /// セグメント情報の golden parity を壊さないよう、既定は false。
+    static func allTablesFromHtml(
+        _ html: String, defaultHeading: String, includeFootnotes: Bool = false
+    ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
         var tables: [BreakdownTable] = []
@@ -402,7 +447,37 @@ enum BreakdownExtractor {
             tables.append(BreakdownTable(heading: defaultHeading, markdown: md, period: period))
         }
         applyPeriodOrdering(&tables)
+        if includeFootnotes, let footnotes = footnoteMarkdown(from: soup) {
+            tables.append(BreakdownTable(heading: defaultHeading, markdown: footnotes, period: nil))
+        }
         return tables
+    }
+
+    /// 注記本文（表の外の `(注１) …` / `（注2）…` 段落）を箇条書き Markdown にする。
+    /// 行ラベル側の「タイヤ(注１)」や、オークマ型の会計脚注「(注)１．連結会社間の…」は対象外。
+    /// 製品・事業の細目説明（「…には、…事業が含まれております」）だけを拾う。
+    static func footnoteMarkdown(from soup: Element) -> String? {
+        guard let paragraphs = try? soup.select("p") else { return nil }
+        var lines: [String] = []
+        var seen = Set<String>()
+        for p in paragraphs {
+            let text = bs4Text(p, strip: true)
+            guard text.unicodeScalars.count <= 400 else { continue }
+            // `(注１)` / `（注2）` のように注番号が括弧内にある行だけ（`(注)１．` は除外）
+            let startsWithNumberedNote =
+                text.hasPrefix("(注1)") || text.hasPrefix("(注2)") || text.hasPrefix("(注3)")
+                || text.hasPrefix("（注1）") || text.hasPrefix("（注2）") || text.hasPrefix("（注3）")
+                || text.hasPrefix("(注１)") || text.hasPrefix("(注２)") || text.hasPrefix("(注３)")
+                || text.hasPrefix("（注１）") || text.hasPrefix("（注２）") || text.hasPrefix("（注３）")
+            guard startsWithNumberedNote else { continue }
+            // 細目の定義文だけ（会計上の一般注記を避ける）
+            guard text.contains("には") || text.contains("含まれ") else { continue }
+            if seen.insert(text).inserted {
+                lines.append("- \(text)")
+            }
+        }
+        guard !lines.isEmpty else { return nil }
+        return (["脚注:"] + lines).joined(separator: "\n")
     }
 
     /// 見出しキーワードに続く <table> を Markdown 化して返す。
@@ -490,7 +565,11 @@ enum BreakdownExtractor {
                 guard !block.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       block.content.lowercased().contains("<table") else { continue }
                 if dedicatedTags.contains(block.tag) {
-                    tables.append(contentsOf: allTablesFromHtml(block.content, defaultHeading: dedicatedHeading))
+                    // 収益認識関係だけ脚注段落を候補に含める（セグメント情報の表件数 golden を変えない）
+                    let includeFootnotes = dedicatedHeading == revenueRecognitionHeading
+                    tables.append(contentsOf: allTablesFromHtml(
+                        block.content, defaultHeading: dedicatedHeading, includeFootnotes: includeFootnotes
+                    ))
                 } else if mixedTags.contains(block.tag) {
                     tables.append(contentsOf: keywordTablesFromHtml(
                         block.content,

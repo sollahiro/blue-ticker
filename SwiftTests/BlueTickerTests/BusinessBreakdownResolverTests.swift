@@ -184,7 +184,7 @@ private actor MockChatCompleting: ChatCompleting {
     }
 
     /// swap 対象の収益認識関係注記が見つからず `BreakdownExtractor` 側のフォールバックで
-    /// 元の地域別 xbrl_facts がそのまま返ってきたケース（今回の和解の核心セマンティクス）。
+    /// 元の地域別 xbrl_facts がそのまま返ってきたケース（tables も空）。
     /// axis が geography のままの xbrl_facts は business としては採用せず not_found にする。
     /// 合成 fact（実データ golden には該当書類が無いため）で決定的に検証する。
     @Test func geographyAxisFallbackWithoutSwapIsNotFound() async throws {
@@ -214,6 +214,62 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(source == .notFound)
         #expect(audit == nil)
         #expect(await client.timesCalled() == 0)
+    }
+
+    /// 住友ファーマ型: 報告セグメント facts は geography だが、セグメント注記 tables に製品別表が残る。
+    /// geography snapshot を短絡 discard せず、SegmentInfoLLM へフォールバックする。
+    @Test func geographyAxisWithSegmentTablesFallsBackToSegmentInfoLLM() async throws {
+        let segments = ExtractedBreakdown(
+            method: "xbrl_facts",
+            tables: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                    | 製品 | 前連結会計年度 | 当連結会計年度 |
+                    |---|---|---|
+                    | ラツーダ | 13153 | 13694 |
+                    | ツイミーグ | 7614 | 10581 |
+                    | 合計 | 398832 | 453294 |
+                    """,
+                    period: "当期"
+                ),
+            ],
+            facts: [
+                BreakdownFact(
+                    tag: "RevenueFromExternalCustomersIFRS",
+                    contextRef: "CurrentYearDuration_JapanReportableSegmentMember",
+                    dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentMember"],
+                    value: 92_365_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                BreakdownFact(
+                    tag: "RevenueFromExternalCustomersIFRS",
+                    contextRef: "CurrentYearDuration_NorthAmericaReportableSegmentMember",
+                    dimensions: ["OperatingSegmentsAxis": "NorthAmericaReportableSegmentMember"],
+                    value: 337_923_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+            ]
+        )
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当連結会計年度",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "ラツーダ", "amount": 13_694, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "ツイミーグ", "amount": 10_581, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            "notes": "製品及びサービスごとの情報を採用",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: 453_294_000_000, client: client
+        )
+
+        #expect(source == .segmentInfoLLM)
+        #expect(snapshot?.axis == "business")
+        #expect(await client.timesCalled() == 1)
     }
 
     /// segments が not_found の場合は何も呼ばない。

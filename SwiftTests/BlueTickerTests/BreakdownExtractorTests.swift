@@ -597,6 +597,72 @@ import Foundation
         }
     }
 
+    /// ブリヂストン・デンソー型: J-GAAP 収益認識関係が stub でも、IFRS「売上収益」注記の表を拾う。
+    @Test func revenueRecognitionInfoFromIFRSRevenueTextBlock() {
+        let xml = textBlockXml(
+            tag: "NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock",
+            escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;タイヤ&lt;/td&gt;&lt;td&gt;4137233&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;その他&lt;/td&gt;&lt;td&gt;292863&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables[0].heading == BreakdownExtractor.revenueRecognitionHeading)
+            #expect(result.tables[0].markdown.contains("タイヤ"))
+        }
+    }
+
+    /// 表の外の脚注段落（化工品・多角化等）を収益認識候補の末尾に残す。
+    @Test func revenueRecognitionInfoIncludesFootnoteParagraphs() {
+        let escaped = """
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;タイヤ(注１)&lt;/td&gt;&lt;td&gt;4137233&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;その他(注２)&lt;/td&gt;&lt;td&gt;292863&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        &lt;p&gt;(注１) 「タイヤ」には、当社グループが行っているタイヤ事業及びソリューション事業が含まれております。&lt;/p&gt;
+        &lt;p&gt;(注２) 「その他」には、当社グループが行っている化工品・多角化事業等が含まれております。&lt;/p&gt;
+        """
+        let xml = textBlockXml(
+            tag: "NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock",
+            escapedHtml: escaped.replacingOccurrences(of: "\n", with: "")
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count >= 2)
+            let joined = result.tables.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("ソリューション"))
+            #expect(joined.contains("化工品"))
+            #expect(joined.contains("多角化"))
+        }
+    }
+
+    @Test func revenueTypeOnlyDecompositionDetectsSumitomoLikeTables() {
+        let revenueTypeOnly = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: """
+                | 報告セグメント | 日本 | 北米 | 合計 |
+                |---|---|---|---|
+                | 製商品の販売 | 98011 | 223338 | 368284 |
+                | 知的財産権収入 | 308 | 2064 | 2372 |
+                """,
+                period: "当期"
+            ),
+        ]
+        #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(revenueTypeOnly))
+
+        let businessRows = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: """
+                | 区分 | 連結計 |
+                |---|---|
+                | タイヤ | 4137233 |
+                | その他 | 292863 |
+                """,
+                period: "当期"
+            ),
+        ]
+        #expect(!BreakdownExtractor.isRevenueTypeOnlyDecomposition(businessRows))
+    }
+
     @Test func notFoundWhenNoRevenueRecognitionTextBlock() {
         let xml = XBRLTestSupport.makeXbrlDuration(
             """
@@ -658,8 +724,8 @@ import Foundation
             </xbrli:period>
           </xbrli:context>
           <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
-          <jppfs_cor:NetSales contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">600000</jppfs_cor:NetSales>
-          <jppfs_cor:NetSales contextRef="CurrentYearDuration_AmericasMember" unitRef="JPY" decimals="-6">400000</jppfs_cor:NetSales>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">600000</jppfs_cor:RevenuesFromExternalCustomers>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_AmericasMember" unitRef="JPY" decimals="-6">400000</jppfs_cor:RevenuesFromExternalCustomers>
           \(revenueBlock)
         </xbrli:xbrl>
         """
@@ -675,6 +741,96 @@ import Foundation
             #expect(result.facts.isEmpty)
             let table = try #require(result.tables.first)
             #expect(table.markdown.contains("ＮＣ旋盤"))
+        }
+    }
+
+    /// ブリヂストン型: geography facts + IFRS 売上収益（タイヤ/その他）→ swap。
+    @Test func segmentInfoSwapsToIFRSRevenueWhenAxisIsGeography() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_JapanMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:JapanReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration_AmericasMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:TheAmericasReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearInstant_OtherOperatingSegmentsAxisMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:instant>2024-12-31</xbrli:instant></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:OtherOperatingSegmentsAxisMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <xbrli:unit id="pure"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">600000</jppfs_cor:RevenuesFromExternalCustomers>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_AmericasMember" unitRef="JPY" decimals="-6">400000</jppfs_cor:RevenuesFromExternalCustomers>
+          <!-- 非金額ファクトが軸判定を壊さないこと（ブリヂストン実データ） -->
+          <jpcrp_cor:NumberOfEmployees contextRef="CurrentYearInstant_OtherOperatingSegmentsAxisMember" unitRef="pure" decimals="0">7630</jpcrp_cor:NumberOfEmployees>
+          <jpcrp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;タイヤ&lt;/td&gt;&lt;td&gt;4137233&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;その他&lt;/td&gt;&lt;td&gt;292863&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.first?.markdown.contains("タイヤ") == true)
+        }
+    }
+
+    /// 住友ファーマ型: IFRS 売上収益が収益種類（製商品/知的財産）だけのときは swap しない。
+    @Test func segmentInfoKeepsGeographyWhenIFRSRevenueIsRevenueTypeOnly() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_JapanMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-04-01</xbrli:startDate><xbrli:endDate>2025-03-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:JapanReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration_AsiaMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-04-01</xbrli:startDate><xbrli:endDate>2025-03-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:AsiaReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-04-01</xbrli:startDate><xbrli:endDate>2025-03-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">600000</jppfs_cor:RevenuesFromExternalCustomers>
+          <jppfs_cor:RevenuesFromExternalCustomers contextRef="CurrentYearDuration_AsiaMember" unitRef="JPY" decimals="-6">400000</jppfs_cor:RevenuesFromExternalCustomers>
+          <jpcrp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;製商品の販売&lt;/td&gt;&lt;td&gt;368284&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;知的財産権収入&lt;/td&gt;&lt;td&gt;2372&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "xbrl_facts")
+            #expect(result.facts.count == 2)
         }
     }
 
