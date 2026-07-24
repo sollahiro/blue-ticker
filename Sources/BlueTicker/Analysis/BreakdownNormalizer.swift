@@ -343,10 +343,13 @@ enum BreakdownNormalizer {
     /// 「国内◯◯事業」「海外◯◯事業」という事業区分名や「海外事業」という単独カテゴリは
     /// Domestic/Overseas のみで一致するが、これらは事業軸の一部であって地域軸との真の混在ではない
     /// （sum(segment) ≈ denominator で axis=business の正しさを別途確認済み）。
-    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」のように member ラベルが
-    /// Domestic/Overseas 単体（他の事業語を伴わない）で、かつ他の segment が事業名という
-    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃す。実データでは
-    /// 常に事業区分語との複合ラベルだったため、複合か単体かは判定に使っていない。
+    ///
+    /// 特定地域名（Japan 等）が事業・プロジェクト名に埋め込まれているだけの行
+    /// （例: INPEX `OilAndGasJapanReportableSegmentMember`＝国内O&G）も、除去後に事業語幹が
+    /// 残るなら混在シグナルに使わない（実データ検証 2026-07-24）。
+    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」「JapanMember」のように
+    /// member ラベルが地域語だけ（他の事業語を伴わない）で、かつ他の segment が事業名という
+    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃すことがある。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
@@ -360,10 +363,12 @@ enum BreakdownNormalizer {
         }
         if geoMatches.isEmpty { return ("business", false) }
 
-        let specificGeoMatches = segmentMembers.filter { member in
+        // 裸の特定地域名 member だけを混在シグナルにする（複合事業ラベルは除外）。
+        let bareSpecificGeoMatches = segmentMembers.filter { member in
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
+                && !hasSubstantiveNonGeographyContent(member)
         }
-        return ("business", !specificGeoMatches.isEmpty)
+        return ("business", !bareSpecificGeoMatches.isEmpty)
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
@@ -392,11 +397,14 @@ enum BreakdownNormalizer {
         return true
     }
 
-    /// member 名から Domestic/Overseas と共通の member 接尾辞を除去した後、実質的な語幹が
-    /// 残るか（＝事業名等の修飾を伴う複合ラベルか）を判定する。
+    /// member 名から地域キーワードと共通の member 接尾辞を除去した後、実質的な語幹が
+    /// 残るか（＝事業名・プロジェクト名等の修飾を伴う複合ラベルか）を判定する。
+    /// Domestic/Overseas だけでなく Japan 等の特定地域名も除去する
+    /// （INPEX `OilAndGasJapan…` → `OilAndGas` が残る、実データ検証 2026-07-24）。
     private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
         var stripped = member
-        for keyword in ["Domestic", "Overseas"] {
+        // 長いキーワードから消す（NorthAmerica を America より先に、等）
+        for keyword in Xbrl.segmentGeographyMemberKeywords.sorted(by: { $0.count > $1.count }) {
             stripped = stripped.replacingOccurrences(of: keyword, with: "")
         }
         for suffix in ["ReportableSegmentsMember", "ReportableSegmentMember", "Member"] {

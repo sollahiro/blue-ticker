@@ -244,16 +244,51 @@ import Foundation
         #expect(snap.axis == "geography")
     }
 
-    /// 対照群: 特定地域名（Japan 等）が事業区分名の一部として混在する場合は、
-    /// これまで通り needs_review を立てる（学び11の緩和は Domestic/Overseas 限定）。
-    @Test func specificGeographyNameMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
+    /// 対照群: 特定地域名が事業語を伴わず裸で混在する場合は needs_review を立てる。
+    /// （`JapanBusinessMember` のような複合は INPEX/資生堂型として許容する。）
+    @Test func bareSpecificGeographyMemberMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
         let snap = try #require(Self.snapshot(labelsAndValues: [
             ("FoodsBusinessMember", 40_000_000_000),
             ("ChemicalsBusinessMember", 30_000_000_000),
-            ("JapanBusinessMember", 30_000_000_000),
+            ("JapanReportableSegmentMember", 30_000_000_000),
         ]))
         #expect(snap.axis == "business")
         #expect(snap.needsReview == true)
+    }
+
+    @Test func inpexProjectSegmentsWithEmbeddedJapanDoNotTriggerNeedsReview() throws {
+        // INPEX（1605）実データ検証 2026-07-24: 報告セグメントは
+        // 国内O&G / イクシスプロジェクト / その他プロジェクト（海外O&G）。
+        // OilAndGasJapan に Japan が含まれるが事業・プロジェクト区分であり地域軸との混在ではない。
+        // セグメント利益は ProfitLossAttributableToOwnersOfParentIFRS に載る。
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("RevenueFromExternalCustomersIFRS", "OilAndGasJapanReportableSegmentMember", 192_176_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "IchthysProjectReportableSegmentMember", 315_069_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "OtherProjectsReportableSegmentMember", 1_486_928_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember", 17_176_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "TotalOfReportableSegmentsAndOthersMember", 2_011_351_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "OilAndGasJapanReportableSegmentMember", 13_663_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "IchthysProjectReportableSegmentMember", 248_239_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "OtherProjectsReportableSegmentMember", 165_711_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 2_011_351_000_000))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("axis_ambiguous"))
+        #expect(
+            snap.rows.first { $0.labelRaw == "OilAndGasJapanReportableSegmentMember" }?.profit
+                == 13_663_000_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "IchthysProjectReportableSegmentMember" }?.profit
+                == 248_239_000_000)
     }
 
     @Test func businessTypeCompaniesAxisIsBusiness() throws {
@@ -682,10 +717,11 @@ import Foundation
         #expect(snap.axis == "business")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
-        // 注: 事業区分(セラミック等)と地域区分(米州/アジア・オセアニア/中国/欧州)が同居する
-        // 混在構造のため、axis_ambiguous 自体は別問題として残る（本コミットのスコープ外。
-        // 二重計上の解消のみを検証する）。
-        #expect(snap.warnings.contains("axis_ambiguous"))
+        // 本フィクスチャの米州/アジア等は `…BusinessReportableSegmentsMember`（事業語付き複合）
+        // のため、INPEX と同様に axis_ambiguous は立てない。実データの裸の
+        // `AmericasReportableSegmentMember` 混在は別テストで needs_review を担保する。
+        #expect(!snap.warnings.contains("axis_ambiguous"))
+        #expect(snap.needsReview == false)
     }
 
     @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {

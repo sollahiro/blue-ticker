@@ -666,6 +666,9 @@ enum Xbrl {
         "OperatingProfitLossIFRS",
         "OperatingIncome",
         "ProfitLossBeforeTaxIFRS",
+        // INPEX: セグメント表の「セグメント利益」行が親会社所有者帰属利益タグに載る
+        // （実データ検証 2026-07-24）。通常の営業利益タグより優先度は下（末尾）。
+        "ProfitLossAttributableToOwnersOfParentIFRS",
     ]
 
     /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
