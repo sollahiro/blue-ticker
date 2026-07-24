@@ -99,6 +99,38 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(rr.method == "html_table")
         #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(rr.tables))
     }
+
+    // MARK: - 三菱商事 / あおぞら / 三井住友トラスト（2026-07-24）
+
+    @Test(.enabled(if: cacheAvailable("S100YB25"), "XBRL cache S100YB25 not available"))
+    func mitsubishiExtractsRevenue2BusinessGroups() throws {
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
+        #expect(result.method == "html_table")
+        #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("顧客との契約から認識した収益"))
+        #expect(joined.contains("地球環境") || joined.contains("マテリアル") || joined.contains("金属資源"))
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100YCRO"), "XBRL cache S100YCRO not available"))
+    func aozoraExtractsProductOrServiceOrdinaryRevenue() throws {
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YCRO"))
+        #expect(!result.tables.isEmpty)
+        #expect(result.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("貸出業務"))
+        #expect(joined.contains("経常収益"))
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100YBGM"), "XBRL cache S100YBGM not available"))
+    func sumitomoTrustExtractsSubstantialGrossBusinessProfitBySegment() throws {
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YBGM"))
+        #expect(!result.tables.isEmpty)
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("実質業務粗利益"))
+        #expect(joined.contains("個人") && joined.contains("法人"))
+        #expect(BreakdownExtractor.tablesContainSalesEquivalent(result.tables))
+    }
 }
 
 @Suite struct RealXbrlBreakdownResolverTests {
