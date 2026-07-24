@@ -345,8 +345,11 @@ enum BreakdownNormalizer {
     /// （sum(segment) ≈ denominator で axis=business の正しさを別途確認済み）。
     ///
     /// 特定地域名（Japan 等）が事業・プロジェクト名に埋め込まれているだけの行
-    /// （例: INPEX `OilAndGasJapanReportableSegmentMember`＝国内O&G）も、除去後に事業語幹が
-    /// 残るなら混在シグナルに使わない（実データ検証 2026-07-24）。
+    /// （例: INPEX `OilAndGasJapanReportableSegmentMember`＝国内O&G）も、除去後に**固有の**
+    /// 事業語幹が残るなら混在シグナルに使わない（実データ検証 2026-07-24）。
+    /// ただし `JapanBusinessMember` / `AmericasBusiness…` のように地域名＋汎用の Business
+    /// ラッパだけのラベルは、学び11どおり特定地域名混在として needs_review を立てる
+    /// （INPEX 免除を Business ラッパまで広げない。Sonnet レビュー 2026-07-25）。
     /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」「JapanMember」のように
     /// member ラベルが地域語だけ（他の事業語を伴わない）で、かつ他の segment が事業名という
     /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃すことがある。
@@ -363,7 +366,8 @@ enum BreakdownNormalizer {
         }
         if geoMatches.isEmpty { return ("business", false) }
 
-        // 裸の特定地域名 member だけを混在シグナルにする（複合事業ラベルは除外）。
+        // 裸の特定地域名（＋汎用 Business ラッパのみ）を混在シグナルにする。
+        // OilAndGasJapan 等、固有語幹が残る複合は除外。
         let bareSpecificGeoMatches = segmentMembers.filter { member in
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
                 && !hasSubstantiveNonGeographyContent(member)
@@ -397,10 +401,12 @@ enum BreakdownNormalizer {
         return true
     }
 
-    /// member 名から地域キーワードと共通の member 接尾辞を除去した後、実質的な語幹が
-    /// 残るか（＝事業名・プロジェクト名等の修飾を伴う複合ラベルか）を判定する。
+    /// member 名から地域キーワード・共通接尾辞・汎用 Business ラッパを除去した後、
+    /// 実質的な語幹が残るか（＝固有の事業名・プロジェクト名等の修飾を伴う複合ラベルか）を判定する。
     /// Domestic/Overseas だけでなく Japan 等の特定地域名も除去する
     /// （INPEX `OilAndGasJapan…` → `OilAndGas` が残る、実データ検証 2026-07-24）。
+    /// `JapanBusiness…` は Business 除去後に空になり「実質語幹なし」＝混在シグナル対象のまま
+    /// （学び11。Business ラッパを事業語幹とみなすと資生堂/TOTO 型の要レビューが消える）。
     private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
         var stripped = member
         // 長いキーワードから消す（NorthAmerica を America より先に、等）
@@ -410,6 +416,8 @@ enum BreakdownNormalizer {
         for suffix in ["ReportableSegmentsMember", "ReportableSegmentMember", "Member"] {
             stripped = stripped.replacingOccurrences(of: suffix, with: "")
         }
+        // 地域事業ユニットの汎用ラッパ。これだけ残っても固有の事業語幹とはみなさない。
+        stripped = stripped.replacingOccurrences(of: "Business", with: "")
         return !stripped.isEmpty
     }
 }

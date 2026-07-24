@@ -273,12 +273,23 @@ import Foundation
     }
 
     /// 対照群: 特定地域名が事業語を伴わず裸で混在する場合は needs_review を立てる。
-    /// （`JapanBusinessMember` のような複合は INPEX/資生堂型として許容する。）
     @Test func bareSpecificGeographyMemberMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
         let snap = try #require(Self.snapshot(labelsAndValues: [
             ("FoodsBusinessMember", 40_000_000_000),
             ("ChemicalsBusinessMember", 30_000_000_000),
             ("JapanReportableSegmentMember", 30_000_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == true)
+    }
+
+    /// 学び11: 特定地域名＋汎用 Business ラッパだけのラベルは混在シグナルのまま
+    /// （INPEX の OilAndGasJapan 免除を JapanBusiness まで広げない）。
+    @Test func specificGeographyBusinessWrapperMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("FoodsBusinessMember", 40_000_000_000),
+            ("ChemicalsBusinessMember", 30_000_000_000),
+            ("JapanBusinessMember", 30_000_000_000),
         ]))
         #expect(snap.axis == "business")
         #expect(snap.needsReview == true)
@@ -745,11 +756,10 @@ import Foundation
         #expect(snap.axis == "business")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
-        // 本フィクスチャの米州/アジア等は `…BusinessReportableSegmentsMember`（事業語付き複合）
-        // のため、INPEX と同様に axis_ambiguous は立てない。実データの裸の
-        // `AmericasReportableSegmentMember` 混在は別テストで needs_review を担保する。
-        #expect(!snap.warnings.contains("axis_ambiguous"))
-        #expect(snap.needsReview == false)
+        // 米州/アジア等は `…Business…` ラッパ付きだが固有事業語幹が無く、日本住設・先進セラミックと
+        // 同居する真の事業×地域混在 → axis_ambiguous（学び11。INPEX の OilAndGasJapan とは別）。
+        #expect(snap.warnings.contains("axis_ambiguous"))
+        #expect(snap.needsReview == true)
     }
 
     @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {
