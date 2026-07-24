@@ -100,6 +100,65 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(rr.tables))
     }
 
+    // MARK: - ネクソン S100XSM4（2026-07-24）
+
+    @Test(.enabled(if: cacheAvailable("S100XSM4"), "XBRL cache S100XSM4 not available"))
+    func nexonKeepsGeographyFactsButExposesProductRevenueTable() throws {
+        // 報告セグメントは Korea/Japan/China/NorthAmerica（地域）。
+        // ゲーム課金・ロイヤリティ等の製品別はセグメント注記内の別表にあり、
+        // 収益認識注記は無い → swap せず facts を残しつつ tables に製品別を載せる。
+        // 後段 SegmentInfoLLM が地域表より製品別表を優先する。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XSM4"))
+        #expect(result.method == "xbrl_facts")
+        let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+        #expect(members.contains("KoreaReportableSegmentMember"))
+        #expect(members.contains("JapanReportableSegmentMember"))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("ゲーム課金") || joined.contains("ゲームコンテンツ"))
+        #expect(joined.contains("ロイヤリティ"))
+        let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100XSM4"))
+        #expect(rr.method == "not_found")
+    }
+
+    // MARK: - メルカリ S100WQDW（2026-07-25）
+
+    @Test(.enabled(if: cacheAvailable("S100WQDW"), "XBRL cache S100WQDW not available"))
+    func mercariKeepsGeographyFactsAndMarketplaceMatrixWithoutRevenueStubSwap() throws {
+        // 報告セグメントは Japan Region / US（地域）。Marketplace/Fintech/その他の事業別は
+        // セグメント注記内のマトリクスにあり、IFRS 売上収益注記はポインタ＋契約負債表のみ。
+        // RR へ無条件 swap すると製品表を失う → facts+tables を残し SegmentInfoLLM へ。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100WQDW"))
+        #expect(result.method == "xbrl_facts")
+        let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+        #expect(members.contains("JapanRegionReportableSegmentMember"))
+        #expect(members.contains("USReportableSegmentMember"))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("Marketplace"))
+        #expect(joined.contains("Fintech"))
+        let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100WQDW"))
+        #expect(rr.method == "html_table")
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent(rr.tables))
+        // swap していないこと（見出しが収益認識関係になっていない）
+        #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
+    }
+
+    // MARK: - アサヒ S100VHC1（2026-07-24）
+
+    @Test(.enabled(if: cacheAvailable("S100VHC1"), "XBRL cache S100VHC1 not available"))
+    func asahiSwapsGeographySegmentsToIFRSRevenueProductMatrix() throws {
+        // 報告セグメントは Japan/Europe/Oceania/SoutheastAsia（地域）。
+        // 酒類/飲料/食品・薬品の製品別は IFRS 売上収益注記のマトリクス（列=製品、行=地域）。
+        // Oceania を地域キーワードに含めないと allMembersAreGeography が false になり swap できない。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100VHC1"))
+        #expect(result.method == "html_table")
+        #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("酒類製造・販売") || joined.contains("酒類"))
+        #expect(joined.contains("飲料製造・販売") || joined.contains("飲料"))
+        #expect(joined.contains("食品") && joined.contains("薬品"))
+        #expect(!BreakdownExtractor.isRevenueTypeOnlyDecomposition(result.tables))
+    }
+
     // MARK: - 三菱商事 / あおぞら / 三井住友トラスト（2026-07-24）
 
     @Test(.enabled(if: cacheAvailable("S100YB25"), "XBRL cache S100YB25 not available"))

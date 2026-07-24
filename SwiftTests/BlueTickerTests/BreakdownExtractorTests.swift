@@ -912,6 +912,60 @@ import Foundation
         }
     }
 
+    /// メルカリ型: 地域 facts + セグメント内の製品マトリクス。RR が契約負債だけの stub なら swap しない。
+    @Test func segmentInfoKeepsMarketplaceMatrixWhenRevenueRecognitionIsContractLiabilityStub() throws {
+        let segmentTable = """
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;Japan Region&lt;/td&gt;&lt;td&gt;US&lt;/td&gt;&lt;td&gt;連結&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;売上収益&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Marketplace&lt;/td&gt;&lt;td&gt;111200&lt;/td&gt;&lt;td&gt;36418&lt;/td&gt;&lt;td&gt;147618&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Fintech&lt;/td&gt;&lt;td&gt;38597&lt;/td&gt;&lt;td&gt;-&lt;/td&gt;&lt;td&gt;38597&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;その他&lt;/td&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;-&lt;/td&gt;&lt;td&gt;6416&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        """
+        let rrStub = """
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;顧客との契約から生じた債権&lt;/td&gt;&lt;td&gt;7933&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;契約負債&lt;/td&gt;&lt;td&gt;2445&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        """
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)"
+            xmlns:jpigp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_JapanRegionMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-07-01</xbrli:startDate><xbrli:endDate>2025-06-30</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:JapanRegionReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration_USMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-07-01</xbrli:startDate><xbrli:endDate>2025-06-30</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:USReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2024-07-01</xbrli:startDate><xbrli:endDate>2025-06-30</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:RevenueFromExternalCustomersIFRS contextRef="CurrentYearDuration_JapanRegionMember" unitRef="JPY" decimals="-6">149807000000</jppfs_cor:RevenueFromExternalCustomersIFRS>
+          <jppfs_cor:RevenueFromExternalCustomersIFRS contextRef="CurrentYearDuration_USMember" unitRef="JPY" decimals="-6">36418000000</jppfs_cor:RevenueFromExternalCustomersIFRS>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(segmentTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+          <jpigp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(rrStub)</jpigp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "xbrl_facts")
+            let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+            #expect(members.contains("JapanRegionReportableSegmentMember"))
+            #expect(members.contains("USReportableSegmentMember"))
+            let joined = result.tables.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("Marketplace"))
+            #expect(joined.contains("Fintech"))
+            #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
+        }
+    }
+
     @Test func segmentInfoKeepsGeographyFactsWhenRevenueRecognitionNotFound() throws {
         // 収益認識関係注記が見つからない場合は、表示が消える(not_found)のではなく
         // 元の地域別 xbrl_facts をそのまま維持する（未検証企業での誤判定時の regression 回避）。

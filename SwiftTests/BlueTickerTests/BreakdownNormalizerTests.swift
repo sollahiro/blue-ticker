@@ -234,6 +234,34 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    @Test func asahiStyleOceaniaMembersClassifyAsGeography() throws {
+        // アサヒ型: Oceania がキーワードに無いと Japan/Europe/SoutheastAsia だけでは
+        // 全一致にならず、収益認識の製品別マトリクスへ swap できない。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "JapanReportableSegmentMember",
+                "EuropeReportableSegmentMember",
+                "OceaniaReportableSegmentMember",
+                "SoutheastAsiaReportableSegmentMember",
+            ]))
+    }
+
+    @Test func mercariStyleJapanRegionAndUSMembersClassifyAsGeography() throws {
+        // メルカリ型: JapanRegion / US。US・Region キーワードが無いと地域軸判定に乗らず、
+        // 報告セグメント（地域）が business として採用されてしまう（実データ検証 2026-07-25）。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "JapanRegionReportableSegmentMember",
+                "USReportableSegmentMember",
+            ]))
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("JapanRegionReportableSegmentMember", 149_807_000_000),
+            ("USReportableSegmentMember", 36_418_000_000),
+        ]))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
+
     @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
         // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
         // 引き続き geography のまま（既知のトレードオフ、学び11参照）。
@@ -244,9 +272,20 @@ import Foundation
         #expect(snap.axis == "geography")
     }
 
-    /// 対照群: 特定地域名（Japan 等）が事業区分名の一部として混在する場合は、
-    /// これまで通り needs_review を立てる（学び11の緩和は Domestic/Overseas 限定）。
-    @Test func specificGeographyNameMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
+    /// 対照群: 特定地域名が事業語を伴わず裸で混在する場合は needs_review を立てる。
+    @Test func bareSpecificGeographyMemberMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("FoodsBusinessMember", 40_000_000_000),
+            ("ChemicalsBusinessMember", 30_000_000_000),
+            ("JapanReportableSegmentMember", 30_000_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == true)
+    }
+
+    /// 学び11: 特定地域名＋汎用 Business ラッパだけのラベルは混在シグナルのまま
+    /// （INPEX の OilAndGasJapan 免除を JapanBusiness まで広げない）。
+    @Test func specificGeographyBusinessWrapperMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
         let snap = try #require(Self.snapshot(labelsAndValues: [
             ("FoodsBusinessMember", 40_000_000_000),
             ("ChemicalsBusinessMember", 30_000_000_000),
@@ -254,6 +293,41 @@ import Foundation
         ]))
         #expect(snap.axis == "business")
         #expect(snap.needsReview == true)
+    }
+
+    @Test func inpexProjectSegmentsWithEmbeddedJapanDoNotTriggerNeedsReview() throws {
+        // INPEX（1605）実データ検証 2026-07-24: 報告セグメントは
+        // 国内O&G / イクシスプロジェクト / その他プロジェクト（海外O&G）。
+        // OilAndGasJapan に Japan が含まれるが事業・プロジェクト区分であり地域軸との混在ではない。
+        // セグメント利益は ProfitLossAttributableToOwnersOfParentIFRS に載る。
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("RevenueFromExternalCustomersIFRS", "OilAndGasJapanReportableSegmentMember", 192_176_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "IchthysProjectReportableSegmentMember", 315_069_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "OtherProjectsReportableSegmentMember", 1_486_928_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember", 17_176_000_000),
+            fact("RevenueFromExternalCustomersIFRS", "TotalOfReportableSegmentsAndOthersMember", 2_011_351_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "OilAndGasJapanReportableSegmentMember", 13_663_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "IchthysProjectReportableSegmentMember", 248_239_000_000),
+            fact("ProfitLossAttributableToOwnersOfParentIFRS", "OtherProjectsReportableSegmentMember", 165_711_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 2_011_351_000_000))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("axis_ambiguous"))
+        #expect(
+            snap.rows.first { $0.labelRaw == "OilAndGasJapanReportableSegmentMember" }?.profit
+                == 13_663_000_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "IchthysProjectReportableSegmentMember" }?.profit
+                == 248_239_000_000)
     }
 
     @Test func businessTypeCompaniesAxisIsBusiness() throws {
@@ -363,6 +437,35 @@ import Foundation
         #expect(snap.rows.first { $0.labelRaw == "ReconcilingItemsMember" }?.rowKind == "reconciling")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
+    @Test func externalRevenueResolvesViaInternalSubtotalWhenConsolidatedSalesMissing() throws {
+        // SOMPO / T&D / 東宝型（2026-07-24）: セグメント注記に外部顧客売上タグはあるが
+        // Stage 4 の years[].sales が null（保険の経常収益ラベルのみ等）のため分母を渡せない。
+        // 売上ホワイトリストタグで内部小計基準へフォールバックできること。
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "FilmBusinessReportableSegmentsMember", 182_617_000_000),
+            fact("RevenuesFromExternalCustomers", "IPAndAnimeBusinessReportableSegmentMember", 75_265_000_000),
+            fact("RevenuesFromExternalCustomers", "TheatricalBusinessReportableSegmentsMember", 22_310_000_000),
+            fact("RevenuesFromExternalCustomers", "RealEstateBusinessReportableSegmentsMember", 79_179_000_000),
+            fact("RevenuesFromExternalCustomers", "ReportableSegmentsMember", 359_371_000_000),
+            fact("OperatingIncome", "FilmBusinessReportableSegmentsMember", 37_302_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominatorTag == "RevenuesFromExternalCustomers")
+        #expect(snap.axis == "business")
+        #expect(snap.denominator == 359_371_000_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "FilmBusinessReportableSegmentsMember" }?.profit
+                == 37_302_000_000)
     }
 
     @Test func salesBasisTakesPriorityOverInternalSubtotalBasisWhenBothTagsPresent() throws {
@@ -653,10 +756,10 @@ import Foundation
         #expect(snap.axis == "business")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
-        // 注: 事業区分(セラミック等)と地域区分(米州/アジア・オセアニア/中国/欧州)が同居する
-        // 混在構造のため、axis_ambiguous 自体は別問題として残る（本コミットのスコープ外。
-        // 二重計上の解消のみを検証する）。
+        // 米州/アジア等は `…Business…` ラッパ付きだが固有事業語幹が無く、日本住設・先進セラミックと
+        // 同居する真の事業×地域混在 → axis_ambiguous（学び11。INPEX の OilAndGasJapan とは別）。
         #expect(snap.warnings.contains("axis_ambiguous"))
+        #expect(snap.needsReview == true)
     }
 
     @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {

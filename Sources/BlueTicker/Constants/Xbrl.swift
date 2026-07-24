@@ -666,6 +666,9 @@ enum Xbrl {
         "OperatingProfitLossIFRS",
         "OperatingIncome",
         "ProfitLossBeforeTaxIFRS",
+        // INPEX: セグメント表の「セグメント利益」行が親会社所有者帰属利益タグに載る
+        // （実データ検証 2026-07-24）。通常の営業利益タグより優先度は下（末尾）。
+        "ProfitLossAttributableToOwnersOfParentIFRS",
     ]
 
     /// 銀行等、外部売上高に相当する概念を持たない金融機関の粗利益タグ（優先順）。
@@ -761,9 +764,16 @@ enum Xbrl {
         "China",
         "NorthAmerica",
         "Emea",
+        "Oceania",  // アサヒ等（Japan/Europe/Oceania/SoutheastAsia）。欠けると地域軸判定が崩れ収益認識の製品別へ swap できない（実データ検証 2026-07-24）
+        "Korea",
         "Domestic",
         "Overseas",
         "Pacific",
+        // メルカリ等: `JapanRegionReportableSegmentMember` / `USReportableSegmentMember`。
+        // `US` が無いと地域軸判定に乗らず business 誤認。`Region` が無いと Japan 除去後に
+        // `Region…` が残り複合事業ラベル扱いになる（実データ検証 2026-07-25）。
+        "US",
+        "Region",
     ]
 
     /// `segmentGeographyMemberKeywords` から「国内」「海外」相当の汎用修飾語（`Domestic`/`Overseas`）

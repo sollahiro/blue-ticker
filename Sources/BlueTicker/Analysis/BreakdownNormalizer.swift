@@ -32,8 +32,10 @@ enum BreakdownNormalizer {
 
     /// ExtractedBreakdown（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// 適用不可（html_table / not_found / 該当タグなし）の場合は nil。
-    /// 銀行等、外部売上高に相当する概念を持たない金融機関は `normalizeBankBasis`
-    /// （粗利益/営業純益基準）にフォールバックする。
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関は粗利益/営業純益基準へフォールバックする。
+    /// Stage 4 の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
+    /// セグメント注記に外部顧客売上タグがあれば内部小計基準で解決する
+    /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
     static func normalize(_ result: ExtractedBreakdown, consolidatedSales: Double?) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
@@ -41,6 +43,14 @@ enum BreakdownNormalizer {
            let snapshot = normalizeSalesBasis(facts: result.facts, consolidatedSales: consolidatedSales)
         {
             return snapshot
+        }
+        // 連結売上が取れないときでも、セグメント側の外部顧客売上タグで分母を組む
+        // （Stage 4 sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
+        if let external = normalizeInternalSubtotalBasis(
+            facts: result.facts, amountTags: Xbrl.segmentExternalRevenueTags,
+            profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue")
+        {
+            return external
         }
         if let bank = normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentBankGrossProfitTags,
@@ -333,10 +343,16 @@ enum BreakdownNormalizer {
     /// 「国内◯◯事業」「海外◯◯事業」という事業区分名や「海外事業」という単独カテゴリは
     /// Domestic/Overseas のみで一致するが、これらは事業軸の一部であって地域軸との真の混在ではない
     /// （sum(segment) ≈ denominator で axis=business の正しさを別途確認済み）。
-    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」のように member ラベルが
-    /// Domestic/Overseas 単体（他の事業語を伴わない）で、かつ他の segment が事業名という
-    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃す。実データでは
-    /// 常に事業区分語との複合ラベルだったため、複合か単体かは判定に使っていない。
+    ///
+    /// 特定地域名（Japan 等）が事業・プロジェクト名に埋め込まれているだけの行
+    /// （例: INPEX `OilAndGasJapanReportableSegmentMember`＝国内O&G）も、除去後に**固有の**
+    /// 事業語幹が残るなら混在シグナルに使わない（実データ検証 2026-07-24）。
+    /// ただし `JapanBusinessMember` / `AmericasBusiness…` のように地域名＋汎用の Business
+    /// ラッパだけのラベルは、学び11どおり特定地域名混在として needs_review を立てる
+    /// （INPEX 免除を Business ラッパまで広げない。Sonnet レビュー 2026-07-25）。
+    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」「JapanMember」のように
+    /// member ラベルが地域語だけ（他の事業語を伴わない）で、かつ他の segment が事業名という
+    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃すことがある。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
@@ -350,10 +366,13 @@ enum BreakdownNormalizer {
         }
         if geoMatches.isEmpty { return ("business", false) }
 
-        let specificGeoMatches = segmentMembers.filter { member in
+        // 裸の特定地域名（＋汎用 Business ラッパのみ）を混在シグナルにする。
+        // OilAndGasJapan 等、固有語幹が残る複合は除外。
+        let bareSpecificGeoMatches = segmentMembers.filter { member in
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
+                && !hasSubstantiveNonGeographyContent(member)
         }
-        return ("business", !specificGeoMatches.isEmpty)
+        return ("business", !bareSpecificGeoMatches.isEmpty)
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
@@ -382,16 +401,23 @@ enum BreakdownNormalizer {
         return true
     }
 
-    /// member 名から Domestic/Overseas と共通の member 接尾辞を除去した後、実質的な語幹が
-    /// 残るか（＝事業名等の修飾を伴う複合ラベルか）を判定する。
+    /// member 名から地域キーワード・共通接尾辞・汎用 Business ラッパを除去した後、
+    /// 実質的な語幹が残るか（＝固有の事業名・プロジェクト名等の修飾を伴う複合ラベルか）を判定する。
+    /// Domestic/Overseas だけでなく Japan 等の特定地域名も除去する
+    /// （INPEX `OilAndGasJapan…` → `OilAndGas` が残る、実データ検証 2026-07-24）。
+    /// `JapanBusiness…` は Business 除去後に空になり「実質語幹なし」＝混在シグナル対象のまま
+    /// （学び11。Business ラッパを事業語幹とみなすと資生堂/TOTO 型の要レビューが消える）。
     private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
         var stripped = member
-        for keyword in ["Domestic", "Overseas"] {
+        // 長いキーワードから消す（NorthAmerica を America より先に、等）
+        for keyword in Xbrl.segmentGeographyMemberKeywords.sorted(by: { $0.count > $1.count }) {
             stripped = stripped.replacingOccurrences(of: keyword, with: "")
         }
         for suffix in ["ReportableSegmentsMember", "ReportableSegmentMember", "Member"] {
             stripped = stripped.replacingOccurrences(of: suffix, with: "")
         }
+        // 地域事業ユニットの汎用ラッパ。これだけ残っても固有の事業語幹とはみなさない。
+        stripped = stripped.replacingOccurrences(of: "Business", with: "")
         return !stripped.isEmpty
     }
 }
