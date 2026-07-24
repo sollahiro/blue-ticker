@@ -100,6 +100,26 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(rr.tables))
     }
 
+    // MARK: - ネクソン S100XSM4（2026-07-24）
+
+    @Test(.enabled(if: cacheAvailable("S100XSM4"), "XBRL cache S100XSM4 not available"))
+    func nexonKeepsGeographyFactsButExposesProductRevenueTable() throws {
+        // 報告セグメントは Korea/Japan/China/NorthAmerica（地域）。
+        // ゲーム課金・ロイヤリティ等の製品別はセグメント注記内の別表にあり、
+        // 収益認識注記は無い → swap せず facts を残しつつ tables に製品別を載せる。
+        // 後段 SegmentInfoLLM が地域表より製品別表を優先する。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XSM4"))
+        #expect(result.method == "xbrl_facts")
+        let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+        #expect(members.contains("KoreaReportableSegmentMember"))
+        #expect(members.contains("JapanReportableSegmentMember"))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("ゲーム課金") || joined.contains("ゲームコンテンツ"))
+        #expect(joined.contains("ロイヤリティ"))
+        let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100XSM4"))
+        #expect(rr.method == "not_found")
+    }
+
     // MARK: - アサヒ S100VHC1（2026-07-24）
 
     @Test(.enabled(if: cacheAvailable("S100VHC1"), "XBRL cache S100VHC1 not available"))
