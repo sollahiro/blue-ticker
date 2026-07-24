@@ -17,11 +17,11 @@
 
 | 項目 | 値 |
 |------|-----|
-| 作業ブランチ | `cursor/fix-mitsubishi-aozora-sumitomo-trust-breakdown` |
+| 作業ブランチ | （PR #122 merge 済み。次作業は `main` から新ブランチ） |
 | PR #120 | **merged**（Mitsubishi/Aozora/Trust + MUFG swap ガード） |
-| PR #122 | INPEX / アサヒ / ネクソン / メルカリ + Stage4 sales=null 等（本ドキュメント更新時点で merge 待ち／直後） |
+| PR #122 | **merged**（INPEX / アサヒ / ネクソン / メルカリ + Stage4 sales=null + JapanBusiness axis_ambiguous 修正） |
 
-PR #122 に含まれる主なコミット（`origin/main..HEAD` 相当）:
+PR #122 に含まれた主なコミット:
 
 1. `2e657cd` — Stage 4 `sales=null` でも外部顧客売上タグで正規化
 2. `371a1da` — INPEX: `OilAndGasJapan` の axis_ambiguous 解除 + 利益タグ
@@ -30,7 +30,7 @@ PR #122 に含まれる主なコミット（`origin/main..HEAD` 相当）:
 5. `d393c46` — メルカリ: `US`/`Region` キーワード + RR stub 時の swap 抑止
 6. `3dcee62` — `JapanBusiness` 型は学び11どおり `axis_ambiguous` 維持（INPEX 免除の過大緩和を修正）
 
-**次セッション最初の作業候補:** main を pull したうえで、**未 ingest の 1605/2502/3659/4385 を Stage 6 ingest**（コードは PR #122 で入る。DB 反映はまだ）。その後 needs_review 残りは **エーザイ** から。
+**次セッション最初の作業候補:** main を pull したうえで、**未 ingest の 1605/2502/3659/4385 を Stage 6 ingest**（コードは PR #122 で main 入り済み。DB 反映はまだ）。その後 needs_review 残りは **エーザイ** から。
 
 ---
 
