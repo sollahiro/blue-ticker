@@ -29,11 +29,14 @@ enum BusinessBreakdownResolver {
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
-        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が geography のままなのは swap 対象の
-        //    収益認識関係注記が見つからなかったケース（`BreakdownExtractor` 側のフォールバック）
-        //    なので、business としては採用しない。
-        if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales) {
-            guard snapshot.axis == "business" else { return (nil, .notFound, nil) }
+        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business なら採用。
+        //    geography のままなのは swap 対象の収益認識/IFRS売上収益注記が見つからなかった
+        //    （または収益種類だけの分解で意図的に swap しなかった）ケース。business としては
+        //    採用せず、下の tables 経路へフォールバックする（住友ファーマ: 製品別表が
+        //    セグメント注記 tables 側に残っている。実データ検証 2026-07-24）。
+        if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales),
+            snapshot.axis == "business"
+        {
             return (snapshot, .xbrlFacts, nil)
         }
 
