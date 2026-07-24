@@ -114,6 +114,10 @@ enum BreakdownExtractor {
         }
     }
 
+    /// 製品・サービス別テキストブロックの表示見出し（あおぞら銀行「サービス毎の情報」等）。
+    /// `SegmentInfoLLMNormalizer` に回す（収益認識見出しには揃えない）。
+    static let productOrServiceHeading = "製品・サービス別情報"
+
     /// 連結財務諸表注記から事業別（報告セグメント別）情報を抽出する。
     ///
     /// 報告セグメント（xbrl_facts 経路）のメンバーが全て地域名の場合（オークマ型:
@@ -125,8 +129,13 @@ enum BreakdownExtractor {
     /// 単一セグメントで報告セグメント開示が省略される場合（東京エレクトロン型）も
     /// `not_found` のままでは製品別が取れないため、収益認識関係注記に製品・サービス別の
     /// 分解表があればそちらへフォールバックする。
+    ///
+    /// 三菱商事型: セグメント注記は売上総利益・資産のみで、事業別の「顧客との契約から認識した収益」
+    /// が IFRS Revenue2 注記側にある → 売上相当行が無いセグメント表なら収益認識へ swap。
+    /// あおぞら銀行型: `InformationForEachProductOrServiceTextBlock`（サービス毎の経常収益）を
+    /// セグメント表の前に結合し、後段 LLM が選べるようにする。
     static func extractSegmentInfo(xbrlDir: URL) -> ExtractedBreakdown {
-        let tables = extractFromTextBlocks(
+        var tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.businessSegmentTextBlockTags,
             mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
@@ -134,24 +143,33 @@ enum BreakdownExtractor {
             mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
             mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords
         )
+        let productOrServiceTables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.productOrServiceTextBlockTags,
+            mixedTags: [],
+            dedicatedHeading: productOrServiceHeading,
+            mixedKeywords: []
+        )
+        // サービス毎・製品別を先頭に置き、報告セグメントの粗利/利益表より優先して LLM に見せる
+        if !productOrServiceTables.isEmpty {
+            tables = productOrServiceTables + tables
+        }
+        // 三井住友トラスト型: 通常のセグメント専用タグでは表が取れず、Etc 注記に実質業務粗利益がある
+        if !tablesContainSalesEquivalent(tables) {
+            let etcTables = extractFromTextBlocks(
+                xbrlDir: xbrlDir,
+                dedicatedTags: Xbrl.businessSegmentEtcTextBlockTags,
+                mixedTags: [],
+                dedicatedHeading: "セグメント情報",
+                mixedKeywords: []
+            )
+            if !etcTables.isEmpty {
+                tables = tables + etcTables
+            }
+        }
         let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
 
-        // オークマ型 / ブリヂストン・デンソー型: 報告セグメントが地域別 → 収益認識（または
-        // IFRS 売上収益注記）の事業・製品別へ。ただし「製商品の販売 / 知的財産権収入」だけの
-        // 収益種類分解（住友ファーマ型）は製品別を取り逃すので swap せず、セグメント注記の
-        // tables を残して後段 LLM に委ねる（実データ検証 2026-07-24）。
-        if result.method == "xbrl_facts", isGeographyAxis(result.facts) {
-            let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
-            if revenueRecognition.method == "html_table",
-                !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
-            {
-                return revenueRecognition
-            }
-            return result
-        }
-
-        // 東京エレクトロン型: 単一セグメントで報告セグメント開示省略 → 収益認識の製品別へ
-        if result.method == "not_found" {
+        if shouldPreferRevenueRecognition(over: result) {
             let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
             if revenueRecognition.method == "html_table",
                 !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
@@ -161,6 +179,48 @@ enum BreakdownExtractor {
         }
 
         return result
+    }
+
+    /// 収益認識/IFRS売上（Revenue2 含む）へ axis-aware に寄せるべきか。
+    static func shouldPreferRevenueRecognition(over result: ExtractedBreakdown) -> Bool {
+        // オークマ / ブリヂストン・デンソー型: 報告セグメントが地域別
+        if result.method == "xbrl_facts", isGeographyAxis(result.facts) { return true }
+        // 東京エレクトロン型: セグメント開示なし
+        if result.method == "not_found" { return true }
+        // 三菱商事型: セグメント表に売上相当行が無く、利益・資産だけ
+        // （製品・サービス別表が既にあればそちらを残すので swap しない。
+        // 　facts に既に売上相当タグ（buildResult と同じ判定、`factsContainRecognizedAmountTag`）が
+        // 　あれば、表側の文言一致に失敗していても swap しない。実データ検証: 三菱UFJ「粗利益」ラベルが
+        // 　tablesContainSalesEquivalent のマーカーに一致せず誤って swap していた、2026-07-24）
+        if !result.tables.isEmpty,
+            !tablesContainSalesEquivalent(result.tables),
+            !factsContainRecognizedAmountTag(result.facts),
+            !result.tables.contains(where: { $0.heading == productOrServiceHeading })
+        {
+            return true
+        }
+        return false
+    }
+
+    /// 表群に外部売上・経常収益・実質業務粗利益など「売上相当」の行があるか。
+    /// 売上総利益・純利益・資産だけのセグメント表は false（三菱商事のセグメント注記）。
+    static func tablesContainSalesEquivalent(_ tables: [BreakdownTable]) -> Bool {
+        guard !tables.isEmpty else { return false }
+        let joined = tables.map(\.markdown).joined(separator: "\n")
+        let markers = [
+            "顧客との契約から認識した収益",
+            "顧客との契約から生じる収益",
+            "外部顧客に対する経常収益",
+            "外部顧客への売上",
+            "外部収益",
+            "売上収益",
+            "売上高",
+            "経常収益",
+            "実質業務粗利益",
+            "連結粗利益",
+            "業務粗利益",
+        ]
+        return markers.contains(where: { joined.contains($0) })
     }
 
     /// EDINET/JPCRP タクソノミの専用タグ。単一セグメント企業がセグメント情報の記載を省略する旨を
@@ -664,11 +724,15 @@ enum BreakdownExtractor {
     /// facts が `BreakdownNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
     /// 1つでも含むか。含まなければ `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等の
     /// 売上に無関係な facts（キヤノン・富士フイルム型）とみなし、html_table を優先させる。
-    private static func factsContainRecognizedAmountTag(_ facts: [BreakdownFact]) -> Bool {
+    /// 上記いずれにも一致しない場合でも、タグ名に "Sales" / "Revenue" を含めば売上相当とみなす
+    /// （建設業の完成工事高等、会計基準ごとにタグ名が細かく割れるため個別列挙し切れない。
+    /// 実データ検証: 三菱UFJ NetRevenue／建設業 NetSalesOfCompletedConstructionContracts、2026-07-24）。
+    static func factsContainRecognizedAmountTag(_ facts: [BreakdownFact]) -> Bool {
         let tags = Set(facts.map(\.tag))
-        return tags.contains(where: Xbrl.segmentExternalRevenueTags.contains)
-            || tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains)
-            || tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains)
+        if tags.contains(where: Xbrl.segmentExternalRevenueTags.contains) { return true }
+        if tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains) { return true }
+        if tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains) { return true }
+        return tags.contains { $0.contains("Sales") || $0.contains("Revenue") }
     }
 
     // MARK: - bs4 互換テキスト抽出

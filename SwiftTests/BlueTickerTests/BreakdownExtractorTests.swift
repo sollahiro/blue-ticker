@@ -611,6 +611,84 @@ import Foundation
         }
     }
 
+    /// 三菱商事型: NotesRevenue2 の事業グループ別「顧客との契約から認識した収益」。
+    @Test func revenueRecognitionInfoFromIFRSRevenue2TextBlock() {
+        let xml = textBlockXml(
+            tag: "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock",
+            escapedHtml: "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;地球環境エネルギー&lt;/td&gt;&lt;td&gt;マテリアルソリューション&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;顧客との契約から認識した収益&lt;/td&gt;&lt;td&gt;1748741&lt;/td&gt;&lt;td&gt;3978475&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables[0].markdown.contains("地球環境エネルギー"))
+            #expect(result.tables[0].markdown.contains("顧客との契約から認識した収益"))
+        }
+    }
+
+    /// 三菱商事型: セグメント表が売上総利益のみ → Revenue2 の売上相当へ swap。
+    @Test func segmentInfoSwapsToRevenue2WhenSegmentTablesLackSalesEquivalent() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)"
+            xmlns:jpigp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <jpcrp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;地球環境&lt;/td&gt;&lt;td&gt;金属資源&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;売上総利益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+          <jpigp_cor:NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;地球環境エネルギー&lt;/td&gt;&lt;td&gt;金属資源&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;顧客との契約から認識した収益&lt;/td&gt;&lt;td&gt;1748741&lt;/td&gt;&lt;td&gt;1219000&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpigp_cor:NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        // jpigp namespace: use same as jpcrp for test support if needed
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+            let joined = result.tables.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("顧客との契約から認識した収益"))
+            #expect(joined.contains("地球環境エネルギー"))
+        }
+    }
+
+    /// あおぞら銀行型: サービス毎の経常収益表をセグメント候補の先頭に結合。
+    @Test func segmentInfoPrependsProductOrServiceTables() {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <jpcrp_cor:NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;投資銀行&lt;/td&gt;&lt;td&gt;市場国際&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;連結粗利益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock>
+          <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;貸出業務&lt;/td&gt;&lt;td&gt;有価証券投資業務&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;外部顧客に対する経常収益&lt;/td&gt;&lt;td&gt;140937&lt;/td&gt;&lt;td&gt;45600&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+        </xbrli:xbrl>
+        """
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.first?.heading == BreakdownExtractor.productOrServiceHeading)
+            #expect(result.tables.first?.markdown.contains("貸出業務") == true)
+            #expect(result.tables.first?.markdown.contains("外部顧客に対する経常収益") == true)
+            #expect(BreakdownExtractor.tablesContainSalesEquivalent(result.tables))
+        }
+    }
+
+    @Test func tablesContainSalesEquivalentDetectsBankAndContractRevenue() {
+        #expect(BreakdownExtractor.tablesContainSalesEquivalent([
+            BreakdownTable(heading: "x", markdown: "| 実質業務粗利益 | 100 |", period: nil)
+        ]))
+        #expect(BreakdownExtractor.tablesContainSalesEquivalent([
+            BreakdownTable(heading: "x", markdown: "| 顧客との契約から認識した収益 | 100 |", period: nil)
+        ]))
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent([
+            BreakdownTable(heading: "x", markdown: "| 売上総利益 | 100 |\n| 純利益 | 50 |", period: nil)
+        ]))
+    }
+
     /// 表の外の脚注段落（化工品・多角化等）を収益認識候補の末尾に残す。
     @Test func revenueRecognitionInfoIncludesFootnoteParagraphs() {
         let escaped = """

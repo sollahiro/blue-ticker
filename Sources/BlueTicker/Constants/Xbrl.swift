@@ -529,6 +529,19 @@ enum Xbrl {
         "SegmentInformationByBusinessSegmentTextBlock",
         "NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock",  // 第一三共・塩野義（jpigp_corタクソノミ）
     ]
+
+    /// J-GAAP「セグメント情報等」注記。三井住友トラスト等で実質業務粗利益の事業別表があるが、
+    /// 常時 dedicated に入れると Python golden parity（tables 件数）が壊れるため、
+    /// 売上相当行が他ソースに無いときだけ追加取得する（実データ検証 2026-07-24）。
+    static let businessSegmentEtcTextBlockTags: Set<String> = [
+        "NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock",
+    ]
+
+    /// 製品・サービス別情報（あおぞら銀行「サービス毎の情報」: 貸出業務/有価証券投資業務…の経常収益）。
+    /// 報告セグメント facts が粗利タグに乗らない銀行で、売上代替の事業別内訳がここにだけある。
+    static let productOrServiceTextBlockTags: Set<String> = [
+        "InformationForEachProductOrServiceTextBlock",
+    ]
     static let businessSegmentDimensionKeywords: [String] = [
         "OperatingSegments",
         "BusinessSegment",
@@ -604,10 +617,15 @@ enum Xbrl {
     // `NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock`（IFRS「売上収益」注記）は
     // ブリヂストン・デンソー型: J-GAAP の収益認識関係が「注記を省略」の stub で、製品・事業別の
     // 分解表が IFRS 売上収益注記側にだけあるケース用（実データ検証 2026-07-24）。
+    //
+    // `NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock`（三菱商事型）: セグメント注記は
+    // 売上総利益・純利益・資産のみで、事業グループ別の「顧客との契約から認識した収益」が
+    // Revenue2 注記側にだけある（実データ検証 2026-07-24）。
     // 見出しは抽出側で `収益認識関係` に揃えて RevenueRecognitionLLMNormalizer へ振る。
     static let revenueRecognitionTextBlockTags: Set<String> = [
         "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
         "NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock",
+        "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock",
     ]
 
     // MARK: - 事業別・地域別内訳の正規化（Stage 6, docs/breakdown-normalization-concept.md）
