@@ -365,6 +365,35 @@ import Foundation
         #expect(abs(segmentShare - 1.0) < 0.001)
     }
 
+    @Test func externalRevenueResolvesViaInternalSubtotalWhenConsolidatedSalesMissing() throws {
+        // SOMPO / T&D / 東宝型（2026-07-24）: セグメント注記に外部顧客売上タグはあるが
+        // Stage 4 の years[].sales が null（保険の経常収益ラベルのみ等）のため分母を渡せない。
+        // 売上ホワイトリストタグで内部小計基準へフォールバックできること。
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "FilmBusinessReportableSegmentsMember", 182_617_000_000),
+            fact("RevenuesFromExternalCustomers", "IPAndAnimeBusinessReportableSegmentMember", 75_265_000_000),
+            fact("RevenuesFromExternalCustomers", "TheatricalBusinessReportableSegmentsMember", 22_310_000_000),
+            fact("RevenuesFromExternalCustomers", "RealEstateBusinessReportableSegmentsMember", 79_179_000_000),
+            fact("RevenuesFromExternalCustomers", "ReportableSegmentsMember", 359_371_000_000),
+            fact("OperatingIncome", "FilmBusinessReportableSegmentsMember", 37_302_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominatorTag == "RevenuesFromExternalCustomers")
+        #expect(snap.axis == "business")
+        #expect(snap.denominator == 359_371_000_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "FilmBusinessReportableSegmentsMember" }?.profit
+                == 37_302_000_000)
+    }
+
     @Test func salesBasisTakesPriorityOverInternalSubtotalBasisWhenBothTagsPresent() throws {
         // 通常の売上高ホワイトリストタグが存在する会社（銀行・保険ではない大多数）は
         // 引き続き normalizeSalesBasis を優先する（normalizeInternalSubtotalBasis に

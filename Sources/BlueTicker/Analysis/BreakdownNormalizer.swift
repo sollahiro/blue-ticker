@@ -32,8 +32,10 @@ enum BreakdownNormalizer {
 
     /// ExtractedBreakdown（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// 適用不可（html_table / not_found / 該当タグなし）の場合は nil。
-    /// 銀行等、外部売上高に相当する概念を持たない金融機関は `normalizeBankBasis`
-    /// （粗利益/営業純益基準）にフォールバックする。
+    /// 銀行等、外部売上高に相当する概念を持たない金融機関は粗利益/営業純益基準へフォールバックする。
+    /// Stage 4 の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
+    /// セグメント注記に外部顧客売上タグがあれば内部小計基準で解決する
+    /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
     static func normalize(_ result: ExtractedBreakdown, consolidatedSales: Double?) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
@@ -41,6 +43,14 @@ enum BreakdownNormalizer {
            let snapshot = normalizeSalesBasis(facts: result.facts, consolidatedSales: consolidatedSales)
         {
             return snapshot
+        }
+        // 連結売上が取れないときでも、セグメント側の外部顧客売上タグで分母を組む
+        // （Stage 4 sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
+        if let external = normalizeInternalSubtotalBasis(
+            facts: result.facts, amountTags: Xbrl.segmentExternalRevenueTags,
+            profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue")
+        {
+            return external
         }
         if let bank = normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentBankGrossProfitTags,
