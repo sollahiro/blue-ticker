@@ -246,6 +246,22 @@ import Foundation
             ]))
     }
 
+    @Test func mercariStyleJapanRegionAndUSMembersClassifyAsGeography() throws {
+        // メルカリ型: JapanRegion / US。US・Region キーワードが無いと地域軸判定に乗らず、
+        // 報告セグメント（地域）が business として採用されてしまう（実データ検証 2026-07-25）。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "JapanRegionReportableSegmentMember",
+                "USReportableSegmentMember",
+            ]))
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("JapanRegionReportableSegmentMember", 149_807_000_000),
+            ("USReportableSegmentMember", 36_418_000_000),
+        ]))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
+
     @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
         // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
         // 引き続き geography のまま（既知のトレードオフ、学び11参照）。

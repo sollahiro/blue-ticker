@@ -120,6 +120,28 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(rr.method == "not_found")
     }
 
+    // MARK: - メルカリ S100WQDW（2026-07-25）
+
+    @Test(.enabled(if: cacheAvailable("S100WQDW"), "XBRL cache S100WQDW not available"))
+    func mercariKeepsGeographyFactsAndMarketplaceMatrixWithoutRevenueStubSwap() throws {
+        // 報告セグメントは Japan Region / US（地域）。Marketplace/Fintech/その他の事業別は
+        // セグメント注記内のマトリクスにあり、IFRS 売上収益注記はポインタ＋契約負債表のみ。
+        // RR へ無条件 swap すると製品表を失う → facts+tables を残し SegmentInfoLLM へ。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100WQDW"))
+        #expect(result.method == "xbrl_facts")
+        let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+        #expect(members.contains("JapanRegionReportableSegmentMember"))
+        #expect(members.contains("USReportableSegmentMember"))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("Marketplace"))
+        #expect(joined.contains("Fintech"))
+        let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100WQDW"))
+        #expect(rr.method == "html_table")
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent(rr.tables))
+        // swap していないこと（見出しが収益認識関係になっていない）
+        #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
+    }
+
     // MARK: - アサヒ S100VHC1（2026-07-24）
 
     @Test(.enabled(if: cacheAvailable("S100VHC1"), "XBRL cache S100VHC1 not available"))

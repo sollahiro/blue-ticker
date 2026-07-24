@@ -174,7 +174,16 @@ enum BreakdownExtractor {
             if revenueRecognition.method == "html_table",
                 !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
             {
-                return revenueRecognition
+                // メルカリ型: セグメント注記に Marketplace/Fintech の売上マトリクスがある一方、
+                // IFRS 売上収益注記は「分解はセグメント情報に記載」のポインタ＋契約負債表のみ。
+                // 無条件 swap すると製品表を失う（実データ検証: S100WQDW、2026-07-25）。
+                // セグメント側に売上相当があり RR 側に無いときだけ swap を抑止する
+                // （ブリヂストン等: セグメント表が空／地域のみで RR に製品表 → 従来どおり swap）。
+                if !(tablesContainSalesEquivalent(result.tables)
+                    && !tablesContainSalesEquivalent(revenueRecognition.tables))
+                {
+                    return revenueRecognition
+                }
             }
         }
 

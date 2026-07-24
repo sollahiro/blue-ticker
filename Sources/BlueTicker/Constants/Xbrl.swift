@@ -769,6 +769,11 @@ enum Xbrl {
         "Domestic",
         "Overseas",
         "Pacific",
+        // メルカリ等: `JapanRegionReportableSegmentMember` / `USReportableSegmentMember`。
+        // `US` が無いと地域軸判定に乗らず business 誤認。`Region` が無いと Japan 除去後に
+        // `Region…` が残り複合事業ラベル扱いになる（実データ検証 2026-07-25）。
+        "US",
+        "Region",
     ]
 
     /// `segmentGeographyMemberKeywords` から「国内」「海外」相当の汎用修飾語（`Domestic`/`Overseas`）
