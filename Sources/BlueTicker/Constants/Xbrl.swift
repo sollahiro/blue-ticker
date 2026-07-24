@@ -764,6 +764,8 @@ enum Xbrl {
         "China",
         "NorthAmerica",
         "Emea",
+        "Oceania",  // アサヒ等（Japan/Europe/Oceania/SoutheastAsia）。欠けると地域軸判定が崩れ収益認識の製品別へ swap できない（実データ検証 2026-07-24）
+        "Korea",
         "Domestic",
         "Overseas",
         "Pacific",

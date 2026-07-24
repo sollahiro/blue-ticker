@@ -234,6 +234,18 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    @Test func asahiStyleOceaniaMembersClassifyAsGeography() throws {
+        // アサヒ型: Oceania がキーワードに無いと Japan/Europe/SoutheastAsia だけでは
+        // 全一致にならず、収益認識の製品別マトリクスへ swap できない。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "JapanReportableSegmentMember",
+                "EuropeReportableSegmentMember",
+                "OceaniaReportableSegmentMember",
+                "SoutheastAsiaReportableSegmentMember",
+            ]))
+    }
+
     @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
         // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
         // 引き続き geography のまま（既知のトレードオフ、学び11参照）。
