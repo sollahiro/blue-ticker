@@ -68,5 +68,15 @@
       { "label": "OtherMember", "sales": 27869000000.0, "profit": -45102000000.0 },
       { "label": "RetailAndDigitalBusinessGroupMember", "sales": 944554000000.0, "profit": 277029000000.0 }
     ]
+  },
+  "S100W0S7": {
+    "code": "8316",
+    "name": "三井住友",
+    "rows": [
+      { "label": "GlobalBusinessUnitReportableSegmentMember", "sales": 1344900000000.0, "profit": 592000000000.0 },
+      { "label": "GlobalMarketsBusinessUnitReportableSegmentMember", "sales": 636600000000.0, "profit": 474500000000.0 },
+      { "label": "RetailBusinessUnitReportableSegmentMember", "sales": 1377300000000.0, "profit": 273800000000.0 },
+      { "label": "WholesaleBusinessUnitReportableSegmentMember", "sales": 931300000000.0, "profit": 729200000000.0 }
+    ]
   }
 }
