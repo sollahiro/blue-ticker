@@ -933,8 +933,651 @@
       "tables": []
     },
     "segments": {
-      "facts": [],
-      "method": "html_table",
+      "facts": [
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 9444000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8910000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3434000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 4010000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1464000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8949000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 10075000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3028000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 5872000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1175000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_CorporateSharedMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 121000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 90000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 47000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 134000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 53000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 106000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 97000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 28000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 49000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 18000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 121000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 170000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 90000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 47000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 250000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 144000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 79000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 20000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 20809000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 6342000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 8936000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 5529000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 23604000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9262000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9919000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 4422000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 72
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 89
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 150
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 76
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1058000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2098000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 408000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1012000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 677000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1036000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2304000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 797000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1151000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 355000000
+        }
+      ],
+      "method": "xbrl_facts",
       "tables": [
         {
           "heading": "製品・サービス別情報",
@@ -13013,8 +13656,651 @@
       "tables": []
     },
     "segments": {
-      "facts": [],
-      "method": "html_table",
+      "facts": [
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 7571000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 16703000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 6652000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8404000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1645000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 9458000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 10867000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3599000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 4959000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 2309000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_CorporateSharedMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 220000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 52000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 14000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 31000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 6000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 218000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 54000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 13000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 33000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 6000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 64000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 223000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 9000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 4000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 3000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 29159000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9544000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 14263000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 5352000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 22482000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 8557000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9775000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 4149000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 51
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 106
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 170
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 93
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1280000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 3993000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1134000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2389000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 469000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1154000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2487000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 964000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1257000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 265000000
+        }
+      ],
+      "method": "xbrl_facts",
       "tables": [
         {
           "heading": "製品・サービス別情報",
@@ -13091,13 +14377,2973 @@
       ]
     },
     "segments": {
-      "facts": [],
-      "method": "html_table",
+      "facts": [
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 7713000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 37209000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 646000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 26503000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 25475000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 44954000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 39600000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 50258000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 232361000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 167285000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 11486000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 35797000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 459000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 32483000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 28174000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 46136000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 29352000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 49809000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 233700000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "固定資産の増加額",
+          "tag": "AdditionsOfFixedAssets",
+          "unitRef": "JPY",
+          "value": 176174000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 21726000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 65000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 9912000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 3369000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 44000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 1436000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 36553000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 36553000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 14069000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 260000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 3396000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 3652000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 44000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 805000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 22230000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "AmortizationOfGoodwillSGA",
+          "unitRef": "JPY",
+          "value": 22230000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 800
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 5700
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 6500
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 100
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 100
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 700
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 1800
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "AverageNumberOfTemporaryWorkers",
+          "unitRef": "pure",
+          "value": 7000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 139282000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 499005000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 26994000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 811829000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": -619841000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 836074000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 68680000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 390823000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2152849000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2704009000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 118560000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 420270000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 29111000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 765826000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 14763000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 795589000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 102455000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 319376000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2565953000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "銀信単体2行合算",
+          "tag": "BTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2448734000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 7568000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 20998000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 280000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 39152000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 30274000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 42211000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 13025000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 33028000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 186539000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 143239000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 9062000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 19027000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 253000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 42254000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 32799000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 42531000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 12352000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 23349000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 181632000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 136479000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 369353000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 50834000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 35146000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 254000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 74797000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 530386000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 530386000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 266033000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 717000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 87669000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 38405000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 299000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 12504000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 405629000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "GoodwillBeforeOffsetting",
+          "unitRef": "JPY",
+          "value": 405629000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 1288000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 1000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 498000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 21509000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 240000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 1256000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 2385000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 27179000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 4414000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 1452000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 7236000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 1773000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 3111000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 4143000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 2688000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 20405000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "ImpairmentLossEL",
+          "unitRef": "JPY",
+          "value": 14489000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 25782000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 266422000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 27956000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 427565000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 100478000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 514374000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 86938000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 307369000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 1756888000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 1569471000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 14742000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 197788000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 29268000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 399786000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 106321000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 490631000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 130305000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 248070000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 1616914000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "金利収支",
+          "tag": "NetInterestIncome",
+          "unitRef": "JPY",
+          "value": 1380287000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 113499000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 232583000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -962000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 384264000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -720320000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 321699000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -18257000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 83454000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 395960000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 1134538000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 103818000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 222482000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -157000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 366039000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -91558000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 304957000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": -27849000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 71306000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 949038000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "非金利収支",
+          "tag": "NetNonInterestIncomeExpense",
+          "unitRef": "JPY",
+          "value": 1068447000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 534207000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 726557000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 969328000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 913004000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": -330602000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 1025616000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 27869000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 944554000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 4810535000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 5113268000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 432311000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 626796000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 684825000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 847856000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 310950000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 975572000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 29201000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 845043000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 4752558000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "粗利益",
+          "tag": "NetRevenue",
+          "unitRef": "JPY",
+          "value": 4412406000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 23137000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 187824000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 2045000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 160913000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 87803000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 171687000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 482307000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 267446000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 1383167000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 813055000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 21246000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 171461000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 1636000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 170913000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 114303000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 169305000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 502280000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 243825000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 1394973000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "tag": "NoncurrentAssets",
+          "unitRef": "JPY",
+          "value": 778388000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 12635
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 18905
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 71479
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 3313
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 2546
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 6816
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 23101
+        },
+        {
+          "contextRef": "CurrentYearInstant_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "0",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 17458
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 135494000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 296855000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 438103000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 473068000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": -648720000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 639005000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": -45102000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 277029000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 1565734000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 2259557000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 121258000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 218795000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 302620000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 428019000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 13641000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 606433000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": -75574000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 216157000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 1831352000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "営業純益",
+          "tag": "OperatingProfit",
+          "unitRef": "JPY",
+          "value": 1893284000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 394924000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 227551000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 942334000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 101175000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 289239000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 189541000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": -40811000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 553731000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2657686000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2409259000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 313751000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 206525000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 655713000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 82030000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 296187000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 179983000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": -73254000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 525667000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 2186605000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "その他",
+          "tag": "OtherThanBTMUAndMUTB",
+          "unitRef": "JPY",
+          "value": 1963672000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 398712000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 429701000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 531225000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 439935000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 318117000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 386610000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 72971000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 667525000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 3244801000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 2853711000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000AssetManagementAndInvestorServicesBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AssetManagementAndInvestorServicesBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 311053000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000CommercialBankingAndWealthManagementBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CommercialBankingAndWealthManagementBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 408000000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCommercialBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCommercialBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 382204000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 419837000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000GlobalMarketsBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "GlobalMarketsBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 297308000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 369138000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000OtherMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "OtherMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 104775000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000RetailAndDigitalBusinessGroupMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 628886000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 2921206000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_jpcrp030000-asr_E03606-000TotalOfCustomerBusinessUnitMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfCustomerBusinessUnitMember"
+          },
+          "label": "経費",
+          "tag": "SundryExpense",
+          "unitRef": "JPY",
+          "value": 2519121000000
+        }
+      ],
+      "method": "xbrl_facts",
       "tables": [
         {
-          "heading": "収益認識関係",
-          "markdown": "|         |               | 前連結会計年度       | 当連結会計年度       |\n|---------|---------------|---------------|---------------|\n|         |               | (自　2023年4月 1日 | (自　2024年4月 1日 |\n|         |               | 至　2024年3月31日) | 至　2025年3月31日) |\n| 役務取引等収益 | 役務取引等収益       | 2,047,232     | 2,360,111     |\n|         | 為替業務          | 168,163       | 179,385       |\n|         | 預金業務          | 44,561        | 44,611        |\n|         | 貸出業務 (注)１     | 439,904       | 503,942       |\n|         | 信託関連業務        | 130,383       | 286,891       |\n|         | 証券関連業務        | 163,037       | 208,778       |\n|         | カード関連業務 (注)１  | 330,177       | 372,676       |\n|         | 投資信託委託・投資顧問業務 | 283,193       | 177,448       |\n|         | 保証業務 (注)２     | 132,402       | 148,105       |\n|         | その他 (注)１      | 355,408       | 438,271       |\n| 信託報酬    | 信託報酬          | 139,363       | 144,395       |",
+          "heading": "セグメント情報",
+          "markdown": "|          |          |          | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計    | 市場事業本部  | その他     | 合計        |\n|----------|----------|----------|---------------|-------------------|-----------------|----------------------|----------|--------------|-----------|---------|---------|-----------|\n| 粗利益      | 粗利益      | 粗利益      | 845,043       | 626,796           | 975,572         | 684,825              | 432,311  | 847,856      | 4,412,406 | 310,950 | 29,201  | 4,752,558 |\n|          | 銀信単体2行合算 | 銀信単体2行合算 | 319,376       | 420,270           | 795,589         | 29,111               | 118,560  | 765,826      | 2,448,734 | 14,763  | 102,455 | 2,565,953 |\n|          |          | 金利収支     | 248,070       | 197,788           | 490,631         | 29,268               | 14,742   | 399,786      | 1,380,287 | 106,321 | 130,305 | 1,616,914 |\n|          |          | 非金利収支    | 71,306        | 222,482           | 304,957         | △157                 | 103,818  | 366,039      | 1,068,447 | △91,558 | △27,849 | 949,038   |\n|          | その他      | その他      | 525,667       | 206,525           | 179,983         | 655,713              | 313,751  | 82,030       | 1,963,672 | 296,187 | △73,254 | 2,186,605 |\n| 経費       | 経費       | 経費       | 628,886       | 408,000           | 369,138         | 382,204              | 311,053  | 419,837      | 2,519,121 | 297,308 | 104,775 | 2,921,206 |\n| 営業純益     | 営業純益     | 営業純益     | 216,157       | 218,795           | 606,433         | 302,620              | 121,258  | 428,019      | 1,893,284 | 13,641  | △75,574 | 1,831,352 |\n| 固定資産     | 固定資産     | 固定資産     | 243,825       | 171,461           | 169,305         | 1,636                | 21,246   | 170,913      | 778,388   | 114,303 | 502,280 | 1,394,973 |\n| 固定資産の増加額 | 固定資産の増加額 | 固定資産の増加額 | 49,809        | 35,797            | 46,136          | 459                  | 11,486   | 32,483       | 176,174   | 28,174  | 29,352  | 233,700   |\n| 減価償却費    | 減価償却費    | 減価償却費    | 23,349        | 19,027            | 42,531          | 253                  | 9,062    | 42,254       | 136,479   | 32,799  | 12,352  | 181,632   |",
+          "period": "前期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "|          |          |          | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計    | 市場事業本部   | その他     | 合計        |\n|----------|----------|----------|---------------|-------------------|-----------------|----------------------|----------|--------------|-----------|----------|---------|-----------|\n| 粗利益      | 粗利益      | 粗利益      | 944,554       | 726,557           | 1,025,616       | 969,328              | 534,207  | 913,004      | 5,113,268 | △330,602 | 27,869  | 4,810,535 |\n|          | 銀信単体2行合算 | 銀信単体2行合算 | 390,823       | 499,005           | 836,074         | 26,994               | 139,282  | 811,829      | 2,704,009 | △619,841 | 68,680  | 2,152,849 |\n|          |          | 金利収支     | 307,369       | 266,422           | 514,374         | 27,956               | 25,782   | 427,565      | 1,569,471 | 100,478  | 86,938  | 1,756,888 |\n|          |          | 非金利収支    | 83,454        | 232,583           | 321,699         | △962                 | 113,499  | 384,264      | 1,134,538 | △720,320 | △18,257 | 395,960   |\n|          | その他      | その他      | 553,731       | 227,551           | 189,541         | 942,334              | 394,924  | 101,175      | 2,409,259 | 289,239  | △40,811 | 2,657,686 |\n| 経費       | 経費       | 経費       | 667,525       | 429,701           | 386,610         | 531,225              | 398,712  | 439,935      | 2,853,711 | 318,117  | 72,971  | 3,244,801 |\n| 営業純益     | 営業純益     | 営業純益     | 277,029       | 296,855           | 639,005         | 438,103              | 135,494  | 473,068      | 2,259,557 | △648,720 | △45,102 | 1,565,734 |\n| 固定資産     | 固定資産     | 固定資産     | 267,446       | 187,824           | 171,687         | 2,045                | 23,137   | 160,913      | 813,055   | 87,803   | 482,307 | 1,383,167 |\n| 固定資産の増加額 | 固定資産の増加額 | 固定資産の増加額 | 50,258        | 37,209            | 44,954          | 646                  | 7,713    | 26,503       | 167,285   | 25,475   | 39,600  | 232,361   |\n| 減価償却費    | 減価償却費    | 減価償却費    | 33,028        | 20,998            | 42,211          | 280                  | 7,568    | 39,152       | 143,239   | 30,274   | 13,025  | 186,539   |",
+          "period": "当期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "| 営業純益                  | 前連結会計年度   | 当連結会計年度   |\n|-----------------------|-----------|-----------|\n| 報告セグメント計              | 1,831,352 | 1,565,734 |\n| 報告セグメント対象外の連結子会社の業務純益 | △373      | △1,288    |\n| 一般貸倒引当金繰入額            | △6,723    | －         |\n| 与信関係費用                | △592,913  | △302,261  |\n| 貸倒引当金戻入益              | －         | 76,843    |\n| 偶発損失引当金戻入益(与信関連)      | －         | 4,480     |\n| 償却債権取立益               | 101,726   | 112,203   |\n| 株式等関係損益               | 371,274   | 592,560   |\n| 持分法による投資損益            | 531,803   | 596,956   |\n| その他                   | △108,187  | 24,254    |\n| 連結損益計算書の経常利益          | 2,127,958 | 2,669,483 |",
           "period": "比較"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "| 日本        | 米国        | 欧州・中近東    | アジア・オセアニア | その他     | 合計         |\n|-----------|-----------|-----------|-----------|---------|------------|\n| 5,148,480 | 2,684,445 | 1,166,422 | 2,507,082 | 383,919 | 11,890,350 |",
+          "period": "前期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "| 日本      | タイ      | その他     | 合計        |\n|---------|---------|---------|-----------|\n| 976,361 | 108,097 | 144,547 | 1,229,007 |",
+          "period": "当期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "| 日本        | 米国        | 欧州・中近東    | アジア・オセアニア | その他     | 合計         |\n|-----------|-----------|-----------|-----------|---------|------------|\n| 5,962,665 | 2,844,831 | 1,339,016 | 2,860,030 | 623,453 | 13,629,997 |",
+          "period": "前期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "| 日本      | タイ      | その他     | 合計        |\n|---------|---------|---------|-----------|\n| 943,823 | 125,410 | 170,870 | 1,240,104 |",
+          "period": "当期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "|      |               |                   |                 |                      |          |              |        |        | (単位：百万円) | (単位：百万円) |\n|------|---------------|-------------------|-----------------|----------------------|----------|--------------|--------|--------|----------|----------|\n|      | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計 | 市場事業本部 | その他      | 合計       |\n| 減損損失 | 2,688         | 1,452             | 3,111           | 0                    | －        | 7,236        | 14,489 | 1,773  | 4,143    | 20,405   |",
+          "period": "前期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "|      |               |                   |                 |                      |          |              |        |        | (単位：百万円) | (単位：百万円) |\n|------|---------------|-------------------|-----------------|----------------------|----------|--------------|--------|--------|----------|----------|\n|      | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計 | 市場事業本部 | その他      | 合計       |\n| 減損損失 | 2,385         | 1,288             | 240             | 1                    | －        | 498          | 4,414  | 21,509 | 1,256    | 27,179   |",
+          "period": "当期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "|       |               |                   |                 |                      |          |              |         |        | (単位：百万円) | (単位：百万円) |\n|-------|---------------|-------------------|-----------------|----------------------|----------|--------------|---------|--------|----------|----------|\n|       | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計  | 市場事業本部 | その他      | 合計       |\n| 当期償却額 | 805           | 260               | 44              | 3,396                | 14,069   | 3,652        | 22,230  | －      | －        | 22,230   |\n| 当期末残高 | 12,504        | 717               | 299             | 87,669               | 266,033  | 38,405       | 405,629 | －      | －        | 405,629  |",
+          "period": "当期"
+        },
+        {
+          "heading": "セグメント情報",
+          "markdown": "|       |               |                   |                 |                      |          |              |         |        | (単位：百万円) | (単位：百万円) |\n|-------|---------------|-------------------|-----------------|----------------------|----------|--------------|---------|--------|----------|----------|\n|       | リテール・デジタル事業本部 | 法人・ウェルスマネジメント事業本部 | コーポレートバンキング事業本部 | グローバルコマーシャルバンキング事業本部 | 受託財産事業本部 | グローバルＣＩＢ事業本部 | 顧客部門小計  | 市場事業本部 | その他      | 合計       |\n| 当期償却額 | 1,436         | 65                | 44              | 9,912                | 21,726   | 3,369        | 36,553  | －      | －        | 36,553   |\n| 当期末残高 | 74,797        | －                 | 254             | 50,834               | 369,353  | 35,146       | 530,386 | －      | －        | 530,386  |",
+          "period": "当期"
         }
       ]
     }

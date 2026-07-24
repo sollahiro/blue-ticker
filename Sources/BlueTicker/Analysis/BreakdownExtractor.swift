@@ -188,9 +188,13 @@ enum BreakdownExtractor {
         // 東京エレクトロン型: セグメント開示なし
         if result.method == "not_found" { return true }
         // 三菱商事型: セグメント表に売上相当行が無く、利益・資産だけ
-        // （製品・サービス別表が既にあればそちらを残すので swap しない）
+        // （製品・サービス別表が既にあればそちらを残すので swap しない。
+        // 　facts に既に売上相当タグ（buildResult と同じ判定、`factsContainRecognizedAmountTag`）が
+        // 　あれば、表側の文言一致に失敗していても swap しない。実データ検証: 三菱UFJ「粗利益」ラベルが
+        // 　tablesContainSalesEquivalent のマーカーに一致せず誤って swap していた、2026-07-24）
         if !result.tables.isEmpty,
             !tablesContainSalesEquivalent(result.tables),
+            !factsContainRecognizedAmountTag(result.facts),
             !result.tables.contains(where: { $0.heading == productOrServiceHeading })
         {
             return true
@@ -720,11 +724,15 @@ enum BreakdownExtractor {
     /// facts が `BreakdownNormalizer` の売上高ホワイトリスト・銀行・保険いずれかの基準タグを
     /// 1つでも含むか。含まなければ `NumberOfEmployees`/`CapitalExpendituresOverviewOf...`等の
     /// 売上に無関係な facts（キヤノン・富士フイルム型）とみなし、html_table を優先させる。
-    private static func factsContainRecognizedAmountTag(_ facts: [BreakdownFact]) -> Bool {
+    /// 上記いずれにも一致しない場合でも、タグ名に "Sales" / "Revenue" を含めば売上相当とみなす
+    /// （建設業の完成工事高等、会計基準ごとにタグ名が細かく割れるため個別列挙し切れない。
+    /// 実データ検証: 三菱UFJ NetRevenue／建設業 NetSalesOfCompletedConstructionContracts、2026-07-24）。
+    static func factsContainRecognizedAmountTag(_ facts: [BreakdownFact]) -> Bool {
         let tags = Set(facts.map(\.tag))
-        return tags.contains(where: Xbrl.segmentExternalRevenueTags.contains)
-            || tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains)
-            || tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains)
+        if tags.contains(where: Xbrl.segmentExternalRevenueTags.contains) { return true }
+        if tags.contains(where: Xbrl.segmentBankGrossProfitTags.contains) { return true }
+        if tags.contains(where: Xbrl.segmentInsuranceRevenueTags.contains) { return true }
+        return tags.contains { $0.contains("Sales") || $0.contains("Revenue") }
     }
 
     // MARK: - bs4 互換テキスト抽出
