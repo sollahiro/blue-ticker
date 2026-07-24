@@ -54,5 +54,19 @@
       { "label": "RealEstateBusinessReportableSegmentMember", "sales": 94774000.0, "profit": 12385000.0 },
       { "label": "ShoesBusinessReportableSegmentMember", "sales": 4452824000.0, "profit": -133019000.0 }
     ]
+  },
+  "S100W4FB": {
+    "code": "8306",
+    "name": "三菱UFJ",
+    "rows": [
+      { "label": "AssetManagementAndInvestorServicesBusinessGroupMember", "sales": 534207000000.0, "profit": 135494000000.0 },
+      { "label": "CommercialBankingAndWealthManagementBusinessGroupMember", "sales": 726557000000.0, "profit": 296855000000.0 },
+      { "label": "GlobalCommercialBankingBusinessGroupMember", "sales": 969328000000.0, "profit": 438103000000.0 },
+      { "label": "GlobalCorporateAndInvestmentBankingBusinessGroupMember", "sales": 913004000000.0, "profit": 473068000000.0 },
+      { "label": "GlobalMarketsBusinessGroupMember", "sales": -330602000000.0, "profit": -648720000000.0 },
+      { "label": "JapaneseCorporateAndInvestmentBankingBusinessGroupMember", "sales": 1025616000000.0, "profit": 639005000000.0 },
+      { "label": "OtherMember", "sales": 27869000000.0, "profit": -45102000000.0 },
+      { "label": "RetailAndDigitalBusinessGroupMember", "sales": 944554000000.0, "profit": 277029000000.0 }
+    ]
   }
 }
