@@ -34,6 +34,13 @@ public struct Stage6IngestSummary: Sendable, Equatable {
     public let stored: Int
     /// 書類の取得・抽出自体は成功したが business 軸の内訳が無かった書類数（失敗ではない）。
     public let notApplicable: Int
+    /// notApplicable の内訳（issue #130、E/F判定の検知結果明示化）。
+    /// E: 報告セグメントが地域別のみで business 軸への swap が見つからなかった書類数。
+    public let notApplicableGeographyOnly: Int
+    /// F: 単一セグメントのため報告セグメント開示自体が省略されていた書類数。
+    public let notApplicableSingleSegmentDisclosed: Int
+    /// 上記いずれにも該当しない・原因未特定の書類数（要調査）。
+    public let notApplicableUnknown: Int
     /// 取得・抽出失敗でスキップした書類数。
     public let failed: Int
     /// 既に現行版・needs_review=false で解決済みのためスキップした書類数。
@@ -63,6 +70,9 @@ func runStage6Ingest(
     var attempted = 0
     var stored = 0
     var notApplicable = 0
+    var notApplicableGeographyOnly = 0
+    var notApplicableSingleSegmentDisclosed = 0
+    var notApplicableUnknown = 0
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
@@ -140,8 +150,13 @@ func runStage6Ingest(
                     llmAudit: audit, db: db)
             }
             stored += 1
-        case .notApplicable:
+        case .notApplicable(let reason):
             notApplicable += 1
+            switch reason {
+            case breakdownNotApplicableGeographyOnly: notApplicableGeographyOnly += 1
+            case breakdownNotApplicableSingleSegmentDisclosed: notApplicableSingleSegmentDisclosed += 1
+            default: notApplicableUnknown += 1
+            }
         case .failed:
             failed += 1
             logger?.warning("Stage 6 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
@@ -168,8 +183,11 @@ func runStage6Ingest(
     }
 
     return Stage6IngestSummary(
-        attempted: attempted, stored: stored, notApplicable: notApplicable, failed: failed,
-        skipped: skipped, purged: purged)
+        attempted: attempted, stored: stored, notApplicable: notApplicable,
+        notApplicableGeographyOnly: notApplicableGeographyOnly,
+        notApplicableSingleSegmentDisclosed: notApplicableSingleSegmentDisclosed,
+        notApplicableUnknown: notApplicableUnknown,
+        failed: failed, skipped: skipped, purged: purged)
 }
 
 /// company_financials（Stage 4）から当該書類（docID）の連結売上高を引く。Stage 6 は自前で

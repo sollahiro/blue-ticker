@@ -1225,6 +1225,60 @@ import Foundation
             #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
         }
     }
+
+    // MARK: - classifyNotApplicableReason（issue #130、E/F判定の検知結果明示化）
+
+    /// E判定: 報告セグメントが地域別のみ（オークマ型 member 構成）の xbrl_facts は geographyOnly。
+    @Test func classifyNotApplicableReasonDetectsGeographyOnly() {
+        let segments = ExtractedBreakdown(
+            method: "xbrl_facts",
+            tables: [],
+            facts: [
+                BreakdownFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
+                    value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                BreakdownFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
+                    value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+            ]
+        )
+        XBRLTestSupport.withXbrlDir(nil) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 124_769_000_000, xbrlDir: dir)
+            #expect(reason == .geographyOnly)
+        }
+    }
+
+    /// F判定: セグメント注記自体が無く（not_found）、単一セグメント開示省略の専用タグがあれば
+    /// singleSegmentDisclosed。
+    @Test func classifyNotApplicableReasonDetectsSingleSegmentDisclosed() {
+        let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
+        let xml = textBlockXml(
+            tag: "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment",
+            escapedHtml: "当行グループは、銀行業の単一セグメントであるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 1_000_000, xbrlDir: dir)
+            #expect(reason == .singleSegmentDisclosed)
+        }
+    }
+
+    /// 地域軸でも単一セグメント開示でもない not_found は unknown（要調査）。
+    @Test func classifyNotApplicableReasonFallsBackToUnknown() {
+        let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
+        XBRLTestSupport.withXbrlDir(nil) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 1_000_000, xbrlDir: dir)
+            #expect(reason == .unknown)
+        }
+    }
 }
 
 // MARK: - Python ゴールデンファイルとのパリティ検証

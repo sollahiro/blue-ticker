@@ -231,7 +231,9 @@ public enum BusinessBreakdownResult: Sendable {
     /// 書類の取得・抽出自体は成功したが、当該書類に business 軸の内訳が無い
     /// （地域別報告セグメントで収益認識注記への swap も失敗、銀行・US-GAAP補助指標のみ等）。
     /// 失敗ではない（`not_found` は行を作らない方針。docs/breakdown-normalization-concept.md）。
-    case notApplicable
+    /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか
+    /// （issue #130、E/F判定の検知結果明示化。ingest ログ専用で company_breakdowns には永続化しない）。
+    case notApplicable(reason: String)
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。
     case failed
 }
@@ -247,12 +249,16 @@ public extension BltServerContext {
     ) async -> BusinessBreakdownResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
-        else { return .notApplicable }
+        else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 
         let hash = breakdownContentHash(segments: segments, consolidatedSales: consolidatedSales)
         let result = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: consolidatedSales, client: chatClient)
-        guard let snapshot = result.snapshot else { return .notApplicable }
+        guard let snapshot = result.snapshot else {
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir)
+            return .notApplicable(reason: reason.rawValue)
+        }
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
             contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))

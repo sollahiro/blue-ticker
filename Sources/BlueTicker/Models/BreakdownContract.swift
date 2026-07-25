@@ -26,6 +26,18 @@ public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
 public let breakdownSourceGeographyLLM = "geography_llm"
 
+/// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
+/// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
+/// 公開文字列定数（`breakdownSource*` と同じ「internal enum ⇔ public 文字列定数」パターン）。
+/// ingest ログ・診断ツール専用（`.notFound` は行を作らない方針のため company_breakdowns には永続化しない）。
+/// E: 報告セグメントが地域別のみで、business 軸への swap（収益認識注記等）が見つからなかった。
+public let breakdownNotApplicableGeographyOnly = "geography_only"
+/// F: 単一セグメントのため報告セグメント開示自体が省略されていた
+/// （`DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` タグで確認）。
+public let breakdownNotApplicableSingleSegmentDisclosed = "single_segment_disclosed"
+/// 上記いずれにも該当しない・原因未特定（要調査）。
+public let breakdownNotApplicableUnknown = "unknown"
+
 /// breakdown read（REST/MCP）が xbrl_facts 経由の行に適用する最低スキーマバージョン番号
 /// （`breakdown-vN` の N）。**明示指定**。LLM 経由の行（source != xbrl_facts）には適用しない
 /// （`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き運用のため、

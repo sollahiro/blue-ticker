@@ -22,6 +22,8 @@ func bootstrapBltLogging(from environment: inout Environment) throws {
 /// 床の概念が無いステージは nil で省略する。
 /// `notApplicable` は計算対象外（例: 半期報告書未提出）でスキップした件数。区別しないステージは nil で省略する
 /// （issue #73 フォローアップ。failed に混入させず設計通りの挙動と区別する）。
+/// `notApplicableGeographyOnly`/`notApplicableSingleSegmentDisclosed`/`notApplicableUnknown` は
+/// Stage 6 の notApplicable 内訳（issue #130、E/F判定の検知結果明示化）。区別しないステージは nil で省略する。
 /// `purged` は保持窓を超えたため削除した既存行数（Stage 5 retention）。区別しないステージは nil で省略する。
 func logIngestSummary(
     _ logger: Logger,
@@ -33,6 +35,9 @@ func logIngestSummary(
     servable: Int? = nil,
     unservable: Int? = nil,
     notApplicable: Int? = nil,
+    notApplicableGeographyOnly: Int? = nil,
+    notApplicableSingleSegmentDisclosed: Int? = nil,
+    notApplicableUnknown: Int? = nil,
     purged: Int? = nil
 ) {
     var metadata: Logger.Metadata = [
@@ -46,6 +51,15 @@ func logIngestSummary(
     if let servable { metadata["servable"] = .stringConvertible(servable) }
     if let unservable { metadata["unservable"] = .stringConvertible(unservable) }
     if let notApplicable { metadata["not_applicable"] = .stringConvertible(notApplicable) }
+    if let notApplicableGeographyOnly {
+        metadata["not_applicable_geography_only"] = .stringConvertible(notApplicableGeographyOnly)
+    }
+    if let notApplicableSingleSegmentDisclosed {
+        metadata["not_applicable_single_segment_disclosed"] = .stringConvertible(notApplicableSingleSegmentDisclosed)
+    }
+    if let notApplicableUnknown {
+        metadata["not_applicable_unknown"] = .stringConvertible(notApplicableUnknown)
+    }
     if let purged { metadata["purged"] = .stringConvertible(purged) }
     if failed > 0 {
         logger.warning("ingest summary", metadata: metadata)

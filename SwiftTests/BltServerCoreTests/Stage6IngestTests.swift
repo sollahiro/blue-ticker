@@ -136,13 +136,37 @@ private func seedRow(
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .notApplicable }
+            ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
             #expect(summary.stored == 0)
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
             #expect(try await CompanyBreakdown.find(key, on: app.db) == nil)
+        }
+    }
+
+    /// issue #130（E/F判定の検知結果明示化）: notApplicable の理由別内訳が正しく集計されること。
+    @Test func ingestClassifiesNotApplicableReasonsSeparately() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)  // geography
+            try await seedDoc("S2", secCode: "67580", db: app.db)  // single segment
+            try await seedDoc("S3", secCode: "99840", db: app.db)  // unknown
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: nil
+            ) { docID, _ in
+                switch docID {
+                case "S1": return .notApplicable(reason: breakdownNotApplicableGeographyOnly)
+                case "S2": return .notApplicable(reason: breakdownNotApplicableSingleSegmentDisclosed)
+                default: return .notApplicable(reason: breakdownNotApplicableUnknown)
+                }
+            }
+
+            #expect(summary.notApplicable == 3)
+            #expect(summary.notApplicableGeographyOnly == 1)
+            #expect(summary.notApplicableSingleSegmentDisclosed == 1)
+            #expect(summary.notApplicableUnknown == 1)
         }
     }
 

@@ -280,7 +280,11 @@ public func runStage3IngestCommand(
                 app.logger, stage: "6", attempted: s6.attempted, stored: s6.stored,
                 failed: s6.failed, skipped: s6.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6.notApplicable, purged: s6.purged)
+                notApplicable: s6.notApplicable,
+                notApplicableGeographyOnly: s6.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6.notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6.notApplicableUnknown,
+                purged: s6.purged)
         }
     } catch {
         try? await app.asyncShutdown()
