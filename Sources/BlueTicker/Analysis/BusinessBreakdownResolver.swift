@@ -29,15 +29,16 @@ enum BusinessBreakdownResolver {
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
-        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business なら採用。
+        let factsSnapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)
+
+        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business かつ needs_review が
+        //    立っていなければ確信度が高いのでそのまま採用する。
         //    geography のままなのは swap 対象の収益認識/IFRS売上収益注記が見つからなかった
         //    （または収益種類だけの分解で意図的に swap しなかった）ケース。business としては
         //    採用せず、下の tables 経路へフォールバックする（住友ファーマ: 製品別表が
         //    セグメント注記 tables 側に残っている。実データ検証 2026-07-24）。
-        if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales),
-            snapshot.axis == "business"
-        {
-            return (snapshot, .xbrlFacts, nil)
+        if let factsSnapshot, factsSnapshot.axis == "business", !factsSnapshot.needsReview {
+            return (factsSnapshot, .xbrlFacts, nil)
         }
 
         // 2) html_table 経路。見出しで「収益認識関係由来（swap 済み）」か
@@ -45,20 +46,37 @@ enum BusinessBreakdownResolver {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
         // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
         // フォールバックできるようにするため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
-        guard !segments.tables.isEmpty else { return (nil, .notFound, nil) }
-
-        if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
-            let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(
-                segments, consolidatedSales: consolidatedSales, client: client
-            )
-            guard let snapshot else { return (nil, .notFound, audit) }
-            return (snapshot, .revenueRecognitionLLM, audit)
+        // axis=business だが needs_review（表取り違えの疑い）の場合も同じ tables 経路を試す
+        // （エーザイ旧filings型: 地域別 facts が誤って business と確定していたが、
+        // classifyAxis 修正で needs_review=true になった後も、実際には製品別の html_table が
+        // 別途存在する。Opus監査 finding #2 フォローアップ、2026-07-25）。
+        if !segments.tables.isEmpty {
+            if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
+                let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(
+                    segments, consolidatedSales: consolidatedSales, client: client
+                )
+                // needs_review が立った swap 経路の結果は採用しない。オークマ型は候補表が
+                // 単一で needs_review=false に安定するが、INPEX旧filings型（複数期の候補表が
+                // 同じ見出し・紛らわしい period ラベルで並ぶ）は再実行のたびに結果が変わる
+                // （source_table_index の誤選択・タイムアウト・not_found が非決定的に発生）。
+                // 低確信度のまま business 軸として保存するより空のままにする方が安全
+                // （実データ検証: S100QH2B を複数回再実行し結果が毎回変化することを確認、2026-07-25）。
+                if let snapshot, !snapshot.needsReview { return (snapshot, .revenueRecognitionLLM, audit) }
+            } else {
+                let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
+                    segments, consolidatedSales: consolidatedSales, client: client
+                )
+                if let snapshot { return (snapshot, .segmentInfoLLM, audit) }
+            }
         }
 
-        let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-            segments, consolidatedSales: consolidatedSales, client: client
-        )
-        guard let snapshot else { return (nil, .notFound, audit) }
-        return (snapshot, .segmentInfoLLM, audit)
+        // 3) LLM 経路が無い・失敗した場合、xbrl_facts の axis=business スナップショットが
+        //    あれば（needs_review=true でも）何もないよりはマシなのでフォールバックする
+        //    （INPEX旧filings型: tables が無く LLM 経路自体を試せない会社の挙動を変えない）。
+        if let factsSnapshot, factsSnapshot.axis == "business" {
+            return (factsSnapshot, .xbrlFacts, nil)
+        }
+
+        return (nil, .notFound, nil)
     }
 }

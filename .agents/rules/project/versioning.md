@@ -73,7 +73,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v3"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `breakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-v5"`（`BreakdownNormalizer.classifyAxis` の NXHD免除条件厳格化、2026-07-25。ingest/CLI(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/breakdown-normalization-concept.md`） |
+| `company_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `breakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-v6"`（地域キーワード拡充（Eurasia/MiddleEastAndAfrica）＋swap経路（revenueRecognitionLLM）needs_review時の不採用化、2026-07-25。ingest/CLI(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/breakdown-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts 経由のみ適用） | `breakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
 
 ### バンプ規則
