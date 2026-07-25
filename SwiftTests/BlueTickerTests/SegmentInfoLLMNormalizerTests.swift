@@ -197,6 +197,7 @@ private actor MockChatCompleting: ChatCompleting {
                 ["label": "A事業", "amount": 80, "profit": NSNull(), "row_kind": "segment"],
                 ["label": "B事業", "amount": 20, "profit": NSNull(), "row_kind": "segment"],
                 ["label": "消去", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
+                ["label": "その他の調整額", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
                 ["label": "計", "amount": 100, "profit": NSNull(), "row_kind": "subtotal"],
             ],
             "notes": "test",
@@ -208,6 +209,8 @@ private actor MockChatCompleting: ChatCompleting {
         let snapshot = try #require(snapshotOrNil)
         let elim = try #require(snapshot.rows.first { $0.labelRaw == "消去" })
         #expect(elim.rowKind == "reconciling")
+        let otherAdj = try #require(snapshot.rows.first { $0.labelRaw == "その他の調整額" })
+        #expect(otherAdj.rowKind == "reconciling")
     }
 
     /// subtotal行がsegment+reconciling合計から大きく乖離する（5%超）場合はフォールバックせず、

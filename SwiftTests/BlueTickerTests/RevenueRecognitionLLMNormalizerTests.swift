@@ -170,7 +170,7 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.warnings.contains("profit_present_despite_not_disclosed"))
     }
 
-    /// 地域名だけの行ばかりなら地域別表の取り違えとみなし business_label_mismatch。
+    /// 地域名らしい行が過半数なら地域別表の取り違えとみなし business_label_mismatch。
     @Test func flagsWhenAllSegmentLabelsLookLikeGeography() async throws {
         let response: [String: Any] = [
             "applicable": true,
@@ -184,6 +184,33 @@ private actor MockChatCompleting: ChatCompleting {
                 ["label": "合計", "amount": 1_000, "profit": NSNull(), "row_kind": "subtotal"],
             ],
             "notes": "誤って地域別表を採用",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains("business_label_mismatch"))
+    }
+
+    /// 地域表に「その他」が1行混ざるケースでも過半数ルールで mismatch になること。
+    @Test func flagsMajorityGeographyTableEvenWithOtherBucket() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "日本", "amount": 500, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "北米", "amount": 200, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "欧州", "amount": 150, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "アジア", "amount": 100, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他", "amount": 50, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 1_000, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "地域表＋その他",
         ]
         let client = MockChatCompleting(responseJSON: response)
         let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(

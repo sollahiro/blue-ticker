@@ -173,14 +173,14 @@ enum RevenueRecognitionLLMNormalizer {
 
         // ラベル妥当性チェック（決定的、追加ガード）。geography 正規化器の逆方向チェック:
         // 地域別表を誤って拾っていないかを検知する（分母一致だけでは表の取り違えを検知できないため）。
-        // 全 segment 行が地域名らしいときだけ弾く。パンパシHD型のように製品明細（家電製品等）に
-        // 加え、品目分解の無い海外残（海外（北米）/海外（アジア））を分母一致のため残す表は
-        // 混在が正常であり、混在だけで needs_review にしない（ユーザー確認 2026-07-25）。
+        // 地域名らしい行が過半数のとき弾く（「その他」だけの非地域行が混ざる地域表も拾う）。
+        // パンパシHD型（品目多数＋海外残わずか）は過半数に届かず弾かない（ユーザー確認 2026-07-25）。
+        // 以前の「全行一致」だと地域表＋「その他」1行でガードが死ぬ（Opus 監査 2026-07-25）。
         let segmentLabels = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         let geographyLikeCount = segmentLabels.filter { label in
             Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
         }.count
-        if !segmentLabels.isEmpty, geographyLikeCount == segmentLabels.count {
+        if !segmentLabels.isEmpty, geographyLikeCount * 2 > segmentLabels.count {
             needsReview = true
             warnings.append("business_label_mismatch")
         }

@@ -310,6 +310,22 @@ import Foundation
         #expect(snap.needsReview == true)
     }
 
+    /// 資生堂型: 複数の JapanBusiness / AmericasBusiness ラッパ＋TravelRetail でも
+    /// NXHD 免除に乗せず needs_review を維持する（Opus 監査 2026-07-25）。
+    @Test func shiseidoStyleBusinessWrappersStillTriggerNeedsReviewDespiteMultipleBareGeos() throws {
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("JapanBusinessReportableSegmentMember", 400_000_000_000),
+            ("ChinaBusinessReportableSegmentMember", 200_000_000_000),
+            ("AmericasBusinessReportableSegmentMember", 150_000_000_000),
+            ("EMEABusinessReportableSegmentMember", 100_000_000_000),
+            ("AsiaPacificBusinessReportableSegmentMember", 80_000_000_000),
+            ("TravelRetailBusinessReportableSegmentMember", 70_000_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("axis_ambiguous"))
+    }
+
     @Test func nxhdLogisticsRegionsWithSpecialtyBusinessesDoNotTriggerNeedsReview() throws {
         // NXHD（9147）S100XTG8: ロジスティクスを地域展開（日本/米州/欧州/東アジア/
         // 南アジア・オセアニア）し、警備輸送・重量品建設・物流サポートと同居。
@@ -612,6 +628,29 @@ import Foundation
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }
             .reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
+    @Test func salesBasisAlignmentWithoutSubtotalSetsNeedsReview() throws {
+        // 小計名が無く segmentSum だけに揃える場合は裏取りが弱いので要レビュー
+        // （Opus 監査 2026-07-25）。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers",
+                contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("AlphaReportableSegmentsMember", 60_000_000_000),
+            fact("BetaReportableSegmentsMember", 40_000_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 80_000_000_000))
+        #expect(snap.denominator == 100_000_000_000)
+        #expect(snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(snap.needsReview == true)
     }
 
     @Test func bankDenominatorPrefersTrueGrandTotalOverPartialTotalWhenSegmentIsNegative() throws {

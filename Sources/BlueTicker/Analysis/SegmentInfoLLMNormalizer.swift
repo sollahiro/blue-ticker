@@ -235,10 +235,13 @@ enum SegmentInfoLLMNormalizer {
     }
 
     /// LLM が「その他（消去分を含む）」を reconciling に誤分類しても、残事業バケットとして
-    /// segment に直す（野村HD、ユーザー確認 2026-07-25）。純粋な「消去」「調整額」だけの行は
-    /// reconciling のまま残す。
+    /// segment に直す（野村HD、ユーザー確認 2026-07-25）。
+    /// 「その他の調整額」「その他の消去」のように消去・調整が本体の行は reconciling のまま
+    /// （Opus 監査 2026-07-25）。
     private static func resolvedRowKind(label: String, rowKind: String) -> String {
         guard rowKind == "reconciling", label.contains("その他") else { return rowKind }
+        if label.contains("消去分を含む") || label.contains("全社") { return "segment" }
+        if label.contains("消去") || label.contains("調整") { return rowKind }
         return "segment"
     }
 

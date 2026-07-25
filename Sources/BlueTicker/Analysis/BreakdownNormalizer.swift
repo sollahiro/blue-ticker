@@ -139,11 +139,22 @@ enum BreakdownNormalizer {
 
         var denominator = consolidatedSales
         var warnings: [String] = []
+        // 名称一致小計で裏取りできた揃えは needs_review にしない（高島屋型）。
+        // 小計が無く segmentSum だけに落ちる揃えは抽出不全の疑いがあるため要レビュー
+        // （Opus 監査 2026-07-25）。
+        var uncorroboratedDenominatorAlignment = false
         if let aligned = segmentConsistentDenominator, aligned != 0,
            abs(consolidatedSales - aligned) / abs(aligned) > 0.05
         {
             denominator = aligned
             warnings.append("sales_denominator_aligned_to_segment_total")
+            let corroboratedBySubtotal = subtotalCandidates.contains { member in
+                let value = perMember[member]!.value
+                return abs(value) > 0 && abs(value - aligned) / abs(aligned) <= 0.05
+            }
+            if !corroboratedBySubtotal {
+                uncorroboratedDenominatorAlignment = true
+            }
         }
 
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
@@ -167,7 +178,7 @@ enum BreakdownNormalizer {
             denominatorTag: denominatorTag,
             rows: rows,
             sourceKind: "xbrl_facts",
-            needsReview: axisNeedsReview || denominatorNeedsReview,
+            needsReview: axisNeedsReview || denominatorNeedsReview || uncorroboratedDenominatorAlignment,
             warnings: warnings
         )
     }
@@ -416,12 +427,16 @@ enum BreakdownNormalizer {
         // NXHD型: ロジスティクスを日本/米州/欧州/東アジア/南アジア・オセアニアに展開し、
         // 警備輸送・重量品建設・物流サポート等の専門事業と同居する。裸の地域行はロジスティクスの
         // 地域内訳であり、事業軸として採用する（ユーザー確認 2026-07-25、S100XTG8）。
+        // 資生堂型の JapanBusiness / AmericasBusiness ラッパは「Business」を含むため除外する
+        // （学び11。ラッパ付き裸地域を件数だけで免除すると資生堂型の要レビューが消える。
+        // Opus 監査 2026-07-25）。
         // 地域が1件だけの混在（Foods + Japan 等）は表取り違えの疑いが残るため要レビューのまま。
         let nonGeographyBusinessMembers = segmentMembers.filter { member in
             !Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
                 && hasSubstantiveNonGeographyContent(member)
         }
-        if bareSpecificGeoMatches.count >= 2, !nonGeographyBusinessMembers.isEmpty {
+        let bareGeoWithoutBusinessWrapper = bareSpecificGeoMatches.filter { !$0.contains("Business") }
+        if bareGeoWithoutBusinessWrapper.count >= 2, !nonGeographyBusinessMembers.isEmpty {
             return ("business", false)
         }
         return ("business", true)
