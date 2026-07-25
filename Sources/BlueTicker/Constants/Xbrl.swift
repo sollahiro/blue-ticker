@@ -592,6 +592,18 @@ enum Xbrl {
     // （detectPeriodFromPreceding の短キャプション判定と同じ考え方の閾値を共有）。
     static let noteShortCaptionMaxLength = 100
 
+    // 見出し行の完全一致（headerRowsMatch）では、同一注記内で事業別 view → 地域別 view の
+    // ように列構成が変わる開示（オリックス型 US-GAAP 巨大注記、issue #103）のチェーンが
+    // 途切れる。行ラベル集合（数値セルを伴う行の先頭セル）の Jaccard 類似度がこの閾値以上
+    // なら「同じ開示の続き」とみなす（headerRowsMatch の代替条件として OR で併用）。
+    // 実データ（S100YG5L）では同一開示間で Jaccard 0.96〜1.00・別開示との境界で 0.0 と
+    // 大きく開くため、「収益」「利益」等の一般的な財務語だけが偶然2件一致するような
+    // 誤チェーン（例: {収益,利益,合計} vs {収益,利益,資産} は交差2/和4=0.5）を避けるため、
+    // 実測値に対して十分な余裕を持たせた値にしている（Grok 4.5 監査指摘、2026-07-25）。
+    static let noteRowLabelJaccardThreshold = 0.6
+    // 偶然2項目だけ一致した場合の誤検出を避けるための最低一致件数。
+    static let noteRowLabelMinOverlapCount = 3
+
     // 地域別
     static let geographyTextBlockTags: Set<String> = [
         "InformationAboutGeographicalAreasIFRSTextBlock",                  // IFRS

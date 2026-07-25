@@ -216,6 +216,25 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(snap.axis == "geography")
         #expect(snap.needsReview == false)
     }
+
+    // MARK: - オリックス S100YG5L（2026-07-25、issue #103）
+
+    @Test(.enabled(if: cacheAvailable("S100YG5L"), "XBRL cache S100YG5L not available"))
+    func orixChainsCurrentPeriodBusinessSegmentTableAcrossColumnViews() throws {
+        // issue #103 の回帰: US-GAAP の巨大注記内で「事業別収益(前期)→地域別収益(前期)→
+        // 事業別収益(当期)→地域別収益(当期)」の4表が連続するが、列見出し（事業名/地域名）が
+        // 表ごとに異なるため headerRowsMatch のみでは前期の1表で打ち切られ、当期表に
+        // 到達できなかった（修正前の実データ検証: 候補4件、全て前期/比較のみで当期の
+        // 事業別セグメント表が1件も無かった）。行ラベル（収益・利益等）の Jaccard 一致を
+        // 追加条件にしたことで当期表まで到達できることを実データで確認する。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YG5L"))
+        #expect(result.method == "html_table")
+        let currentTables = result.tables.filter { $0.period == "当期" }
+        #expect(!currentTables.isEmpty)
+        let joined = currentTables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("法人営業"))
+        #expect(joined.contains("銀行・クレジット") || joined.contains("輸送機器"))
+    }
 }
 
 @Suite struct RealXbrlBreakdownResolverTests {
