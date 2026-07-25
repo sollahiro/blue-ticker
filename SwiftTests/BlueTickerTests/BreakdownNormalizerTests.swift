@@ -517,6 +517,42 @@ import Foundation
         #expect(snap.denominator == 100_000_000_000)
     }
 
+    @Test func salesBasisAlignsDenominatorWhenStage4SalesFarFromSegmentTotal() throws {
+        // 高島屋型（S100Y4X5）: Stage 4 は NetSales（売上高）だが、セグメント注記の
+        // RevenuesFromExternalCustomers は営業収益ベース。小計に揃えて分母を差し替える。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers",
+                contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("DepartmentStoresInJapanReportableSegmentsMember", 303_856_000_000),
+            fact("OverseasDepartmentStoresReportableSegmentsMember", 34_310_000_000),
+            fact("CommercialPropertyDevelopmentInJapanReportableSegmentsMember", 41_767_000_000),
+            fact("OverseasCommercialPropertyDevelopmentReportableSegmentsMember", 15_738_000_000),
+            fact("FinanceReportableSegmentsMember", 20_699_000_000),
+            fact("ContractAndDesignReportableSegmentsMember", 33_240_000_000),
+            fact(
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                42_756_000_000),
+            fact("TotalOfReportableSegmentsAndOthersMember", 492_370_000_000),
+            fact("ReportableSegmentsMember", 449_613_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 401_958_000_000))
+        #expect(snap.denominator == 492_370_000_000)
+        #expect(snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(snap.needsReview == false)
+        #expect(snap.axis == "business")
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }
+            .reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
     @Test func bankDenominatorPrefersTrueGrandTotalOverPartialTotalWhenSegmentIsNegative() throws {
         // 回帰テスト: 市場部門が赤字の期は「顧客部門のみの部分合計」が「全社合計」より大きくなり、
         // 単純な最大値採用だと部分合計を誤って分母に選んでしまう。segment 行の合計に最も近い値

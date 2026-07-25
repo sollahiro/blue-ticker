@@ -115,25 +115,55 @@ enum BreakdownNormalizer {
             }
         }
 
+        // 高島屋型: Stage 4 が NetSales（売上高）を取る一方、セグメント注記の
+        // RevenuesFromExternalCustomers は営業収益ベース。Stage 4 売上を分母にしたままだと
+        // amount/denominator が 1 を大きく超え比較不能になる（実データ: S100Y4X5、2026-07-25）。
+        // 小計（または segment 合計）が Stage 4 売上と ±5% 超乖離するときは注記側に揃える。
+        // segmentSum は 2 次判定後の kinds で再集計する（小計へ昇格した行を含めない）。
+        let segmentSum = perMember.keys.filter { kinds[$0] == "segment" }
+            .reduce(0.0) { $0 + perMember[$1]!.value }
+        let subtotalCandidates = perMember.keys.filter { kinds[$0] == "subtotal" }
+        let segmentConsistentDenominator: Double? = {
+            if let closest = subtotalCandidates.min(by: {
+                abs(perMember[$0]!.value - segmentSum) < abs(perMember[$1]!.value - segmentSum)
+            }) {
+                let subtotalValue = perMember[closest]!.value
+                if abs(subtotalValue) > 0,
+                   abs(subtotalValue - segmentSum) / abs(subtotalValue) <= 0.05
+                {
+                    return subtotalValue
+                }
+            }
+            return segmentSum != 0 ? segmentSum : nil
+        }()
+
+        var denominator = consolidatedSales
+        var warnings: [String] = []
+        if let aligned = segmentConsistentDenominator, aligned != 0,
+           abs(consolidatedSales - aligned) / abs(aligned) > 0.05
+        {
+            denominator = aligned
+            warnings.append("sales_denominator_aligned_to_segment_total")
+        }
+
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
             let fact = perMember[member]!
             return BreakdownRow(
                 labelRaw: member,
                 amount: fact.value,
-                share: fact.value / consolidatedSales,
+                share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
                 rowKind: kinds[member]!
             )
         }
 
         let (axis, axisNeedsReview) = classifyAxis(rows: rows)
-        var warnings: [String] = []
         if axisNeedsReview { warnings.append("axis_ambiguous") }
         if denominatorNeedsReview { warnings.append("denominator_tag_ambiguous") }
 
         return BreakdownSnapshot(
             axis: axis,
-            denominator: consolidatedSales,
+            denominator: denominator,
             denominatorTag: denominatorTag,
             rows: rows,
             sourceKind: "xbrl_facts",

@@ -35,7 +35,8 @@ enum SegmentInfoLLMNormalizer {
     - 前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
     - 行ラベルは事業名・製品名・サービス名であるべきで、地域名ではないこと。事業別のはずが実際には地域別の表（見出しの取り違え）である場合は applicable=false を返すこと
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること
-    - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
+    - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、純粋な除去・消去・調整だけの行（例:「消去」「調整額」「連結消去」）は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
+    - 「その他（消去分を含む）」のように、残りの事業・本社勘定等と消去が一体になった列・行は row_kind="segment" とすること（ラベルに「消去」とあっても、単独の消去行ではない。野村HD等。ユーザー確認 2026-07-25）
     - 該当する事業別データが候補テーブル群に存在しない場合は applicable=false を返すこと
     - notes フィールドに、表選択・期間列選択・転置有無の根拠を短く日本語で記すこと
     """
@@ -150,7 +151,8 @@ enum SegmentInfoLLMNormalizer {
             let rawProfit = (raw["profit"] as? NSNumber)?.doubleValue
             rows.append(BreakdownRow(
                 labelRaw: label, amount: rawAmount * unitMultiplier, share: nil,
-                profit: rawProfit.map { $0 * unitMultiplier }, rowKind: rowKind
+                profit: rawProfit.map { $0 * unitMultiplier },
+                rowKind: resolvedRowKind(label: label, rowKind: rowKind)
             ))
         }
         guard !rows.isEmpty else { return (nil, audit) }
@@ -230,6 +232,14 @@ enum SegmentInfoLLMNormalizer {
             warnings: warnings
         )
         return (snapshot, audit)
+    }
+
+    /// LLM が「その他（消去分を含む）」を reconciling に誤分類しても、残事業バケットとして
+    /// segment に直す（野村HD、ユーザー確認 2026-07-25）。純粋な「消去」「調整額」だけの行は
+    /// reconciling のまま残す。
+    private static func resolvedRowKind(label: String, rowKind: String) -> String {
+        guard rowKind == "reconciling", label.contains("その他") else { return rowKind }
+        return "segment"
     }
 
     private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
