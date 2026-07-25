@@ -455,6 +455,46 @@ enum BreakdownExtractor {
         return a.map(stripFiscalYearLabel) == b.map(stripFiscalYearLabel)
     }
 
+    /// grid の1行目（見出し/期間行）を除く各行から、行ラベル（先頭セルが非数値かつ同じ行に
+    /// 数値セルが1つ以上ある場合の先頭セル文字列）の集合を作る。カテゴリ名だけが並ぶ見出し行
+    /// （例:「建設機械・車両｜リテールファイナンス」のような列見出し行）は、その行に数値セルが
+    /// 無いため行ラベルとみなさない。
+    ///
+    /// 地域名（日本・米州・欧州等）は行ラベルの候補から除外する。地域名は同一注記内で
+    /// 「売上高の地域別内訳」「有形固定資産の地域別内訳」のように**別々の指標の開示**で
+    /// 使い回されるため、一致しても「同じ開示の続き」の根拠にならない（実データ検証:
+    /// 富士フイルム S100W3XJ。売上高地域別表と有形固定資産地域別表が同一の地域名
+    /// 「日本・米州・欧州・アジア及びその他」を行ラベルに持ち、Jaccard 1.0 で誤ってチェーン
+    /// されていた。golden parity 回帰、CI 発覚 2026-07-25）。
+    private static func rowLabelSet(_ grid: [[String]]) -> Set<String> {
+        var labels: Set<String> = []
+        for row in grid.dropFirst() {
+            guard let first = row.first, !first.isEmpty, XBRLUtils.parseHtmlNumber(first) == nil else { continue }
+            guard !Xbrl.segmentGeographyLabelKeywordsJa.contains(where: first.contains) else { continue }
+            let hasNumericSibling = row.dropFirst().contains { XBRLUtils.parseHtmlNumber($0) != nil }
+            if hasNumericSibling { labels.insert(first) }
+        }
+        return labels
+    }
+
+    /// 2つの表が「同じ財務項目行を異なる列構成（事業別／地域別など）または期間で開示した続き」
+    /// とみなせるか。列見出しの完全一致を要求する `headerRowsMatch` では、同一注記内で
+    /// 事業別 view → 地域別 view のように列構成が変わる開示（オリックス型 US-GAAP 巨大注記、
+    /// issue #103）を取りこぼす。行ラベル集合の Jaccard 類似度が閾値以上なら「同じ開示の続き」
+    /// とみなす（`headerRowsMatch` の代替条件。実データ検証: S100YG5L、事業別/地域別いずれも
+    /// 22項目中22項目一致=Jaccard 1.0、資産注記との境界では一致0件=Jaccard 0.0）。
+    /// カテゴリ名だけが並ぶ見出し行（行ラベルを持たない表）はどちらも空集合になるため、
+    /// 空集合同士は非該当として扱う（誤って一致とみなさない）。
+    private static func rowLabelSetsOverlapEnough(_ a: [[String]], _ b: [[String]]) -> Bool {
+        let labelsA = rowLabelSet(a)
+        let labelsB = rowLabelSet(b)
+        guard !labelsA.isEmpty, !labelsB.isEmpty else { return false }
+        let intersection = labelsA.intersection(labelsB)
+        guard intersection.count >= Xbrl.noteRowLabelMinOverlapCount else { return false }
+        let union = labelsA.union(labelsB)
+        return Double(intersection.count) / Double(union.count) >= Xbrl.noteRowLabelJaccardThreshold
+    }
+
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
     static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
         var i = 0
@@ -592,16 +632,22 @@ enum BreakdownExtractor {
                     tables.append(BreakdownTable(heading: keyword, markdown: md, period: period))
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
-                    // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ見出し行
-                    // （grid 先頭行）が完全一致するか、西暦年度ラベルだけが異なる（実データ検証:
-                    // 小松製作所の US-GAAP セグメント注記。「2024年度」「2025年度」のように
-                    // 見出し行自体に年度が埋め込まれ、前期・当期表で完全一致しないため見逃していた）
-                    // なら「同じ表の続き」とみなして拾い続ける。それ以外の違いがあれば別の開示と
-                    // みなし打ち切る。
+                    // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを
+                    // 満たすなら「同じ表の続き」とみなして拾い続ける。どちらも満たさなければ
+                    // 別の開示とみなし打ち切る。
+                    // (a) 見出し行（grid 先頭行）が完全一致するか、西暦年度ラベルだけが異なる
+                    //     （実データ検証: 小松製作所の US-GAAP セグメント注記。「2024年度」
+                    //     「2025年度」のように見出し行自体に年度が埋め込まれ、前期・当期表で
+                    //     完全一致しないため見逃していた）
+                    // (b) 見出し行（列構成）自体は一致しないが、行ラベル集合（財務項目名）が
+                    //     Jaccard で高一致する（実データ検証: オリックスの US-GAAP セグメント
+                    //     注記、issue #103。事業別 view→地域別 view のように列構成が変わる
+                    //     開示は (a) では拾えず当期表を取りこぼしていた）
                     if let chained = findImmediatelyChainedTable(after: table),
                        !seen.contains(ObjectIdentifier(chained)) {
                         let chainedGrid = expandTable(chained)
-                        if headerRowsMatch(chainedGrid.first, grid.first) {
+                        if headerRowsMatch(chainedGrid.first, grid.first)
+                            || rowLabelSetsOverlapEnough(grid, chainedGrid) {
                             candidate = chained
                             continue
                         }

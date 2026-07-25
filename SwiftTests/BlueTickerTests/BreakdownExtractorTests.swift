@@ -460,6 +460,132 @@ import Foundation
         }
     }
 
+    // オリックス型フィクスチャ共通のテーブル片。行ラベル（収益・利益・費用）を3件共有させ、
+    // Jaccard 一致に必要な最低一致件数（`Xbrl.noteRowLabelMinOverlapCount` = 3）を満たす。
+    private func orixStyleSegmentTable(period: String, colA: String, colB: String, values: [String]) -> String {
+        "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;\(period)&lt;/td&gt;&lt;td&gt;\(colA)&lt;/td&gt;&lt;td&gt;\(colB)&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;\(values[0])&lt;/td&gt;&lt;td&gt;\(values[1])&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;利益&lt;/td&gt;&lt;td&gt;\(values[2])&lt;/td&gt;&lt;td&gt;\(values[3])&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;費用&lt;/td&gt;&lt;td&gt;\(values[4])&lt;/td&gt;&lt;td&gt;\(values[5])&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+    }
+
+    @Test func segmentInfoChainsAcrossDifferentColumnViewsWhenRowLabelsMatch() {
+        // オリックス型の回帰（issue #103、実データ検証: S100YG5L）: US-GAAP の巨大注記内で
+        // 「事業別収益（前期）」→「地域別収益（前期）」→「事業別収益（当期）」→「地域別収益（当期）」
+        // の4表が連続する。列見出し（事業名／地域名）は表ごとに異なるため headerRowsMatch は
+        // 不一致になるが、各表の行ラベル（収益・利益・費用）は共通しており「同じ開示の別 view」と
+        // みなせる。この行ラベル一致が無ければ最初の1表（前期・事業別）で打ち切られ、
+        // 当期表（table3）に到達できなかった（実データでも当期表が一切見つからない不具合として
+        // 顕在化していた）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            orixStyleSegmentTable(period: "前連結会計年度", colA: "事業A", colB: "事業B", values: ["100", "50", "10", "5", "20", "15"]) +
+            orixStyleSegmentTable(period: "前連結会計年度", colA: "米州", colB: "欧州", values: ["80", "70", "8", "7", "18", "16"]) +
+            orixStyleSegmentTable(period: "当連結会計年度", colA: "事業A", colB: "事業B", values: ["120", "60", "12", "6", "22", "17"]) +
+            orixStyleSegmentTable(period: "当連結会計年度", colA: "米州", colB: "欧州", values: ["90", "75", "9", "7", "19", "17"])
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 4)
+            #expect(result.tables.map(\.period) == ["前期", "前期", "当期", "当期"])
+            #expect(result.tables[2].markdown.contains("120") && result.tables[2].markdown.contains("60"))
+            #expect(result.tables[3].markdown.contains("90") && result.tables[3].markdown.contains("75"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenRowLabelOverlapBelowMinimumCount() {
+        // Grok 4.5 監査指摘の回帰（2026-07-25）: 行ラベルが2件しか一致しない場合は
+        // `Xbrl.noteRowLabelMinOverlapCount`（3）未満のため Jaccard 経路も発火せず、
+        // 見出し不一致の表として打ち切られるべき（「収益」「利益」等の一般的な財務語だけが
+        // 偶然一致する誤チェーンを防ぐ安全弁）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度&lt;/td&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;利益&lt;/td&gt;&lt;td&gt;10&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;無関係な注記&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;利益&lt;/td&gt;&lt;td&gt;888&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;td&gt;777&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotChainWhenJaccardBelowThresholdDespiteThreeSharedLabels() {
+        // Grok 4.5 監査指摘の回帰（2026-07-25）: 一致件数が最低件数（3）を満たしていても、
+        // 和集合が大きく Jaccard が閾値（0.6）未満なら「同じ開示の続き」とはみなさない。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度&lt;/td&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;利益&lt;/td&gt;&lt;td&gt;10&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;費用&lt;/td&gt;&lt;td&gt;5&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;無関係な注記&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;利益&lt;/td&gt;&lt;td&gt;888&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;費用&lt;/td&gt;&lt;td&gt;777&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;資産&lt;/td&gt;&lt;td&gt;666&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;負債&lt;/td&gt;&lt;td&gt;555&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;純資産&lt;/td&gt;&lt;td&gt;444&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            // 交差3件（収益・利益・費用）/ 和集合6件（+資産・負債・純資産）= Jaccard 0.5 (<0.6) → 不一致
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("100"))
+        }
+    }
+
+    @Test func geographyDoesNotChainAcrossDifferentMetricsSharingSameRegionRowLabels() {
+        // 富士フイルム型の回帰（CI parityWithPythonGolden 差分、2026-07-25、S100W3XJ）:
+        // 「売上高の地域別内訳」表と「有形固定資産の地域別内訳」表が隣接し、どちらも行ラベルが
+        // 地域名（日本・米州・欧州）で一致するため、地域名を行ラベルとして扱うと
+        // Jaccard 0.6（交差3件「日本/米州/欧州」÷ 和集合5件「+売上高合計/有形固定資産合計」、
+        // 閾値ちょうど）で誤って連結されてしまう（golden は2表のみを期待）。地域名は複数の
+        // 異なる指標の開示で使い回されるため、行ラベルの一致シグナルから除外する必要がある。
+        let escaped =
+            "&lt;p&gt;地域別&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度&lt;/td&gt;&lt;td&gt;当連結会計年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;1049550&lt;/td&gt;&lt;td&gt;1099302&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;641784&lt;/td&gt;&lt;td&gt;646904&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;470573&lt;/td&gt;&lt;td&gt;544628&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;売上高合計&lt;/td&gt;&lt;td&gt;2960916&lt;/td&gt;&lt;td&gt;3195828&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度末&lt;/td&gt;&lt;td&gt;当連結会計年度末&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;385506&lt;/td&gt;&lt;td&gt;408084&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;447731&lt;/td&gt;&lt;td&gt;643690&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;488537&lt;/td&gt;&lt;td&gt;664752&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;有形固定資産合計&lt;/td&gt;&lt;td&gt;1395735&lt;/td&gt;&lt;td&gt;1786475&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("売上高合計"))
+            #expect(!result.tables[0].markdown.contains("有形固定資産"))
+        }
+    }
+
     @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
         // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
         // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`
