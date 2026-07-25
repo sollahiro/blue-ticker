@@ -299,7 +299,7 @@ import Foundation
         #expect(snap.axis == "geography")
     }
 
-    /// 対照群: 特定地域名が事業語を伴わず裸で混在する場合は needs_review を立てる。
+    /// 対照群: 特定地域名が事業語を伴わず裸で**1件だけ**混在する場合は needs_review を立てる。
     @Test func bareSpecificGeographyMemberMixedWithBusinessSegmentsStillTriggersNeedsReview() throws {
         let snap = try #require(Self.snapshot(labelsAndValues: [
             ("FoodsBusinessMember", 40_000_000_000),
@@ -308,6 +308,67 @@ import Foundation
         ]))
         #expect(snap.axis == "business")
         #expect(snap.needsReview == true)
+    }
+
+    @Test func nxhdLogisticsRegionsWithSpecialtyBusinessesDoNotTriggerNeedsReview() throws {
+        // NXHD（9147）S100XTG8: ロジスティクスを地域展開（日本/米州/欧州/東アジア/
+        // 南アジア・オセアニア）し、警備輸送・重量品建設・物流サポートと同居。
+        // 地域行はロジスティクス内訳として残し、axis_ambiguous にしない
+        // （ユーザー確認 2026-07-25）。
+        func fact(_ member: String, _ value: Double, profit: Double? = nil) -> [BreakdownFact] {
+            var facts = [
+                BreakdownFact(
+                    tag: "RevenueFromExternalCustomersIFRS",
+                    contextRef: "CurrentYearDuration_\(member)",
+                    dimensions: ["OperatingSegmentsAxis": member],
+                    value: value, label: nil, unitRef: "JPY", decimals: "-6"
+                )
+            ]
+            if let profit {
+                facts.append(
+                    BreakdownFact(
+                        tag: "SegmentProfitLossIFRS",
+                        contextRef: "CurrentYearDuration_\(member)",
+                        dimensions: ["OperatingSegmentsAxis": member],
+                        value: profit, label: nil, unitRef: "JPY", decimals: "-6"
+                    ))
+            }
+            return facts
+        }
+        var facts: [BreakdownFact] = []
+        facts += fact("JapanReportableSegmentMember", 1_222_355_000_000, profit: 44_511_000_000)
+        facts += fact("TheAmericasReportableSegmentMember", 121_416_000_000, profit: 5_768_000_000)
+        facts += fact("EuropeReportableSegmentMember", 513_815_000_000, profit: 4_796_000_000)
+        facts += fact("EastAsiaReportableSegmentMember", 147_561_000_000, profit: 5_708_000_000)
+        facts += fact("SouthAsiaAndOceaniaReportableSegmentMember", 129_006_000_000, profit: 3_257_000_000)
+        facts += fact("SecurityTransportationReportableSegmentMember", 68_597_000_000, profit: 2_493_000_000)
+        facts += fact(
+            "HeavyHaulageAndConstructionReportableSegmentMember", 45_136_000_000, profit: 5_307_000_000)
+        facts += fact("DistributionSupportReportableSegmentMember", 326_937_000_000, profit: 16_129_000_000)
+        facts += fact("TotalOfReportableSegmentsAndOthersMember", 2_574_826_000_000)
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 2_574_826_000_000))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("axis_ambiguous"))
+        #expect(snap.rows.contains {
+            $0.labelRaw == "JapanReportableSegmentMember" && $0.rowKind == "segment"
+                && $0.profit == 44_511_000_000
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "SecurityTransportationReportableSegmentMember" && $0.rowKind == "segment"
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "HeavyHaulageAndConstructionReportableSegmentMember"
+                && $0.rowKind == "segment"
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "DistributionSupportReportableSegmentMember" && $0.rowKind == "segment"
+        })
+        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }
+            .reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.001)
     }
 
     /// 学び11: 特定地域名＋汎用 Business ラッパだけのラベルは混在シグナルのまま

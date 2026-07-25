@@ -380,9 +380,8 @@ enum BreakdownNormalizer {
     /// ただし `JapanBusinessMember` / `AmericasBusiness…` のように地域名＋汎用の Business
     /// ラッパだけのラベルは、学び11どおり特定地域名混在として needs_review を立てる
     /// （INPEX 免除を Business ラッパまで広げない。Sonnet レビュー 2026-07-25）。
-    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」「JapanMember」のように
-    /// member ラベルが地域語だけ（他の事業語を伴わない）で、かつ他の segment が事業名という
-    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃すことがある。
+    /// 裸の地域行が1件だけ事業名と混在するケース（例: Foods + Japan）は従来どおり needs_review。
+    /// 裸の地域が複数かつ非地域の専門事業が同居する NXHD 型は下記で免除する。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
@@ -412,7 +411,20 @@ enum BreakdownNormalizer {
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
                 && !hasSubstantiveNonGeographyContent(member)
         }
-        return ("business", !bareSpecificGeoMatches.isEmpty)
+        if bareSpecificGeoMatches.isEmpty { return ("business", false) }
+
+        // NXHD型: ロジスティクスを日本/米州/欧州/東アジア/南アジア・オセアニアに展開し、
+        // 警備輸送・重量品建設・物流サポート等の専門事業と同居する。裸の地域行はロジスティクスの
+        // 地域内訳であり、事業軸として採用する（ユーザー確認 2026-07-25、S100XTG8）。
+        // 地域が1件だけの混在（Foods + Japan 等）は表取り違えの疑いが残るため要レビューのまま。
+        let nonGeographyBusinessMembers = segmentMembers.filter { member in
+            !Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
+                && hasSubstantiveNonGeographyContent(member)
+        }
+        if bareSpecificGeoMatches.count >= 2, !nonGeographyBusinessMembers.isEmpty {
+            return ("business", false)
+        }
+        return ("business", true)
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
