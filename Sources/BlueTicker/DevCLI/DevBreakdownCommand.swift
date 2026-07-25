@@ -149,10 +149,6 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
             printSegmentPreview(segments)
-            if segments.method == "not_found",
-               let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
-                printError("診断: 単一セグメントのため開示省略と明記されています: \(disclosure)\n")
-            }
 
             if let client = llmClient {
                 let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
@@ -164,6 +160,7 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                     printSnapshot(snapshot)
                 } else {
                     printError("business snapshot: nil\n")
+                    printNotApplicableReason(segments: segments, sales: sales, xbrlDir: xbrlDir)
                 }
             } else if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: sales),
                       snapshot.axis == "business" {
@@ -174,6 +171,7 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                 throw ExitCode.failure
             } else {
                 printError("business snapshot: nil\n")
+                printNotApplicableReason(segments: segments, sales: sales, xbrlDir: xbrlDir)
             }
         }
 
@@ -265,6 +263,22 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             }
         } else if result.method == "xbrl_facts" {
             printError("facts: \(result.facts.count)\n")
+        }
+    }
+
+    /// business snapshot が nil のとき、E（地域のみ）/ F（単一セグメント記載省略）を診断表示する
+    /// （issue #130）。`BreakdownExtractor.classifyNotApplicableReason` と同じ判定を ingest 側と共用する。
+    private func printNotApplicableReason(segments: ExtractedBreakdown, sales: Double?, xbrlDir: URL) {
+        switch BreakdownExtractor.classifyNotApplicableReason(
+            segments: segments, consolidatedSales: sales, xbrlDir: xbrlDir
+        ) {
+        case .geographyOnly:
+            printError("診断(E): 報告セグメントが地域別のみで、business 軸への swap が見つかりませんでした。\n")
+        case .singleSegmentDisclosed:
+            let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) ?? ""
+            printError("診断(F): 単一セグメントのため開示省略と明記されています: \(disclosure)\n")
+        case .unknown:
+            printError("診断: 該当理由を特定できませんでした（要調査）。\n")
         }
     }
 

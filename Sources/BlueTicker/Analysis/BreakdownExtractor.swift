@@ -82,6 +82,18 @@ extension ExtractedBreakdown {
     }
 }
 
+/// business breakdown が解決できなかった理由（診断用、issue #130）。
+/// rawValue は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`、公開文字列定数）と揃える
+/// （`BusinessBreakdownSource` と `breakdownSource*` の関係と同じパターン）。
+enum BusinessBreakdownNotApplicableReason: String, Equatable {
+    /// E: 報告セグメントが地域別のみで、business 軸への swap が見つからなかった（良品計画・マツダ型）。
+    case geographyOnly = "geography_only"
+    /// F: 単一セグメントのため報告セグメント開示自体が省略されていた。
+    case singleSegmentDisclosed = "single_segment_disclosed"
+    /// 上記いずれにも該当しない・原因未特定（要調査）。
+    case unknown
+}
+
 enum BreakdownExtractor {
 
     private static let currentPeriodKeywords = ["当連結会計年度", "当期"]
@@ -257,6 +269,24 @@ enum BreakdownExtractor {
             }
         }
         return nil
+    }
+
+    /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
+    /// 理由を推定する（診断用、issue #130）。`extractSegmentInfo` は既に axis-aware な swap を
+    /// 試みた後の `segments` を返すため、それでも method="xbrl_facts" のまま地域軸判定される場合は
+    /// swap 失敗（E）、method="not_found" かつ単一セグメント開示タグがあれば記載省略（F）とみなす。
+    static func classifyNotApplicableReason(
+        segments: ExtractedBreakdown, consolidatedSales: Double?, xbrlDir: URL
+    ) -> BusinessBreakdownNotApplicableReason {
+        if segments.method == "xbrl_facts",
+            BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)?.axis == "geography"
+        {
+            return .geographyOnly
+        }
+        if segments.method == "not_found", detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil {
+            return .singleSegmentDisclosed
+        }
+        return .unknown
     }
 
     /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
