@@ -289,6 +289,31 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    /// INPEX旧filings型（J-GAAP時代）の回帰: 報告セグメントが Americas/AsiaAndOceania/
+    /// Eurasia/Japan/MiddleEastAndAfrica という純粋な地域区分。`Eurasia`/`MiddleEastAndAfrica`
+    /// が `segmentGeographyMemberKeywords` に無いと NXHD 免除条件（裸地域2件以上+非地域事業2件
+    /// 以上）に誤ってヒットし axis=business, needs_review=false に確定してしまう
+    /// （実データ検証: S100QH2B、2026-07-25）。
+    @Test func inpexLegacyFilingPureRegionalSegmentsClassifyAsGeography() throws {
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "AmericasReportableSegmentMember",
+                "AsiaAndOceaniaReportableSegmentMember",
+                "EurasiaReportableSegmentMember",
+                "JapanReportableSegmentMember",
+                "MiddleEastAndAfricaReportableSegmentMember",
+            ]))
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("AmericasReportableSegmentMember", 300_000_000_000),
+            ("AsiaAndOceaniaReportableSegmentMember", 200_000_000_000),
+            ("EurasiaReportableSegmentMember", 400_000_000_000),
+            ("JapanReportableSegmentMember", 500_000_000_000),
+            ("MiddleEastAndAfricaReportableSegmentMember", 100_000_000_000),
+        ]))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
+
     /// エーザイ旧filings型の回帰（Opus監査 finding #2、2026-07-25）: 地域5member
     /// （Americas/AsiaAndLatinAmerica/China/EMEA/Japan）+ 残余バケツ「OTCAndOthers」1件という
     /// 構成（実データ: S100LKNM/S100O9U7/S100R09Z、`segmentOtherBusinessMemberNames` 未収録の
