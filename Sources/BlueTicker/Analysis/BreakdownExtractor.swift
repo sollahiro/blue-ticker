@@ -459,10 +459,18 @@ enum BreakdownExtractor {
     /// 数値セルが1つ以上ある場合の先頭セル文字列）の集合を作る。カテゴリ名だけが並ぶ見出し行
     /// （例:「建設機械・車両｜リテールファイナンス」のような列見出し行）は、その行に数値セルが
     /// 無いため行ラベルとみなさない。
+    ///
+    /// 地域名（日本・米州・欧州等）は行ラベルの候補から除外する。地域名は同一注記内で
+    /// 「売上高の地域別内訳」「有形固定資産の地域別内訳」のように**別々の指標の開示**で
+    /// 使い回されるため、一致しても「同じ開示の続き」の根拠にならない（実データ検証:
+    /// 富士フイルム S100W3XJ。売上高地域別表と有形固定資産地域別表が同一の地域名
+    /// 「日本・米州・欧州・アジア及びその他」を行ラベルに持ち、Jaccard 1.0 で誤ってチェーン
+    /// されていた。golden parity 回帰、CI 発覚 2026-07-25）。
     private static func rowLabelSet(_ grid: [[String]]) -> Set<String> {
         var labels: Set<String> = []
         for row in grid.dropFirst() {
             guard let first = row.first, !first.isEmpty, XBRLUtils.parseHtmlNumber(first) == nil else { continue }
+            guard !Xbrl.segmentGeographyLabelKeywordsJa.contains(where: first.contains) else { continue }
             let hasNumericSibling = row.dropFirst().contains { XBRLUtils.parseHtmlNumber($0) != nil }
             if hasNumericSibling { labels.insert(first) }
         }

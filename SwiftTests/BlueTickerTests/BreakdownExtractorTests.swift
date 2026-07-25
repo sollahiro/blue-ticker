@@ -553,6 +553,39 @@ import Foundation
         }
     }
 
+    @Test func geographyDoesNotChainAcrossDifferentMetricsSharingSameRegionRowLabels() {
+        // 富士フイルム型の回帰（CI parityWithPythonGolden 差分、2026-07-25、S100W3XJ）:
+        // 「売上高の地域別内訳」表と「有形固定資産の地域別内訳」表が隣接し、どちらも行ラベルが
+        // 地域名（日本・米州・欧州）で一致するため、地域名を行ラベルとして扱うと
+        // Jaccard 0.6（交差3件「日本/米州/欧州」÷ 和集合5件「+売上高合計/有形固定資産合計」、
+        // 閾値ちょうど）で誤って連結されてしまう（golden は2表のみを期待）。地域名は複数の
+        // 異なる指標の開示で使い回されるため、行ラベルの一致シグナルから除外する必要がある。
+        let escaped =
+            "&lt;p&gt;地域別&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度&lt;/td&gt;&lt;td&gt;当連結会計年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;1049550&lt;/td&gt;&lt;td&gt;1099302&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;641784&lt;/td&gt;&lt;td&gt;646904&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;470573&lt;/td&gt;&lt;td&gt;544628&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;売上高合計&lt;/td&gt;&lt;td&gt;2960916&lt;/td&gt;&lt;td&gt;3195828&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;前連結会計年度末&lt;/td&gt;&lt;td&gt;当連結会計年度末&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;385506&lt;/td&gt;&lt;td&gt;408084&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;447731&lt;/td&gt;&lt;td&gt;643690&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;488537&lt;/td&gt;&lt;td&gt;664752&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;有形固定資産合計&lt;/td&gt;&lt;td&gt;1395735&lt;/td&gt;&lt;td&gt;1786475&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("売上高合計"))
+            #expect(!result.tables[0].markdown.contains("有形固定資産"))
+        }
+    }
+
     @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
         // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
         // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`
