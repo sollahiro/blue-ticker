@@ -677,6 +677,31 @@ import Foundation
         }
     }
 
+    /// エーザイ型: IFRS「主要な製品に関する情報」専用タグを製品・サービス別として先頭結合。
+    @Test func segmentInfoPrependsIFRSProductsAndServicesTables() {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:jpigp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アメリカス&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;外部顧客への売上収益&lt;/td&gt;&lt;td&gt;229238&lt;/td&gt;&lt;td&gt;300440&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+          <jpigp_cor:InformationAboutProductsAndServicesIFRSTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;ニューロロジー領域製品&lt;/td&gt;&lt;td&gt;オンコロジー領域製品&lt;/td&gt;&lt;td&gt;その他&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;外部顧客への売上収益&lt;/td&gt;&lt;td&gt;260568&lt;/td&gt;&lt;td&gt;362668&lt;/td&gt;&lt;td&gt;202142&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpigp_cor:InformationAboutProductsAndServicesIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.tables.first?.heading == BreakdownExtractor.productOrServiceHeading)
+            let joined = result.tables.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("ニューロロジー領域製品"))
+            #expect(joined.contains("オンコロジー領域製品"))
+            #expect(BreakdownExtractor.tablesContainSalesEquivalent(result.tables))
+        }
+    }
+
     @Test func tablesContainSalesEquivalentDetectsBankAndContractRevenue() {
         #expect(BreakdownExtractor.tablesContainSalesEquivalent([
             BreakdownTable(heading: "x", markdown: "| 実質業務粗利益 | 100 |", period: nil)
@@ -725,6 +750,20 @@ import Foundation
             ),
         ]
         #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(revenueTypeOnly))
+
+        // エーザイ型: 列見出しが医薬品販売/ライセンス供与（脚注の「ライセンス収入」無しでも種類分解）
+        let eisaiTypeOnly = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: """
+                | | 医薬品販売による収益 | ライセンス供与による収益 | 合計 |
+                |---|---|---|---|
+                | 日本 | 226140 | 1725 | 229238 |
+                """,
+                period: "当期"
+            ),
+        ]
+        #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(eisaiTypeOnly))
 
         let businessRows = [
             BreakdownTable(

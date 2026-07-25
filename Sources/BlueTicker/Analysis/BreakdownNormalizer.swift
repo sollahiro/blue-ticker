@@ -115,29 +115,70 @@ enum BreakdownNormalizer {
             }
         }
 
+        // 高島屋型: Stage 4 が NetSales（売上高）を取る一方、セグメント注記の
+        // RevenuesFromExternalCustomers は営業収益ベース。Stage 4 売上を分母にしたままだと
+        // amount/denominator が 1 を大きく超え比較不能になる（実データ: S100Y4X5、2026-07-25）。
+        // 小計（または segment 合計）が Stage 4 売上と ±5% 超乖離するときは注記側に揃える。
+        // segmentSum は 2 次判定後の kinds で再集計する（小計へ昇格した行を含めない）。
+        let segmentSum = perMember.keys.filter { kinds[$0] == "segment" }
+            .reduce(0.0) { $0 + perMember[$1]!.value }
+        let subtotalCandidates = perMember.keys.filter { kinds[$0] == "subtotal" }
+        let segmentConsistentDenominator: Double? = {
+            if let closest = subtotalCandidates.min(by: {
+                abs(perMember[$0]!.value - segmentSum) < abs(perMember[$1]!.value - segmentSum)
+            }) {
+                let subtotalValue = perMember[closest]!.value
+                if abs(subtotalValue) > 0,
+                   abs(subtotalValue - segmentSum) / abs(subtotalValue) <= 0.05
+                {
+                    return subtotalValue
+                }
+            }
+            return segmentSum != 0 ? segmentSum : nil
+        }()
+
+        var denominator = consolidatedSales
+        var warnings: [String] = []
+        // 名称一致小計で裏取りできた揃えは needs_review にしない（高島屋型）。
+        // 小計が無く segmentSum だけに落ちる揃えは抽出不全の疑いがあるため要レビュー
+        // （Opus 監査 2026-07-25）。
+        var uncorroboratedDenominatorAlignment = false
+        if let aligned = segmentConsistentDenominator, aligned != 0,
+           abs(consolidatedSales - aligned) / abs(aligned) > 0.05
+        {
+            denominator = aligned
+            warnings.append("sales_denominator_aligned_to_segment_total")
+            let corroboratedBySubtotal = subtotalCandidates.contains { member in
+                let value = perMember[member]!.value
+                return abs(value) > 0 && abs(value - aligned) / abs(aligned) <= 0.05
+            }
+            if !corroboratedBySubtotal {
+                uncorroboratedDenominatorAlignment = true
+            }
+        }
+
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
             let fact = perMember[member]!
             return BreakdownRow(
                 labelRaw: member,
                 amount: fact.value,
-                share: fact.value / consolidatedSales,
+                share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
                 rowKind: kinds[member]!
             )
         }
 
         let (axis, axisNeedsReview) = classifyAxis(rows: rows)
-        var warnings: [String] = []
         if axisNeedsReview { warnings.append("axis_ambiguous") }
         if denominatorNeedsReview { warnings.append("denominator_tag_ambiguous") }
 
         return BreakdownSnapshot(
             axis: axis,
-            denominator: consolidatedSales,
+            denominator: denominator,
             denominatorTag: denominatorTag,
             rows: rows,
             sourceKind: "xbrl_facts",
-            needsReview: axisNeedsReview || denominatorNeedsReview,
+            needsReview: axisNeedsReview || denominatorNeedsReview || uncorroboratedDenominatorAlignment,
             warnings: warnings
         )
     }
@@ -350,9 +391,8 @@ enum BreakdownNormalizer {
     /// ただし `JapanBusinessMember` / `AmericasBusiness…` のように地域名＋汎用の Business
     /// ラッパだけのラベルは、学び11どおり特定地域名混在として needs_review を立てる
     /// （INPEX 免除を Business ラッパまで広げない。Sonnet レビュー 2026-07-25）。
-    /// 既知のトレードオフ: 「DomesticMember」「OverseasMember」「JapanMember」のように
-    /// member ラベルが地域語だけ（他の事業語を伴わない）で、かつ他の segment が事業名という
-    /// 真に軸混在のケースも、本ルールでは needs_review を立てず見逃すことがある。
+    /// 裸の地域行が1件だけ事業名と混在するケース（例: Foods + Japan）は従来どおり needs_review。
+    /// 裸の地域が複数かつ非地域の専門事業が同居する NXHD 型は下記で免除する。
     private static func classifyAxis(rows: [BreakdownRow]) -> (axis: String, needsReview: Bool) {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
@@ -366,13 +406,40 @@ enum BreakdownNormalizer {
         }
         if geoMatches.isEmpty { return ("business", false) }
 
+        // TOTO型: 報告セグメントが「日本住設」＋海外住設の地域内訳（米州/アジア・オセアニア/欧州/
+        // 中国大陸）＋「先進セラミック」。海外側 member は Americas / Europe 等の裸の地域名だが、
+        // HousingEquipment 語幹を持つ行が同居するならマネジメント・アプローチ上の事業区分であり
+        // 真の軸混在ではない（ユーザー確認 2026-07-25、S100YC72）。
+        // 資生堂型の JapanBusiness のみの地域事業ユニット（製品別は記載省略）には HousingEquipment
+        // が無いので、この免除は当たらない。
+        if segmentMembers.contains(where: { $0.contains("HousingEquipment") }) {
+            return ("business", false)
+        }
+
         // 裸の特定地域名（＋汎用 Business ラッパのみ）を混在シグナルにする。
         // OilAndGasJapan 等、固有語幹が残る複合は除外。
         let bareSpecificGeoMatches = segmentMembers.filter { member in
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
                 && !hasSubstantiveNonGeographyContent(member)
         }
-        return ("business", !bareSpecificGeoMatches.isEmpty)
+        if bareSpecificGeoMatches.isEmpty { return ("business", false) }
+
+        // NXHD型: ロジスティクスを日本/米州/欧州/東アジア/南アジア・オセアニアに展開し、
+        // 警備輸送・重量品建設・物流サポート等の専門事業と同居する。裸の地域行はロジスティクスの
+        // 地域内訳であり、事業軸として採用する（ユーザー確認 2026-07-25、S100XTG8）。
+        // 資生堂型の JapanBusiness / AmericasBusiness ラッパは「Business」を含むため除外する
+        // （学び11。ラッパ付き裸地域を件数だけで免除すると資生堂型の要レビューが消える。
+        // Opus 監査 2026-07-25）。
+        // 地域が1件だけの混在（Foods + Japan 等）は表取り違えの疑いが残るため要レビューのまま。
+        let nonGeographyBusinessMembers = segmentMembers.filter { member in
+            !Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
+                && hasSubstantiveNonGeographyContent(member)
+        }
+        let bareGeoWithoutBusinessWrapper = bareSpecificGeoMatches.filter { !$0.contains("Business") }
+        if bareGeoWithoutBusinessWrapper.count >= 2, !nonGeographyBusinessMembers.isEmpty {
+            return ("business", false)
+        }
+        return ("business", true)
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と
@@ -406,7 +473,8 @@ enum BreakdownNormalizer {
     /// Domestic/Overseas だけでなく Japan 等の特定地域名も除去する
     /// （INPEX `OilAndGasJapan…` → `OilAndGas` が残る、実データ検証 2026-07-24）。
     /// `JapanBusiness…` は Business 除去後に空になり「実質語幹なし」＝混在シグナル対象のまま
-    /// （学び11。Business ラッパを事業語幹とみなすと資生堂/TOTO 型の要レビューが消える）。
+    /// （学び11。Business ラッパを事業語幹とみなすと資生堂型の要レビューが消える）。
+    /// TOTO の海外住設（Americas 等）は `classifyAxis` 側の HousingEquipment 同居免除で扱う。
     private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
         var stripped = member
         // 長いキーワードから消す（NorthAmerica を America より先に、等）

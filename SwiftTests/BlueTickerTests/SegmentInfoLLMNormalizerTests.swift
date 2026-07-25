@@ -145,8 +145,10 @@ private actor MockChatCompleting: ChatCompleting {
 
     /// 野村HD型の回帰（issue #105）: 証券会社は資金調達費用（金融費用）が大きく、
     /// セグメント表の「収益合計（金融費用控除後）」は連結売上高（総額）の半分以下になる。
-    /// segment+reconciling合計が表自身のsubtotal行（「計」）と一致する場合、
-    /// consolidatedSales基準では乖離してもneeds_reviewを立てず、subtotalへ分母を差し替える。
+    /// segment 合計が表自身の subtotal 行（「計」）と一致する場合、
+    /// consolidatedSales 基準では乖離しても needs_review を立てず、subtotal へ分母を差し替える。
+    /// 「その他（消去分を含む）」は LLM が reconciling と返しても残事業バケットとして segment に直す
+    /// （ユーザー確認 2026-07-25）。
     @Test func fallsBackToInternalSubtotalWhenSalesBasisMismatchesButTableReconciles() async throws {
         let response: [String: Any] = [
             "applicable": true,
@@ -159,6 +161,7 @@ private actor MockChatCompleting: ChatCompleting {
                 ["label": "インベストメント・マネジメント部門", "amount": 258_516, "profit": 88_297, "row_kind": "segment"],
                 ["label": "ホールセール部門", "amount": 1_162_229, "profit": 200_567, "row_kind": "segment"],
                 ["label": "バンキング部門", "amount": 53_918, "profit": 14_016, "row_kind": "segment"],
+                // LLM が誤って reconciling と返しても決定的に segment へ直すことを検証する。
                 ["label": "その他（消去分を含む）", "amount": 196_873, "profit": 24_646, "row_kind": "reconciling"],
                 ["label": "計", "amount": 2_159_442, "profit": 531_550, "row_kind": "subtotal"],
             ],
@@ -174,8 +177,40 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.denominator == 2_159_442 * Financial.millionYen)
         #expect(snapshot.warnings.contains("llm_denominator_from_internal_subtotal"))
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
+        let otherRow = try #require(snapshot.rows.first { $0.labelRaw == "その他（消去分を含む）" })
+        #expect(otherRow.rowKind == "segment")
         let wealthRow = try #require(snapshot.rows.first { $0.labelRaw == "ウェルス・マネジメント部門" })
         #expect(wealthRow.share == 487_906 * Financial.millionYen / (2_159_442 * Financial.millionYen))
+        let segmentShare = snapshot.rows.filter { $0.rowKind == "segment" }
+            .reduce(0.0) { $0 + ($1.share ?? 0) }
+        #expect(abs(segmentShare - 1.0) < 0.001)
+    }
+
+    @Test func keepsPureEliminationRowsAsReconciling() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "A事業", "amount": 80, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "B事業", "amount": 20, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "消去", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
+                ["label": "その他の調整額", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
+                ["label": "計", "amount": 100, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 100 * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        let elim = try #require(snapshot.rows.first { $0.labelRaw == "消去" })
+        #expect(elim.rowKind == "reconciling")
+        let otherAdj = try #require(snapshot.rows.first { $0.labelRaw == "その他の調整額" })
+        #expect(otherAdj.rowKind == "reconciling")
     }
 
     /// subtotal行がsegment+reconciling合計から大きく乖離する（5%超）場合はフォールバックせず、
