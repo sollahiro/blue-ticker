@@ -1,158 +1,91 @@
-# 引き継ぎ: 日経225 Stage 6 business カバレッジ（2026-07-25 棚卸し完了）
+# 引き継ぎ: 日経225 Stage 6 business カバレッジ（2026-07-25 ingest 完了）
 
-次セッション向け。Stage 6（`company_breakdowns` / axis=business）の空き・`needs_review` 棚卸しは一段落。残りは **DB 再 ingest**（と任意の `breakdown-v5` バンプ）。
+Stage 6（`company_breakdowns` / axis=business）の needs_review 棚卸しと、対象 7 社の本番 DB 再 ingest まで完了。
 
 ## ゴール
 
 - 日経225の **business 軸** を、開示がある会社は正しく埋める
-- **E（地域のみ）/ F（単一セグメント）** は空のままでよい（無理に埋めない）
-- `needs_review` は 1 社ずつ原因を見て直す（一括雑修正しない）
+- **E（地域のみ）/ F（単一セグメント）** は空のままでよい
+- `needs_review` は 1 社ずつ原因を見て直す
 
-正本コンセプト: `docs/breakdown-normalization-concept.md`  
-ロードマップ: `docs/blt-server-roadmap.md`（Stage 6）
+正本: `docs/breakdown-normalization-concept.md` / `docs/blt-server-roadmap.md`（Stage 6）
 
 ---
 
-## Git / PR 状態（重要）
+## Git / DB 状態
 
 | 項目 | 値 |
 |------|-----|
-| 作業ブランチ | `cursor/stage6-nikkei225-business-203b`（base: `main` @ `ffe85c9`） |
+| 作業ブランチ | `cursor/stage6-nikkei225-business-203b` |
 | PR #120 / #122 / #123 | **merged** |
+| `breakdownCacheVersion` | まだ **`breakdown-v4`**（v5 バンプは未実施） |
 
-### `breakdownCacheVersion` は **v4 のまま保留 → バンプ可**
+### 2026-07-25 本番 ingest（完了）
 
-- 現行: `breakdown-v4`
-- **棚卸し完了**（下記）。分母揃え等を他社へ広げるなら、ingest 直前に `breakdown-v5` へバンプしてよい
-- バンプ箇所: `BreakdownContract.swift` + `.agents/rules/project/versioning.md`
+```bash
+# pooler 端点は transaction_read_only=on のため direct 端点を使用
+DATABASE_URL=<non-pooler> \
+  .build/debug/blt-server ingest --stages 6 --codes 4385,4523,5332,7532,8233,8604,9147
+```
+
+結果サマリ: `attempted=36 failed=0 stored=36 skipped=4`
+
+| Code | 会社 |  ingest 後 latest | source |
+|------|------|-------------------|--------|
+| 4385 | メルカリ | nr=**false** | Marketplace / Fintech / その他 |
+| 4523 | エーザイ | nr=**false** | ニューロ / オンコ / その他 |
+| 5332 | TOTO | nr=**false** | 住設+海外地域+先進セラミック |
+| 7532 | パンパシHD | nr=**false** | 品目+北米/アジア+その他収益 |
+| 8233 | 高島屋 | nr=**false**（warn: 分母揃え） | 百貨店/不動産/建装/金融 等 |
+| 8604 | 野村 | nr=**false**（warn: 表の計） | WM/IM/WS/銀行/**その他（消去分を含む）** |
+| 9147 | NXHD | nr=**false** | ロジ地域+専門事業 |
+| 4911 | 資生堂 | **未更新**（F・対象外） | stale flagged のまま |
+
+### 運用メモ: Neon pooler が read-only
+
+- Secret / `.env` の `-pooler` ホストは `transaction_read_only=on`
+- 書き込み時は `-pooler` を除いた direct ホストを使う
+- 読み取りは pooler のままで可
 
 ---
 
-## 2026-07-25 再スキャン結果（読み取りのみ）
+## 棚卸し結果（再掲）
 
-前提:
-
-- `assets/nikkei225.csv` は **gitignore**（親リポジトリ `blue-ticker/assets/` に実体。worktree は symlink）
-- ローカル `.env` の `DATABASE_URL` は本番寄り → **SELECT のみ。ingest 禁止**
-
-### 母集団
-
-- 日経225 コード: **223**
-- business 行あり: **206**
-- 空き: **17**（下記。E/F/既知ギャップと一致）
-- 最新行 `needs_review=true`: **8**（すべてコード修正済みの stale DB）
-
-### 最新 `needs_review=true`（DB）→ live 再確認
-
-| Code | 会社 | DB | live（本セッション） | 次 |
-|------|------|-----|----------------------|-----|
-| 4385 | メルカリ | `xbrl_facts` + axis_ambiguous | `segment_info_llm` Marketplace/Fintech/その他, nr=**false** | **再 ingest** |
-| 4523 | エーザイ | `xbrl_facts` + axis_ambiguous | `segment_info_llm` ニューロ/オンコ/その他, nr=**false** | **再 ingest** |
-| 5332 | TOTO | axis_ambiguous | `xbrl_facts` 住設+地域+先進セラミック, nr=**false** | **再 ingest** |
-| 7532 | パンパシHD | business_label_mismatch | `revenue_recognition_llm` 品目+海外, nr=**false** | **再 ingest** |
-| 8233 | 高島屋 | axis_ambiguous（分母=売上高） | 分母=営業収益小計, nr=**false**, warning=`sales_denominator_aligned_to_segment_total` | **再 ingest** |
-| 8604 | 野村 | llm_row_sum_mismatch / v1 | 分母=表の計, 「その他（消去分を含む）」=segment, nr=**false** | **再 ingest** |
-| 9147 | NXHD | axis_ambiguous | ロジ地域+専門事業, nr=**false**, warnings=[] | **再 ingest** |
-| 4911 | 資生堂 | axis_ambiguous | LLM が地域事業表を返し nr=**true**（`business_label_looks_like_geography`） | **F・空のまま**（ingest しない。ユーザー合意） |
-
-### すでに DB 反映済み（再 ingest 不要）
-
-| Code | 会社 | DB latest |
-|------|------|-----------|
-| 1605 | INPEX | nr=false, `xbrl_facts` |
-| 2502 | アサヒ | nr=false, `revenue_recognition_llm` |
-| 3659 | ネクソン | nr=false, `segment_info_llm` |
+- 日経225: 223 社 / business あり 206 / 空き 17（E/F/オリックス）
+- 新規にコード修正が必要な needs_review は無し（PR #122/#123 で解消済み）
+- 資生堂は **F**（製品別省略 → business 空）。「E 地域のみ」ではない
 
 ### 空き 17（空のままでよい）
 
 | 分類 | コード |
 |------|--------|
-| **F 単一** | 3436 SUMCO, 4704 トレンド, 6273 SMC, 6526 ソシオネクスト, 6532 ベイカレント, 8697 JPX, 6861 キーエンス, 7186 横浜FG, 8331 千葉銀, 8354 ふくおかFG, 4507 塩野義, 4519 中外, 5214 日電硝, 3092 ZOZO, **4911 資生堂**（DB に stale flagged 行あり・ingest 対象外） |
-| **E 地域のみ** | 7453 良品計画, 7261 マツダ |
-| **既知ギャップ** | 8591 オリックス（#103・今はやらない） |
-
-→ **新規にコード修正が必要な needs_review / 空きは無し。**
+| **F** | 3436, 4704, 6273, 6526, 6532, 8697, 6861, 7186, 8331, 8354, 4507, 4519, 5214, 3092, **4911** |
+| **E** | 7453 良品計画, 7261 マツダ |
+| **既知ギャップ** | 8591 オリックス |
 
 ---
 
-## 次セッションの進め方
+## 次にやること（任意）
 
-1. **使い捨て Neon** の `DATABASE_URL` を用意（ローカル `.env` は使わない）
-2. （推奨）`breakdownCacheVersion` → `breakdown-v5` をバンプ
-3. Stage 6 再 ingest:
-
-```bash
-swift build --product blt-server
-# 要再計算の flagged 7 社（資生堂 4911 は除外）
-.build/debug/blt-server ingest --stages 6 --codes 4385,4523,5332,7532,8233,8604,9147
-# v5 バンプ後は日経225全件（または limit 付き）で xbrl_facts 側の分母揃えも広げられる
-```
-
-4. ingest 後に DB で最新 nr を再確認（期待: 上記 7 社 nr=false。空き 17 は維持）
-
-### 資生堂メモ
-
-- ユーザー合意は **F（製品別省略 → business 空）**
-- live は地域報告セグメントを LLM で拾い `needs_review=true` になることがある → **空扱いを崩さない。ingest しない**
-- DB の stale flagged 行を消すなら disposable Neon 上でのみ（本番寄りには DELETE しない）
+1. **`breakdown-v5` バンプ**（分母揃え等を他社の xbrl_facts 行へ広げるなら）
+2. v5 後に日経225全件（または limit 付き）Stage 6 再 ingest
+3. 資生堂の stale flagged 行を消すなら明示 DELETE（F 維持。今は放置でも可）
+4. Secret の `DATABASE_URL` を direct（非 pooler）に揃えると書き込み手順が単純になる
 
 ---
 
-## 技術メモ（PR #123 以降・変更なし）
+## やらないこと
 
-- 高島屋: Stage 4 `NetSales` とセグメント営業収益小計の分母揃え（名称一致小計の裏取り時のみ nr=false）
-- 野村: 「その他（消去分を含む）」→ segment（決定的ガード）
-- NXHD: 裸地域≥2 + 専門事業で axis_ambiguous 免除（`JapanBusiness` ラッパ型は免除しない）
-- パンパシ: `business_label_mismatch` は地域名らしい行が**過半数**のとき
-- **golden 更新はユーザーレビュー後**
-- **`assets/nikkei225.csv` は gitignore**（親 `assets/` を参照）
-
----
-
-## 環境・コマンド
-
-```bash
-# テスト（代表）
-swift test --filter 'BreakdownNormalizerTests|BreakdownExtractorTests|RealXbrlBreakdownTests|SegmentParityTests|RevenueRecognitionLLMNormalizerTests|SegmentInfoLLMNormalizerTests'
-
-# live 診断
-swift build --product TickerDev
-.build/debug/TickerDev breakdown <CODE> <DOC> --live --axis business
-
-# Stage 6（使い捨て Neon のみ）
-swift build --product blt-server
-.build/debug/blt-server ingest --stages 6 --codes <CODES>
-```
-
----
-
-## やらないこと（このスコープ外）
-
-- geography 軸の ingest 配線
-- `labelRaw` の日本語化
-- オリックス #103 本対応
-- ZOZO の MD&A スクレイピング
-- needs_review の一括クリア
-- クボタ製品別と報告セグメントの融合
-- ローカル `.env` の `DATABASE_URL` への ingest / DELETE
+- geography 軸 ingest 配線
+- オリックス #103
+- ZOZO MD&A
 - 資生堂を business として無理に埋める
+- needs_review 一括クリア
 
 ---
 
-## ユーザーとの合意メモ
+## ユーザー合意
 
-- E/F は空でよい（資生堂 F・マツダ E 含む）
-- needs_review は **1 社ずつ**
+- E/F は空でよい（資生堂 **F**・マツダ E）
+- live 異常なしなら本番 ingest OK（2026-07-25）
 - golden 更新はユーザーレビュー後
-- ingest は Cursor VM 使い捨て DB のみ
-- **`breakdownCacheVersion` バンプは棚卸し後** → **いまバンプ可**（ingest とセットが望ましい）
-
----
-
-## 参照
-
-- PR #119 / #120 / #122 / #123（merged）
-- `docs/breakdown-normalization-concept.md`
-- `Sources/BlueTicker/Analysis/BreakdownNormalizer.swift` ほか
-- `Sources/BlueTicker/Models/BreakdownContract.swift`（`breakdown-v4` → 次は v5）
-- `Sources/BltServerCore/Stage6Ingest.swift`
