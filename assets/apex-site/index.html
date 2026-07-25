@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLUE TICKER MCP — 日本株の財務データを、会話に。</title>
+<meta name="description" content="日本株の財務データを MCP 経由で Claude / Grok に接続。財務サマリー・増減分析・提出書類の本文抽出をツールとして呼び出せます。">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<style>
+  /*
+    白ベースのページの中に、証券会社の電光掲示板を思わせる紺色パネルを
+    「板」として点在させる（電光テープ・結果マーキー）。上昇=赤・下落=緑。
+    背景は平行四辺形（菱格子）のみで構成した和柄。
+  */
+  :root {
+    --page: #f5f7fb;
+    --card: #ffffff;
+    --ink: #10152a;
+    --ink-dim: #55607c;
+    --ink-faint: #8891a8;
+    --rule: rgba(16,21,42,0.10);
+    --accent: #1c5fe0;
+    --accent-soft: rgba(28,95,224,0.08);
+    --panel-a: #2569e6;
+    --panel-b: #0a2f86;
+    --panel-border: rgba(255,255,255,0.16);
+    --cyan: #7fd6ff;
+    --cyan-dim: #9bd3f2;
+    --up: #ff4136;
+    --down: #16b872;
+    --shadow: 0 1px 2px rgba(16,21,42,0.05), 0 18px 36px -22px rgba(16,21,42,0.20);
+    --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 16px 34px -18px rgba(9,38,110,0.5);
+    --font-display: ui-serif, "Iowan Old Style", "Apple Garamond", Baskerville, "Times New Roman", "Hiragino Mincho ProN", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Segoe UI", Meiryo, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--page); color-scheme: light; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--page);
+    background-image:
+      repeating-linear-gradient(45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 27px),
+      repeating-linear-gradient(-45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 27px);
+  }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; color: var(--ink); }
+  code, pre, .mono { font-family: var(--font-mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .page { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- nav ---- */
+  .nav {
+    max-width: 1120px; margin: 0 auto; padding: 22px 24px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+  .nav .word { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--ink); }
+  .nav .tag {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    color: #fff; background: var(--accent);
+    padding: 2px 7px; border-radius: 3px; margin-left: 2px; font-weight: 700;
+  }
+
+  /* ---- hero ---- */
+  .hero { max-width: 1120px; margin: 0 auto; padding: 28px 24px 0; text-align: center; }
+  .hero h1 { font-size: clamp(32px, 5.4vw, 52px); line-height: 1.28; letter-spacing: -0.01em; color: var(--ink); }
+  .hero .lead {
+    max-width: 620px; margin: 22px auto 0; color: var(--ink-dim);
+    font-size: 17px; line-height: 1.8;
+  }
+
+  /* ---- ticker tape (電光テープ) ---- */
+  .tape { margin: 40px 0 20px; padding: 13px 0; background: #05070d; overflow: hidden; }
+  .tape-track { display: flex; width: max-content; animation: tape-scroll 30s linear infinite; }
+  .tape-chip {
+    display: flex; align-items: baseline; gap: 8px; padding: 0 28px;
+    white-space: nowrap; font-family: var(--font-mono); font-size: 13.5px;
+  }
+  .tape-chip + .tape-chip { border-left: 1px solid rgba(255,255,255,0.14); }
+  .tape-label { color: var(--cyan-dim); }
+  .tape-val { color: #fff; font-weight: 700; }
+  .tape-delta.up { color: var(--up); }
+  .tape-delta.down { color: #34e08a; }
+  @keyframes tape-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .tape-track { animation: none; } }
+
+  .copy-wrap { display: inline-flex; align-items: center; gap: 4px; }
+  .copy-btn {
+    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border: none; background: transparent; color: var(--accent); cursor: pointer; padding: 0;
+    border-radius: 5px; vertical-align: middle;
+  }
+  .copy-btn:hover { background: var(--accent-soft); }
+  .copy-btn .icon-check { display: none; color: var(--down); }
+  .copy-btn.copied .icon-copy { display: none; }
+  .copy-btn.copied .icon-check { display: inline-flex; }
+
+  /* ---- legend（4機能のビジュアル説明） ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 22px 0 30px; }
+  .legend-item { flex: 1 1 200px; padding-left: 14px; border-left: 3px solid var(--accent); }
+  .legend-item b { display: block; font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+  .legend-item span { display: block; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
+
+  /* ---- section shell ---- */
+  section { padding: 56px 0; border-top: 1px solid var(--rule); }
+  section > h2 { font-size: 24px; margin-bottom: 8px; }
+  .section-lead { color: var(--ink-dim); font-size: 15px; margin: 0 0 28px; max-width: 62ch; }
+
+  /* ---- light card（つなぎ方の共通カード） ---- */
+  .light-card {
+    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+
+  /* ---- setup steps ---- */
+  .steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 14px; }
+  .step { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 20px 22px; }
+  .step-num {
+    font-family: var(--font-mono); font-size: 13px; color: #fff;
+    width: 32px; height: 32px; border-radius: 50%; background: var(--accent); font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { font-family: var(--font-body); font-size: 15.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
+  .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
+  .step .endpoint {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-family: var(--font-mono); font-size: 13.5px;
+    background: var(--accent-soft); padding: 8px 8px 8px 12px; border-radius: 6px; color: var(--accent);
+  }
+  .setup-foot { margin: 18px 0 0; font-size: 13.5px; color: var(--ink-faint); }
+  .setup-foot code { font-family: var(--font-mono); background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; color: var(--accent); }
+
+  /* ---- tools: 結果を出したまま横に自動で流れるマーキー ---- */
+  .tool-marquee { overflow: hidden; margin-top: 24px; }
+  .tool-track { display: flex; gap: 16px; width: max-content; animation: tool-scroll 52s linear infinite; }
+  .tool-marquee:hover .tool-track { animation-play-state: paused; }
+  @keyframes tool-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .tool-track { animation: none; } }
+
+  .tool-card {
+    flex: 0 0 238px; display: flex; flex-direction: column; padding: 16px 17px;
+    background: linear-gradient(155deg, var(--panel-a) 0%, var(--panel-b) 100%);
+    border: 1px solid var(--panel-border); border-radius: 10px; box-shadow: var(--panel-shadow);
+    min-height: 224px;
+  }
+  .tool-tag {
+    display: inline-block; width: fit-content;
+    font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: 0.01em;
+    color: var(--panel-b); background: #fff; padding: 5px 14px; border-radius: 20px;
+    box-shadow: 0 4px 12px -4px rgba(0,0,0,0.35);
+  }
+  .tool-call { font-family: var(--font-mono); font-size: 10.5px; color: var(--cyan-dim); margin-top: 12px; }
+
+  .tool-rows { display: grid; gap: 7px; flex: 1; margin-top: 8px; align-content: center; }
+  .tool-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tool-row .rlabel { font-size: 11px; color: var(--cyan-dim); white-space: nowrap; }
+  .tool-row .rval { font-family: var(--font-mono); font-size: 12.5px; color: #fff; font-weight: 700; text-align: right; }
+  .tool-row .rval.up { color: var(--up); }
+  .tool-row .rval.down { color: #34e08a; }
+  .tool-row.total .rlabel, .tool-row.total .rval { color: #fff; font-weight: 700; }
+  .tool-row.total { border-top: 1px solid var(--panel-border); padding-top: 6px; margin-top: 1px; }
+
+  /* ---- bridge (ウォーターフォール) ---- */
+  .bridge { display: flex; align-items: stretch; gap: 5px; flex: 1; min-height: 88px; margin-top: 10px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .bar-val { font-family: var(--font-mono); font-size: 9px; color: #fff; margin-bottom: 3px; white-space: nowrap; }
+  .bar-track { position: relative; flex: 1; width: 100%; }
+  .bar { position: absolute; left: 1px; right: 1px; border-radius: 2px 2px 0 0; min-height: 3px; }
+  .bar.total { background: rgba(255,255,255,0.85); }
+  .bar.up { background: var(--up); }
+  .bar.down { background: #34e08a; }
+  .bar-cat { font-family: var(--font-mono); font-size: 8.5px; color: var(--cyan-dim); margin-top: 4px; white-space: nowrap; }
+
+  /* ---- oss ---- */
+  .oss { text-align: center; }
+  .oss p { margin: 0 0 18px; color: var(--ink-dim); font-size: 14.5px; }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 9px; padding: 11px 20px; border-radius: 999px;
+    background: var(--ink); color: #fff; font-family: var(--font-body); font-size: 14.5px; font-weight: 600;
+    text-decoration: none; box-shadow: var(--shadow);
+  }
+  .gh-btn:hover { background: #000; }
+  .gh-btn svg { flex-shrink: 0; }
+
+  /* ---- footer ---- */
+  footer { border-top: 1px solid var(--rule); margin-top: 24px; padding: 32px 0 48px; }
+  footer .wide { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-end; }
+  footer p { margin: 0; font-size: 12.5px; color: var(--ink-faint); max-width: 58ch; line-height: 1.7; }
+  footer .credit { font-size: 12.5px; color: var(--ink-faint); white-space: nowrap; }
+
+  @media (max-width: 560px) {
+    .step { grid-template-columns: 1fr; }
+    .tool-card { flex-basis: 208px; min-height: 208px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <img src="mark.png" alt="BLUE TICKER">
+  <span class="word">BLUE TICKER</span>
+  <span class="tag">MCP</span>
+</header>
+
+<main>
+  <section class="hero" style="border-top:none; padding-top:28px;">
+    <h1>あなたとAIで、<br>企業の財務情報を分析する。</h1>
+    <p class="lead">Claude や Grok に「トヨタ自動車の業績を調べて」とお願いすると、決算データを調べてきます。</p>
+  </section>
+
+  <div class="tape" role="img" aria-label="トヨタ自動車(7203) 2025年3月期の実データ例: 売上高48.0兆円、前年比プラス6.5パーセント。営業利益4.80兆円、前年比マイナス10.4パーセント。当期純利益4.77兆円、前年比マイナス3.6パーセント。ROE12.9パーセント、前年差マイナス1.1ポイント。ROIC4.7パーセント、前年差マイナス0.7ポイント。EPS359.56円、前年差マイナス6.38円。">
+    <div class="tape-track" aria-hidden="true">
+      <div class="tape-chip"><span class="tape-label">7203 トヨタ自動車 / 売上高</span><span class="tape-val num">¥48.0兆</span><span class="tape-delta up num">+6.5%</span></div>
+      <div class="tape-chip"><span class="tape-label">営業利益</span><span class="tape-val num">¥4.80兆</span><span class="tape-delta down num">−10.4%</span></div>
+      <div class="tape-chip"><span class="tape-label">当期純利益</span><span class="tape-val num">¥4.77兆</span><span class="tape-delta down num">−3.6%</span></div>
+      <div class="tape-chip"><span class="tape-label">ROE</span><span class="tape-val num">12.9%</span><span class="tape-delta down num">−1.1pt</span></div>
+      <div class="tape-chip"><span class="tape-label">ROIC</span><span class="tape-val num">4.7%</span><span class="tape-delta down num">−0.7pt</span></div>
+      <div class="tape-chip"><span class="tape-label">EPS</span><span class="tape-val num">¥359.56</span><span class="tape-delta down num">−6.38円</span></div>
+      <div class="tape-chip"><span class="tape-label">7203 トヨタ自動車 / 売上高</span><span class="tape-val num">¥48.0兆</span><span class="tape-delta up num">+6.5%</span></div>
+      <div class="tape-chip"><span class="tape-label">営業利益</span><span class="tape-val num">¥4.80兆</span><span class="tape-delta down num">−10.4%</span></div>
+      <div class="tape-chip"><span class="tape-label">当期純利益</span><span class="tape-val num">¥4.77兆</span><span class="tape-delta down num">−3.6%</span></div>
+      <div class="tape-chip"><span class="tape-label">ROE</span><span class="tape-val num">12.9%</span><span class="tape-delta down num">−1.1pt</span></div>
+      <div class="tape-chip"><span class="tape-label">ROIC</span><span class="tape-val num">4.7%</span><span class="tape-delta down num">−0.7pt</span></div>
+      <div class="tape-chip"><span class="tape-label">EPS</span><span class="tape-val num">¥359.56</span><span class="tape-delta down num">−6.38円</span></div>
+    </div>
+  </div>
+
+  <section class="tools">
+    <div class="page">
+      <h2>何ができる？</h2>
+      <p class="section-lead">実際にトヨタ自動車（7203）へ呼んだ結果です。</p>
+      <div class="legend">
+        <div class="legend-item"><b>Summarize</b><span>財務諸表の数値</span></div>
+        <div class="legend-item"><b>Filing</b><span>有報のテキスト</span></div>
+        <div class="legend-item"><b>Analyze</b><span>独自の分析手法に基づいた計算値</span></div>
+        <div class="legend-item"><b>Breakdown</b><span>バックエンドLLMで構造化した事業別・地域別売上</span></div>
+      </div>
+
+      <div class="tool-marquee">
+        <div class="tool-track">
+
+          <div class="tool-card">
+            <span class="tool-tag">Summarize</span>
+            <span class="tool-call">トヨタ自動車 2025年3月期</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">売上高 Sales</span><span class="rval num">¥48,036,704</span></div>
+              <div class="tool-row"><span class="rlabel">営業利益 Operating</span><span class="rval num down">¥4,795,586 −10.4%</span></div>
+              <div class="tool-row"><span class="rlabel">ROE</span><span class="rval num">12.92%</span></div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Filing</span>
+            <span class="tool-call">トヨタ自動車 研究開発</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">研究開発費</span><span class="rval num">¥1,326,496百万</span></div>
+              <div class="tool-row"><span class="rlabel">拠点</span><span class="rval">日・米・欧・亜</span></div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Analyze</span>
+            <span class="tool-call">トヨタ自動車 事業利益の推移</span>
+            <div class="bridge">
+              <div class="bar-col"><span class="bar-val">7.48兆</span><div class="bar-track"><div class="bar total" style="top:16.4%;height:83.6%"></div></div><span class="bar-cat">24期</span></div>
+              <div class="bar-col"><span class="bar-val">+0.75兆</span><div class="bar-track"><div class="bar up" style="top:8.1%;height:8.4%"></div></div><span class="bar-cat">売上</span></div>
+              <div class="bar-col"><span class="bar-val">+0.28兆</span><div class="bar-track"><div class="bar up" style="top:4.9%;height:3.2%"></div></div><span class="bar-cat">粗利</span></div>
+              <div class="bar-col"><span class="bar-val">−0.77兆</span><div class="bar-track"><div class="bar down" style="top:4.9%;height:8.6%"></div></div><span class="bar-cat">販管費</span></div>
+              <div class="bar-col"><span class="bar-val">7.74兆</span><div class="bar-track"><div class="bar total" style="top:13.5%;height:86.5%"></div></div><span class="bar-cat">25期</span></div>
+            </div>
+            <div class="tool-row total"><span class="rlabel">前年差</span><span class="rval num">+264,765</span></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Breakdown</span>
+            <span class="tool-call">トヨタ自動車 事業別売上高</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
+              <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
+              <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
+            </div>
+          </div>
+
+          <!-- 継ぎ目のない無限スクロール用に複製 -->
+
+          <div class="tool-card">
+            <span class="tool-tag">Summarize</span>
+            <span class="tool-call">トヨタ自動車 2025年3月期</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">売上高 Sales</span><span class="rval num">¥48,036,704</span></div>
+              <div class="tool-row"><span class="rlabel">営業利益 Operating</span><span class="rval num down">¥4,795,586 −10.4%</span></div>
+              <div class="tool-row"><span class="rlabel">ROE</span><span class="rval num">12.92%</span></div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Filing</span>
+            <span class="tool-call">トヨタ自動車 研究開発</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">研究開発費</span><span class="rval num">¥1,326,496百万</span></div>
+              <div class="tool-row"><span class="rlabel">拠点</span><span class="rval">日・米・欧・亜</span></div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Analyze</span>
+            <span class="tool-call">トヨタ自動車 事業利益の推移</span>
+            <div class="bridge">
+              <div class="bar-col"><span class="bar-val">7.48兆</span><div class="bar-track"><div class="bar total" style="top:16.4%;height:83.6%"></div></div><span class="bar-cat">24期</span></div>
+              <div class="bar-col"><span class="bar-val">+0.75兆</span><div class="bar-track"><div class="bar up" style="top:8.1%;height:8.4%"></div></div><span class="bar-cat">売上</span></div>
+              <div class="bar-col"><span class="bar-val">+0.28兆</span><div class="bar-track"><div class="bar up" style="top:4.9%;height:3.2%"></div></div><span class="bar-cat">粗利</span></div>
+              <div class="bar-col"><span class="bar-val">−0.77兆</span><div class="bar-track"><div class="bar down" style="top:4.9%;height:8.6%"></div></div><span class="bar-cat">販管費</span></div>
+              <div class="bar-col"><span class="bar-val">7.74兆</span><div class="bar-track"><div class="bar total" style="top:13.5%;height:86.5%"></div></div><span class="bar-cat">25期</span></div>
+            </div>
+            <div class="tool-row total"><span class="rlabel">前年差</span><span class="rval num">+264,765</span></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-tag">Breakdown</span>
+            <span class="tool-call">トヨタ自動車 事業別売上高</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
+              <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
+              <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="setup">
+    <div class="page">
+      <h2>どうやって使い始める？</h2>
+      <p class="section-lead">アカウント登録は不要です。接続先を登録して、ブラウザで一度認可するだけです。現在は無料でご利用いただけますが、今後一部機能の有料化を検討しています。</p>
+      <ol class="steps">
+        <li class="light-card step">
+          <span class="step-num num">1</span>
+          <div>
+            <h3>コネクタとして登録する</h3>
+            <p>Claude Desktop / Claude.ai / Grok の「カスタムコネクタを追加」で接続先を入力します。スマートフォンアプリではなく、Web版での操作が必要です。</p>
+            <span class="endpoint">
+              https://mcp.sollahiro.com
+              <button type="button" class="copy-btn" aria-label="コピー" onclick="navigator.clipboard.writeText('https://mcp.sollahiro.com');this.classList.add('copied');clearTimeout(this._t);this._t=setTimeout(()=&gt;this.classList.remove('copied'),1500)">
+                <svg class="icon-copy" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3.5 10.5V3.5A1.5 1.5 0 0 1 5 2h6"/></svg>
+                <svg class="icon-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.5"/></svg>
+              </button>
+            </span>
+          </div>
+        </li>
+        <li class="light-card step">
+          <span class="step-num num">2</span>
+          <div>
+            <h3>ブラウザで認可する</h3>
+            <p>初回接続時にブラウザが開き、Cloudflare Access 経由で認可します（Managed OAuth）。以降はそのまま会話の中でツールを呼べます。</p>
+          </div>
+        </li>
+      </ol>
+      <p class="setup-foot">curl・CI から機械的に呼び出せる REST API も公開予定です（<code>https://api.sollahiro.com</code>）。</p>
+    </div>
+  </section>
+
+  <section class="oss">
+    <div class="page">
+      <p>BLUE TICKER はオープンソースです。MITライセンスのもと、ソースコードは GitHub で公開しています。興味のある方は覗いてみてください。</p>
+      <a class="gh-btn" href="https://github.com/sollahiro/blue-ticker" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHubで見る
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wide">
+    <p>本サイトおよび提供される情報は、投資判断の参考として提供されるものであり、投資の勧誘を目的としたものではありません。最終的な投資判断は、必ず利用者ご自身の責任において行ってください。EDINETから取得した有価証券報告書を解析しています。</p>
+    <span class="credit">BLUE TICKER — developed by sollahiro</span>
+  </div>
+</footer>
+
+</body>
+</html>
