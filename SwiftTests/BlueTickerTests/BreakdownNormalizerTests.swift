@@ -289,6 +289,26 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    /// エーザイ旧filings型の回帰（Opus監査 finding #2、2026-07-25）: 地域5member
+    /// （Americas/AsiaAndLatinAmerica/China/EMEA/Japan）+ 残余バケツ「OTCAndOthers」1件という
+    /// 構成（実データ: S100LKNM/S100O9U7/S100R09Z、`segmentOtherBusinessMemberNames` 未収録の
+    /// 残余名）。旧 NXHD 免除条件（裸地域2件以上 かつ 非地域事業1件以上）はこの構成にも誤って
+    /// 一致し、地域別データが axis=business, needs_review=false のまま確定していた。
+    /// 非地域事業の最低件数を2件に上げたことで、残余バケツ1件だけでは免除が外れ
+    /// needs_review が正しく立つことを確認する。
+    @Test func eisaiLegacyFilingWithSingleResidualBucketStillTriggersNeedsReview() throws {
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("AmericasReportableSegmentMember", 300_000_000_000),
+            ("AsiaAndLatinAmericaReportableSegmentMember", 80_000_000_000),
+            ("ChinaReportableSegmentMember", 130_000_000_000),
+            ("EMEAReportableSegmentMember", 80_000_000_000),
+            ("JapanReportableSegmentMember", 220_000_000_000),
+            ("OTCAndOthersReportableSegmentMember", 40_000_000_000),
+        ]))
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == true)
+    }
+
     @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
         // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
         // 引き続き geography のまま（既知のトレードオフ、学び11参照）。

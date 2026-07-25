@@ -431,12 +431,23 @@ enum BreakdownNormalizer {
         // （学び11。ラッパ付き裸地域を件数だけで免除すると資生堂型の要レビューが消える。
         // Opus 監査 2026-07-25）。
         // 地域が1件だけの混在（Foods + Japan 等）は表取り違えの疑いが残るため要レビューのまま。
+        //
+        // 非地域の実質事業の最低件数を1件から2件に厳格化する。旧条件（裸地域2件以上 かつ
+        // 非地域事業1件以上）は、エーザイ旧filings（Americas/AsiaAndLatinAmerica/China/
+        // EMEA/Japanの地域5member + 残余バケツ「OTCAndOthers」1件）にも誤って一致し、
+        // 地域別データが axis=business, needs_review=false のまま確定していた（本番Neon実データ
+        // 確認、Opus監査 finding #2、2026-07-25）。裸地域2件以上の要件は維持する（外すと
+        // 「Foods + Chemicals + Japan」のような1地域だけの混在まで免除されてしまい、
+        // 既存の表取り違え検知回帰が壊れる）。非地域事業を2件以上に上げると、NXHD
+        // （DistributionSupport/HeavyHaulageAndConstruction/SecurityTransportationの3件）は
+        // 免除が維持され、エーザイ旧filings（残余バケツ1件のみ）は免除が外れて
+        // needs_review が正しく立つ。
         let nonGeographyBusinessMembers = segmentMembers.filter { member in
             !Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
                 && hasSubstantiveNonGeographyContent(member)
         }
         let bareGeoWithoutBusinessWrapper = bareSpecificGeoMatches.filter { !$0.contains("Business") }
-        if bareGeoWithoutBusinessWrapper.count >= 2, !nonGeographyBusinessMembers.isEmpty {
+        if bareGeoWithoutBusinessWrapper.count >= 2, nonGeographyBusinessMembers.count >= 2 {
             return ("business", false)
         }
         return ("business", true)
