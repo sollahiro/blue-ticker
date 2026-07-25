@@ -106,6 +106,39 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
+    /// INPEX旧filings型: revenue_recognition_llm 経由の結果でも needs_review が立つ場合
+    /// （分母不一致など低確信度）は採用せず not_found にする。同一書類を複数回実行すると
+    /// 候補表の誤選択でシェア合計が売上高から乖離することがあり（実データ検証:
+    /// S100QH2B、2026-07-25）、低確信度のまま business 軸として保存するより空の方が安全という
+    /// ユーザー判断。オークマ（needs_review=false）の挙動は変えない。
+    @Test func revenueRecognitionLLMResultWithNeedsReviewIsDiscardedAsNotFound() async throws {
+        let segments = try Self.segmentsResult(docID: "S100W043")
+        #expect(segments.tables.first?.heading == "収益認識関係")
+        let sales = try #require(try Self.loadSales(code: "6103"))
+
+        // 分母（sales）の117%相当を返し、llm_row_sum_mismatch で needs_review が立つ
+        // ケースを再現する（実データ検証で観測した S100QH2B のシェア合計117%と同型）。
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "前期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "ＮＣ旋盤", "amount": (sales * 1.17) / Financial.millionYen, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+    }
+
     /// Grok 4.5 レビュー指摘の回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
     /// facts の正規化に失敗する（未知タグで売上高・銀行・保険いずれの経路にも一致しない）場合、
     /// tables が非空なら LLM の表フォールバックへ回る（facts 優先化で tables を破棄していた頃は
