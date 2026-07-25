@@ -170,6 +170,71 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.warnings.contains("profit_present_despite_not_disclosed"))
     }
 
+    /// 地域名だけの行ばかりなら地域別表の取り違えとみなし business_label_mismatch。
+    @Test func flagsWhenAllSegmentLabelsLookLikeGeography() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "日本", "amount": 600, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "米州", "amount": 400, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 1_000, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "誤って地域別表を採用",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains("business_label_mismatch"))
+    }
+
+    /// パンパシHD型: 製品明細＋海外地域残。地域行が混ざっても製品行があれば mismatch にしない。
+    @Test func acceptsProductRowsWithOverseasGeographyRemainder() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 1,
+            "period_column": "合計",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "家電製品（ディスカウントストア）", "amount": 92_391, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "日用雑貨品（ディスカウントストア）", "amount": 393_490, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "食品（ディスカウントストア）", "amount": 613_713, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "時計・ファッション用品（ディスカウントストア）", "amount": 182_209, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "スポーツ・レジャー用品（ディスカウントストア）", "amount": 92_288, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他（ディスカウントストア）", "amount": 21_998, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "衣料品（総合スーパー）", "amount": 43_789, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "住居関連品（総合スーパー）", "amount": 67_551, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "食品（総合スーパー）", "amount": 313_828, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他（総合スーパー）", "amount": 986, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "海外（北米）", "amount": 257_088, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "海外（アジア）", "amount": 91_037, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "顧客との契約から生じる収益", "amount": 2_170_368, "profit": NSNull(), "row_kind": "subtotal"],
+                ["label": "その他の収益", "amount": 76_390, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "外部顧客への売上高", "amount": 2_246_758, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "製品明細＋海外残。合計列で分母一致",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 2_246_758 * Financial.millionYen, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("business_label_mismatch"))
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
+        let labels = Set(snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels.contains("家電製品（ディスカウントストア）"))
+        #expect(labels.contains("海外（北米）"))
+        #expect(labels.contains("海外（アジア）"))
+    }
+
     /// profit_disclosed キーが欠落・型不正な場合、silent に false（＝「未開示確認済み」）扱いせず
     /// 「不明」として needs_review で拾う。
     @Test func flagsUnresolvedWhenProfitDisclosedKeyMissing() async throws {

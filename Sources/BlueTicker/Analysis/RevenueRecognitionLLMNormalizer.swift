@@ -28,6 +28,7 @@ enum RevenueRecognitionLLMNormalizer {
     ルール:
     - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表（多くは当期の表）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
     - 出力の行ラベルは製品名・事業区分名・部門名であるべきで、「日本」「国内」「米国」「米州」「欧州」「アジア」「中国」等の地域名ではないこと
+    - **例外（パンパシHD型）**: 行が「（ディスカウントストア）」「（総合スーパー）」のような大枠見出し（金額なし）と、その下の品目明細（家電製品・日用雑貨品等、金額あり）、さらに品目分解の無い「（海外）」配下の北米/アジアになっている表は対象内。大枠見出し行は出さず、品目明細を segment にし、業態が分かるようラベルに親見出しを付すこと（例: 「家電製品（ディスカウントストア）」）。海外の北米/アジアは品目が無い残として segment に残すこと。「その他の収益」も外部顧客への売上高に加算されているなら segment とし、reconciling にしないこと（品目＋海外＋その他の収益の segment 合計が外部顧客への売上高と一致するようにする）
     - **単純な製品別・部門別表**（1行=1製品/部門）はそのまま行として使うこと
     - **事業・製品名が行、地域が列のマトリクス表**（例: 行がタイヤ／その他、列が日本／米州／欧州…／連結計）は対象内。金額は「連結計」（または連結合計）列を使うこと。地域列の内訳を行にしてはならない
     - **部門・製品名・事業グループ名が列見出しで、指標が行になっているマトリクス表**（例: 列が地球環境エネルギー／マテリアルソリューション／金属資源…、行が「顧客との契約から認識した収益」）は対象内。当該収益行の各事業列の金額を使い、列見出しを行ラベルとして1事業=1行に転置して出力すること。地域行・調整列の扱いに注意し、合計列は row_kind="subtotal"
@@ -172,11 +173,14 @@ enum RevenueRecognitionLLMNormalizer {
 
         // ラベル妥当性チェック（決定的、追加ガード）。geography 正規化器の逆方向チェック:
         // 地域別表を誤って拾っていないかを検知する（分母一致だけでは表の取り違えを検知できないため）。
+        // 全 segment 行が地域名らしいときだけ弾く。パンパシHD型のように製品明細（家電製品等）に
+        // 加え、品目分解の無い海外残（海外（北米）/海外（アジア））を分母一致のため残す表は
+        // 混在が正常であり、混在だけで needs_review にしない（ユーザー確認 2026-07-25）。
         let segmentLabels = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
-        let hasGeographyLikeLabel = segmentLabels.contains { label in
+        let geographyLikeCount = segmentLabels.filter { label in
             Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
-        }
-        if hasGeographyLikeLabel {
+        }.count
+        if !segmentLabels.isEmpty, geographyLikeCount == segmentLabels.count {
             needsReview = true
             warnings.append("business_label_mismatch")
         }
