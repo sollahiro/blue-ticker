@@ -1,4 +1,4 @@
-# 引き継ぎ: 日経225 Stage 6 business カバレッジ（2026-07-25 更新）
+# 引き継ぎ: 日経225 Stage 6 business カバレッジ（2026-07-25 再々更新）
 
 次セッション向け。Stage 6（`company_breakdowns` / axis=business）の空き・`needs_review` を会社単位で潰している途中。
 
@@ -17,20 +17,43 @@
 
 | 項目 | 値 |
 |------|-----|
-| 作業ブランチ | （PR #122 merge 済み。次作業は `main` から新ブランチ） |
-| PR #120 | **merged**（Mitsubishi/Aozora/Trust + MUFG swap ガード） |
-| PR #122 | **merged**（INPEX / アサヒ / ネクソン / メルカリ + Stage4 sales=null + JapanBusiness axis_ambiguous 修正） |
+| 作業ブランチ | `main` @ `b07d2e5`（PR #123 merge 済み） |
+| PR #120 | **merged** |
+| PR #122 | **merged**（INPEX / アサヒ / ネクソン / メルカリ 等） |
+| PR #123 | **merged**（エーザイ〜NXHD + Opus 監査硬化） |
 
-PR #122 に含まれた主なコミット:
+PR #123 に含まれた主なコミット:
 
-1. `2e657cd` — Stage 4 `sales=null` でも外部顧客売上タグで正規化
-2. `371a1da` — INPEX: `OilAndGasJapan` の axis_ambiguous 解除 + 利益タグ
-3. `0d72cb5` — アサヒ: `Oceania`/`Korea` キーワードで地域→製品マトリクス swap
-4. `8a0ac96` — ネクソン: 製品別表パスの real XBRL 回帰
-5. `d393c46` — メルカリ: `US`/`Region` キーワード + RR stub 時の swap 抑止
-6. `3dcee62` — `JapanBusiness` 型は学び11どおり `axis_ambiguous` 維持（INPEX 免除の過大緩和を修正）
+1. `b049c9b` — エーザイ: IFRS 製品表 + `EMEA` / TOTO: `HousingEquipment` 同居時 axis_ambiguous 解除 / クボタ golden tables
+2. `50eccc9` — パンパシHD: 品目＋海外残（当時は全行地域名で mismatch。後続で過半数ルールへ）
+3. `a64c6ae` — 高島屋: 営業収益ベース分母揃え / 野村: 「その他（消去分を含む）」を segment
+4. `9ff6206` — NXHD: ロジスティクス地域展開＋専門事業を axis_ambiguous にしない
+5. `326ce80` — Opus 5 監査指摘の硬化（分母裏取り / 資生堂型免除抑止 / RR 過半数 / その他調整）
 
-**次セッション最初の作業候補:** main を pull したうえで、**未 ingest の 1605/2502/3659/4385 を Stage 6 ingest**（コードは PR #122 で main 入り済み。DB 反映はまだ）。その後 needs_review 残りは **エーザイ** から。
+### `breakdownCacheVersion` は **v4 のまま保留**
+
+- 現行: `breakdown-v4`（`Sources/BlueTicker/Models/BreakdownContract.swift`）
+- PR #123 は xbrl_facts 正規化の意味（分母揃え・axis 免除等）を変えているが、**バンプは意図的に見送った**
+- 理由: 日経225の needs_review / 空きを一通り見終わってから、まとめて `breakdown-v5` にして Stage 6 再 ingest したい
+- **次セッションでバンプしてよいタイミング**: 残 needs_review の棚卸しが一段落したあと（または ingest バッチを組む直前）
+- バンプするまでは、既に DB に `needs_review=false` で入っている旧行は content_hash 一致時に据え置き（再計算されない）。今回スコープの要再計算社は多くが flagged / 未 ingest なので実害は限定的だが、**分母揃えの恩恵を他社に広げたいなら v5 バンプが必要**
+
+**次セッション最初の作業候補:**
+
+1. DB / live で **残 needs_review・空き** を再スキャン（高島屋・野村・NXHD はコード上解消済み）
+2. **ingest**（Cursor VM の使い捨て Neon のみ。ローカル `.env` の `DATABASE_URL` は本番寄り → **書かない**）
+3. 一通り見終わったら **`breakdownCacheVersion` → `breakdown-v5`** をバンプして再 ingest
+
+未 ingest コード（live 確認済み・DB 未反映の想定）:
+
+- PR #122 系: `1605,2502,3659,4385`
+- PR #123 系: `4523,5332,7532,8233,8604,9147`（資生堂 4911 は F で空のまま → ingest 対象外）
+
+```bash
+# VM 上で例:
+swift build --product blt-server
+.build/debug/blt-server ingest --stages 6 --codes 1605,2502,3659,4385,4523,5332,7532,8233,8604,9147
+```
 
 ---
 
@@ -48,62 +71,78 @@ PR #122 に含まれた主なコミット:
 | 8750 | 第一生命HD | 国内/海外保険 | `xbrl_facts` | 済 |
 | 8795 | T&D | 太陽/大同/TF/UC | `xbrl_facts` | 済 |
 | 9602 | 東宝 | 映画/IP・アニメ/演劇/不動産 | `xbrl_facts` | 済 |
-| **1605** | **INPEX** | 国内O&G / イクシス / その他PJ | `xbrl_facts`, needs_review=**false**, profit あり | **未** |
-| **2502** | **アサヒ** | 酒類/飲料/食品・薬品 | `revenue_recognition_llm`, needs_review=**false** | **未** |
-| **3659** | **ネクソン** | ゲーム課金/ロイヤリティ/その他 | `segment_info_llm`, needs_review=**false** | **未** |
-| **4385** | **メルカリ** | Marketplace / Fintech / その他 | `segment_info_llm`, needs_review=**false**（live 確認 2026-07-25） | **未** |
+| 1605 | INPEX | 国内O&G / イクシス / その他PJ | `xbrl_facts`, needs_review=**false** | **未** |
+| 2502 | アサヒ | 酒類/飲料/食品・薬品 | `revenue_recognition_llm`, needs_review=**false** | **未** |
+| 3659 | ネクソン | ゲーム課金/ロイヤリティ/その他 | `segment_info_llm`, needs_review=**false** | **未** |
+| 4385 | メルカリ | Marketplace / Fintech / その他 | `segment_info_llm`, needs_review=**false** | **未** |
+| 4523 | エーザイ | ニューロロジー/オンコロジー/その他 | `segment_info_llm`, needs_review=**false** | **未** |
+| 5332 | TOTO | 日本住設+海外住設4地域+先進セラミック（利益あり） | `xbrl_facts`, needs_review=**false** | **未** |
+| 7532 | パンパシHD | DS/GMS 品目 + 海外（北米/アジア）+ その他の収益 | `revenue_recognition_llm`, needs_review=**false** | **未** |
+| **8233** | **高島屋** | 国内/海外百貨店・不動産・建装・金融・その他 | `xbrl_facts`, needs_review=**false**（分母=営業収益小計） | **未** |
+| **8604** | **野村** | WM/IM/ホールセール/バンキング/**その他** | `segment_info_llm`, needs_review=**false**（分母=表の計） | **未** |
+| **9147** | **NXHD** | ロジ5地域 + 警備輸送/重量品建設/物流サポート | `xbrl_facts`, needs_review=**false** | **未** |
 
 ### 分類で「空のまま」確定したもの（抜粋）
 
-- **F 単一:** SUMCO, トレンドマイクロ, SMC, ソシオネクスト, ベイカレント, JPX, ARCHION, キーエンス, 横浜FG, 千葉銀, ふくおかFG, 塩野義, 中外, 日電硝（ガラスに集約）, ZOZO（MD&A のみ・注記は単一）
+- **F 単一:** SUMCO, トレンドマイクロ, SMC, ソシオネクスト, ベイカレント, JPX, ARCHION, キーエンス, 横浜FG, 千葉銀, ふくおかFG, 塩野義, 中外, 日電硝（ガラスに集約）, ZOZO（MD&A のみ・注記は単一）, **資生堂（化粧品事業がほとんどで製品別記載省略）**
 - **E 地域のみ:** 良品計画, **マツダ**（ユーザー確定）
 - **既知ギャップ:** オリックス（巨大 USGAAP / #103）— 今はやらない
+- **将来（低優先）:** クボタ等で報告セグメント（利益あり）と製品別明細（利益なし）の**融合**スキーマ。現状は粗い報告セグメントを採用
 
 ---
 
-## needs_review 残り（2026-07-25 時点）
+## needs_review 残り（2026-07-25 時点・コード上）
 
-ユーザー指示: **1 社ずつ**。次は **エーザイ**（メルカリ実装・live 確認済、ingest はバッチで可）。
+ユーザー指示: **1 社ずつ**。  
+**高島屋 / 野村 / NXHD は PR #123 で live 解消済み。** 次は DB 再スキャンで残件を洗い出す。
 
-| # | Code | 会社 | 最新 doc | source | 現状ラベル（要約） | 見立て（未確認） |
-|---|------|------|----------|--------|-------------------|------------------|
-| **→** | **4523** | **エーザイ** | S100YB05 | xbrl_facts | Americas/Japan/China/EMEA… | 地域寄り |
-| 2 | 4911 | 資生堂 | S100XSCU | xbrl_facts | JapanBusiness / ChinaAndTR… | 地域事業ユニット境界（`JapanBusiness` は axis_ambiguous 対象のまま） |
-| 3 | 5332 | TOTO | S100YC72 | xbrl_facts | 日本住設+先進セラミック+米欧亜Business | **事業×地域混在**（axis_ambiguous 維持） |
-| 4 | 7532 | パンパシHD | S100WR05 | revenue_recognition_llm | 品目 + 北米/アジア | `business_label_mismatch` |
-| 5 | 8233 | 高島屋 | S100Y4X5 | xbrl_facts | 国内/海外百貨店・不動産等 | 事業だが Domestic/Overseas 修飾 |
-| 6 | 8604 | 野村 | S100YC5C | segment_info_llm | WM/IM/ホールセール/バンキング | 部門は妥当そう・`llm_row_sum_mismatch`（#105 系） |
-| 7 | 9147 | NXHD | S100XTG8 | xbrl_facts | 地域 + 流通支援/警備/重量 | 混在 |
+| # | Code | 会社 | 状態 |
+|---|------|------|------|
+| — | 8233 | 高島屋 | **解消**（コード・live） |
+| — | 8604 | 野村 | **解消**（コード・live） |
+| — | 9147 | NXHD | **解消**（コード・live） |
 
-解消済み（上表から外れた）: 1605 INPEX, 2502 アサヒ, 3659 ネクソン, **4385 メルカリ**（実装・live。DB ingest は未）。
+解消済み（実装・live。DB ingest は未）: 1605 INPEX, 2502 アサヒ, 3659 ネクソン, 4385 メルカリ, 4523 エーザイ, 4911 資生堂（F・空）, 5332 TOTO, 7532 パンパシHD, **8233 高島屋**, **8604 野村**, **9147 NXHD**。
 
 ---
 
 ## 次セッションの進め方
 
-1. **コード同期**
+1. **main を最新に**
    ```bash
    git fetch && git checkout main && git pull
    ```
-2. **未反映 4 社を Stage 6 ingest**（ユーザー合意・`DATABASE_URL` 確認のうえ）
-   ```bash
-   set -a && source .env && set +a
-   swift build --product blt-server
-   .build/debug/blt-server ingest --stages 6 --codes 1605,2502,3659,4385
-   ```
-3. **エーザイから needs_review を 1 社ずつ**
-   ```bash
-   swift build --product TickerDev
-   .build/debug/TickerDev breakdown 4523 S100YB05 --live --axis business
-   ```
-4. 修正 → テスト → ユーザー確認 → ingest → 次社
+2. **残 needs_review / 空きをスキャン**（DB または live バッチ）
+3. 残があれば **1 社ずつ** 修正 → テスト → ユーザー確認
+4. **ingest**（Cursor VM の使い捨て Neon のみ）
+5. 一通り見終わったら **`breakdownCacheVersion` を `breakdown-v5` にバンプ**（`BreakdownContract.swift` + `versioning.md`）→ 全件/対象 Stage 6 再 ingest
 
-### メルカリで分かったこと（再掲）
+### 高島屋で分かったこと（2026-07-25）
 
-- 報告セグメント facts は Japan Region / US（地域）
-- Marketplace / Fintech / その他は **セグメント注記内のマトリクス**（行=事業・列=地域）
-- IFRS 売上収益注記は「分解はセグメント情報に記載」＋契約負債表のみ → **RR へ無条件 swap すると製品表を失う**
-- 経路: geography facts 判定 → SegmentInfoLLM が製品行を採用（live: 147618 / 38597 / 6416 百万円）
+- 軸は事業（国内/海外百貨店・不動産開発・建装・金融・その他）。INPEX 型語幹判定で当初から `axis_ambiguous` ではない
+- Stage 4 は `NetSales`（売上高 4019億）、セグメント注記の `RevenuesFromExternalCustomers` は営業収益ベース（4923億）
+- 小計 `TotalOfReportableSegmentsAndOthers` に分母を揃え、warning `sales_denominator_aligned_to_segment_total`
+- 公開 API に `share` は無い（`amount` + `denominator`）。内部 `share` は診断用
+- Opus 後: **名称一致小計で裏取りできた揃えだけ** needs_review=false。小計無しの segmentSum フォールバックは要レビュー
+
+### 野村で分かったこと（2026-07-25）
+
+- #105 の分母フォールバック済み（金融費用控除後の「計」→ `llm_table_subtotal`）
+- 「その他（消去分を含む）」はヘッジ・投資持分・持分法・本社等の残バケット → **segment**（ユーザー確認）
+- 決定的ガード: ラベルに「その他」かつ（`消去分を含む` / `全社`）→ segment。「その他の調整額」等の消去・調整本体は reconciling のまま（Opus）
+
+### NXHD で分かったこと（2026-07-25）
+
+- 報告セグメントは **ロジスティクスを地域展開**（日本/米州/欧州/東アジア/南ア・オセアニア）＋警備輸送/重量品建設/物流サポート
+- ユーザー方針: ロジスティクスを1行に潰さず **地域内訳も残す**のがベスト
+- 免除条件: 裸地域（**`Business` ラッパを含まない**）が2件以上 かつ 非地域の専門事業が同居 → axis_ambiguous 解除
+- 資生堂型 `JapanBusiness` ラッパは件数だけでは免除しない（学び11 / Opus）
+
+### エーザイ / TOTO / パンパシ（再掲）
+
+- エーザイ: 製品表 `InformationAboutProductsAndServicesIFRSTextBlock` + EMEA キーワード + 種類分解 swap 抑止
+- TOTO: HousingEquipment 同居で海外住設の裸地域を事業として採用
+- パンパシ: 品目＋海外残。`business_label_mismatch` は **地域名らしい行が過半数**のとき（Opus 後。当初の「全行一致」から変更）
 
 ### よく使う診断パターン
 
@@ -112,36 +151,40 @@ PR #122 に含まれた主なコミット:
 - 地域判定: `BreakdownNormalizer.allMembersAreGeography`（キーワードは `Xbrl.segmentGeographyMemberKeywords`）
 - Stage 4 `sales` null でも外部売上タグがあれば正規化できる（`2e657cd`）
 - `needs_review=true` の行は Stage 6 が再試行対象（flaggedForReview）
+- **golden（`smoke/breakdown_extraction_expected.json`）はユーザーレビュー前に更新しない**
+- **`breakdownCacheVersion` バンプは保留中（v4）** — 下記「技術メモ」参照
 
 ---
 
-## 技術メモ（このラウンドで入れた要点）
+## 技術メモ（PR #123 時点）
 
 ### 抽出（`BreakdownExtractor` / `Xbrl`）
 
-- `NotesRevenue2…IFRSTextBlock`（三菱商事）
-- `InformationForEachProductOrServiceTextBlock`（あおぞら等）
-- `NotesSegmentInformationEtc…` は売上相当が無いときだけ追加（トラスト）
-- 地域軸 → 収益認識/IFRS売上へ swap（`shouldPreferRevenueRecognition`）
-- ただし **認識済み売上タグ付き facts があるときは swap しない**（MUFG 粗利益破壊防止 / `42f90de`）
-- **セグメント側に売上相当があり RR 側に無いときは swap しない**（メルカリ: RR が契約負債 stub / `d393c46`）
+- `InformationAboutProductsAndServicesIFRSTextBlock` を `productOrServiceTextBlockTags` に追加
+- 種類分解マーカーに `医薬品販売による収益` / `ライセンス供与による収益`
+- 地理キーワードに `EMEA`（全大文字）
 
 ### 正規化（`BreakdownNormalizer`）
 
-- `sales=null` → `segmentExternalRevenueTags` で内部小計フォールバック
-- 固有語幹付き複合（`OilAndGasJapan`）内の地域語は `axis_ambiguous` にしない
-- **`JapanBusiness` / `AmericasBusiness` のように地域名＋汎用 Business ラッパだけのラベルは学び11どおり混在シグナル**（`3dcee62`。INPEX 免除の過大緩和を Sonnet レビューで修正）
-- 利益タグに `ProfitLossAttributableToOwnersOfParentIFRS`（INPEX）
-
-### 地理キーワード追加
-
-- `Oceania`, `Korea`（アサヒ/ネクソン）
-- `US`, `Region`（メルカリ `JapanRegion` / `US`）
+- Stage 4 売上とセグメント小計が ±5% 超乖離 → 小計側に分母揃え（`sales_denominator_aligned_to_segment_total`）
+- 小計裏取りなしの揃え → `needs_review=true`
+- `HousingEquipment` 同居 / NXHD 型（裸地域≥2・非 Business ラッパ + 専門事業）で axis_ambiguous 解除
+- `JapanBusiness` 型は要レビュー維持
 
 ### LLM
 
-- アサヒ: 列=製品・行=地域のマトリクス → 連結合計を転置（`RevenueRecognitionLLMNormalizer`）
-- ネクソン / メルカリ: セグメント注記の製品表を地域表より優先（`SegmentInfoLLMNormalizer`）
+- `SegmentInfoLLMNormalizer`: 「その他（消去分を含む）」→ segment（決定的 `resolvedRowKind`）
+- `RevenueRecognitionLLMNormalizer`: パンパシ型プロンプト / `business_label_mismatch` は過半数ルール
+
+### キャッシュバージョン（保留）
+
+- **いま:** `breakdown-v4`
+- **保留理由:** 残 needs_review を一通り見てからまとめてバンプしたい（ユーザー指示 2026-07-25）
+- **やるとき:** `BreakdownContract.swift` の `breakdownCacheVersion` + `.agents/rules/project/versioning.md` を `breakdown-v5` に更新
+
+### golden
+
+- `S100XR0M`（クボタ）segments tables 8→10（製品別候補が先頭に追加。最終 business は xbrl_facts のまま）
 
 ---
 
@@ -149,32 +192,35 @@ PR #122 に含まれた主なコミット:
 
 ```bash
 # テスト（代表）
-swift test --filter 'BreakdownNormalizerTests|BreakdownExtractorTests|RealXbrlBreakdownTests|SegmentParityTests'
+swift test --filter 'BreakdownNormalizerTests|BreakdownExtractorTests|RealXbrlBreakdownTests|SegmentParityTests|RevenueRecognitionLLMNormalizerTests|SegmentInfoLLMNormalizerTests'
 
-# Stage 6 単発
-set -a && source .env && set +a
+# live 診断
+swift build --product TickerDev
+.build/debug/TickerDev breakdown <CODE> <DOC> --live --axis business
+
+# Stage 6 単発（VM の使い捨て Neon のみ）
 swift build --product blt-server
 .build/debug/blt-server ingest --stages 6 --codes <CODES>
-
-# DB 確認例
-# company_breakdowns で code + 最新 doc_id、needs_review / source / rows.labelRaw
 ```
 
 前提:
 
-- `.env` に `DATABASE_URL`, `XAI_API_KEY`, `BLT_EDINET_API_KEY`
+- `.env` に `XAI_API_KEY`, `BLT_EDINET_API_KEY`（解析用）
+- **ローカル `.env` の `DATABASE_URL` は本番寄り → Stage 6 ingest 禁止**
+- Cursor Cloud / VM の `DATABASE_URL` は使い捨て Neon → ingest 可
 - `assets/nikkei225.csv`（Stage 6 母集団）
-- AGENTS.md: Cloud の `DATABASE_URL` は使い捨て Neon 想定。ローカル `.env` は運用 DB の可能性あり → 書き込みはユーザー合意のうえ
 
 ---
 
 ## やらないこと（このスコープ外）
 
 - geography 軸の ingest 配線（未着手のまま）
-- `labelRaw` の日本語化（現状は XBRL member 英語名が多い。アサヒ/ネクソン/メルカリは LLM 日本語 or 英語製品名）
+- `labelRaw` の日本語化（XBRL member 英語名が多い。LLM 経路は日本語になりやすい）
 - オリックス #103 本対応
 - ZOZO の MD&A スクレイピング
 - needs_review の一括クリア
+- クボタ製品別と報告セグメントの融合（低優先・スキーマ拡張が先）
+- **いまの時点での `breakdownCacheVersion` バンプ**（保留。一通り見終わってから）
 
 ---
 
@@ -184,19 +230,30 @@ swift build --product blt-server
 - ソシオネクストの製品売上/NRE は収益種類 → 無理に実装しない
 - ZOZO は単一 + MD&A のみ → 実装しない
 - マツダは E
-- needs_review は **1 社ずつ**（INPEX → アサヒ → ネクソン → メルカリ 済、次エーザイ）
-- メルカリは Marketplace / Fintech / その他が取れる（ユーザー確認）
-- PR #122 のコード修正後、**ingest は別バッチ**（live のみ先に確認）
+- **資生堂は F**（化粧品事業がほとんどで製品別記載省略 → business 空）
+- needs_review は **1 社ずつ**
+- エーザイ: ニューロロジー/オンコロジー/その他（ユーザー確認）
+- TOTO: 日本住設・米州・アジア・オセアニア等を business 採用してよい（ユーザー確認）
+- パンパシHD: 品目＋海外（北米/アジア）残し（方針1、ユーザー確認）
+- 高島屋: 分母は営業収益ベース小計でよい（ユーザー確認）
+- 野村: 「その他（消去分を含む）」は segment（ユーザー確認）
+- NXHD: ロジスティクスの**地域内訳も残す**（ユーザー確認）
+- クボタ製品別融合は低優先
+- **golden 更新は必ずユーザーレビュー後**
+- ingest は Cursor VM 使い捨て DB のみ（ローカル `.env` は本番寄り）
+- コード修正後の **ingest は別バッチ**（live のみ先に確認）
+- **`breakdownCacheVersion` バンプは一通り見終わるまで保留**（ユーザー指示 2026-07-25）
 
 ---
 
 ## 参照コミット / ドキュメント
 
-- PR #119: geography → IFRS revenue / product tables
-- PR #120: Mitsubishi / Aozora / Trust（merged）
-- PR #122: INPEX / Asahi / Nexon / Mercari + sales=null + axis_ambiguous 修正
+- PR #119 / #120 / #122 / **#123**（いずれも merged）
 - `docs/breakdown-normalization-concept.md`
 - `Sources/BlueTicker/Analysis/BreakdownExtractor.swift`
 - `Sources/BlueTicker/Analysis/BreakdownNormalizer.swift`
+- `Sources/BlueTicker/Analysis/RevenueRecognitionLLMNormalizer.swift`
+- `Sources/BlueTicker/Analysis/SegmentInfoLLMNormalizer.swift`
 - `Sources/BlueTicker/Analysis/BusinessBreakdownResolver.swift`
+- `Sources/BlueTicker/Models/BreakdownContract.swift`（`breakdownCacheVersion = "breakdown-v4"` 保留中）
 - `Sources/BltServerCore/Stage6Ingest.swift`
