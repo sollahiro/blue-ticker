@@ -537,10 +537,17 @@ enum Xbrl {
         "NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock",
     ]
 
-    /// 製品・サービス別情報（あおぞら銀行「サービス毎の情報」: 貸出業務/有価証券投資業務…の経常収益）。
-    /// 報告セグメント facts が粗利タグに乗らない銀行で、売上代替の事業別内訳がここにだけある。
+    /// 製品・サービス別情報。
+    /// - `InformationForEachProductOrServiceTextBlock`: あおぞら銀行「サービス毎の情報」
+    ///   （貸出業務/有価証券投資業務…の経常収益）。報告セグメント facts が粗利タグに乗らない
+    ///   銀行で、売上代替の事業別内訳がここにだけある。
+    /// - `InformationAboutProductsAndServicesIFRSTextBlock`: エーザイ等の IFRS
+    ///   「主要な製品に関する情報」（ニューロロジー/オンコロジー領域製品…）。報告セグメントが
+    ///   地域別のとき、セグメント注記内ではなく専用タグ側に製品別売上がある（実データ検証:
+    ///   S100YB05、2026-07-25）。
     static let productOrServiceTextBlockTags: Set<String> = [
         "InformationForEachProductOrServiceTextBlock",
+        "InformationAboutProductsAndServicesIFRSTextBlock",
     ]
     static let businessSegmentDimensionKeywords: [String] = [
         "OperatingSegments",
@@ -764,6 +771,9 @@ enum Xbrl {
         "China",
         "NorthAmerica",
         "Emea",
+        "EMEA",  // エーザイ等: member 名が全大文字 `EMEAReportableSegmentMember`。`Emea` だけでは
+                 // case-sensitive の contains にヒットせず、地域軸が business+axis_ambiguous に誤分類される
+                 // （実データ検証: S100YB05、2026-07-25）
         "Oceania",  // アサヒ等（Japan/Europe/Oceania/SoutheastAsia）。欠けると地域軸判定が崩れ収益認識の製品別へ swap できない（実データ検証 2026-07-24）
         "Korea",
         "Domestic",

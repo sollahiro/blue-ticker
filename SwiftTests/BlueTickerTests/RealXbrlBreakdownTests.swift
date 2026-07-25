@@ -190,6 +190,32 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(joined.contains("個人") && joined.contains("法人"))
         #expect(BreakdownExtractor.tablesContainSalesEquivalent(result.tables))
     }
+
+    // MARK: - エーザイ S100YB05（2026-07-25）
+
+    @Test(.enabled(if: cacheAvailable("S100YB05"), "XBRL cache S100YB05 not available"))
+    func eisaiKeepsGeographyFactsAndExposesNeurologyOncologyProductTable() throws {
+        // 報告セグメントは Japan/Americas/China/EMEA/EastAsiaGlobalSouth（地域）。
+        // ニューロロジー/オンコロジー領域製品は InformationAboutProductsAndServicesIFRS 側。
+        // IFRS 売上収益注記は医薬品販売/ライセンスの種類分解 → swap せず facts+製品表を残し
+        // SegmentInfoLLM へ（住友ファーマ型）。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB05"))
+        #expect(result.method == "xbrl_facts")
+        let members = Set(result.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
+        #expect(members.contains("EMEAReportableSegmentMember"))
+        #expect(members.contains("JapanReportableSegmentMember"))
+        #expect(result.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("ニューロロジー"))
+        #expect(joined.contains("オンコロジー"))
+        let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100YB05"))
+        #expect(rr.method == "html_table")
+        #expect(BreakdownExtractor.isRevenueTypeOnlyDecomposition(rr.tables))
+        // geography 判定が通ること（EMEA キーワード欠落の回帰）
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 825_378_000_000))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
 }
 
 @Suite struct RealXbrlBreakdownResolverTests {
@@ -331,6 +357,45 @@ private actor RealXbrlMockChat: ChatCompleting {
         let labels = snapshot?.rows.map(\.labelRaw).joined(separator: " ") ?? ""
         #expect(labels.contains("ラツーダ"))
         #expect(labels.contains("オルゴビクス"))
+        #expect(await client.timesCalled() == 1)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100YB05"), "XBRL cache S100YB05 not available"))
+    func eisaiResolvesViaSegmentInfoLLMFromNeurologyOncologyTable() async throws {
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB05"))
+        #expect(segments.method == "xbrl_facts")
+        #expect(segments.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
+
+        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "ニューロロジー")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当連結会計年度",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "ニューロロジー領域製品", "amount": 260_568, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "オンコロジー領域製品", "amount": 362_668, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他", "amount": 202_142, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 825_378, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "主要な製品に関する情報を採用",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 825_378_000_000.0
+
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .segmentInfoLLM)
+        #expect(await client.schemaName() == "segment_info_breakdown")
+        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.needsReview == false)
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("ニューロロジー領域製品"))
+        #expect(labels.contains("オンコロジー領域製品"))
+        #expect(labels.contains("その他"))
         #expect(await client.timesCalled() == 1)
     }
 }

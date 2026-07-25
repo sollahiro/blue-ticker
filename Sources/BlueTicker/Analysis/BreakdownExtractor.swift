@@ -297,6 +297,10 @@ enum BreakdownExtractor {
         let joined = tables.map(\.markdown).joined(separator: "\n")
         let revenueTypeMarkers = [
             "製商品の販売", "物品の販売", "知的財産権収入", "知的財産収益", "ライセンス収入",
+            // エーザイ等: 列が「医薬品販売による収益」「ライセンス供与による収益」。脚注の
+            // 「ライセンス収入」だけに頼ると表本文だけの抽出時に種類分解と判定できず、
+            // 製品別表（ニューロロジー/オンコロジー）を失う（実データ検証: S100YB05、2026-07-25）。
+            "医薬品販売による収益", "ライセンス供与による収益",
         ]
         guard revenueTypeMarkers.contains(where: { joined.contains($0) }) else { return false }
         // 事業・製品の具体名が併記されていれば種類分解ではない（ブリヂストン: タイヤ、デンソー: サーマル…）

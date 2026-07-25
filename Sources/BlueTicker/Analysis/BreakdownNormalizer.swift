@@ -366,6 +366,16 @@ enum BreakdownNormalizer {
         }
         if geoMatches.isEmpty { return ("business", false) }
 
+        // TOTO型: 報告セグメントが「日本住設」＋海外住設の地域内訳（米州/アジア・オセアニア/欧州/
+        // 中国大陸）＋「先進セラミック」。海外側 member は Americas / Europe 等の裸の地域名だが、
+        // HousingEquipment 語幹を持つ行が同居するならマネジメント・アプローチ上の事業区分であり
+        // 真の軸混在ではない（ユーザー確認 2026-07-25、S100YC72）。
+        // 資生堂型の JapanBusiness のみの地域事業ユニット（製品別は記載省略）には HousingEquipment
+        // が無いので、この免除は当たらない。
+        if segmentMembers.contains(where: { $0.contains("HousingEquipment") }) {
+            return ("business", false)
+        }
+
         // 裸の特定地域名（＋汎用 Business ラッパのみ）を混在シグナルにする。
         // OilAndGasJapan 等、固有語幹が残る複合は除外。
         let bareSpecificGeoMatches = segmentMembers.filter { member in
@@ -406,7 +416,8 @@ enum BreakdownNormalizer {
     /// Domestic/Overseas だけでなく Japan 等の特定地域名も除去する
     /// （INPEX `OilAndGasJapan…` → `OilAndGas` が残る、実データ検証 2026-07-24）。
     /// `JapanBusiness…` は Business 除去後に空になり「実質語幹なし」＝混在シグナル対象のまま
-    /// （学び11。Business ラッパを事業語幹とみなすと資生堂/TOTO 型の要レビューが消える）。
+    /// （学び11。Business ラッパを事業語幹とみなすと資生堂型の要レビューが消える）。
+    /// TOTO の海外住設（Americas 等）は `classifyAxis` 側の HousingEquipment 同居免除で扱う。
     private static func hasSubstantiveNonGeographyContent(_ member: String) -> Bool {
         var stripped = member
         // 長いキーワードから消す（NorthAmerica を America より先に、等）

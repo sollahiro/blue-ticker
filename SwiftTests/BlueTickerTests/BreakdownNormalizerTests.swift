@@ -262,6 +262,33 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    @Test func eisaiStyleEMEAMembersClassifyAsGeography() throws {
+        // エーザイ型: `EMEAReportableSegmentMember` は全大文字。`Emea` だけでは
+        // case-sensitive contains にヒットせず、地域軸が business+axis_ambiguous になり
+        // 製品別表（ニューロロジー/オンコロジー）へ進めない（実データ検証: S100YB05、2026-07-25）。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "AmericasReportableSegmentMember",
+                "ChinaReportableSegmentMember",
+                "EMEAReportableSegmentMember",
+                "EastAsiaGlobalSouthReportableSegmentMember",
+                "JapanReportableSegmentMember",
+            ]))
+        let snap = try #require(Self.snapshot(labelsAndValues: [
+            ("AmericasReportableSegmentMember", 300_440_000_000),
+            ("ChinaReportableSegmentMember", 130_745_000_000),
+            ("EMEAReportableSegmentMember", 81_532_000_000),
+            ("EastAsiaGlobalSouthReportableSegmentMember", 68_823_000_000),
+            ("JapanReportableSegmentMember", 229_238_000_000),
+            (
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                14_599_000_000
+            ),
+        ]))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+    }
+
     @Test func bareDomesticOverseasMembersStillClassifyAsGeography() throws {
         // 対照群: 「DomesticMember」「OverseasMember」のように事業名を伴わない裸の地域区分は
         // 引き続き geography のまま（既知のトレードオフ、学び11参照）。
@@ -713,8 +740,19 @@ import Foundation
         let global = try #require(snap.rows.first { $0.labelRaw == "GlobalHousingEquipmentBusinessReportableSegmentMember" })
         #expect(global.rowKind == "subtotal")
         #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("axis_ambiguous"))
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
+        #expect(snap.rows.contains {
+            $0.labelRaw == "JapanHousingEquipmentBusinessReportableSegmentMember" && $0.rowKind == "segment"
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "AmericasReportableSegmentMember" && $0.rowKind == "segment"
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "AsiaOceaniaReportableSegmentMember" && $0.rowKind == "segment"
+        })
     }
 
     @Test func totoGlobalHousingEquipmentPluralMemberIsSubtotalNotSegment() throws {
@@ -756,10 +794,10 @@ import Foundation
         #expect(snap.axis == "business")
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
-        // 米州/アジア等は `…Business…` ラッパ付きだが固有事業語幹が無く、日本住設・先進セラミックと
-        // 同居する真の事業×地域混在 → axis_ambiguous（学び11。INPEX の OilAndGasJapan とは別）。
-        #expect(snap.warnings.contains("axis_ambiguous"))
-        #expect(snap.needsReview == true)
+        // 米州/アジア等は地域名＋Business ラッパだけだが、日本住設（HousingEquipment）と同居する
+        // TOTO 型の海外住設内訳 → 事業区分として採用（ユーザー確認 2026-07-25）。
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("axis_ambiguous"))
     }
 
     @Test func mauiRetailFinTechResolvesViaSingularRevenueTagWithoutAmbiguity() throws {
