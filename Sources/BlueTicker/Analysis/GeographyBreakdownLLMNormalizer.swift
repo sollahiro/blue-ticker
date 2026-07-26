@@ -226,20 +226,24 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 親・子のラベル組と金額関係から、「うち」内数行かを判定する。
+    /// 独立した並列地域（例: 「中国」と「アジア他」、「中国」と「その他」）を誤って落とさないよう、
+    /// 内数らしい高い金額比率（親の概ね 80% 以上）を要求する。
     private static func isLikelyOfWhichChild(parent: BreakdownRow, child: BreakdownRow) -> Bool {
         guard child.amount > 0, parent.amount > 0 else { return false }
         // 内数は親以下（丸め誤差のみ許容）。
         guard child.amount <= parent.amount * 1.001 else { return false }
+        // 兄弟地域の取りこぼし防止: 真の「うち」は親の大部分を占めることが多い
+        // （北米のうち米国 ≈ 95%+）。中国が「アジア他」「その他」と並列な表では比率が低い。
+        guard child.amount >= parent.amount * 0.80 else { return false }
         return matchesOfWhichLabelPair(parent: parent.labelRaw, child: child.labelRaw)
     }
 
-    /// よくある親地域 ↔ 内数地域のラベル組。
+    /// 高確度の親地域 ↔ 内数地域ラベル組のみ（並列バケット「その他」「アジア他」は扱わない）。
+    /// 「その他のうち中国」等はプロンプト指示に委ね、決定的フィルタでは触らない。
     private static func matchesOfWhichLabelPair(parent: String, child: String) -> Bool {
         let pairs: [(parents: [String], children: [String])] = [
             (["北米", "米州", "米大陸", "アメリカ"], ["米国", "アメリカ合衆国"]),
             (["欧州", "ヨーロッパ"], ["フランス", "ドイツ", "英国", "イギリス", "イタリア", "スペイン"]),
-            (["アジア"], ["中国", "タイ", "インド", "韓国", "台湾", "ベトナム"]),
-            (["その他"], ["中国"]),
         ]
         for pair in pairs {
             let parentHit = pair.parents.contains { parent.contains($0) }
