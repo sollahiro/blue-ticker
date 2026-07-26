@@ -40,6 +40,7 @@ enum GeographyBreakdownLLMNormalizer {
     ルール:
     - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・列（多くは「当期」列）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
     - **見出しが2段以上に分かれている表（例: 1段目が「アジア」「米州」等の広い区分、2段目が「タイ」「その他」「米国」「その他」等の細かい区分）では、必ず最も粒度の細かい行を採用すること。広い区分へ集約してはならない。行ラベルは2段目（最も内側）の区分名をそのまま使うこと（例: 「アジア」「タイ」の2段なら「タイ」、「アジア」「その他」の2段なら「アジアその他」のように、上位区分と下位区分をつなげた名前にすること）**
+    - **親地域に金額があり、その下に「うち」「（うち〜）」等の内数行がある表では、内数行は出力しないこと（親地域の金額のみを segment にする）。内数を別 segment に含めると親と二重計上になり分母合計が崩れる**
     - 行ラベルは「日本」「米国」「欧州」「アジア」等の地域名であるべきで、事業名・製品名ではないこと。地域別注記のはずが実際には事業別の表（見出しの取り違え）である場合は applicable=false を返すこと
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
@@ -148,6 +149,10 @@ enum GeographyBreakdownLLMNormalizer {
         }
         guard !rows.isEmpty else { return (nil, audit) }
 
+        // 「うち」内数の二重計上を決定的に除去する（プロンプト指示の保険）。
+        // 親地域（北米等）と内数（米国等）が両方 segment だと分母合計が 1 を超える。
+        rows = dropOfWhichSubsetSegments(rows)
+
         // ラベル妥当性チェック（決定的、追加ガード）。分母一致だけでは表の取り違えを検知できないため
         // （例: 誤って選ばれた事業別表の合計が、地域別表の合計とたまたま一致するケース）。
         // 「その他」はキーワードに含めない — 事業別表にも「その他及び全社」等の形でほぼ必ず
@@ -198,5 +203,53 @@ enum GeographyBreakdownLLMNormalizer {
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。
+    /// 親を残し内数を落とす（注記の加算構造に合わせる。内数は親金額の内訳開示）。
+    static func dropOfWhichSubsetSegments(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        let segmentIndices = rows.indices.filter { rows[$0].rowKind == "segment" }
+        guard segmentIndices.count >= 2 else { return rows }
+        var drop = Set<Int>()
+        for childIdx in segmentIndices {
+            let child = rows[childIdx]
+            for parentIdx in segmentIndices where parentIdx != childIdx && !drop.contains(parentIdx) {
+                let parent = rows[parentIdx]
+                if isLikelyOfWhichChild(parent: parent, child: child) {
+                    drop.insert(childIdx)
+                    break
+                }
+            }
+        }
+        guard !drop.isEmpty else { return rows }
+        return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+    }
+
+    /// 親・子のラベル組と金額関係から、「うち」内数行かを判定する。
+    private static func isLikelyOfWhichChild(parent: BreakdownRow, child: BreakdownRow) -> Bool {
+        guard child.amount > 0, parent.amount > 0 else { return false }
+        // 内数は親以下（丸め誤差のみ許容）。
+        guard child.amount <= parent.amount * 1.001 else { return false }
+        return matchesOfWhichLabelPair(parent: parent.labelRaw, child: child.labelRaw)
+    }
+
+    /// よくある親地域 ↔ 内数地域のラベル組。
+    private static func matchesOfWhichLabelPair(parent: String, child: String) -> Bool {
+        let pairs: [(parents: [String], children: [String])] = [
+            (["北米", "米州", "米大陸", "アメリカ"], ["米国", "アメリカ合衆国"]),
+            (["欧州", "ヨーロッパ"], ["フランス", "ドイツ", "英国", "イギリス", "イタリア", "スペイン"]),
+            (["アジア"], ["中国", "タイ", "インド", "韓国", "台湾", "ベトナム"]),
+            (["その他"], ["中国"]),
+        ]
+        for pair in pairs {
+            let parentHit = pair.parents.contains { parent.contains($0) }
+            let childHit = pair.children.contains { child.contains($0) }
+            // 親ラベル自体が子キーワードだけ、または子が親キーワードを含む場合は組としない
+            // （例: 親「米国」と子「北米」の取り違えを防ぐ）。
+            let parentIsChildOnly = pair.children.contains { parent == $0 || parent.contains($0) }
+                && !pair.parents.contains { parent.contains($0) }
+            if parentHit && childHit && !parentIsChildOnly { return true }
+        }
+        return false
     }
 }
