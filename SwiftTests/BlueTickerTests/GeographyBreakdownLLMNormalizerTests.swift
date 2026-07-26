@@ -24,8 +24,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(filtered.contains { $0.rowKind == "subtotal" })
     }
 
-    @Test("米大陸とうち米国、その他と中国も内数側を落とす")
-    func dropsAmericasAndChinaSubsets() {
+    @Test("北米のうち米国（高比率）だけ落とし、並列の中国はそのまま残す")
+    func dropsOnlyHighRatioAmericasSubset() {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 84_769, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 322_540, share: nil, profit: nil, rowKind: "segment"),
@@ -36,7 +36,23 @@ struct GeographyBreakdownLLMNormalizerTests {
         ]
         let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
         let labels = Set(filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        #expect(labels == ["日本", "北米", "その他"])
+        // 米国は北米の内数（比率≈99%）。中国はその他の並列地域なので残す（プロンプト側でうち除外）。
+        #expect(labels == ["日本", "北米", "その他", "中国"])
+    }
+
+    @Test("アジア他と中国が並列のときは中国を落とさない（テルモ型）")
+    func keepsChinaBesideAsiaOther() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "米州", amount: 443_405, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "日本", amount: 222_603, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "欧州", amount: 242_655, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "中国", amount: 91_309, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア他", amount: 131_902, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "合計", amount: 1_131_877, share: nil, profit: nil, rowKind: "subtotal"),
+        ]
+        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(labels == ["米州", "日本", "欧州", "中国", "アジア他"])
     }
 
     @Test("親子関係が無い地域行はそのまま残す")
