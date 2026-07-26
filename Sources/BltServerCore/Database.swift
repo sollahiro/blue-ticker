@@ -50,6 +50,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanySegmentBreakdowns())
     // company_segment_breakdowns → company_breakdowns へのテーブル名変更（Breakdown 系命名への統一）。
     app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
+    // business 軸が解決できなかった理由（E/F/unknown）の永続化列（issue #132）。
+    app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

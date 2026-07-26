@@ -96,7 +96,7 @@ func runStage6Ingest(
             missing.append(cand)
         } else if existing?.needsReview == true {
             flaggedForReview.append(cand)
-        } else if existing?.source == breakdownSourceXbrlFacts,
+        } else if let source = existing?.source, isVersionGatedBreakdownSource(source),
             existing?.cacheVersion != breakdownCacheVersion
         {
             staleVersion.append(cand)
@@ -123,7 +123,7 @@ func runStage6Ingest(
             try await CompanyBreakdown.find(key, on: db)
         }
         if let row = existing, row.needsReview == false,
-            row.source != breakdownSourceXbrlFacts
+            !isVersionGatedBreakdownSource(row.source)
                 || row.cacheVersion == breakdownCacheVersion
         {
             skipped += 1
@@ -156,6 +156,36 @@ func runStage6Ingest(
             case breakdownNotApplicableGeographyOnly: notApplicableGeographyOnly += 1
             case breakdownNotApplicableSingleSegmentDisclosed: notApplicableSingleSegmentDisclosed += 1
             default: notApplicableUnknown += 1
+            }
+            // 既存行が実データ（source != not_applicable）を保持している場合は上書きしない。
+            // 再試行（needsReview=true や cache_version 不一致）の対象になった行が、LLM 一時停止・
+            // Stage 4 未計算等の一時的な理由で今回だけ notApplicable 判定された場合に、既存の
+            // 正しいデータを破壊してしまうため（Opus監査で指摘、issue #132）。`.failed` と同じ
+            // 「今回は進展なし、次回また再試行対象になる」扱いにする。
+            if let existing, existing.source != breakdownSourceNotApplicable {
+                logger?.warning(
+                    "Stage 6: 既存の実データ行を notApplicable(\(reason)) で上書きしません(次回再試行): docID=\(cand.docID) code=\(cand.code)"
+                )
+            } else {
+                // E/F は確信度の高い決定的判定のため needsReview=false（cache_version バンプでのみ
+                // 再試行）。それ以外（unknown）は要調査のため needsReview=true にして再処理キューへ
+                // 乗せる（通常巡回または `--codes` 指名 ingest で再分類できるようにする。issue #132）。
+                let needsReview =
+                    reason != breakdownNotApplicableGeographyOnly
+                    && reason != breakdownNotApplicableSingleSegmentDisclosed
+                let placeholder = BreakdownSnapshotPayload(
+                    axis: breakdownAxisBusiness, denominator: 0, denominatorTag: "", rows: [],
+                    sourceKind: breakdownSourceNotApplicable, needsReview: needsReview, warnings: [])
+                try await withDbRetry(
+                    logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+                ) {
+                    try await storeBreakdown(
+                        existing: existing, docID: cand.docID, axis: breakdownAxisBusiness,
+                        code: cand.code, submitDateTime: cand.submitDateTime, payload: placeholder,
+                        source: breakdownSourceNotApplicable, contentHash: "",
+                        cacheVersion: breakdownCacheVersion, llmAudit: nil,
+                        notApplicableReason: reason, db: db)
+                }
             }
         case .failed:
             failed += 1
@@ -203,10 +233,13 @@ func consolidatedSalesForDoc(code: String, docID: String, db: Database) async th
 }
 
 /// 解決済み business 軸内訳を company_breakdowns へ書き込む（既存行があれば更新、無ければ作成）。
+/// `notApplicableReason` は `source == breakdownSourceNotApplicable` の行にのみ渡す（issue #132）。
+/// 省略時 nil（実データ行）。
 func storeBreakdown(
     existing: CompanyBreakdown?, docID: String, axis: String, code: String,
     submitDateTime: String, payload: BreakdownSnapshotPayload, source: String, contentHash: String,
-    cacheVersion: String, llmAudit: LLMBreakdownAuditPayload?, db: Database
+    cacheVersion: String, llmAudit: LLMBreakdownAuditPayload?, notApplicableReason: String? = nil,
+    db: Database
 ) async throws {
     let applyFields: (CompanyBreakdown) -> Void = { row in
         row.code = code
@@ -217,6 +250,7 @@ func storeBreakdown(
         row.contentHash = contentHash
         row.cacheVersion = cacheVersion
         row.llmAudit = llmAudit
+        row.notApplicableReason = notApplicableReason
     }
     if let row = existing {
         applyFields(row)
@@ -267,17 +301,28 @@ func countServableBreakdowns(db: Database) async throws -> (servable: Int, unser
 
 // MARK: - read 経路（REST/MCP breakdown）
 
+/// `loadStoredBreakdown` の結果3値。「行が無い/read不可」と「行はあるが business 軸が
+/// 解決できなかった（reason付き）」を区別して呼び出し側（REST/MCP）へ伝える（issue #132）。
+enum BreakdownLoadResult {
+    /// 実データあり。公開契約 {code, doc_id, axis, breakdown} の JSON。
+    case found([String: Any])
+    /// 行はあるが business 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。
+    case notApplicable(reason: String)
+    /// 行が無い、または read 不可（バージョン床未満等）。
+    case absent
+}
+
 /// 格納済み Stage 6 business 軸内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
-/// axis は現状 "business" のみ受け付ける（geography は未配線のため行が無く、自然に nil になる）。
+/// axis は現状 "business" のみ受け付ける（geography は未配線のため行が無く、自然に absent になる）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
-/// read 可否は `isServableBreakdown`（xbrl_facts はバージョン床、LLM 経由は常に可）。
-/// 無い・read 不可なら nil（呼び出し側は 404。ライブ解決へはフォールバックしない）。
+/// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
+/// 無い・read 不可なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
-) async throws -> [String: Any]? {
+) async throws -> BreakdownLoadResult {
     let code4 = String(code.prefix(4))
-    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
-    guard axis == breakdownAxisBusiness else { return nil }
+    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
+    guard axis == breakdownAxisBusiness else { return .absent }
 
     let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {
@@ -295,7 +340,12 @@ func loadStoredBreakdown(
 
     guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion),
         let docID = row.id?.components(separatedBy: "#").first
-    else { return nil }
+    else { return .absent }
+
+    if let reason = row.notApplicableReason {
+        return .notApplicable(reason: reason)
+    }
+
     var result: [String: Any] = [
         "code": code4,
         "doc_id": docID,
@@ -308,5 +358,5 @@ func loadStoredBreakdown(
     if let llmAudit = row.llmAudit {
         result["llm_audit"] = llmAudit.jsonObject()
     }
-    return result
+    return .found(result)
 }

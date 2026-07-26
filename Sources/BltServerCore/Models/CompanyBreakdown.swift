@@ -63,6 +63,13 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     @OptionalField(key: "llm_audit")
     var llmAudit: LLMBreakdownAuditPayload?
 
+    /// business 軸が解決できなかった理由（`breakdownNotApplicable*`。issue #132）。
+    /// `source == breakdownSourceNotApplicable` の行にのみ設定され、この場合 `payload` は
+    /// プレースホルダ（`denominator=0`・`rows=[]`）で実データを持たない。read 経路はこのフィールドの
+    /// 有無で「実データあり」と「notApplicable（reason付き）」を区別する（`loadStoredBreakdown` 参照）。
+    @OptionalField(key: "not_applicable_reason")
+    var notApplicableReason: String?
+
     /// 最終更新時刻（正規化・upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?

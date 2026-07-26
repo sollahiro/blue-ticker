@@ -210,7 +210,7 @@ private func dispatchMcpTool(
         let code = args["code"]?.stringValue ?? ""
         let docId = args["doc_id"]?.stringValue
         let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
-        return mapStoredResult(
+        return mapBreakdownResult(
             await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
             notFoundMessage: "事業別内訳は未算出です")
 
@@ -236,6 +236,23 @@ private func mapStoredResult(
     switch result {
     case .ok(let value):
         return jsonToolResult(value)
+    case .notFound:
+        return errorToolResult(notFoundMessage)
+    case .dbUnavailable:
+        return errorToolResult("財務データベースに接続できません")
+    }
+}
+
+/// `BreakdownServeResult` → `CallTool.Result`。REST の `makeBreakdownResponse` と同型
+/// （notApplicable のときのみエラー本文に `reason` を添える。issue #132）。
+private func mapBreakdownResult(
+    _ result: BreakdownServeResult, notFoundMessage: String
+) -> CallTool.Result {
+    switch result {
+    case .ok(let value):
+        return jsonToolResult(value)
+    case .notApplicable(let reason):
+        return errorToolResult(notFoundMessage, reason: reason)
     case .notFound:
         return errorToolResult(notFoundMessage)
     case .dbUnavailable:

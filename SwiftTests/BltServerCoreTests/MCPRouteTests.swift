@@ -33,6 +33,9 @@ private func withMcpApp(
             app.migrations.add(CreateCompanyHalfFinancials())
             app.migrations.add(AddHighWaterToCompanyFinancials())
             app.migrations.add(CreateCompanyFilingSections())
+            app.migrations.add(CreateCompanySegmentBreakdowns())
+            app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
+            app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             try await app.autoMigrate()
         }
         try await registerRoutes(app, context: makeMcpContext())
@@ -116,6 +119,35 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let content = result?["content"] as? [[String: Any]]
             let text = content?.first?["text"] as? String
             #expect(text?.contains("未集計") == true)
+        }
+    }
+
+    /// issue #132: REST の 404 ボディ拡張と同じ意味論を MCP エラーテキストにも反映する。
+    @Test func getBreakdownReturnsReasonWhenNotApplicable() async throws {
+        try await withMcpApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisBusiness)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = breakdownSourceNotApplicable
+            row.contentHash = ""
+            row.cacheVersion = breakdownCacheVersion
+            row.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
+            try await row.create(on: app.db)
+
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_breakdown", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            #expect(body?["reason"] as? String == "single_segment_disclosed")
         }
     }
 

@@ -60,9 +60,11 @@ public func jsonToolResult(_ value: Any) -> CallTool.Result {
     return CallTool.Result(content: [.text(text: text, annotations: nil, _meta: nil)], structuredContent: nil, isError: false)
 }
 
-/// エラーメッセージを `isError: true` の `CallTool.Result` へ変換する。
-public func errorToolResult(_ message: String) -> CallTool.Result {
-    let body: [String: String] = ["error": message]
+/// エラーメッセージを `isError: true` の `CallTool.Result` へ変換する。`reason` を渡すと
+/// 同じボディに `"reason"` キーを追加する（breakdown の notApplicable 応答用。issue #132）。
+public func errorToolResult(_ message: String, reason: String? = nil) -> CallTool.Result {
+    var body: [String: String] = ["error": message]
+    if let reason { body["reason"] = reason }
     let data = (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
     let text = String(data: data, encoding: .utf8) ?? "{\"error\":\"unknown\"}"
     return CallTool.Result(content: [.text(text: text, annotations: nil, _meta: nil)], structuredContent: nil, isError: true)

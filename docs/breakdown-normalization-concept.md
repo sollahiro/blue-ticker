@@ -66,7 +66,7 @@
 5. **ミソはプロンプト単体ではなく正規化契約**（スキーマ・分母・指標・軸判定）。LLM を使うなら契約を `json_schema` / プロンプトに落とす。使わないなら同じ契約をコードと別名表に落とす。
 6. 時系列はスナップショット列でよい（再編の連続補正なし）。
 7. **小計・調整行の除外は名称リストより数値判定が頑健**。`ReportableSegmentsMember` / `ReconcilingItemsMember` 等の命名は会社で揺れるが、「金額が分母候補と一致する」「他行の合計と一致する」といった数値的判定なら会社をまたいで機械的に効く。
-8. **金融機関（銀行等）は外部売上高ではなく粗利益/営業純益を分母・指標にする別経路が必要（2026-07-21 実装済み）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（三菱UFJ）や `ConsolidatedGrossProfit`（三井住友）という別概念のため、連結損益計算書の売上を分母にする通常経路（`normalizeSalesBasis`）では解決できない。`BreakdownNormalizer.normalizeBankBasis` を専用フォールバックとして新設し、分母は `segmentSubtotalMemberNames` に名称一致する小計 member のうち segment 行合計に最も近い値（＝真の全社合計。単純な最大値だと市場部門赤字の期に部分合計を誤選択する）を採用する。単一セグメント銀行（例: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、記載を省略しております」）は EDINET/JPCRP タクソノミの専用タグ `DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` で検出できるが、DB 永続化はせず開発ツール診断表示のみに留める（`BreakdownExtractor.detectSingleSegmentDisclosure`）。
+8. **金融機関（銀行等）は外部売上高ではなく粗利益/営業純益を分母・指標にする別経路が必要（2026-07-21 実装済み）。** セグメント指標が外部顧客売上ではなく `NetRevenue`（三菱UFJ）や `ConsolidatedGrossProfit`（三井住友）という別概念のため、連結損益計算書の売上を分母にする通常経路（`normalizeSalesBasis`）では解決できない。`BreakdownNormalizer.normalizeBankBasis` を専用フォールバックとして新設し、分母は `segmentSubtotalMemberNames` に名称一致する小計 member のうち segment 行合計に最も近い値（＝真の全社合計。単純な最大値だと市場部門赤字の期に部分合計を誤選択する）を採用する。単一セグメント銀行（例: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、記載を省略しております」）は EDINET/JPCRP タクソノミの専用タグ `DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` で検出できる（`BreakdownExtractor.detectSingleSegmentDisclosure`）。当初は開発ツール診断表示のみだったが、issue #132（2026-07-26）でカテゴリ（F: `single_segment_disclosed`）としてDB永続化・REST/MCP応答へ反映するよう拡張した（詳細開示文そのものは引き続きDevCLI診断のみ）。
 9. **実装コストの重心は `segments` の `xbrl_facts` ではなく `geography` の `html_table` 側にある。** smoke 11社では `segments` は会計基準（J-GAAP/IFRS/US-GAAP）を問わず **11社中11社が `xbrl_facts`**。一方 `geography` は9社が `html_table`（fact なし）・2社が `not_found`（AZplanning・東邦レマックは小規模で海外拠点なし＝正当な欠測、抽出漏れではない）。現状 `ExtractedBreakdown.tables` は見出し＋markdown文字列のみで行パースをしておらず、ここが Stage 6 の実カバレッジを左右する。
 10. **`segments` キーの軸（business/geography）は member 名のキーワード判定で機械的に決まる。** smoke 11社中10社は事業名（例: `SeasoningsAndFoodsReportableSegmentMember`）、オークマ1社のみ地域名（`JapanReportableSegmentsMember` 等）。小計・調整行を除いた member 全部が地域キーワードに一致する（オークマ: 4/4）か、1つも一致しない（他10社: 0/N）かで完全に分かれ、混在ケースは smoke 内では0件だった。→ 詳細は下記「軸判定ルール（案）」。
 11. **混在（部分一致）ケースの needs_review は「Domestic/Overseas のみの一致」では立てない。** 2026-07-20、smoke 外の実データ（1802大林組・1812鹿島建設・1808長谷工・2413エムスリー）で軸判定ルール4（混在→business+needs_review）の偽陽性を確認。建設業等では「国内建築/海外建築/国内土木/海外土木/不動産」のように事業区分×国内海外のクロス集計になる例や、「海外事業」を単独の事業区分として括る例があり、いずれも axis=business が正しい（sum(segment)≈denominator で確認済み）にもかかわらず Domestic/Overseas という汎用修飾語がヒットして要確認扱いになっていた。`Xbrl.segmentSpecificGeographyMemberKeywords`（Domestic/Overseas を除いた特定地域名）で混在判定を絞り、特定地域名の一致が1件も無ければ needs_review を立てないよう `BreakdownNormalizer.classifyAxis` を修正（`breakdownCacheVersion` を `breakdown-v3` へバンプ）。
@@ -169,7 +169,15 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 5. ~~**永続化**~~（2026-07-19 確定・実装済み）: `company_filing_sections`（Stage 5, 生のsegments/geography表）とは**別テーブル** `company_breakdowns` を新設（`Sources/BltServerCore/Models/CompanyBreakdown.swift` + `Migrations/CreateCompanySegmentBreakdowns.swift`）。分離理由: LLM経由の行（source≠xbrl_facts）はfiling-sectionsのcache_versionバンプ（決定的抽出ロジック変更）に連動して全件再計算させたくないため（検討事項8参照）
    - 主キー: `"doc_id#axis"` 合成文字列（本プロジェクトの既存テーブルは単一String IDの慣習のため、複合IDではなくこの合成キーで揃える）。1書類につきbusiness/geography最大2行
    - カラム: `code`/`submit_date_time`（company_filing_sectionsと同じ非正規化、code別最新選択用）、`payload`(JSONB, `BreakdownSnapshotPayload`)、`needs_review`(bool, payloadから複製したトップレベル列。JSONBを掘らずに再処理キューを引ける)、`source`(`xbrl_facts`\|`revenue_recognition_llm`\|`segment_info_llm`。`BusinessBreakdownResolver`の解決経路)、`content_hash`(生入力+分母のみのハッシュ。**プロンプト/モデル/スキーマは含めない**)、`cache_version`(`breakdown-vN`。バンプ規則は`versioning.md`参照)、`llm_audit`(JSONB nullable, `LLMBreakdownAuditPayload`。LLM経由の行のみ)
-   - `not_found`は行を作らない（欠ける軸は出さない原則と整合）。再計算ルール: `content_hash`一致 かつ `needs_review=false` ならスキップ。プロンプト/モデル改善は`needs_review=true`行だけを狙い撃ちで再処理する
+   - `not_found`（欠測）は行を作らない（欠ける軸は出さない原則と整合）。ただし business 軸が
+     E（地域のみ）/F（単一セグメント記載省略）/unknown で**解決できなかった**場合は例外として
+     `source="not_applicable"` のプレースホルダ行（`payload`はダミー、`not_applicable_reason`に理由を
+     保持）を永続化する（issue #132、`AddNotApplicableReasonToCompanyBreakdowns`）。REST/MCP は
+     404 ステータスを維持したまま応答ボディへ `reason` を追加する（エッジ課金がステータス単位で
+     メーターするため 200 化はしない）。E/F は決定的判定のため`needs_review=false`（xbrl_factsと同じ
+     `cache_version`世代でのみ再試行）、unknownは`needs_review=true`で再処理キューに乗せ、通常巡回や
+     `--codes`指名ingestで再分類できるようにする。再計算ルール: `content_hash`一致 かつ
+     `needs_review=false` ならスキップ。プロンプト/モデル改善は`needs_review=true`行だけを狙い撃ちで再処理する
    - 設計は Cursor Grok 4.5 にレビューを依頼（`cursor-agent --model cursor-grok-4.5-high`）。初期案の`input_hash`にプロンプト/モデルを含めていた設計ミスを指摘され修正。生LLM応答ログの全文保持は引き続き別テーブル案のまま未着手（`llm_audit`は軽量な監査情報のみ）
    - 公開Codable契約は `Sources/BlueTicker/Models/BreakdownContract.swift`（`FilingSectionsContract.swift`と同型: 内部型`BreakdownSnapshot`/`BreakdownRow`/`LLMBreakdownAudit`を公開Payload型へ写す層）
    - `Database.swift`の`app.migrations`に登録済み（ingest/CLI/REST配線と同時に着手。下記9参照）
@@ -180,13 +188,18 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - `smoke/breakdown_business_expected.json`（新規、geography版`breakdown_geography_expected.json`と同型）にキヤノン・オークマの事業別BreakdownSnapshot確認済み値を記録。実LLM呼び出し（xAI Grok）で検証: キヤノン5事業合計=連結売上高4,624,727百万円と完全一致、オークマ5製品合計=206,821（連結206,822と丸め±1）。ユーザー目視確認済み
    - LLM経由ゴールデンは自動pass/fail回帰ではなくスポット監査用（geography版と同じ設計判断）
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
-9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 軸のみ確定・実装済み。geography 軸は未着手のまま） — `Sources/BltServerCore/Stage6Ingest.swift`（`runStage6Ingest`）が対象選定（`stage5Candidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages 6`（`IngestStage.breakdowns`）。REST は `GET /v1/companies/{code}/breakdown?axis=business&doc_id=...`、MCP は `get_breakdown`（いずれも`serveStoredBreakdown`/`loadStoredBreakdown`を共有）
+9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 軸のみ確定・実装済み。geography 軸は未着手のまま） — `Sources/BltServerCore/Stage6Ingest.swift`（`runStage6Ingest`）が対象選定（`stage5Candidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages 6`（`IngestStage.breakdowns`）。REST は `GET /v1/companies/{code}/breakdown?axis=business&doc_id=...`、MCP は `get_breakdown`（いずれも`serveStoredBreakdown`/`loadStoredBreakdown`を共有）。E/F/unknown reasonのREST/MCP反映はissue #132（下記）
    - **対象は日経225構成銘柄限定**（東証上場全体ではない。LLM呼び出し費用抑制のため）。`priorityIngestCodes()`（`assets/nikkei225.csv`）を対象母集団として渡す（Stage4/5の「優先度のみ」用途とは異なる使い方）。年数はStage5と共通の`stage5IngestYears`を使う（Stage6専用の別定数は持たない）
    - staleness判定はStage5と非対称: xbrl_facts経由（決定的）は`cache_version`不一致で再試行してよいが、LLM経由（source≠xbrl_facts）は`needs_review=true`のときのみ再試行する（`cache_version`バンプだけでは触らない）。read側の servable 判定も同型の非対称性を持つ（`isServableBreakdown`: xbrl_factsはバージョン床、LLM経由は存在すれば常にservable）
    - 分母（連結外部売上）はStage6独自に再抽出せず、Stage4（`company_financials`）の計算済み結果を`FinancialsResponse.salesForDoc(_:)`経由で再利用する（重複ロジック回避）
    - `content_hash`はFNV-1a（非暗号学的・決定的）。CryptoKitはLinux（Fly.io配信ターゲット）で使えないため採用しなかった
    - LLMクライアント（`XAI_API_KEY`/`XAI_MODEL`/`XAI_BASE_URL`）はServer側で独自に環境変数解決する（`BltServerFacade.resolveXaiEndpoint`。DevCLIの`LLMClientLoader`とは意図的に別実装。EDINETキー解決がServer/DevCLIで個別に存在するのと同じ設計）。未設定時は`UnavailableChatClient`が即座に失敗し、html_table経路（LLM必須）のみ`notApplicable`になる（xbrl_facts経路は影響を受けない）
    - geography軸は未配線のまま（`GeographyBreakdownLLMNormalizer`はStage6 ingestから未呼び出し）。残作業として残る
+10. ~~**E/F/unknown判定結果の明示化**~~（issue #130、2026-07-25 ingestログ・DevCLI診断まで実装済み、PR #131） /
+    ~~**REST/MCPへの反映**~~（issue #132、2026-07-26 実装済み） — `BreakdownExtractor.classifyNotApplicableReason`
+    がE（`geography_only`）/F（`single_segment_disclosed`）/unknownを判定し、`company_breakdowns`へ
+    `source="not_applicable"`のプレースホルダ行として永続化する（検討事項5参照）。REST/MCPは404を
+    維持したままボディへ`reason`を追加する。
 
 ### キャッシュ・再計算（メモ）
 
@@ -224,7 +237,6 @@ LLM 経路を同じ感覚で `llm-v1` / `llm-v2` バンプすると問題が二�
 - 会社間行ラベルの統一・共通バケットへの強制写像
 - 全企業・全期での事業×地域の完全充足保証
 - 生 XBRL を渡して LLM に一発抽出させる経路（現行 HTML/fact 前段を捨てない）
-- 単一セグメント開示（千葉銀行型）の DB 永続化。開発ツールでの診断表示のみ（学び8参照）
 
 ## 関連
 
