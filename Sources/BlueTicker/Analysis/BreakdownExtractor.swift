@@ -246,8 +246,12 @@ enum BreakdownExtractor {
 
     /// EDINET/JPCRP タクソノミの専用タグ。単一セグメント企業がセグメント情報の記載を省略する旨を
     /// 開示する箇所（実データ確認: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、
-    /// 記載を省略しております。」、ユーザー確認2026-07-21）。
-    static let singleSegmentDisclosureTag = "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment"
+    /// 記載を省略しております。」、ユーザー確認2026-07-21）。IFRS版はサフィックスが異なる
+    /// （実データ確認: ベイカレント6532・日本取引所グループ8697、issue #137調査2026-07-26）。
+    static let singleSegmentDisclosureTags: Set<String> = [
+        "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment",
+        "DescriptionOfFactThatCompanysBusinessComprisesSingleSegmentIFRS",
+    ]
 
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
     /// `extractSegmentInfo` は表(`<table>`)を持たないブロックを対象外とするため method="not_found"
@@ -257,7 +261,7 @@ enum BreakdownExtractor {
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
         for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
             guard let data = try? Data(contentsOf: file) else { continue }
-            let collector = TextBlockSAXCollector(targetTags: [singleSegmentDisclosureTag])
+            let collector = TextBlockSAXCollector(targetTags: singleSegmentDisclosureTags)
             let parser = XMLParser(data: data)
             parser.delegate = collector
             parser.parse()
@@ -811,9 +815,12 @@ enum BreakdownExtractor {
         if !tables.isEmpty {
             return ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
         }
-        if !facts.isEmpty {
-            return ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        }
+        // facts はあっても売上相当タグを1つも含まない場合（例: 従業員数・設備投資額のみ）は
+        // 「見つかった」とみなさず not_found にする。ZOZO・ベイカレント型（実データ検証: issue #137、
+        // 2026-07-26）: OperatingSegmentsAxis 付きの非売上系 fact（CapEx・R&D・従業員数）だけが
+        // 存在する単一セグメント企業で、ここを xbrl_facts のまま返すと shouldPreferRevenueRecognition の
+        // swap 判定（not_found 必須）・classifyNotApplicableReason の単一セグメント診断（同）の
+        // どちらにも到達できなくなる。
         return ExtractedBreakdown(method: "not_found", tables: [], facts: [])
     }
 

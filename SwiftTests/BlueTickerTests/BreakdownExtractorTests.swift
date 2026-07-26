@@ -1160,6 +1160,84 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoSwapsToRevenueRecognitionWhenDimensionFactsAreNonRevenue() throws {
+        // ZOZO型の回帰（issue #137、実データ検証2026-07-26）: セグメント注記自体は
+        // 単一セグメントで表を持たず、OperatingSegmentsAxis 付き fact も CapEx/R&D 等の
+        // 非売上系タグしか無い。旧実装はここで method="xbrl_facts"（非売上 facts）を返してしまい、
+        // shouldPreferRevenueRecognition の swap 条件（method=="not_found" 必須）に届かず、
+        // 収益認識関係注記にある本物の事業別売上表（ZOZOTOWN事業等）を見失っていた。
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_CorporateSharedMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jpcrp_cor:OperatingSegmentsAxis">jpcrp_cor:CorporateSharedMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jpcrp_cor:CapitalExpendituresOverviewOfCapitalExpendituresEtc contextRef="CurrentYearDuration_CorporateSharedMember" unitRef="JPY" decimals="-6">7050000000</jpcrp_cor:CapitalExpendituresOverviewOfCapitalExpendituresEtc>
+          <jpcrp_cor:NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;ZOZOTOWN事業&lt;/td&gt;&lt;td&gt;157416&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;広告事業&lt;/td&gt;&lt;td&gt;11884&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let markdown = try #require(result.tables.first?.markdown)
+            #expect(markdown.contains("ZOZOTOWN事業"))
+            #expect(markdown.contains("広告事業"))
+        }
+    }
+
+    @Test func segmentInfoIsNotFoundWhenDimensionFactsAreNonRevenueAndNoRevenueRecognition() throws {
+        // 上のテストの対照: 収益認識関係注記も無い場合は、非売上系 facts を method="xbrl_facts" として
+        // 誤って「見つかった」扱いにせず not_found にする（classifyNotApplicableReason が
+        // 単一セグメント診断に到達できるようにするため）。
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearInstant_ReportableSegmentsMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:instant>2026-02-28</xbrli:instant></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jpcrp_cor:OperatingSegmentsAxis">jpcrp_cor:ReportableSegmentsMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:unit id="pure"><xbrli:measure>pure</xbrli:measure></xbrli:unit>
+          <jpcrp_cor:NumberOfEmployees contextRef="CurrentYearInstant_ReportableSegmentsMember" unitRef="pure" decimals="0">6788</jpcrp_cor:NumberOfEmployees>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "not_found")
+            #expect(result.tables.isEmpty)
+            #expect(result.facts.isEmpty)
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureFindsIFRSVariantTag() {
+        // ベイカレント・JPX型の回帰（issue #137、実データ検証2026-07-26）: IFRS filer は
+        // サフィックス付きの専用タグ（...SingleSegmentIFRS）を使う。J-GAAP版のみを見ていた
+        // 旧実装ではこの2社の単一セグメント開示を検知できなかった。
+        let xml = textBlockXml(
+            tag: "DescriptionOfFactThatCompanysBusinessComprisesSingleSegmentIFRS",
+            escapedHtml: "当社グループは、金融商品取引所事業の単一セグメントであるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
+            #expect(disclosure == "当社グループは、金融商品取引所事業の単一セグメントであるため、記載を省略しております。")
+        }
+    }
+
     // MARK: - toDictionary（JSON 出力）
 
     @Test func toDictionarySerializesWithOptionalKeysOmitted() throws {
