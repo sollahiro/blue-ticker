@@ -39,6 +39,11 @@ public enum Api {
 
     // 件数上限
     static let companySearchLimit = 50      // searchCompanies の返却上限
+
+    /// `/v1/demo/companies` の返却件数上限。子サイト（sollahiro.com/demo）の実データ検索専用。
+    /// company_breakdowns 格納銘柄（日経225構成銘柄）に絞ったうえでの表示件数（検索窓の下の候補用）。
+    /// BltServerCore（Routes.swift）から参照するため public。
+    public static let demoSearchResultLimit = 8
     static let filingsMaxDocuments = 50     // server read（getFilings / filingsList）の filings 上限
     static let filingsCliMaxDocuments = 10  // CLI `filings` コマンドの表示上限
 
