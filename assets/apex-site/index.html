@@ -40,18 +40,18 @@
   }
 
   * { box-sizing: border-box; }
-  html { background: var(--page); color-scheme: light; }
+  html {
+    background-color: var(--page);
+    color-scheme: light;
+  }
   body {
+    position: relative;
     margin: 0;
     color: var(--ink);
     font-family: var(--font-body);
     font-size: 16px;
     line-height: 1.75;
     -webkit-font-smoothing: antialiased;
-    background-color: var(--page);
-    background-image:
-      repeating-linear-gradient(45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 27px),
-      repeating-linear-gradient(-45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 27px);
   }
   a { color: var(--accent); }
   a:focus-visible, button:focus-visible {
@@ -69,15 +69,14 @@
   /* ---- nav ---- */
   .nav {
     max-width: 1120px; margin: 0 auto; padding: 22px 24px;
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
+  .nav a.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
   .nav img { width: 26px; height: 26px; border-radius: 6px; display: block; }
   .nav .word { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--ink); }
-  .nav .tag {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
-    color: #fff; background: var(--accent);
-    padding: 2px 7px; border-radius: 3px; margin-left: 2px; font-weight: 700;
-  }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+  .nav-links a { color: var(--ink-dim); font-size: 13.5px; text-decoration: none; }
+  .nav-links a:hover { color: var(--accent); }
 
   /* ---- hero ---- */
   .hero { max-width: 1120px; margin: 0 auto; padding: 28px 24px 0; text-align: center; }
@@ -102,23 +101,6 @@
   @keyframes tape-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   @media (prefers-reduced-motion: reduce) { .tape-track { animation: none; } }
 
-  .copy-wrap { display: inline-flex; align-items: center; gap: 4px; }
-  .copy-btn {
-    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-    border: none; background: transparent; color: var(--accent); cursor: pointer; padding: 0;
-    border-radius: 5px; vertical-align: middle;
-  }
-  .copy-btn:hover { background: var(--accent-soft); }
-  .copy-btn .icon-check { display: none; color: var(--down); }
-  .copy-btn.copied .icon-copy { display: none; }
-  .copy-btn.copied .icon-check { display: inline-flex; }
-
-  /* ---- legend（4機能のビジュアル説明） ---- */
-  .legend { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 22px 0 30px; }
-  .legend-item { flex: 1 1 200px; padding-left: 14px; border-left: 3px solid var(--accent); }
-  .legend-item b { display: block; font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
-  .legend-item span { display: block; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
-
   /* ---- section shell ---- */
   section { padding: 56px 0; border-top: 1px solid var(--rule); }
   section > h2 { font-size: 24px; margin-bottom: 8px; }
@@ -130,36 +112,21 @@
     border-radius: 12px; box-shadow: var(--shadow);
   }
 
-  /* ---- setup steps ---- */
-  .steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 14px; }
-  .step { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 20px 22px; }
-  .step-num {
-    font-family: var(--font-mono); font-size: 13px; color: #fff;
-    width: 32px; height: 32px; border-radius: 50%; background: var(--accent); font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .step h3 { font-family: var(--font-body); font-size: 15.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
-  .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
-  .step .endpoint {
-    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-family: var(--font-mono); font-size: 13.5px;
-    background: var(--accent-soft); padding: 8px 8px 8px 12px; border-radius: 6px; color: var(--accent);
-  }
-  .setup-foot { margin: 18px 0 0; font-size: 13.5px; color: var(--ink-faint); }
-  .setup-foot code { font-family: var(--font-mono); background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; color: var(--accent); }
-
   /* ---- tools: 結果を出したまま横に自動で流れるマーキー ---- */
-  .tool-marquee { overflow: hidden; margin-top: 24px; }
-  .tool-track { display: flex; gap: 16px; width: max-content; animation: tool-scroll 52s linear infinite; }
-  .tool-marquee:hover .tool-track { animation-play-state: paused; }
-  @keyframes tool-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  @media (prefers-reduced-motion: reduce) { .tool-track { animation: none; } }
+  .tool-marquee {
+    margin-top: 24px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .tool-marquee::-webkit-scrollbar { display: none; }
+  .tool-track { display: flex; gap: 16px; width: max-content; }
 
   .tool-card {
     flex: 0 0 238px; display: flex; flex-direction: column; padding: 16px 17px;
     background: linear-gradient(155deg, var(--panel-a) 0%, var(--panel-b) 100%);
     border: 1px solid var(--panel-border); border-radius: 10px; box-shadow: var(--panel-shadow);
-    min-height: 224px;
+    min-height: 224px; text-decoration: none; transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
+  .tool-card:hover { transform: translateY(-3px); box-shadow: var(--panel-shadow), 0 10px 24px -10px rgba(9,38,110,0.45); }
   .tool-tag {
     display: inline-block; width: fit-content;
     font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: 0.01em;
@@ -206,17 +173,78 @@
   footer .credit { font-size: 12.5px; color: var(--ink-faint); white-space: nowrap; }
 
   @media (max-width: 560px) {
-    .step { grid-template-columns: 1fr; }
+    .nav-links { margin-left: 0; width: 100%; justify-content: flex-start; }
     .tool-card { flex-basis: 208px; min-height: 208px; }
+  }
+
+  /* ---- wagara background: lattice + random twinkle (page-color -> water-blue -> page-color) ----
+     The lattice is painted as a 38x38px background tile, so its phase is anchored to the document
+     origin. (A bare repeating-linear-gradient is phased from the centre of its box, so on <html>
+     it drifted as the page grew -- that was the old misalignment.) Lines land exactly on
+     x-y = 38k and x+y = 38m, so cell centres are (19a, 19b) with a+b odd, and every cell is the
+     diamond inscribed in the 38x38 box at (19a-19, 19b-19). The cells use clip-path rather than a
+     rotated box: integer offsets and sizes avoid Chrome's pixel-snapping of fractional top/left.
+     ::after paints the lattice on top of the cells so a lit cell never swallows its own lines. */
+  .wagara-glow { position: absolute; inset: 0; min-height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }
+  .wagara-glow::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px),
+      repeating-linear-gradient(-45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px);
+    background-size: 38px 38px;
+  }
+  .wagara-glow span {
+    position: absolute; width: 38px; height: 38px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    background-color: var(--page);
+    animation: wagara-blink ease-in-out infinite;
+  }
+  @keyframes wagara-blink {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #cdeeff; }
   }
 </style>
 </head>
 <body>
+<div class="wagara-glow" aria-hidden="true">
+  <span style="top:19px; left:0px; animation-duration:6s; animation-delay:0s;"></span>
+  <span style="top:893px; left:266px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1767px; left:532px; animation-duration:8s; animation-delay:7s;"></span>
+  <span style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
+  <span style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
+  <span style="top:437px; left:608px; animation-duration:11s; animation-delay:4s;"></span>
+  <span style="top:1311px; left:152px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:209px; left:418px; animation-duration:7s; animation-delay:2s;"></span>
+  <span style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
+  <span style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
+  <span style="top:855px; left:494px; animation-duration:10s; animation-delay:8s;"></span>
+  <span style="top:1729px; left:38px; animation-duration:11s; animation-delay:7s;"></span>
+  <span style="top:627px; left:304px; animation-duration:6s; animation-delay:6s;"></span>
+  <span style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
+  <span style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
+  <span style="top:1273px; left:380px; animation-duration:9s; animation-delay:3s;"></span>
+  <span style="top:171px; left:646px; animation-duration:10s; animation-delay:2s;"></span>
+  <span style="top:1045px; left:190px; animation-duration:11s; animation-delay:1s;"></span>
+  <span style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
+  <span style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1691px; left:266px; animation-duration:8s; animation-delay:7s;"></span>
+  <span style="top:589px; left:532px; animation-duration:9s; animation-delay:6s;"></span>
+  <span style="top:1463px; left:76px; animation-duration:10s; animation-delay:5s;"></span>
+  <span style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
+  <span style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:133px; left:152px; animation-duration:7s; animation-delay:2s;"></span>
+</div>
 
 <header class="nav">
-  <img src="mark.png" alt="BLUE TICKER">
-  <span class="word">BLUE TICKER</span>
-  <span class="tag">MCP</span>
+  <a href="index.html" class="brand">
+    <img src="mark.png" alt="BLUE TICKER">
+    <span class="word">BLUE TICKER</span>
+  </a>
+  <nav class="nav-links">
+    <a href="mcp.html">MCP</a>
+    <a href="api.html">API</a>
+    <a href="tools.html">仕様</a>
+  </nav>
 </header>
 
 <main>
@@ -246,17 +274,10 @@
     <div class="page">
       <h2>何ができる？</h2>
       <p class="section-lead">実際にトヨタ自動車（7203）へ呼んだ結果です。</p>
-      <div class="legend">
-        <div class="legend-item"><b>Summarize</b><span>財務諸表の数値</span></div>
-        <div class="legend-item"><b>Filing</b><span>有報のテキスト</span></div>
-        <div class="legend-item"><b>Analyze</b><span>独自の分析手法に基づいた計算値</span></div>
-        <div class="legend-item"><b>Breakdown</b><span>バックエンドLLMで構造化した事業別・地域別売上</span></div>
-      </div>
-
       <div class="tool-marquee">
         <div class="tool-track">
 
-          <div class="tool-card">
+          <a class="tool-card" href="summarize.html">
             <span class="tool-tag">Summarize</span>
             <span class="tool-call">トヨタ自動車 2025年3月期</span>
             <div class="tool-rows">
@@ -264,18 +285,18 @@
               <div class="tool-row"><span class="rlabel">営業利益 Operating</span><span class="rval num down">¥4,795,586 −10.4%</span></div>
               <div class="tool-row"><span class="rlabel">ROE</span><span class="rval num">12.92%</span></div>
             </div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="filing.html">
             <span class="tool-tag">Filing</span>
             <span class="tool-call">トヨタ自動車 研究開発</span>
             <div class="tool-rows">
               <div class="tool-row"><span class="rlabel">研究開発費</span><span class="rval num">¥1,326,496百万</span></div>
               <div class="tool-row"><span class="rlabel">拠点</span><span class="rval">日・米・欧・亜</span></div>
             </div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="analyze.html">
             <span class="tool-tag">Analyze</span>
             <span class="tool-call">トヨタ自動車 事業利益の推移</span>
             <div class="bridge">
@@ -286,9 +307,9 @@
               <div class="bar-col"><span class="bar-val">7.74兆</span><div class="bar-track"><div class="bar total" style="top:13.5%;height:86.5%"></div></div><span class="bar-cat">25期</span></div>
             </div>
             <div class="tool-row total"><span class="rlabel">前年差</span><span class="rval num">+264,765</span></div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="breakdown.html">
             <span class="tool-tag">Breakdown</span>
             <span class="tool-call">トヨタ自動車 事業別売上高</span>
             <div class="tool-rows">
@@ -296,11 +317,11 @@
               <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
               <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
             </div>
-          </div>
+          </a>
 
           <!-- 継ぎ目のない無限スクロール用に複製 -->
 
-          <div class="tool-card">
+          <a class="tool-card" href="summarize.html">
             <span class="tool-tag">Summarize</span>
             <span class="tool-call">トヨタ自動車 2025年3月期</span>
             <div class="tool-rows">
@@ -308,18 +329,18 @@
               <div class="tool-row"><span class="rlabel">営業利益 Operating</span><span class="rval num down">¥4,795,586 −10.4%</span></div>
               <div class="tool-row"><span class="rlabel">ROE</span><span class="rval num">12.92%</span></div>
             </div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="filing.html">
             <span class="tool-tag">Filing</span>
             <span class="tool-call">トヨタ自動車 研究開発</span>
             <div class="tool-rows">
               <div class="tool-row"><span class="rlabel">研究開発費</span><span class="rval num">¥1,326,496百万</span></div>
               <div class="tool-row"><span class="rlabel">拠点</span><span class="rval">日・米・欧・亜</span></div>
             </div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="analyze.html">
             <span class="tool-tag">Analyze</span>
             <span class="tool-call">トヨタ自動車 事業利益の推移</span>
             <div class="bridge">
@@ -330,9 +351,9 @@
               <div class="bar-col"><span class="bar-val">7.74兆</span><div class="bar-track"><div class="bar total" style="top:13.5%;height:86.5%"></div></div><span class="bar-cat">25期</span></div>
             </div>
             <div class="tool-row total"><span class="rlabel">前年差</span><span class="rval num">+264,765</span></div>
-          </div>
+          </a>
 
-          <div class="tool-card">
+          <a class="tool-card" href="breakdown.html">
             <span class="tool-tag">Breakdown</span>
             <span class="tool-call">トヨタ自動車 事業別売上高</span>
             <div class="tool-rows">
@@ -340,41 +361,10 @@
               <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
               <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
             </div>
-          </div>
+          </a>
 
         </div>
       </div>
-    </div>
-  </section>
-
-  <section class="setup">
-    <div class="page">
-      <h2>どうやって使い始める？</h2>
-      <p class="section-lead">アカウント登録は不要です。接続先を登録して、ブラウザで一度認可するだけです。現在は無料でご利用いただけますが、今後一部機能の有料化を検討しています。</p>
-      <ol class="steps">
-        <li class="light-card step">
-          <span class="step-num num">1</span>
-          <div>
-            <h3>コネクタとして登録する</h3>
-            <p>Claude Desktop / Claude.ai / Grok の「カスタムコネクタを追加」で接続先を入力します。スマートフォンアプリではなく、Web版での操作が必要です。</p>
-            <span class="endpoint">
-              https://mcp.sollahiro.com
-              <button type="button" class="copy-btn" aria-label="コピー" onclick="navigator.clipboard.writeText('https://mcp.sollahiro.com');this.classList.add('copied');clearTimeout(this._t);this._t=setTimeout(()=&gt;this.classList.remove('copied'),1500)">
-                <svg class="icon-copy" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3.5 10.5V3.5A1.5 1.5 0 0 1 5 2h6"/></svg>
-                <svg class="icon-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.5"/></svg>
-              </button>
-            </span>
-          </div>
-        </li>
-        <li class="light-card step">
-          <span class="step-num num">2</span>
-          <div>
-            <h3>ブラウザで認可する</h3>
-            <p>初回接続時にブラウザが開き、Cloudflare Access 経由で認可します（Managed OAuth）。以降はそのまま会話の中でツールを呼べます。</p>
-          </div>
-        </li>
-      </ol>
-      <p class="setup-foot">curl・CI から機械的に呼び出せる REST API も公開予定です（<code>https://api.sollahiro.com</code>）。</p>
     </div>
   </section>
 
@@ -396,5 +386,34 @@
   </div>
 </footer>
 
+<script>
+  // tool-marquee: 自動スクロール（drag/swipeで手動操作もできるよう、CSS transform
+  // アニメーションではなくネイティブ scrollLeft を動かす。track は継ぎ目のない
+  // ループ用に中身を複製済みなので、半分の幅で先頭へ折り返す）。
+  (function () {
+    var mq = document.querySelector('.tool-marquee');
+    var track = mq && mq.querySelector('.tool-track');
+    if (!mq || !track) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var paused = false;
+    function step() {
+      if (!paused) {
+        var half = track.scrollWidth / 2;
+        mq.scrollLeft += 0.5;
+        if (mq.scrollLeft >= half) mq.scrollLeft -= half;
+      }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+
+    ['mouseenter', 'touchstart', 'pointerdown', 'focusin'].forEach(function (ev) {
+      mq.addEventListener(ev, function () { paused = true; }, { passive: true });
+    });
+    ['mouseleave', 'touchend', 'pointerup', 'focusout'].forEach(function (ev) {
+      mq.addEventListener(ev, function () { paused = false; }, { passive: true });
+    });
+  })();
+</script>
 </body>
 </html>

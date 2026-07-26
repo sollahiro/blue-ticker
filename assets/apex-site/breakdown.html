@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breakdown — 機能デモ | BLUE TICKER</title>
+<meta name="description" content="有価証券報告書のXBRLから事業別・地域別の売上高内訳をどう取り出し正規化しているかを解説する BLUE TICKER の Breakdown 機能デモです。">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<style>
+  /*
+    白ベースのページの中に、証券会社の電光掲示板を思わせる紺色パネルを
+    「板」として点在させる（電光テープ・結果マーキー）。上昇=赤・下落=緑。
+    背景は平行四辺形（菱格子）のみで構成した和柄。
+    → index.html のデザインシステムを踏襲。
+  */
+  :root {
+    --page: #f5f7fb;
+    --card: #ffffff;
+    --ink: #10152a;
+    --ink-dim: #55607c;
+    --ink-faint: #8891a8;
+    --rule: rgba(16,21,42,0.10);
+    --accent: #1c5fe0;
+    --accent-soft: rgba(28,95,224,0.08);
+    --panel-a: #2569e6;
+    --panel-b: #0a2f86;
+    --panel-border: rgba(255,255,255,0.16);
+    --cyan: #7fd6ff;
+    --cyan-dim: #9bd3f2;
+    --up: #ff4136;
+    --down: #16b872;
+    --shadow: 0 1px 2px rgba(16,21,42,0.05), 0 18px 36px -22px rgba(16,21,42,0.20);
+    --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 16px 34px -18px rgba(9,38,110,0.5);
+    --font-display: ui-serif, "Iowan Old Style", "Apple Garamond", Baskerville, "Times New Roman", "Hiragino Mincho ProN", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Segoe UI", Meiryo, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html {
+    background-color: var(--page);
+    color-scheme: light;
+  }
+  body {
+    position: relative;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; color: var(--ink); }
+  code, pre, .mono { font-family: var(--font-mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .page { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- nav ---- */
+  .nav {
+    max-width: 1120px; margin: 0 auto; padding: 22px 24px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .nav a.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+  .nav img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+  .nav .word { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--ink); }
+  .nav .tag {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    color: #fff; background: var(--accent);
+    padding: 2px 7px; border-radius: 3px; margin-left: 2px; font-weight: 700;
+  }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .nav-links a { color: var(--ink-dim); font-size: 13.5px; text-decoration: none; }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* ---- page intro ---- */
+  .intro { max-width: 1120px; margin: 0 auto; padding: 8px 24px 0; }
+  .intro h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.3; }
+  .intro .lead { max-width: 640px; margin: 14px 0 0; color: var(--ink-dim); font-size: 15.5px; }
+
+  /* ---- section shell ---- */
+  section { padding: 40px 0 56px; }
+
+  /* ---- light card ---- */
+  .light-card {
+    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+
+  /* ---- steps ---- */
+  .steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 14px; }
+  .step { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 20px 22px; }
+  .step-num {
+    font-family: var(--font-mono); font-size: 13px; color: #fff;
+    width: 32px; height: 32px; border-radius: 50%; background: var(--accent); font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { font-family: var(--font-body); font-size: 15.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
+  .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
+
+  /* ---- tool-card（紺パネル。実例で使用） ---- */
+  .tool-card {
+    display: flex; flex-direction: column; padding: 16px 17px;
+    background: linear-gradient(155deg, var(--panel-a) 0%, var(--panel-b) 100%);
+    border: 1px solid var(--panel-border); border-radius: 10px; box-shadow: var(--panel-shadow);
+  }
+  .tool-tag {
+    display: inline-block; width: fit-content;
+    font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: 0.01em;
+    color: var(--panel-b); background: #fff; padding: 5px 14px; border-radius: 20px;
+    box-shadow: 0 4px 12px -4px rgba(0,0,0,0.35);
+  }
+  .tool-call { font-family: var(--font-mono); font-size: 10.5px; color: var(--cyan-dim); margin-top: 12px; }
+  .tool-rows { display: grid; gap: 7px; flex: 1; margin-top: 8px; }
+  .tool-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tool-row .rlabel { font-size: 11.5px; color: var(--cyan-dim); white-space: nowrap; }
+  .tool-row .rval { font-family: var(--font-mono); font-size: 13px; color: #fff; font-weight: 700; text-align: right; }
+  .tool-row .rval.up { color: var(--up); }
+  .tool-row .rval.down { color: #34e08a; }
+  .tool-row.total { border-top: 1px solid var(--panel-border); padding-top: 6px; margin-top: 1px; }
+  .tool-card.standalone { max-width: 320px; }
+  .tool-card-caption { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+
+  /* ---- 他機能への誘導 ---- */
+  .cross-links { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 6px; }
+  .cross-links a { font-size: 13.5px; text-decoration: none; color: var(--accent); }
+  .cross-links a:hover { text-decoration: underline; }
+
+  @media (max-width: 560px) {
+    .nav-links { margin-left: 0; width: 100%; justify-content: flex-start; }
+    .step { grid-template-columns: 1fr; }
+  }
+
+  /* ---- wagara background: lattice + random twinkle (page-color -> water-blue -> page-color) ----
+     The lattice is painted as a 38x38px background tile, so its phase is anchored to the document
+     origin. (A bare repeating-linear-gradient is phased from the centre of its box, so on <html>
+     it drifted as the page grew -- that was the old misalignment.) Lines land exactly on
+     x-y = 38k and x+y = 38m, so cell centres are (19a, 19b) with a+b odd, and every cell is the
+     diamond inscribed in the 38x38 box at (19a-19, 19b-19). The cells use clip-path rather than a
+     rotated box: integer offsets and sizes avoid Chrome's pixel-snapping of fractional top/left.
+     ::after paints the lattice on top of the cells so a lit cell never swallows its own lines. */
+  .wagara-glow { position: absolute; inset: 0; min-height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }
+  .wagara-glow::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px),
+      repeating-linear-gradient(-45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px);
+    background-size: 38px 38px;
+  }
+  .wagara-glow span {
+    position: absolute; width: 38px; height: 38px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    background-color: var(--page);
+    animation: wagara-blink ease-in-out infinite;
+  }
+  @keyframes wagara-blink {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #cdeeff; }
+  }
+</style>
+</head>
+<body>
+<div class="wagara-glow" aria-hidden="true">
+  <span style="top:19px; left:0px; animation-duration:6s; animation-delay:0s;"></span>
+  <span style="top:893px; left:266px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1767px; left:532px; animation-duration:8s; animation-delay:7s;"></span>
+  <span style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
+  <span style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
+  <span style="top:437px; left:608px; animation-duration:11s; animation-delay:4s;"></span>
+  <span style="top:1311px; left:152px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:209px; left:418px; animation-duration:7s; animation-delay:2s;"></span>
+  <span style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
+  <span style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
+  <span style="top:855px; left:494px; animation-duration:10s; animation-delay:8s;"></span>
+  <span style="top:1729px; left:38px; animation-duration:11s; animation-delay:7s;"></span>
+  <span style="top:627px; left:304px; animation-duration:6s; animation-delay:6s;"></span>
+  <span style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
+  <span style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
+  <span style="top:1273px; left:380px; animation-duration:9s; animation-delay:3s;"></span>
+  <span style="top:171px; left:646px; animation-duration:10s; animation-delay:2s;"></span>
+  <span style="top:1045px; left:190px; animation-duration:11s; animation-delay:1s;"></span>
+  <span style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
+  <span style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1691px; left:266px; animation-duration:8s; animation-delay:7s;"></span>
+  <span style="top:589px; left:532px; animation-duration:9s; animation-delay:6s;"></span>
+  <span style="top:1463px; left:76px; animation-duration:10s; animation-delay:5s;"></span>
+  <span style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
+  <span style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:133px; left:152px; animation-duration:7s; animation-delay:2s;"></span>
+</div>
+
+<header class="nav">
+  <a href="index.html" class="brand">
+    <img src="mark.png" alt="BLUE TICKER">
+    <span class="word">BLUE TICKER</span>
+    <span class="tag">MCP</span>
+  </a>
+  <nav class="nav-links">
+    <a href="mcp.html">MCP</a>
+    <a href="api.html">API</a>
+    <a href="tools.html">仕様</a>
+  </nav>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>Breakdown — 事業別売上高をどう作っているか</h1>
+    <p class="lead">事業別・地域別の売上高内訳を、有価証券報告書のXBRLからどう取り出し、どう正規化して返しているかの処理の流れです。製品固有の実装名ではなく、役割で説明します。</p>
+  </div>
+
+  <section class="demo-breakdown">
+    <div class="page">
+      <ol class="steps">
+        <li class="light-card step">
+          <span class="step-num num">1</span>
+          <div>
+            <h3>ソース発見（決定的処理）</h3>
+            <p>有価証券報告書のXBRLから、セグメント情報の開示形式を判定します。専用の整形済みHTML表が見つかればそれを採用し、無ければdimension（軸）付きの数値タグを拾います。</p>
+          </div>
+        </li>
+        <li class="light-card step">
+          <span class="step-num num">2</span>
+          <div>
+            <h3>正規化</h3>
+            <p>数値タグ経由の場合は決定的なコードでピボット・単位統一・小計行の除外（金額が分母や他行合計と数値的に一致するかで機械判定し、名称リストには頼りません）を行います。各セグメント名が地域を表すキーワードに一致するかで「事業別」か「地域別」かを機械的に判定します。変則的な表構造（列と行が入れ替わっている、収益認識の注記に事業別情報が隠れている等）は外部LLMが定義済みのスキーマに沿って構造化します。LLMは意味の写像だけを担当し、判定の原則はコードが担います。</p>
+          </div>
+        </li>
+        <li class="light-card step">
+          <span class="step-num num">3</span>
+          <div>
+            <h3>検証</h3>
+            <p>各行の合計が分母（連結の外部顧客向け売上高）とほぼ一致するかを機械的にチェックし、ずれがあれば「要確認」フラグを立てます。</p>
+          </div>
+        </li>
+        <li class="light-card step">
+          <span class="step-num num">4</span>
+          <div>
+            <h3>保存</h3>
+            <p>書類×軸（事業別／地域別）ごとに1レコードとして正規化結果を保存先データベースに保存します。LLM経由の結果は入力データのハッシュで再計算要否を判定するため、プロンプトを微修正しても正しい行まで全部作り直すことはありません。</p>
+          </div>
+        </li>
+        <li class="light-card step">
+          <span class="step-num num">5</span>
+          <div>
+            <h3>配信</h3>
+            <p>リクエストが来たら保存済みの結果を読んで返すだけです。その場でのXBRL解析やLLM呼び出しは行わない設計のため、常に軽量・高速・安定して応答できます。</p>
+          </div>
+        </li>
+      </ol>
+
+      <h3 style="font-size:16px; margin-top:36px;">実例: トヨタ自動車(7203) 2025年3月期</h3>
+      <div class="tool-card standalone" style="margin-top:14px;">
+        <span class="tool-tag">Breakdown</span>
+        <span class="tool-call">トヨタ自動車 事業別売上高（単位: 百万円）</span>
+        <div class="tool-rows">
+          <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
+          <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
+          <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
+          <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥48,036,704</span></div>
+        </div>
+      </div>
+      <p class="tool-card-caption">採用タグ: <code>OperatingRevenueFromExternalCustomersIFRS</code></p>
+
+      <p class="cross-links" style="margin-top:36px;">
+        <a href="summarize.html">Summarize — 財務サマリーを検索する →</a>
+        <a href="filing.html">Filing — 提出書類の本文を要約する →</a>
+        <a href="analyze.html">Analyze — 独自の計算式で分析する →</a>
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer style="border-top:1px solid var(--rule); margin-top:24px; padding:32px 0 48px;">
+  <div class="wide" style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:16px; align-items:flex-end;">
+    <p style="margin:0; font-size:12.5px; color:var(--ink-faint); max-width:58ch; line-height:1.7;">本サイトおよび提供される情報は、投資判断の参考として提供されるものであり、投資の勧誘を目的としたものではありません。最終的な投資判断は、必ず利用者ご自身の責任において行ってください。EDINETから取得した有価証券報告書を解析しています。</p>
+    <span style="font-size:12.5px; color:var(--ink-faint); white-space:nowrap;">BLUE TICKER — developed by sollahiro</span>
+  </div>
+</footer>
+
+</body>
+</html>
