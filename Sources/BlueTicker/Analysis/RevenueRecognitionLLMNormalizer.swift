@@ -122,16 +122,22 @@ enum RevenueRecognitionLLMNormalizer {
         // せず llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
         let profitDisclosedRaw = response["profit_disclosed"] as? Bool
         let profitDisclosed = profitDisclosedRaw ?? false
+        // strict JSON schema では not_applicable_reason が applicable=true の応答でも常に埋まって
+        // 返ってくる（プロンプトの「other のままでよい」は forcing ではない）。applicable=false の
+        // ときだけ採用することで、成功応答からの理由を誤って「該当なし」判定に混入させない
+        // （Opus監査 2026-07-26: revenueRecognitionLLM の needsReview 破棄経路が audit を持ち帰る
+        // ため、ここを絞らないと非決定的な低確信度結果が誤って geography_only 確定してしまう）。
+        let applicable = response["applicable"] as? Bool ?? false
         let audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
             profitDisclosed: profitDisclosed,
             notes: response["notes"] as? String ?? "",
-            notApplicableReason: response["not_applicable_reason"] as? String
+            notApplicableReason: applicable ? nil : response["not_applicable_reason"] as? String
         )
 
-        guard let applicable = response["applicable"] as? Bool, applicable,
+        guard applicable,
               let rawRows = response["rows"] as? [[String: Any]], !rawRows.isEmpty
         else { return (nil, audit) }
         var warnings: [String] = []

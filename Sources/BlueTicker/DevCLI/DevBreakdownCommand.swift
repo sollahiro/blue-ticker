@@ -160,7 +160,9 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                     printSnapshot(snapshot)
                 } else {
                     printError("business snapshot: nil\n")
-                    printNotApplicableReason(segments: segments, sales: sales, xbrlDir: xbrlDir)
+                    printNotApplicableReason(
+                        segments: segments, sales: sales, xbrlDir: xbrlDir,
+                        llmHint: audit?.notApplicableReason)
                 }
             } else if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: sales),
                       snapshot.axis == "business" {
@@ -268,9 +270,13 @@ struct DevBreakdownCommand: AsyncParsableCommand {
 
     /// business snapshot が nil のとき、E（地域のみ）/ F（単一セグメント記載省略）を診断表示する
     /// （issue #130）。`BreakdownExtractor.classifyNotApplicableReason` と同じ判定を ingest 側と共用する。
-    private func printNotApplicableReason(segments: ExtractedBreakdown, sales: Double?, xbrlDir: URL) {
+    /// `llmHint` は html_table 経由で LLM が返した `notApplicableReason`（issue #135）。呼び出し元に
+    /// audit が無い経路（xbrl_facts のみ・LLM未設定）では nil のままでよい。
+    private func printNotApplicableReason(
+        segments: ExtractedBreakdown, sales: Double?, xbrlDir: URL, llmHint: String? = nil
+    ) {
         switch BreakdownExtractor.classifyNotApplicableReason(
-            segments: segments, consolidatedSales: sales, xbrlDir: xbrlDir
+            segments: segments, consolidatedSales: sales, xbrlDir: xbrlDir, llmHint: llmHint
         ) {
         case .geographyOnly:
             printError("診断(E): 報告セグメントが地域別のみで、business 軸への swap が見つかりませんでした。\n")

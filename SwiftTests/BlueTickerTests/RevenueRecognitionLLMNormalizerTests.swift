@@ -307,4 +307,30 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshotOrNil == nil)
         #expect(audit?.notApplicableReason == "geography_only")
     }
+
+    /// 回帰防止（Opus監査 2026-07-26）: strict JSON schema では not_applicable_reason が
+    /// applicable=true の応答でも常に埋まって返ってくる。この値を採用してしまうと、低確信度で
+    /// 捨てた successful 応答が誤って geography_only 確定（needs_review=false・再試行停止）になる。
+    /// applicable=true のときは audit.notApplicableReason が nil のままであること。
+    @Test func ignoresNotApplicableReasonWhenApplicableIsTrue() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "製品A", "amount": 1_000, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            // LLM が schema 制約でやむなく埋めた値。applicable=true のときは無視すべき。
+            "not_applicable_reason": "geography_only",
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        #expect(snapshotOrNil != nil)
+        #expect(audit?.notApplicableReason == nil)
+    }
 }
