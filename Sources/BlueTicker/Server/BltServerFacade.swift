@@ -232,7 +232,8 @@ public enum BusinessBreakdownResult: Sendable {
     /// （地域別報告セグメントで収益認識注記への swap も失敗、銀行・US-GAAP補助指標のみ等）。
     /// 失敗ではない（`not_found` は行を作らない方針。docs/breakdown-normalization-concept.md）。
     /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか
-    /// （issue #130、E/F判定の検知結果明示化。ingest ログ専用で company_breakdowns には永続化しない）。
+    /// （issue #130、E/F判定の検知結果明示化。呼び出し元の `Stage6Ingest` が
+    /// `company_breakdowns.not_applicable_reason` へ永続化し、REST/MCP の 404 応答へ反映する）。
     case notApplicable(reason: String)
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。
     case failed

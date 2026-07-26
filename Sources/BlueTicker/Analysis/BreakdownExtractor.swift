@@ -86,7 +86,9 @@ extension ExtractedBreakdown {
 /// rawValue は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`、公開文字列定数）と揃える
 /// （`BusinessBreakdownSource` と `breakdownSource*` の関係と同じパターン）。
 enum BusinessBreakdownNotApplicableReason: String, Equatable {
-    /// E: 報告セグメントが地域別のみで、business 軸への swap が見つからなかった（良品計画・マツダ型）。
+    /// E: 報告セグメントが地域別のみで、business 軸への swap が見つからなかった（良品計画型）。
+    /// マツダは地域別セグメントを持つが、単一セグメント開示省略の文言（F）も併せ持つため
+    /// singleSegmentDisclosed が優先される（2026-07-26、資生堂型対応）。
     case geographyOnly = "geography_only"
     /// F: 単一セグメントのため報告セグメント開示自体が省略されていた。
     case singleSegmentDisclosed = "single_segment_disclosed"
@@ -253,32 +255,62 @@ enum BreakdownExtractor {
         "DescriptionOfFactThatCompanysBusinessComprisesSingleSegmentIFRS",
     ]
 
+    /// 専用タグを使わず、IFRS方式のセグメント注記「(4) 製品及びサービスに関する情報」
+    /// （`Xbrl.productOrServiceTextBlockTags`）内の説明文だけで記載省略を述べるケースがある
+    /// （実データ確認: 資生堂4911「化粧品事業の外部顧客への売上高が連結損益計算書上の「売上高」の
+    /// ほとんどを占めているため、記載を省略します。」、issue調査2026-07-26）。
+    ///
+    /// 「記載を省略」単独では、報告セグメントと内容が重複するため省略する**多セグメント企業**の
+    /// 定型文まで拾ってしまう（実データ検証2026-07-26、EDINETキャッシュ157社: パナソニックHD
+    /// 「セグメント情報に同様の情報を開示しているため、記載を省略しています。」、富士通「製品及び
+    /// サービスの類型は各報告セグメントと同一となるため、記載を省略しております。」等、194ブロック中
+    /// 145件・59社中51社が誤検出）。したがって単一セグメント・集中度を示す語との併記を必須にし
+    /// （`singleSegmentConcentrationMarkers`）、「報告セグメントと同一」型の定型句は明示的に除外する
+    /// （`singleSegmentDisclosureExclusionMarkers`）。この2条件で実データ59社中8社（資生堂含む）を
+    /// 誤検出ゼロで検出できることを確認済み。
+    static let singleSegmentDisclosureMarker = "記載を省略"
+    static let singleSegmentConcentrationMarkers = [
+        "単一の", "ほとんどを占め", "90％を超える", "90%を超える", "区分することが困難",
+    ]
+    static let singleSegmentDisclosureExclusionMarkers = ["報告セグメントと同一", "同様の情報を開示"]
+
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
-    /// `extractSegmentInfo` は表(`<table>`)を持たないブロックを対象外とするため method="not_found"
-    /// になり、「省略の確認が取れた」場合と「タグ自体が無く原因不明」の場合が区別できない。
-    /// 本関数は永続化（company_breakdowns）には使わず、開発ツール/ログでの
-    /// 診断表示専用（該当タグの内容が見つかれば返す、無ければ nil）。
+    /// `classifyNotApplicableReason`（company_breakdowns への永続化に使う本番判定）から呼ばれる
+    /// ほか、DevCLI診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
+    /// 表を持たず・マーカー＋集中度語を含み・同一セグメント定型句を含まない場合のみ採用する。
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
+        let targetTags = singleSegmentDisclosureTags.union(Xbrl.productOrServiceTextBlockTags)
         for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
             guard let data = try? Data(contentsOf: file) else { continue }
-            let collector = TextBlockSAXCollector(targetTags: singleSegmentDisclosureTags)
+            let collector = TextBlockSAXCollector(targetTags: targetTags)
             let parser = XMLParser(data: data)
             parser.delegate = collector
             parser.parse()
             for block in collector.blocks {
+                let isDedicatedTag = singleSegmentDisclosureTags.contains(block.tag)
+                if !isDedicatedTag, block.content.contains("<table") { continue }
                 let text = (try? SwiftSoup.parse(block.content))
                     .map { bs4Text($0, strip: true) } ?? block.content
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { return trimmed }
+                guard !trimmed.isEmpty else { continue }
+                if isDedicatedTag {
+                    return trimmed
+                }
+                guard trimmed.contains(singleSegmentDisclosureMarker),
+                    !singleSegmentDisclosureExclusionMarkers.contains(where: trimmed.contains),
+                    singleSegmentConcentrationMarkers.contains(where: trimmed.contains)
+                else { continue }
+                return trimmed
             }
         }
         return nil
     }
 
     /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
-    /// 理由を推定する（診断用、issue #130）。`extractSegmentInfo` は既に axis-aware な swap を
-    /// 試みた後の `segments` を返すため、それでも method="xbrl_facts" のまま地域軸判定される場合は
-    /// swap 失敗（E）、method="not_found" かつ単一セグメント開示タグがあれば記載省略（F）とみなす。
+    /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は専用タグ・マーカーで直接
+    /// 確認できる最も具体的な signal のため、地域軸swap失敗（E）の推定より優先して判定する
+    /// （実データ確認: 資生堂4911は地域区分facts（method=xbrl_facts）を持ちながら実際は単一セグメント
+    /// 開示省略であり、method=="not_found" 限定の旧実装ではF判定に到達できなかった、issue調査2026-07-26）。
     /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
     /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
     /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、
@@ -286,6 +318,9 @@ enum BreakdownExtractor {
     static func classifyNotApplicableReason(
         segments: ExtractedBreakdown, consolidatedSales: Double?, xbrlDir: URL, llmHint: String? = nil
     ) -> BusinessBreakdownNotApplicableReason {
+        if detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil {
+            return .singleSegmentDisclosed
+        }
         if segments.method == "xbrl_facts",
             BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)?.axis == "geography"
         {
@@ -293,9 +328,6 @@ enum BreakdownExtractor {
         }
         if llmHint == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue {
             return .geographyOnly
-        }
-        if segments.method == "not_found", detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil {
-            return .singleSegmentDisclosed
         }
         return .unknown
     }
@@ -819,8 +851,9 @@ enum BreakdownExtractor {
         // 「見つかった」とみなさず not_found にする。ZOZO・ベイカレント型（実データ検証: issue #137、
         // 2026-07-26）: OperatingSegmentsAxis 付きの非売上系 fact（CapEx・R&D・従業員数）だけが
         // 存在する単一セグメント企業で、ここを xbrl_facts のまま返すと shouldPreferRevenueRecognition の
-        // swap 判定（not_found 必須）・classifyNotApplicableReason の単一セグメント診断（同）の
-        // どちらにも到達できなくなる。
+        // swap 判定（not_found 必須）に到達できなくなる。`classifyNotApplicableReason` の単一セグメント
+        // 診断（`detectSingleSegmentDisclosure`）は method を問わず先に判定するため、この分岐には
+        // 依存しない（2026-07-26、資生堂型対応）。
         return ExtractedBreakdown(method: "not_found", tables: [], facts: [])
     }
 
