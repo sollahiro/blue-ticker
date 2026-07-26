@@ -1279,6 +1279,35 @@ import Foundation
             #expect(reason == .unknown)
         }
     }
+
+    /// issue #135: html_table 経由で LLM が「地域別のみ」と判定した場合（method=="html_table"
+    /// のため xbrl_facts 経路の判定は効かない）でも、llmHint 経由で geographyOnly を拾えること。
+    @Test func classifyNotApplicableReasonDetectsGeographyOnlyFromLlmHint() {
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [BreakdownTable(heading: "収益認識関係", markdown: "| 地域 | 金額 |", period: "当期")],
+            facts: [])
+        XBRLTestSupport.withXbrlDir(nil) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 1_000_000, xbrlDir: dir,
+                llmHint: "geography_only")
+            #expect(reason == .geographyOnly)
+        }
+    }
+
+    /// llmHint が geography_only 以外（"other" 等）のときは既存の判定（今回は unknown）へ
+    /// フォールバックする。LLM の "other" 判定を無条件に geographyOnly 扱いしないことの回帰防止。
+    @Test func classifyNotApplicableReasonIgnoresNonGeographyLlmHint() {
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [BreakdownTable(heading: "セグメント情報", markdown: "| 製品 | 金額 |", period: "当期")],
+            facts: [])
+        XBRLTestSupport.withXbrlDir(nil) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 1_000_000, xbrlDir: dir, llmHint: "other")
+            #expect(reason == .unknown)
+        }
+    }
 }
 
 // MARK: - Python ゴールデンファイルとのパリティ検証

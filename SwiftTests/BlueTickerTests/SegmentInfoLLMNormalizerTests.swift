@@ -259,4 +259,50 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.warnings.contains("llm_profit_disclosed_unresolved"))
         #expect(audit?.profitDisclosed == false)
     }
+
+    /// issue #135: LLM が「地域別のみで事業別データが無い」と判定した場合、applicable=false と
+    /// 併せて not_applicable_reason=geography_only を返す。audit 経由で呼び出し元
+    /// （`BusinessBreakdownResolver`）まで理由が伝搬すること。
+    @Test func propagatesGeographyOnlyReasonWhenNotApplicable() async {
+        let response: [String: Any] = [
+            "applicable": false,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [[String: Any]](),
+            "not_applicable_reason": "geography_only",
+            "notes": "地域別（日本・海外）のみで事業別データが存在しない",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        #expect(snapshotOrNil == nil)
+        #expect(audit?.notApplicableReason == "geography_only")
+    }
+
+    /// 回帰防止（Opus監査 2026-07-26）: strict JSON schema では not_applicable_reason が
+    /// applicable=true の応答でも常に埋まって返ってくる。applicable=true のときは
+    /// audit.notApplicableReason が nil のままであること。
+    @Test func ignoresNotApplicableReasonWhenApplicableIsTrue() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "プリンティング", "amount": 1_000, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            "not_applicable_reason": "geography_only",
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        #expect(snapshotOrNil != nil)
+        #expect(audit?.notApplicableReason == nil)
+    }
 }

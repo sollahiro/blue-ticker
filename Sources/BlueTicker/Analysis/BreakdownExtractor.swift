@@ -275,12 +275,19 @@ enum BreakdownExtractor {
     /// 理由を推定する（診断用、issue #130）。`extractSegmentInfo` は既に axis-aware な swap を
     /// 試みた後の `segments` を返すため、それでも method="xbrl_facts" のまま地域軸判定される場合は
     /// swap 失敗（E）、method="not_found" かつ単一セグメント開示タグがあれば記載省略（F）とみなす。
+    /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
+    /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
+    /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、
+    /// LLM 自身が「地域別のみ」と申告したケースを拾う目的で追加した。
     static func classifyNotApplicableReason(
-        segments: ExtractedBreakdown, consolidatedSales: Double?, xbrlDir: URL
+        segments: ExtractedBreakdown, consolidatedSales: Double?, xbrlDir: URL, llmHint: String? = nil
     ) -> BusinessBreakdownNotApplicableReason {
         if segments.method == "xbrl_facts",
             BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)?.axis == "geography"
         {
+            return .geographyOnly
+        }
+        if llmHint == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue {
             return .geographyOnly
         }
         if segments.method == "not_found", detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil {

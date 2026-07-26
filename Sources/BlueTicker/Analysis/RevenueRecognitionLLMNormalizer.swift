@@ -43,6 +43,9 @@ enum RevenueRecognitionLLMNormalizer {
     - 合計・小計・連結合計を表す行（例: 「顧客との契約から生じる収益」「外部顧客への売上高」「合計」「外部収益合計」）は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な製品・事業・部門区分の行は row_kind="segment" とすること
     - 表や注記に「タイヤ(注1)＝タイヤ＋ソリューション」「その他(注2)＝化工品・多角化」のような内訳説明がある場合、rows は注記が示す粗い区分（例: タイヤ／その他）のままにし、細目名（ソリューション、化工品・多角化 等）は notes に具体名で残すこと（「細目は省略」だけでは不十分）
     - 該当する事業別・製品別・部門別データが候補テーブル群に存在しない場合は applicable=false を返すこと
+    - applicable=false の場合、not_applicable_reason に理由種別を設定すること: 候補が地域別（仕向地別）分解のみで
+      事業別・製品別・部門別データが存在しないことが理由なら geography_only、それ以外の理由（収益の種類だけの
+      分解・該当データ自体が存在しない等）なら other。applicable=true の場合は other のままでよい
     - notes フィールドに、表選択・転置有無・連結計列の採用・注記の細目説明（具体名）の根拠を短く日本語で記すこと
     """
 
@@ -70,9 +73,13 @@ enum RevenueRecognitionLLMNormalizer {
                     "additionalProperties": false,
                 ],
             ],
+            "not_applicable_reason": ["type": "string", "enum": ["geography_only", "other"]],
             "notes": ["type": "string"],
         ],
-        "required": ["applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows", "notes"],
+        "required": [
+            "applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows",
+            "not_applicable_reason", "notes",
+        ],
         "additionalProperties": false,
     ]
 
@@ -115,15 +122,22 @@ enum RevenueRecognitionLLMNormalizer {
         // せず llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
         let profitDisclosedRaw = response["profit_disclosed"] as? Bool
         let profitDisclosed = profitDisclosedRaw ?? false
+        // strict JSON schema では not_applicable_reason が applicable=true の応答でも常に埋まって
+        // 返ってくる（プロンプトの「other のままでよい」は forcing ではない）。applicable=false の
+        // ときだけ採用することで、成功応答からの理由を誤って「該当なし」判定に混入させない
+        // （Opus監査 2026-07-26: revenueRecognitionLLM の needsReview 破棄経路が audit を持ち帰る
+        // ため、ここを絞らないと非決定的な低確信度結果が誤って geography_only 確定してしまう）。
+        let applicable = response["applicable"] as? Bool ?? false
         let audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
             profitDisclosed: profitDisclosed,
-            notes: response["notes"] as? String ?? ""
+            notes: response["notes"] as? String ?? "",
+            notApplicableReason: applicable ? nil : response["not_applicable_reason"] as? String
         )
 
-        guard let applicable = response["applicable"] as? Bool, applicable,
+        guard applicable,
               let rawRows = response["rows"] as? [[String: Any]], !rawRows.isEmpty
         else { return (nil, audit) }
         var warnings: [String] = []

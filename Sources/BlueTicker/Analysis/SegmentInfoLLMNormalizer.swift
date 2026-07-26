@@ -38,6 +38,9 @@ enum SegmentInfoLLMNormalizer {
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、純粋な除去・消去・調整だけの行（例:「消去」「調整額」「連結消去」）は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
     - 「その他（消去分を含む）」のように、残りの事業・本社勘定等と消去が一体になった列・行は row_kind="segment" とすること（ラベルに「消去」とあっても、単独の消去行ではない。野村HD等。ユーザー確認 2026-07-25）
     - 該当する事業別データが候補テーブル群に存在しない場合は applicable=false を返すこと
+    - applicable=false の場合、not_applicable_reason に理由種別を設定すること: 候補が地域別の表のみで
+      事業別・製品別データが存在しないことが理由なら geography_only、それ以外の理由なら other。
+      applicable=true の場合は other のままでよい
     - notes フィールドに、表選択・期間列選択・転置有無の根拠を短く日本語で記すこと
     """
 
@@ -65,9 +68,13 @@ enum SegmentInfoLLMNormalizer {
                     "additionalProperties": false,
                 ],
             ],
+            "not_applicable_reason": ["type": "string", "enum": ["geography_only", "other"]],
             "notes": ["type": "string"],
         ],
-        "required": ["applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows", "notes"],
+        "required": [
+            "applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows",
+            "not_applicable_reason", "notes",
+        ],
         "additionalProperties": false,
     ]
 
@@ -110,15 +117,21 @@ enum SegmentInfoLLMNormalizer {
         // llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
         let profitDisclosedRaw = response["profit_disclosed"] as? Bool
         let profitDisclosed = profitDisclosedRaw ?? false
+        // strict JSON schema では not_applicable_reason が applicable=true の応答でも常に埋まって
+        // 返ってくる（プロンプトの「other のままでよい」は forcing ではない）。applicable=false の
+        // ときだけ採用することで、成功応答からの理由を誤って「該当なし」判定に混入させない
+        // （Opus監査 2026-07-26）。
+        let applicable = response["applicable"] as? Bool ?? false
         let audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
             profitDisclosed: profitDisclosed,
-            notes: response["notes"] as? String ?? ""
+            notes: response["notes"] as? String ?? "",
+            notApplicableReason: applicable ? nil : response["not_applicable_reason"] as? String
         )
 
-        guard let applicable = response["applicable"] as? Bool, applicable,
+        guard applicable,
               let rawRows = response["rows"] as? [[String: Any]], !rawRows.isEmpty
         else { return (nil, audit) }
         var warnings: [String] = []

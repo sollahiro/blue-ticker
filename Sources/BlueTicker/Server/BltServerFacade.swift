@@ -256,7 +256,8 @@ public extension BltServerContext {
             segments: segments, consolidatedSales: consolidatedSales, client: chatClient)
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
-                segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir)
+                segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
+                llmHint: result.audit?.notApplicableReason)
             return .notApplicable(reason: reason.rawValue)
         }
         return .resolved(

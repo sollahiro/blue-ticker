@@ -305,6 +305,101 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
+    /// issue #135: LLM が applicable=false・not_applicable_reason=geography_only を返した場合、
+    /// resolve() は not_found を返しつつ、その audit（理由込み）を呼び出し元へ持ち帰ること
+    /// （`BltServerFacade.resolveBusinessBreakdown` が `classifyNotApplicableReason` の
+    /// llmHint に使う）。以前は notFound 確定時に audit を nil で握り潰していた。
+    @Test func propagatesAuditWithGeographyOnlyReasonWhenLlmSaysNotApplicable() async throws {
+        let segments = try Self.segmentsResult(docID: "S100XTLJ")
+        #expect(segments.method == "html_table")
+        let sales = try #require(try Self.loadSales(code: "7751"))
+
+        let response: [String: Any] = [
+            "applicable": false,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [[String: Any]](),
+            "not_applicable_reason": "geography_only",
+            "notes": "地域別のみで事業別データが存在しない",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == "geography_only")
+    }
+
+    /// issue #135: revenueRecognitionLLM 経路でも同様に、applicable=false・
+    /// not_applicable_reason=geography_only のとき audit が notFound まで伝搬すること
+    /// （segmentInfoLLM 経路は `propagatesAuditWithGeographyOnlyReasonWhenLlmSaysNotApplicable` で
+    /// カバー済み。Opus監査 2026-07-26 指摘: 両分岐を個別に検証する）。
+    @Test func revenueRecognitionLLMPropagatesAuditWithGeographyOnlyReasonWhenNotApplicable() async throws {
+        let segments = try Self.segmentsResult(docID: "S100W043")
+        #expect(segments.tables.first?.heading == "収益認識関係")
+        let sales = try #require(try Self.loadSales(code: "6103"))
+
+        let response: [String: Any] = [
+            "applicable": false,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [[String: Any]](),
+            "not_applicable_reason": "geography_only",
+            "notes": "仕向地別の地域分解のみで事業別データが存在しない",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == "geography_only")
+    }
+
+    /// 回帰防止（Opus監査 2026-07-26）: revenueRecognitionLLM が needs_review=true で低確信度の
+    /// ため採用しなかった応答（`revenueRecognitionLLMResultWithNeedsReviewIsDiscardedAsNotFound` と
+    /// 同型）でも、その応答に schema 制約で埋まった not_applicable_reason（applicable=true の
+    /// ときは無視すべき値）が誤って audit へ伝搬しないこと。伝搬してしまうと
+    /// `classifyNotApplicableReason` が低確信度の非決定的結果を geography_only（needs_review=false・
+    /// 再試行停止）として誤確定させてしまう。
+    @Test func discardedNeedsReviewResultDoesNotLeakStrayNotApplicableReasonIntoAudit() async throws {
+        let segments = try Self.segmentsResult(docID: "S100W043")
+        #expect(segments.tables.first?.heading == "収益認識関係")
+        let sales = try #require(try Self.loadSales(code: "6103"))
+
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "前期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "ＮＣ旋盤", "amount": (sales * 1.17) / Financial.millionYen, "profit": NSNull(), "row_kind": "segment"],
+            ],
+            // schema 制約でやむなく埋まった値。applicable=true のため無視されるべき。
+            "not_applicable_reason": "geography_only",
+            "notes": "test",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == nil)
+    }
+
     /// segments が not_found の場合は何も呼ばない。
     @Test func segmentsNotFoundReturnsNotFound() async throws {
         let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
