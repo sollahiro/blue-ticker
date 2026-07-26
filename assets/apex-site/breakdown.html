@@ -92,22 +92,9 @@
   /* ---- section shell ---- */
   section { padding: 40px 0 56px; }
 
-  /* ---- light card ---- */
-  .light-card {
-    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
-    border-radius: 12px; box-shadow: var(--shadow);
-  }
-
-  /* ---- steps ---- */
-  .steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 14px; }
-  .step { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 20px 22px; }
-  .step-num {
-    font-family: var(--font-mono); font-size: 13px; color: #fff;
-    width: 32px; height: 32px; border-radius: 50%; background: var(--accent); font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .step h3 { font-family: var(--font-body); font-size: 15.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
-  .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
+  /* ---- pipeline diagram ---- */
+  .pipeline { margin: 24px 0 0; }
+  .pipeline svg { display: block; width: 100%; height: auto; }
 
   /* ---- tool-card（紺パネル。実例で使用） ---- */
   .tool-card {
@@ -131,6 +118,8 @@
   .tool-row.total { border-top: 1px solid var(--panel-border); padding-top: 6px; margin-top: 1px; }
   .tool-card.standalone { max-width: 320px; }
   .tool-card-caption { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+  .example-cards { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
+  .example-item { flex: 0 0 auto; }
 
   /* ---- 他機能への誘導 ---- */
   .cross-links { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 6px; }
@@ -139,7 +128,6 @@
 
   @media (max-width: 560px) {
     .nav-links { margin-left: 0; width: 100%; justify-content: flex-start; }
-    .step { grid-template-columns: 1fr; }
   }
 
   /* ---- wagara background: lattice + random twinkle (page-color -> water-blue -> page-color) ----
@@ -164,9 +152,19 @@
     background-color: var(--page);
     animation: wagara-blink ease-in-out infinite;
   }
+  .wagara-glow span.c-red { animation-name: wagara-blink-red; }
+  .wagara-glow span.c-green { animation-name: wagara-blink-green; }
   @keyframes wagara-blink {
     0%, 100% { background-color: var(--page); }
     50% { background-color: #cdeeff; }
+  }
+  @keyframes wagara-blink-red {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #ffb3af; }
+  }
+  @keyframes wagara-blink-green {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #a2e3c7; }
   }
 </style>
 </head>
@@ -175,28 +173,28 @@
   <span style="top:19px; left:0px; animation-duration:6s; animation-delay:0s;"></span>
   <span style="top:893px; left:266px; animation-duration:7s; animation-delay:8s;"></span>
   <span style="top:1767px; left:532px; animation-duration:8s; animation-delay:7s;"></span>
-  <span style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
-  <span style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
+  <span class="c-red" style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
+  <span class="c-green" style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
   <span style="top:437px; left:608px; animation-duration:11s; animation-delay:4s;"></span>
   <span style="top:1311px; left:152px; animation-duration:6s; animation-delay:3s;"></span>
   <span style="top:209px; left:418px; animation-duration:7s; animation-delay:2s;"></span>
-  <span style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
-  <span style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
+  <span class="c-red" style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
+  <span class="c-green" style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
   <span style="top:855px; left:494px; animation-duration:10s; animation-delay:8s;"></span>
   <span style="top:1729px; left:38px; animation-duration:11s; animation-delay:7s;"></span>
   <span style="top:627px; left:304px; animation-duration:6s; animation-delay:6s;"></span>
-  <span style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
-  <span style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
+  <span class="c-red" style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
+  <span class="c-green" style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
   <span style="top:1273px; left:380px; animation-duration:9s; animation-delay:3s;"></span>
   <span style="top:171px; left:646px; animation-duration:10s; animation-delay:2s;"></span>
   <span style="top:1045px; left:190px; animation-duration:11s; animation-delay:1s;"></span>
-  <span style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
-  <span style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
+  <span class="c-red" style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
+  <span class="c-green" style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
   <span style="top:1691px; left:266px; animation-duration:8s; animation-delay:7s;"></span>
   <span style="top:589px; left:532px; animation-duration:9s; animation-delay:6s;"></span>
   <span style="top:1463px; left:76px; animation-duration:10s; animation-delay:5s;"></span>
-  <span style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
-  <span style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
+  <span class="c-red" style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
+  <span class="c-green" style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
   <span style="top:133px; left:152px; animation-duration:7s; animation-delay:2s;"></span>
 </div>
 
@@ -221,56 +219,124 @@
 
   <section class="demo-breakdown">
     <div class="page">
-      <ol class="steps">
-        <li class="light-card step">
-          <span class="step-num num">1</span>
-          <div>
-            <h3>ソース発見（決定的処理）</h3>
-            <p>有価証券報告書のXBRLから、セグメント情報の開示形式を判定します。専用の整形済みHTML表が見つかればそれを採用し、無ければdimension（軸）付きの数値タグを拾います。</p>
-          </div>
-        </li>
-        <li class="light-card step">
-          <span class="step-num num">2</span>
-          <div>
-            <h3>正規化</h3>
-            <p>数値タグ経由の場合は決定的なコードでピボット・単位統一・小計行の除外（金額が分母や他行合計と数値的に一致するかで機械判定し、名称リストには頼りません）を行います。各セグメント名が地域を表すキーワードに一致するかで「事業別」か「地域別」かを機械的に判定します。変則的な表構造（列と行が入れ替わっている、収益認識の注記に事業別情報が隠れている等）は外部LLMが定義済みのスキーマに沿って構造化します。LLMは意味の写像だけを担当し、判定の原則はコードが担います。</p>
-          </div>
-        </li>
-        <li class="light-card step">
-          <span class="step-num num">3</span>
-          <div>
-            <h3>検証</h3>
-            <p>各行の合計が分母（連結の外部顧客向け売上高）とほぼ一致するかを機械的にチェックし、ずれがあれば「要確認」フラグを立てます。</p>
-          </div>
-        </li>
-        <li class="light-card step">
-          <span class="step-num num">4</span>
-          <div>
-            <h3>保存</h3>
-            <p>書類×軸（事業別／地域別）ごとに1レコードとして正規化結果を保存先データベースに保存します。LLM経由の結果は入力データのハッシュで再計算要否を判定するため、プロンプトを微修正しても正しい行まで全部作り直すことはありません。</p>
-          </div>
-        </li>
-        <li class="light-card step">
-          <span class="step-num num">5</span>
-          <div>
-            <h3>配信</h3>
-            <p>リクエストが来たら保存済みの結果を読んで返すだけです。その場でのXBRL解析やLLM呼び出しは行わない設計のため、常に軽量・高速・安定して応答できます。</p>
-          </div>
-        </li>
-      </ol>
+      <figure class="pipeline">
+        <svg viewBox="0 0 640 560" role="img" aria-labelledby="pipeline-title pipeline-desc" xmlns="http://www.w3.org/2000/svg">
+          <title id="pipeline-title">事業別内訳の正規化パイプライン</title>
+          <desc id="pipeline-desc">有報のXBRLから開示形式を判定し、数値タグ経由はコードで、変則構造のみLLMで正規化し、検証・保存を経て配信する5段の処理フロー。</desc>
+          <defs>
+            <marker id="pl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-faint)"></path>
+            </marker>
+          </defs>
+          <style>
+            .pl-node { fill: var(--card); stroke: var(--rule); stroke-width: 1.5; }
+            .pl-node-code { stroke: var(--accent); }
+            .pl-node-llm { stroke: #7c3aed; }
+            .pl-edge { fill: none; stroke: var(--ink-faint); stroke-width: 1.5; marker-end: url(#pl-arrow); }
+            .pl-title { font-family: var(--font-body); font-weight: 700; font-size: 15px; fill: var(--ink); }
+            .pl-cap { font-family: var(--font-body); font-size: 12px; fill: var(--ink-dim); }
+            .pl-io { font-family: var(--font-mono); font-size: 12px; fill: var(--ink-faint); text-anchor: middle; }
+            .pl-num { font-family: var(--font-mono); font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; }
+            .pl-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; text-anchor: middle; }
+          </style>
 
-      <h3 style="font-size:16px; margin-top:36px;">実例: トヨタ自動車(7203) 2025年3月期</h3>
-      <div class="tool-card standalone" style="margin-top:14px;">
-        <span class="tool-tag">Breakdown</span>
-        <span class="tool-call">トヨタ自動車 事業別売上高（単位: 百万円）</span>
-        <div class="tool-rows">
-          <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
-          <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
-          <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
-          <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥48,036,704</span></div>
+          <text class="pl-io" x="320" y="18">有価証券報告書（XBRL）</text>
+          <path class="pl-edge" d="M320,26 L320,60"></path>
+
+          <rect class="pl-node" x="90" y="64" width="460" height="60" rx="10"></rect>
+          <circle cx="118" cy="94" r="14" fill="var(--accent)"></circle>
+          <text class="pl-num" x="118" y="98">1</text>
+          <text class="pl-title" x="150" y="90">ソース発見</text>
+          <text class="pl-cap" x="150" y="108">開示形式を判定（決定的）</text>
+
+          <path class="pl-edge" d="M320,124 L320,144"></path>
+          <path class="pl-edge" d="M320,144 L187,152"></path>
+          <path class="pl-edge" d="M320,144 L453,152"></path>
+
+          <rect class="pl-node pl-node-code" x="64" y="156" width="246" height="80" rx="10"></rect>
+          <text class="pl-badge" x="90" y="176" fill="var(--accent)">コード</text>
+          <text class="pl-title" x="80" y="200">正規化（数値タグ）</text>
+          <text class="pl-cap" x="80" y="218">分母と数値一致で小計を除外</text>
+
+          <rect class="pl-node pl-node-llm" x="330" y="156" width="246" height="80" rx="10"></rect>
+          <text class="pl-badge" x="561" y="176" fill="#7c3aed" text-anchor="end">LLM</text>
+          <text class="pl-title" x="346" y="200">正規化（変則構造）</text>
+          <text class="pl-cap" x="346" y="218">定義済みスキーマへ意味を写像</text>
+
+          <path class="pl-edge" d="M187,236 L320,258"></path>
+          <path class="pl-edge" d="M453,236 L320,258"></path>
+          <path class="pl-edge" d="M320,258 L320,276"></path>
+
+          <rect class="pl-node" x="90" y="280" width="460" height="60" rx="10"></rect>
+          <circle cx="118" cy="310" r="14" fill="var(--accent)"></circle>
+          <text class="pl-num" x="118" y="314">3</text>
+          <text class="pl-title" x="150" y="306">検証</text>
+          <text class="pl-cap" x="150" y="324">分母と突き合わせ、ズレは要確認</text>
+
+          <path class="pl-edge" d="M320,340 L320,360"></path>
+
+          <rect class="pl-node" x="90" y="364" width="460" height="60" rx="10"></rect>
+          <circle cx="118" cy="394" r="14" fill="var(--accent)"></circle>
+          <text class="pl-num" x="118" y="398">4</text>
+          <text class="pl-title" x="150" y="390">保存</text>
+          <text class="pl-cap" x="150" y="408">書類×軸で1行、ハッシュで再計算判定</text>
+
+          <path class="pl-edge" d="M320,424 L320,444"></path>
+
+          <rect class="pl-node" x="90" y="448" width="460" height="60" rx="10"></rect>
+          <circle cx="118" cy="478" r="14" fill="var(--accent)"></circle>
+          <text class="pl-num" x="118" y="482">5</text>
+          <text class="pl-title" x="150" y="474">配信</text>
+          <text class="pl-cap" x="150" y="492">保存済みを即返却、その場での再計算なし</text>
+
+          <path class="pl-edge" d="M320,508 L320,528"></path>
+          <text class="pl-io" x="320" y="546">REST / MCP レスポンス</text>
+        </svg>
+      </figure>
+
+      <h3 style="font-size:16px; margin-top:36px;">実例: 3社の2025年3月期</h3>
+      <div class="example-cards">
+        <div class="example-item">
+          <div class="tool-card standalone">
+            <span class="tool-tag">Breakdown</span>
+            <span class="tool-call">トヨタ自動車 事業別売上高（単位: 百万円）</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
+              <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
+              <div class="tool-row"><span class="rlabel">その他</span><span class="rval num">¥602,578</span></div>
+              <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥48,036,704</span></div>
+            </div>
+          </div>
+          <p class="tool-card-caption">採用タグ: <code>OperatingRevenueFromExternalCustomersIFRS</code></p>
+        </div>
+
+        <div class="example-item">
+          <div class="tool-card standalone">
+            <span class="tool-tag">Breakdown</span>
+            <span class="tool-call">ソニーグループ 事業別売上高（単位: 百万円）</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">ゲーム&amp;ネットワーク</span><span class="rval num">¥4,570,053</span></div>
+              <div class="tool-row"><span class="rlabel">エンタテインメント技術</span><span class="rval num">¥2,184,815</span></div>
+              <div class="tool-row"><span class="rlabel">音楽</span><span class="rval num">¥2,090,534</span></div>
+              <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥12,479,620</span></div>
+            </div>
+          </div>
+          <p class="tool-card-caption">採用タグ: <code>SalesToExternalCustomersIFRS</code></p>
+        </div>
+
+        <div class="example-item">
+          <div class="tool-card standalone">
+            <span class="tool-tag">Breakdown</span>
+            <span class="tool-call">任天堂 事業別売上高（単位: 百万円）</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">ゲーム専用機</span><span class="rval num">¥2,239,541</span></div>
+              <div class="tool-row"><span class="rlabel">IP関連収入等</span><span class="rval num">¥73,510</span></div>
+              <div class="tool-row total"><span class="rlabel">分母（連結売上高）</span><span class="rval num">¥2,313,051</span></div>
+            </div>
+          </div>
+          <p class="tool-card-caption">収益認識注記をLLMで構造化（xbrl_facts軸なし・製品×地域マトリクスから抽出）</p>
         </div>
       </div>
-      <p class="tool-card-caption">採用タグ: <code>OperatingRevenueFromExternalCustomersIFRS</code></p>
 
       <p class="cross-links" style="margin-top:36px;">
         <a href="summarize.html">Summarize — 財務サマリーを検索する →</a>

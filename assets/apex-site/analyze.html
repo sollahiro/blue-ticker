@@ -240,9 +240,19 @@
     background-color: var(--page);
     animation: wagara-blink ease-in-out infinite;
   }
+  .wagara-glow span.c-red { animation-name: wagara-blink-red; }
+  .wagara-glow span.c-green { animation-name: wagara-blink-green; }
   @keyframes wagara-blink {
     0%, 100% { background-color: var(--page); }
     50% { background-color: #cdeeff; }
+  }
+  @keyframes wagara-blink-red {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #ffb3af; }
+  }
+  @keyframes wagara-blink-green {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #a2e3c7; }
   }
 </style>
 </head>
@@ -251,28 +261,28 @@
   <span style="top:19px; left:0px; animation-duration:6s; animation-delay:0s;"></span>
   <span style="top:893px; left:266px; animation-duration:7s; animation-delay:8s;"></span>
   <span style="top:1767px; left:532px; animation-duration:8s; animation-delay:7s;"></span>
-  <span style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
-  <span style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
+  <span class="c-red" style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
+  <span class="c-green" style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
   <span style="top:437px; left:608px; animation-duration:11s; animation-delay:4s;"></span>
   <span style="top:1311px; left:152px; animation-duration:6s; animation-delay:3s;"></span>
   <span style="top:209px; left:418px; animation-duration:7s; animation-delay:2s;"></span>
-  <span style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
-  <span style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
+  <span class="c-red" style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
+  <span class="c-green" style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
   <span style="top:855px; left:494px; animation-duration:10s; animation-delay:8s;"></span>
   <span style="top:1729px; left:38px; animation-duration:11s; animation-delay:7s;"></span>
   <span style="top:627px; left:304px; animation-duration:6s; animation-delay:6s;"></span>
-  <span style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
-  <span style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
+  <span class="c-red" style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
+  <span class="c-green" style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
   <span style="top:1273px; left:380px; animation-duration:9s; animation-delay:3s;"></span>
   <span style="top:171px; left:646px; animation-duration:10s; animation-delay:2s;"></span>
   <span style="top:1045px; left:190px; animation-duration:11s; animation-delay:1s;"></span>
-  <span style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
-  <span style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
+  <span class="c-red" style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
+  <span class="c-green" style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
   <span style="top:1691px; left:266px; animation-duration:8s; animation-delay:7s;"></span>
   <span style="top:589px; left:532px; animation-duration:9s; animation-delay:6s;"></span>
   <span style="top:1463px; left:76px; animation-duration:10s; animation-delay:5s;"></span>
-  <span style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
-  <span style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
+  <span class="c-red" style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
+  <span class="c-green" style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
   <span style="top:133px; left:152px; animation-duration:7s; animation-delay:2s;"></span>
 </div>
 
