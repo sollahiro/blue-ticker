@@ -109,15 +109,14 @@
     box-shadow: 0 4px 12px -4px rgba(0,0,0,0.35);
   }
   .tool-call { font-family: var(--font-mono); font-size: 10.5px; color: var(--cyan-dim); margin-top: 12px; }
-  .tool-rows { display: grid; gap: 7px; flex: 1; margin-top: 8px; }
+  .tool-rows { display: grid; gap: 7px; flex: 1; margin-top: 8px; align-content: space-between; }
   .tool-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tool-row .rlabel { font-size: 11.5px; color: var(--cyan-dim); white-space: nowrap; }
-  .tool-row .rval { font-family: var(--font-mono); font-size: 13px; color: #fff; font-weight: 700; text-align: right; }
+  .tool-row .rlabel { font-size: 11.5px; color: var(--cyan-dim); }
+  .tool-row .rval { font-family: var(--font-mono); font-size: 13px; color: #fff; font-weight: 700; text-align: right; white-space: nowrap; }
   .tool-row .rval.up { color: var(--up); }
   .tool-row .rval.down { color: #34e08a; }
   .tool-row.total { border-top: 1px solid var(--panel-border); padding-top: 6px; margin-top: 1px; }
-  .tool-card.standalone { max-width: 320px; }
-  .tool-card-caption { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+  .tool-card.standalone { width: 280px; min-height: 270px; }
   .example-cards { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
   .example-item { flex: 0 0 auto; }
 
@@ -294,12 +293,12 @@
         </svg>
       </figure>
 
-      <h3 style="font-size:16px; margin-top:36px;">実例: 3社の2025年3月期</h3>
+      <h3 style="font-size:16px; margin-top:36px;">実例: 4社の2025年3月期</h3>
       <div class="example-cards">
         <div class="example-item">
           <div class="tool-card standalone">
-            <span class="tool-tag">Breakdown</span>
-            <span class="tool-call">トヨタ自動車 事業別売上高（単位: 百万円）</span>
+            <span class="tool-tag">トヨタ自動車</span>
+            <span class="tool-call">事業別売上高（単位: 百万円）</span>
             <div class="tool-rows">
               <div class="tool-row"><span class="rlabel">自動車</span><span class="rval num">¥42,996,299</span></div>
               <div class="tool-row"><span class="rlabel">金融</span><span class="rval num">¥4,437,827</span></div>
@@ -307,13 +306,12 @@
               <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥48,036,704</span></div>
             </div>
           </div>
-          <p class="tool-card-caption">採用タグ: <code>OperatingRevenueFromExternalCustomersIFRS</code></p>
         </div>
 
         <div class="example-item">
           <div class="tool-card standalone">
-            <span class="tool-tag">Breakdown</span>
-            <span class="tool-call">ソニーグループ 事業別売上高（単位: 百万円）</span>
+            <span class="tool-tag">ソニーグループ</span>
+            <span class="tool-call">事業別売上高（単位: 百万円）</span>
             <div class="tool-rows">
               <div class="tool-row"><span class="rlabel">ゲーム&amp;ネットワーク</span><span class="rval num">¥4,570,053</span></div>
               <div class="tool-row"><span class="rlabel">エンタテインメント技術</span><span class="rval num">¥2,184,815</span></div>
@@ -321,20 +319,31 @@
               <div class="tool-row total"><span class="rlabel">分母（連結外部売上高）</span><span class="rval num">¥12,479,620</span></div>
             </div>
           </div>
-          <p class="tool-card-caption">採用タグ: <code>SalesToExternalCustomersIFRS</code></p>
         </div>
 
         <div class="example-item">
           <div class="tool-card standalone">
-            <span class="tool-tag">Breakdown</span>
-            <span class="tool-call">任天堂 事業別売上高（単位: 百万円）</span>
+            <span class="tool-tag">任天堂</span>
+            <span class="tool-call">事業別売上高（単位: 百万円）</span>
             <div class="tool-rows">
               <div class="tool-row"><span class="rlabel">ゲーム専用機</span><span class="rval num">¥2,239,541</span></div>
               <div class="tool-row"><span class="rlabel">IP関連収入等</span><span class="rval num">¥73,510</span></div>
               <div class="tool-row total"><span class="rlabel">分母（連結売上高）</span><span class="rval num">¥2,313,051</span></div>
             </div>
           </div>
-          <p class="tool-card-caption">収益認識注記をLLMで構造化（xbrl_facts軸なし・製品×地域マトリクスから抽出）</p>
+        </div>
+
+        <div class="example-item">
+          <div class="tool-card standalone">
+            <span class="tool-tag">ファーストリテイリング</span>
+            <span class="tool-call">事業別売上高（単位: 百万円）</span>
+            <div class="tool-rows">
+              <div class="tool-row"><span class="rlabel">ユニクロインターナショナル</span><span class="rval num">¥1,910,289</span></div>
+              <div class="tool-row"><span class="rlabel">ユニクロジャパン</span><span class="rval num">¥1,026,096</span></div>
+              <div class="tool-row"><span class="rlabel">GU</span><span class="rval num">¥330,701</span></div>
+              <div class="tool-row total"><span class="rlabel">分母（連結売上高）</span><span class="rval num">¥3,400,539</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
