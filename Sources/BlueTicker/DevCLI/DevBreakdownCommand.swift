@@ -262,9 +262,15 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             printError("候補テーブル数: \(result.tables.count)\n")
             for (i, table) in result.tables.enumerated() {
                 printError("  [\(i)] heading=\(table.heading) period=\(table.period ?? "不明")\n")
+                printError("\(table.markdown)\n")
             }
         } else if result.method == "xbrl_facts" {
             printError("facts: \(result.facts.count)\n")
+            for fact in result.facts {
+                printError(
+                    "  tag=\(fact.tag) contextRef=\(fact.contextRef) dimensions=\(fact.dimensions) value=\(fact.value) unitRef=\(fact.unitRef ?? "不明")\n"
+                )
+            }
         }
     }
 
