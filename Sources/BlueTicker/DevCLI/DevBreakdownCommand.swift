@@ -92,13 +92,16 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             return
         }
 
-        let client = try LLMClientLoader.make()
         let (snapshotOrNil, audit): (BreakdownSnapshot?, LLMBreakdownAudit?)
         switch source {
         case .geography:
-            (snapshotOrNil, audit) = await GeographyBreakdownLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+            let client = try LLMClientLoader.make(axis: .geography)
+            (snapshotOrNil, audit) = await GeographyBreakdownLLMNormalizer.normalize(
+                result, consolidatedSales: sales, client: client)
         case .revenueRecognition:
-            (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(result, consolidatedSales: sales, client: client)
+            let client = try LLMClientLoader.make(axis: .business)
+            (snapshotOrNil, audit) = await RevenueRecognitionLLMNormalizer.normalize(
+                result, consolidatedSales: sales, client: client)
         }
 
         printAudit(audit)
@@ -142,15 +145,18 @@ struct DevBreakdownCommand: AsyncParsableCommand {
         printError("連結外部売上高（円）: \(Int(sales))\n")
 
         // html_table 振分は実行時まで LLM 要否が不明。キー未設定時は決定的経路だけ試し、
-        // LLM が必要な時点で失敗させる。
-        let llmClient = LLMClientLoader.resolveEndpoint().map { ChatCompletionClient(endpoint: $0) }
+        // LLM が必要な時点で失敗させる。軸ごとに別クライアント（命名規約 B）。
+        let businessLLM = LLMClientLoader.resolveEndpoint(axis: .business)
+            .map { ChatCompletionClient(endpoint: $0) }
+        let geographyLLM = LLMClientLoader.resolveEndpoint(axis: .geography)
+            .map { ChatCompletionClient(endpoint: $0) }
 
         if axis == .all || axis == .business {
             let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
             printSegmentPreview(segments)
 
-            if let client = llmClient {
+            if let client = businessLLM {
                 let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
                     segments: segments, consolidatedSales: sales, client: client
                 )
@@ -169,7 +175,14 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                 printError("source: xbrl_facts（LLM未設定・決定的経路のみ）\n")
                 printSnapshot(snapshot)
             } else if !segments.tables.isEmpty {
-                printError("エラー: business の表フォールバックに LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
+                printError(
+                    """
+                    エラー: business の表フォールバックに LLM が必要です。\
+                    XAI_BUSINESS_API_KEY と XAI_BUSINESS_MODEL \
+                    （または旧 XAI_API_KEY / XAI_MODEL）を設定してください。
+
+                    """
+                )
                 throw ExitCode.failure
             } else {
                 printError("business snapshot: nil\n")
@@ -182,31 +195,29 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             printError("\n=== geography method=\(geography.method) ===\n")
             printSegmentPreview(geography)
 
-            switch geography.method {
-            case "not_found":
+            let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
+                geography: geography, consolidatedSales: sales,
+                client: geographyLLM ?? UnavailableDevChatClient()
+            )
+            printError("source: \(source.rawValue)\n")
+            printAudit(audit)
+            if let snapshot {
+                printSnapshot(snapshot)
+            } else if geography.method == "not_found" {
                 printError("geography: not_found（地域注記なし）\n")
-            case "xbrl_facts":
-                if let snapshot = BreakdownNormalizer.normalize(geography, consolidatedSales: sales) {
-                    printSnapshot(snapshot)
-                } else {
-                    printError("geography snapshot: nil（xbrl_facts 正規化失敗）\n")
-                }
-            case "html_table":
-                guard let client = llmClient else {
-                    printError("エラー: geography が html_table のため LLM が必要です。XAI_API_KEY と XAI_MODEL を設定してください。\n")
-                    throw ExitCode.failure
-                }
-                let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
-                    geography, consolidatedSales: sales, client: client
+            } else if geography.method == "html_table" || !geography.tables.isEmpty,
+                geographyLLM == nil
+            {
+                printError(
+                    """
+                    エラー: geography が html_table のため LLM が必要です。\
+                    XAI_GEOGRAPHY_API_KEY と XAI_GEOGRAPHY_MODEL を設定してください。
+
+                    """
                 )
-                printAudit(audit)
-                if let snapshot {
-                    printSnapshot(snapshot)
-                } else {
-                    printError("geography snapshot: nil\n")
-                }
-            default:
-                printError("geography: 未対応 method=\(geography.method)\n")
+                throw ExitCode.failure
+            } else {
+                printError("geography snapshot: nil\n")
             }
         }
     }
@@ -318,5 +329,13 @@ struct DevBreakdownCommand: AsyncParsableCommand {
             .compactMap(\.share)
             .reduce(0, +)
         print("segment share sum: \(String(format: "%.4f", segmentShare))")
+    }
+}
+
+/// DevCLI 用: geography LLM 未設定時に決定的経路だけ試すためのプレースホルダ。
+/// Server の `UnavailableChatClient` と同型（意図的に別実装）。
+private struct UnavailableDevChatClient: ChatCompleting {
+    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
+        throw ChatCompletionError.invalidResponse
     }
 }

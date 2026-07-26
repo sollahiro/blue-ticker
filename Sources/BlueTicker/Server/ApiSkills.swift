@@ -449,7 +449,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Breakdown（事業別売上の構造化）。自由テキストのセグメント記述は get-filing-content の segments。
-                日経225構成銘柄のみ。geography 軸は未配線のため行が無く 404 になりうる。
+                日経225構成銘柄のみ。geography 軸は Neon 投入済みだが REST/MCP 非公開のため 404。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=business
                 """
