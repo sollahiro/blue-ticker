@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filing — 機能デモ | BLUE TICKER</title>
+<meta name="description" content="有価証券報告書の本文をAIが要約する BLUE TICKER の Filing 機能デモです。トヨタ自動車の実例で要約と原文を並べて確認できます。">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<style>
+  /*
+    白ベースのページの中に、証券会社の電光掲示板を思わせる紺色パネルを
+    「板」として点在させる（電光テープ・結果マーキー）。上昇=赤・下落=緑。
+    背景は平行四辺形（菱格子）のみで構成した和柄。
+    → index.html のデザインシステムを踏襲。
+  */
+  :root {
+    --page: #f5f7fb;
+    --card: #ffffff;
+    --ink: #10152a;
+    --ink-dim: #55607c;
+    --ink-faint: #8891a8;
+    --rule: rgba(16,21,42,0.10);
+    --accent: #1c5fe0;
+    --accent-soft: rgba(28,95,224,0.08);
+    --panel-a: #2569e6;
+    --panel-b: #0a2f86;
+    --panel-border: rgba(255,255,255,0.16);
+    --cyan: #7fd6ff;
+    --cyan-dim: #9bd3f2;
+    --up: #ff4136;
+    --down: #16b872;
+    --shadow: 0 1px 2px rgba(16,21,42,0.05), 0 18px 36px -22px rgba(16,21,42,0.20);
+    --panel-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 16px 34px -18px rgba(9,38,110,0.5);
+    --font-display: ui-serif, "Iowan Old Style", "Apple Garamond", Baskerville, "Times New Roman", "Hiragino Mincho ProN", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Segoe UI", Meiryo, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html {
+    background-color: var(--page);
+    color-scheme: light;
+  }
+  body {
+    position: relative;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; color: var(--ink); }
+  code, pre, .mono { font-family: var(--font-mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .page { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- nav ---- */
+  .nav {
+    max-width: 1120px; margin: 0 auto; padding: 22px 24px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .nav a.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+  .nav img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+  .nav .word { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--ink); }
+  .nav .tag {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    color: #fff; background: var(--accent);
+    padding: 2px 7px; border-radius: 3px; margin-left: 2px; font-weight: 700;
+  }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .nav-links a { color: var(--ink-dim); font-size: 13.5px; text-decoration: none; }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* ---- page intro ---- */
+  .intro { max-width: 1120px; margin: 0 auto; padding: 8px 24px 0; }
+  .intro h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.3; }
+  .intro .lead { max-width: 640px; margin: 14px 0 0; color: var(--ink-dim); font-size: 15.5px; }
+
+  /* ---- section shell ---- */
+  section { padding: 40px 0 56px; }
+
+  /* ---- light card ---- */
+  .light-card {
+    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+
+  /* ---- badge ---- */
+  .ai-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: #fff; background: var(--accent);
+    padding: 3px 10px; border-radius: 4px; font-weight: 700;
+  }
+
+  /* ---- Filing ---- */
+  .filing-card { padding: 22px 24px; margin-top: 18px; }
+  .filing-card ul { margin: 12px 0 0; padding-left: 1.3em; }
+  .filing-card li { margin-bottom: 10px; color: var(--ink); font-size: 15px; line-height: 1.75; }
+  .filing-card li:last-child { margin-bottom: 0; }
+  .filing-source { margin: 16px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+  details.filing-raw { margin-top: 16px; }
+  details.filing-raw summary { cursor: pointer; font-size: 13.5px; color: var(--accent); font-weight: 600; }
+  details.filing-raw pre {
+    margin: 10px 0 0; padding: 14px 16px; background: var(--page); border: 1px solid var(--rule);
+    border-radius: 8px; font-size: 12.5px; line-height: 1.8; color: var(--ink-dim); white-space: pre-wrap;
+  }
+
+  /* ---- 他機能への誘導 ---- */
+  .cross-links { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 6px; }
+  .cross-links a { font-size: 13.5px; text-decoration: none; color: var(--accent); }
+  .cross-links a:hover { text-decoration: underline; }
+
+  /* ---- wagara background: lattice + random twinkle (page-color -> water-blue -> page-color) ----
+     The lattice is painted as a 38x38px background tile, so its phase is anchored to the document
+     origin. (A bare repeating-linear-gradient is phased from the centre of its box, so on <html>
+     it drifted as the page grew -- that was the old misalignment.) Lines land exactly on
+     x-y = 38k and x+y = 38m, so cell centres are (19a, 19b) with a+b odd, and every cell is the
+     diamond inscribed in the 38x38 box at (19a-19, 19b-19). The cells use clip-path rather than a
+     rotated box: integer offsets and sizes avoid Chrome's pixel-snapping of fractional top/left.
+     ::after paints the lattice on top of the cells so a lit cell never swallows its own lines. */
+  .wagara-glow { position: absolute; inset: 0; min-height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }
+  .wagara-glow::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px),
+      repeating-linear-gradient(-45deg, rgba(28,95,224,0.07) 0 1px, transparent 1px 26.8701px);
+    background-size: 38px 38px;
+  }
+  .wagara-glow span {
+    position: absolute; width: 38px; height: 38px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    background-color: var(--page);
+    animation: wagara-blink ease-in-out infinite;
+  }
+  .wagara-glow span.c-red { animation-name: wagara-blink-red; }
+  .wagara-glow span.c-green { animation-name: wagara-blink-green; }
+  @keyframes wagara-blink {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #cdeeff; }
+  }
+  @keyframes wagara-blink-red {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #ffb3af; }
+  }
+  @keyframes wagara-blink-green {
+    0%, 100% { background-color: var(--page); }
+    50% { background-color: #a2e3c7; }
+  }
+
+  @media (max-width: 560px) {
+    .nav-links { margin-left: 0; width: 100%; justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="wagara-glow" aria-hidden="true">
+  <span style="top:19px; left:0px; animation-duration:6s; animation-delay:0s;"></span>
+  <span style="top:893px; left:266px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1767px; left:532px; animation-duration:8s; animation-delay:7s;"></span>
+  <span class="c-red" style="top:665px; left:76px; animation-duration:9s; animation-delay:6s;"></span>
+  <span class="c-green" style="top:1539px; left:342px; animation-duration:10s; animation-delay:5s;"></span>
+  <span style="top:437px; left:608px; animation-duration:11s; animation-delay:4s;"></span>
+  <span style="top:1311px; left:152px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:209px; left:418px; animation-duration:7s; animation-delay:2s;"></span>
+  <span class="c-red" style="top:1083px; left:684px; animation-duration:8s; animation-delay:1s;"></span>
+  <span class="c-green" style="top:1957px; left:228px; animation-duration:9s; animation-delay:0s;"></span>
+  <span style="top:855px; left:494px; animation-duration:10s; animation-delay:8s;"></span>
+  <span style="top:1729px; left:38px; animation-duration:11s; animation-delay:7s;"></span>
+  <span style="top:627px; left:304px; animation-duration:6s; animation-delay:6s;"></span>
+  <span class="c-red" style="top:1501px; left:570px; animation-duration:7s; animation-delay:5s;"></span>
+  <span class="c-green" style="top:399px; left:114px; animation-duration:8s; animation-delay:4s;"></span>
+  <span style="top:1273px; left:380px; animation-duration:9s; animation-delay:3s;"></span>
+  <span style="top:171px; left:646px; animation-duration:10s; animation-delay:2s;"></span>
+  <span style="top:1045px; left:190px; animation-duration:11s; animation-delay:1s;"></span>
+  <span class="c-red" style="top:1919px; left:456px; animation-duration:6s; animation-delay:0s;"></span>
+  <span class="c-green" style="top:817px; left:0px; animation-duration:7s; animation-delay:8s;"></span>
+  <span style="top:1691px; left:266px; animation-duration:8s; animation-delay:7s;"></span>
+  <span style="top:589px; left:532px; animation-duration:9s; animation-delay:6s;"></span>
+  <span style="top:1463px; left:76px; animation-duration:10s; animation-delay:5s;"></span>
+  <span class="c-red" style="top:361px; left:342px; animation-duration:11s; animation-delay:4s;"></span>
+  <span class="c-green" style="top:1235px; left:608px; animation-duration:6s; animation-delay:3s;"></span>
+  <span style="top:133px; left:152px; animation-duration:7s; animation-delay:2s;"></span>
+</div>
+
+<header class="nav">
+  <a href="index.html" class="brand">
+    <img src="mark.png" alt="BLUE TICKER">
+    <span class="word">BLUE TICKER</span>
+    <span class="tag">MCP</span>
+  </a>
+  <nav class="nav-links">
+    <a href="mcp.html">MCP</a>
+    <a href="api.html">API</a>
+    <a href="tools.html">仕様</a>
+  </nav>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>Filing — 提出書類の本文を要約する</h1>
+    <p class="lead">有価証券報告書の「経営成績等の状況の概要」（MD&amp;A）を、AIが要約した例です。全文は長いためここでは要約のみ掲載します。</p>
+  </div>
+
+  <section class="demo-filing">
+    <div class="page">
+      <div class="light-card filing-card">
+        <span class="ai-badge">AIによる要約</span>
+        <ul>
+          <li>世界販売台数は936万2千台で前期比0.9%減（国内199万1千台・海外737万2千台とも微減）。</li>
+          <li>営業収益は為替の追い風もあり6.5%増の48兆367億円。一方、営業利益は10.4%減の4兆7,955億円で、増収減益の決算だった。</li>
+          <li>営業利益の増減要因では、為替変動が+5,900億円の押し上げ要因だった一方、諸経費の増減・低減努力が−9,900億円と最大の押し下げ要因になった（原価改善効果はほぼゼロ）。</li>
+          <li>税引前利益は7.9%減、親会社の所有者に帰属する当期利益は3.6%減にとどまり、営業段階の落ち込みほど最終利益は悪化しなかった。</li>
+        </ul>
+        <p class="filing-source">出典: トヨタ自動車 有価証券報告書（2025年3月期、doc_id: S100VWVY）「経営成績等の状況の概要」より</p>
+
+        <details class="filing-raw">
+          <summary>原文を見る</summary>
+          <pre>（１）経営成績等の状況の概要
+①経営成績の状況
+当連結会計年度の世界経済は、中国において、住宅価格の下落が継続し、消費マインドの停滞が見られた一方、米国において、個人消費を中心とした景気拡大が継続したことを受け、堅調に推移しました。
+このような経営環境の中、トヨタは、「もっといいクルマをつくろうよ」という軸のもと、長年の「商品と地域を軸にした経営」を通じて、フルラインアップの商品とグローバルな事業基盤を構築してきました。それからの基盤を活かして、当期も、安全・品質の徹底をはじめとする「足場固め」の取り組みを進めながら、世界各地のお客様にいいクルマをお届けする努力を重ねてきました。そして、多様なモビリティのご提供を通じて「幸せを量産する」という当社の使命を果たすべく、Toyota Mobility Conceptのもと、モビリティカンパニーへの変革に向けた様々な技術開発や基盤づくりに取り組んできました。
+当連結会計年度における日本、海外を合わせた自動車の連結販売台数は、936万２千台と、前連結会計年度に比べて８万台（0.9％）の減少となりました。日本での販売台数については、199万１千台と、前連結会計年度に比べて２千台（0.1％）減少しました。海外においても、737万２千台と、前連結会計年度に比べて７万８千台（1.0％）の減少となりました。
+当連結会計年度の業績については、次のとおりです。
+営業収益 48兆367億円（前期比増減２兆9,413億円（6.5％））営業利益４兆7,955億円（前期比増減△5,573億円（△10.4%））税引前利益６兆4,145億円（前期比増減△5,504億円（△7.9%））親会社の所有者に帰属する当期利益４兆7,650億円（前期比増減△1,798億円（△3.6%））
+なお、営業利益の主な増減要因は、次のとおりです。
+営業面の努力 1,450億円　原価改善の努力±0億円　為替変動の影響5,900億円　諸経費の増減・低減努力△9,900億円　その他△3,023億円
+事業別セグメントの業績は、次のとおりです。</pre>
+        </details>
+      </div>
+
+      <p class="cross-links" style="margin-top:36px;">
+        <a href="summarize.html">Summarize — 財務サマリーを検索する →</a>
+        <a href="analyze.html">Analyze — 独自の計算式で分析する →</a>
+        <a href="breakdown.html">Breakdown — 事業別売上高の内訳 →</a>
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer style="border-top:1px solid var(--rule); margin-top:24px; padding:32px 0 48px;">
+  <div class="wide" style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:16px; align-items:flex-end;">
+    <p style="margin:0; font-size:12.5px; color:var(--ink-faint); max-width:58ch; line-height:1.7;">本サイトおよび提供される情報は、投資判断の参考として提供されるものであり、投資の勧誘を目的としたものではありません。最終的な投資判断は、必ず利用者ご自身の責任において行ってください。EDINETから取得した有価証券報告書を解析しています。</p>
+    <span style="font-size:12.5px; color:var(--ink-faint); white-space:nowrap;">BLUE TICKER — developed by sollahiro</span>
+  </div>
+</footer>
+
+</body>
+</html>

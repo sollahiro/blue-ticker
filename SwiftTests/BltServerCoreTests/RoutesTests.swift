@@ -69,6 +69,18 @@ private func send(
     return (response.status, json)
 }
 
+/// 公開契約 FinancialsResponse を JSON 経由で構築する（Stage4IngestTests.makeResponse と同型）。
+private func makeDemoFinancialsResponse(code: String, years: Int) throws -> FinancialsResponse {
+    let yrs = (0..<years).map { ["fy_end": "20\(20 + $0)-03-31"] }
+    let dict: [String: Any] = [
+        "schema_version": 2, "code": code, "name": "テスト",
+        "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
+        "years": yrs,
+    ]
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return try JSONDecoder().decode(FinancialsResponse.self, from: data)
+}
+
 @Suite struct RoutesTests {
 
     // MARK: - healthz（認証不要）
@@ -278,6 +290,92 @@ private func send(
             let (status, json) = try await send(app, "/v1/skills/does-not-exist")
             #expect(status == .notFound)
             #expect(json?["status"] as? Int == 404)
+        }
+    }
+
+    // MARK: - /v1/demo（子サイト実データデモ専用。company_breakdowns 格納銘柄限定）
+
+    @Test func demoFinancialsReturns503WithoutDatabase() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "財務データベースに接続できません")
+        }
+    }
+
+    @Test func demoFinancialsReturns404WhenCodeNotInBreakdownPopulation() async throws {
+        // company_breakdowns に行が無い銘柄（母集団外）は、company_financials の有無に関わらず対象外。
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "デモ対象外の銘柄コードです")
+        }
+    }
+
+    @Test func demoFinancialsReturns404WhenEligibleButFinancialsNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = "xbrl_facts"
+            row.contentHash = ""
+            row.cacheVersion = breakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "財務データは未集計です")
+        }
+    }
+
+    @Test func demoFinancialsReturns200WhenEligibleAndStored() async throws {
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = breakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let financials = CompanyFinancials()
+            financials.id = "7203"
+            financials.response = try makeDemoFinancialsResponse(
+                code: "7203", years: Api.financialsYearsDefault)
+            financials.cacheVersion = companyFinancialsCacheVersion
+            financials.requestedYears = Api.financialsYearsDefault
+            financials.highWater = "2025-06-20 09:00"
+            try await financials.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
+            #expect(status == .ok)
+            #expect(json?["code"] as? String == "7203")
+        }
+    }
+
+    @Test func demoCompaniesReturnsEmptyArrayWhenQueryMissing() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/demo/companies")
+            #expect(status == .ok)
+            #expect((json?["companies"] as? [[String: Any]])?.isEmpty == true)
+        }
+    }
+
+    @Test func demoCompaniesReturnsOkWithArrayBodyForQuery() async throws {
+        // EDINET マスタ CSV 未配置（テスト環境）では検索候補自体が空になるため、母集団フィルタ後も
+        // 200・空配列で応答することを確認する（sectorsReturnsOkWithArrayBody と同型）。
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
+            #expect(status == .ok)
+            #expect(json?["companies"] is [[String: Any]])
         }
     }
 }

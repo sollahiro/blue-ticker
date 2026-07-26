@@ -199,6 +199,78 @@ func registerRoutes(
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
+
+    // GET /v1/demo/companies?q=...
+    // sollahiro.com/demo（子サイト）の実データ検索専用。company_breakdowns に格納済みの銘柄
+    // （Stage 6 対象母集団＝日経225構成銘柄）に絞って返す。日経225の構成銘柄一覧そのものは
+    // 編集著作物のため配布・公開しない設計（PriorityIngestCodes.swift 参照）。クエリ必須にし、
+    // 全件列挙（一覧公開）にならないようにする。
+    // このパスは Cloudflare Access の対象外（Bypass ポリシー）にして無認証公開する想定。
+    v1.get("demo", "companies") { req async -> Response in
+        let q = (req.query[String.self, at: "q"] ?? "").trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else {
+            return jsonResponse(["companies": []], status: .ok)
+        }
+        guard dbAvailable else {
+            return errorResponse(.serviceUnavailable, message: "検索データベースに接続できません")
+        }
+        guard case .ok(let candidates as [[String: Any]]) = await context.searchCompanies(q: q)
+        else {
+            return jsonResponse(["companies": []], status: .ok)
+        }
+        do {
+            let candidateCodes = candidates.compactMap { $0["code"] as? String }
+            let eligible = try await demoEligibleCodes(among: candidateCodes, db: req.db)
+            let results =
+                candidates
+                .filter { eligible.contains($0["code"] as? String ?? "") }
+                .prefix(Api.demoSearchResultLimit)
+                .map { ["code": $0["code"] ?? "", "name": $0["name"] ?? ""] as [String: Any] }
+            return jsonResponse(["companies": Array(results)], status: .ok)
+        } catch {
+            return errorResponse(.serviceUnavailable, message: "検索データベースに接続できません")
+        }
+    }
+
+    // GET /v1/demo/companies/{code}/financials
+    // sollahiro.com/demo の実データ検索専用。company_breakdowns に格納済みの銘柄（上記と同じ
+    // 母集団）限定で通期財務サマリーを返す。半期は対象外。中身は既存 /v1/companies/{code}/financials
+    // と同じ格納データ・同じ既定年数（serveStoredFinancials を再利用、ロジックの二重化はしない）。
+    v1.get("demo", "companies", ":code", "financials") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        guard dbAvailable else {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+        do {
+            guard try await isDemoEligibleCode(code, db: req.db) else {
+                return errorResponse(.notFound, message: "デモ対象外の銘柄コードです")
+            }
+        } catch {
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+        return makeStoredDataResponse(
+            await serveStoredFinancials(
+                code: code, years: Api.financialsYearsDefault, db: req.db, logger: req.logger),
+            notFoundMessage: "財務データは未集計です")
+    }
+}
+
+// MARK: - /v1/demo 専用: company_breakdowns を対象母集団ゲートに使う
+
+/// 候補コード集合のうち company_breakdowns に格納済みの銘柄コードを返す。
+/// 日経225構成銘柄リストそのものを公開しないため、常に検索クエリの候補集合との積集合としてのみ使い、
+/// 対象母集団を単独で全件列挙できるエンドポイントは設けない。
+private func demoEligibleCodes(among candidates: [String], db: Database) async throws -> Set<String> {
+    guard !candidates.isEmpty else { return [] }
+    let rows = try await CompanyBreakdown.query(on: db)
+        .filter(\.$code ~~ candidates)
+        .all()
+    return Set(rows.map { $0.code })
+}
+
+/// 単一の銘柄コードが company_breakdowns に格納済みか判定する。
+private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bool {
+    try await CompanyBreakdown.query(on: db).filter(\.$code == code).first() != nil
 }
 
 // MARK: - 格納済みデータ提供ロジック（REST ルートと MCP ツールディスパッチの共通処理）
