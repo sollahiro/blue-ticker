@@ -38,6 +38,9 @@ private func withApp(
             app.migrations.add(CreateCompanyHalfFinancials())
             app.migrations.add(AddHighWaterToCompanyFinancials())
             app.migrations.add(CreateCompanyFilingSections())
+            app.migrations.add(CreateCompanySegmentBreakdowns())
+            app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
+            app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             try await app.autoMigrate()
         }
         try await registerRoutes(
@@ -146,6 +149,9 @@ private func send(
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "財務データは未集計です")
             #expect(json?["status"] as? Int == 404)
+            // errorResponse の reason 引数は breakdown 専用の拡張（issue #132）。
+            // 他エンドポイントの 404 ボディへ漏れ出さないことを確認する。
+            #expect(json?["reason"] == nil)
         }
     }
 
@@ -178,6 +184,39 @@ private func send(
             let (status, json) = try await send(app, "/v1/companies/7203/filing-content")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "書類本文は未抽出です")
+        }
+    }
+
+    @Test func breakdownReturns404WhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "事業別内訳は未算出です")
+            #expect(json?["reason"] == nil)
+        }
+    }
+
+    /// issue #132: business 軸が解決できなかった場合、404 のステータスは維持したまま
+    /// ボディへ E/F/unknown の reason を追加する（エッジ課金はステータス単位でメーターするため）。
+    @Test func breakdownReturns404WithReasonWhenNotApplicable() async throws {
+        try await withApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisBusiness)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = breakdownSourceNotApplicable
+            row.contentHash = ""
+            row.cacheVersion = breakdownCacheVersion
+            row.notApplicableReason = breakdownNotApplicableGeographyOnly
+            try await row.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "事業別内訳は未算出です")
+            #expect(json?["reason"] as? String == "geography_only")
         }
     }
 

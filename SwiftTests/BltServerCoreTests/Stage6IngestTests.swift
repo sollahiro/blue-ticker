@@ -25,6 +25,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
+        app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
         app.migrations.add(CreateCompanyFinancials())
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
@@ -66,7 +67,8 @@ private func fakePayload(
 private func seedRow(
     _ docID: String, code: String, submit: String, db: Database,
     source: String = breakdownSourceXbrlFacts, cacheVersion: String = breakdownCacheVersion,
-    needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil
+    needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil,
+    notApplicableReason: String? = nil
 ) async throws {
     let row = CompanyBreakdown(docID: docID, axis: breakdownAxisBusiness)
     row.code = code
@@ -77,7 +79,24 @@ private func seedRow(
     row.contentHash = contentHash
     row.cacheVersion = cacheVersion
     row.llmAudit = llmAudit
+    row.notApplicableReason = notApplicableReason
     try await row.create(on: db)
+}
+
+/// テスト用の `BreakdownLoadResult` 抽出ヘルパー（issue #132 で戻り値を3値化したため）。
+extension BreakdownLoadResult {
+    fileprivate var foundJSON: [String: Any]? {
+        if case .found(let json) = self { return json }
+        return nil
+    }
+    fileprivate var notApplicableReason: String? {
+        if case .notApplicable(let reason) = self { return reason }
+        return nil
+    }
+    fileprivate var isAbsent: Bool {
+        if case .absent = self { return true }
+        return false
+    }
 }
 
 @Suite struct Stage6IngestTests {
@@ -130,9 +149,57 @@ private func seedRow(
         }
     }
 
-    @Test func ingestDoesNotStoreRowWhenResolverReturnsNotApplicable() async throws {
+    /// issue #132: notApplicable もプレースホルダ行として永続化される（`.notFound` の
+    /// 「行を作らない」方針とは別。理由を REST/MCP へ返すために必要）。
+    @Test func ingestStoresNotApplicablePlaceholderWithReason() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in .notApplicable(reason: breakdownNotApplicableGeographyOnly) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            #expect(summary.stored == 0)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.source == breakdownSourceNotApplicable)
+            #expect(row.notApplicableReason == breakdownNotApplicableGeographyOnly)
+            // E/F は確信度の高い決定的判定のため needsReview=false。
+            #expect(row.needsReview == false)
+        }
+    }
+
+    /// unknown は要調査のため needsReview=true で保存し、通常巡回や `--codes` 指名 ingest で
+    /// 再分類できるようにする（ユーザー要望: 「unknownは開発側でレビューして指名ingestなど」）。
+    @Test func ingestFlagsUnknownNotApplicableReasonForReview() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+
+            _ = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
+
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.needsReview == true)
+        }
+    }
+
+    /// Opus監査で指摘（issue #132）: 既存の実データ行（LLM経由でneeds_review=trueの再試行対象等）が
+    /// 一時的な解決失敗（LLM停止・Stage4未計算等）でnotApplicableへ「格下げ」されると、正しいデータを
+    /// 破壊してしまう。既存が実データを持つ場合は上書きせず、次回また再試行対象として残すべき。
+    @Test func ingestDoesNotOverwriteExistingRealDataWithNotApplicablePlaceholder() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let audit = LLMBreakdownAuditPayload(
+                sourceTableIndex: 0, periodColumn: "当期", unit: "million_yen",
+                profitDisclosed: true, notes: "test")
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: breakdownCacheVersion,
+                needsReview: true, contentHash: "real-hash", llmAudit: audit)
 
             let summary = try await runStage6Ingest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
@@ -140,9 +207,73 @@ private func seedRow(
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
-            #expect(summary.stored == 0)
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
-            #expect(try await CompanyBreakdown.find(key, on: app.db) == nil)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            // 実データ（LLM経由）が保持されたままであること。
+            #expect(row.source == breakdownSourceSegmentInfoLLM)
+            #expect(row.notApplicableReason == nil)
+            #expect(row.payload.rows.count == 1)
+            #expect(row.needsReview == true)
+        }
+    }
+
+    /// 実データ（`.resolved`）で再解決された行は、以前 notApplicable プレースホルダだった場合でも
+    /// `notApplicableReason` が nil へ戻ること（`applyFields` が毎回無条件で設定するため desync しない）。
+    @Test func ingestClearsNotApplicableReasonWhenLaterResolved() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: "old-version",
+                notApplicableReason: breakdownNotApplicableGeographyOnly)
+
+            _ = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h9", audit: nil) }
+
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.source == breakdownSourceXbrlFacts)
+            #expect(row.notApplicableReason == nil)
+        }
+    }
+
+    /// not_applicable source は xbrl_facts と同様、cache_version バンプで再試行してよい
+    /// （分類ロジック改善を拾うため）。
+    @Test func ingestReattemptsNotApplicableRowWhenVersionStale() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: "old-version",
+                notApplicableReason: breakdownNotApplicableGeographyOnly)
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+        }
+    }
+
+    @Test func ingestSkipsNotApplicableRowAlreadyAtCurrentVersion() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: breakdownCacheVersion,
+                notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in
+                Issue.record("resolver must not run for an up-to-date not_applicable row")
+                return .failed
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
         }
     }
 
@@ -385,9 +516,9 @@ private func seedRow(
             try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
-            let json = try #require(
-                try await loadStoredBreakdown(
-                    code: "7203", docId: nil, axis: "business", db: app.db))
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S25")
             #expect(json["code"] as? String == "7203")
             #expect(json["axis"] as? String == "business")
@@ -401,9 +532,9 @@ private func seedRow(
             try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
-            let json = try #require(
-                try await loadStoredBreakdown(
-                    code: "7203", docId: "S24", axis: "business", db: app.db))
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: "S24", axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S24")
         }
     }
@@ -411,18 +542,18 @@ private func seedRow(
     @Test func loadByDocIdRejectsMismatchedCode() async throws {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
-            let json = try await loadStoredBreakdown(
+            let result = try await loadStoredBreakdown(
                 code: "6758", docId: "S1", axis: "business", db: app.db)
-            #expect(json == nil)
+            #expect(result.isAbsent)
         }
     }
 
     @Test func loadRejectsNonBusinessAxis() async throws {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
-            let json = try await loadStoredBreakdown(
+            let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "geography", db: app.db)
-            #expect(json == nil)
+            #expect(result.isAbsent)
         }
     }
 
@@ -431,9 +562,9 @@ private func seedRow(
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
-            let json = try await loadStoredBreakdown(
+            let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "business", db: app.db)
-            #expect(json == nil)
+            #expect(result.isAbsent)
         }
     }
 
@@ -443,18 +574,18 @@ private func seedRow(
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
-            let json = try #require(
-                try await loadStoredBreakdown(
-                    code: "7203", docId: nil, axis: "business", db: app.db))
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S1")
         }
     }
 
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
-            let json = try await loadStoredBreakdown(
+            let result = try await loadStoredBreakdown(
                 code: "0000", docId: nil, axis: "business", db: app.db)
-            #expect(json == nil)
+            #expect(result.isAbsent)
         }
     }
 
@@ -465,9 +596,9 @@ private func seedRow(
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts)
-            let json = try #require(
-                try await loadStoredBreakdown(
-                    code: "7203", docId: nil, axis: "business", db: app.db))
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
             #expect(json["llm_audit"] == nil)
         }
     }
@@ -483,13 +614,81 @@ private func seedRow(
             try await seedRow(
                 "S1", code: "8604", submit: "2026-06-22 15:36", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, llmAudit: audit)
-            let json = try #require(
-                try await loadStoredBreakdown(
-                    code: "8604", docId: nil, axis: "business", db: app.db))
+            let result = try await loadStoredBreakdown(
+                code: "8604", docId: nil, axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
             let llmAuditJson = try #require(json["llm_audit"] as? [String: Any])
             #expect(llmAuditJson["notes"] as? String == "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
             #expect(llmAuditJson["profit_disclosed"] as? Bool == true)
             #expect(llmAuditJson["source_table_index"] as? Int == 0)
+        }
+    }
+
+    // MARK: - read 経路（notApplicable、issue #132）
+
+    /// notApplicable プレースホルダ行は breakdown データではなく reason を返す。
+    @Test func loadReturnsNotApplicableReasonForPlaceholderRow() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: breakdownCacheVersion,
+                notApplicableReason: breakdownNotApplicableGeographyOnly)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            #expect(result.notApplicableReason == breakdownNotApplicableGeographyOnly)
+            #expect(result.foundJSON == nil)
+        }
+    }
+
+    /// not_applicable source も xbrl_facts と同じバージョン床を受ける
+    /// （分類ロジックが変わった後の古い reason を誤って返さないため）。
+    @Test func loadTreatsStaleNotApplicableRowAsAbsent() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v0",
+                notApplicableReason: breakdownNotApplicableUnknown)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            #expect(result.isAbsent)
+        }
+    }
+
+    /// 最新書類が notApplicable の場合、より古い書類に実データがあってもそれは返さない
+    /// （最新の状態を正しく反映する。Stage4 の notApplicablePlaceholder と同じ設計判断）。
+    @Test func loadPrefersLatestNotApplicableOverOlderRealData() async throws {
+        try await withMigratedApp { app in
+            try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
+            try await seedRow(
+                "S25", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: breakdownCacheVersion,
+                notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            #expect(result.notApplicableReason == breakdownNotApplicableSingleSegmentDisclosed)
+        }
+    }
+
+    // MARK: - servable/unservable 集計（not_applicable source）
+
+    /// not_applicable source も xbrl_facts と同じくバージョン床で servable/unservable が分かれる。
+    @Test func countServableSplitsNotApplicableRowsByVersionFloorLikeXbrlFacts() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v0",
+                notApplicableReason: breakdownNotApplicableUnknown)
+            try await seedRow(
+                "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v1",
+                notApplicableReason: breakdownNotApplicableGeographyOnly)
+
+            let coverage = try await countServableBreakdowns(db: app.db)
+            #expect(coverage.servable == 1)
+            #expect(coverage.unservable == 1)
         }
     }
 }

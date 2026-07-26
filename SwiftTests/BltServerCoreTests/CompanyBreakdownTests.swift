@@ -17,6 +17,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
+        app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -122,6 +123,45 @@ private func fakeSnapshot(
             try await geography.create(on: app.db)
 
             #expect(try await CompanyBreakdown.query(on: app.db).filter(\.$docID == "S100W043").count() == 2)
+        }
+    }
+
+    /// issue #132: notApplicable プレースホルダ行（payload はダミー、reason に E/F/unknown を保持）
+    /// が往復できること。
+    @Test func notApplicableReasonRoundTripsAndPayloadStaysNil() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyBreakdown(docID: "S100AAAA", axis: "business")
+            row.code = "9999"
+            row.submitDateTime = "2026-03-25 00:00"
+            row.payload = fakeSnapshot(sourceKind: breakdownSourceNotApplicable)
+            row.needsReview = false
+            row.source = breakdownSourceNotApplicable
+            row.contentHash = ""
+            row.cacheVersion = breakdownCacheVersion
+            row.notApplicableReason = breakdownNotApplicableGeographyOnly
+            try await row.create(on: app.db)
+
+            let found = try #require(try await CompanyBreakdown.find("S100AAAA#business", on: app.db))
+            #expect(found.source == breakdownSourceNotApplicable)
+            #expect(found.notApplicableReason == breakdownNotApplicableGeographyOnly)
+        }
+    }
+
+    /// 実データ行（source != not_applicable）は notApplicableReason が nil のまま。
+    @Test func notApplicableReasonIsNilForRealDataRows() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyBreakdown(docID: "S100BBBB", axis: "business")
+            row.code = "8888"
+            row.submitDateTime = "2026-03-25 00:00"
+            row.payload = fakeSnapshot()
+            row.needsReview = false
+            row.source = breakdownSourceXbrlFacts
+            row.contentHash = "abc"
+            row.cacheVersion = breakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let found = try #require(try await CompanyBreakdown.find("S100BBBB#business", on: app.db))
+            #expect(found.notApplicableReason == nil)
         }
     }
 

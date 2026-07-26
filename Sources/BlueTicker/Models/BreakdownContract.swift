@@ -25,23 +25,28 @@ public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
 public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
 public let breakdownSourceGeographyLLM = "geography_llm"
+/// business 軸の内訳が解決できなかった（E/F/unknown）ことを表す行の source（issue #132）。
+/// `BreakdownExtractor.classifyNotApplicableReason` による決定的判定のため、xbrl_facts と同様
+/// `cache_version` 世代でゲートする（`isVersionGatedBreakdownSource` 参照）。
+public let breakdownSourceNotApplicable = "not_applicable"
 
 /// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
 /// 公開文字列定数（`breakdownSource*` と同じ「internal enum ⇔ public 文字列定数」パターン）。
-/// ingest ログ・診断ツール専用（`.notFound` は行を作らない方針のため company_breakdowns には永続化しない）。
+/// `CompanyBreakdown.notApplicableReason` に永続化され、REST/MCP の 404 応答へ反映される（issue #132）。
 /// E: 報告セグメントが地域別のみで、business 軸への swap（収益認識注記等）が見つからなかった。
 public let breakdownNotApplicableGeographyOnly = "geography_only"
 /// F: 単一セグメントのため報告セグメント開示自体が省略されていた
 /// （`DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` タグで確認）。
 public let breakdownNotApplicableSingleSegmentDisclosed = "single_segment_disclosed"
-/// 上記いずれにも該当しない・原因未特定（要調査）。
+/// 上記いずれにも該当しない・原因未特定（要調査）。ingest 側は `needsReview=true` で保存し、
+/// 分類ロジック改善後の再 ingest（`--codes` 指名 or 通常巡回）で再分類できるようにする。
 public let breakdownNotApplicableUnknown = "unknown"
 
-/// breakdown read（REST/MCP）が xbrl_facts 経由の行に適用する最低スキーマバージョン番号
-/// （`breakdown-vN` の N）。**明示指定**。LLM 経由の行（source != xbrl_facts）には適用しない
-/// （`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き運用のため、
-/// cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
+/// breakdown read（REST/MCP）が xbrl_facts / not_applicable 経由の行に適用する最低スキーマ
+/// バージョン番号（`breakdown-vN` の N）。**明示指定**。LLM 経由の行（segment_info_llm 等）には
+/// 適用しない（`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き
+/// 運用のため、cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
 /// 不変条件: `breakdownMinServableVersion` ≤ 現行 `breakdown-vN` の N。
 public let breakdownMinServableVersion = 1
 
@@ -53,11 +58,18 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     return n
 }
 
-/// 格納行が read 可能か。xbrl_facts 経由（決定的）は cache_version が床以上のときのみ
-/// （バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
+/// xbrl_facts と同じく決定的ロジックで解決され、`cache_version` 世代で再計算・read 可否を
+/// 判定すべき source かどうか。LLM 経由（segment_info_llm 等）は content_hash + needs_review
+/// でのみ扱うためここには含めない（`isServableBreakdown` / Stage 6 ingest の staleness 判定で共用）。
+public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
+    source == breakdownSourceXbrlFacts || source == breakdownSourceNotApplicable
+}
+
+/// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が床以上の
+/// ときのみ（バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
 /// docs/breakdown-normalization-concept.md「今後の検討事項8」参照）。
 public func isServableBreakdown(source: String, cacheVersion: String) -> Bool {
-    guard source == breakdownSourceXbrlFacts else { return true }
+    guard isVersionGatedBreakdownSource(source) else { return true }
     guard let n = breakdownCacheVersionNumber(cacheVersion) else { return false }
     return n >= breakdownMinServableVersion
 }

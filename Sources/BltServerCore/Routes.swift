@@ -189,7 +189,7 @@ func registerRoutes(
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
         let axis = req.query[String.self, at: "axis"] ?? breakdownAxisBusiness
-        return makeStoredDataResponse(
+        return makeBreakdownResponse(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
                 logger: req.logger),
@@ -317,11 +317,24 @@ func serveStoredFilingSections(
     }
 }
 
+/// `breakdown` 専用の DB 読み取り結果。E/F/unknown の reason を 404 応答へ載せるため、他の
+/// エンドポイントが共有する `StoredDataServeResult` とは別に持つ（影響範囲を breakdown に限定。issue #132）。
+enum BreakdownServeResult {
+    /// 成功。JSON 値（`[String: Any]`）。
+    case ok([String: Any])
+    /// 行はあるが business 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。404 だが理由を返す。
+    case notApplicable(reason: String)
+    /// 未格納（404 相当。reason 無し）。
+    case notFound
+    /// DB 未接続・読み取り失敗（503 相当）。
+    case dbUnavailable
+}
+
 /// `breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 /// ライブ解決へのフォールバックは行わない（Stage 5 と同じ理由。LLM 呼び出しを serving 経路に持ち込まない）。
 func serveStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database?, logger: Logger
-) async -> StoredDataServeResult {
+) async -> BreakdownServeResult {
     guard let db else { return .dbUnavailable }
     do {
         let stored = try await withDbRetry(
@@ -331,8 +344,11 @@ func serveStoredBreakdown(
         ) {
             try await loadStoredBreakdown(code: code, docId: docId, axis: axis, db: db)
         }
-        guard let stored else { return .notFound }
-        return .ok(stored)
+        switch stored {
+        case .found(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .absent: return .notFound
+        }
     } catch {
         return .dbUnavailable
     }
@@ -433,6 +449,24 @@ private func makeStoredDataResponse(
     }
 }
 
+/// `BreakdownServeResult` を HTTP レスポンスへ変換する。ステータスは 404 のまま維持し
+/// （エッジ課金がステータス単位でメーターするため、issue #132 のコメント参照）、notApplicable の
+/// ときのみ 404 ボディへ `reason` を追加する。
+private func makeBreakdownResponse(
+    _ result: BreakdownServeResult, notFoundMessage: String
+) -> Response {
+    switch result {
+    case .ok(let value):
+        return jsonResponse(value, status: .ok)
+    case .notApplicable(let reason):
+        return errorResponse(.notFound, message: notFoundMessage, reason: reason)
+    case .notFound:
+        return errorResponse(.notFound, message: notFoundMessage)
+    case .dbUnavailable:
+        return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+    }
+}
+
 /// JSON-serializable な値（`[String: Any]` / `[[String: Any]]`）を JSON レスポンスにする。
 private func jsonResponse(_ value: Any, status: HTTPResponseStatus) -> Response {
     guard JSONSerialization.isValidJSONObject(value),
@@ -447,9 +481,11 @@ private func jsonResponse(_ value: Any, status: HTTPResponseStatus) -> Response 
     return response
 }
 
-/// `{"error": "...", "status": N}` 形式のエラーレスポンス。
-private func errorResponse(_ status: HTTPResponseStatus, message: String) -> Response {
-    let body: [String: Any] = ["error": message, "status": Int(status.code)]
+/// `{"error": "...", "status": N}` 形式のエラーレスポンス。`reason` を渡すと同じボディに
+/// `"reason"` キーを追加する（breakdown の notApplicable 応答用。issue #132）。
+private func errorResponse(_ status: HTTPResponseStatus, message: String, reason: String? = nil) -> Response {
+    var body: [String: Any] = ["error": message, "status": Int(status.code)]
+    if let reason { body["reason"] = reason }
     let data =
         (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
     let response = Response(status: status)
