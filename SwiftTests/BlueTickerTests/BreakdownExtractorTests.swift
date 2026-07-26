@@ -1238,6 +1238,61 @@ import Foundation
         }
     }
 
+    @Test func detectSingleSegmentDisclosureFindsProductServiceMarker() {
+        // 資生堂型の回帰（実データ検証2026-07-26）: 専用タグを使わず、IFRS方式のセグメント注記
+        // 「(4) 製品及びサービスに関する情報」内の説明文だけで記載省略を述べる。地域区分の
+        // xbrl_facts（method=xbrl_facts）を別途持つため、専用タグ限定・method=="not_found"限定
+        // の旧実装ではF判定に到達できなかった。
+        let xml = textBlockXml(
+            tag: "InformationAboutProductsAndServicesIFRSTextBlock",
+            escapedHtml: "化粧品事業の外部顧客への売上高が連結損益計算書上の「売上高」のほとんどを占めているため、記載を省略します。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir)
+            #expect(disclosure == "化粧品事業の外部顧客への売上高が連結損益計算書上の「売上高」のほとんどを占めているため、記載を省略します。")
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureIgnoresProductServiceBlockWithRealTable() {
+        // エーザイ型の回帰防止: 同じタグ（InformationAboutProductsAndServicesIFRSTextBlock）に
+        // 実際の製品別売上表がある場合は記載省略ではないため、表を持つブロックは対象外にする。
+        let xml = textBlockXml(
+            tag: "InformationAboutProductsAndServicesIFRSTextBlock",
+            escapedHtml:
+                "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ニューロロジー領域製品&lt;/td&gt;&lt;td&gt;260568&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureIgnoresIdenticalToSegmentBoilerplate() {
+        // パナソニックHD・富士通型の回帰防止（監査指摘・実データ検証2026-07-26、EDINETキャッシュ
+        // 157社: 194ブロック中145件が「記載を省略」に一致・59社中51社が実際は多セグメント企業）。
+        // 「製品及びサービスの区分が報告セグメントと同一のため記載を省略」は複数セグメントを持つ
+        // 企業の定型文であり、単一セグメント開示省略（F）とは意味が逆。マーカーだけでなく
+        // 「報告セグメントと同一」等の除外語も必須にして誤検出を防ぐ。
+        let xml = textBlockXml(
+            tag: "InformationAboutProductsAndServicesIFRSTextBlock",
+            escapedHtml: "当社の製品及びサービスの類型は各報告セグメントと同一となるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
+        }
+    }
+
+    @Test func detectSingleSegmentDisclosureIgnoresOmissionMarkerWithoutConcentrationWord() {
+        // マーカー「記載を省略」だけでは不十分（除外語にも該当しないが単一/集中を示す語も無い）
+        // ケースを not_found 相当として弾く回帰防止。
+        let xml = textBlockXml(
+            tag: "InformationAboutProductsAndServicesIFRSTextBlock",
+            escapedHtml: "重要性が乏しいため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == nil)
+        }
+    }
+
     // MARK: - toDictionary（JSON 出力）
 
     @Test func toDictionarySerializesWithOptionalKeysOmitted() throws {
@@ -1330,6 +1385,39 @@ import Foundation
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: 124_769_000_000, xbrlDir: dir)
             #expect(reason == .geographyOnly)
+        }
+    }
+
+    /// 資生堂型の回帰（実データ検証2026-07-26）: 地域区分の xbrl_facts（geographyOnly の条件を満たす）
+    /// と単一セグメント開示省略の説明文が両方存在する場合、より具体的な signal である
+    /// singleSegmentDisclosed（F）を優先する。
+    @Test func classifyNotApplicableReasonPrefersSingleSegmentDisclosedOverGeographyOnly() {
+        let segments = ExtractedBreakdown(
+            method: "xbrl_facts",
+            tables: [],
+            facts: [
+                BreakdownFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_JapanReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentsMember"],
+                    value: 61_753_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+                BreakdownFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_AmericasReportableSegmentsMember",
+                    dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentsMember"],
+                    value: 63_016_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+                ),
+            ]
+        )
+        let xml = textBlockXml(
+            tag: "InformationAboutProductsAndServicesIFRSTextBlock",
+            escapedHtml: "化粧品事業の外部顧客への売上高が連結損益計算書上の「売上高」のほとんどを占めているため、記載を省略します。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 124_769_000_000, xbrlDir: dir)
+            #expect(reason == .singleSegmentDisclosed)
         }
     }
 
