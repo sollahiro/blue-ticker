@@ -69,6 +69,18 @@ private func send(
     return (response.status, json)
 }
 
+/// 公開契約 FinancialsResponse を JSON 経由で構築する（Stage4IngestTests.makeResponse と同型）。
+private func makeDemoFinancialsResponse(code: String, years: Int) throws -> FinancialsResponse {
+    let yrs = (0..<years).map { ["fy_end": "20\(20 + $0)-03-31"] }
+    let dict: [String: Any] = [
+        "schema_version": 2, "code": code, "name": "テスト",
+        "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
+        "years": yrs,
+    ]
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return try JSONDecoder().decode(FinancialsResponse.self, from: data)
+}
+
 @Suite struct RoutesTests {
 
     // MARK: - healthz（認証不要）
@@ -317,6 +329,35 @@ private func send(
             let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "財務データは未集計です")
+        }
+    }
+
+    @Test func demoFinancialsReturns200WhenEligibleAndStored() async throws {
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = breakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let financials = CompanyFinancials()
+            financials.id = "7203"
+            financials.response = try makeDemoFinancialsResponse(
+                code: "7203", years: Api.financialsYearsDefault)
+            financials.cacheVersion = companyFinancialsCacheVersion
+            financials.requestedYears = Api.financialsYearsDefault
+            financials.highWater = "2025-06-20 09:00"
+            try await financials.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
+            #expect(status == .ok)
+            #expect(json?["code"] as? String == "7203")
         }
     }
 
