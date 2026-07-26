@@ -50,11 +50,16 @@ enum BusinessBreakdownResolver {
         // （エーザイ旧filings型: 地域別 facts が誤って business と確定していたが、
         // classifyAxis 修正で needs_review=true になった後も、実際には製品別の html_table が
         // 別途存在する。Opus監査 finding #2 フォローアップ、2026-07-25）。
+        // LLM が resolve せず終わった場合でも、audit（`notApplicableReason` 等）は呼び出し元へ
+        // 持ち帰る（issue #135: html_table経由でLLMが「地域別のみ」等と判定した理由を
+        // `BreakdownExtractor.classifyNotApplicableReason` の分類に使うため）。
+        var lastAudit: LLMBreakdownAudit?
         if !segments.tables.isEmpty {
             if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
                 let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(
                     segments, consolidatedSales: consolidatedSales, client: client
                 )
+                lastAudit = audit
                 // needs_review が立った swap 経路の結果は採用しない。オークマ型は候補表が
                 // 単一で needs_review=false に安定するが、INPEX旧filings型（複数期の候補表が
                 // 同じ見出し・紛らわしい period ラベルで並ぶ）は再実行のたびに結果が変わる
@@ -66,6 +71,7 @@ enum BusinessBreakdownResolver {
                 let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
                     segments, consolidatedSales: consolidatedSales, client: client
                 )
+                lastAudit = audit
                 if let snapshot { return (snapshot, .segmentInfoLLM, audit) }
             }
         }
@@ -77,6 +83,6 @@ enum BusinessBreakdownResolver {
             return (factsSnapshot, .xbrlFacts, nil)
         }
 
-        return (nil, .notFound, nil)
+        return (nil, .notFound, lastAudit)
     }
 }

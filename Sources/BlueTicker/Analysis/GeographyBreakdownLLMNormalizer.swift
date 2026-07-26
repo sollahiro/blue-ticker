@@ -22,6 +22,11 @@ struct LLMBreakdownAudit {
     /// geography 軸（本ファイル）は利益比較の対象外のため常に false。
     var profitDisclosed: Bool
     var notes: String
+    /// `applicable=false` のときの理由種別（`geography_only` | `other`）。business 軸の
+    /// 正規化器（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）のみが設定する
+    /// （issue #135: html_table経由でLLMが地域別のみと判定したケースをE判定として拾うため）。
+    /// `applicable=true` のときは無視されるフィールドのため nil のままでよい。
+    var notApplicableReason: String? = nil
 }
 
 enum GeographyBreakdownLLMNormalizer {

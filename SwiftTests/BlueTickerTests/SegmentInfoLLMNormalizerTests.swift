@@ -259,4 +259,26 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot.warnings.contains("llm_profit_disclosed_unresolved"))
         #expect(audit?.profitDisclosed == false)
     }
+
+    /// issue #135: LLM が「地域別のみで事業別データが無い」と判定した場合、applicable=false と
+    /// 併せて not_applicable_reason=geography_only を返す。audit 経由で呼び出し元
+    /// （`BusinessBreakdownResolver`）まで理由が伝搬すること。
+    @Test func propagatesGeographyOnlyReasonWhenNotApplicable() async {
+        let response: [String: Any] = [
+            "applicable": false,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [[String: Any]](),
+            "not_applicable_reason": "geography_only",
+            "notes": "地域別（日本・海外）のみで事業別データが存在しない",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
+        )
+        #expect(snapshotOrNil == nil)
+        #expect(audit?.notApplicableReason == "geography_only")
+    }
 }

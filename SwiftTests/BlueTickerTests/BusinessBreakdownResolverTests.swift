@@ -305,6 +305,36 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
+    /// issue #135: LLM が applicable=false・not_applicable_reason=geography_only を返した場合、
+    /// resolve() は not_found を返しつつ、その audit（理由込み）を呼び出し元へ持ち帰ること
+    /// （`BltServerFacade.resolveBusinessBreakdown` が `classifyNotApplicableReason` の
+    /// llmHint に使う）。以前は notFound 確定時に audit を nil で握り潰していた。
+    @Test func propagatesAuditWithGeographyOnlyReasonWhenLlmSaysNotApplicable() async throws {
+        let segments = try Self.segmentsResult(docID: "S100XTLJ")
+        #expect(segments.method == "html_table")
+        let sales = try #require(try Self.loadSales(code: "7751"))
+
+        let response: [String: Any] = [
+            "applicable": false,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [[String: Any]](),
+            "not_applicable_reason": "geography_only",
+            "notes": "地域別のみで事業別データが存在しない",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == "geography_only")
+    }
+
     /// segments が not_found の場合は何も呼ばない。
     @Test func segmentsNotFoundReturnsNotFound() async throws {
         let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
