@@ -188,13 +188,13 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
    - `smoke/breakdown_business_expected.json`（新規、geography版`breakdown_geography_expected.json`と同型）にキヤノン・オークマの事業別BreakdownSnapshot確認済み値を記録。実LLM呼び出し（xAI Grok）で検証: キヤノン5事業合計=連結売上高4,624,727百万円と完全一致、オークマ5製品合計=206,821（連結206,822と丸め±1）。ユーザー目視確認済み
    - LLM経由ゴールデンは自動pass/fail回帰ではなくスポット監査用（geography版と同じ設計判断）
 8. **LLM 成果のバージョンと再計算方針** — 下記「キャッシュ・再計算」
-9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 軸のみ確定・実装済み。geography 軸は未着手のまま） — `Sources/BltServerCore/Stage6Ingest.swift`（`runStage6Ingest`）が対象選定（`stage5Candidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages 6`（`IngestStage.breakdowns`）。REST は `GET /v1/companies/{code}/breakdown?axis=business&doc_id=...`、MCP は `get_breakdown`（いずれも`serveStoredBreakdown`/`loadStoredBreakdown`を共有）。E/F/unknown reasonのREST/MCP反映はissue #132（下記）
+9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 確定。2026-07-26 geography **ingest** 配線済み・**REST/MCP 公開は未着手**） — `Sources/BltServerCore/Stage6Ingest.swift`（`runStage6Ingest`）が軸パラメータ付きで対象選定（`stage5Candidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages 6`（`IngestStage.breakdowns`）で business → geography の順に2回呼ぶ（`limit` は各パス独立）。REST は `GET /v1/companies/{code}/breakdown?axis=business&doc_id=...`、MCP は `get_breakdown`（いずれも`serveStoredBreakdown`/`loadStoredBreakdown`を共有し、**当面 business のみ**。geography 行があっても read は absent）。E/F/unknown reasonのREST/MCP反映はissue #132（下記）。geography 公開は最新年の品質ゲート（`needs_review=true` とあいまい失敗が0）通過後
    - **対象は日経225構成銘柄限定**（東証上場全体ではない。LLM呼び出し費用抑制のため）。`priorityIngestCodes()`（`assets/nikkei225.csv`）を対象母集団として渡す（Stage4/5の「優先度のみ」用途とは異なる使い方）。年数はStage5と共通の`stage5IngestYears`を使う（Stage6専用の別定数は持たない）
    - staleness判定はStage5と非対称: xbrl_facts経由（決定的）は`cache_version`不一致で再試行してよいが、LLM経由（source≠xbrl_facts）は`needs_review=true`のときのみ再試行する（`cache_version`バンプだけでは触らない）。read側の servable 判定も同型の非対称性を持つ（`isServableBreakdown`: xbrl_factsはバージョン床、LLM経由は存在すれば常にservable）
    - 分母（連結外部売上）はStage6独自に再抽出せず、Stage4（`company_financials`）の計算済み結果を`FinancialsResponse.salesForDoc(_:)`経由で再利用する（重複ロジック回避）
    - `content_hash`はFNV-1a（非暗号学的・決定的）。CryptoKitはLinux（Fly.io配信ターゲット）で使えないため採用しなかった
-   - LLMクライアント（`XAI_API_KEY`/`XAI_MODEL`/`XAI_BASE_URL`）はServer側で独自に環境変数解決する（`BltServerFacade.resolveXaiEndpoint`。DevCLIの`LLMClientLoader`とは意図的に別実装。EDINETキー解決がServer/DevCLIで個別に存在するのと同じ設計）。未設定時は`UnavailableChatClient`が即座に失敗し、html_table経路（LLM必須）のみ`notApplicable`になる（xbrl_facts経路は影響を受けない）
-   - geography軸は未配線のまま（`GeographyBreakdownLLMNormalizer`はStage6 ingestから未呼び出し）。残作業として残る
+   - LLMクライアントは軸別: business は `XAI_BUSINESS_*`（未設定時は旧 `XAI_*` フォールバック）、geography は `XAI_GEOGRAPHY_*` のみ。Server 側は `BltServerFacade.resolveXaiEndpoint(axis:)`、DevCLI は `LLMClientLoader`（意図的に別実装）。未設定時は`UnavailableChatClient`が即座に失敗し、html_table経路のみ`notApplicable`/`unknown`になる（xbrl_facts経路は影響を受けない）
+   - geography 解決は `GeographyBreakdownResolver` + `resolveGeographyBreakdown`。正当欠測は `not_applicable`/`not_found`（`needs_review=false`）、正規化・LLM失敗は `unknown`（`needs_review=true`）で business と同型の再分析キューに載せる
 10. ~~**E/F/unknown判定結果の明示化**~~（issue #130、2026-07-25 ingestログ・DevCLI診断まで実装済み、PR #131） /
     ~~**REST/MCPへの反映**~~（issue #132、2026-07-26 実装済み） — `BreakdownExtractor.classifyNotApplicableReason`
     がE（`geography_only`）/F（`single_segment_disclosed`）/unknownを判定し、`company_breakdowns`へ

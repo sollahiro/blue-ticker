@@ -42,6 +42,19 @@ public let breakdownNotApplicableSingleSegmentDisclosed = "single_segment_disclo
 /// 上記いずれにも該当しない・原因未特定（要調査）。ingest 側は `needsReview=true` で保存し、
 /// 分類ロジック改善後の再 ingest（`--codes` 指名 or 通常巡回）で再分類できるようにする。
 public let breakdownNotApplicableUnknown = "unknown"
+/// geography 軸: 地域注記自体が無い（`BreakdownExtractor.extractGeographyInfo` の
+/// `method == "not_found"`）。正当欠測として `needsReview=false` で永続化し、無駄な再 LLM を止める
+/// （business の E/F と同型の決定的 not_applicable。REST/MCP の geography 公開は別途）。
+public let breakdownNotApplicableNotFound = "not_found"
+
+/// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
+/// E/F（business）と geography の正当欠測（`not_found`）が該当。`unknown` や正規化/LLM 失敗は
+/// `needs_review=true` で再処理キューへ載せる（Stage 6 ingest と共用）。
+public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Bool {
+    reason == breakdownNotApplicableGeographyOnly
+        || reason == breakdownNotApplicableSingleSegmentDisclosed
+        || reason == breakdownNotApplicableNotFound
+}
 
 /// breakdown read（REST/MCP）が xbrl_facts / not_applicable 経由の行に適用する最低スキーマ
 /// バージョン番号（`breakdown-vN` の N）。**明示指定**。LLM 経由の行（segment_info_llm 等）には

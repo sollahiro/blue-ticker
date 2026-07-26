@@ -73,7 +73,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v3"` |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_breakdowns`（Stage 6 事業別内訳。business 軸のみ） | `breakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-v7"`（`classifyNotApplicableReason`の単一セグメント開示判定（F）を地域軸swap失敗（E）より優先＋IFRS方式「(4)製品及びサービスに関する情報」の記載省略マーカー検出を追加、2026-07-26。資生堂型（地域区分factsを持ちながら実は単一セグメント開示省略）の誤判定を修正。ingest/CLI(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`) 配線済み。対象は日経225構成銘柄限定。geography 軸は未配線。詳細は `docs/breakdown-normalization-concept.md`） |
+| `company_breakdowns`（Stage 6 事業別・地域別内訳） | `breakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-v7"`（`classifyNotApplicableReason`の単一セグメント開示判定（F）を地域軸swap失敗（E）より優先＋IFRS方式「(4)製品及びサービスに関する情報」の記載省略マーカー検出を追加、2026-07-26。資生堂型（地域区分factsを持ちながら実は単一セグメント開示省略）の誤判定を修正。ingest は business→geography の2パス（CLI `--stages 6`）。REST(`breakdown`)/MCP(`get_breakdown`) は当面 business のみ公開（geography は Neon 投入済み・品質ゲート後に解禁）。対象は日経225構成銘柄限定。詳細は `docs/breakdown-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts 経由のみ適用） | `breakdownMinServableVersion` | 同上 | `1`（`breakdown-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
 
 ### バンプ規則

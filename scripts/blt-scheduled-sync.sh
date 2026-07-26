@@ -7,11 +7,12 @@
 # Stage 3（XBRL 数値 fact）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
-# Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・LLM 呼び出しを伴う
-# （docs/breakdown-normalization-concept.md）。XAI_API_KEY/XAI_MODEL 未設定でも
-# xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
+# Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
+# LLM は軸別（XAI_BUSINESS_* / XAI_GEOGRAPHY_*。business のみ旧 XAI_* フォールバック可）。
+# 未設定でも xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
+# REST/MCP の geography 公開は未着手（Neon 投入のみ）。
 #
-# 機密（DATABASE_URL / BLT_EDINET_API_KEY / XAI_API_KEY 等）はリポジトリ直下 .env から読む。
+# 機密（DATABASE_URL / BLT_EDINET_API_KEY / XAI_* 等）はリポジトリ直下 .env から読む。
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:
 #   swift build -c release --product blt-server
 #

@@ -19,7 +19,9 @@ private func makeContext() -> BltServerContext {
         .appendingPathComponent("blt-routes-tests-\(UUID().uuidString)", isDirectory: true)
     let chatClient = ChatCompletionClient(
         endpoint: ChatCompletionEndpoint(baseURL: "", apiKey: "", model: ""))
-    return BltServerContext(apiKey: "test-key", cacheDir: dir, chatClient: chatClient)
+    return BltServerContext(
+        apiKey: "test-key", cacheDir: dir, businessChatClient: chatClient,
+        geographyChatClient: chatClient)
 }
 
 /// ルート登録済みの Application を作って body を実行する。
