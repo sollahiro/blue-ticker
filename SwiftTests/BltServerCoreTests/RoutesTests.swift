@@ -55,9 +55,19 @@ private func withApp(
 
 /// responder 経由でリクエストを送り、ステータスとデコード済み JSON を返す。
 private func send(
-    _ app: Application, _ path: String
+    _ app: Application, _ path: String, origin: String? = nil
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
-    let headers = HTTPHeaders()
+    let (status, json, _) = try await sendWithHeaders(app, path, origin: origin)
+    return (status, json)
+}
+
+/// responder 経由でリクエストを送り、ステータス・デコード済み JSON・レスポンスヘッダーを返す
+/// （CORS ヘッダーの検証用に origin を指定できる）。
+private func sendWithHeaders(
+    _ app: Application, _ path: String, origin: String? = nil
+) async throws -> (status: HTTPResponseStatus, json: [String: Any]?, headers: HTTPHeaders) {
+    var headers = HTTPHeaders()
+    if let origin { headers.add(name: .origin, value: origin) }
     let request = Request(
         application: app, method: .GET, url: URI(string: path), headers: headers,
         on: app.eventLoopGroup.next())
@@ -66,7 +76,7 @@ private func send(
     if let string = response.body.string, let data = string.data(using: .utf8) {
         json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
-    return (response.status, json)
+    return (response.status, json, response.headers)
 }
 
 /// 公開契約 FinancialsResponse を JSON 経由で構築する（Stage4IngestTests.makeResponse と同型）。
@@ -376,6 +386,38 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
             #expect(status == .ok)
             #expect(json?["companies"] is [[String: Any]])
+        }
+    }
+
+    @Test func demoCompaniesIncludesCorsHeaderForAllowedOrigin() async throws {
+        // sollahiro.com（静的サイト）から api.sollahiro.com への別オリジン fetch を
+        // ブラウザに許可させるため、許可オリジンからのリクエストには
+        // Access-Control-Allow-Origin を返す必要がある。
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/demo/companies?q=トヨタ", origin: Api.demoAllowedOrigin)
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].first == Api.demoAllowedOrigin)
+        }
+    }
+
+    @Test func demoCompaniesOmitsCorsHeaderForDisallowedOrigin() async throws {
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/demo/companies?q=トヨタ", origin: "https://evil.example")
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].isEmpty)
+        }
+    }
+
+    @Test func nonDemoRouteOmitsCorsHeaderEvenForAllowedOrigin() async throws {
+        // CORS は /v1/demo/* グループにのみ適用する。他の /v1 パスに漏れていないことを確認する
+        // （sollahiro.com からの Origin であっても、demo 以外は Cloudflare Access 経由のみを想定）。
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/sectors", origin: Api.demoAllowedOrigin)
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].isEmpty)
         }
     }
 }

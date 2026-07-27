@@ -200,13 +200,24 @@ func registerRoutes(
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
 
+    // /v1/demo/* は sollahiro.com（別オリジンの静的サイト）から直接 fetch されるため、
+    // このグループにだけ CORS を許可する（他の /v1 パスは Cloudflare Access 経由のみを想定し、
+    // ブラウザからの直接クロスオリジン読み取りを許可しない）。
+    let demo = v1.grouped(
+        CORSMiddleware(
+            configuration: .init(
+                allowedOrigin: .any([Api.demoAllowedOrigin]),
+                allowedMethods: [.GET],
+                allowedHeaders: [.accept, .contentType, .origin]
+            )))
+
     // GET /v1/demo/companies?q=...
     // sollahiro.com/demo（子サイト）の実データ検索専用。company_breakdowns に格納済みの銘柄
     // （Stage 6 対象母集団＝日経225構成銘柄）に絞って返す。日経225の構成銘柄一覧そのものは
     // 編集著作物のため配布・公開しない設計（PriorityIngestCodes.swift 参照）。クエリ必須にし、
     // 全件列挙（一覧公開）にならないようにする。
     // このパスは Cloudflare Access の対象外（Bypass ポリシー）にして無認証公開する想定。
-    v1.get("demo", "companies") { req async -> Response in
+    demo.get("demo", "companies") { req async -> Response in
         let q = (req.query[String.self, at: "q"] ?? "").trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else {
             return jsonResponse(["companies": []], status: .ok)
@@ -236,7 +247,7 @@ func registerRoutes(
     // sollahiro.com/demo の実データ検索専用。company_breakdowns に格納済みの銘柄（上記と同じ
     // 母集団）限定で通期財務サマリーを返す。半期は対象外。中身は既存 /v1/companies/{code}/financials
     // と同じ格納データ・同じ既定年数（serveStoredFinancials を再利用、ロジックの二重化はしない）。
-    v1.get("demo", "companies", ":code", "financials") { req async -> Response in
+    demo.get("demo", "companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
