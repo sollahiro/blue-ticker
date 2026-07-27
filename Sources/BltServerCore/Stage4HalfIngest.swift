@@ -90,7 +90,7 @@ func runStage4HalfIngest(
         }
     }
     let candidates = prioritized(
-        missing + staleHighWater + staleYears + staleVersion, codeOf: \.code,
+        interleaved([missing, staleHighWater, staleYears, staleVersion]), codeOf: \.code,
         priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
