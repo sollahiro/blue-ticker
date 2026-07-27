@@ -29,7 +29,7 @@
 ## Breakdown の境界
 
 - REST: `GET /v1/companies/{code}/breakdown`、MCP: `get_breakdown`
-- 事業別（business）軸は実装済み（日経225構成銘柄限定など制約あり）。地域別（geography）軸は配線進行中。詳細は `docs/breakdown-normalization-concept.md`
+- 事業別（business）/ 地域別（geography）軸ともに実装済み（日経225構成銘柄限定など制約あり。geography は2026-07-27公開）。詳細は `docs/breakdown-normalization-concept.md`
 
 ## 関連
 

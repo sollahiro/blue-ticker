@@ -388,13 +388,13 @@
 
         <div class="light-card catalog-card">
           <div class="catalog-head">
-            <div class="catalog-name">事業別売上内訳<span class="id">get-breakdown</span></div>
+            <div class="catalog-name">事業別・地域別売上内訳<span class="id">get-breakdown</span></div>
             <span class="mcp-badge">get_breakdown</span>
           </div>
-          <p class="catalog-desc">有価証券報告書から事業別売上高の内訳を取得します（格納済みデータのみ）。対象は日経225構成銘柄に限る。axis は現状 business のみ対応（地域別は未対応）。</p>
+          <p class="catalog-desc">有価証券報告書から事業別/地域別売上高の内訳を取得します（格納済みデータのみ）。対象は日経225構成銘柄に限る。axis は business（既定）/ geography に対応。</p>
           <div class="catalog-meta">
             <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/breakdown?axis=business</span></div>
-            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6758/breakdown?axis=business</span></div>
+            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6758/breakdown?axis=geography</span></div>
           </div>
         </div>
 

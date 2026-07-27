@@ -276,7 +276,7 @@ public enum BreakdownResolveResult: Sendable {
     /// 書類の取得・抽出自体は成功したが、当該軸の内訳が解決できなかった。
     /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか。
     /// 呼び出し元の `Stage6Ingest` が `company_breakdowns.not_applicable_reason` へ永続化する
-    /// （business は REST/MCP の 404 応答へ反映。geography の read 公開は未着手）。
+    /// （business / geography どちらも REST/MCP の 404 応答へ反映）。
     case notApplicable(reason: String)
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。行は作らない。
     case failed

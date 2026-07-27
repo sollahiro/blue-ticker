@@ -184,8 +184,8 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
-    // DB（Stage 6 company_breakdowns）の格納済み事業別内訳のみを返す。
-    // axis は現状 business のみ（省略時 business）。geography は未配線のため行が無く 404 になる。
+    // DB（Stage 6 company_breakdowns）の格納済み内訳のみを返す。
+    // axis は business / geography（省略時 business）。それ以外の軸は行が無く 404 になる。
     // Stage 6 の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown-normalization-concept.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
@@ -195,7 +195,7 @@ func registerRoutes(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
                 logger: req.logger),
-            notFoundMessage: "事業別内訳は未算出です")
+            notFoundMessage: breakdownNotFoundMessage(axis: axis))
     }
 
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
@@ -413,6 +413,11 @@ enum BreakdownServeResult {
     case notFound
     /// DB 未接続・読み取り失敗（503 相当）。
     case dbUnavailable
+}
+
+/// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
+func breakdownNotFoundMessage(axis: String) -> String {
+    axis == breakdownAxisGeography ? "地域別内訳は未算出です" : "事業別内訳は未算出です"
 }
 
 /// `breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。

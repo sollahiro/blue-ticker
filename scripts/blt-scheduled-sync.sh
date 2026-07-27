@@ -10,7 +10,7 @@
 # Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
 # LLM は軸別（XAI_BUSINESS_* / XAI_GEOGRAPHY_*。business のみ旧 XAI_* フォールバック可）。
 # 未設定でも xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
-# REST/MCP の geography 公開は未着手（Neon 投入のみ）。
+# REST/MCP は business / geography の両軸を公開する（2026-07-27、品質ゲート通過後に解禁）。
 #
 # 機密（DATABASE_URL / BLT_EDINET_API_KEY / XAI_* 等）はリポジトリ直下 .env から読む。
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:

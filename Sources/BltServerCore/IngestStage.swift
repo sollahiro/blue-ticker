@@ -11,7 +11,7 @@ public enum IngestStage: String, CaseIterable, Sendable {
     /// Stage 5: 有報セクション本文（company_filing_sections）。
     case sections = "5"
     /// Stage 6: 事業別・地域別内訳（company_breakdowns）。ingest は business→geography。
-    /// REST/MCP read は当面 business のみ。
+    /// REST/MCP read は business / geography の両軸。
     case breakdowns = "6"
 }
 

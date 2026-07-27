@@ -3,7 +3,8 @@
 // （resolveBusinessBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
 // staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 // 呼び出し元（Stage3Ingest）が business → geography の順で本関数を2回呼ぶ。
-// REST/MCP の read（loadStoredBreakdown）は当面 business のみ公開。
+// REST/MCP の read（loadStoredBreakdown）は business / geography の両軸を公開する
+// （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
 // 対象は東証上場全体ではなく日経225構成銘柄に限定する（LLM 呼び出し費用を抑えるため。呼び出し元
 // `Stage3Ingest.swift` が `priorityIngestCodes()`（`assets/nikkei225.csv`）を `stage5Candidates` の
@@ -363,9 +364,9 @@ enum BreakdownLoadResult {
     case absent
 }
 
-/// 格納済み Stage 6 business 軸内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
-/// axis は現状 "business" のみ受け付ける（geography は Neon 投入済みでも REST/MCP 非公開。
-/// 品質ゲート通過後に解禁予定）。
+/// 格納済み Stage 6 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
+/// axis は "business" / "geography" を受け付ける（geography は 2026-07-27、品質ゲート
+/// ＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁。それ以外の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
 /// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
 /// 無い・read 不可なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
@@ -374,7 +375,7 @@ func loadStoredBreakdown(
 ) async throws -> BreakdownLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
-    guard axis == breakdownAxisBusiness else { return .absent }
+    guard axis == breakdownAxisBusiness || axis == breakdownAxisGeography else { return .absent }
 
     let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {
