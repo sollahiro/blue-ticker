@@ -42,6 +42,7 @@ XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以
 |---|---|
 | `BreakdownNormalizer.swift` | `BreakdownExtractor` の xbrl_facts 結果 → `BreakdownSnapshot`（比較可能な正規化スナップショット） |
 | `BusinessBreakdownResolver.swift` | `segments` キーの事業別内訳を、method に応じてどの正規化器（xbrl_facts / LLM 2種）に振り分けるか判定 |
+| `GeographyBreakdownResolver.swift` | `geography` キーの地域別内訳を、method に応じて xbrl_facts 正規化 / LLM フォールバックへ振り分け（DevCLI live 分岐と共有） |
 | `GeographyBreakdownLLMNormalizer.swift` | geography（地域別情報）の html_table を LLM で `BreakdownSnapshot` へ正規化 |
 | `SegmentInfoLLMNormalizer.swift` | `segments` キー自体が html_table を返すケースを LLM で `BreakdownSnapshot`（axis: business）へ正規化 |
 | `RevenueRecognitionLLMNormalizer.swift` | オークマ型（segments が実は地域別）の収益認識関係注記を LLM で事業別 `BreakdownSnapshot` へ正規化 |
