@@ -25,10 +25,6 @@ import Fluent
 import Foundation
 import Logging
 
-/// company_breakdowns の axis 値。
-let breakdownAxisBusiness = "business"
-let breakdownAxisGeography = "geography"
-
 /// Stage 6 取り込み結果のサマリ。
 public struct Stage6IngestSummary: Sendable, Equatable {
     /// 解決を試みた書類数（skip を除く）。

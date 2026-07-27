@@ -838,4 +838,66 @@ extension BreakdownLoadResult {
             #expect(result.isAbsent)
         }
     }
+
+    /// 軸別 cache_version: business バンプ相当の ingest は geography 行を stale にしない。
+    @Test func businessIngestDoesNotReattemptGeographyAxisRowOnVersionMismatch() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisGeography, source: breakdownSourceXbrlFacts,
+                cacheVersion: geographyBreakdownCacheVersion)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts,
+                cacheVersion: "breakdown-business-v0")
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
+                axis: breakdownAxisBusiness
+            ) { _, _ in
+                .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h-biz", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            let geoKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
+            let geoRow = try #require(try await CompanyBreakdown.find(geoKey, on: app.db))
+            #expect(geoRow.cacheVersion == geographyBreakdownCacheVersion)
+            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let bizRow = try #require(try await CompanyBreakdown.find(bizKey, on: app.db))
+            #expect(bizRow.cacheVersion == businessBreakdownCacheVersion)
+        }
+    }
+
+    /// 軸別 cache_version: geography バンプ相当の ingest は business 行を stale にしない。
+    @Test func geographyIngestDoesNotReattemptBusinessAxisRowOnVersionMismatch() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts,
+                cacheVersion: businessBreakdownCacheVersion)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisGeography, source: breakdownSourceXbrlFacts,
+                cacheVersion: "breakdown-geography-v0")
+
+            let summary = try await runStage6Ingest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
+                axis: breakdownAxisGeography
+            ) { _, _ in
+                .resolved(
+                    payload: fakePayload(axis: breakdownAxisGeography),
+                    source: breakdownSourceXbrlFacts, contentHash: "h-geo", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let bizRow = try #require(try await CompanyBreakdown.find(bizKey, on: app.db))
+            #expect(bizRow.cacheVersion == businessBreakdownCacheVersion)
+            let geoKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
+            let geoRow = try #require(try await CompanyBreakdown.find(geoKey, on: app.db))
+            #expect(geoRow.cacheVersion == geographyBreakdownCacheVersion)
+        }
+    }
 }
