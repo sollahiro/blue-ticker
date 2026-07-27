@@ -345,7 +345,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             row.needsReview = false
             row.source = "xbrl_facts"
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             try await row.create(on: app.db)
 
             let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
@@ -365,7 +365,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let financials = CompanyFinancials()
@@ -412,7 +412,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
@@ -456,7 +456,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let financials = CompanyFinancials()
