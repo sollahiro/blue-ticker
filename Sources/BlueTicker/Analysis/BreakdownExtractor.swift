@@ -332,17 +332,42 @@ enum BreakdownExtractor {
         return .unknown
     }
 
-    /// 連結財務諸表注記から地域別（所在地別）情報を抽出する。
+    /// 連結財務諸表注記から地域別（所在地別）の**外部売上**情報を抽出する。
+    ///
+    /// IFRS「地域別の情報」で外部顧客売上を省略し非流動資産だけを載せる会社（日本精工型）では、
+    /// 資産表を候補から外し、注記「売上高」の収益の分解（地域×事業マトリクス）へフォールバックする。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
-        let tables = extractFromTextBlocks(
+        var tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: dedicated,
             mixedTags: Xbrl.geographyMixedTextBlockTags,
             dedicatedHeading: "地域ごとの情報",
-            mixedKeywords: Xbrl.geographyHeadingKeywords
+            mixedKeywords: Xbrl.geographyHeadingKeywords,
+            skipGeographyAssetMetricTables: true
         )
+        // 地域注記側に売上表が残らない（売上省略＋資産表除外）ときだけ、
+        // 収益の分解（NotesNetSales）から地域行のある表を拾う。
+        // 売上マーカー無しの正当な地域売上表まで NotesNetSales で上書きしない。
+        if tables.isEmpty {
+            let revenueDecomp = extractFromTextBlocks(
+                xbrlDir: xbrlDir,
+                dedicatedTags: Xbrl.geographyRevenueDecompositionTextBlockTags,
+                mixedTags: [],
+                dedicatedHeading: Xbrl.geographyRevenueDecompositionHeading,
+                mixedKeywords: []
+            ).filter(tableHasGeographyRegionLabels)
+            if !revenueDecomp.isEmpty {
+                tables = revenueDecomp
+            }
+        }
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
+    }
+
+    /// markdown に地域名行ラベルが十分あるか（収益分解注記内の無関係な表を落とすため）。
+    static func tableHasGeographyRegionLabels(_ table: BreakdownTable) -> Bool {
+        let hits = Xbrl.segmentSpecificGeographyLabelKeywordsJa.filter { table.markdown.contains($0) }
+        return hits.count >= 2
     }
 
     /// 連結財務諸表注記（収益認識関係 / IFRS 売上収益）から「顧客との契約から生じる収益を
@@ -619,16 +644,32 @@ enum BreakdownExtractor {
     /// 収益認識/IFRS 売上収益向け（ブリヂストン: タイヤ(注1)＝ソリューション、その他(注2)＝化工品・多角化。
     /// 表セルには注番号しか無く細目本文は段落側。実データ検証 2026-07-24）。
     /// セグメント情報の golden parity を壊さないよう、既定は false。
+    /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
+    /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
     static func allTablesFromHtml(
-        _ html: String, defaultHeading: String, includeFootnotes: Bool = false
+        _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
+        skipGeographyAssetMetricTables: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
         var tables: [BreakdownTable] = []
         for table in tableEls {
+            if skipGeographyAssetMetricTables,
+                let metricCaption = nearestGeographyMetricCaption(before: table),
+                isGeographyAssetMetricCaption(metricCaption)
+            {
+                continue
+            }
             let grid = expandTable(table)
             let md = gridToMarkdown(grid)
             if md.isEmpty { continue }
+            // 地域売上向け: 有形固定資産合計行など資産専用表を markdown でも落とす
+            // （富士フイルム型。セグメント専用経路の golden を変えないよう geography 時のみ）。
+            if skipGeographyAssetMetricTables,
+                Xbrl.noteTableExclusionKeywords.contains(where: md.contains)
+            {
+                continue
+            }
             let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
             tables.append(BreakdownTable(heading: defaultHeading, markdown: md, period: period))
         }
@@ -637,6 +678,56 @@ enum BreakdownExtractor {
             tables.append(BreakdownTable(heading: defaultHeading, markdown: footnotes, period: nil))
         }
         return tables
+    }
+
+    /// 表の直前（親を遡った兄弟要素含む）の短いキャプション候補（文書順）。
+    /// 「所在地別の非流動資産…」のあと `(単位：百万円)` だけの表が挟まると、
+    /// 末尾キャプションだけ見ると資産判定を外す（実データ: S100XR0M）。
+    private static func precedingShortCaptions(before table: Element) -> [String] {
+        var current: Element? = table
+        var captions: [String] = []
+        while let node = current {
+            guard let parent = node.parent() else { break }
+            for child in parent.getChildNodes() {
+                guard child.siblingIndex < node.siblingIndex else { break }
+                let text: String
+                if let el = child as? Element {
+                    text = bs4Text(el, strip: true)
+                } else if let tn = child as? TextNode {
+                    text = tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    continue
+                }
+                if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
+                captions.append(text)
+            }
+            current = parent
+            // body / html まで上がると無関係な見出しが混ざるので数段で止める
+            if parent.tagName() == "body" || parent.tagName() == "html" { break }
+        }
+        return captions
+    }
+
+    /// 単位表記などを飛ばし、直近の「指標セクション」キャプションを返す。
+    /// 資産表のあとに売上表が続く開示では、全先行キャプションに非流動資産が残るため
+    /// 単純な any-match だと売上表まで落とす（S100W4MT）。
+    private static func nearestGeographyMetricCaption(before table: Element) -> String? {
+        let captions = precedingShortCaptions(before: table)
+        for text in captions.reversed() {
+            if isGeographyAssetMetricCaption(text) { return text }
+            if text.contains("売上") || text.contains("収益") || text.contains("外部顧客") {
+                return text
+            }
+        }
+        return captions.last
+    }
+
+    private static func isGeographyAssetMetricCaption(_ text: String) -> Bool {
+        let isAsset = Xbrl.geographyAssetMetricCaptionKeywords.contains(where: text.contains)
+        guard isAsset else { return false }
+        // 「売上高と非流動資産」のような併記は売上側として残す
+        if text.contains("売上") || text.contains("収益") { return false }
+        return true
     }
 
     /// 注記本文（表の外の `(注１) …` / `（注2）…` 段落）を箇条書き Markdown にする。
@@ -743,7 +834,8 @@ enum BreakdownExtractor {
         mixedTags: Set<String>,
         dedicatedHeading: String,
         mixedKeywords: [String],
-        mixedHeadingExclusionKeywords: [String] = []
+        mixedHeadingExclusionKeywords: [String] = [],
+        skipGeographyAssetMetricTables: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -760,13 +852,17 @@ enum BreakdownExtractor {
                     // 収益認識関係だけ脚注段落を候補に含める（セグメント情報の表件数 golden を変えない）
                     let includeFootnotes = dedicatedHeading == revenueRecognitionHeading
                     tables.append(contentsOf: allTablesFromHtml(
-                        block.content, defaultHeading: dedicatedHeading, includeFootnotes: includeFootnotes
+                        block.content, defaultHeading: dedicatedHeading,
+                        includeFootnotes: includeFootnotes,
+                        skipGeographyAssetMetricTables: skipGeographyAssetMetricTables
                     ))
                 } else if mixedTags.contains(block.tag) {
                     tables.append(contentsOf: keywordTablesFromHtml(
                         block.content,
                         keywords: mixedKeywords,
                         headingExclusionKeywords: mixedHeadingExclusionKeywords
+                            + (skipGeographyAssetMetricTables
+                                ? Xbrl.geographyAssetMetricCaptionKeywords : [])
                     ))
                 }
             }
