@@ -413,11 +413,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ),
         ApiSkill(
             id: "get-breakdown",
-            name: "事業別売上内訳",
+            name: "事業別・地域別売上内訳",
             description: """
-                有価証券報告書から事業別売上高の内訳を取得します（格納済みデータのみ）。
+                有価証券報告書から事業別/地域別売上高の内訳を取得します（格納済みデータのみ）。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は現状 business のみ対応（地域別は未対応）。
+                axis は business（既定）/ geography に対応。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
@@ -442,16 +442,16 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（現状 business のみ。省略時 business）",
+                    description: "内訳の軸（business または geography。省略時 business）",
                     required: false,
                     defaultValue: .string("business")
                 ),
             ],
             instructions: """
-                Breakdown（事業別売上の構造化）。自由テキストのセグメント記述は get-filing-content の segments。
-                日経225構成銘柄のみ。geography 軸は Neon 投入済みだが REST/MCP 非公開のため 404。
-                格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                Breakdown（事業別/地域別売上の構造化）。自由テキストのセグメント記述は get-filing-content の segments。
+                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=business
+                例: GET /v1/companies/6758/breakdown?axis=geography
                 """
         ),
     ]

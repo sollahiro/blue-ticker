@@ -212,7 +212,7 @@ private func dispatchMcpTool(
         let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
         return mapBreakdownResult(
             await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
-            notFoundMessage: "事業別内訳は未算出です")
+            notFoundMessage: breakdownNotFoundMessage(axis: axis))
 
     default:
         return errorToolResult("Unknown tool: \(params.name)")

@@ -73,7 +73,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `1`（`half-v1` 以上を 200） |
 | `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v4"`（geography: 非流動資産表除外＋収益の分解フォールバック、2026-07-27） |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_breakdowns`（Stage 6 business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は当面 business のみ公開。詳細は `docs/breakdown-normalization-concept.md`） |
+| `company_breakdowns`（Stage 6 business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts / not_applicable 経由のみ） | `businessBreakdownMinServableVersion` | 同上 | `1`（`…-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
 | `company_breakdowns`（Stage 6 geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。geography の決定的ロジック変更時のみバンプ） |
 | （同上・read 床） | `geographyBreakdownMinServableVersion` | 同上 | `1` |

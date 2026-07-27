@@ -153,6 +153,40 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
+    /// 2026-07-27 品質ゲート通過後、MCP get_breakdown も axis=geography で格納済みデータを返す。
+    @Test func getBreakdownReturnsGeographyAxisWhenStored() async throws {
+        try await withMcpApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisGeography)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: breakdownAxisGeography, denominator: 1_000_000,
+                denominatorTag: "income_statement.sales",
+                rows: [
+                    BreakdownRowPayload(labelRaw: "日本", amount: 600_000, profit: nil, rowKind: "segment")
+                ],
+                sourceKind: breakdownSourceGeographyLLM, needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = breakdownSourceGeographyLLM
+            row.contentHash = ""
+            row.cacheVersion = geographyBreakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await postMcp(
+                app,
+                toolCallBody(
+                    name: "get_breakdown", arguments: ["code": "7203", "axis": "geography"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool != true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            #expect(body?["axis"] as? String == breakdownAxisGeography)
+        }
+    }
+
     @Test func toolsListIsReachableWithoutDatabase() async throws {
         try await withMcpApp { app in
             let (status, json) = try await postMcp(

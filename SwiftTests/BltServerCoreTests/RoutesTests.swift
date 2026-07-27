@@ -246,6 +246,40 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
+    /// 2026-07-27 品質ゲート通過後、axis=geography も business と同型で格納済みデータを返す。
+    @Test func breakdownReturnsGeographyAxisWhenStored() async throws {
+        try await withApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisGeography)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: breakdownAxisGeography, denominator: 1_000_000,
+                denominatorTag: "income_statement.sales",
+                rows: [
+                    BreakdownRowPayload(labelRaw: "日本", amount: 600_000, profit: nil, rowKind: "segment")
+                ],
+                sourceKind: breakdownSourceGeographyLLM, needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = breakdownSourceGeographyLLM
+            row.contentHash = ""
+            row.cacheVersion = geographyBreakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=geography")
+            #expect(status == .ok)
+            #expect(json?["axis"] as? String == breakdownAxisGeography)
+        }
+    }
+
+    /// axis=geography 未算出時は business と別文言（「地域別内訳は未算出です」）で 404 になる。
+    @Test func breakdownReturns404WithGeographyMessageWhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=geography")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "地域別内訳は未算出です")
+        }
+    }
+
     // MARK: - sectors（EDINET マスタ CSV 未配置でも 200・空配列で応答する）
 
     @Test func sectorsReturnsOkWithArrayBody() async throws {

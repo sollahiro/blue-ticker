@@ -591,12 +591,47 @@ extension BreakdownLoadResult {
         }
     }
 
-    @Test func loadRejectsNonBusinessAxis() async throws {
+    /// business / geography 以外の軸は行の有無に関わらず absent（将来 axis 追加時の安全側デフォルト）。
+    @Test func loadRejectsUnknownAxis() async throws {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "geography", db: app.db)
+                code: "7203", docId: nil, axis: "product", db: app.db)
             #expect(result.isAbsent)
+        }
+    }
+
+    /// geography も business と同じく格納済み行を読める（2026-07-27 品質ゲート通過後に解禁）。
+    @Test func loadReturnsGeographyRowWhenPresent() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
+                cacheVersion: geographyBreakdownCacheVersion)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
+            let json = try #require(result.foundJSON)
+            #expect(json["doc_id"] as? String == "S1")
+            #expect(json["axis"] as? String == breakdownAxisGeography)
+            let breakdown = try #require(json["breakdown"] as? [String: Any])
+            #expect(breakdown["axis"] as? String == breakdownAxisGeography)
+        }
+    }
+
+    /// geography の notApplicable（例: not_found）行も business と同型で reason を返す。
+    @Test func loadReturnsGeographyNotApplicableReason() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisGeography, source: breakdownSourceNotApplicable,
+                cacheVersion: geographyBreakdownCacheVersion,
+                notApplicableReason: breakdownNotApplicableNotFound)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
+            #expect(result.notApplicableReason == breakdownNotApplicableNotFound)
+            #expect(result.foundJSON == nil)
         }
     }
 
@@ -827,15 +862,18 @@ extension BreakdownLoadResult {
         }
     }
 
-    @Test func loadStillRejectsGeographyAxisEvenWhenRowExists() async throws {
+    /// LLM 経由（geography_llm）の geography 行は business と同じく cache_version が古くても read 可能。
+    @Test func loadReturnsGeographyLLMRowEvenWithOldCacheVersion() async throws {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM)
+                axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
+                cacheVersion: "very-old-version")
 
             let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
-            #expect(result.isAbsent)
+            let json = try #require(result.foundJSON)
+            #expect(json["doc_id"] as? String == "S1")
         }
     }
 
