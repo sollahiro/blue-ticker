@@ -44,6 +44,9 @@ WITH checks AS (
   SELECT 'company_filing_sections',
          (SELECT max(updated_at) FROM company_filing_sections)
   UNION ALL
+  SELECT 'company_breakdowns',
+         (SELECT max(updated_at) FROM company_breakdowns)
+  UNION ALL
   SELECT 'edinet_sync_state',
          (SELECT max(updated_at) FROM edinet_sync_state)
 ),

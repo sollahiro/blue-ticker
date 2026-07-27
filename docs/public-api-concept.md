@@ -38,7 +38,7 @@
 | 認証 | SSO / MCP OAuth ＋ **Service Token（`api.*`・疎通済み）**。origin 非検証・エッジ。旧 CLI Bearer は復活しない。詳細 `docs/api-auth.md` |
 | レート制御 | 独自実装ゼロ。Cloudflare Free のゾーン制限のみ |
 | スキーマバージョニング | 応答の `schema_version` は実装済み。互換ポリシーは `docs/api-compatibility.md`（段階 A） |
-| CORS | 未設定 |
+| CORS | 未設定（`/v1/demo/*` のみ sollahiro.com 向けに許可済み。第三者公開時に汎用対応を検討） |
 | API ドキュメント | 外部向け OpenAPI / リファレンスなし（`docs/` は運営・開発向け）。エージェント向け使用案内は `GET /v1/skills`（MCP `tools/list` と共有カタログ） |
 | エラー契約 | `{"error":...,"status":N}` に統一済み |
 

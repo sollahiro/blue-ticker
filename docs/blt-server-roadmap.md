@@ -2,7 +2,7 @@
 
 現在地と次の意思決定の索引。手順は `deploy.md` / `operations.md`、構成のスナップショットは `architecture.md`、完了履歴は Git。
 
-## 現在地（2026-07-21）
+## 現在地（2026-07-27）
 
 | 項目 | 状態 |
 |---|---|
@@ -10,11 +10,12 @@
 | CLI | 配布 `ticker` **廃止済み**。開発用は配布しない `TickerDev`。運用は `blt-server` sync/ingest |
 | Stage 1 | 同期済み（~3,944 社）。launchd が日次増分 sync |
 | Stage 3 | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
-| Stage 4 | **バックフィル進行中**。`company_financials` 合計 2,288 行（うち `fin-v4` 307）。ユニバース ~3,944 社 |
+| Stage 4 | バックフィル継続中。`company_financials` 合計 3,876 行（`fin-v4` 3,829・`fin-v3` 29・`fin-v2` 18）。ユニバース ~3,944 社 |
 | Stage 4 read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
-| Stage 4-half | 進行中。issue #73 の半期報告書マッチング修正で `half-v2` へバンプ（`half-v1` 行は全件 stale・再計算対象）。read 床 `companyHalfFinancialsMinServableVersion = 1` を新規導入し `half-v1` 行も引き続き 200 |
-| Stage 5 | 進行中。issue #86, #93 対応で `sections-v3` へバンプ（2026-07-20）。旧版行は stale 消化中 |
+| Stage 4-half | `half-v2` への stale 消化継続中（issue #73 の半期報告書マッチング修正で導入）。合計 3,859 行中 `half-v2` 3,823・`half-v1` 36。read 床 `companyHalfFinancialsMinServableVersion = 1` |
+| Stage 5 | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
+| Stage 6 | 日経225限定。business 軸は 225/225 社ingest 済み。cache_version を軸別（`breakdown-business-v7`/`breakdown-geography-v7`）に分離し、geography 軸の Neon ingest 配線・REST/MCP 公開を 2026-07-27 に完了（品質ゲート: 最新有報 224/224 社で `needs_review=true` とあいまい失敗が 0 を確認）。軸別命名への切替は Neon 側は次回 ingest から反映（現状 business 行は旧共通名 `breakdown-v7` 等のまま） |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
 | MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。8 ツール（`search_companies`・`get_analysis`・`get_half_analysis` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
 
@@ -44,7 +45,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 |---|---|
 | `companyFinancialsCacheVersion`（いま `fin-v4`） | Stage 4 ingest の書き込み・stale 判定 |
 | `companyFinancialsMinServableVersion`（いま `2`） | financials read の最低 N（`fin-vN`） |
-| `filingSectionsCacheVersion`（いま `sections-v3`） | Stage 5 ingest の書き込み・stale 判定 |
+| `filingSectionsCacheVersion`（いま `sections-v4`） | Stage 5 ingest の書き込み・stale 判定 |
 | `filingSectionsMinServableVersion`（いま `1`） | filing-content read の最低 N（`sections-vN`） |
 
 - 比較は `*-vN` を数値パースして行う（文字列辞書順は使わない）。
