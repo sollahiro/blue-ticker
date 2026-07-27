@@ -136,7 +136,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
             try await row.create(on: app.db)
 

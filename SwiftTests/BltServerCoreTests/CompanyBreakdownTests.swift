@@ -60,7 +60,7 @@ private func fakeSnapshot(
             row.needsReview = false
             row.source = breakdownSourceSegmentInfoLLM
             row.contentHash = "abc123"
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.llmAudit = LLMBreakdownAuditPayload(sourceTableIndex: 1, periodColumn: "当期", unit: "million_yen", profitDisclosed: true, notes: "test")
             try await row.create(on: app.db)
 
@@ -86,7 +86,7 @@ private func fakeSnapshot(
             row.needsReview = false
             row.source = breakdownSourceXbrlFacts
             row.contentHash = "def456"
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.llmAudit = nil
             try await row.create(on: app.db)
 
@@ -109,7 +109,7 @@ private func fakeSnapshot(
             business.needsReview = false
             business.source = breakdownSourceRevenueRecognitionLLM
             business.contentHash = "h1"
-            business.cacheVersion = breakdownCacheVersion
+            business.cacheVersion = businessBreakdownCacheVersion
             try await business.create(on: app.db)
 
             let geography = CompanyBreakdown(docID: "S100W043", axis: "geography")
@@ -119,7 +119,7 @@ private func fakeSnapshot(
             geography.needsReview = false
             geography.source = breakdownSourceGeographyLLM
             geography.contentHash = "h2"
-            geography.cacheVersion = breakdownCacheVersion
+            geography.cacheVersion = geographyBreakdownCacheVersion
             try await geography.create(on: app.db)
 
             #expect(try await CompanyBreakdown.query(on: app.db).filter(\.$docID == "S100W043").count() == 2)
@@ -137,7 +137,7 @@ private func fakeSnapshot(
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 
@@ -157,7 +157,7 @@ private func fakeSnapshot(
             row.needsReview = false
             row.source = breakdownSourceXbrlFacts
             row.contentHash = "abc"
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             try await row.create(on: app.db)
 
             let found = try #require(try await CompanyBreakdown.find("S100BBBB#business", on: app.db))
@@ -174,7 +174,7 @@ private func fakeSnapshot(
             clean.needsReview = false
             clean.source = breakdownSourceXbrlFacts
             clean.contentHash = "h1"
-            clean.cacheVersion = breakdownCacheVersion
+            clean.cacheVersion = businessBreakdownCacheVersion
             try await clean.create(on: app.db)
 
             let flagged = CompanyBreakdown(docID: "S2", axis: "business")
@@ -184,7 +184,7 @@ private func fakeSnapshot(
             flagged.needsReview = true
             flagged.source = breakdownSourceSegmentInfoLLM
             flagged.contentHash = "h2"
-            flagged.cacheVersion = breakdownCacheVersion
+            flagged.cacheVersion = businessBreakdownCacheVersion
             try await flagged.create(on: app.db)
 
             let needingReview = try await CompanyBreakdown.query(on: app.db)

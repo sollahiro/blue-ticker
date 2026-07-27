@@ -42,8 +42,10 @@ func registerRoutes(
                 "company_half_financials_min_servable": companyHalfFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
-                "breakdown": breakdownCacheVersion,
-                "breakdown_min_servable": breakdownMinServableVersion,
+                "breakdown_business": businessBreakdownCacheVersion,
+                "breakdown_business_min_servable": businessBreakdownMinServableVersion,
+                "breakdown_geography": geographyBreakdownCacheVersion,
+                "breakdown_geography_min_servable": geographyBreakdownMinServableVersion,
             ],
         ], status: .ok)
     }

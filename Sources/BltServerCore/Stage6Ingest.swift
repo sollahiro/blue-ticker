@@ -69,6 +69,7 @@ func runStage6Ingest(
     axis: String = breakdownAxisBusiness,
     logger: Logger? = nil, resolve: BreakdownResolveFn
 ) async throws -> Stage6IngestSummary {
+    let currentCacheVersion = breakdownCacheVersion(forAxis: axis)
     let sets = try await stage5Candidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
     let baseCandidates = sets.keep
@@ -103,7 +104,7 @@ func runStage6Ingest(
         } else if existing?.needsReview == true {
             flaggedForReview.append(cand)
         } else if let source = existing?.source, isVersionGatedBreakdownSource(source),
-            existing?.cacheVersion != breakdownCacheVersion
+            existing?.cacheVersion != currentCacheVersion
         {
             staleVersion.append(cand)
         } else {
@@ -130,7 +131,7 @@ func runStage6Ingest(
         }
         if let row = existing, row.needsReview == false,
             !isVersionGatedBreakdownSource(row.source)
-                || row.cacheVersion == breakdownCacheVersion
+                || row.cacheVersion == currentCacheVersion
         {
             skipped += 1
             continue
@@ -173,7 +174,7 @@ func runStage6Ingest(
                             existing: existing, docID: cand.docID, axis: axis,
                             code: cand.code, submitDateTime: cand.submitDateTime,
                             payload: placeholder, source: breakdownSourceNotApplicable,
-                            contentHash: "", cacheVersion: breakdownCacheVersion, llmAudit: nil,
+                            contentHash: "", cacheVersion: currentCacheVersion, llmAudit: nil,
                             notApplicableReason: breakdownNotApplicableNotFound, db: db)
                     }
                 }
@@ -191,7 +192,7 @@ func runStage6Ingest(
                 try await storeBreakdown(
                     existing: existing, docID: cand.docID, axis: axis,
                     code: cand.code, submitDateTime: cand.submitDateTime, payload: payload,
-                    source: source, contentHash: contentHash, cacheVersion: breakdownCacheVersion,
+                    source: source, contentHash: contentHash, cacheVersion: currentCacheVersion,
                     llmAudit: audit, db: db)
             }
             stored += 1
@@ -226,7 +227,7 @@ func runStage6Ingest(
                         existing: existing, docID: cand.docID, axis: axis,
                         code: cand.code, submitDateTime: cand.submitDateTime, payload: placeholder,
                         source: breakdownSourceNotApplicable, contentHash: "",
-                        cacheVersion: breakdownCacheVersion, llmAudit: nil,
+                        cacheVersion: currentCacheVersion, llmAudit: nil,
                         notApplicableReason: reason, db: db)
                 }
             }
@@ -323,7 +324,7 @@ func storeBreakdown(
 
 // MARK: - servable/unservable 集計
 
-/// `source`/`cache_version` のみを対象にした軽量射影（`payload` の JSONB を転送しない）。
+/// `source`/`cache_version`/`axis` を対象にした軽量射影（`payload` の JSONB を転送しない）。
 /// company_breakdowns 全件の servable/unservable 集計用。
 final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
     static let schema = CompanyBreakdown.schema
@@ -337,6 +338,9 @@ final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
     @Field(key: "cache_version")
     var cacheVersion: String
 
+    @Field(key: "axis")
+    var axis: String
+
     init() {}
 }
 
@@ -344,8 +348,9 @@ final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
 /// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送しない軽量クエリで行う。
 func countServableBreakdowns(db: Database) async throws -> (servable: Int, unservable: Int) {
     let rows = try await CompanyBreakdownSourceVersionOnly.query(on: db).all()
-    let servable = rows.filter { isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
-        .count
+    let servable = rows.filter {
+        isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion, axis: $0.axis)
+    }.count
     return (servable, rows.count - servable)
 }
 
@@ -386,10 +391,12 @@ func loadStoredBreakdown(
             .filter(\.$axis == axis)
             .sort(\.$submitDateTime, .descending)
             .all()
-        row = candidates.first { isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion) }
+        row = candidates.first {
+            isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion, axis: axis)
+        }
     }
 
-    guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion),
+    guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion, axis: axis),
         let docID = row.id?.components(separatedBy: "#").first
     else { return .absent }
 
