@@ -475,6 +475,12 @@ extension FinancialsResponse {
         years.first { $0.docId == docID }?.sales.map { $0 * Financial.millionYen }
     }
 
+    /// 当該 docID の年次エントリがあるか（売上の有無は問わない）。
+    /// Stage 6 が「Stage 4 未計算」と「計算済みだが売上抽出不能」を分けるために使う。
+    public func hasDoc(_ docID: String) -> Bool {
+        years.contains { $0.docId == docID }
+    }
+
     /// 有価証券報告書未提出等、計算対象外だった企業のプレースホルダ（`years` 空）。
     /// public: Stage 4 ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
     /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う

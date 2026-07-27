@@ -138,13 +138,52 @@ func runStage6Ingest(
         if let lim = limit, attempted >= lim { break }
         attempted += 1
 
-        let sales = try? await withDbRetry(
+        let salesOrNil = try? await withDbRetry(
             logger: logger, context: "docID=\(cand.docID) 売上参照", onRetry: { unhealthyRetries += 1 }
         ) {
             try await consolidatedSalesForDoc(code: cand.code, docID: cand.docID, db: db)
         }
 
-        switch await resolve(cand.docID, sales ?? nil) {
+        // 分母売上なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
+        // 過去の成功行（例: 保険の前年）を隠してしまう。Stage 4 が当該 doc を既に計算済みなら
+        // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
+        guard let sales = salesOrNil, sales != 0 else {
+            let stage4HasDoc = try await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID) Stage4有無",
+                onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
+            }
+            if stage4HasDoc {
+                notApplicable += 1
+                // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
+                if let existing, existing.source != breakdownSourceNotApplicable {
+                    logger?.warning(
+                        "Stage 6(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
+                    )
+                } else {
+                    let placeholder = BreakdownSnapshotPayload(
+                        axis: axis, denominator: 0, denominatorTag: "", rows: [],
+                        sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
+                    try await withDbRetry(
+                        logger: logger, context: "docID=\(cand.docID)",
+                        onRetry: { unhealthyRetries += 1 }
+                    ) {
+                        try await storeBreakdown(
+                            existing: existing, docID: cand.docID, axis: axis,
+                            code: cand.code, submitDateTime: cand.submitDateTime,
+                            payload: placeholder, source: breakdownSourceNotApplicable,
+                            contentHash: "", cacheVersion: breakdownCacheVersion, llmAudit: nil,
+                            notApplicableReason: breakdownNotApplicableNotFound, db: db)
+                    }
+                }
+            } else {
+                skipped += 1
+            }
+            continue
+        }
+
+        switch await resolve(cand.docID, sales) {
         case .resolved(let payload, let source, let contentHash, let audit):
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
@@ -234,6 +273,13 @@ func runStage6Ingest(
 func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
     return financials.response.salesForDoc(docID)
+}
+
+/// Stage 4 が当該 code/docID の年次エントリを既に持っているか（売上の有無は問わない）。
+/// 分母売上なしの Stage 6 判定で「未計算」と「計算済みだが売上抽出不能」を分けるために使う。
+func companyFinancialsHasDoc(code: String, docID: String, db: Database) async throws -> Bool {
+    guard let financials = try await CompanyFinancials.find(code, on: db) else { return false }
+    return financials.response.hasDoc(docID)
 }
 
 /// 解決済み内訳を company_breakdowns へ書き込む（既存行があれば更新、無ければ作成）。
