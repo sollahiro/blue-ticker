@@ -44,6 +44,12 @@ public enum Api {
     /// company_breakdowns 格納銘柄（日経225構成銘柄）に絞ったうえでの表示件数（検索窓の下の候補用）。
     /// BltServerCore（Routes.swift）から参照するため public。
     public static let demoSearchResultLimit = 8
+
+    /// `/v1/demo/*` に CORS で許可するオリジン。summarize.html が同一オリジンでない
+    /// api.sollahiro.com へ fetch するため必要（ブラウザは Access-Control-Allow-Origin が
+    /// 一致しないとレスポンスをスクリプトから読ませない）。BltServerCore（Routes.swift）から
+    /// 参照するため public。
+    public static let demoAllowedOrigin = "https://sollahiro.com"
     static let filingsMaxDocuments = 50     // server read（getFilings / filingsList）の filings 上限
     static let filingsCliMaxDocuments = 10  // CLI `filings` コマンドの表示上限
 

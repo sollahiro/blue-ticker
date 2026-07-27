@@ -55,9 +55,19 @@ private func withApp(
 
 /// responder 経由でリクエストを送り、ステータスとデコード済み JSON を返す。
 private func send(
-    _ app: Application, _ path: String
+    _ app: Application, _ path: String, origin: String? = nil
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
-    let headers = HTTPHeaders()
+    let (status, json, _) = try await sendWithHeaders(app, path, origin: origin)
+    return (status, json)
+}
+
+/// responder 経由でリクエストを送り、ステータス・デコード済み JSON・レスポンスヘッダーを返す
+/// （CORS ヘッダーの検証用に origin を指定できる）。
+private func sendWithHeaders(
+    _ app: Application, _ path: String, origin: String? = nil
+) async throws -> (status: HTTPResponseStatus, json: [String: Any]?, headers: HTTPHeaders) {
+    var headers = HTTPHeaders()
+    if let origin { headers.add(name: .origin, value: origin) }
     let request = Request(
         application: app, method: .GET, url: URI(string: path), headers: headers,
         on: app.eventLoopGroup.next())
@@ -66,7 +76,7 @@ private func send(
     if let string = response.body.string, let data = string.data(using: .utf8) {
         json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
-    return (response.status, json)
+    return (response.status, json, response.headers)
 }
 
 /// 公開契約 FinancialsResponse を JSON 経由で構築する（Stage4IngestTests.makeResponse と同型）。
@@ -295,6 +305,14 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
 
     // MARK: - /v1/demo（子サイト実データデモ専用。company_breakdowns 格納銘柄限定）
 
+    @Test func demoCompaniesReturns503WithoutDatabase() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "検索データベースに接続できません")
+        }
+    }
+
     @Test func demoFinancialsReturns503WithoutDatabase() async throws {
         try await withApp { app in
             let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
@@ -369,13 +387,98 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
-    @Test func demoCompaniesReturnsOkWithArrayBodyForQuery() async throws {
-        // EDINET マスタ CSV 未配置（テスト環境）では検索候補自体が空になるため、母集団フィルタ後も
-        // 200・空配列で応答することを確認する（sectorsReturnsOkWithArrayBody と同型）。
+    @Test func demoCompaniesFiltersOutMatchesNotInBreakdownPopulation() async throws {
+        // EDINET マスタ CSV には実データが載っており「トヨタ」で 7203 がヒットするが、
+        // company_breakdowns に行が無ければ母集団外として除外され 200・空配列になる。
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
             #expect(status == .ok)
-            #expect(json?["companies"] is [[String: Any]])
+            #expect((json?["companies"] as? [[String: Any]])?.isEmpty == true)
+        }
+    }
+
+    @Test func demoCompaniesReturnsMatchInBreakdownPopulation() async throws {
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = breakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
+            #expect(status == .ok)
+            let companies = try #require(json?["companies"] as? [[String: Any]])
+            #expect(companies.contains { $0["code"] as? String == "7203" })
+        }
+    }
+
+    @Test func demoCompaniesIncludesCorsHeaderForAllowedOrigin() async throws {
+        // sollahiro.com（静的サイト）から api.sollahiro.com への別オリジン fetch を
+        // ブラウザに許可させるため、許可オリジンからのリクエストには
+        // Access-Control-Allow-Origin を返す必要がある。
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/demo/companies?q=トヨタ", origin: Api.demoAllowedOrigin)
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].first == Api.demoAllowedOrigin)
+        }
+    }
+
+    @Test func demoCompaniesOmitsCorsHeaderForDisallowedOrigin() async throws {
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/demo/companies?q=トヨタ", origin: "https://evil.example")
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].isEmpty)
+        }
+    }
+
+    @Test func demoFinancialsIncludesCorsHeaderForAllowedOrigin() async throws {
+        // /v1/demo/companies だけでなく /v1/demo/companies/{code}/financials も同じ demo
+        // グループに属するため、こちらにも CORS ヘッダーが付くことを確認する。
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = breakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let financials = CompanyFinancials()
+            financials.id = "7203"
+            financials.response = try makeDemoFinancialsResponse(
+                code: "7203", years: Api.financialsYearsDefault)
+            financials.cacheVersion = companyFinancialsCacheVersion
+            financials.requestedYears = Api.financialsYearsDefault
+            financials.highWater = "2025-06-20 09:00"
+            try await financials.create(on: app.db)
+
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/demo/companies/7203/financials", origin: Api.demoAllowedOrigin)
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].first == Api.demoAllowedOrigin)
+        }
+    }
+
+    @Test func nonDemoRouteOmitsCorsHeaderEvenForAllowedOrigin() async throws {
+        // CORS は /v1/demo/* グループにのみ適用する。他の /v1 パスに漏れていないことを確認する
+        // （sollahiro.com からの Origin であっても、demo 以外は Cloudflare Access 経由のみを想定）。
+        try await withApp(databases: true) { app in
+            let (status, _, headers) = try await sendWithHeaders(
+                app, "/v1/sectors", origin: Api.demoAllowedOrigin)
+            #expect(status == .ok)
+            #expect(headers[.accessControlAllowOrigin].isEmpty)
         }
     }
 }
