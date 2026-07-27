@@ -310,8 +310,9 @@ public extension BltServerContext {
     }
 
     /// Stage 6: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
-    /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし）は
-    /// `not_applicable` / `not_found`、正規化・LLM 失敗は `unknown`（要再試行）。
+    /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
+    /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
+    /// `unknown`（要再試行）。
     func resolveGeographyBreakdown(
         docID: String, consolidatedSales: Double?
     ) async -> BreakdownResolveResult {
@@ -325,6 +326,15 @@ public extension BltServerContext {
         let result = await GeographyBreakdownResolver.resolve(
             geography: geography, consolidatedSales: consolidatedSales, client: geographyChatClient)
         guard let snapshot = result.snapshot else {
+            // Resolver の notFound は「地域注記なし」または LLM の applicable=false。
+            // audit があれば LLM が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
+            // LLM 呼び出し失敗の可能性が高いので unknown（再試行）に落とす。
+            if result.source == .notFound {
+                if result.audit != nil || geography.tables.isEmpty {
+                    return .notApplicable(reason: breakdownNotApplicableNotFound)
+                }
+                return .notApplicable(reason: breakdownNotApplicableUnknown)
+            }
             return .notApplicable(reason: breakdownNotApplicableUnknown)
         }
         return .resolved(
