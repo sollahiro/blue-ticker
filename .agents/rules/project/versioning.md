@@ -99,3 +99,13 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 `companyFinancialsCacheVersion` / `filingSectionsCacheVersion` 等の**現行版**を上げると、既存の Neon 行は全件が一度だけ stale 判定され、次回 `blt-server ingest` で再パース／再計算される。これは想定どおりの移行コスト。XBRL ダウンロードが重い（9MB/件）ため、必要なら `--limit` でバッチ分割して取り込む。
 
 Stage 4 / Stage 5 read は現行版完全一致ではなく各 min servable 以上を返すため、現行版バンプ直後も床以上の旧行は 200 のまま（バンプの崖を避ける）。ingest は引き続き現行版へ収束する。
+
+### 軸分離後の移行（`breakdown-v7` → `breakdown-business-v7` / `breakdown-geography-v7`）
+
+2026-07-27 の軸別 cache_version 分離以前に `breakdown-v7`（共通）で格納されていた **決定的 source**（`xbrl_facts` / `not_applicable`）の行は、初回 ingest で各軸の現行版（`breakdown-business-v7` / `breakdown-geography-v7`）と文字列が一致しないため **一度だけ stale** となり再計算される（`breakdownCacheVersionNumber` は旧 `breakdown-vN` も受理するが、ingest の書き込み先は軸別現行版）。**LLM 経由**（`segment_info_llm` / `geography_llm` 等）は cache_version バンプ非連動のため、needs_review=false の行はこの移行でも据え置き。
+
+business 軸の `businessBreakdownCacheVersion` バンプは geography 軸の行を stale にせず、逆も同様（ingest は軸パラメータごとに独立して staleness 判定する）。
+
+### Stage 5 / extractor 修正と geography LLM 行の再計算
+
+`filingSectionsCacheVersion`（sections-v4 等）のバンプや `BreakdownExtractor` の geography 抽出修正だけでは、**既存の `geography_llm` 行（needs_review=false）は再計算されない**（LLM 行は content_hash + needs_review でのみ再試行。`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。抽出ロジック改善の恩恵を geography LLM 行に届けるには、該当軸の LLM 行を `needs_review=true` に更新するか削除してから `blt-server ingest --stages 6` を実行する（business 軸の `segment_info_llm` も同型）。

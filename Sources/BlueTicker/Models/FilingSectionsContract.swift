@@ -17,6 +17,8 @@ import Foundation
 /// （単一セグメントで報告セグメント開示省略・method == "not_found"）の収益認識関係注記
 /// フォールバックを追加した抽出ロジック変更を反映する。該当企業の Stage 5 `segments` は
 /// 既に `section_keys` に "segments" を含むため、キー集合不一致による自動再抽出の対象にならない。
+/// v3 → v4（2026-07-27）: BreakdownExtractor.extractGeographyInfo の非流動資産表除外と
+/// 収益の分解フォールバック（日本精工型）を反映する抽出ロジック変更。
 public let filingSectionsCacheVersion = "sections-v4"
 
 /// filing-content read（REST）が 200 を返す最低抽出バージョン番号（`sections-vN` の N）。

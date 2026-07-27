@@ -348,14 +348,18 @@ enum BreakdownExtractor {
         )
         // 地域注記側に売上表が残らない（売上省略＋資産表除外）ときだけ、
         // 収益の分解（NotesNetSales）から地域行のある表を拾う。
-        // 売上マーカー無しの正当な地域売上表まで NotesNetSales で上書きしない。
-        if tables.isEmpty {
+        // 単に tables.isEmpty だけでは不十分（地域専用 TextBlock 無しの誤発火を防ぐ）。
+        if tables.isEmpty,
+            hasDedicatedGeographyTextBlock(xbrlDir: xbrlDir)
+                || hasGeographyRevenueOmissionMarker(xbrlDir: xbrlDir)
+        {
             let revenueDecomp = extractFromTextBlocks(
                 xbrlDir: xbrlDir,
                 dedicatedTags: Xbrl.geographyRevenueDecompositionTextBlockTags,
                 mixedTags: [],
                 dedicatedHeading: Xbrl.geographyRevenueDecompositionHeading,
-                mixedKeywords: []
+                mixedKeywords: [],
+                skipGeographyAssetMetricTables: true
             ).filter(tableHasGeographyRegionLabels)
             if !revenueDecomp.isEmpty {
                 tables = revenueDecomp
@@ -364,10 +368,73 @@ enum BreakdownExtractor {
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
     }
 
-    /// markdown に地域名行ラベルが十分あるか（収益分解注記内の無関係な表を落とすため）。
+    /// markdown 表のデータ行先頭セル（行ラベル）に地域名キーワードが十分あるか。
+    /// 列が地域・行が事業の表（収益分解の転置形）は落とす。
     static func tableHasGeographyRegionLabels(_ table: BreakdownTable) -> Bool {
-        let hits = Xbrl.segmentSpecificGeographyLabelKeywordsJa.filter { table.markdown.contains($0) }
+        let labels = rowLabelsFromMarkdown(table.markdown)
+        let hits = labels.filter { label in
+            Xbrl.segmentSpecificGeographyLabelKeywordsJa.contains(where: label.contains)
+        }
         return hits.count >= 2
+    }
+
+    private static let dedicatedGeographyTextBlockTags: Set<String> =
+        Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
+
+    private static func hasDedicatedGeographyTextBlock(xbrlDir: URL) -> Bool {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let collector = TextBlockSAXCollector(targetTags: dedicatedGeographyTextBlockTags)
+            let parser = XMLParser(data: data)
+            parser.delegate = collector
+            parser.parse()
+            if !collector.blocks.isEmpty { return true }
+        }
+        return false
+    }
+
+    /// 地域専用 TextBlock 本文に売上省略マーカー（日本精工型）があるか。
+    private static func hasGeographyRevenueOmissionMarker(xbrlDir: URL) -> Bool {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let collector = TextBlockSAXCollector(targetTags: dedicatedGeographyTextBlockTags)
+            let parser = XMLParser(data: data)
+            parser.delegate = collector
+            parser.parse()
+            for block in collector.blocks where geographyRevenueOmissionMarker(in: block.content) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func geographyRevenueOmissionMarker(in html: String) -> Bool {
+        let text = (try? SwiftSoup.parse(html)).map { bs4Text($0, strip: true) } ?? html
+        let hasOmission = text.contains("記載を省略")
+            || (text.contains("注記") && (text.contains("売上") || text.contains("収益")))
+        guard hasOmission else { return false }
+        return text.contains("売上") || text.contains("収益")
+    }
+
+    /// Markdown 表のデータ行（ヘッダー区切り線の後）から先頭セル＝行ラベルを取り出す。
+    private static func rowLabelsFromMarkdown(_ markdown: String) -> [String] {
+        var labels: [String] = []
+        var pastSeparator = false
+        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = String(line).trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") else { continue }
+            if trimmed.contains("---") {
+                pastSeparator = true
+                continue
+            }
+            if !pastSeparator { continue }
+            let parts = trimmed.split(separator: "|", omittingEmptySubsequences: false)
+            guard parts.count >= 2 else { continue }
+            let label = parts[1].trimmingCharacters(in: .whitespaces)
+            guard !label.isEmpty, XBRLUtils.parseHtmlNumber(label) == nil else { continue }
+            labels.append(label)
+        }
+        return labels
     }
 
     /// 連結財務諸表注記（収益認識関係 / IFRS 売上収益）から「顧客との契約から生じる収益を
@@ -665,9 +732,10 @@ enum BreakdownExtractor {
             if md.isEmpty { continue }
             // 地域売上向け: 有形固定資産合計行など資産専用表を markdown でも落とす
             // （富士フイルム型。セグメント専用経路の golden を変えないよう geography 時のみ）。
-            if skipGeographyAssetMetricTables,
-                Xbrl.noteTableExclusionKeywords.contains(where: md.contains)
-            {
+            let mdExclusionKeywords = skipGeographyAssetMetricTables
+                ? Xbrl.noteTableExclusionKeywords + Xbrl.geographyAssetTableMarkdownExclusionKeywords
+                : Xbrl.noteTableExclusionKeywords
+            if mdExclusionKeywords.contains(where: md.contains) {
                 continue
             }
             let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
@@ -680,16 +748,22 @@ enum BreakdownExtractor {
         return tables
     }
 
-    /// 表の直前（親を遡った兄弟要素含む）の短いキャプション候補（文書順）。
+    /// 表の直前（親を遡った兄弟要素含む）の短いキャプション候補（文書順: 遠い→直近）。
     /// 「所在地別の非流動資産…」のあと `(単位：百万円)` だけの表が挟まると、
     /// 末尾キャプションだけ見ると資産判定を外す（実データ: S100XR0M）。
+    /// table 要素および table を含む要素の全文は候補にしない。
     private static func precedingShortCaptions(before table: Element) -> [String] {
         var current: Element? = table
         var captions: [String] = []
         while let node = current {
             guard let parent = node.parent() else { break }
+            var levelCaptions: [String] = []
             for child in parent.getChildNodes() {
                 guard child.siblingIndex < node.siblingIndex else { break }
+                if let el = child as? Element {
+                    if el.tagName() == "table" { continue }
+                    if (try? el.select("table").first()) != nil { continue }
+                }
                 let text: String
                 if let el = child as? Element {
                     text = bs4Text(el, strip: true)
@@ -699,8 +773,9 @@ enum BreakdownExtractor {
                     continue
                 }
                 if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
-                captions.append(text)
+                levelCaptions.append(text)
             }
+            captions = levelCaptions + captions
             current = parent
             // body / html まで上がると無関係な見出しが混ざるので数段で止める
             if parent.tagName() == "body" || parent.tagName() == "html" { break }
@@ -711,6 +786,7 @@ enum BreakdownExtractor {
     /// 単位表記などを飛ばし、直近の「指標セクション」キャプションを返す。
     /// 資産表のあとに売上表が続く開示では、全先行キャプションに非流動資産が残るため
     /// 単純な any-match だと売上表まで落とす（S100W4MT）。
+    /// `precedingShortCaptions` は文書順（末尾＝直近）なので末尾から探索する。
     private static func nearestGeographyMetricCaption(before table: Element) -> String? {
         let captions = precedingShortCaptions(before: table)
         for text in captions.reversed() {

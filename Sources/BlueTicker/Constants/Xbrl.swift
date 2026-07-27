@@ -577,6 +577,11 @@ enum Xbrl {
         "予想残存期間",                    // ストックオプションの公正価値評価前提
         "総未実現利益",                    // 投資有価証券の公正価値内訳（ASC 320/321 相当）
         "償却累計額",                     // 無形固定資産・有形固定資産の取得原価/償却累計額/帳簿価額の内訳
+    ]
+
+    /// geography 売上候補から落とす資産専用表の markdown キーワード（`skipGeographyAssetMetricTables` 時のみ）。
+    /// 共有 `noteTableExclusionKeywords` には入れず、セグメント経路の golden を変えない。
+    static let geographyAssetTableMarkdownExclusionKeywords: [String] = [
         "有形固定資産合計",                // 地域別有形固定資産表（売上高地域別と隣接、富士フイルム型）
     ]
 

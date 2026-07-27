@@ -631,6 +631,103 @@ import Foundation
         }
     }
 
+    @Test func geographyKeepsSalesTableAfterUnitRowTable() {
+        // クボタ型（S100XR0M）: 売上見出しのあと単位行だけの表が挟まり、
+        // その後に売上表が続く。単位表の全文をキャプション候補に混ぜず、売上表を落とさない。
+        let html =
+            "&lt;h4&gt;外部顧客への売上高&lt;/h4&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;(単位：百万円)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;632476&lt;/td&gt;&lt;td&gt;685184&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;北米&lt;/td&gt;&lt;td&gt;1272503&lt;/td&gt;&lt;td&gt;1218454&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;334079&lt;/td&gt;&lt;td&gt;348954&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;計&lt;/td&gt;&lt;td&gt;3016281&lt;/td&gt;&lt;td&gt;3018891&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;" +
+            "&lt;h4&gt;非流動資産&lt;/h4&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "InformationAboutGeographicalAreasIFRSTextBlock", escapedHtml: html)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.contains { $0.markdown.contains("685184") })
+            #expect(!result.tables.contains { $0.markdown.contains("有形固定資産") })
+        }
+    }
+
+    @Test func geographyKeepsSalesTableAfterAssetTableInSameBlock() {
+        // スズキ型（S100W4MT）: 資産表のあとに売上表が続く。全先行キャプションに非流動資産が
+        // 残っていても、直近キャプションが売上なら売上表を落とさない。
+        let html =
+            "&lt;h4&gt;②　非流動資産&lt;/h4&gt;" +
+            "&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前期&lt;/td&gt;&lt;td&gt;当期&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;100000&lt;/td&gt;&lt;td&gt;110000&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;合計&lt;/td&gt;&lt;td&gt;200000&lt;/td&gt;&lt;td&gt;220000&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;" +
+            "&lt;h4&gt;①　外部顧客への売上高&lt;/h4&gt;" +
+            "&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前期&lt;/td&gt;&lt;td&gt;当期&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;1312842&lt;/td&gt;&lt;td&gt;1491008&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;インド&lt;/td&gt;&lt;td&gt;2235205&lt;/td&gt;&lt;td&gt;2447563&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;連結&lt;/td&gt;&lt;td&gt;5357523&lt;/td&gt;&lt;td&gt;5825161&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = textBlockXml(tag: "InformationAboutGeographicalAreasIFRSTextBlock", escapedHtml: html)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("1491008"))
+            #expect(!result.tables[0].markdown.contains("110000"))
+        }
+    }
+
+    @Test func geographyDoesNotFallbackToRevenueDecompositionWithoutDedicatedBlockOrOmission() {
+        // 地域専用 TextBlock が無く売上省略マーカーも無いときは NotesNetSales へフォールバックしない。
+        let salesHtml =
+            "&lt;p&gt;(1) 収益の分解&lt;/p&gt;" +
+            "&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;産業機械&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;83914&lt;/td&gt;&lt;td&gt;286949&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;65887&lt;/td&gt;&lt;td&gt;183149&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpigp_cor:NotesNetSalesConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(salesHtml)</jpigp_cor:NotesNetSalesConsolidatedFinancialStatementsIFRSTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "not_found")
+            #expect(result.tables.isEmpty)
+        }
+    }
+
+    @Test func tableHasGeographyRegionLabelsRequiresRowLabelsNotMarkdownSubstring() {
+        // 列が地域・行が事業の表は markdown 全体に地域名が含まれても false。
+        let transposed = BreakdownTable(
+            heading: "収益の分解",
+            markdown: """
+                |     | 日本    | 米州    |
+                |-----|-------|-------|
+                | 産業機械 | 100   | 200   |
+                | 自動車  | 300   | 400   |
+                """,
+            period: nil)
+        #expect(!BreakdownExtractor.tableHasGeographyRegionLabels(transposed))
+
+        let geographyRows = BreakdownTable(
+            heading: "収益の分解",
+            markdown: """
+                |     | 産業機械 | 合計  |
+                |-----|------|-----|
+                | 日本  | 100  | 300 |
+                | 米州  | 200  | 400 |
+                """,
+            period: nil)
+        #expect(BreakdownExtractor.tableHasGeographyRegionLabels(geographyRows))
+    }
+
     @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
         // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
         // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`

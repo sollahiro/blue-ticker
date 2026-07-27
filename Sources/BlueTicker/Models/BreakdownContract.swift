@@ -8,6 +8,10 @@
 
 import Foundation
 
+/// company_breakdowns.axis の公開定数（BltServerCore / REST / MCP / ingest で共用）。
+public let breakdownAxisBusiness = "business"
+public let breakdownAxisGeography = "geography"
+
 /// Neon Stage 6 キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
 /// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
@@ -20,7 +24,7 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v7"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
-    axis == "geography" ? geographyBreakdownCacheVersion : businessBreakdownCacheVersion
+    axis == breakdownAxisGeography ? geographyBreakdownCacheVersion : businessBreakdownCacheVersion
 }
 
 /// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
@@ -75,7 +79,7 @@ public let geographyBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
-    axis == "geography" ? geographyBreakdownMinServableVersion : businessBreakdownMinServableVersion
+    axis == breakdownAxisGeography ? geographyBreakdownMinServableVersion : businessBreakdownMinServableVersion
 }
 
 /// `breakdown-business-vN` / `breakdown-geography-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
