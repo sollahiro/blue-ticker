@@ -112,8 +112,10 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
                     == companyHalfFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
-            #expect(versions?["breakdown"] as? String == breakdownCacheVersion)
-            #expect(versions?["breakdown_min_servable"] as? Int == breakdownMinServableVersion)
+            #expect(versions?["breakdown_business"] as? String == businessBreakdownCacheVersion)
+            #expect(versions?["breakdown_business_min_servable"] as? Int == businessBreakdownMinServableVersion)
+            #expect(versions?["breakdown_geography"] as? String == geographyBreakdownCacheVersion)
+            #expect(versions?["breakdown_geography_min_servable"] as? Int == geographyBreakdownMinServableVersion)
         }
     }
 
@@ -233,7 +235,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 

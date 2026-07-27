@@ -54,7 +54,8 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     @Field(key: "content_hash")
     var contentHash: String
 
-    /// 契約スキーマ版（`breakdownCacheVersion`）。破壊的な契約変更のときのみバンプする。
+    /// 契約スキーマ版（軸別: `businessBreakdownCacheVersion` / `geographyBreakdownCacheVersion`）。
+    /// 当該軸の決定的経路の破壊的変更のときのみバンプする。
     @Field(key: "cache_version")
     var cacheVersion: String
 

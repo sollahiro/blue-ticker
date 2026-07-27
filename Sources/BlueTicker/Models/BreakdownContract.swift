@@ -9,10 +9,19 @@
 import Foundation
 
 /// Neon Stage 6 キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
-/// blueTickerVersion 非連動。`BreakdownSnapshotPayload` の意味を変える破壊的変更のみバンプする。
+/// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
+/// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
 /// （content_hash 一致・needs_review=false の行はそのまま据え置く。今後の検討事項8参照）。
-public let breakdownCacheVersion = "breakdown-v7"
+///
+/// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
+public let businessBreakdownCacheVersion = "breakdown-business-v7"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v7"
+
+/// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
+public func breakdownCacheVersion(forAxis axis: String) -> String {
+    axis == "geography" ? geographyBreakdownCacheVersion : businessBreakdownCacheVersion
+}
 
 /// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
 /// `GeographyBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`BreakdownNormalizer`）で
@@ -57,18 +66,28 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 }
 
 /// breakdown read（REST/MCP）が xbrl_facts / not_applicable 経由の行に適用する最低スキーマ
-/// バージョン番号（`breakdown-vN` の N）。**明示指定**。LLM 経由の行（segment_info_llm 等）には
+/// バージョン番号（軸別 `…-vN` の N）。**明示指定**。LLM 経由の行（segment_info_llm 等）には
 /// 適用しない（`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き
 /// 運用のため、cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
-/// 不変条件: `breakdownMinServableVersion` ≤ 現行 `breakdown-vN` の N。
-public let breakdownMinServableVersion = 1
+/// 不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
+public let businessBreakdownMinServableVersion = 1
+public let geographyBreakdownMinServableVersion = 1
 
-/// `breakdown-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+/// 軸に対応する read 床。未知の軸は business 床。
+public func breakdownMinServableVersion(forAxis axis: String) -> Int {
+    axis == "geography" ? geographyBreakdownMinServableVersion : businessBreakdownMinServableVersion
+}
+
+/// `breakdown-business-vN` / `breakdown-geography-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
+/// パース不能なら nil（非 servable 扱い）。
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
-    guard version.hasPrefix("breakdown-v") else { return nil }
-    let suffix = version.dropFirst("breakdown-v".count)
-    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
-    return n
+    let prefixes = ["breakdown-business-v", "breakdown-geography-v", "breakdown-v"]
+    for prefix in prefixes where version.hasPrefix(prefix) {
+        let suffix = version.dropFirst(prefix.count)
+        guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+        return n
+    }
+    return nil
 }
 
 /// xbrl_facts と同じく決定的ロジックで解決され、`cache_version` 世代で再計算・read 可否を
@@ -78,13 +97,14 @@ public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
     source == breakdownSourceXbrlFacts || source == breakdownSourceNotApplicable
 }
 
-/// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が床以上の
+/// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が当該軸の床以上の
 /// ときのみ（バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
 /// docs/breakdown-normalization-concept.md「今後の検討事項8」参照）。
-public func isServableBreakdown(source: String, cacheVersion: String) -> Bool {
+/// `axis` 省略時は business（現行 REST/MCP 公開軸）。
+public func isServableBreakdown(source: String, cacheVersion: String, axis: String = "business") -> Bool {
     guard isVersionGatedBreakdownSource(source) else { return true }
     guard let n = breakdownCacheVersionNumber(cacheVersion) else { return false }
-    return n >= breakdownMinServableVersion
+    return n >= breakdownMinServableVersion(forAxis: axis)
 }
 
 /// BreakdownRow（内部型）の公開 Codable 写経。
