@@ -30,16 +30,24 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
-    /// Stage 6 の html_table 正規化（LLM）に使うクライアント。XAI_API_KEY/XAI_MODEL 未設定時は
-    /// `UnavailableChatClient`（即座に失敗する）が入る。xbrl_facts 経路はこのフィールドに触れない。
-    let chatClient: ChatCompleting
+    /// Stage 6 business 軸の html_table 正規化（LLM）に使うクライアント。
+    /// `XAI_BUSINESS_*`（未設定時は旧 `XAI_*`）が無いときは `UnavailableChatClient`。
+    /// xbrl_facts 経路はこのフィールドに触れない。
+    let businessChatClient: ChatCompleting
+    /// Stage 6 geography 軸の html_table 正規化（LLM）に使うクライアント。
+    /// `XAI_GEOGRAPHY_*` 未設定時は `UnavailableChatClient`（旧 `XAI_*` へのフォールバックなし）。
+    let geographyChatClient: ChatCompleting
 
-    init(apiKey: String, cacheDir: URL, chatClient: ChatCompleting) {
+    init(
+        apiKey: String, cacheDir: URL, businessChatClient: ChatCompleting,
+        geographyChatClient: ChatCompleting
+    ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         self.edinetClient = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
         self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
-        self.chatClient = chatClient
+        self.businessChatClient = businessChatClient
+        self.geographyChatClient = geographyChatClient
     }
 }
 
@@ -52,22 +60,53 @@ private func resolveEdinetApiKey() async -> String? {
     return (envKey?.isEmpty == false) ? envKey : nil
 }
 
-/// Stage 6 の LLM（Chat Completions 互換）エンドポイントを環境変数から解決する。
-/// `DevCLI/LLMClientLoader` と同じ env 変数名（XAI_API_KEY / XAI_MODEL / XAI_BASE_URL）を見るが、
-/// blt-server はヘッドレスサーバーのため ArgumentParser には依存しない別実装を持つ
+/// Stage 6 の LLM 軸。Server / DevCLI で同じ命名規約の env を読む（実装は意図的に別）。
+enum XaiBreakdownAxis: String, Sendable {
+    case business
+    case geography
+}
+
+/// Stage 6 の LLM（Chat Completions 互換）エンドポイントを軸別に環境変数から解決する。
+/// - business: `XAI_BUSINESS_API_KEY` / `XAI_BUSINESS_MODEL` / `XAI_BUSINESS_BASE_URL`。
+///   未設定時は旧 `XAI_API_KEY` / `XAI_MODEL` / `XAI_BASE_URL` にフォールバック。
+/// - geography: `XAI_GEOGRAPHY_API_KEY` / `XAI_GEOGRAPHY_MODEL` / `XAI_GEOGRAPHY_BASE_URL` のみ
+///   （旧 `XAI_*` へのフォールバックなし）。
+/// `DevCLI/LLMClientLoader` と同じ規約だが、blt-server は ArgumentParser 非依存の別実装
 /// （EDINET キー解決が Server/DevCLI で個別に存在するのと同じ設計）。未設定なら nil。
-private func resolveXaiEndpoint() -> ChatCompletionEndpoint? {
+func resolveXaiEndpoint(axis: XaiBreakdownAxis) -> ChatCompletionEndpoint? {
     let env = ProcessInfo.processInfo.environment
-    guard let apiKey = env["XAI_API_KEY"], !apiKey.isEmpty,
-        let model = env["XAI_MODEL"], !model.isEmpty
-    else { return nil }
-    let baseURL = env["XAI_BASE_URL"]?.isEmpty == false ? env["XAI_BASE_URL"]! : Api.xaiBaseURL
+    let prefix: String
+    let allowLegacyFallback: Bool
+    switch axis {
+    case .business:
+        prefix = "XAI_BUSINESS"
+        allowLegacyFallback = true
+    case .geography:
+        prefix = "XAI_GEOGRAPHY"
+        allowLegacyFallback = false
+    }
+    let apiKey =
+        nonEmptyEnv(env["\(prefix)_API_KEY"])
+        ?? (allowLegacyFallback ? nonEmptyEnv(env["XAI_API_KEY"]) : nil)
+    let model =
+        nonEmptyEnv(env["\(prefix)_MODEL"])
+        ?? (allowLegacyFallback ? nonEmptyEnv(env["XAI_MODEL"]) : nil)
+    guard let apiKey, let model else { return nil }
+    let baseURL =
+        nonEmptyEnv(env["\(prefix)_BASE_URL"])
+        ?? (allowLegacyFallback ? nonEmptyEnv(env["XAI_BASE_URL"]) : nil)
+        ?? Api.xaiBaseURL
     return ChatCompletionEndpoint(baseURL: baseURL, apiKey: apiKey, model: model)
 }
 
-/// XAI_API_KEY 未設定時のプレースホルダ。`BusinessBreakdownResolver` は xbrl_facts 経路では
-/// client に触れないため、html_table 経路（LLM 必須）に到達した場合のみネットワーク I/O なしで
-/// 即座に失敗する（呼び出し側は notApplicable として扱う）。
+private func nonEmptyEnv(_ value: String?) -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    return value
+}
+
+/// LLM 未設定時のプレースホルダ。xbrl_facts 経路では client に触れないため、
+/// html_table 経路（LLM 必須）に到達した場合のみネットワーク I/O なしで即座に失敗する
+/// （呼び出し側は notApplicable / unknown として扱う）。
 private struct UnavailableChatClient: ChatCompleting {
     func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
         throw ChatCompletionError.invalidResponse
@@ -76,7 +115,7 @@ private struct UnavailableChatClient: ChatCompleting {
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
-/// XAI_API_KEY 未設定でも Stage 6 の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
+/// LLM キー未設定でも Stage 6 の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
 public func makeBltServerContext() async -> BltServerContext? {
     guard let key = await resolveEdinetApiKey() else {
         return nil
@@ -84,9 +123,15 @@ public func makeBltServerContext() async -> BltServerContext? {
     let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
     let cacheDir = URL(
         fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
-    let chatClient: ChatCompleting =
-        resolveXaiEndpoint().map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
-    return BltServerContext(apiKey: key, cacheDir: cacheDir, chatClient: chatClient)
+    let businessChatClient: ChatCompleting =
+        resolveXaiEndpoint(axis: .business).map { ChatCompletionClient(endpoint: $0) }
+        ?? UnavailableChatClient()
+    let geographyChatClient: ChatCompleting =
+        resolveXaiEndpoint(axis: .geography).map { ChatCompletionClient(endpoint: $0) }
+        ?? UnavailableChatClient()
+    return BltServerContext(
+        apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
+        geographyChatClient: geographyChatClient)
 }
 
 // MARK: - REST Facade
@@ -220,22 +265,20 @@ public extension BltServerContext {
     }
 }
 
-// MARK: - Stage 6 取り込み（事業別内訳）
+// MARK: - Stage 6 取り込み（事業別・地域別内訳）
 
-/// Stage 6 business 軸内訳の解決結果（`computeHalfFinancials` と同じ3値パターン）。
-public enum BusinessBreakdownResult: Sendable {
+/// Stage 6 内訳（business / geography）の解決結果（`computeHalfFinancials` と同じ3値パターン）。
+public enum BreakdownResolveResult: Sendable {
     /// 解決成功。格納用ペイロード一式。
     case resolved(
         payload: BreakdownSnapshotPayload, source: String, contentHash: String,
         audit: LLMBreakdownAuditPayload?)
-    /// 書類の取得・抽出自体は成功したが、当該書類に business 軸の内訳が無い
-    /// （地域別報告セグメントで収益認識注記への swap も失敗、銀行・US-GAAP補助指標のみ等）。
-    /// 失敗ではない（`not_found` は行を作らない方針。docs/breakdown-normalization-concept.md）。
-    /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか
-    /// （issue #130、E/F判定の検知結果明示化。呼び出し元の `Stage6Ingest` が
-    /// `company_breakdowns.not_applicable_reason` へ永続化し、REST/MCP の 404 応答へ反映する）。
+    /// 書類の取得・抽出自体は成功したが、当該軸の内訳が解決できなかった。
+    /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか。
+    /// 呼び出し元の `Stage6Ingest` が `company_breakdowns.not_applicable_reason` へ永続化する
+    /// （business は REST/MCP の 404 応答へ反映。geography の read 公開は未着手）。
     case notApplicable(reason: String)
-    /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。
+    /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。行は作らない。
     case failed
 }
 
@@ -247,19 +290,52 @@ public extension BltServerContext {
     /// （Stage 6 は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
     func resolveBusinessBreakdown(
         docID: String, consolidatedSales: Double?
-    ) async -> BusinessBreakdownResult {
+    ) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
         else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 
-        let hash = breakdownContentHash(segments: segments, consolidatedSales: consolidatedSales)
+        let hash = breakdownContentHash(extracted: segments, consolidatedSales: consolidatedSales)
         let result = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: consolidatedSales, client: chatClient)
+            segments: segments, consolidatedSales: consolidatedSales, client: businessChatClient)
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
                 llmHint: result.audit?.notApplicableReason)
             return .notApplicable(reason: reason.rawValue)
+        }
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+    }
+
+    /// Stage 6: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
+    /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
+    /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
+    /// `unknown`（要再試行）。
+    func resolveGeographyBreakdown(
+        docID: String, consolidatedSales: Double?
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
+        if geography.method == "not_found" {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+
+        let hash = breakdownContentHash(extracted: geography, consolidatedSales: consolidatedSales)
+        let result = await GeographyBreakdownResolver.resolve(
+            geography: geography, consolidatedSales: consolidatedSales, client: geographyChatClient)
+        guard let snapshot = result.snapshot else {
+            // Resolver の notFound は「地域注記なし」または LLM の applicable=false。
+            // audit があれば LLM が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
+            // LLM 呼び出し失敗の可能性が高いので unknown（再試行）に落とす。
+            if result.source == .notFound {
+                if result.audit != nil || geography.tables.isEmpty {
+                    return .notApplicable(reason: breakdownNotApplicableNotFound)
+                }
+                return .notApplicable(reason: breakdownNotApplicableUnknown)
+            }
+            return .notApplicable(reason: breakdownNotApplicableUnknown)
         }
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
@@ -286,17 +362,23 @@ private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdown
         profitDisclosed: a.profitDisclosed, notes: a.notes)
 }
 
-/// 生入力（segments ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
+/// 生入力（ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
 /// スキーマは含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になる。
 /// docs/breakdown-normalization-concept.md「今後の検討事項8」）。ExtractedBreakdown は Codable ではないため
 /// 既存の ExtractedBreakdownPayload 写経を経由する。CryptoKit は Linux（Fly.io 配信）で使えないため、
 /// 非暗号学的だが決定的な FNV-1a を使う（目的は変更検知であり耐改ざん性は不要）。
-private func breakdownContentHash(segments: ExtractedBreakdown, consolidatedSales: Double?) -> String {
+/// business / geography いずれの抽出結果にも使う（軸ごとに入力が異なるためハッシュも分かれる）。
+private func breakdownContentHash(
+    extracted: ExtractedBreakdown, consolidatedSales: Double?
+) -> String {
+    // Codable キー名 `segments` は business 既存行の content_hash 互換のため残す
+    // （geography 入力でも同フィールドへ載せる。スキップ判定には未使用）。
     struct HashInput: Codable {
         let segments: ExtractedBreakdownPayload
         let consolidatedSales: Double?
     }
-    let input = HashInput(segments: extractedBreakdownPayload(from: segments), consolidatedSales: consolidatedSales)
+    let input = HashInput(
+        segments: extractedBreakdownPayload(from: extracted), consolidatedSales: consolidatedSales)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     guard let data = try? encoder.encode(input) else { return "" }

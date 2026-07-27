@@ -32,19 +32,23 @@ struct LLMBreakdownAudit {
 enum GeographyBreakdownLLMNormalizer {
 
     private static let systemPrompt = """
-    あなたは日本の有価証券報告書の「地域ごとの情報」注記から、地域別の外部売上（または相当する主要指標）を構造化するアシスタントです。
+    あなたは日本の有価証券報告書の「地域ごとの情報」注記および、そこに売上が省略されている場合の「収益の分解」（売上高注記の地域別表）から、地域別の外部売上（または相当する主要指標）を構造化するアシスタントです。
 
     入力として、同一書類から抽出された地域別注記の候補テーブル（Markdown形式、見出し・期間ラベル・表インデックス付き）と、
     連結の外部売上高（円単位、比較の分母）が与えられます。
 
     ルール:
     - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・列（多くは「当期」列）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
+    - **非流動資産・有形固定資産など資産の地域別表は対象外**。候補が資産表のみなら applicable=false を返すこと
+    - **「収益の分解」見出しの表**（行が日本・米州等、列が事業セグメント＋合計）は対象内。金額は「合計」（または連結）列を使い、行ラベルは地域名にすること
     - **見出しが2段以上に分かれている表（例: 1段目が「アジア」「米州」等の広い区分、2段目が「タイ」「その他」「米国」「その他」等の細かい区分）では、必ず最も粒度の細かい行を採用すること。広い区分へ集約してはならない。行ラベルは2段目（最も内側）の区分名をそのまま使うこと（例: 「アジア」「タイ」の2段なら「タイ」、「アジア」「その他」の2段なら「アジアその他」のように、上位区分と下位区分をつなげた名前にすること）**
+    - **親地域に金額があり、その下に「うち」「（うち〜）」等の内数行がある表では、内数行は出力しないこと（親地域の金額のみを segment にする）。内数を別 segment に含めると親と二重計上になり分母合計が崩れる**
     - 行ラベルは「日本」「米国」「欧州」「アジア」等の地域名であるべきで、事業名・製品名ではないこと。地域別注記のはずが実際には事業別の表（見出しの取り違え）である場合は applicable=false を返すこと
+    - **行ラベルから「（注）2」「(注1)」「（注１）」「※1」等の脚注マーカーは除去すること（例: 「米州（注）2」→「米州」、「欧州他（注）3」→「欧州他」）。脚注の定義文（例: 米州は米国を除く）が表外やセルにある場合は、その意味を notes に具体的に残すこと**
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
     - 該当する地域別データが候補テーブル群に存在しない場合は applicable=false を返すこと
-    - notes フィールドに、表選択・期間列選択の根拠を短く日本語で記すこと
+    - notes フィールドに、表選択・期間列選択の根拠と、行ラベルから省いた脚注の意味（定義があれば）を短く日本語で記すこと
     """
 
     // 中身は文字列・数値・配列・辞書のリテラルのみで実質不変（生成後に変更しない）。
@@ -112,7 +116,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         let unit = response["unit"] as? String ?? "other"
-        let audit = LLMBreakdownAudit(
+        var audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
@@ -138,15 +142,29 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append("llm_unit_unresolved")
         }
 
+        // 脚注マーカー除去はプロンプト指示が本線。ここは LLM が残したときの決定的保険。
         var rows: [BreakdownRow] = []
+        var strippedFootnotes: [String] = []
         for raw in rawRows {
-            guard let label = raw["label"] as? String,
+            guard let rawLabel = raw["label"] as? String,
                   let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
                   let rowKind = raw["row_kind"] as? String
             else { continue }
+            let label = stripGeographyLabelFootnotes(rawLabel)
+            if label != rawLabel {
+                strippedFootnotes.append("\(rawLabel)→\(label)")
+            }
             rows.append(BreakdownRow(labelRaw: label, amount: rawAmount * unitMultiplier, share: nil, profit: nil, rowKind: rowKind))
         }
         guard !rows.isEmpty else { return (nil, audit) }
+        if !strippedFootnotes.isEmpty {
+            let suffix = "label_footnotes_stripped: " + strippedFootnotes.joined(separator: "; ")
+            audit.notes = audit.notes.isEmpty ? suffix : audit.notes + " / " + suffix
+        }
+
+        // 「うち」内数の二重計上を決定的に除去する（プロンプト指示の保険）。
+        // 親地域（北米等）と内数（米国等）が両方 segment だと分母合計が 1 を超える。
+        rows = dropOfWhichSubsetSegments(rows)
 
         // ラベル妥当性チェック（決定的、追加ガード）。分母一致だけでは表の取り違えを検知できないため
         // （例: 誤って選ばれた事業別表の合計が、地域別表の合計とたまたま一致するケース）。
@@ -162,23 +180,42 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append("geography_label_mismatch")
         }
 
-        // 分母整合性チェック。
-        let segmentShare = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount } / consolidatedSales
+        // 分母整合性チェック。金融・カード等（例: クレディセゾン・野村HD）は地域注記の
+        // 「営業収益」「収益合計（金融費用控除後）」が損益計算書の売上高（総額）と乖離する。
+        // 表自身の subtotal（合計/連結）が segment(+reconciling) 合計と一致するなら注記側に揃える
+        // （business 軸 `SegmentInfoLLMNormalizer` / xbrl_facts の高島屋型と同型）。
+        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
+        let segmentShare = segmentSum / consolidatedSales
+
+        var denominator = consolidatedSales
+        var denominatorTag = "income_statement.sales"
+
         if !denominatorTolerance.contains(segmentShare) {
-            needsReview = true
-            warnings.append("llm_row_sum_mismatch")
+            let internalSum = segmentSum + reconcilingSum
+            let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
+            if let closest = subtotalCandidates.min(by: {
+                abs($0.amount - internalSum) < abs($1.amount - internalSum)
+            }), closest.amount != 0, abs(closest.amount - internalSum) / abs(closest.amount) <= 0.05 {
+                denominator = closest.amount
+                denominatorTag = "llm_table_subtotal"
+                warnings.append("llm_denominator_from_internal_subtotal")
+            } else {
+                needsReview = true
+                warnings.append("llm_row_sum_mismatch")
+            }
         }
 
         let rowsWithShare = rows.map { row -> BreakdownRow in
             var r = row
-            r.share = r.amount / consolidatedSales
+            r.share = r.amount / denominator
             return r
         }
 
         let snapshot = BreakdownSnapshot(
             axis: "geography",
-            denominator: consolidatedSales,
-            denominatorTag: "income_statement.sales",
+            denominator: denominator,
+            denominatorTag: denominatorTag,
             rows: rowsWithShare,
             sourceKind: "html_table",
             needsReview: needsReview,
@@ -198,5 +235,86 @@ enum GeographyBreakdownLLMNormalizer {
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。
+    /// 親を残し内数を落とす（注記の加算構造に合わせる。内数は親金額の内訳開示）。
+    static func dropOfWhichSubsetSegments(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        let segmentIndices = rows.indices.filter { rows[$0].rowKind == "segment" }
+        guard segmentIndices.count >= 2 else { return rows }
+        var drop = Set<Int>()
+        for childIdx in segmentIndices {
+            let child = rows[childIdx]
+            for parentIdx in segmentIndices where parentIdx != childIdx && !drop.contains(parentIdx) {
+                let parent = rows[parentIdx]
+                if isLikelyOfWhichChild(parent: parent, child: child) {
+                    drop.insert(childIdx)
+                    break
+                }
+            }
+        }
+        guard !drop.isEmpty else { return rows }
+        return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+    }
+
+    /// 地域ラベル末尾の脚注マーカーを決定的に除去する（LLM 出力の保険）。
+    /// 例: `米州（注）2` → `米州`、`欧州他(注1)` → `欧州他`、`アジア※１` → `アジア`。
+    /// 「（注記）」のような一般語や、地域名の一部としての「注」は対象外。
+    static func stripGeographyLabelFootnotes(_ label: String) -> String {
+        var s = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        // （注）2 / (注)３ / （注1） / (注１) / （注） / ※1 / ＊２ 等を末尾から繰り返し除去
+        let patterns = [
+            #"[\s　]*[（(]\s*注\s*[）)]\s*[0-9０-９]+$"#,
+            #"[\s　]*[（(]\s*注\s*[0-9０-９]+\s*[）)]$"#,
+            #"[\s　]*[（(]\s*注\s*[）)]$"#,
+            #"[\s　]*[※＊*]\s*[0-9０-９]+$"#,
+        ]
+        var changed = true
+        while changed {
+            changed = false
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+                let range = NSRange(s.startIndex..<s.endIndex, in: s)
+                let replaced = regex.stringByReplacingMatches(in: s, range: range, withTemplate: "")
+                if replaced != s {
+                    s = replaced.trimmingCharacters(in: .whitespacesAndNewlines)
+                    changed = true
+                    break
+                }
+            }
+        }
+        return s
+    }
+
+    /// 親・子のラベル組と金額関係から、「うち」内数行かを判定する。
+    /// 独立した並列地域（例: 「中国」と「アジア他」、「中国」と「その他」）を誤って落とさないよう、
+    /// 内数らしい高い金額比率（親の概ね 80% 以上）を要求する。
+    private static func isLikelyOfWhichChild(parent: BreakdownRow, child: BreakdownRow) -> Bool {
+        guard child.amount > 0, parent.amount > 0 else { return false }
+        // 内数は親以下（丸め誤差のみ許容）。
+        guard child.amount <= parent.amount * 1.001 else { return false }
+        // 兄弟地域の取りこぼし防止: 真の「うち」は親の大部分を占めることが多い
+        // （北米のうち米国 ≈ 95%+）。中国が「アジア他」「その他」と並列な表では比率が低い。
+        guard child.amount >= parent.amount * 0.80 else { return false }
+        return matchesOfWhichLabelPair(parent: parent.labelRaw, child: child.labelRaw)
+    }
+
+    /// 高確度の親地域 ↔ 内数地域ラベル組のみ（並列バケット「その他」「アジア他」は扱わない）。
+    /// 「その他のうち中国」等はプロンプト指示に委ね、決定的フィルタでは触らない。
+    private static func matchesOfWhichLabelPair(parent: String, child: String) -> Bool {
+        let pairs: [(parents: [String], children: [String])] = [
+            (["北米", "米州", "米大陸", "アメリカ"], ["米国", "アメリカ合衆国"]),
+            (["欧州", "ヨーロッパ"], ["フランス", "ドイツ", "英国", "イギリス", "イタリア", "スペイン"]),
+        ]
+        for pair in pairs {
+            let parentHit = pair.parents.contains { parent.contains($0) }
+            let childHit = pair.children.contains { child.contains($0) }
+            // 親ラベル自体が子キーワードだけ、または子が親キーワードを含む場合は組としない
+            // （例: 親「米国」と子「北米」の取り違えを防ぐ）。
+            let parentIsChildOnly = pair.children.contains { parent == $0 || parent.contains($0) }
+                && !pair.parents.contains { parent.contains($0) }
+            if parentHit && childHit && !parentIsChildOnly { return true }
+        }
+        return false
     }
 }

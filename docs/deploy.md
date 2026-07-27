@@ -14,7 +14,7 @@
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared サイドカーの Tunnel トークン。設定時のみコンテナ内で cloudflared を起動 | **secret**（Cloudflare 本番時） |
 | `DATABASE_URL` | Neon Postgres 接続文字列 | **secret**（未設定なら DB なしのステートレス動作） |
 
-`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`・`breakdown`・`breakdown_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
+`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`・`breakdown_business`・`breakdown_business_min_servable`・`breakdown_geography`・`breakdown_geography_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
 
 認証モードは `/v1` 配下で起動時に env から1つ選ばれる: ① `CF_ACCESS_TEAM_DOMAIN` 設定時 → Cloudflare Access、② 未設定 → 無認証（ローカル開発専用・起動時 warning）。**公開デプロイは常に `CF_ACCESS_TEAM_DOMAIN` を設定すること**（Bearer トークンによる self-host 認証は廃止済み）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
 
@@ -215,7 +215,7 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` はステージ別に分けて実行し、既定値は `Stage 4=80` / `Stage 4-half=80` / `Stage 5=50` / `Stage 6=30`（空白解消優先・Mac 負荷抑制。Stage 6 は日経225構成銘柄限定・LLM 呼び出しを伴うためより保守的な既定値）。上書きは env `BLT_INGEST_LIMIT_STAGE4` / `BLT_INGEST_LIMIT_STAGE4_HALF` / `BLT_INGEST_LIMIT_STAGE5` / `BLT_INGEST_LIMIT_STAGE6` を使う。`BLT_INGEST_LIMIT` は後方互換として「4ステージの共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。Stage 6 の LLM 呼び出しには `.env` に `XAI_API_KEY` / `XAI_MODEL`（任意で `XAI_BASE_URL`）も必要（未設定でも xbrl_facts 経路は動くが html_table 経路は notApplicable になる）。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` はステージ別に分けて実行し、既定値は `Stage 4=80` / `Stage 4-half=80` / `Stage 5=50` / `Stage 6=30`（空白解消優先・Mac 負荷抑制。Stage 6 は日経225構成銘柄限定・LLM 呼び出しを伴うためより保守的な既定値）。上書きは env `BLT_INGEST_LIMIT_STAGE4` / `BLT_INGEST_LIMIT_STAGE4_HALF` / `BLT_INGEST_LIMIT_STAGE5` / `BLT_INGEST_LIMIT_STAGE6` を使う。`BLT_INGEST_LIMIT` は後方互換として「4ステージの共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。Stage 6 の LLM 呼び出しには軸別キーが必要: business は `XAI_BUSINESS_API_KEY` / `XAI_BUSINESS_MODEL`（任意で `XAI_BUSINESS_BASE_URL`。未設定時は旧 `XAI_API_KEY` / `XAI_MODEL` / `XAI_BASE_URL` にフォールバック）、geography は `XAI_GEOGRAPHY_API_KEY` / `XAI_GEOGRAPHY_MODEL`（任意で `XAI_GEOGRAPHY_BASE_URL`。旧 `XAI_*` へのフォールバックなし）。未設定でも各軸の xbrl_facts 経路は動くが、html_table 経路は notApplicable（`unknown`・要再試行）になる。`BLT_INGEST_LIMIT_STAGE6` は business / geography 各パスに独立適用される。
 
 > **長時間ランは transient な接続エラーで巻き戻る**: `ingest` をステージ別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（4=80 / 4-half=80 / 5=50 / 6=30）から始め、必要なら `.env` の stage 別 limit を下げる。
 

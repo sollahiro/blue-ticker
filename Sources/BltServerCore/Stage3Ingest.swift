@@ -261,14 +261,22 @@ public func runStage3IngestCommand(
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
         if stages.contains(.breakdowns) {
-            // Stage 6: 日経225構成銘柄（`priority`）の有報について business 軸の事業別内訳を解決・格納。
-            // 上場全体ではなく priority（`assets/nikkei225.csv`）を対象母集団として渡す（LLM 費用抑制）。
-            // 年数は Stage 5 と同じ集合から取るため stage5IngestYears を共用する。
-            let s6 = try await runStage6Ingest(
+            // Stage 6: 日経225構成銘柄（`priority`）の有報について business → geography の順で
+            // 軸別に内訳を解決・格納。上場全体ではなく priority（`assets/nikkei225.csv`）を
+            // 対象母集団として渡す（LLM 費用抑制）。年数は Stage 5 と同じ集合から取るため
+            // stage5IngestYears を共用する。limit は軸ごとの呼び出しで独立に適用する。
+            let s6Business = try await runStage6Ingest(
                 db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
-                explicitCodes: codes, logger: app.logger
+                explicitCodes: codes, axis: breakdownAxisBusiness, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveBusinessBreakdown(
+                    docID: docID, consolidatedSales: consolidatedSales)
+            }
+            let s6Geography = try await runStage6Ingest(
+                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisGeography, logger: app.logger
+            ) { docID, consolidatedSales in
+                await context.resolveGeographyBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
             let coverage = try? await withDbRetry(
@@ -277,14 +285,24 @@ public func runStage3IngestCommand(
                 try await countServableBreakdowns(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "6", attempted: s6.attempted, stored: s6.stored,
-                failed: s6.failed, skipped: s6.skipped,
+                app.logger, stage: "6", attempted: s6Business.attempted, stored: s6Business.stored,
+                failed: s6Business.failed, skipped: s6Business.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6.notApplicable,
-                notApplicableGeographyOnly: s6.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6.notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6.notApplicableUnknown,
-                purged: s6.purged)
+                notApplicable: s6Business.notApplicable,
+                notApplicableGeographyOnly: s6Business.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6Business.notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6Business.notApplicableUnknown,
+                purged: s6Business.purged)
+            logIngestSummary(
+                app.logger, stage: "6-geography", attempted: s6Geography.attempted,
+                stored: s6Geography.stored, failed: s6Geography.failed, skipped: s6Geography.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6Geography.notApplicable,
+                notApplicableGeographyOnly: s6Geography.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6Geography
+                    .notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6Geography.notApplicableUnknown,
+                purged: s6Geography.purged)
         }
     } catch {
         try? await app.asyncShutdown()

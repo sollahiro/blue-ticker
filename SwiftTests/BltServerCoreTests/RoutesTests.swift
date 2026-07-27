@@ -19,7 +19,9 @@ private func makeContext() -> BltServerContext {
         .appendingPathComponent("blt-routes-tests-\(UUID().uuidString)", isDirectory: true)
     let chatClient = ChatCompletionClient(
         endpoint: ChatCompletionEndpoint(baseURL: "", apiKey: "", model: ""))
-    return BltServerContext(apiKey: "test-key", cacheDir: dir, chatClient: chatClient)
+    return BltServerContext(
+        apiKey: "test-key", cacheDir: dir, businessChatClient: chatClient,
+        geographyChatClient: chatClient)
 }
 
 /// ルート登録済みの Application を作って body を実行する。
@@ -110,8 +112,10 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
                     == companyHalfFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
-            #expect(versions?["breakdown"] as? String == breakdownCacheVersion)
-            #expect(versions?["breakdown_min_servable"] as? Int == breakdownMinServableVersion)
+            #expect(versions?["breakdown_business"] as? String == businessBreakdownCacheVersion)
+            #expect(versions?["breakdown_business_min_servable"] as? Int == businessBreakdownMinServableVersion)
+            #expect(versions?["breakdown_geography"] as? String == geographyBreakdownCacheVersion)
+            #expect(versions?["breakdown_geography_min_servable"] as? Int == geographyBreakdownMinServableVersion)
         }
     }
 
@@ -231,7 +235,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 
@@ -341,7 +345,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             row.needsReview = false
             row.source = "xbrl_facts"
             row.contentHash = ""
-            row.cacheVersion = breakdownCacheVersion
+            row.cacheVersion = businessBreakdownCacheVersion
             try await row.create(on: app.db)
 
             let (status, json) = try await send(app, "/v1/demo/companies/7203/financials")
@@ -361,7 +365,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let financials = CompanyFinancials()
@@ -408,7 +412,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
@@ -452,7 +456,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             breakdown.needsReview = false
             breakdown.source = "xbrl_facts"
             breakdown.contentHash = ""
-            breakdown.cacheVersion = breakdownCacheVersion
+            breakdown.cacheVersion = businessBreakdownCacheVersion
             try await breakdown.create(on: app.db)
 
             let financials = CompanyFinancials()
