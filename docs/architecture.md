@@ -105,6 +105,7 @@ flowchart LR
 | `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4）。read 床は `companyFinancialsMinServableVersion` |
 | `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |
 | `GET /v1/companies/{code}/filing-content` | `getFilingContent` | 有報セクション本文・セグメント |
+| `GET /v1/companies/{code}/breakdown?axis=business\|geography` | DB read（`company_breakdowns`。日経225構成銘柄限定。未格納/床未満は404、E/F/unknown等の理由はボディの`reason`で返す） | 事業別・地域別売上の正規化内訳（Stage 6）。business/geography 両軸公開 |
 
 レスポンス契約は単一の Codable 型から導出（`Models/FinancialsContract.swift`）。エラー封筒は `{"error":..., "status":N}`。
 

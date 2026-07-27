@@ -4,7 +4,7 @@
 
 ## 大前提: データはすべて EDINET から再導出可能
 
-Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-half 財務サマリ・Stage 5 セクション本文）と Fly Volume の内容（EDINET 取得キャッシュ）は、いずれも **EDINET API から `sync` → `ingest` で再構築できる導出データ**であり、真実源は EDINET にある。したがってどのサービスの移行・障害でも「失われて困る一次データ」は存在しない。ただし全社バックフィルは数日〜1週間規模かかるため、実移行では dump/restore（後述）で時間を買うのが現実的。
+Neon の全テーブル（Stage 1 書類一覧・Stage 3 RAW fact・Stage 4/4-half 財務サマリ・Stage 5 セクション本文・Stage 6 事業別/地域別内訳）と Fly Volume の内容（EDINET 取得キャッシュ）は、いずれも **EDINET API から `sync` → `ingest` で再構築できる導出データ**であり、真実源は EDINET にある。したがってどのサービスの移行・障害でも「失われて困る一次データ」は存在しない。ただし全社バックフィルは数日〜1週間規模かかるため、実移行では dump/restore（後述）で時間を買うのが現実的。
 
 ## サービス別の結合点と代替可能性
 

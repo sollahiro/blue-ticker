@@ -9,7 +9,7 @@
 | Summarize | Basic | 無料 | 実装済 | 財務諸表の数値 |
 | Filing | Basic | 無料 | 実装済 | 有報のテキスト |
 | Analyze | Basic | 有料 | 実装済 | 独自の分析手法に基づいた計算値 |
-| Breakdown | Basic | 有料 | 実装中 | バックエンド LLM で構造化した事業別・地域別売上 |
+| Breakdown | Basic | 有料 | 実装済 | バックエンド LLM で構造化した事業別・地域別売上 |
 
 現時点のプラン枠は **Basic のみ**（上表の全機能が Basic に属する）。
 
