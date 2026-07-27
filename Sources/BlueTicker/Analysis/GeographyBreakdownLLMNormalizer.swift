@@ -42,10 +42,11 @@ enum GeographyBreakdownLLMNormalizer {
     - **見出しが2段以上に分かれている表（例: 1段目が「アジア」「米州」等の広い区分、2段目が「タイ」「その他」「米国」「その他」等の細かい区分）では、必ず最も粒度の細かい行を採用すること。広い区分へ集約してはならない。行ラベルは2段目（最も内側）の区分名をそのまま使うこと（例: 「アジア」「タイ」の2段なら「タイ」、「アジア」「その他」の2段なら「アジアその他」のように、上位区分と下位区分をつなげた名前にすること）**
     - **親地域に金額があり、その下に「うち」「（うち〜）」等の内数行がある表では、内数行は出力しないこと（親地域の金額のみを segment にする）。内数を別 segment に含めると親と二重計上になり分母合計が崩れる**
     - 行ラベルは「日本」「米国」「欧州」「アジア」等の地域名であるべきで、事業名・製品名ではないこと。地域別注記のはずが実際には事業別の表（見出しの取り違え）である場合は applicable=false を返すこと
+    - **行ラベルから「（注）2」「(注1)」「（注１）」「※1」等の脚注マーカーは除去すること（例: 「米州（注）2」→「米州」、「欧州他（注）3」→「欧州他」）。脚注の定義文（例: 米州は米国を除く）が表外やセルにある場合は、その意味を notes に具体的に残すこと**
     - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
     - 該当する地域別データが候補テーブル群に存在しない場合は applicable=false を返すこと
-    - notes フィールドに、表選択・期間列選択の根拠を短く日本語で記すこと
+    - notes フィールドに、表選択・期間列選択の根拠と、行ラベルから省いた脚注の意味（定義があれば）を短く日本語で記すこと
     """
 
     // 中身は文字列・数値・配列・辞書のリテラルのみで実質不変（生成後に変更しない）。
@@ -113,7 +114,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         let unit = response["unit"] as? String ?? "other"
-        let audit = LLMBreakdownAudit(
+        var audit = LLMBreakdownAudit(
             sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
             periodColumn: response["period_column"] as? String,
             unit: unit,
@@ -139,15 +140,25 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append("llm_unit_unresolved")
         }
 
+        // 脚注マーカー除去はプロンプト指示が本線。ここは LLM が残したときの決定的保険。
         var rows: [BreakdownRow] = []
+        var strippedFootnotes: [String] = []
         for raw in rawRows {
-            guard let label = raw["label"] as? String,
+            guard let rawLabel = raw["label"] as? String,
                   let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
                   let rowKind = raw["row_kind"] as? String
             else { continue }
+            let label = stripGeographyLabelFootnotes(rawLabel)
+            if label != rawLabel {
+                strippedFootnotes.append("\(rawLabel)→\(label)")
+            }
             rows.append(BreakdownRow(labelRaw: label, amount: rawAmount * unitMultiplier, share: nil, profit: nil, rowKind: rowKind))
         }
         guard !rows.isEmpty else { return (nil, audit) }
+        if !strippedFootnotes.isEmpty {
+            let suffix = "label_footnotes_stripped: " + strippedFootnotes.joined(separator: "; ")
+            audit.notes = audit.notes.isEmpty ? suffix : audit.notes + " / " + suffix
+        }
 
         // 「うち」内数の二重計上を決定的に除去する（プロンプト指示の保険）。
         // 親地域（北米等）と内数（米国等）が両方 segment だと分母合計が 1 を超える。
@@ -242,6 +253,35 @@ enum GeographyBreakdownLLMNormalizer {
         }
         guard !drop.isEmpty else { return rows }
         return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+    }
+
+    /// 地域ラベル末尾の脚注マーカーを決定的に除去する（LLM 出力の保険）。
+    /// 例: `米州（注）2` → `米州`、`欧州他(注1)` → `欧州他`、`アジア※１` → `アジア`。
+    /// 「（注記）」のような一般語や、地域名の一部としての「注」は対象外。
+    static func stripGeographyLabelFootnotes(_ label: String) -> String {
+        var s = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        // （注）2 / (注)３ / （注1） / (注１) / （注） / ※1 / ＊２ 等を末尾から繰り返し除去
+        let patterns = [
+            #"[\s　]*[（(]\s*注\s*[）)]\s*[0-9０-９]+$"#,
+            #"[\s　]*[（(]\s*注\s*[0-9０-９]+\s*[）)]$"#,
+            #"[\s　]*[（(]\s*注\s*[）)]$"#,
+            #"[\s　]*[※＊*]\s*[0-9０-９]+$"#,
+        ]
+        var changed = true
+        while changed {
+            changed = false
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+                let range = NSRange(s.startIndex..<s.endIndex, in: s)
+                let replaced = regex.stringByReplacingMatches(in: s, range: range, withTemplate: "")
+                if replaced != s {
+                    s = replaced.trimmingCharacters(in: .whitespacesAndNewlines)
+                    changed = true
+                    break
+                }
+            }
+        }
+        return s
     }
 
     /// 親・子のラベル組と金額関係から、「うち」内数行かを判定する。

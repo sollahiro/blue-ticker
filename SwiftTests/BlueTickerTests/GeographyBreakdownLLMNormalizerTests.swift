@@ -169,4 +169,53 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(snap.warnings.contains("llm_row_sum_mismatch"))
         #expect(snap.denominatorTag == "income_statement.sales")
     }
+
+    @Test("脚注マーカーをラベルから決定的に除去する")
+    func stripsGeographyLabelFootnotes() {
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("米州（注）2") == "米州")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("欧州他（注）3") == "欧州他")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("アジア(注1)") == "アジア")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("中国（注１）") == "中国")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("その他※2") == "その他")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("日本") == "日本")
+        #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("米州（注記）") == "米州（注記）")
+    }
+
+    @Test("LLM が脚注付きラベルを返しても正規化後は除去され audit.notes に残る")
+    func normalizeStripsFootnotesAndRecordsAudit() async throws {
+        let sales = 873_190.0 * Financial.millionYen
+        let tables = [
+            BreakdownTable(
+                heading: "地域ごとの情報",
+                markdown: "| 日本 | アメリカ | 米州（注）2 | 欧州他（注）3 | 合計 |\n",
+                period: "当期")
+        ]
+        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "rows": [
+                ["label": "日本", "amount": 395_472, "row_kind": "segment"],
+                ["label": "アメリカ", "amount": 92_074, "row_kind": "segment"],
+                ["label": "米州（注）2", "amount": 8_482, "row_kind": "segment"],
+                ["label": "欧州他（注）3", "amount": 110_982, "row_kind": "segment"],
+                ["label": "中国", "amount": 170_772, "row_kind": "segment"],
+                ["label": "アジア", "amount": 95_409, "row_kind": "segment"],
+                ["label": "合計", "amount": 873_191, "row_kind": "subtotal"],
+            ],
+            "notes": "帝人型。米州は米国を除く",
+        ]
+        let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
+            geography, consolidatedSales: sales, client: MockChat(response))
+        let snap = try #require(snapshot)
+        let a = try #require(audit)
+        let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(labels == ["日本", "アメリカ", "米州", "欧州他", "中国", "アジア"])
+        #expect(a.notes.contains("label_footnotes_stripped:"))
+        #expect(a.notes.contains("米州（注）2→米州"))
+        #expect(a.notes.contains("欧州他（注）3→欧州他"))
+        #expect(a.notes.contains("帝人型"))
+    }
 }
