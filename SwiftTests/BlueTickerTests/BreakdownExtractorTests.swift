@@ -586,6 +586,51 @@ import Foundation
         }
     }
 
+    @Test func geographyFallsBackToRevenueDecompositionWhenAreasOnlyHaveNonCurrentAssets() {
+        // 日本精工型（S100YFE3）: InformationAboutGeographicalAreas は①売上省略・②非流動資産表のみ。
+        // 地域別売上は NotesNetSales の「収益の分解」マトリクス（行=地域、列=事業+合計）にある。
+        let areasHtml =
+            "&lt;h4&gt;(4) 地域別の情報&lt;/h4&gt;" +
+            "&lt;h4&gt;①　外部顧客への売上高&lt;/h4&gt;" +
+            "&lt;p&gt;「注記22．売上高」に同様の情報を開示しているため、記載を省略しています。&lt;/p&gt;" +
+            "&lt;h4&gt;②　非流動資産&lt;/h4&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前連結会計年度&lt;/td&gt;&lt;td&gt;当連結会計年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;225948&lt;/td&gt;&lt;td&gt;248422&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;32268&lt;/td&gt;&lt;td&gt;38068&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;55282&lt;/td&gt;&lt;td&gt;63268&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;中国&lt;/td&gt;&lt;td&gt;59998&lt;/td&gt;&lt;td&gt;69105&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;その他アジア&lt;/td&gt;&lt;td&gt;36725&lt;/td&gt;&lt;td&gt;39485&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;合計&lt;/td&gt;&lt;td&gt;410224&lt;/td&gt;&lt;td&gt;458350&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let salesHtml =
+            "&lt;p&gt;(1) 収益の分解&lt;/p&gt;" +
+            "&lt;p&gt;当連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;産業機械&lt;/td&gt;&lt;td&gt;自動車&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;83914&lt;/td&gt;&lt;td&gt;156247&lt;/td&gt;&lt;td&gt;286949&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;米州&lt;/td&gt;&lt;td&gt;65887&lt;/td&gt;&lt;td&gt;91543&lt;/td&gt;&lt;td&gt;183149&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;58201&lt;/td&gt;&lt;td&gt;32200&lt;/td&gt;&lt;td&gt;126699&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;中国&lt;/td&gt;&lt;td&gt;112245&lt;/td&gt;&lt;td&gt;66949&lt;/td&gt;&lt;td&gt;194490&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;その他アジア&lt;/td&gt;&lt;td&gt;57242&lt;/td&gt;&lt;td&gt;56364&lt;/td&gt;&lt;td&gt;120355&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;合計&lt;/td&gt;&lt;td&gt;377491&lt;/td&gt;&lt;td&gt;403304&lt;/td&gt;&lt;td&gt;911644&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpigp_cor:InformationAboutGeographicalAreasIFRSTextBlock contextRef="CurrentYearDuration">\(areasHtml)</jpigp_cor:InformationAboutGeographicalAreasIFRSTextBlock>
+            <jpigp_cor:NotesNetSalesConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(salesHtml)</jpigp_cor:NotesNetSalesConsolidatedFinancialStatementsIFRSTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(!result.tables.isEmpty)
+            #expect(result.tables.allSatisfy { $0.heading == "収益の分解" })
+            #expect(result.tables.contains { $0.markdown.contains("911644") })
+            #expect(!result.tables.contains { $0.markdown.contains("458350") })
+        }
+    }
+
     @Test func segmentInfoPrefersDimensionFactsOverTableWhenBothPresent() throws {
         // 実データ検証の回帰（東京海上・キッコーマン・第一三共、issue調査 2026-07-21）:
         // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`

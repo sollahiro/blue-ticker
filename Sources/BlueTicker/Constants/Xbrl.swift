@@ -577,6 +577,14 @@ enum Xbrl {
         "予想残存期間",                    // ストックオプションの公正価値評価前提
         "総未実現利益",                    // 投資有価証券の公正価値内訳（ASC 320/321 相当）
         "償却累計額",                     // 無形固定資産・有形固定資産の取得原価/償却累計額/帳簿価額の内訳
+        "有形固定資産合計",                // 地域別有形固定資産表（売上高地域別と隣接、富士フイルム型）
+    ]
+
+    /// 地域別注記内で「売上」ではなく資産指標の小見出し（日本精工: ①売上省略→②非流動資産）。
+    /// 直前キャプションがこれに当たる表は geography 売上候補から除外する。
+    static let geographyAssetMetricCaptionKeywords: [String] = [
+        "非流動資産",
+        "有形固定資産",
     ]
     // 見出し直後の表が noteTableExclusionKeywords に該当した場合、次の表を何個先まで
     // 試すか（無関係な後続表まで際限なく拾わないための上限）。
@@ -604,14 +612,14 @@ enum Xbrl {
     // 偶然2項目だけ一致した場合の誤検出を避けるための最低一致件数。
     static let noteRowLabelMinOverlapCount = 3
 
-    // 地域別
+    // 地域別（売上・外部顧客向け）。資産のみの TextBlock は含めない
+    // （`PropertyPlantAndEquipmentInformationForEachRegionTextBlock` は有形固定資産専用）。
     static let geographyTextBlockTags: Set<String> = [
         "InformationAboutGeographicalAreasIFRSTextBlock",                  // IFRS
         "InformationAboutGeographicalAreasTextBlock",                       // J-GAAP
         "InformationAboutGeographicalAreasUSGAAPTextBlock",                 // US-GAAP
         "RelatedInformationTextBlock",                                      // J-GAAP 関連情報（混在）
         "RevenuesFromExternalCustomersInformationForEachRegionTextBlock",   // J-GAAP 地域ごとの外部顧客への売上収益
-        "PropertyPlantAndEquipmentInformationForEachRegionTextBlock",       // J-GAAP 地域ごとの有形固定資産
     ]
     static let geographyMixedTextBlockTags: Set<String> = [
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
@@ -622,12 +630,17 @@ enum Xbrl {
         "地域別",
         "所在地別",
     ]
+    /// 地域別売上の開示が「注記22. 売上高」等の収益分解へ省略されている会社向け
+    /// （日本精工: InformationAboutGeographicalAreas は非流動資産のみ。収益の分解に地域×事業マトリクス）。
+    static let geographyRevenueDecompositionTextBlockTags: Set<String> = [
+        "NotesNetSalesConsolidatedFinancialStatementsIFRSTextBlock",
+    ]
+    static let geographyRevenueDecompositionHeading = "収益の分解"
     static let geographyDimensionKeywords: [String] = [
         "GeographicArea",
         "Geography",
         "Country",
         "Region",
-        "NoncurrentAssetsByLocation",
     ]
 
     // 収益認識関係（顧客との契約から生じる収益を分解した情報）。報告セグメントが地域別の会社
