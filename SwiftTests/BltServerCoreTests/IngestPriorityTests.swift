@@ -26,3 +26,30 @@ struct IngestPriorityTests {
         #expect(prioritized(items, codeOf: { $0 }, priorityCodes: ["9984"]) == items)
     }
 }
+
+@Suite("interleaved")
+struct InterleavedTests {
+    @Test("複数バケツをラウンドロビンで束ねる（バケツ間の優先順位・バケツ内の相対順序は維持）")
+    func roundRobinsAcrossBuckets() {
+        let result = interleaved([["a1", "a2"], ["b1", "b2"], ["c1", "c2"]])
+        #expect(result == ["a1", "b1", "c1", "a2", "b2", "c2"])
+    }
+
+    @Test("空バケツはスキップされる")
+    func skipsEmptyBuckets() {
+        let result = interleaved([["a1"], [], ["c1", "c2"]])
+        #expect(result == ["a1", "c1", "c2"])
+    }
+
+    @Test("上位バケツが limit を大きく超える件数でも下位バケツが飢餓状態にならない")
+    func lowerPriorityBucketIsNotStarvedByLargerBucket() {
+        let big = (1...100).map { "big\($0)" }
+        let result = interleaved([big, ["small1"]])
+        #expect(result[1] == "small1")
+    }
+
+    @Test("全バケツが空なら空配列")
+    func allEmptyBucketsProduceEmptyResult() {
+        #expect(interleaved([[String](), [String]()]) == [])
+    }
+}

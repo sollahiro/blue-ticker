@@ -540,6 +540,45 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
+    /// staleHighWater が limit を超える件数存在しても、単純連結
+    /// (`missing + staleHighWater + staleYears + staleVersion`) だと staleVersion は理論上
+    /// 永久に処理されない（starvation）。ラウンドロビン（`interleaved`）で全バケツに毎サイクル
+    /// 一定の進捗を保証していることを確認する（issue 由来: 20日間・6,400枠処理されても
+    /// staleVersion 47社が一切収束しなかった実データ観測から追加）。
+    @Test func ingestDoesNotStarveStaleVersionWhenManyHighWaterCandidatesExist() async throws {
+        try await withMigratedApp { app in
+            let highWaterCodes = ["1000", "2000", "3000", "4000", "5000"]
+            for (i, code) in highWaterCodes.enumerated() {
+                try await seedDocument(
+                    "H\(i)", secCode: "\(code)0", submitDateTime: "2026-01-15 09:00", db: app.db)
+                let pre = CompanyFinancials()
+                pre.id = code
+                pre.response = try makeResponse(code: code, years: 6)
+                pre.cacheVersion = companyFinancialsCacheVersion
+                pre.requestedYears = 6
+                pre.highWater = "2025-06-01 09:00"  // 新規有報あり
+                try await pre.create(on: app.db)
+            }
+
+            try await seedDocument("V0", secCode: "60000", db: app.db)  // high-water 変化なし
+            let staleVersion = CompanyFinancials()
+            staleVersion.id = "6000"
+            staleVersion.response = try makeResponse(code: "6000", years: 6)
+            staleVersion.cacheVersion = "0.0.0"
+            staleVersion.requestedYears = 6
+            staleVersion.highWater = "2025-06-20 09:00"  // seedDocument のデフォルトと一致
+            try await staleVersion.create(on: app.db)
+
+            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 2) { code in
+                fakeSuccess(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 2)
+            let processedVersion = try #require(try await CompanyFinancials.find("6000", on: app.db))
+            #expect(processedVersion.cacheVersion == companyFinancialsCacheVersion)  // 飢餓状態にならず処理される
+        }
+    }
+
     @Test func ingestProcessesPriorityCodesFirstWhenLimited() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)

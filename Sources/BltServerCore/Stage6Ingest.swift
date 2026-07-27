@@ -109,7 +109,8 @@ func runStage6Ingest(
         }
     }
     let candidates = prioritized(
-        missing + flaggedForReview + staleVersion, codeOf: \.code, priorityCodes: priorityCodes)
+        interleaved([missing, flaggedForReview, staleVersion]), codeOf: \.code,
+        priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 
