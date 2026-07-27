@@ -167,23 +167,42 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append("geography_label_mismatch")
         }
 
-        // 分母整合性チェック。
-        let segmentShare = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount } / consolidatedSales
+        // 分母整合性チェック。金融・カード等（例: クレディセゾン・野村HD）は地域注記の
+        // 「営業収益」「収益合計（金融費用控除後）」が損益計算書の売上高（総額）と乖離する。
+        // 表自身の subtotal（合計/連結）が segment(+reconciling) 合計と一致するなら注記側に揃える
+        // （business 軸 `SegmentInfoLLMNormalizer` / xbrl_facts の高島屋型と同型）。
+        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
+        let segmentShare = segmentSum / consolidatedSales
+
+        var denominator = consolidatedSales
+        var denominatorTag = "income_statement.sales"
+
         if !denominatorTolerance.contains(segmentShare) {
-            needsReview = true
-            warnings.append("llm_row_sum_mismatch")
+            let internalSum = segmentSum + reconcilingSum
+            let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
+            if let closest = subtotalCandidates.min(by: {
+                abs($0.amount - internalSum) < abs($1.amount - internalSum)
+            }), closest.amount != 0, abs(closest.amount - internalSum) / abs(closest.amount) <= 0.05 {
+                denominator = closest.amount
+                denominatorTag = "llm_table_subtotal"
+                warnings.append("llm_denominator_from_internal_subtotal")
+            } else {
+                needsReview = true
+                warnings.append("llm_row_sum_mismatch")
+            }
         }
 
         let rowsWithShare = rows.map { row -> BreakdownRow in
             var r = row
-            r.share = r.amount / consolidatedSales
+            r.share = r.amount / denominator
             return r
         }
 
         let snapshot = BreakdownSnapshot(
             axis: "geography",
-            denominator: consolidatedSales,
-            denominatorTag: "income_statement.sales",
+            denominator: denominator,
+            denominatorTag: denominatorTag,
             rows: rowsWithShare,
             sourceKind: "html_table",
             needsReview: needsReview,
