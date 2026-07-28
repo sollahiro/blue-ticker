@@ -603,8 +603,8 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
     @Test func countServableCompanyFinancialsSplitsByReadFloor() async throws {
         try await withMigratedApp { app in
-            // fin-v1: 床(2)未満 → unservable。fin-v2/fin-v4: 床以上 → servable。
-            for (code, version) in [("7203", "fin-v1"), ("6758", "fin-v2"), ("9984", "fin-v4")] {
+            // fin-v3: 床(4)未満 → unservable。fin-v4/fin-v5: 床以上 → servable。
+            for (code, version) in [("7203", "fin-v3"), ("6758", "fin-v4"), ("9984", "fin-v5")] {
                 let row = CompanyFinancials()
                 row.id = code
                 row.response = try makeResponse(code: code, years: 1)
@@ -667,13 +667,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// 床ちょうど（fin-v2）は現行版でなくても 200。
+    /// 床ちょうど（fin-v4）は 200。
     @Test func loadStoredFinancialsAcceptsMinServableVersion() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = try makeResponse(code: "7203", years: 6)
-            row.cacheVersion = "fin-v2"
+            row.cacheVersion = "fin-v4"
             row.requestedYears = 6
             try await row.create(on: app.db)
 
@@ -683,13 +683,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// 床より新しい旧版（fin-v3）も 200。
-    @Test func loadStoredFinancialsAcceptsIntermediateServableVersion() async throws {
+    /// 床判定は現行版との完全一致ではなく数値比較（n >= 床）。将来のバージョン（fin-v5）も 200。
+    @Test func loadStoredFinancialsAcceptsVersionAboveCurrent() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = try makeResponse(code: "7203", years: 6)
-            row.cacheVersion = "fin-v3"
+            row.cacheVersion = "fin-v5"
             row.requestedYears = 6
             try await row.create(on: app.db)
 

@@ -384,8 +384,8 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
     @Test func countServableCompanyHalfFinancialsSplitsByReadFloor() async throws {
         try await withMigratedApp { app in
-            // half-v0: 床(1)未満 → unservable。half-v1/half-v2: 床以上 → servable。
-            for (code, version) in [("7203", "half-v0"), ("6758", "half-v1"), ("9984", "half-v2")] {
+            // half-v1: 床(2)未満 → unservable。half-v2/half-v3: 床以上 → servable。
+            for (code, version) in [("7203", "half-v1"), ("6758", "half-v2"), ("9984", "half-v3")] {
                 let row = CompanyHalfFinancials()
                 row.id = code
                 row.response = try makeHalfResponse(code: code, fyEnds: years3)
@@ -448,13 +448,13 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         }
     }
 
-    /// 床ちょうど（half-v1）は現行版（half-v2）でなくても 200。
+    /// 床ちょうど（half-v2）は 200。
     @Test func loadStoredHalfFinancialsAcceptsMinServableVersion() async throws {
         try await withMigratedApp { app in
             let row = CompanyHalfFinancials()
             row.id = "7203"
             row.response = try makeHalfResponse(code: "7203", fyEnds: years3)
-            row.cacheVersion = "half-v1"
+            row.cacheVersion = "half-v2"
             row.requestedYears = 5
             try await row.create(on: app.db)
 

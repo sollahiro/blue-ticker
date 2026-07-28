@@ -39,7 +39,7 @@ public let companyFinancialsCacheVersion = "fin-v4"
 /// ingest の stale 判定・書き込みは常に `companyFinancialsCacheVersion`。床未満の行は 404。
 /// 床の引き上げは、該当旧版の stale 消化が終わってから行う（引き上げ後に servable 穴を作らない）。
 /// 不変条件: `companyFinancialsMinServableVersion` ≤ 現行 `fin-vN` の N。
-public let companyFinancialsMinServableVersion = 2
+public let companyFinancialsMinServableVersion = 4
 
 /// `fin-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
 public func companyFinancialsCacheVersionNumber(_ version: String) -> Int? {
