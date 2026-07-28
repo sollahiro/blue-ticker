@@ -44,14 +44,19 @@ jobs:
             echo "::error::secrets.BLT_API_DOMAIN が未設定です"
             exit 1
           fi
+          # 無認証の Access 応答は次のいずれか:
+          # - 302 + Location: https://<team>.cloudflareaccess.com/...（ログイン誘導）
+          # - 403 + cf-access-domain / cf-access-aud（Forbidden interstitial。2026-07-28 頃から観測）
+          # どちらもポリシー生存の証拠。単なる 403（WAF 等）と区別するため Access signature を要求する。
           headers=$(curl -sS --max-time 15 -D - -o /dev/null "https://$BLT_API_DOMAIN/healthz")
           http_status=$(printf '%s' "$headers" | head -1 | awk '{print $2}')
           if [ "$http_status" = "200" ]; then
             echo "::error::/healthz が無認証で200を返しました。Access ポリシーが外れている可能性があります。"
             exit 1
           fi
-          if ! printf '%s' "$headers" | grep -qi "cloudflareaccess.com\|Cloudflare-Access"; then
+          if ! printf '%s' "$headers" | grep -qiE 'cloudflareaccess\.com|Cloudflare-Access|cf-access-'; then
             echo "::error::http_status=$http_status ですが Cloudflare Access のチャレンジ signature が確認できません。Tunnel / Access の稼働状況を確認してください。"
+            printf '%s\n' "$headers" | head -n 20
             exit 1
           fi
           echo "OK: 無認証アクセスは Cloudflare Access にブロックされています（http_status=$http_status）"
