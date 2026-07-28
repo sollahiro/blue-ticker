@@ -35,10 +35,10 @@ import Testing
     }
 
     @Test func isServableUsesNumericFloorNotLexicographicOrder() throws {
-        #expect(companyFinancialsMinServableVersion == 2)
+        #expect(companyFinancialsMinServableVersion == 4)
         #expect(isServableCompanyFinancialsCacheVersion("fin-v1") == false)
-        #expect(isServableCompanyFinancialsCacheVersion("fin-v2") == true)
-        #expect(isServableCompanyFinancialsCacheVersion("fin-v3") == true)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v2") == false)
+        #expect(isServableCompanyFinancialsCacheVersion("fin-v3") == false)
         #expect(isServableCompanyFinancialsCacheVersion("fin-v4") == true)
         #expect(isServableCompanyFinancialsCacheVersion("fin-v10") == true)
         #expect(isServableCompanyFinancialsCacheVersion("0.0.0") == false)
