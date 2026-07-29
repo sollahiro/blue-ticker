@@ -143,29 +143,46 @@ DB モデル・ingest・REST・MCP からはまだ呼ばれない（DevCLI か�
 ## Stage 番号とロードマップ上の位置づけ
 
 - **Stage 7（本体・BS/PL/CF）**: 抽出ロジック（`StatementClassifier`/`StatementAnalyzer`）と
-  DevCLI での目視確認まで実装済み。DB モデル・ingest・REST・MCP 配線は未着手。
+  DevCLI での目視確認は実装済み（PR #153）。DB モデル・ingest・REST・MCP 配線は
+  下記「実装方針」に沿って着手（対象は日経225限定でスタート）。
 - **Stage 8（注記）**: 構想のみ。対象注記・正規化方式（LLM 要否含む）は未確定。
 
-## 今回のスコープ外（非ゴール）
+## 今回（PR #153）のスコープ外（非ゴール）
 
-- DB モデル・マイグレーション・`Stage7Ingest.swift`・REST ルート・MCP ツール配線
-- 複数年度の履歴集約（`EdinetDiscovery` を使った複数書類の走査。現状は単一書類＝単一年度のみ）
+PR #153（抽出ロジック・DevCLI）時点の切り分け。~~取り消し線~~の項目は下記「実装方針」で着手済み。
+
+- ~~DB モデル・マイグレーション・`Stage7Ingest.swift`・REST ルート・MCP ツール配線~~ → 着手（下記「実装方針」参照）
+- ~~複数年度の履歴集約~~ → `Stage7Ingest` が `stage5Candidates` の docID 反復で対応（下記「実装方針」2）
 - 注記（Stage 8）の抽出方式・対象注記の確定・LLM 要否判断
 - 企業拡張タグの正規化ポリシー（そのまま出すか、正規化するか）の確定
 - 企業間の科目名統一（Breakdown 的な意味正規化）
 
-## 未決事項（Stage7Ingest 実装時に詰めること）
+## 実装方針（Stage7Ingest/DB/REST/MCP 着手時に確定、2026-07-29）
 
-1. **企業拡張タグの識別**: 契約に「標準タグか拡張タグか」を示すフラグを持たせるか。今回の
-   `StatementLineItem` には未実装（`tag` 文字列のみ）
-2. **`order`（表示順）の取得方法**: presentation linkbase は「どの role に属するか」は
-   `loadRolesByTag` で取れるが、**role 内の並び順（プレゼンテーション順）は現状どの既存関数も
-   保持していない**。`StatementClassifier.extractLineItems` は暫定でタグ名のアルファベット順を
-   採用している。真の表示順対応には `PresentationLinkbaseParser`（`XBRLUtils.swift` 内）の拡張が
-   必要
-3. **複数年度の履歴集約**: `StatementAnalyzer` は単一書類のみ対応。`stage5IngestYears`（6年）を
-   使った複数書類の走査・マージは Stage7Ingest 実装時に追加する
-4. **半期報告書への対応要否**: 通期のみか、`company_half_financials` 同様に半期も対象にするか（今回は保留・通期のみ）
+PR #153 時点の「未決事項」を次のとおり確定した。DB モデル・`Stage7Ingest.swift`・REST・MCP は
+本方針に沿って実装する。
+
+1. **対象母集団**: **日経225限定**（Stage 5/6 と同じ `assets/nikkei225.csv` /
+   `priorityIngestCodes()` を流用）で開始する。Stage 7 は LLM を使わないためコスト制約はないが、
+   実データ検証が158社（ほぼ日経225相当）に留まり、銀行・保険等の特殊タクソノミでの検証が
+   未実施（上記「未検証事項」参照）。母集団拡大（全銘柄化）はこのリスクを解消したうえで
+   `docs/blt-server-roadmap.md` の TODO に別項目として積む
+2. **複数年度の履歴集約**: `StatementAnalyzer` 自体は単一書類のみのままでよい。`Stage7Ingest` は
+   Stage 6 と同じく `stage5Candidates`（`listedCodes × 有報(120) × 直近 stage5IngestYears 件`）を
+   再利用し、返ってきた **docID ごとに `StatementAnalyzer.extract` を1回ずつ呼んで1行として
+   upsert** する（`CompanyBreakdown` と同じ「1書類=1行」設計）。複数年度対応は
+   `StatementAnalyzer` の拡張ではなく ingest 側の候補選定の繰り返しで自然に達成されるため、
+   追加のマージロジックは不要
+3. **`order`（表示順）**: v1 では暫定のタグ名アルファベット順のまま出す。真の表示順対応
+   （`PresentationLinkbaseParser` の拡張）はコストが高く本体（BS/PL/CF が過不足なく揃うこと）と
+   独立に価値があるため、`docs/blt-server-roadmap.md` の将来 TODO へ別項目として切り出す。
+   契約上は `order` フィールドを維持し、常に `nil` を返す
+4. **企業拡張タグの識別フラグ**: v1 では見送る。理由: `XbrlFact`（`Analysis/XBRLTypes.swift`）が
+   qualifiedName の namespace prefix を保持しておらず、追加するには `collectNumericFacts` 系の
+   XML パーサ本体の拡張が要る（影響範囲が `XBRLUtils.swift` 全体に及ぶ）。実需が具体化してから
+   `StatementLineItem` に非破壊で追加できる（Codable のため後方互換）
+5. **半期報告書への対応**: v1 では対象外（通期のみ）。`company_half_financials` 同様の需要が
+   あるかは未確認のため、まず本体（通期）を出荷してから判断する
 
 ## 関連ドキュメント
 
