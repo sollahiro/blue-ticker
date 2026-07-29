@@ -77,7 +77,8 @@ struct DevStatementCommand: AsyncParsableCommand {
         for item in items {
             let label = item.label ?? "(ラベル不明)"
             let unit = item.unit ?? "-"
-            print("  \(item.tag): \(label) = \(item.value) [\(unit)]")
+            let section = item.section.map { "<\($0.rawValue)>" } ?? ""
+            print("  \(item.tag): \(label) = \(item.value) [\(unit)] \(section)")
         }
     }
 }

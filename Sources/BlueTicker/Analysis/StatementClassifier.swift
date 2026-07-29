@@ -35,9 +35,12 @@ enum StatementClassifier {
     /// 連結優先・非連結フォールバック（`ContextHelpers` 既存ロジックを流用。学び: Breakdown Stage 6
     /// と同じく、子会社を持たない小規模企業は連結コンテキストを持たない）。表示順は presentation
     /// linkbase の並び順（`XbrlFact.orderByRole`）を使い、取得できないタグはタグ名のアルファベット順を
-    /// 決定的なフォールバックとする（末尾の `sorted` 参照）。
+    /// 決定的なフォールバックとする（末尾の `sorted` 参照）。`parentTagsByRoleTag`
+    /// （`XBRLUtils.loadPresentationParents`）を渡すと BS/CF 行に `section`（資産/負債/純資産、
+    /// 営業/投資/財務）を付与する。省略時（テスト等）は常に nil。
     static func extractLineItems(
-        from facts: XbrlFactIndex, sectionType: StatementSectionType
+        from facts: XbrlFactIndex, sectionType: StatementSectionType,
+        parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
     ) -> [StatementLineItem] {
         let isInstant = sectionType == .balanceSheet
         var consolidated: [(tag: String, fact: XbrlFact)] = []
@@ -74,10 +77,15 @@ enum StatementClassifier {
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
         let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
+        let parentTagsByTag = primaryRole.flatMap { parentTagsByRoleTag[$0] }
         let items = chosen.map { tag, fact in
             let order = primaryRole.flatMap { fact.orderByRole?[$0] }
+            let section = parentTagsByTag.flatMap {
+                lineSection(for: tag, sectionType: sectionType, parentTagsByTag: $0)
+            }
             return StatementLineItem(
-                tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order)
+                tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order,
+                section: section)
         }
 
         // presentation linkbase の表示順が取れたタグを優先し、取れないタグはタグ名のアルファベット順へ
@@ -123,6 +131,70 @@ enum StatementClassifier {
             let ca = coverage(a)
             let cb = coverage(b)
             return ca == cb ? a < b : ca > cb
+        }
+    }
+
+    /// presentation 祖先タグを辿り、BS は資産/負債/純資産、CF は営業/投資/財務へ分類する。
+    ///
+    /// タグそのものではなく祖先を判定に使う理由: 個々の明細タグ名（例: `CashAndDeposits`）は
+    /// 区分を表す語を含まないことが多く、区分は presentation linkbase 上の親子関係（例:
+    /// `CashAndDeposits` → `CurrentAssetsAbstract` → `AssetsAbstract`）でのみ判定できる
+    /// （`docs/statement-normalization-concept.md`）。`parentTagsByTag` は同一タグが役割内で
+    /// 複数回参照される場合に複数の親を持ちうるため、BFS で全経路を辿り最初に一致した祖先で確定する。
+    private static func lineSection(
+        for tag: String, sectionType: StatementSectionType, parentTagsByTag: [String: Set<String>]
+    ) -> StatementLineSection? {
+        guard sectionType != .incomeStatement else { return nil }
+
+        var frontier: Set<String> = [tag]
+        var visited: Set<String> = []
+        while !frontier.isEmpty {
+            var nextFrontier: Set<String> = []
+            for current in frontier {
+                guard !visited.contains(current) else { continue }
+                visited.insert(current)
+                for parent in parentTagsByTag[current] ?? [] {
+                    if let section = classifyAncestor(parent, sectionType: sectionType) {
+                        return section
+                    }
+                    nextFrontier.insert(parent)
+                }
+            }
+            frontier = nextFrontier
+        }
+        return nil
+    }
+
+    /// 単一の祖先タグ名を区分キーワードへ照合する。判定順は `Constants/Xbrl.swift` のコメント参照
+    /// （BS は NetAssets/Equity → Liabilit → Asset の順が必須）。
+    private static func classifyAncestor(
+        _ ancestorTag: String, sectionType: StatementSectionType
+    ) -> StatementLineSection? {
+        switch sectionType {
+        case .balanceSheet:
+            if Xbrl.statementNetAssetsAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .netAssets
+            }
+            if Xbrl.statementLiabilitiesAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .liabilities
+            }
+            if Xbrl.statementAssetsAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .assets
+            }
+            return nil
+        case .cashFlow:
+            if Xbrl.statementOperatingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .operating
+            }
+            if Xbrl.statementInvestingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .investing
+            }
+            if Xbrl.statementFinancingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
+                return .financing
+            }
+            return nil
+        case .incomeStatement:
+            return nil
         }
     }
 }

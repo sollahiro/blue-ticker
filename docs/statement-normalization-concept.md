@@ -219,6 +219,37 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    `StatementLineItem` に非破壊で追加できる（Codable のため後方互換）
 5. **半期報告書への対応**: v1 では対象外（通期のみ）。`company_half_financials` 同様の需要が
    あるかは未確認のため、まず本体（通期）を出荷してから判断する
+6. **BS/CF 行の区分（`section`）**: v1 のうちに実装した（2026-07-30、`order` と同じ理由で
+   `statement-v2` を切らず v1 のまま拡張。本番 `company_statements` の日経225全社ingestが
+   まだ未実施のため移行コストが実質ゼロ）。`StatementLineItem.section` に BS は
+   `assets`/`liabilities`/`net_assets`、CF は `operating`/`investing`/`financing` を付与する
+   （配列構造は維持。複数区分にまたがる合計行（例: 資産合計＋負債純資産合計）は該当する祖先を
+   持たないため `nil` のまま）。PL の利益段階ラベリング（売上総利益/営業利益/経常利益等）は
+   会計基準を跨いだタグ正規化が必要になり「企業間の科目名統一」そのものに当たるためスコープ外に
+   確定した（2026-07-30、ユーザー合意。Stage 4 の `computeFinancials` の領域）。
+
+   判定は `order` と同じ presentation linkbase を使うが、表示順（同一 role 内の深さ優先番号）とは
+   別に、タグの presentation 祖先を辿って最初にキーワード一致した区分で確定する
+   （`XBRLUtils.loadPresentationParents` / `StatementClassifier.lineSection`）。祖先を辿るのは、
+   BS/CF の区分が個々のタグ名ではなく presentation linkbase 上の親子関係でしか判定できないため
+   （例: `CashAndDeposits` 自体は区分を表す語を含まないが、祖先 `CurrentAssetsAbstract` →
+   `AssetsAbstract` を辿ると「資産」と分かる）。
+
+   **学び1**: BS の判定順は 純資産/資本（`NetAssets`/`Equity`）→ 負債（`Liabilit`）→ 資産（`Asset`）
+   でなければならない。標準タクソノミの `NetAssetsAbstract` は文字列 "Assets" を部分文字列として
+   含むため、資産キーワードを先に判定すると純資産科目（`ShareholdersEquityAbstract` 等の祖先が
+   `NetAssetsAbstract` のケース）が資産へ誤分類される。
+
+   **学び2**: presentation linkbase には、同一タグが役割内で2回 `<loc>` される実データパターンが
+   存在する（実データ検証: ソニー6758 IFRS の `ChangesInWorkingCapitalOpeCFIFRSAbstract`）。
+   1回は明細の見出しとして親を持たない root、もう1回は上位ツリーの子として参照される
+   （親を持つ）。タグ単位で複数の親候補を集合として持たせ、BFS で経路を辿ることで、root 側の
+   出現からでも正しい区分へたどり着けるようにした。
+
+   実データ検証（トヨタ 7203 J-GAAP単体BS＋IFRS連結BS/CF、ソニー 6758 IFRS連結BS/CF、
+   出光興産 5019 J-GAAP連結BS/CF、いずれもキャッシュ済み実XBRL）で DevCLI から目視確認済み。
+   グランドトータル行（`LiabilitiesAndEquityIFRS`/`LiabilitiesAndNetAssets` 等）のみ `section=nil`、
+   それ以外は全行正しく分類されることを確認済み。Cursor CLI（Grok 4.5）監査済み（問題なし）。
 
 ## 関連ドキュメント
 

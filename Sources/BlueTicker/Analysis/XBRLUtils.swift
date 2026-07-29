@@ -44,6 +44,7 @@ private struct BoundedFIFOCache<Key: Hashable, Value> {
 nonisolated(unsafe) private var _labelCache = BoundedFIFOCache<URL, [String: String]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _roleCache = BoundedFIFOCache<URL, [String: [String]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _presentationOrderCache = BoundedFIFOCache<URL, [String: [String: Int]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _presentationParentsCache = BoundedFIFOCache<URL, [String: [String: Set<String>]]>(capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
 
 // MARK: - Core Utilities
@@ -266,6 +267,37 @@ enum XBRLUtils {
         _presentationOrderCache.insert(orderByRoleTag, forKey: dir)
         _cacheLock.unlock()
         return orderByRoleTag
+    }
+
+    /// プレゼンテーションリンクベースから {roleURI: {local_tag: 直接の親タグ集合}} を作る。
+    /// `loadPresentationOrder` と同じ presentationArc からタグ単位の親を辿れるように構築する
+    /// （`StatementClassifier` の BS/CF セクション判定 [資産/負債/純資産、営業/投資/財務] で使用）。
+    /// 同一タグが役割内で複数回 `<loc>` される場合（明細の見出しとして root に立つ出現と、上位ツリーから
+    /// 参照される出現が両方あるケース、実データ検証: ソニー6758 IFRS の
+    /// `ChangesInWorkingCapitalOpeCFIFRSAbstract`）は、双方の出現から見つかった親タグを集合として
+    /// 保持する（タグ単位の集合で親を持たせることで、真の親を持つ出現側の情報を失わない）。
+    /// 同一ディレクトリはキャッシュを返す。
+    static func loadPresentationParents(in dir: URL) -> [String: [String: Set<String>]] {
+        _cacheLock.lock()
+        if let cached = _presentationParentsCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = PresentationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, parents) in parser.parentTagsByRoleTag where parentTagsByRoleTag[role] == nil {
+                parentTagsByRoleTag[role] = parents
+            }
+        }
+
+        _cacheLock.lock()
+        _presentationParentsCache.insert(parentTagsByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return parentTagsByRoleTag
     }
 
     // MARK: Fact Collection
@@ -649,6 +681,8 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
     var roleSetsByTag: [String: Set<String>] = [:]
     /// {roleURI: {local_tag: 表示順}}。role（`<presentationLink>` 単位）ごとに深さ優先走査で確定する。
     var orderByRoleTag: [String: [String: Int]] = [:]
+    /// {roleURI: {local_tag: 直接の親タグ集合}}。`loadPresentationParents` 参照。
+    var parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
 
     private var currentRole = ""
     private var inPresentationLink = false
@@ -730,5 +764,12 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
         for root in roots { visit(root) }
 
         orderByRoleTag[currentRole] = order
+
+        var parentsByTag: [String: Set<String>] = [:]
+        for arc in arcs {
+            guard let parentTag = locTagByLabel[arc.from], let childTag = locTagByLabel[arc.to] else { continue }
+            parentsByTag[childTag, default: []].insert(parentTag)
+        }
+        parentTagsByRoleTag[currentRole] = parentsByTag
     }
 }

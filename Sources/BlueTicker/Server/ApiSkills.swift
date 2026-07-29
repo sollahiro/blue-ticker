@@ -495,7 +495,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 Statement（BS/PL/CF の全項目正規化）。絞り込んだ主要指標だけなら get-financials。
                 日経225構成銘柄のみ。格納済みデータのみ。未抽出は 404、DB 非接続は 503。
-                表示順（order）は v1 では未対応（常に null。タグ名アルファベット順で返る）。
+                表示順（order）は有価証券報告書の presentation linkbase 通り（取得できないタグはタグ名
+                アルファベット順へフォールバック）。BS/CF の各行には区分（section: assets/liabilities/
+                net_assets、operating/investing/financing）が付く場合がある（複数区分にまたがる合計行は
+                null）。PL の行には section を付けない。
                 例: GET /v1/companies/7203/statement?years=3
                 """
         ),

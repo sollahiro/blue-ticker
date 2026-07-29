@@ -47,8 +47,21 @@ public let statementSchemaVersion = 1
 
 // MARK: - 契約型
 
+/// BS/CF 行の区分。貸借対照表は資産/負債/純資産、キャッシュ・フロー計算書は営業/投資/財務活動を表す。
+/// 損益計算書には適用しない（`StatementLineItem.section` は常に nil）。presentation linkbase の
+/// 祖先タグから判定する（`StatementClassifier` 参照）。複数区分にまたがる合計行（例: 資産合計＋
+/// 負債純資産合計）は該当する祖先を持たないため nil になる。
+public enum StatementLineSection: String, Codable, Sendable {
+    case assets
+    case liabilities
+    case netAssets = "net_assets"
+    case operating
+    case investing
+    case financing
+}
+
 /// BS/PL/CF いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
-/// 参照）。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
+/// 参照)。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
 /// 企業拡張タグの区別は docs/statement-normalization-concept.md「未決事項」参照（v1では未対応）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
@@ -56,21 +69,27 @@ public struct StatementLineItem: Codable, Sendable {
     public var value: Double
     public var unit: String?
     public var order: Int?
+    public var section: StatementLineSection?
 
     private enum CodingKeys: String, CodingKey {
-        case tag, label, value, unit, order
+        case tag, label, value, unit, order, section
     }
 
-    public init(tag: String, label: String?, value: Double, unit: String?, order: Int?) {
+    public init(
+        tag: String, label: String?, value: Double, unit: String?, order: Int?,
+        section: StatementLineSection? = nil
+    ) {
         self.tag = tag
         self.label = label
         self.value = value
         self.unit = unit
         self.order = order
+        self.section = section
     }
 
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
-    /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。
+    /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
+    /// 該当する祖先が判定できた行のみ非 nil。
     public func jsonObject() -> [String: Any] {
         [
             "tag": tag,
@@ -78,6 +97,7 @@ public struct StatementLineItem: Codable, Sendable {
             "value": value,
             "unit": unit as Any? ?? NSNull(),
             "order": order as Any? ?? NSNull(),
+            "section": section?.rawValue as Any? ?? NSNull(),
         ]
     }
 }
