@@ -40,9 +40,8 @@ enum StatementClassifier {
         from facts: XbrlFactIndex, sectionType: StatementSectionType
     ) -> [StatementLineItem] {
         let isInstant = sectionType == .balanceSheet
-        let primaryRole = primaryRole(for: facts, sectionType: sectionType)
-        var consolidated: [StatementLineItem] = []
-        var nonConsolidated: [StatementLineItem] = []
+        var consolidated: [(tag: String, fact: XbrlFact)] = []
+        var nonConsolidated: [(tag: String, fact: XbrlFact)] = []
 
         for (tag, ctxMap) in facts {
             for (ctx, fact) in ctxMap {
@@ -65,21 +64,25 @@ enum StatementClassifier {
                 isNonConsolidated = ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: patterns)
                 guard isConsolidated || isNonConsolidated else { continue }
 
-                let order = primaryRole.flatMap { fact.orderByRole?[$0] }
-                let item = StatementLineItem(
-                    tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order)
                 if isConsolidated {
-                    consolidated.append(item)
+                    consolidated.append((tag, fact))
                 } else {
-                    nonConsolidated.append(item)
+                    nonConsolidated.append((tag, fact))
                 }
             }
         }
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
+        let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
+        let items = chosen.map { tag, fact in
+            let order = primaryRole.flatMap { fact.orderByRole?[$0] }
+            return StatementLineItem(
+                tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order)
+        }
+
         // presentation linkbase の表示順が取れたタグを優先し、取れないタグはタグ名のアルファベット順へ
         // フォールバックする（両方 order 無しの場合は従来どおりタグ名順のみで決定的）。
-        return chosen.sorted { lhs, rhs in
+        return items.sorted { lhs, rhs in
             switch (lhs.order, rhs.order) {
             case let (l?, r?): return l == r ? lhs.tag < rhs.tag : l < r
             case (.some, nil): return true
@@ -89,27 +92,37 @@ enum StatementClassifier {
         }
     }
 
-    /// sectionType へ分類される role のうち、facts の中で最も多くのタグが属する role を1つ選ぶ。
+    /// sectionType へ分類される role のうち、実際に採用された（連結優先／非連結フォールバック後の）
+    /// タグ集合を最も多くカバーする role を1つ選ぶ。
     ///
     /// 表示順（`order`）は同一 role（presentation tree）内でしか比較できない。IFRS 企業では
-    /// 「損益計算書」と「包括利益計算書」のように sectionType が同じでも role が複数存在し、
-    /// 一部タグ（当期純利益等）は両方に現れる。role を tag ごとに別々に選ぶと、異なる木の
-    /// order 値が混ざって表示順が破綻する（実データ検証で確認）ため、書類全体で単一の role に固定する。
-    /// 同数の場合は role 名の昇順で決定的に選ぶ。
-    private static func primaryRole(for facts: XbrlFactIndex, sectionType: StatementSectionType) -> String? {
-        var frequency: [String: Int] = [:]
-        for (_, ctxMap) in facts {
-            for (_, fact) in ctxMap {
-                let roles = fact.roles ?? fact.role.map { [$0] } ?? []
-                for r in roles where classify(role: r) == sectionType {
-                    frequency[r, default: 0] += 1
-                }
+    /// 連結BS用role（例: `ConsolidatedStatementOfFinancialPositionIFRS`）とは別に、個別（非連結）
+    /// BS用role（例: `BalanceSheet`、J-GAAPタグ体系）が同じ sectionType に分類されることがある。
+    /// **fact の出現頻度で role を選ぶと誤る**（実データ検証で発見: 個別BS用roleは非連結・複数年度分の
+    /// factを大量に含むため頻度で勝つが、そのroleの木には採用済みの連結IFRSタグが1つも含まれず、
+    /// 全行のorderがnilになりアルファベット順へサイレント劣化していた）。正しい基準は「採用済みタグを
+    /// 実際にどれだけ説明できるか（カバレッジ）」であり、頻度ではない。同数の場合は role 名の昇順で
+    /// 決定的に選ぶ。
+    private static func primaryRole(
+        coveringTagsOf items: [(tag: String, fact: XbrlFact)], sectionType: StatementSectionType
+    ) -> String? {
+        var candidateRoles: Set<String> = []
+        for (_, fact) in items {
+            let roles = fact.roles ?? fact.role.map { [$0] } ?? []
+            for r in roles where classify(role: r) == sectionType {
+                candidateRoles.insert(r)
             }
         }
-        return frequency.keys.min { a, b in
-            let fa = frequency[a] ?? 0
-            let fb = frequency[b] ?? 0
-            return fa == fb ? a < b : fa > fb
+
+        func coverage(_ role: String) -> Int {
+            items.reduce(into: 0) { count, item in
+                if item.fact.orderByRole?[role] != nil { count += 1 }
+            }
+        }
+        return candidateRoles.min { a, b in
+            let ca = coverage(a)
+            let cb = coverage(b)
+            return ca == cb ? a < b : ca > cb
         }
     }
 }

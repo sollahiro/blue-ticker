@@ -186,17 +186,33 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    （xlink:label→タグ）と `<presentationArc>`（from/to/order）から role ごとの木を構築、
    深さ優先で辿った通し番号を `XbrlFact.orderByRole[role]` として持たせる
    （`XBRLUtils.loadPresentationOrder(in:)`）。`StatementClassifier.extractLineItems` は
-   sectionType に分類される role のうち facts 内で最も出現頻度が高い role を「代表 role」
-   として1つに固定し（`primaryRole`）、その role の order のみを使う。
-   **学び**: 表示順は同一 role（presentation tree）内でしか比較できない。IFRS 企業では
+   sectionType に分類される role のうち、実際に採用された（連結優先／非連結フォールバック後の）
+   タグ集合を最も多くカバーする role を「代表 role」として1つに固定し（`primaryRole`）、
+   その role の order のみを使う。
+
+   **学び1**: 表示順は同一 role（presentation tree）内でしか比較できない。IFRS 企業では
    同じ sectionType に複数 role（例: 損益計算書と包括利益計算書）が存在し得るため、
    role をタグごとに別々に選ぶと異なる木の order 値が混ざり順序が壊れる（Sony 6758
    IFRS で発見・回帰防止済み）。role が取得できないタグ（企業拡張タグ等）はタグ名の
-   アルファベット順へフォールバックする。実データ検証（トヨタ 7203 J-GAAP・ソニー 6758
-   IFRS、使い捨て Neon）で BS/PL とも presentation linkbase 通りの並び（現預金→流動資産→
-   固定資産、売上高→売上原価→営業利益→…→当期純利益等）を確認済み。ソニー IFRS の PL は
-   費用の内訳が収益より先に並ぶ等、直感的な「売上高が先頭」という期待と異なる箇所があるが、
-   これは presentation linkbase 上の実際の構造であり抽出側の不具合ではない
+   アルファベット順へフォールバックする。
+
+   **学び2（Opus監査で発見・修正済み）**: 「代表 role」の初版実装は「facts 内で最も出現頻度が
+   高い role」を選ぶ方式だったが、これは誤り。ソニー 6758・トヨタ 7203 の IFRS 連結BSでは、
+   実際に採用される連結IFRSタグ集合をカバーしない別の role（`rol_BalanceSheet`）の方が
+   生fact数（非連結・複数年度分を含む）で勝ってしまい、選ばれたroleの木には採用済みタグが
+   1つも含まれず全行の order が nil になって旧アルファベット順へサイレント劣化していた
+   （キャッシュ済み実XBRL 165件・489セクションのうち16%で発生。Opus監査でのローカルXBRL
+   キャッシュに対する実データ診断で発見）。正しい基準は「頻度」ではなく「実際に採用された
+   タグ集合をどれだけカバーするか」で、`primaryRole` をカバレッジ基準に修正して解消した
+   （回帰テスト: `StatementClassifierTests.choosesRoleByCoverageOfChosenItemsNotByRawMentionFrequency`）。
+   修正後、S100QZT6 は48/48行、S100VWVY は49/49行で order が付与されることをローカル
+   XBRLキャッシュで再検証済み。
+
+   実データ検証（トヨタ 7203 J-GAAP・ソニー 6758 IFRS、使い捨て Neon）で BS/PL とも
+   presentation linkbase 通りの並び（現預金→流動資産→固定資産、売上高→売上原価→
+   営業利益→…→当期純利益等）を確認済み。ソニー IFRS の PL は費用の内訳が収益より
+   先に並ぶ等、直感的な「売上高が先頭」という期待と異なる箇所があるが、これは
+   presentation linkbase 上の実際の構造であり抽出側の不具合ではない
 4. **企業拡張タグの識別フラグ**: v1 では見送る。理由: `XbrlFact`（`Analysis/XBRLTypes.swift`）が
    qualifiedName の namespace prefix を保持しておらず、追加するには `collectNumericFacts` 系の
    XML パーサ本体の拡張が要る（影響範囲が `XBRLUtils.swift` 全体に及ぶ）。実需が具体化してから

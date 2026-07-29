@@ -171,6 +171,37 @@ import Testing
         #expect(items.map(\.order) == [0, 1])
     }
 
+    @Test func choosesRoleByCoverageOfChosenItemsNotByRawMentionFrequency() {
+        // 実データ検証（ソニー/トヨタのIFRS BS、S100QZT6・S100VWVY）で発見したバグの回帰テスト。
+        // 同じ sectionType に2つの role が対応する場合（IFRS企業の連結BS用roleと、同じ role名
+        // キーワードにマッチするが実際は別の目的の role）、全タグがどちらの role にも言及していても、
+        // 実際に採用されたタグ集合を1つもカバーしない「decoy」roleを選んではならない。カバレッジで
+        // 選べば正しい role（realRole）が選ばれ、頻度だけで選ぶ実装に戻すとここで全 order が nil に
+        // 落ちてタグ名アルファベット順（Assets, Cash, Liabilities）へサイレント劣化する。
+        let decoyRole = role("BalanceSheet")
+        let realRole = role("ConsolidatedStatementOfFinancialPositionIFRS")
+        let facts: XbrlFactIndex = [
+            "AssetsIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "AssetsIFRS", contextRef: "CurrentYearInstant", value: 500,
+                    consolidation: "", roles: [decoyRole, realRole], orderByRole: [realRole: 0])
+            ],
+            "CashAndCashEquivalentsIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndCashEquivalentsIFRS", contextRef: "CurrentYearInstant", value: 100,
+                    consolidation: "", roles: [decoyRole, realRole], orderByRole: [realRole: 1])
+            ],
+            "LiabilitiesIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "LiabilitiesIFRS", contextRef: "CurrentYearInstant", value: 200,
+                    consolidation: "", roles: [decoyRole, realRole], orderByRole: [realRole: 2])
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
+        #expect(items.map(\.tag) == ["AssetsIFRS", "CashAndCashEquivalentsIFRS", "LiabilitiesIFRS"])
+        #expect(items.map(\.order) == [0, 1, 2])
+    }
+
     @Test func placesTagsWithoutPresentationOrderAfterOrderedTagsFallingBackToAlphabetical() {
         // order を持つタグを優先し、order が無いタグは末尾でタグ名アルファベット順にする。
         let bsRole = role("ConsolidatedBalanceSheet")
