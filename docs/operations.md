@@ -62,3 +62,4 @@ R2（Stage 2 生 XBRL 退避）は延期中で、現時点でコード上の結�
 | Cloudflare ダッシュボード | Tunnel 定義・Access アプリ / ポリシー・IdP 接続・zone | `deploy.md`「Cloudflare Access」A 節の手順で再作成 |
 | ローカル Mac | launchd plist・`scripts/blt-scheduled-sync.sh` 用 `.env`（`BLT_EDINET_API_KEY`） | plist は `deploy.md`「定期同期」から再作成、キーは再発行。機械 REST は Service Token |
 | Fly Volume `/data` | EDINET 取得キャッシュ | 再取得（コピー不要） |
+| Cloudflare Pages（`sollahiro-apex`） | GitHub 連携（`sollahiro/blue-ticker` の `main` ブランチ、ビルドコマンドなし、出力ディレクトリ `assets/apex-site`）。2026-07-29 にダッシュボードで設定するまでは未接続で、push しても再デプロイされなかった（`wrangler pages deploy` の手動実行が必要だった） | ダッシュボードで再接続: Workers & Pages → `sollahiro-apex` → Settings → Builds & deployments → Connect to Git。`npx wrangler pages project list` の `Git Provider` 列で接続状態を確認できる |
