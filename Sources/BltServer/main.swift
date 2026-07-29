@@ -10,6 +10,12 @@
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
+//   blt-server status-report                                5 ステージ（financials/half_financials/
+//                                                            filing_sections/breakdown_business/
+//                                                            breakdown_geography）のカバレッジ・鮮度を
+//                                                            JSON で stdout へ出力（DB read-only）。
+//                                                            assets/apex-site/status.html 生成用
+//                                                            （scripts/generate-status-page.sh が呼ぶ）。
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
@@ -76,6 +82,8 @@ do {
             exit(1)
         }
         try await runMasterDataUploadCommand(path: argv[2])
+    } else if argv.count > 1, argv[1] == "status-report" {
+        try await runStatusReportCommand()
     } else {
         let args = ServerArgs.parse(argv)
         try await runBltServer(host: args.host, port: args.port)

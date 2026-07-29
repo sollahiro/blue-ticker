@@ -95,4 +95,14 @@ run_with_timeout() {
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage6 --limit $LIMIT_STAGE6 開始 ====="
   run_with_timeout "$BIN" ingest --stages 6 --limit "$LIMIT_STAGE6"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
+
+  # 公開ステータスページ（assets/apex-site/status.html）の再生成・push。
+  # ingest 本体は既に成功しているため、ここが失敗しても全体は失敗扱いにしない
+  # （DATABASE_URL は上の set -a; . .env; set +a で既に読み込み済み）。
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') status-page 生成 開始 ====="
+  if "$REPO/scripts/generate-status-page.sh"; then
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') status-page 生成 完了 ====="
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') WARN: status-page 生成に失敗しました（ingest 本体の成否には影響しません）"
+  fi
 } >> "$LOG" 2>&1
