@@ -43,6 +43,7 @@ private struct BoundedFIFOCache<Key: Hashable, Value> {
 // nonisolated(unsafe): access is serialized by _cacheLock
 nonisolated(unsafe) private var _labelCache = BoundedFIFOCache<URL, [String: String]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _roleCache = BoundedFIFOCache<URL, [String: [String]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _presentationOrderCache = BoundedFIFOCache<URL, [String: [String: Int]]>(capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
 
 // MARK: - Core Utilities
@@ -240,6 +241,33 @@ enum XBRLUtils {
         return result
     }
 
+    /// プレゼンテーションリンクベースから {roleURI: {local_tag: 表示順}} を作る。
+    /// 表示順は role 内の presentationArc（`order` 属性）を深さ優先で辿った 0 始まりの通し番号。
+    /// 同一ディレクトリはキャッシュを返す。role が複数ファイルに跨って定義されることは実データ上
+    /// 想定していないため、同一 role が複数ファイルに現れた場合は最初に見つかったファイルの木を採用する。
+    static func loadPresentationOrder(in dir: URL) -> [String: [String: Int]] {
+        _cacheLock.lock()
+        if let cached = _presentationOrderCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var orderByRoleTag: [String: [String: Int]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = PresentationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, tagOrder) in parser.orderByRoleTag where orderByRoleTag[role] == nil {
+                orderByRoleTag[role] = tagOrder
+            }
+        }
+
+        _cacheLock.lock()
+        _presentationOrderCache.insert(orderByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return orderByRoleTag
+    }
+
     // MARK: Fact Collection
 
     /// XMLファイルから {local_tag: {contextRef: XbrlFact}} の辞書を返す。
@@ -248,7 +276,8 @@ enum XBRLUtils {
         allowedTags: Set<String>? = nil,
         nilAsZero: Bool = false,
         labelsByTag: [String: String] = [:],
-        rolesByTag: [String: [String]] = [:]
+        rolesByTag: [String: [String]] = [:],
+        orderByRoleTag: [String: [String: Int]] = [:]
     ) -> XbrlFactIndex {
         guard let data = try? Data(contentsOf: file) else { return [:] }
         let delegate = XBRLNumericsParser(
@@ -256,6 +285,7 @@ enum XBRLUtils {
             nilAsZero: nilAsZero,
             labelsByTag: labelsByTag,
             rolesByTag: rolesByTag,
+            orderByRoleTag: orderByRoleTag,
             sourceFile: file.lastPathComponent
         )
         let parser = XMLParser(data: data)
@@ -278,13 +308,15 @@ enum XBRLUtils {
         var allFacts: XbrlFactIndex = [:]
         let labelsByTag = loadLabelsByTag(in: dir)
         let rolesByTag = loadRolesByTag(in: dir)
+        let orderByRoleTag = loadPresentationOrder(in: dir)
         for file in findXbrlFiles(in: dir) {
             for (tag, ctxMap) in collectNumericFacts(
                 in: file,
                 allowedTags: nil,
                 nilAsZero: nilAsZero,
                 labelsByTag: labelsByTag,
-                rolesByTag: rolesByTag
+                rolesByTag: rolesByTag,
+                orderByRoleTag: orderByRoleTag
             ) {
                 for (ctx, fact) in ctxMap {
                     allFacts[tag, default: [:]][ctx] = fact
@@ -451,6 +483,7 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
     private let nilAsZero: Bool
     private let labelsByTag: [String: String]
     private let rolesByTag: [String: [String]]
+    private let orderByRoleTag: [String: [String: Int]]
     private let sourceFile: String
 
     private var currentLocalTag = ""
@@ -464,12 +497,14 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         nilAsZero: Bool,
         labelsByTag: [String: String],
         rolesByTag: [String: [String]],
+        orderByRoleTag: [String: [String: Int]] = [:],
         sourceFile: String
     ) {
         self.allowedTags = allowedTags
         self.nilAsZero = nilAsZero
         self.labelsByTag = labelsByTag
         self.rolesByTag = rolesByTag
+        self.orderByRoleTag = orderByRoleTag
         self.sourceFile = sourceFile
     }
 
@@ -526,6 +561,12 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         if !sections.isEmpty { fact.section = sections[0]; fact.sections = sections }
         fact.label = labelsByTag[currentLocalTag]
         fact.sourceFile = sourceFile
+
+        var orderByRole: [String: Int] = [:]
+        for r in roles {
+            if let o = orderByRoleTag[r]?[currentLocalTag] { orderByRole[r] = o }
+        }
+        if !orderByRole.isEmpty { fact.orderByRole = orderByRole }
 
         results[currentLocalTag, default: [:]][currentCtx] = fact
     }
@@ -606,9 +647,14 @@ private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
 
 private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
     var roleSetsByTag: [String: Set<String>] = [:]
+    /// {roleURI: {local_tag: 表示順}}。role（`<presentationLink>` 単位）ごとに深さ優先走査で確定する。
+    var orderByRoleTag: [String: [String: Int]] = [:]
 
     private var currentRole = ""
     private var inPresentationLink = false
+    /// role スコープ内でのみ有効な xlink:label → タグ名（`<loc>` はリンクごとにローカルスコープ）。
+    private var locTagByLabel: [String: String] = [:]
+    private var arcs: [(from: String, to: String, order: Double)] = []
 
     func parser(
         _ parser: XMLParser,
@@ -623,10 +669,18 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
         case "presentationLink":
             currentRole = attributeDict["xlink:role"] ?? ""
             inPresentationLink = !currentRole.isEmpty
+            locTagByLabel = [:]
+            arcs = []
         case "loc" where inPresentationLink:
-            if let href = attributeDict["xlink:href"] {
+            if let href = attributeDict["xlink:href"], let label = attributeDict["xlink:label"] {
                 let tag = XBRLUtils.conceptLocalName(from: href)
                 roleSetsByTag[tag, default: []].insert(currentRole)
+                locTagByLabel[label] = tag
+            }
+        case "presentationArc" where inPresentationLink:
+            if let from = attributeDict["xlink:from"], let to = attributeDict["xlink:to"] {
+                let order = Double(attributeDict["order"] ?? "") ?? 0
+                arcs.append((from: from, to: to, order: order))
             }
         default:
             break
@@ -639,8 +693,42 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
         namespaceURI: String?,
         qualifiedName qName: String?
     ) {
-        if XBRLUtils.localName(of: elementName) == "presentationLink" {
-            inPresentationLink = false
+        guard XBRLUtils.localName(of: elementName) == "presentationLink" else { return }
+        inPresentationLink = false
+        defer { locTagByLabel = [:]; arcs = [] }
+        guard !currentRole.isEmpty, !locTagByLabel.isEmpty, orderByRoleTag[currentRole] == nil else { return }
+
+        var childrenByFrom: [String: [(order: Double, to: String)]] = [:]
+        var hasIncoming: Set<String> = []
+        for arc in arcs {
+            childrenByFrom[arc.from, default: []].append((arc.order, arc.to))
+            hasIncoming.insert(arc.to)
         }
+        for label in childrenByFrom.keys {
+            childrenByFrom[label]?.sort { $0.order < $1.order }
+        }
+
+        // ルート = どの arc の to にもならない label（複数ある場合は label 名で決定的にソート）。
+        let roots = locTagByLabel.keys.filter { !hasIncoming.contains($0) }.sorted()
+
+        var order: [String: Int] = [:]
+        var counter = 0
+        var visiting: Set<String> = []
+
+        func visit(_ label: String) {
+            guard !visiting.contains(label) else { return }
+            visiting.insert(label)
+            defer { visiting.remove(label) }
+            if let tag = locTagByLabel[label], order[tag] == nil {
+                order[tag] = counter
+                counter += 1
+            }
+            for child in childrenByFrom[label] ?? [] {
+                visit(child.to)
+            }
+        }
+        for root in roots { visit(root) }
+
+        orderByRoleTag[currentRole] = order
     }
 }

@@ -101,8 +101,9 @@ Stage 6 同様 LLM フォールバックが必要になる可能性が高く、s
 
 - `Analysis/StatementClassifier.swift`: role → BS/PL/CF 判定（`classify(role:)`）と、
   fact index から指定 section type の当期・連結優先／非連結フォールバック行を抽出する
-  `extractLineItems(from:sectionType:)`。表示順は presentation linkbase の並び順を
-  取得できないため、暫定でタグ名のアルファベット順を採用（「未決事項」参照）
+  `extractLineItems(from:sectionType:)`。表示順は presentation linkbase の実際の並び順
+  （`XBRLUtils.loadPresentationOrder` / `XbrlFact.orderByRole`）を使い、取得できないタグは
+  タグ名のアルファベット順へフォールバックする（2026-07-30、「実装方針」3 で確定）
 - `Services/StatementAnalyzer.swift`: 単一書類（docID）の XBRL をダウンロードし、要求された
   statement type だけを `StatementClassifier` で抽出して `StatementYear` を返す。
   `IndividualAnalyzer`（Stage 4）と異なり複数年度の履歴集約は行わない（1書類＝1年度分のみ）
@@ -177,10 +178,25 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    upsert** する（`CompanyBreakdown` と同じ「1書類=1行」設計）。複数年度対応は
    `StatementAnalyzer` の拡張ではなく ingest 側の候補選定の繰り返しで自然に達成されるため、
    追加のマージロジックは不要
-3. **`order`（表示順）**: v1 では暫定のタグ名アルファベット順のまま出す。真の表示順対応
-   （`PresentationLinkbaseParser` の拡張）はコストが高く本体（BS/PL/CF が過不足なく揃うこと）と
-   独立に価値があるため、`docs/blt-server-roadmap.md` の将来 TODO へ別項目として切り出す。
-   契約上は `order` フィールドを維持し、常に `nil` を返す
+3. **`order`（表示順）**: v1 のうちに真の表示順対応を実装した（2026-07-30。本番に
+   `company_statements` の行がまだ0件だった＝バージョンバンプの移行コストが実質ゼロだった
+   ため、`statement-v2` を切らず v1 のまま拡張した。`.agents/rules/project/versioning.md`
+   の「抽出ロジック変更時にバンプ」原則より、移行コストを判断材料に優先した）。
+   `Analysis/XBRLUtils.swift` の `PresentationLinkbaseParser` を拡張し、`<loc>`
+   （xlink:label→タグ）と `<presentationArc>`（from/to/order）から role ごとの木を構築、
+   深さ優先で辿った通し番号を `XbrlFact.orderByRole[role]` として持たせる
+   （`XBRLUtils.loadPresentationOrder(in:)`）。`StatementClassifier.extractLineItems` は
+   sectionType に分類される role のうち facts 内で最も出現頻度が高い role を「代表 role」
+   として1つに固定し（`primaryRole`）、その role の order のみを使う。
+   **学び**: 表示順は同一 role（presentation tree）内でしか比較できない。IFRS 企業では
+   同じ sectionType に複数 role（例: 損益計算書と包括利益計算書）が存在し得るため、
+   role をタグごとに別々に選ぶと異なる木の order 値が混ざり順序が壊れる（Sony 6758
+   IFRS で発見・回帰防止済み）。role が取得できないタグ（企業拡張タグ等）はタグ名の
+   アルファベット順へフォールバックする。実データ検証（トヨタ 7203 J-GAAP・ソニー 6758
+   IFRS、使い捨て Neon）で BS/PL とも presentation linkbase 通りの並び（現預金→流動資産→
+   固定資産、売上高→売上原価→営業利益→…→当期純利益等）を確認済み。ソニー IFRS の PL は
+   費用の内訳が収益より先に並ぶ等、直感的な「売上高が先頭」という期待と異なる箇所があるが、
+   これは presentation linkbase 上の実際の構造であり抽出側の不具合ではない
 4. **企業拡張タグの識別フラグ**: v1 では見送る。理由: `XbrlFact`（`Analysis/XBRLTypes.swift`）が
    qualifiedName の namespace prefix を保持しておらず、追加するには `collectNumericFacts` 系の
    XML パーサ本体の拡張が要る（影響範囲が `XBRLUtils.swift` 全体に及ぶ）。実需が具体化してから

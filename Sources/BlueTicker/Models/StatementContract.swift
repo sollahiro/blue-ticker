@@ -47,8 +47,9 @@ public let statementSchemaVersion = 1
 
 // MARK: - 契約型
 
-/// BS/PL/CF いずれかの1行分。標準タグ・企業拡張タグの区別や表示順（`order`）の取得方法は
-/// docs/statement-normalization-concept.md「未決事項」参照（Stage 7 実装時に確定）。
+/// BS/PL/CF いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
+/// 参照）。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
+/// 企業拡張タグの区別は docs/statement-normalization-concept.md「未決事項」参照（v1では未対応）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
     public var label: String?
@@ -68,8 +69,8 @@ public struct StatementLineItem: Codable, Sendable {
         self.order = order
     }
 
-    /// REST/MCP 応答用 JSON オブジェクト。`order` は v1 では常に nil（未対応、
-    /// docs/statement-normalization-concept.md「実装方針」3）。
+    /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
+    /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。
     public func jsonObject() -> [String: Any] {
         [
             "tag": tag,

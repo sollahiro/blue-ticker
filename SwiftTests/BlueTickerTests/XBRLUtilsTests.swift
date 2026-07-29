@@ -168,4 +168,58 @@ import Foundation
         let firstAgain = XBRLUtils.loadLabelsByTag(in: dirs[0])
         #expect(firstAgain["NetSales"] == "売上高")
     }
+
+    // MARK: - Presentation linkbase 表示順（loadPresentationOrder）
+
+    private static let incomeStatementRole =
+        "http://disclosure.edinet-fsa.go.jp/role/jppfs/rol_ConsolidatedStatementOfIncome"
+
+    /// Root(Abstract) → NetSales(order 1) → CostOfSales(order 2) → GrossProfit(order 3) の
+    /// 最小プレゼンテーションリンクベース（_pre.xml）を生成する。
+    private static func makePresentationLinkbase() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:presentationLink xlink:type="extended" xlink:role="\(incomeStatementRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_StatementOfIncomeAbstract" xlink:label="loc_Root"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetSales" xlink:label="loc_NetSales"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CostOfSales" xlink:label="loc_CostOfSales"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_GrossProfit" xlink:label="loc_GrossProfit"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_Root" xlink:to="loc_NetSales" order="1"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_Root" xlink:to="loc_CostOfSales" order="2"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_Root" xlink:to="loc_GrossProfit" order="3"/>
+          </link:presentationLink>
+        </link:linkbase>
+        """
+    }
+
+    /// presentationArc の order 属性を深さ優先で辿り、role 内の表示順を 0 始まりの通し番号として復元する。
+    @Test func loadPresentationOrderReconstructsDepthFirstOrderFromArcs() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_pre.xml": Self.makePresentationLinkbase()]
+        ) { dir in
+            let orderByRoleTag = XBRLUtils.loadPresentationOrder(in: dir)
+            let order = try #require(orderByRoleTag[Self.incomeStatementRole])
+
+            #expect(order["StatementOfIncomeAbstract"] == 0, "root が最初に訪問される")
+            let netSales = try #require(order["NetSales"])
+            let costOfSales = try #require(order["CostOfSales"])
+            let grossProfit = try #require(order["GrossProfit"])
+            #expect(netSales < costOfSales)
+            #expect(costOfSales < grossProfit)
+        }
+    }
+
+    /// 同一 dir への複数回の要求で常に同じ結果を返すこと（loadLabelsByTag と同型のキャッシュ挙動）。
+    @Test func loadPresentationOrderReturnsSameResultOnRepeatedCalls() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_pre.xml": Self.makePresentationLinkbase()]
+        ) { dir in
+            let first = XBRLUtils.loadPresentationOrder(in: dir)
+            let second = XBRLUtils.loadPresentationOrder(in: dir)
+            #expect(first == second)
+        }
+    }
 }

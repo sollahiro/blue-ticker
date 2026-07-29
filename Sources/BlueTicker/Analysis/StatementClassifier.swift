@@ -33,13 +33,14 @@ enum StatementClassifier {
     /// fact index から指定した statement type の当期・行一覧を抽出する。
     ///
     /// 連結優先・非連結フォールバック（`ContextHelpers` 既存ロジックを流用。学び: Breakdown Stage 6
-    /// と同じく、子会社を持たない小規模企業は連結コンテキストを持たない）。表示順（presentation
-    /// linkbase の並び順）は現状取得できないため、タグ名のアルファベット順を暫定の決定的順序とする
-    /// （docs/statement-normalization-concept.md「未決事項」）。
+    /// と同じく、子会社を持たない小規模企業は連結コンテキストを持たない）。表示順は presentation
+    /// linkbase の並び順（`XbrlFact.orderByRole`）を使い、取得できないタグはタグ名のアルファベット順を
+    /// 決定的なフォールバックとする（末尾の `sorted` 参照）。
     static func extractLineItems(
         from facts: XbrlFactIndex, sectionType: StatementSectionType
     ) -> [StatementLineItem] {
         let isInstant = sectionType == .balanceSheet
+        let primaryRole = primaryRole(for: facts, sectionType: sectionType)
         var consolidated: [StatementLineItem] = []
         var nonConsolidated: [StatementLineItem] = []
 
@@ -64,8 +65,9 @@ enum StatementClassifier {
                 isNonConsolidated = ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: patterns)
                 guard isConsolidated || isNonConsolidated else { continue }
 
+                let order = primaryRole.flatMap { fact.orderByRole?[$0] }
                 let item = StatementLineItem(
-                    tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: nil)
+                    tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order)
                 if isConsolidated {
                     consolidated.append(item)
                 } else {
@@ -75,6 +77,39 @@ enum StatementClassifier {
         }
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
-        return chosen.sorted { $0.tag < $1.tag }
+        // presentation linkbase の表示順が取れたタグを優先し、取れないタグはタグ名のアルファベット順へ
+        // フォールバックする（両方 order 無しの場合は従来どおりタグ名順のみで決定的）。
+        return chosen.sorted { lhs, rhs in
+            switch (lhs.order, rhs.order) {
+            case let (l?, r?): return l == r ? lhs.tag < rhs.tag : l < r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            case (nil, nil): return lhs.tag < rhs.tag
+            }
+        }
+    }
+
+    /// sectionType へ分類される role のうち、facts の中で最も多くのタグが属する role を1つ選ぶ。
+    ///
+    /// 表示順（`order`）は同一 role（presentation tree）内でしか比較できない。IFRS 企業では
+    /// 「損益計算書」と「包括利益計算書」のように sectionType が同じでも role が複数存在し、
+    /// 一部タグ（当期純利益等）は両方に現れる。role を tag ごとに別々に選ぶと、異なる木の
+    /// order 値が混ざって表示順が破綻する（実データ検証で確認）ため、書類全体で単一の role に固定する。
+    /// 同数の場合は role 名の昇順で決定的に選ぶ。
+    private static func primaryRole(for facts: XbrlFactIndex, sectionType: StatementSectionType) -> String? {
+        var frequency: [String: Int] = [:]
+        for (_, ctxMap) in facts {
+            for (_, fact) in ctxMap {
+                let roles = fact.roles ?? fact.role.map { [$0] } ?? []
+                for r in roles where classify(role: r) == sectionType {
+                    frequency[r, default: 0] += 1
+                }
+            }
+        }
+        return frequency.keys.min { a, b in
+            let fa = frequency[a] ?? 0
+            let fb = frequency[b] ?? 0
+            return fa == fb ? a < b : fa > fb
+        }
     }
 }

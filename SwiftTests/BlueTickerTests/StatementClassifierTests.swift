@@ -149,4 +149,49 @@ import Testing
         let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
         #expect(items.map(\.tag) == ["CashAndDeposits", "TotalAssets"])
     }
+
+    @Test func sortsResultsByPresentationOrderWhenAvailable() {
+        // タグ名のアルファベット順（CashAndDeposits < TotalAssets）とは逆の presentation 順
+        // （TotalAssets が先）を与え、order が優先されることを確認する。
+        let bsRole = role("ConsolidatedBalanceSheet")
+        let facts: XbrlFactIndex = [
+            "TotalAssets": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "TotalAssets", contextRef: "CurrentYearInstant", value: 500,
+                    consolidation: "", role: bsRole, orderByRole: [bsRole: 0])
+            ],
+            "CashAndDeposits": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndDeposits", contextRef: "CurrentYearInstant", value: 1_000,
+                    consolidation: "", role: bsRole, orderByRole: [bsRole: 1])
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
+        #expect(items.map(\.tag) == ["TotalAssets", "CashAndDeposits"])
+        #expect(items.map(\.order) == [0, 1])
+    }
+
+    @Test func placesTagsWithoutPresentationOrderAfterOrderedTagsFallingBackToAlphabetical() {
+        // order を持つタグを優先し、order が無いタグは末尾でタグ名アルファベット順にする。
+        let bsRole = role("ConsolidatedBalanceSheet")
+        let facts: XbrlFactIndex = [
+            "TotalAssets": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "TotalAssets", contextRef: "CurrentYearInstant", value: 500,
+                    consolidation: "", role: bsRole, orderByRole: [bsRole: 5])
+            ],
+            "ZExtensionTag": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "ZExtensionTag", contextRef: "CurrentYearInstant", value: 10,
+                    consolidation: "", role: bsRole)
+            ],
+            "AExtensionTag": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "AExtensionTag", contextRef: "CurrentYearInstant", value: 20,
+                    consolidation: "", role: bsRole)
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
+        #expect(items.map(\.tag) == ["TotalAssets", "AExtensionTag", "ZExtensionTag"])
+    }
 }
