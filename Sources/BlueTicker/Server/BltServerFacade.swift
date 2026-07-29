@@ -257,6 +257,17 @@ public extension BltServerContext {
         await masterDataManager.listedCodes()
     }
 
+    /// Stage 7（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。決定論のみ（LLM不要）。
+    /// `extractFilingSections`（Stage 5）と同型: 1書類分のみを扱い、複数年度の履歴集約・
+    /// 「対象外」判定は行わない（Stage7Ingest 実装時に code+years 単位のラッパーを追加する想定。
+    /// docs/statement-normalization-concept.md）。ダウンロード失敗は nil（戻り値パターン）。
+    func extractStatement(
+        docID: String, statementTypes: Set<StatementSectionType> = Set(StatementSectionType.allCases)
+    ) async -> StatementYear? {
+        let analyzer = StatementAnalyzer(edinetClient: edinetClient)
+        return await analyzer.extract(docID: docID, statementTypes: statementTypes)
+    }
+
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
     /// Stage 4/4-half/5 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
     /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。

@@ -164,6 +164,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。E/F判定（地域のみ・単一セグメント記載省略）の検知結果明示化はDBスキーマ・REST/MCP応答まで反映済み（issue #130/#132、`source="not_applicable"`プレースホルダ行＋404ボディの`reason`フィールド）。html_table経由でLLMがgeography-only等と判定したケースがunknownに落ちる分類漏れも解消済み（issue #135）。オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103、PR #126）、ZOZO/ベイカレント/JPXの非収益OperatingSegmentsAxis facts誤判定（issue #137、PR #138）、野村の金融費用控除後分母取り違え（issue #105、PR #109で分母をセグメント表小計へフォールバックする方式で解消済み）、資生堂型の地域facts併存によるE/F誤判定（PR #139）も解消済み。日経225は225/225社が最低1件ingest済み（2026-07-26時点）。geography 軸の **Neon ingest 配線は PR #141**（軸別 LLM キー `XAI_BUSINESS_*`/`XAI_GEOGRAPHY_*`、`GeographyBreakdownResolver`、Stage6 を business→geography の2パス）。**REST/MCP の geography 公開は 2026-07-27 に解禁**（公開ゲート＝使い捨て Neon（Stage6-devブランチ）で最新有報224/224社を確認し `needs_review=true` とあいまい失敗が0を確認済み。正当欠測 `not_found` は別カウント。直近の抽出修正3件（NSK型収益分解フォールバック・クボタ型キャプション順序・スズキ型資産表除外）は実データで再検証しゲート判定に影響しないことを確認）。構想は `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価
+- [ ] Stage 7/8: Statement（財務諸表 BS/PL/CF 完全正規化＋注記）。現状は設計・契約型のみ（`docs/statement-normalization-concept.md`）。DB/ingest/REST/MCP は未着手
 
 ## 関連ドキュメント
 
