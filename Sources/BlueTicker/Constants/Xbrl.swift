@@ -855,6 +855,36 @@ enum Xbrl {
     /// 誤検知としてガードを立てない。
     static let segmentSpecificGeographyLabelKeywordsJa: [String] =
         segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
+
+    // MARK: - Statement（BS/PL/CF 完全正規化, Stage 7, docs/statement-normalization-concept.md）
+
+    /// role URI の末尾セクション名（`XBRLUtils.sectionNameFromRole`）が注記・補足表であることを示す
+    /// 接頭辞。`NotesConsolidatedBalanceSheet` のように本表と同じキーワードを含むため、
+    /// BS/PL/CF 判定より先にこの接頭辞で除外する（実データ検証: 2026-07, smoke 158社）。
+    static let statementNotesRolePrefix = "Notes"
+
+    /// 貸借対照表（Instant）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `BalanceSheet`/`ConsolidatedBalanceSheet`、IFRS は
+    /// `ConsolidatedStatementOfFinancialPositionIFRS` 等（実データ検証: smoke 158社）。
+    static let balanceSheetRoleKeywords: [String] = [
+        "BalanceSheet",
+        "StatementOfFinancialPosition",
+    ]
+
+    /// 損益計算書（Duration）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `StatementOfIncome`/`ConsolidatedStatementOfIncome`、IFRS は
+    /// `ConsolidatedStatementOfProfitOrLossIFRS`。
+    static let incomeStatementRoleKeywords: [String] = [
+        "StatementOfIncome",
+        "StatementOfProfitOrLoss",
+    ]
+
+    /// キャッシュ・フロー計算書（Duration）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `StatementOfCashFlows-indirect`、IFRS は `ConsolidatedStatementOfCashFlowsIFRS`。
+    /// いずれも `StatementOfCashFlows` を含むため単一キーワードで両基準を吸収できる。
+    static let cashFlowRoleKeywords: [String] = [
+        "StatementOfCashFlows"
+    ]
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

@@ -12,7 +12,9 @@ import Testing
 
     @Test func devRootRegistersAllDocumentedSubcommands() {
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
-        let expected: Set = ["search", "analyze", "summarize", "cache", "filings", "filing", "breakdown"]
+        let expected: Set = [
+            "search", "analyze", "summarize", "cache", "filings", "filing", "breakdown", "statement",
+        ]
         #expect(names == expected)
     }
 
