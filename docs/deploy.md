@@ -241,6 +241,8 @@ plist はリポジトリの絶対パスを埋め込む必要があるためマ�
 
 初回バックフィル中（全 ~3,944 社。Stage 6 は日経225構成銘柄のみ）は本ジョブが少しずつ `company_financials`（および Stage 4-half の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は Stage 4=80 / Stage 4-half=80 / Stage 5=50 / Stage 6=30）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
+全ステージ完了後、`scripts/blt-scheduled-sync.sh` は末尾で `scripts/generate-status-page.sh` を呼ぶ。`blt-server status-report`（5 ステージのカバレッジ・鮮度を集計する DB read-only サブコマンド）の出力で Pages サイトの `/status.html`（`assets/apex-site/status.html`）を再生成し、内容に差分があれば同ファイルのみを `main` へ自動コミット・push する（push で Pages が再デプロイ）。日経225構成銘柄の実コードは出力しない（集計件数のみ）。このステップの失敗は ingest 本体の成否に影響しない（ログに WARN を残すのみ）。
+
 ### ingest の優先順位・Stage 6 の対象選定（任意・ローカル専用）
 
 `assets/nikkei225.csv`（証券コード列を含む CSV。日経225等、ユーザーが用意する任意ファイル）を配置すると、Stage 4/4-half/5 の取り込み候補のうちそのコードに一致する企業を候補列の先頭へ寄せる（対象選定ではなく処理順序のみ変える）。`limit` 付きバッチで全社バックフィルが終わっていない間、主要銘柄を優先的に埋めたい場合に使う。
