@@ -41,6 +41,10 @@ public func isServableStatementCacheVersion(_ version: String) -> Bool {
     return n >= statementMinServableVersion
 }
 
+/// Statement API の公開契約バージョン。`blueTickerVersion` とは独立。
+/// レスポンス形を破壊的に変更したときのみ +1 する（`Api.financialsSchemaVersion` と同型）。
+public let statementSchemaVersion = 1
+
 // MARK: - 契約型
 
 /// BS/PL/CF いずれかの1行分。標準タグ・企業拡張タグの区別や表示順（`order`）の取得方法は
@@ -62,6 +66,18 @@ public struct StatementLineItem: Codable, Sendable {
         self.value = value
         self.unit = unit
         self.order = order
+    }
+
+    /// REST/MCP 応答用 JSON オブジェクト。`order` は v1 では常に nil（未対応、
+    /// docs/statement-normalization-concept.md「実装方針」3）。
+    public func jsonObject() -> [String: Any] {
+        [
+            "tag": tag,
+            "label": label as Any? ?? NSNull(),
+            "value": value,
+            "unit": unit as Any? ?? NSNull(),
+            "order": order as Any? ?? NSNull(),
+        ]
     }
 }
 
@@ -95,6 +111,18 @@ public struct StatementYear: Codable, Sendable {
         self.incomeStatement = incomeStatement
         self.cashFlow = cashFlow
     }
+
+    /// REST/MCP 応答用 JSON オブジェクト。
+    public func jsonObject() -> [String: Any] {
+        [
+            "fy_end": fyEnd as Any? ?? NSNull(),
+            "financial_period": financialPeriod as Any? ?? NSNull(),
+            "doc_id": docId as Any? ?? NSNull(),
+            "balance_sheet": balanceSheet.map { $0.jsonObject() },
+            "income_statement": incomeStatement.map { $0.jsonObject() },
+            "cash_flow": cashFlow.map { $0.jsonObject() },
+        ]
+    }
 }
 
 /// Statement API の公開レスポンス（本体・Stage 7）。
@@ -127,6 +155,21 @@ public struct StatementResponse: Codable, Sendable {
     /// 恒久的な対象外を毎回再試行しない（`FinancialsResponse.notApplicablePlaceholder` と同型）。
     public static func notApplicablePlaceholder(code: String) -> StatementResponse {
         StatementResponse(
-            schemaVersion: 1, code: code, name: nil, sector: nil, market: nil, years: [])
+            schemaVersion: statementSchemaVersion, code: code, name: nil, sector: nil, market: nil,
+            years: [])
+    }
+
+    /// REST/MCP 応答用 JSON オブジェクト。`name`/`sector`/`market` は v1 では常に nil
+    /// （company_statements は company_filing_sections と同様 code のみ非正規化して持つ。
+    /// docs/statement-normalization-concept.md）。
+    public func jsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name as Any? ?? NSNull(),
+            "sector": sector as Any? ?? NSNull(),
+            "market": market as Any? ?? NSNull(),
+            "years": years.map { $0.jsonObject() },
+        ]
     }
 }

@@ -1,0 +1,232 @@
+// Stage 7 取り込み: 日経225構成銘柄の有報について BS/PL/CF を抽出し company_statements へ upsert する。
+// 抽出は BlueTickerCore のファサード（extractStatement）に委譲し、ここでは対象選定・staleness 判定・
+// DB upsert のみを担う（ネットワーク非依存でテスト可能）。
+//
+// `stage5Candidates`（`listedCodes × 有報(120) × 直近 years 件`）をそのまま再利用し、返ってきた
+// docID ごとに抽出結果を1行として格納する（company_filing_sections と同じ「1書類=1行」設計）。
+// 複数年度対応は本関数の呼び出し元が stage5Candidates から複数 docID を受け取ることで自然に
+// 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
+// （docs/statement-normalization-concept.md「実装方針」2）。
+//
+// 対象母集団は Stage 6 と同じ日経225限定でスタートする。Stage 7 は LLM 不要でコスト制約は
+// 無いが、実データ検証（158社）が銀行・保険等の特殊タクソノミを網羅していないため、まず
+// 母集団を絞って様子を見る（呼び出し元が `listedCodes` に `priorityIngestCodes()` を渡すことで
+// 実現する。同「実装方針」1）。
+//
+// staleness 判定は決定論のみ（LLM 不要）のため Stage 6 より単純: cache_version 不一致のみで
+// 再抽出対象にする（company_breakdowns の needs_review 相当の概念は無い）。
+
+import BlueTickerCore
+import Fluent
+import Foundation
+import Logging
+
+/// Stage 7 取り込み結果のサマリ。
+public struct Stage7IngestSummary: Sendable, Equatable {
+    /// 抽出を試みた書類数（skip を除く）。
+    public let attempted: Int
+    /// 抽出・格納に成功した書類数。
+    public let stored: Int
+    /// 取得・抽出失敗でスキップした書類数。
+    public let failed: Int
+    /// 既に現行バージョンで抽出済みのためスキップした書類数。
+    public let skipped: Int
+    /// 保持窓（直近 years 件）を超えたため削除した既存行数。
+    public let purged: Int
+}
+
+/// docID を受けて BS/PL/CF payload を返す抽出器（成功で payload、失敗で nil）。
+/// 本番は `context.extractStatement`、テストはフェイクを注入する。
+public typealias StatementExtractor = @Sendable (String) async -> StatementYear?
+
+/// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定）の有報（直近 years 年ぶん）を走査し、
+/// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
+/// `explicitCodes` / `priorityCodes` は Stage 5/6 と同じ意味。
+func runStage7Ingest(
+    db: Database, listedCodes: Set<String>, years: Int,
+    limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    logger: Logger? = nil, extract: StatementExtractor
+) async throws -> Stage7IngestSummary {
+    let sets = try await stage5Candidates(
+        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    let baseCandidates = sets.keep
+
+    var attempted = 0
+    var stored = 0
+    var failed = 0
+    var skipped = 0
+    var unhealthyRetries = 0
+    var missing: [(docID: String, code: String, submitDateTime: String)] = []
+    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
+
+    for cand in baseCandidates {
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 7 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await CompanyStatement.find(cand.docID, on: db)
+        }
+        if existing == nil {
+            missing.append(cand)
+        } else if existing?.cacheVersion != statementCacheVersion {
+            staleVersion.append(cand)
+        } else {
+            skipped += 1
+        }
+    }
+    let candidates = prioritized(
+        interleaved([missing, staleVersion]), codeOf: \.code, priorityCodes: priorityCodes)
+    // 分類フェーズと実処理フェーズでリトライ予算を分ける。
+    unhealthyRetries = 0
+
+    for cand in candidates {
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため Stage 7 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+            )
+            break
+        }
+        let existing = try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await CompanyStatement.find(cand.docID, on: db)
+        }
+        if let row = existing, row.cacheVersion == statementCacheVersion {
+            skipped += 1
+            continue
+        }
+        if let lim = limit, attempted >= lim { break }
+        attempted += 1
+        guard let payload = await extract(cand.docID) else {
+            failed += 1
+            logger?.warning("Stage 7 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
+            continue
+        }
+        try await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await storeCompanyStatement(
+                existing: existing, docID: cand.docID, code: cand.code,
+                submitDateTime: cand.submitDateTime, payload: payload, db: db)
+        }
+        stored += 1
+    }
+
+    // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
+    unhealthyRetries = 0
+    var purged = 0
+    for docID in sets.purge {
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error("DB接続が不安定なため Stage 7 purge を中断します(リトライ\(unhealthyRetries)回)")
+            break
+        }
+        let deleted = try await withDbRetry(
+            logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) { () -> Bool in
+            guard let row = try await CompanyStatement.find(docID, on: db) else { return false }
+            try await row.delete(on: db)
+            return true
+        }
+        if deleted { purged += 1 }
+    }
+
+    return Stage7IngestSummary(
+        attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
+}
+
+/// 抽出済み BS/PL/CF を company_statements へ書き込む（既存行があれば更新、無ければ作成）。
+func storeCompanyStatement(
+    existing: CompanyStatement?, docID: String, code: String, submitDateTime: String,
+    payload: StatementYear, db: Database
+) async throws {
+    let applyFields: (CompanyStatement) -> Void = { row in
+        row.code = code
+        row.submitDateTime = submitDateTime
+        row.payload = payload
+        row.cacheVersion = statementCacheVersion
+    }
+    if let row = existing {
+        applyFields(row)
+        try await row.update(on: db)
+    } else {
+        let model = CompanyStatement()
+        model.id = docID
+        applyFields(model)
+        try await createIdempotently(
+            create: { try await model.create(on: db) },
+            recover: {
+                guard let recovered = try await CompanyStatement.find(docID, on: db) else { return false }
+                applyFields(recovered)
+                try await recovered.update(on: db)
+                return true
+            }
+        )
+    }
+}
+
+// MARK: - servable/unservable 集計
+
+/// `cache_version` のみを対象にした軽量射影（`payload` の JSONB を転送しない）。
+/// company_statements 全件の servable/unservable 集計用。
+final class CompanyStatementCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyStatement.schema
+
+    @ID(custom: "doc_id", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
+}
+
+/// company_statements 全件を read 床（`statementMinServableVersion`）で集計する。
+/// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送しない軽量クエリで行う。
+func countServableStatements(db: Database) async throws -> (servable: Int, unservable: Int) {
+    let versions = try await CompanyStatementCacheVersionOnly.query(on: db).all()
+        .map(\.cacheVersion)
+    let servable = versions.filter(isServableStatementCacheVersion).count
+    return (servable, versions.count - servable)
+}
+
+// MARK: - read 経路（REST/MCP statement）
+
+/// 格納済み Stage 7 行を code で引き、公開契約 `StatementResponse` の JSON を返す。
+/// `docId` 指定時はその書類（当該 code のもの）1件のみ、省略時は当該 code の直近 `years` 件
+/// （提出日時降順・床以上）を束ねる。床は `statementMinServableVersion`（明示定数）。
+/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない。Stage 5 と同型）。
+func loadStoredStatement(
+    code: String, docId: String?, years: Int, db: Database
+) async throws -> [String: Any]? {
+    let code4 = String(code.prefix(4))
+    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }), years > 0 else {
+        return nil
+    }
+
+    let rows: [CompanyStatement]
+    if let docId, !docId.isEmpty {
+        // 指定書類。取り違え防止に当該 code の書類であることを確認する。
+        guard let found = try await CompanyStatement.find(docId, on: db), found.code == code4,
+            isServableStatementCacheVersion(found.cacheVersion)
+        else { return nil }
+        rows = [found]
+    } else {
+        // 直近 years 件（提出日時降順のうち、read 床以上）。
+        let candidates = try await CompanyStatement.query(on: db)
+            .filter(\.$code == code4)
+            .sort(\.$submitDateTime, .descending)
+            .all()
+        rows = Array(
+            candidates.filter { isServableStatementCacheVersion($0.cacheVersion) }.prefix(years))
+    }
+    guard !rows.isEmpty else { return nil }
+
+    let response = StatementResponse(
+        schemaVersion: statementSchemaVersion, code: code4, name: nil, sector: nil, market: nil,
+        years: rows.map(\.payload))
+    return response.jsonObject()
+}

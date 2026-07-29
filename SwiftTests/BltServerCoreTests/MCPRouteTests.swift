@@ -38,6 +38,7 @@ private func withMcpApp(
             app.migrations.add(CreateCompanySegmentBreakdowns())
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
+            app.migrations.add(CreateCompanyStatements())
             try await app.autoMigrate()
         }
         try await registerRoutes(app, context: makeMcpContext())
@@ -184,6 +185,51 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let body = text.flatMap { $0.data(using: .utf8) }
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             #expect(body?["axis"] as? String == breakdownAxisGeography)
+        }
+    }
+
+    // MARK: - get_statement（Stage 7）
+
+    @Test func getStatementReturnsErrorResultWhenNotStored() async throws {
+        try await withMcpApp(databases: true) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_statement", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("未抽出") == true)
+        }
+    }
+
+    @Test func getStatementReturnsStoredDataSuccessfully() async throws {
+        try await withMcpApp(databases: true) { app in
+            let row = CompanyStatement()
+            row.id = "S1"
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = StatementYear(
+                fyEnd: "2025-03-31", financialPeriod: "通期", docId: "S1",
+                balanceSheet: [
+                    StatementLineItem(
+                        tag: "TotalAssets", label: "資産合計", value: 1_000, unit: "JPY", order: nil)
+                ],
+                incomeStatement: [], cashFlow: [])
+            row.cacheVersion = statementCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_statement", arguments: ["code": "7203"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool != true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            let years = body?["years"] as? [[String: Any]]
+            #expect(years?.first?["doc_id"] as? String == "S1")
         }
     }
 

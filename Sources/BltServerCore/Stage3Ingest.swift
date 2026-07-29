@@ -304,6 +304,24 @@ public func runStage3IngestCommand(
                 notApplicableUnknown: s6Geography.notApplicableUnknown,
                 purged: s6Geography.purged)
         }
+        if stages.contains(.statement) {
+            // Stage 7: 日経225構成銘柄（`priority`）の有報について BS/PL/CF を抽出・格納。
+            // Stage 6 と同じ理由で対象母集団は priority（`assets/nikkei225.csv`）に限定する
+            // （LLM は不要だが、実データ検証が日経225相当に留まるため。docs/statement-normalization-concept.md）。
+            let s7 = try await runStage7Ingest(
+                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                explicitCodes: codes, logger: app.logger
+            ) { docID in
+                await context.extractStatement(docID: docID)
+            }
+            let coverage = try? await withDbRetry(logger: app.logger, context: "company_statements 集計") {
+                try await countServableStatements(db: app.db)
+            }
+            logIngestSummary(
+                app.logger, stage: "7", attempted: s7.attempted, stored: s7.stored,
+                failed: s7.failed, skipped: s7.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable, purged: s7.purged)
+        }
     } catch {
         try? await app.asyncShutdown()
         throw error

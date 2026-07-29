@@ -454,6 +454,51 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 """
         ),
+        ApiSkill(
+            id: "get-statement",
+            name: "財務諸表（BS/PL/CF）完全正規化",
+            description: """
+                有価証券報告書から貸借対照表・損益計算書・キャッシュ・フロー計算書を、企業間の科目統一を
+                試みずそのまま構造化して返します（格納済みデータのみ）。Summarize/Analyze の絞り込んだ
+                ~20指標とは異なり、開示された全項目（企業拡張タグ含む）を返します。
+                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                注記（Stage 8）は別ツール（未実装）の対象。
+                """,
+            method: "GET",
+            path: "/v1/companies/{code}/statement",
+            mcpTool: "get_statement",
+            feature: "statement",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 7203）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "doc_id",
+                    location: .query,
+                    type: .string,
+                    description: "書類ID（省略時は直近 years 件の有価証券報告書）",
+                    required: false
+                ),
+                ApiSkillParameter(
+                    name: "years",
+                    location: .query,
+                    type: .integer,
+                    description: "取得年数",
+                    required: false,
+                    defaultValue: .int(Api.statementYearsDefault)
+                ),
+            ],
+            instructions: """
+                Statement（BS/PL/CF の全項目正規化）。絞り込んだ主要指標だけなら get-financials。
+                日経225構成銘柄のみ。格納済みデータのみ。未抽出は 404、DB 非接続は 503。
+                表示順（order）は v1 では未対応（常に null。タグ名アルファベット順で返る）。
+                例: GET /v1/companies/7203/statement?years=3
+                """
+        ),
     ]
 }
 

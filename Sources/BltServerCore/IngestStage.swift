@@ -13,6 +13,9 @@ public enum IngestStage: String, CaseIterable, Sendable {
     /// Stage 6: 事業別・地域別内訳（company_breakdowns）。ingest は business→geography。
     /// REST/MCP read は business / geography の両軸。
     case breakdowns = "6"
+    /// Stage 7: BS/PL/CF 完全正規化（company_statements）。対象は日経225限定でスタート
+    /// （docs/statement-normalization-concept.md「実装方針」1）。
+    case statement = "7"
 }
 
 /// `--stages` の CSV 値をステージ集合へ変換する。
