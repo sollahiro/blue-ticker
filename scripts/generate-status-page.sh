@@ -134,11 +134,24 @@ for key in "${STAGE_KEYS[@]}"; do
 
   label="$(echo "$stage_json" | jq -r '.label')"
   companies_covered="$(echo "$stage_json" | jq -r '.companies_covered')"
+  companies_target="$(echo "$stage_json" | jq -r '.companies_target')"
   coverage_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.coverage_pct')")"
   current_version_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.current_version_pct')")"
   docs_covered="$(echo "$stage_json" | jq -r '.docs_covered')"
   docs_target="$(echo "$stage_json" | jq -r '.docs_target')"
+  servable_covered="$(echo "$stage_json" | jq -r '.servable_covered')"
+  servable_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.servable_pct')")"
   stale="$(echo "$stage_json" | jq -r '.stale')"
+
+  # servable_covered/servable_pct の分母単位（docs_target があれば書類件数、無ければ対象社数）。
+  # current_version_pct/docs_covered と同じ分母を使う。
+  if [ "$docs_target" != "null" ]; then
+    servable_target="$docs_target"
+    servable_unit="件"
+  else
+    servable_target="$companies_target"
+    servable_unit="社"
+  fi
 
   status_class=""
   status_text="最新"
@@ -161,6 +174,8 @@ for key in "${STAGE_KEYS[@]}"; do
     echo "          </div>"
     echo "          <p class=\"stage-line\">対象社数のうち <span class=\"num\">${companies_covered}</span> 社に反映済み（<span class=\"num\">${coverage_pct}</span>%）</p>"
     echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${coverage_pct}%\"></div></div>"
+    echo "          <p class=\"stage-line\">対象${servable_unit}数あたりの格納済み（serviceable）: <span class=\"num\">${servable_covered}</span>/<span class=\"num\">${servable_target}</span>${servable_unit}（<span class=\"num\">${servable_pct}</span>%）</p>"
+    echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${servable_pct}%\"></div></div>"
     # docs_target がある（financials/half_financials 以外）ステージのみ、書類ベースの補助行を出す。
     if [ "$docs_target" != "null" ]; then
       echo "          <div class=\"stage-sub\">書類ベースでは <span class=\"num\">${docs_covered}</span>/<span class=\"num\">${docs_target}</span> 件を格納・最新ロジックへの反映: <span class=\"num\">${current_version_pct}</span>%"
