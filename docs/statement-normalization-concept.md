@@ -138,21 +138,25 @@ StatementLineItem
 `StatementComputeResult`（`.success` / `.notApplicable` / `.failed`）は `FinancialsComputeResult`
 と同じ3値パターン（`.agents/rules/project/error-handling.md`）に合わせた。
 
-DB モデル・ingest・REST・MCP からはまだ呼ばれない（DevCLI からのみ呼ばれる。下記参照）。
+2026-07-29 に DB モデル（`company_statements`）・ingest（`Stage7Ingest.swift`）・REST
+（`GET /v1/companies/{code}/statement`）・MCP（`get_statement`）配線を実装し、使い捨て Neon
+への実 EDINET 取り込み・REST/MCP 読み出しまで検証済み（下記「実装方針」参照）。
 
 ## Stage 番号とロードマップ上の位置づけ
 
 - **Stage 7（本体・BS/PL/CF）**: 抽出ロジック（`StatementClassifier`/`StatementAnalyzer`）と
-  DevCLI での目視確認は実装済み（PR #153）。DB モデル・ingest・REST・MCP 配線は
-  下記「実装方針」に沿って着手（対象は日経225限定でスタート）。
+  DevCLI での目視確認は実装済み（PR #153）。DB モデル・ingest・REST・MCP 配線も
+  下記「実装方針」に沿って実装済み（2026-07-29、対象は日経225限定でスタート。使い捨て Neon
+  への実データ書き込み・読み出しまで検証済み）。日経225全社への本番ingestはこれから
+  （`assets/nikkei225.csv` を持つ本番/ローカル環境で `blt-server ingest --stages 7` を実行）。
 - **Stage 8（注記）**: 構想のみ。対象注記・正規化方式（LLM 要否含む）は未確定。
 
 ## 今回（PR #153）のスコープ外（非ゴール）
 
-PR #153（抽出ロジック・DevCLI）時点の切り分け。~~取り消し線~~の項目は下記「実装方針」で着手済み。
+PR #153（抽出ロジック・DevCLI）時点の切り分け。~~取り消し線~~の項目は下記「実装方針」で実装済み。
 
-- ~~DB モデル・マイグレーション・`Stage7Ingest.swift`・REST ルート・MCP ツール配線~~ → 着手（下記「実装方針」参照）
-- ~~複数年度の履歴集約~~ → `Stage7Ingest` が `stage5Candidates` の docID 反復で対応（下記「実装方針」2）
+- ~~DB モデル・マイグレーション・`Stage7Ingest.swift`・REST ルート・MCP ツール配線~~ → 実装済み（下記「実装方針」参照）
+- ~~複数年度の履歴集約~~ → `Stage7Ingest` が `stage5Candidates` の docID 反復で対応済み（下記「実装方針」2）
 - 注記（Stage 8）の抽出方式・対象注記の確定・LLM 要否判断
 - 企業拡張タグの正規化ポリシー（そのまま出すか、正規化するか）の確定
 - 企業間の科目名統一（Breakdown 的な意味正規化）
