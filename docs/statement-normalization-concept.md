@@ -251,6 +251,58 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    グランドトータル行（`LiabilitiesAndEquityIFRS`/`LiabilitiesAndNetAssets` 等）のみ `section=nil`、
    それ以外は全行正しく分類されることを確認済み。Cursor CLI（Grok 4.5）監査済み（問題なし）。
 
+   **学び3（2026-07-30 実データ目視確認で発見・修正済み）**: 負債合計・資産合計等の「タグ自身が
+   単一区分を表す合計行」は、直接の親が負債・純資産の両方を束ねる見出し（例:
+   `LiabilitiesAndEquityIFRSAbstract`）である IFRS 個別タクソノミが存在する（実データ検証:
+   デンソー6902）。祖先を優先順位（NetAssets/Equity→Liabilit→Asset）だけで確定させると
+   `LiabilitiesIFRS` が誤って純資産へ分類される。祖先が複数区分のキーワードに同時一致する場合は
+   曖昧とみなしてさらに上の祖先を辿り、それでも確定しない場合に限りタグ自身の名前（単一区分に
+   曖昧さなく一致する場合のみ）へフォールバックする形に修正した
+   （`StatementClassifier.classifyIfUnambiguous`）。
+
+7. **ラベル解決（標準タクソノミ補完・`preferredLabel` 対応、2026-07-30）**: 提出書類自身の
+   ラベルリンクベースには拡張タグの分しか同梱されない（標準タクソノミ側は外部参照のみでファイル
+   自体は含まれない）。`assets/taxonomy/{GAAP,IFRS}/*.zip`（ユーザーが EDINET から取得し配置。
+   git 管理外・`.gitignore` 参照）の最新版（現行＋廃止済み要素）から補完する
+   （`XBRLUtils.loadStandardTaxonomyLabels`）。実データ検証（トヨタ・デンソー・任天堂、BS/PL/CF
+   計316行）でラベル解決率 21%→100%。`assets/taxonomy` が無い環境（CI・本番等）は従来どおり
+   拡張タグ以外が未解決のまま（クラッシュしない）。
+   また presentationArc の `preferredLabel`（合計行・期首/期末残高等でどのラベルロールを使うべきかの
+   指示）に応じてラベルを差し替える（`XBRLUtils.loadLabelRoleVariants` /
+   `StatementClassifier.resolvedLabel`）。実データ検証: 任天堂7974 の `ValuationAndTranslationAdjustments`
+   は通常ラベル「評価・換算差額等」ではなく合計ラベル「評価・換算差額等合計」を使うべきケース。
+   同一タグが同一 role 内に2回出現するケース（`CashAndCashEquivalentsIFRS` の期首/期末残高）は
+   fact 自身の context（前期末=当期首 instant か当期末 instant か）から
+   periodStartLabel/periodEndLabel を直接選び直して区別する。
+
+8. **ツリー構造（`parent_tag`/`depth`）は不採用（2026-07-30 検討・撤回）**: presentation
+   linkbase 上の直接の親タグ・深さを一度実装したが、実データ（デンソー6902）で確認したところ
+   「表示上どこにネストするか」の情報でしかなく、v1 では本来解決したかった「合計行の二重計上を
+   避ける」問題には効かないと判断し撤回した。その問題は presentation ではなく**計算リンクベース**
+   でのみ決定的に解けると判断し、下記10で実装した。
+
+9. **CF の Instant/Duration 混在**: CF は大半が Duration（フロー行）だが、現金及び現金同等物の
+   期首/期末残高調整行は Instant 型 fact のまま CF の presentation role に現れる（実データ検証:
+   トヨタ7203 の `CashAndCashEquivalentsIFRS` が `periodStartLabel`/`periodEndLabel` として
+   CF role 内に2箇所出現）。当初は CF を Duration のみで判定していたため、この Instant fact が
+   両判定に失敗し黙って欠落していた（2026-07-30 発見・修正済み。期首残高は当期首=前期末の
+   instant context のため、CF に限り前期 Instant も受理する）。
+
+10. **合計行の構成要素（`is_total`/`components`、計算リンクベース由来、2026-07-30 実装）**:
+    presentation の親子関係は表示上のネストでしかなく二重計上の防止を保証しないため、
+    `_cal.xml`（`summation-item` arc・`weight`）から「この行が他の行の合計かどうか・何を
+    足したものか」を決定的に取得する（`XBRLUtils.loadCalculationComponents` /
+    `StatementClassifier`）。presentation と同様、同じ sectionType に複数 role
+    （IFRS連結用・J-GAAP個別用等）が対応することがあるため role ごとに分けて持ち、
+    presentation のカバレッジ基準で選んだのと同じ `primaryRole`（同一 role URI を計算
+    リンクベース側でも共有）で1つに絞る。`weight` は加算=+1・控除=−1（実データ上 ±1 のみ確認。
+    例: `GrossProfitIFRS = +1*RevenueIFRS + (-1)*CostOfSalesIFRS`）。
+    実データ検証（トヨタ・デンソー・任天堂）: BS/PL/CF の合計行のほぼ全てで構成要素が完結し、
+    多段階の積み上げ（例: 任天堂7974 `資産合計 = 流動資産合計 + 固定資産合計`、各小計もさらに
+    明細に展開）も正しく連鎖することを確認。複数区分にまたがるグランドトータル行（`section=nil`）
+    も `is_total`/`components` は正しく取得できる（presentation の区分判定と計算リンクベースの
+    構成要素判定は独立した情報源のため）。
+
 ## 関連ドキュメント
 
 - `docs/feature-tiers.md` — Statement の境界（free/paid 分離方針）
