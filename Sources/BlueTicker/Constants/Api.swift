@@ -36,6 +36,8 @@ public enum Api {
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
     public static let halfFinancialsYearsDefault = 3
+    /// Stage 7（Statement）read の既定年数。`stage5IngestYears`（6年保持）以下に収める。
+    public static let statementYearsDefault = 5
 
     // 件数上限
     static let companySearchLimit = 50      // searchCompanies の返却上限

@@ -6,6 +6,7 @@ import Foundation
 import FoundationXML
 #endif
 import SwiftSoup
+import ZIPFoundation
 
 // MARK: - Module-level label/role cache
 
@@ -42,8 +43,29 @@ private struct BoundedFIFOCache<Key: Hashable, Value> {
 
 // nonisolated(unsafe): access is serialized by _cacheLock
 nonisolated(unsafe) private var _labelCache = BoundedFIFOCache<URL, [String: String]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _labelRoleVariantsCache = BoundedFIFOCache<URL, [String: [String: String]]>(
+    capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _roleCache = BoundedFIFOCache<URL, [String: [String]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _presentationOrderCache = BoundedFIFOCache<URL, [String: [String: Int]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _presentationParentsCache = BoundedFIFOCache<URL, [String: [String: Set<String>]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _preferredLabelRolesCache = BoundedFIFOCache<URL, [String: [String: String]]>(capacity: _labelRoleCacheCapacity)
+nonisolated(unsafe) private var _calculationComponentsCache = BoundedFIFOCache<URL, [String: [String: [CalcComponent]]]>(
+    capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
+
+/// 計算リンクベース（`_cal.xml`、`summation-item` arc）由来の合計項目の構成要素。
+/// `StatementLineItem.components` 用（`weight` は実データ上 ±1 のみ確認）。
+struct CalcComponent {
+    let tag: String
+    let weight: Int
+}
+
+// 標準タクソノミ（GAAP/IFRS）のラベルは `assets/taxonomy` 配下の zip 群という単一の入力から
+// プロセス生涯不変で決まるため、doc 単位キャッシュとは別に一度だけ計算しメモ化する。
+nonisolated(unsafe) private var _standardTaxonomyLabelsCache: (
+    collapsed: [String: String], variants: [String: [String: String]]
+)?
+private let _standardTaxonomyLock = NSLock()
 
 // MARK: - Core Utilities
 
@@ -208,11 +230,158 @@ enum XBRLUtils {
                 labelsByTag[tag] = text
             }
         }
+        // 提出書類自身のラベルリンクベースには拡張タグの分しか同梱されない（標準タクソノミ側は
+        // 外部参照のみでファイル自体は含まれない）。標準タグは `loadStandardTaxonomyLabels()` で
+        // 補完する（提出書類側のラベルを優先し、無い場合のみ埋める）。
+        for (tag, label) in loadStandardTaxonomyLabels() where labelsByTag[tag] == nil {
+            labelsByTag[tag] = label
+        }
 
         _cacheLock.lock()
         _labelCache.insert(labelsByTag, forKey: dir)
         _cacheLock.unlock()
         return labelsByTag
+    }
+
+    /// ラベルリンクベースから {local_tag: {ラベルロールURI: テキスト}} を作る（`loadLabelsByTag` の
+    /// ロール別・非収束版）。`preferredLabel`（presentation linkbase の presentationArc 属性。合計行・
+    /// 期首/期末残高等でどのロールのラベルを使うべきかを示す）に応じて Stage 7 Statement が正しい
+    /// バリアントを選ぶために使う。同一ディレクトリはキャッシュを返す。
+    static func loadLabelRoleVariants(in dir: URL) -> [String: [String: String]] {
+        _cacheLock.lock()
+        if let cached = _labelRoleVariantsCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var variants: [String: [String: String]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_lab") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = LabelLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (tag, roleMap) in parser.labelsByTagAndRole {
+                for (role, text) in roleMap {
+                    variants[tag, default: [:]][role] = text
+                }
+            }
+        }
+        for (tag, roleMap) in loadStandardTaxonomyLabelRoleVariants() {
+            for (role, text) in roleMap where variants[tag]?[role] == nil {
+                variants[tag, default: [:]][role] = text
+            }
+        }
+
+        _cacheLock.lock()
+        _labelRoleVariantsCache.insert(variants, forKey: dir)
+        _cacheLock.unlock()
+        return variants
+    }
+
+    /// 標準タクソノミ（EDINET が公開する GAAP/IFRS）のラベルリンクベースから {tag: 日本語標準ラベル} を作る。
+    /// `assets/taxonomy/{GAAP,IFRS}/*.zip`（ユーザーが EDINET から取得し配置する。git 管理外・
+    /// `.gitignore` 参照）の最新版（ファイル名の日付が最大のもの）のみを使う。各 zip には現行版と
+    /// 廃止済み要素の両方のラベルリンクベースが含まれるため、最新版1本で実データ上ほぼ全タグを
+    /// カバーできる（実データ検証: トヨタ・デンソー・任天堂で拡張タグ以外の未解決ゼロ）。
+    /// `assets/taxonomy` が存在しない環境（CI・本番等）では空辞書を返し、既存の「ラベル未解決」表示に
+    /// フォールバックする（クラッシュしない）。プロセス内でメモ化する。
+    static func loadStandardTaxonomyLabels() -> [String: String] {
+        standardTaxonomyLabels().collapsed
+    }
+
+    /// 標準タクソノミのラベルを {tag: {ラベルロールURI: テキスト}} の形（ロール別）で返す。
+    /// `preferredLabel`（合計行・期首/期末残高等）に応じたラベル選択に使う（Stage 7 Statement 専用、
+    /// `loadLabelRoleVariants` 参照）。
+    static func loadStandardTaxonomyLabelRoleVariants() -> [String: [String: String]] {
+        standardTaxonomyLabels().variants
+    }
+
+    private static func standardTaxonomyLabels() -> (
+        collapsed: [String: String], variants: [String: [String: String]]
+    ) {
+        _standardTaxonomyLock.lock()
+        if let cached = _standardTaxonomyLabelsCache { _standardTaxonomyLock.unlock(); return cached }
+        _standardTaxonomyLock.unlock()
+
+        let result = buildStandardTaxonomyLabels()
+        _standardTaxonomyLock.lock()
+        _standardTaxonomyLabelsCache = result
+        _standardTaxonomyLock.unlock()
+        return result
+    }
+
+    private static func buildStandardTaxonomyLabels() -> (
+        collapsed: [String: String], variants: [String: [String: String]]
+    ) {
+        guard let taxonomyDir = resolveAssetFileURL(filename: "taxonomy") else { return ([:], [:]) }
+
+        var collapsed: [String: String] = [:]
+        var variants: [String: [String: String]] = [:]
+        for subdir in ["GAAP", "IFRS"] {
+            guard let zipURL = latestTaxonomyZip(
+                in: taxonomyDir.appendingPathComponent(subdir, isDirectory: true))
+            else { continue }
+            guard let extracted = try? extractTaxonomyZip(zipURL) else { continue }
+            defer { try? FileManager.default.removeItem(at: extracted) }
+            let (fileCollapsed, fileVariants) = parseTaxonomyLabels(in: extracted)
+            for (tag, label) in fileCollapsed where collapsed[tag] == nil {
+                collapsed[tag] = label
+            }
+            for (tag, roleMap) in fileVariants {
+                for (role, text) in roleMap where variants[tag]?[role] == nil {
+                    variants[tag, default: [:]][role] = text
+                }
+            }
+        }
+        return (collapsed, variants)
+    }
+
+    /// ファイル名末尾の日付（例: `JPPFS_20251101.zip`）が最大の zip を選ぶ。文字列比較で十分
+    /// （8桁数字の日付は辞書順=数値順）。
+    private static func latestTaxonomyZip(in dir: URL) -> URL? {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)
+        else { return nil }
+        return entries
+            .filter { $0.pathExtension.lowercased() == "zip" }
+            .max { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    private static func extractTaxonomyZip(_ zipURL: URL) throws -> URL {
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blt-taxonomy-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        try FileManager.default.unzipItem(at: zipURL, to: dest)
+        return dest
+    }
+
+    /// 展開済みタクソノミディレクトリ配下の全 `*_lab.xml`（英語版 `-en` は除く）を走査する。
+    /// 現行版・廃止済み版（`deprecated/`）双方のラベルリンクベースが対象。
+    private static func parseTaxonomyLabels(
+        in dir: URL
+    ) -> (collapsed: [String: String], variants: [String: [String: String]]) {
+        var collapsed: [String: String] = [:]
+        var variants: [String: [String: String]] = [:]
+        guard let enumerator = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: nil)
+        else { return (collapsed, variants) }
+        for case let fileURL as URL in enumerator {
+            let name = fileURL.lastPathComponent
+            guard name.hasSuffix("_lab.xml"), !name.contains("-en") else { continue }
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+            let parser = LabelLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (tag, text) in parser.labelsByTag where collapsed[tag] == nil {
+                collapsed[tag] = text
+            }
+            for (tag, roleMap) in parser.labelsByTagAndRole {
+                for (role, text) in roleMap where variants[tag]?[role] == nil {
+                    variants[tag, default: [:]][role] = text
+                }
+            }
+        }
+        return (collapsed, variants)
     }
 
     /// プレゼンテーションリンクベースから {local_tag: roleURI list} を作る。同一ディレクトリはキャッシュを返す。
@@ -240,6 +409,121 @@ enum XBRLUtils {
         return result
     }
 
+    /// プレゼンテーションリンクベースから {roleURI: {local_tag: 表示順}} を作る。
+    /// 表示順は role 内の presentationArc（`order` 属性）を深さ優先で辿った 0 始まりの通し番号。
+    /// 同一ディレクトリはキャッシュを返す。role が複数ファイルに跨って定義されることは実データ上
+    /// 想定していないため、同一 role が複数ファイルに現れた場合は最初に見つかったファイルの木を採用する。
+    static func loadPresentationOrder(in dir: URL) -> [String: [String: Int]] {
+        _cacheLock.lock()
+        if let cached = _presentationOrderCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var orderByRoleTag: [String: [String: Int]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = PresentationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, tagOrder) in parser.orderByRoleTag where orderByRoleTag[role] == nil {
+                orderByRoleTag[role] = tagOrder
+            }
+        }
+
+        _cacheLock.lock()
+        _presentationOrderCache.insert(orderByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return orderByRoleTag
+    }
+
+    /// プレゼンテーションリンクベースから {roleURI: {local_tag: 直接の親タグ集合}} を作る。
+    /// `loadPresentationOrder` と同じ presentationArc からタグ単位の親を辿れるように構築する
+    /// （`StatementClassifier` の BS/CF セクション判定 [資産/負債/純資産、営業/投資/財務] で使用）。
+    /// 同一タグが役割内で複数回 `<loc>` される場合（明細の見出しとして root に立つ出現と、上位ツリーから
+    /// 参照される出現が両方あるケース、実データ検証: ソニー6758 IFRS の
+    /// `ChangesInWorkingCapitalOpeCFIFRSAbstract`）は、双方の出現から見つかった親タグを集合として
+    /// 保持する（タグ単位の集合で親を持たせることで、真の親を持つ出現側の情報を失わない）。
+    /// 同一ディレクトリはキャッシュを返す。
+    static func loadPresentationParents(in dir: URL) -> [String: [String: Set<String>]] {
+        _cacheLock.lock()
+        if let cached = _presentationParentsCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = PresentationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, parents) in parser.parentTagsByRoleTag where parentTagsByRoleTag[role] == nil {
+                parentTagsByRoleTag[role] = parents
+            }
+        }
+
+        _cacheLock.lock()
+        _presentationParentsCache.insert(parentTagsByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return parentTagsByRoleTag
+    }
+
+    /// プレゼンテーションリンクベースから {roleURI: {local_tag: preferredLabel のロールURI}} を作る。
+    /// 合計行・期首/期末残高等でどのラベルロールを使うべきかの指示（`loadLabelRoleVariants` と
+    /// 組み合わせて使う）。同一ディレクトリはキャッシュを返す。
+    static func loadPreferredLabelRoles(in dir: URL) -> [String: [String: String]] {
+        _cacheLock.lock()
+        if let cached = _preferredLabelRolesCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var preferredLabelByRoleTag: [String: [String: String]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = PresentationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, labels) in parser.preferredLabelByRoleTag where preferredLabelByRoleTag[role] == nil {
+                preferredLabelByRoleTag[role] = labels
+            }
+        }
+
+        _cacheLock.lock()
+        _preferredLabelRolesCache.insert(preferredLabelByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return preferredLabelByRoleTag
+    }
+
+    /// 計算リンクベース（`_cal.xml`）から {roleURI: {local_tag（合計行）: 構成要素}} を作る。
+    /// `summation-item` arc の `weight`（±1）付きで、presentation linkbase とは独立に
+    /// 「二重計上せず合計を検算・再構成できる」ことを保証する（presentation の親子関係は表示上の
+    /// ネストでしかなく計算の正しさを保証しない。`docs/statement-normalization-concept.md`
+    /// 実装方針8参照）。presentation と同じく、同じ sectionType に複数 role（IFRS連結用・
+    /// J-GAAP個別用等）が対応することがあるため role ごとに分けて持ち、`StatementClassifier` が
+    /// `primaryRole`（presentation のカバレッジ基準で選んだのと同じ role）で1つに絞って使う。
+    /// 同一ディレクトリはキャッシュを返す。
+    static func loadCalculationComponents(in dir: URL) -> [String: [String: [CalcComponent]]] {
+        _cacheLock.lock()
+        if let cached = _calculationComponentsCache[dir] { _cacheLock.unlock(); return cached }
+        _cacheLock.unlock()
+
+        var componentsByRoleTag: [String: [String: [CalcComponent]]] = [:]
+        for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_cal") {
+            guard let data = try? Data(contentsOf: xmlFile) else { continue }
+            let parser = CalculationLinkbaseParser()
+            let xmlParser = XMLParser(data: data)
+            xmlParser.delegate = parser
+            xmlParser.parse()
+            for (role, components) in parser.componentsByRoleTag where componentsByRoleTag[role] == nil {
+                componentsByRoleTag[role] = components
+            }
+        }
+
+        _cacheLock.lock()
+        _calculationComponentsCache.insert(componentsByRoleTag, forKey: dir)
+        _cacheLock.unlock()
+        return componentsByRoleTag
+    }
+
     // MARK: Fact Collection
 
     /// XMLファイルから {local_tag: {contextRef: XbrlFact}} の辞書を返す。
@@ -248,7 +532,8 @@ enum XBRLUtils {
         allowedTags: Set<String>? = nil,
         nilAsZero: Bool = false,
         labelsByTag: [String: String] = [:],
-        rolesByTag: [String: [String]] = [:]
+        rolesByTag: [String: [String]] = [:],
+        orderByRoleTag: [String: [String: Int]] = [:]
     ) -> XbrlFactIndex {
         guard let data = try? Data(contentsOf: file) else { return [:] }
         let delegate = XBRLNumericsParser(
@@ -256,6 +541,7 @@ enum XBRLUtils {
             nilAsZero: nilAsZero,
             labelsByTag: labelsByTag,
             rolesByTag: rolesByTag,
+            orderByRoleTag: orderByRoleTag,
             sourceFile: file.lastPathComponent
         )
         let parser = XMLParser(data: data)
@@ -278,13 +564,15 @@ enum XBRLUtils {
         var allFacts: XbrlFactIndex = [:]
         let labelsByTag = loadLabelsByTag(in: dir)
         let rolesByTag = loadRolesByTag(in: dir)
+        let orderByRoleTag = loadPresentationOrder(in: dir)
         for file in findXbrlFiles(in: dir) {
             for (tag, ctxMap) in collectNumericFacts(
                 in: file,
                 allowedTags: nil,
                 nilAsZero: nilAsZero,
                 labelsByTag: labelsByTag,
-                rolesByTag: rolesByTag
+                rolesByTag: rolesByTag,
+                orderByRoleTag: orderByRoleTag
             ) {
                 for (ctx, fact) in ctxMap {
                     allFacts[tag, default: [:]][ctx] = fact
@@ -451,6 +739,7 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
     private let nilAsZero: Bool
     private let labelsByTag: [String: String]
     private let rolesByTag: [String: [String]]
+    private let orderByRoleTag: [String: [String: Int]]
     private let sourceFile: String
 
     private var currentLocalTag = ""
@@ -464,12 +753,14 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         nilAsZero: Bool,
         labelsByTag: [String: String],
         rolesByTag: [String: [String]],
+        orderByRoleTag: [String: [String: Int]] = [:],
         sourceFile: String
     ) {
         self.allowedTags = allowedTags
         self.nilAsZero = nilAsZero
         self.labelsByTag = labelsByTag
         self.rolesByTag = rolesByTag
+        self.orderByRoleTag = orderByRoleTag
         self.sourceFile = sourceFile
     }
 
@@ -527,12 +818,22 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         fact.label = labelsByTag[currentLocalTag]
         fact.sourceFile = sourceFile
 
+        var orderByRole: [String: Int] = [:]
+        for r in roles {
+            if let o = orderByRoleTag[r]?[currentLocalTag] { orderByRole[r] = o }
+        }
+        if !orderByRole.isEmpty { fact.orderByRole = orderByRole }
+
         results[currentLocalTag, default: [:]][currentCtx] = fact
     }
 }
 
 private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
     var labelsByTag: [String: String] = [:]
+    /// {tag: {ラベルロールURI: テキスト}}。`labelsByTag`（標準ラベル1つに収束させたもの）とは別に
+    /// 全ロールを保持する。`preferredLabel`（合計行・期首/期末残高等）でロール別に異なるラベルを
+    /// 選ぶ必要がある Stage 7 Statement 専用（`loadLabelRoleVariants` 参照）。
+    var labelsByTagAndRole: [String: [String: String]] = [:]
 
     private var locByLabel: [String: String] = [:]
     private var labelTextByResource: [String: (role: String, text: String)] = [:]
@@ -600,15 +901,28 @@ private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
             if pair.role == roleLabel || labelsByTag[tag] == nil {
                 labelsByTag[tag] = pair.text
             }
+            if labelsByTagAndRole[tag]?[pair.role] == nil {
+                labelsByTagAndRole[tag, default: [:]][pair.role] = pair.text
+            }
         }
     }
 }
 
 private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
     var roleSetsByTag: [String: Set<String>] = [:]
+    /// {roleURI: {local_tag: 表示順}}。role（`<presentationLink>` 単位）ごとに深さ優先走査で確定する。
+    var orderByRoleTag: [String: [String: Int]] = [:]
+    /// {roleURI: {local_tag: 直接の親タグ集合}}。`loadPresentationParents` 参照。
+    var parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
+    /// {roleURI: {local_tag: preferredLabel のロールURI}}。presentationArc の `preferredLabel`
+    /// 属性（合計行・期首/期末残高等でどのラベルロールを使うべきかの指示）。
+    var preferredLabelByRoleTag: [String: [String: String]] = [:]
 
     private var currentRole = ""
     private var inPresentationLink = false
+    /// role スコープ内でのみ有効な xlink:label → タグ名（`<loc>` はリンクごとにローカルスコープ）。
+    private var locTagByLabel: [String: String] = [:]
+    private var arcs: [(from: String, to: String, order: Double, preferredLabel: String?)] = []
 
     func parser(
         _ parser: XMLParser,
@@ -623,10 +937,18 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
         case "presentationLink":
             currentRole = attributeDict["xlink:role"] ?? ""
             inPresentationLink = !currentRole.isEmpty
+            locTagByLabel = [:]
+            arcs = []
         case "loc" where inPresentationLink:
-            if let href = attributeDict["xlink:href"] {
+            if let href = attributeDict["xlink:href"], let label = attributeDict["xlink:label"] {
                 let tag = XBRLUtils.conceptLocalName(from: href)
                 roleSetsByTag[tag, default: []].insert(currentRole)
+                locTagByLabel[label] = tag
+            }
+        case "presentationArc" where inPresentationLink:
+            if let from = attributeDict["xlink:from"], let to = attributeDict["xlink:to"] {
+                let order = Double(attributeDict["order"] ?? "") ?? 0
+                arcs.append((from: from, to: to, order: order, preferredLabel: attributeDict["preferredLabel"]))
             }
         default:
             break
@@ -639,8 +961,130 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
         namespaceURI: String?,
         qualifiedName qName: String?
     ) {
-        if XBRLUtils.localName(of: elementName) == "presentationLink" {
-            inPresentationLink = false
+        guard XBRLUtils.localName(of: elementName) == "presentationLink" else { return }
+        inPresentationLink = false
+        defer { locTagByLabel = [:]; arcs = [] }
+        guard !currentRole.isEmpty, !locTagByLabel.isEmpty, orderByRoleTag[currentRole] == nil else { return }
+
+        var childrenByFrom: [String: [(order: Double, to: String, preferredLabel: String?)]] = [:]
+        var hasIncoming: Set<String> = []
+        for arc in arcs {
+            childrenByFrom[arc.from, default: []].append((arc.order, arc.to, arc.preferredLabel))
+            hasIncoming.insert(arc.to)
         }
+        for label in childrenByFrom.keys {
+            childrenByFrom[label]?.sort { $0.order < $1.order }
+        }
+
+        // ルート = どの arc の to にもならない label（複数ある場合は label 名で決定的にソート）。
+        let roots = locTagByLabel.keys.filter { !hasIncoming.contains($0) }.sorted()
+
+        var order: [String: Int] = [:]
+        var preferredLabel: [String: String] = [:]
+        var counter = 0
+        var visiting: Set<String> = []
+
+        func visit(_ label: String, preferredLabelRole: String?) {
+            guard !visiting.contains(label) else { return }
+            visiting.insert(label)
+            defer { visiting.remove(label) }
+            if let tag = locTagByLabel[label], order[tag] == nil {
+                order[tag] = counter
+                counter += 1
+                if let preferredLabelRole { preferredLabel[tag] = preferredLabelRole }
+            }
+            for child in childrenByFrom[label] ?? [] {
+                visit(child.to, preferredLabelRole: child.preferredLabel)
+            }
+        }
+        for root in roots { visit(root, preferredLabelRole: nil) }
+
+        orderByRoleTag[currentRole] = order
+        preferredLabelByRoleTag[currentRole] = preferredLabel
+
+        var parentsByTag: [String: Set<String>] = [:]
+        for arc in arcs {
+            guard let parentTag = locTagByLabel[arc.from], let childTag = locTagByLabel[arc.to] else { continue }
+            parentsByTag[childTag, default: []].insert(parentTag)
+        }
+        parentTagsByRoleTag[currentRole] = parentsByTag
+    }
+}
+
+private final class CalculationLinkbaseParser: NSObject, XMLParserDelegate {
+    /// {roleURI: {合計行タグ: 構成要素（表示順ソート済み）}}。
+    var componentsByRoleTag: [String: [String: [CalcComponent]]] = [:]
+
+    private var currentRole = ""
+    private var inCalculationLink = false
+    /// role スコープ内でのみ有効な xlink:label → タグ名（`<loc>` はリンクごとにローカルスコープ）。
+    private var locTagByLabel: [String: String] = [:]
+    private var arcs: [(from: String, to: String, weight: Double, order: Double)] = []
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String]
+    ) {
+        let local = XBRLUtils.localName(of: elementName)
+
+        switch local {
+        case "calculationLink":
+            currentRole = attributeDict["xlink:role"] ?? ""
+            inCalculationLink = !currentRole.isEmpty
+            locTagByLabel = [:]
+            arcs = []
+        case "loc" where inCalculationLink:
+            if let href = attributeDict["xlink:href"], let label = attributeDict["xlink:label"] {
+                locTagByLabel[label] = XBRLUtils.conceptLocalName(from: href)
+            }
+        case "calculationArc" where inCalculationLink:
+            if let from = attributeDict["xlink:from"], let to = attributeDict["xlink:to"] {
+                let weight = Double(attributeDict["weight"] ?? "") ?? 1
+                let order = Double(attributeDict["order"] ?? "") ?? 0
+                arcs.append((from: from, to: to, weight: weight, order: order))
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        guard XBRLUtils.localName(of: elementName) == "calculationLink" else { return }
+        inCalculationLink = false
+        defer { locTagByLabel = [:]; arcs = [] }
+        // 同一 role が複数の <calculationLink>（extended link）に分割定義されるケースを
+        // presentation/label と同じ「最初に見つかった方を採用」で扱う（Opus 監査で発見・修正、
+        // 2026-07-31）。以前は無条件に上書きしており、後続の <calculationLink> に同じ role が
+        // 現れると先に集めた arc が丸ごと失われ得た（実データでは未発生だが、XBRL の base set
+        // 分割は仕様上許容されるため PresentationLinkbaseParser 側の方針に合わせる）。
+        guard !currentRole.isEmpty, !locTagByLabel.isEmpty, componentsByRoleTag[currentRole] == nil else {
+            return
+        }
+
+        var componentsByTag: [String: [CalcComponent]] = [:]
+        var seenByTag: [String: Set<String>] = [:]
+        let sortedArcs = arcs.sorted { $0.order < $1.order }
+        for arc in sortedArcs {
+            guard let fromTag = locTagByLabel[arc.from], let toTag = locTagByLabel[arc.to],
+                arc.weight.isFinite
+            else { continue }
+            // 実データ上 weight は ±1 のみ確認済み（加算/控除）。非整数値は四捨五入で
+            // 最も近い整数へ丸める（Opus 監査で発見・修正、2026-07-31。以前は `Int(_:)` で
+            // 単純切り捨てており 0.5 が 0 になり得た）。
+            let weight = Int(arc.weight.rounded())
+            let dedupeKey = "\(toTag)#\(weight)"
+            guard !(seenByTag[fromTag] ?? []).contains(dedupeKey) else { continue }
+            seenByTag[fromTag, default: []].insert(dedupeKey)
+            componentsByTag[fromTag, default: []].append(CalcComponent(tag: toTag, weight: weight))
+        }
+        componentsByRoleTag[currentRole] = componentsByTag
     }
 }

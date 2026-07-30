@@ -41,27 +41,115 @@ public func isServableStatementCacheVersion(_ version: String) -> Bool {
     return n >= statementMinServableVersion
 }
 
+/// Statement API の公開契約バージョン。`blueTickerVersion` とは独立。
+/// レスポンス形を破壊的に変更したときのみ +1 する（`Api.financialsSchemaVersion` と同型）。
+public let statementSchemaVersion = 1
+
 // MARK: - 契約型
 
-/// BS/PL/CF いずれかの1行分。標準タグ・企業拡張タグの区別や表示順（`order`）の取得方法は
-/// docs/statement-normalization-concept.md「未決事項」参照（Stage 7 実装時に確定）。
+/// BS/CF 行の区分。貸借対照表は資産/負債/純資産、キャッシュ・フロー計算書は営業/投資/財務活動を表す。
+/// 損益計算書には適用しない（`StatementLineItem.section` は常に nil）。presentation linkbase の
+/// 祖先タグから判定する（`StatementClassifier` 参照）。複数区分にまたがる合計行（例: 資産合計＋
+/// 負債純資産合計）は該当する祖先を持たないため nil になる。
+public enum StatementLineSection: String, Codable, Sendable {
+    case assets
+    case liabilities
+    case netAssets = "net_assets"
+    case operating
+    case investing
+    case financing
+}
+
+/// 合計行（`StatementLineItem.isTotal == true`）を構成する要素1件。計算リンクベース
+/// （`_cal.xml`、`summation-item` arc）由来。`weight` は加算=1・控除=−1（実データ上 ±1 のみ確認）。
+public struct StatementLineComponent: Codable, Sendable {
+    public var tag: String
+    public var weight: Int
+
+    public init(tag: String, weight: Int) {
+        self.tag = tag
+        self.weight = weight
+    }
+
+    public func jsonObject() -> [String: Any] {
+        ["tag": tag, "weight": weight]
+    }
+}
+
+/// BS/PL/CF いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
+/// 参照)。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
+/// `isTotal`/`components` は presentation ではなく計算リンクベース由来（`docs/statement-
+/// normalization-concept.md` 実装方針8）。presentation の親子関係は表示上のネストでしかなく
+/// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
+/// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
+/// 「未決事項」参照（v1では未対応）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
     public var label: String?
     public var value: Double
     public var unit: String?
     public var order: Int?
+    public var section: StatementLineSection?
+    /// この行が計算リンクベース上の合計行（`summation-item` の from 側）かどうか。
+    public var isTotal: Bool
+    /// `isTotal == true` かつ構成要素が解決できた場合のみ非 nil。
+    public var components: [StatementLineComponent]?
 
     private enum CodingKeys: String, CodingKey {
-        case tag, label, value, unit, order
+        case tag, label, value, unit, order, section
+        case isTotal = "is_total"
+        case components
     }
 
-    public init(tag: String, label: String?, value: Double, unit: String?, order: Int?) {
+    public init(
+        tag: String, label: String?, value: Double, unit: String?, order: Int?,
+        section: StatementLineSection? = nil, isTotal: Bool = false,
+        components: [StatementLineComponent]? = nil
+    ) {
         self.tag = tag
         self.label = label
         self.value = value
         self.unit = unit
         self.order = order
+        self.section = section
+        self.isTotal = isTotal
+        self.components = components
+    }
+
+    /// 手書き実装（Opus 監査で発見・修正、2026-07-31）: `isTotal` を非 Optional のまま
+    /// `decodeIfPresent(_:default:)` で読む。`company_statements.payload` は JSON カラムで
+    /// Fluent が直接デコードするため、この2フィールド追加前に格納された行（`is_total` キーが
+    /// 無い）があると合成 `Decodable` では `keyNotFound` で読み取り自体が失敗し、REST 読み出しも
+    /// `Stage7Ingest` の既存行チェックも共倒れする。現状 `company_statements` は本番・開発とも
+    /// 未書き込みで実害は無いが、将来の取り違えを避けるため決定的に安全側へ倒す。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tag = try container.decode(String.self, forKey: .tag)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        value = try container.decode(Double.self, forKey: .value)
+        unit = try container.decodeIfPresent(String.self, forKey: .unit)
+        order = try container.decodeIfPresent(Int.self, forKey: .order)
+        section = try container.decodeIfPresent(StatementLineSection.self, forKey: .section)
+        isTotal = try container.decodeIfPresent(Bool.self, forKey: .isTotal) ?? false
+        components = try container.decodeIfPresent(
+            [StatementLineComponent].self, forKey: .components)
+    }
+
+    /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
+    /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
+    /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
+    /// 解決できた場合のみ非 nil。
+    public func jsonObject() -> [String: Any] {
+        [
+            "tag": tag,
+            "label": label as Any? ?? NSNull(),
+            "value": value,
+            "unit": unit as Any? ?? NSNull(),
+            "order": order as Any? ?? NSNull(),
+            "section": section?.rawValue as Any? ?? NSNull(),
+            "is_total": isTotal,
+            "components": components.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+        ]
     }
 }
 
@@ -95,6 +183,18 @@ public struct StatementYear: Codable, Sendable {
         self.incomeStatement = incomeStatement
         self.cashFlow = cashFlow
     }
+
+    /// REST/MCP 応答用 JSON オブジェクト。
+    public func jsonObject() -> [String: Any] {
+        [
+            "fy_end": fyEnd as Any? ?? NSNull(),
+            "financial_period": financialPeriod as Any? ?? NSNull(),
+            "doc_id": docId as Any? ?? NSNull(),
+            "balance_sheet": balanceSheet.map { $0.jsonObject() },
+            "income_statement": incomeStatement.map { $0.jsonObject() },
+            "cash_flow": cashFlow.map { $0.jsonObject() },
+        ]
+    }
 }
 
 /// Statement API の公開レスポンス（本体・Stage 7）。
@@ -127,6 +227,21 @@ public struct StatementResponse: Codable, Sendable {
     /// 恒久的な対象外を毎回再試行しない（`FinancialsResponse.notApplicablePlaceholder` と同型）。
     public static func notApplicablePlaceholder(code: String) -> StatementResponse {
         StatementResponse(
-            schemaVersion: 1, code: code, name: nil, sector: nil, market: nil, years: [])
+            schemaVersion: statementSchemaVersion, code: code, name: nil, sector: nil, market: nil,
+            years: [])
+    }
+
+    /// REST/MCP 応答用 JSON オブジェクト。`name`/`sector`/`market` は v1 では常に nil
+    /// （company_statements は company_filing_sections と同様 code のみ非正規化して持つ。
+    /// docs/statement-normalization-concept.md）。
+    public func jsonObject() -> [String: Any] {
+        [
+            "schema_version": schemaVersion,
+            "code": code,
+            "name": name as Any? ?? NSNull(),
+            "sector": sector as Any? ?? NSNull(),
+            "market": market as Any? ?? NSNull(),
+            "years": years.map { $0.jsonObject() },
+        ]
     }
 }

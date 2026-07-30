@@ -67,4 +67,35 @@ import Testing
         #expect(placeholder.code == "9999")
         #expect(placeholder.years.isEmpty)
     }
+
+    @Test func decodesLineItemJsonMissingIsTotalKeyAsFalse() throws {
+        // 回帰テスト（Opus 監査で発見・修正、2026-07-31）: `is_total`/`components` 追加前に
+        // 格納された行（company_statements.payload は JSON カラム）は `is_total` キーを
+        // 持たない。合成 `Decodable` のままだと `keyNotFound` で読み取り自体が失敗するため、
+        // `isTotal` は非 Optional のまま `decodeIfPresent(default: false)` で読む。
+        let json = Data(
+            """
+            {"tag": "CashAndDeposits", "label": "現金及び預金", "value": 100, "unit": "JPY",
+             "order": null, "section": null}
+            """.utf8)
+        let item = try JSONDecoder().decode(StatementLineItem.self, from: json)
+        #expect(item.tag == "CashAndDeposits")
+        #expect(item.isTotal == false)
+        #expect(item.components == nil)
+    }
+
+    @Test func roundTripsIsTotalAndComponentsThroughJson() throws {
+        let item = StatementLineItem(
+            tag: "AssetsIFRS", label: "資産合計", value: 93_601_350_000_000, unit: "JPY", order: 33,
+            section: .assets, isTotal: true,
+            components: [
+                StatementLineComponent(tag: "CurrentAssetsIFRS", weight: 1),
+                StatementLineComponent(tag: "NonCurrentAssetsIFRS", weight: 1),
+            ])
+        let json = try JSONEncoder().encode(item)
+        let decoded = try JSONDecoder().decode(StatementLineItem.self, from: json)
+        #expect(decoded.isTotal == true)
+        #expect(decoded.components?.map(\.tag) == ["CurrentAssetsIFRS", "NonCurrentAssetsIFRS"])
+        #expect(decoded.components?.map(\.weight) == [1, 1])
+    }
 }

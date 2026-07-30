@@ -16,8 +16,10 @@
 | Stage 5 | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | Stage 6 | 日経225限定。business 軸は 225/225 社ingest 済み。cache_version を軸別（`breakdown-business-v7`/`breakdown-geography-v7`）に分離し、geography 軸の Neon ingest 配線・REST/MCP 公開を 2026-07-27 に完了（品質ゲート: 最新有報 224/224 社で `needs_review=true` とあいまい失敗が 0 を確認）。軸別命名への切替は Neon 側は次回 ingest から反映（現状 business 行は旧共通名 `breakdown-v7` 等のまま） |
+| Stage 7 | 日経225限定でスタート（2026-07-29）。DB(`company_statements`)/ingest(`--stages 7`)/REST/MCP 配線済み。presentation linkbase 由来の真の表示順(`order`)、BS/CF 行の区分(`section`: assets/liabilities/net_assets、operating/investing/financing)、標準タクソノミ補完によるラベル解決、計算リンクベース由来の合計行構成要素(`is_total`/`components`)まで対応済み（2026-07-31、v1のまま）。PL の利益段階ラベリングはスコープ外に確定（Stage 4 領域）。使い捨て Neon で実データ書き込み・読み出し検証済み（実XBRL9社でタグ漏れ・合計不一致なしを確認）。本番 Neon への日経225全社ingestは未実施 |
+| Stage 7 read 床 | **`statementMinServableVersion = 1`**（`statement-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
-| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。8 ツール（`search_companies`・`get_analysis`・`get_half_analysis` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
+| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。9 ツール（`search_companies`・`get_analysis`・`get_half_analysis`・`get_statement` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
@@ -164,7 +166,17 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。E/F判定（地域のみ・単一セグメント記載省略）の検知結果明示化はDBスキーマ・REST/MCP応答まで反映済み（issue #130/#132、`source="not_applicable"`プレースホルダ行＋404ボディの`reason`フィールド）。html_table経由でLLMがgeography-only等と判定したケースがunknownに落ちる分類漏れも解消済み（issue #135）。オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103、PR #126）、ZOZO/ベイカレント/JPXの非収益OperatingSegmentsAxis facts誤判定（issue #137、PR #138）、野村の金融費用控除後分母取り違え（issue #105、PR #109で分母をセグメント表小計へフォールバックする方式で解消済み）、資生堂型の地域facts併存によるE/F誤判定（PR #139）も解消済み。日経225は225/225社が最低1件ingest済み（2026-07-26時点）。geography 軸の **Neon ingest 配線は PR #141**（軸別 LLM キー `XAI_BUSINESS_*`/`XAI_GEOGRAPHY_*`、`GeographyBreakdownResolver`、Stage6 を business→geography の2パス）。**REST/MCP の geography 公開は 2026-07-27 に解禁**（公開ゲート＝使い捨て Neon（Stage6-devブランチ）で最新有報224/224社を確認し `needs_review=true` とあいまい失敗が0を確認済み。正当欠測 `not_found` は別カウント。直近の抽出修正3件（NSK型収益分解フォールバック・クボタ型キャプション順序・スズキ型資産表除外）は実データで再検証しゲート判定に影響しないことを確認）。構想は `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価
-- [ ] Stage 7/8: Statement（財務諸表 BS/PL/CF 完全正規化＋注記）。現状は設計・契約型のみ（`docs/statement-normalization-concept.md`）。DB/ingest/REST/MCP は未着手
+- [~] Stage 7/8: Statement（財務諸表 BS/PL/CF 完全正規化＋注記）。抽出ロジック・DevCLI は実装済み（PR #153）。DB（`company_statements`）/ingest(`--stages 7`)/REST(`GET /v1/companies/{code}/statement`)/MCP(`get_statement`) 配線を実装済み（2026-07-29、対象は日経225限定でスタート。実装方針は `docs/statement-normalization-concept.md`「実装方針」参照）。presentation linkbase 由来の真の表示順（`order`）、BS/CF 行の区分（`section`）対応も実装済み
+（2026-07-30、`statement-v1` のまま。本番未マージで移行コストゼロだったため v2 バンプ不要と判断。
+詳細は「実装方針」3・6）。PL の利益段階ラベリングはスコープ外に確定（Stage 4 領域）。使い捨て Neon
+への実 EDINET 取り込みで書き込み・REST/MCP 読み出しを実地検証済み（トヨタ7203・ソニー6758・出光興産5019、
+`swift test` green、Cursor CLI 監査済み）。日経225未配置環境（本 dev 環境含む）では `priorityIngestCodes()` が空集合になり Stage 7 の対象は0件（Stage 6 と同じ既知の制約）。
+2026-07-31、実データ目視確認で発見した3件のバグ（標準タグのラベル未解決・CFの現金同等物期首/期末残高欠落・
+デンソー型の負債合計誤区分）を修正し、計算リンクベース由来の合計行構成要素（`is_total`/`components`）を
+新規実装（詳細は「実装方針」7〜10）。トヨタ・デンソー・任天堂を golden 回帰テスト化
+（`RealXbrlStatementTests.swift`）、他6社（ソニー・SBI新生銀行・武田薬品・ソフトバンクグループ・
+キヤノン・三菱重工業）でも smoke 検証しタグ漏れ・実質的な合計不一致なしを確認済み
+- [ ] Stage 7 母集団拡大（日経225限定→全銘柄）。LLM 不要でコスト制約はないが、銀行・保険等特殊タクソノミでの実データ検証未実施のため段階展開する（`docs/statement-normalization-concept.md`「未検証事項」）
 
 ## 関連ドキュメント
 

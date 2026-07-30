@@ -168,4 +168,141 @@ import Foundation
         let firstAgain = XBRLUtils.loadLabelsByTag(in: dirs[0])
         #expect(firstAgain["NetSales"] == "売上高")
     }
+
+    // MARK: - Presentation linkbase 表示順（loadPresentationOrder）
+
+    private static let incomeStatementRole =
+        "http://disclosure.edinet-fsa.go.jp/role/jppfs/rol_ConsolidatedStatementOfIncome"
+
+    /// 深さ2のツリー（Root→GroupA/GroupB→Leaf*）を持つプレゼンテーションリンクベースを生成する。
+    /// `<loc>`/`<presentationArc>` の**文書内の出現順をわざと木の論理順と一致させない**
+    /// （GroupB・LeafB2 を先に書く）ことで、実装が文書順ではなく `order` 属性に従うことを検証できる
+    /// ようにする。GroupA(order=1)配下は Root の直後に来るのに対し、GroupB(order=2)は Root の
+    /// 「子」の中では2番目だが GroupA のサブツリー全体より後になる（深さ優先）ため、この形は
+    /// 幅優先実装（Root→GroupA/GroupBを先に全部→Leaf達）とも区別できる
+    /// （深さ優先: Root,GroupA,LeafA1,LeafA2,GroupB,LeafB1,LeafB2 / 幅優先だと GroupB が LeafA2 より前に来る）。
+    private static func makePresentationLinkbase() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:presentationLink xlink:type="extended" xlink:role="\(incomeStatementRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_GroupB" xlink:label="loc_GroupB"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LeafB2" xlink:label="loc_LeafB2"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LeafB1" xlink:label="loc_LeafB1"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_StatementOfIncomeAbstract" xlink:label="loc_Root"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_GroupA" xlink:label="loc_GroupA"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LeafA2" xlink:label="loc_LeafA2"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LeafA1" xlink:label="loc_LeafA1"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_GroupB" xlink:to="loc_LeafB2" order="2"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_GroupB" xlink:to="loc_LeafB1" order="1"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_Root" xlink:to="loc_GroupB" order="2"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_GroupA" xlink:to="loc_LeafA2" order="2"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_Root" xlink:to="loc_GroupA" order="1"/>
+            <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="loc_GroupA" xlink:to="loc_LeafA1" order="1"/>
+          </link:presentationLink>
+        </link:linkbase>
+        """
+    }
+
+    /// presentationArc の order 属性を深さ優先で辿り、role 内の表示順を 0 始まりの通し番号として復元する。
+    /// 文書内の要素出現順や幅優先走査ではなく、`order` 属性に基づく深さ優先順序であることを検証する。
+    @Test func loadPresentationOrderReconstructsDepthFirstOrderFromArcs() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_pre.xml": Self.makePresentationLinkbase()]
+        ) { dir in
+            let orderByRoleTag = XBRLUtils.loadPresentationOrder(in: dir)
+            let order = try #require(orderByRoleTag[Self.incomeStatementRole])
+
+            let expected = [
+                "StatementOfIncomeAbstract", "GroupA", "LeafA1", "LeafA2", "GroupB", "LeafB1", "LeafB2",
+            ]
+            let actual = expected.compactMap { order[$0] }
+            #expect(actual.count == expected.count, "全ノードに order が割り当てられていること")
+            #expect(actual == actual.sorted(), "文書内の宣言順ではなく order 属性に基づく深さ優先順であること")
+            #expect(order["LeafA2"]! < order["GroupB"]!, "深さ優先: GroupAの子孫を辿り終えてからGroupBへ進む（幅優先ならGroupBの方が先）")
+        }
+    }
+
+    /// 同一 dir への複数回の要求で常に同じ結果を返すこと（loadLabelsByTag と同型のキャッシュ挙動）。
+    @Test func loadPresentationOrderReturnsSameResultOnRepeatedCalls() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_pre.xml": Self.makePresentationLinkbase()]
+        ) { dir in
+            let first = XBRLUtils.loadPresentationOrder(in: dir)
+            let second = XBRLUtils.loadPresentationOrder(in: dir)
+            #expect(first == second)
+        }
+    }
+
+    // MARK: - 計算リンクベース（loadCalculationComponents）
+
+    private static let balanceSheetRole =
+        "http://disclosure.edinet-fsa.go.jp/role/jppfs/rol_ConsolidatedBalanceSheet"
+
+    /// `GrossProfit = NetSales(+1) + CostOfSales(-1)` を表す最小の計算リンクベース。
+    /// `CurrentAssets` の合計関係は同一 role 内に**わざと重複した arc**（同じ from/to/weight の
+    /// `<calculationArc>` を2本）を含める。presentation linkbase と同様、実データの XBRL には
+    /// 同一の集計関係が複数箇所で再定義される癖があるため、重複排除がされることを検証する。
+    private static func makeCalculationLinkbase() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:calculationLink xlink:type="extended" xlink:role="\(incomeStatementRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_GrossProfit" xlink:label="loc_GrossProfit"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetSales" xlink:label="loc_NetSales"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CostOfSales" xlink:label="loc_CostOfSales"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_GrossProfit" xlink:to="loc_NetSales" order="1" weight="1"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_GrossProfit" xlink:to="loc_CostOfSales" order="2" weight="-1"/>
+          </link:calculationLink>
+          <link:calculationLink xlink:type="extended" xlink:role="\(balanceSheetRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CurrentAssets" xlink:label="loc_CurrentAssets_1"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CashAndDeposits" xlink:label="loc_Cash_1"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CurrentAssets" xlink:label="loc_CurrentAssets_2"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CashAndDeposits" xlink:label="loc_Cash_2"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_CurrentAssets_1" xlink:to="loc_Cash_1" order="1" weight="1"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_CurrentAssets_2" xlink:to="loc_Cash_2" order="1" weight="1"/>
+          </link:calculationLink>
+        </link:linkbase>
+        """
+    }
+
+    @Test func loadCalculationComponentsExpressesAdditionAndSubtractionByWeight() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            let components = try #require(componentsByRoleTag[Self.incomeStatementRole]?["GrossProfit"])
+            #expect(components.map(\.tag) == ["NetSales", "CostOfSales"])
+            #expect(components.map(\.weight) == [1, -1])
+        }
+    }
+
+    @Test func loadCalculationComponentsScopesByRoleAndDoesNotLeakAcrossRoles() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            #expect(componentsByRoleTag[Self.incomeStatementRole]?["CurrentAssets"] == nil)
+            #expect(componentsByRoleTag[Self.balanceSheetRole]?["GrossProfit"] == nil)
+        }
+    }
+
+    /// 実データの癖の回帰テスト: 同一 role 内で同じ集計関係（同じ component・weight）が
+    /// 複数の `<loc>`/`<calculationArc>` の組で重複定義されても、構成要素は1回だけに収まる。
+    @Test func loadCalculationComponentsDedupesRepeatedArcsWithinTheSameRole() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            let components = try #require(componentsByRoleTag[Self.balanceSheetRole]?["CurrentAssets"])
+            #expect(components.count == 1)
+            #expect(components.first?.tag == "CashAndDeposits")
+            #expect(components.first?.weight == 1)
+        }
+    }
 }

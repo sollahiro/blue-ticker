@@ -46,6 +46,8 @@ func registerRoutes(
                 "breakdown_business_min_servable": businessBreakdownMinServableVersion,
                 "breakdown_geography": geographyBreakdownCacheVersion,
                 "breakdown_geography_min_servable": geographyBreakdownMinServableVersion,
+                "statement": statementCacheVersion,
+                "statement_min_servable": statementMinServableVersion,
             ],
         ], status: .ok)
     }
@@ -196,6 +198,21 @@ func registerRoutes(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
                 logger: req.logger),
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
+    }
+
+    // GET /v1/companies/{code}/statement?years=5&doc_id=...
+    // DB（Stage 7 company_statements）の格納済み BS/PL/CF のみを返す。ライブ抽出へはフォールバック
+    // しない（Stage 5/6 と同型）。Stage 7 の対象母集団は日経225構成銘柄のみ（ingest 側の制約。
+    // docs/statement-normalization-concept.md「実装方針」1）。
+    v1.get("companies", ":code", "statement") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let docId = req.query[String.self, at: "doc_id"]
+        let years = req.query[Int.self, at: "years"] ?? Api.statementYearsDefault
+        return makeStoredDataResponse(
+            await serveStoredStatement(
+                code: code, docId: docId, years: years, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            notFoundMessage: "財務諸表は未抽出です")
     }
 
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
@@ -394,6 +411,27 @@ func serveStoredFilingSections(
         ) {
             try await loadStoredFilingSections(
                 code: code, docId: docId, sections: sections, db: db)
+        }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `statement` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+/// ライブ抽出へのフォールバックは行わない（Stage 5 と同じ理由。決定論のみだが EDINET DL 自体は重い）。
+func serveStoredStatement(
+    code: String, docId: String?, years: Int, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredStatement(code: code, docId: docId, years: years, db: db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)

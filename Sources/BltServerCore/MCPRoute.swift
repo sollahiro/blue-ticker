@@ -214,6 +214,14 @@ private func dispatchMcpTool(
             await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
 
+    case "get_statement":
+        let code = args["code"]?.stringValue ?? ""
+        let docId = args["doc_id"]?.stringValue
+        let years = args["years"]?.intValue ?? Api.statementYearsDefault
+        return mapStoredResult(
+            await serveStoredStatement(code: code, docId: docId, years: years, db: db, logger: logger),
+            notFoundMessage: "財務諸表は未抽出です")
+
     default:
         return errorToolResult("Unknown tool: \(params.name)")
     }
