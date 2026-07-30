@@ -209,10 +209,25 @@ if ! git commit -m "chore: refresh ingest status page" -- assets/apex-site/statu
   exit 1
 fi
 
-if ! git push origin main; then
-  echo "ERROR: git push に失敗しました（コミットはローカルに残っています。次回実行時に確認してください）" >&2
-  exit 1
+if git push origin main; then
+  echo "status-page: committed and pushed"
+  exit 0
 fi
 
-echo "status-page: committed and pushed"
-exit 0
+# push が non-fast-forward で失敗するケース（他 worktree の PR マージ等で origin/main が
+# 進んでいた場合）を1回だけ自動リカバリする。--autostash は、たまたま実行タイミングで
+# ユーザーが他ファイルを編集中だった場合に rebase が中断しないための保険。
+# rebase 自体が失敗する（= status.html 側で本当のコンフリクト）場合は abort して
+# ローカルコミットを保持したまま従来どおりエラー終了する。
+echo "git push が失敗しました。fetch + rebase して再試行します" >&2
+if git fetch origin main --quiet && git rebase --autostash origin/main; then
+  if git push origin main; then
+    echo "status-page: committed and pushed (rebase retry)"
+    exit 0
+  fi
+else
+  git rebase --abort >/dev/null 2>&1
+fi
+
+echo "ERROR: git push に失敗しました（コミットはローカルに残っています。次回実行時に確認してください）" >&2
+exit 1
