@@ -52,6 +52,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
     // business 軸が解決できなかった理由（E/F/unknown）の永続化列（issue #132）。
     app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
+    // Stage 7: BS/PL/CF 完全正規化（company_statements、書類単位 JSONB）。対象は日経225限定。
+    app.migrations.add(CreateCompanyStatements())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

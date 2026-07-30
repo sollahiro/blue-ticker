@@ -11,6 +11,7 @@ import Testing
         #expect(Set(ids).count == ids.count)
         #expect(ids.contains("search-companies"))
         #expect(ids.contains("get-breakdown"))
+        #expect(ids.contains("get-statement"))
         #expect(ids.contains("list-sectors"))
     }
 
@@ -21,7 +22,7 @@ import Testing
                 "search_companies", "search_by_sector", "get_filings",
                 "get_financial_summary", "get_half_financial_summary",
                 "get_analysis", "get_half_analysis", "get_filing_content",
-                "get_breakdown",
+                "get_breakdown", "get_statement",
             ])
         // REST 専用（MCP なし）
         #expect(apiSkill(id: "list-sectors")?.mcpTool == nil)

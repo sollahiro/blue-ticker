@@ -10,6 +10,8 @@
 | Filing | Basic | 無料 | 実装済 | 有報のテキスト |
 | Analyze | Basic | 有料 | 実装済 | 独自の分析手法に基づいた計算値 |
 | Breakdown | Basic | 有料 | 実装済 | バックエンド LLM で構造化した事業別・地域別売上 |
+| Statement | Basic | 無料 | 実装済（日経225限定） | 財務諸表（BS/PL/CF）の全項目正規化 |
+| Statement Notes | Basic | 有料 | 構想（Stage 8・未着手） | 財務諸表の注記 |
 
 現時点のプラン枠は **Basic のみ**（上表の全機能が Basic に属する）。
 
@@ -31,8 +33,15 @@
 - REST: `GET /v1/companies/{code}/breakdown`、MCP: `get_breakdown`
 - 事業別（business）/ 地域別（geography）軸ともに実装済み（日経225構成銘柄限定など制約あり。geography は2026-07-27公開）。詳細は `docs/breakdown-normalization-concept.md`
 
+## Statement の境界
+
+- 本体（BS/PL/CF 全項目、Stage 7）と注記（Stage 8）は**別エンドポイント・別ツール**に分離する: `GET /v1/companies/{code}/statement`（MCP `get_statement`）/ `GET /v1/companies/{code}/statement/notes`（MCP `get_statement_notes`）。
+- 分離理由: 課金境界はエンドポイント・ツール単位で決まる（「前提」節のルール）。本体無料・注記有料のティア分けは、Breakdown の `axis=` のような同一エンドポイント内のクエリパラメータでは実現できない（両軸が同ティアだから成立していた設計）。
+- 本体（`GET /v1/companies/{code}/statement`・`get_statement`）は DB/ingest/REST/MCP まで実装済み（2026-07-29、対象は日経225限定）。注記（Stage 8）は未実装。詳細は `docs/statement-normalization-concept.md`
+
 ## 関連
 
 - `docs/public-api-concept.md` — REST 本線化と公開 API 化
 - `docs/breakdown-normalization-concept.md` — Breakdown（旧 Segment / Geography）正規化構想
+- `docs/statement-normalization-concept.md` — Statement（BS/PL/CF 完全正規化）構想
 - `docs/blt-server-roadmap.md` — Monetize Gateway 等

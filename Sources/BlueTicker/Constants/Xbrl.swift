@@ -855,6 +855,55 @@ enum Xbrl {
     /// 誤検知としてガードを立てない。
     static let segmentSpecificGeographyLabelKeywordsJa: [String] =
         segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
+
+    // MARK: - Statement（BS/PL/CF 完全正規化, Stage 7, docs/statement-normalization-concept.md）
+
+    /// role URI の末尾セクション名（`XBRLUtils.sectionNameFromRole`）が注記・補足表であることを示す
+    /// 接頭辞。`NotesConsolidatedBalanceSheet` のように本表と同じキーワードを含むため、
+    /// BS/PL/CF 判定より先にこの接頭辞で除外する（実データ検証: 2026-07, smoke 158社）。
+    static let statementNotesRolePrefix = "Notes"
+
+    /// 貸借対照表（Instant）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `BalanceSheet`/`ConsolidatedBalanceSheet`、IFRS は
+    /// `ConsolidatedStatementOfFinancialPositionIFRS` 等（実データ検証: smoke 158社）。
+    static let balanceSheetRoleKeywords: [String] = [
+        "BalanceSheet",
+        "StatementOfFinancialPosition",
+    ]
+
+    /// 損益計算書（Duration）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `StatementOfIncome`/`ConsolidatedStatementOfIncome`、IFRS は
+    /// `ConsolidatedStatementOfProfitOrLossIFRS`。
+    static let incomeStatementRoleKeywords: [String] = [
+        "StatementOfIncome",
+        "StatementOfProfitOrLoss",
+    ]
+
+    /// キャッシュ・フロー計算書（Duration）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `StatementOfCashFlows-indirect`、IFRS は `ConsolidatedStatementOfCashFlowsIFRS`。
+    /// いずれも `StatementOfCashFlows` を含むため単一キーワードで両基準を吸収できる。
+    static let cashFlowRoleKeywords: [String] = [
+        "StatementOfCashFlows"
+    ]
+
+    /// BS/CF 行の区分（`StatementLineItem.section`）判定に使う presentation 祖先タグの部分一致
+    /// キーワード。`StatementClassifier` が presentation linkbase の親子関係を辿り、最初に一致した
+    /// 祖先で確定する（実データ検証: トヨタ7203 J-GAAP・ソニー6758 IFRS のキャッシュ済み実XBRL）。
+    ///
+    /// **判定順が重要**: BS は 純資産/資本（NetAssets・Equity）→ 負債（Liabilit）→ 資産（Asset）の順で
+    /// 判定する。`NetAssetsAbstract` は "Assets" を部分文字列として含むため、資産キーワードを先に
+    /// 判定すると純資産科目（`ShareholdersEquityAbstract` 等の祖先が `NetAssetsAbstract` のケース）が
+    /// 資産へ誤分類される。
+    static let statementNetAssetsAncestorKeywords: [String] = ["NetAssets", "Equity"]
+    static let statementLiabilitiesAncestorKeywords: [String] = ["Liabilit"]
+    static let statementAssetsAncestorKeywords: [String] = ["Asset"]
+
+    /// CF 行の区分キーワード。IFRS は "Investing"/"Financing"、J-GAAP は
+    /// "NetCashProvidedByUsedInInvestmentActivitiesAbstract" のように "Investment" と表記が割れるため、
+    /// 両方を吸収できる短い部分文字列にする。
+    static let statementOperatingAncestorKeywords: [String] = ["Operat"]
+    static let statementInvestingAncestorKeywords: [String] = ["Invest"]
+    static let statementFinancingAncestorKeywords: [String] = ["Financ"]
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

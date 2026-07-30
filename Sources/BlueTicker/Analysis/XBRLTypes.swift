@@ -14,6 +14,9 @@ struct XbrlFact {
     var sections: [String]?
     var label: String?
     var sourceFile: String?
+    /// role URI ごとの presentation linkbase 表示順（0始まり、role 内の深さ優先走査順）。
+    /// role がこのタグを含まない場合は該当キー無し。
+    var orderByRole: [String: Int]?
 }
 
 typealias XbrlTagElements = [String: [String: Double]]

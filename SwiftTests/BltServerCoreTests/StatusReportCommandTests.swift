@@ -140,6 +140,8 @@ private func seedBreakdown(
                 #expect(stage.companiesCovered == 0)
                 #expect(stage.coveragePct == 0.0)
                 #expect(stage.currentVersionPct == 0.0)
+                #expect(stage.servableCovered == 0)
+                #expect(stage.servablePct == 0.0)
                 #expect(stage.lastUpdated == nil)
                 #expect(stage.stale == true)
             }
@@ -161,6 +163,8 @@ private func seedBreakdown(
             #expect(financials.companiesTarget == 2)
             #expect(financials.coveragePct == 100.0)
             #expect(financials.currentVersionPct == 100.0)
+            #expect(financials.servableCovered == 2)
+            #expect(financials.servablePct == 100.0)
             #expect(financials.docsCovered == nil)
             #expect(financials.docsTarget == nil)
         }
@@ -242,6 +246,49 @@ private func seedBreakdown(
             #expect(business.companiesCovered == 2)
             // 現行版扱いは segment_info_llm 側の1件のみ（xbrl_facts の旧版はカウントしない）。
             #expect(business.currentVersionPct == 50.0)
+        }
+    }
+
+    // MARK: - serviceable(床以上)率は現行版一致率(current_version_pct)とは独立した軸
+
+    @Test func breakdownServablePctStaysHighWhileCurrentVersionPctDropsForOldButFloorMeetingVersion()
+        async throws
+    {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
+            try await seedAnnualReportDoc("S2", secCode: "67580", db: app.db)
+            try await seedBreakdown(
+                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
+                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+            // xbrl_facts 経由・旧版だが床（businessBreakdownMinServableVersion=1）以上 →
+            // current_version_pct には数えないが servable_pct には数える。
+            try await seedBreakdown(
+                docID: "S2", axis: breakdownAxisBusiness, code: "6758",
+                source: breakdownSourceXbrlFacts, version: "breakdown-business-v3", db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: [], priorityCodes: ["7203", "6758"])
+            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+
+            #expect(business.currentVersionPct == 50.0)  // 現行版(v7)は1件のみ
+            #expect(business.servableCovered == 2)  // 床(v1)以上は2件とも該当
+            #expect(business.servablePct == 100.0)
+        }
+    }
+
+    @Test func financialsServablePctDropsWhileCoverageStaysFullForVersionBelowFloor() async throws {
+        try await withMigratedApp { app in
+            try await seedFinancials(code: "7203", version: companyFinancialsCacheVersion, db: app.db)
+            // fin-v1 は companyFinancialsMinServableVersion(=4) 未満 → 配信不可。
+            try await seedFinancials(code: "6758", version: "fin-v1", db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
+            let financials = try #require(report.stages.first { $0.key == "financials" })
+
+            #expect(financials.coveragePct == 100.0)  // 行の存在自体は2社ともある
+            #expect(financials.servableCovered == 1)  // 実際に配信可能なのは現行版の1社のみ
+            #expect(financials.servablePct == 50.0)
         }
     }
 

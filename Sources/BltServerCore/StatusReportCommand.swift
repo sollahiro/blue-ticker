@@ -105,6 +105,13 @@ public struct IngestStageStatus: Codable, Sendable, Equatable {
     public let docsCovered: Int?
     public let docsTarget: Int?
     public let currentVersionPct: Double
+    /// 対象件数（docsTarget があれば docsTarget、無ければ companiesTarget）のうち、read 床
+    /// （各 Stage の `*MinServableVersion`）以上を満たす件数・割合。`currentVersionPct`
+    /// （現行版との完全一致）とは別軸: 床以上だが現行版ではない行も含まれる。ただし breakdown の
+    /// `not_applicable` 行のように床は満たしていても実際の read は 404（reason 付き）になる行も
+    /// この集計には含む（`isServableBreakdown` の定義どおり。実 HTTP 200 率とは厳密には一致しない）。
+    public let servableCovered: Int
+    public let servablePct: Double
     /// ISO8601（UTC）。行が1件も無ければ nil。
     public let lastUpdated: String?
     public let stale: Bool
@@ -118,6 +125,8 @@ public struct IngestStageStatus: Codable, Sendable, Equatable {
         case docsCovered = "docs_covered"
         case docsTarget = "docs_target"
         case currentVersionPct = "current_version_pct"
+        case servableCovered = "servable_covered"
+        case servablePct = "servable_pct"
         case lastUpdated = "last_updated"
         case stale
     }
@@ -162,6 +171,9 @@ private func isStageStale(lastUpdated: Date?, now: Date) -> Bool {
 private struct StatusRow {
     let code: String
     let isCurrentVersion: Bool
+    /// read 床（`*MinServableVersion`）以上で実際に 200 が返るか。`isCurrentVersion` より緩い条件
+    /// （床以上なら現行版でなくても true）。
+    let isServable: Bool
     let updatedAt: Date?
 }
 
@@ -176,6 +188,7 @@ private func buildCompanyLevelStage(
     let companiesTarget = targetCodes.count
     let companiesCovered = Set(inScope.map(\.code)).count
     let currentCount = inScope.filter(\.isCurrentVersion).count
+    let servableCount = inScope.filter(\.isServable).count
     let lastUpdated = inScope.compactMap(\.updatedAt).max()
     return IngestStageStatus(
         key: key, label: label,
@@ -183,6 +196,8 @@ private func buildCompanyLevelStage(
         coveragePct: roundedPct(companiesCovered, companiesTarget),
         docsCovered: nil, docsTarget: nil,
         currentVersionPct: roundedPct(currentCount, companiesTarget),
+        servableCovered: servableCount,
+        servablePct: roundedPct(servableCount, companiesTarget),
         lastUpdated: lastUpdated.map { isoString(from: $0) },
         stale: isStageStale(lastUpdated: lastUpdated, now: now))
 }
@@ -199,6 +214,7 @@ private func buildDocumentLevelStage(
     let companiesTarget = targetCodes.count
     let companiesCovered = Set(inScope.map(\.code)).count
     let currentCount = inScope.filter(\.isCurrentVersion).count
+    let servableCount = inScope.filter(\.isServable).count
     let lastUpdated = inScope.compactMap(\.updatedAt).max()
     return IngestStageStatus(
         key: key, label: label,
@@ -206,6 +222,8 @@ private func buildDocumentLevelStage(
         coveragePct: roundedPct(companiesCovered, companiesTarget),
         docsCovered: inScope.count, docsTarget: docsTarget,
         currentVersionPct: roundedPct(currentCount, docsTarget),
+        servableCovered: servableCount,
+        servablePct: roundedPct(servableCount, docsTarget),
         lastUpdated: lastUpdated.map { isoString(from: $0) },
         stale: isStageStale(lastUpdated: lastUpdated, now: now))
 }
@@ -224,6 +242,7 @@ public func buildIngestStatusReport(
         rows: finRows.map {
             StatusRow(
                 code: $0.id ?? "", isCurrentVersion: $0.cacheVersion == companyFinancialsCacheVersion,
+                isServable: isServableCompanyFinancialsCacheVersion($0.cacheVersion),
                 updatedAt: $0.updatedAt)
         },
         targetCodes: listedCodes, now: now)
@@ -236,6 +255,7 @@ public func buildIngestStatusReport(
             StatusRow(
                 code: $0.id ?? "",
                 isCurrentVersion: $0.cacheVersion == companyHalfFinancialsCacheVersion,
+                isServable: isServableCompanyHalfFinancialsCacheVersion($0.cacheVersion),
                 updatedAt: $0.updatedAt)
         },
         targetCodes: listedCodes, now: now)
@@ -250,6 +270,7 @@ public func buildIngestStatusReport(
         rows: sectionRows.map {
             StatusRow(
                 code: $0.code, isCurrentVersion: $0.cacheVersion == filingSectionsCacheVersion,
+                isServable: isServableFilingSectionsCacheVersion($0.cacheVersion),
                 updatedAt: $0.updatedAt)
         },
         targetCodes: listedCodes, docsTarget: sectionsDocsTarget, now: now)
@@ -271,7 +292,11 @@ public func buildIngestStatusReport(
             let isCurrent =
                 !isVersionGatedBreakdownSource(row.source)
                 || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisBusiness)
-            return StatusRow(code: row.code, isCurrentVersion: isCurrent, updatedAt: row.updatedAt)
+            let isServable = isServableBreakdown(
+                source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisBusiness)
+            return StatusRow(
+                code: row.code, isCurrentVersion: isCurrent, isServable: isServable,
+                updatedAt: row.updatedAt)
         },
         targetCodes: priorityCodes, docsTarget: breakdownDocsTarget, now: now)
 
@@ -284,7 +309,11 @@ public func buildIngestStatusReport(
             let isCurrent =
                 !isVersionGatedBreakdownSource(row.source)
                 || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisGeography)
-            return StatusRow(code: row.code, isCurrentVersion: isCurrent, updatedAt: row.updatedAt)
+            let isServable = isServableBreakdown(
+                source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisGeography)
+            return StatusRow(
+                code: row.code, isCurrentVersion: isCurrent, isServable: isServable,
+                updatedAt: row.updatedAt)
         },
         targetCodes: priorityCodes, docsTarget: breakdownDocsTarget, now: now)
 
