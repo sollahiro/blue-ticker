@@ -11,17 +11,20 @@ enum SmokeCacheSupport {
     static let cacheDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent("tmp_cache/edinet")
 
-    static func ensureCached(_ docIDs: some Sequence<String>) async {
+    /// `cacheDir` 省略時は `tmp_cache/edinet`（従来通り）。`RealXbrlBreakdownTests` のような
+    /// 別ディレクトリ（`~/.config/blue-ticker/analysis_cache/...`）を使う呼び出し元は明示指定する。
+    static func ensureCached(_ docIDs: some Sequence<String>, cacheDir: URL? = nil) async {
         guard let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"], !apiKey.isEmpty else {
             return
         }
-        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-        let store = EdinetCacheStore(cacheDir: cacheDir)
+        let dir = cacheDir ?? self.cacheDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = EdinetCacheStore(cacheDir: dir)
         let client = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
 
         for docID in docIDs {
-            guard !store.hasXbrlDir(docID, saveDir: cacheDir) else { continue }
-            if await client.downloadDocument(docID, saveDir: cacheDir) == nil {
+            guard !store.hasXbrlDir(docID, saveDir: dir) else { continue }
+            if await client.downloadDocument(docID, saveDir: dir) == nil {
                 print("FAIL   \(docID): ダウンロード失敗")
             }
         }
