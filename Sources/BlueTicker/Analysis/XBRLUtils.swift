@@ -1060,14 +1060,26 @@ private final class CalculationLinkbaseParser: NSObject, XMLParserDelegate {
         guard XBRLUtils.localName(of: elementName) == "calculationLink" else { return }
         inCalculationLink = false
         defer { locTagByLabel = [:]; arcs = [] }
-        guard !currentRole.isEmpty, !locTagByLabel.isEmpty else { return }
+        // 同一 role が複数の <calculationLink>（extended link）に分割定義されるケースを
+        // presentation/label と同じ「最初に見つかった方を採用」で扱う（Opus 監査で発見・修正、
+        // 2026-07-31）。以前は無条件に上書きしており、後続の <calculationLink> に同じ role が
+        // 現れると先に集めた arc が丸ごと失われ得た（実データでは未発生だが、XBRL の base set
+        // 分割は仕様上許容されるため PresentationLinkbaseParser 側の方針に合わせる）。
+        guard !currentRole.isEmpty, !locTagByLabel.isEmpty, componentsByRoleTag[currentRole] == nil else {
+            return
+        }
 
         var componentsByTag: [String: [CalcComponent]] = [:]
         var seenByTag: [String: Set<String>] = [:]
         let sortedArcs = arcs.sorted { $0.order < $1.order }
         for arc in sortedArcs {
-            guard let fromTag = locTagByLabel[arc.from], let toTag = locTagByLabel[arc.to] else { continue }
-            let weight = Int(arc.weight)
+            guard let fromTag = locTagByLabel[arc.from], let toTag = locTagByLabel[arc.to],
+                arc.weight.isFinite
+            else { continue }
+            // 実データ上 weight は ±1 のみ確認済み（加算/控除）。非整数値は四捨五入で
+            // 最も近い整数へ丸める（Opus 監査で発見・修正、2026-07-31。以前は `Int(_:)` で
+            // 単純切り捨てており 0.5 が 0 になり得た）。
+            let weight = Int(arc.weight.rounded())
             let dedupeKey = "\(toTag)#\(weight)"
             guard !(seenByTag[fromTag] ?? []).contains(dedupeKey) else { continue }
             seenByTag[fromTag, default: []].insert(dedupeKey)

@@ -96,6 +96,31 @@ import Foundation
         #expect(Set(cashRows.map(\.value)) == [8_982_404_000_000, 9_412_060_000_000])
         // 期首・期末で異なるラベルが選ばれ、同じラベルに収束していない。
         #expect(Set(cashRows.compactMap(\.label)).count == 2)
+
+        // 回帰テスト: 出力順が実行のたびに入れ替わらないこと（Opus 監査で発見・修正、
+        // 2026-07-31。期首/期末残高は同一タグ・同一 order のため、fact の contextRef を
+        // 決定的なタイブレークキーに使う前は入力の走査順に依存していた）。
+        let secondRun = try #require(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.cashFlow]))
+        let secondCashRows = secondRun.cashFlow.filter { $0.tag == "CashAndCashEquivalentsIFRS" }
+        #expect(cashRows.map(\.value) == secondCashRows.map(\.value))
+    }
+
+    @Test(
+        .enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"),
+        .enabled(if: taxonomyAvailable, "assets/taxonomy not available")
+    )
+    func toyotaBalanceSheetTotalRowsUseTotalLabelNotPeriodEndLabel() async throws {
+        // 回帰テスト（Opus 監査で発見・修正、2026-07-31）: BS の合計行が標準タクソノミの
+        // periodEndLabel を持つ場合（`EquityIFRS` 等）、期首/期末残高の区別ロジックが CF に
+        // 限定されていなかったため `preferredLabel=totalLabel`（「資本合計」）が無視され
+        // 常に「期末残高」になっていた（キャッシュ済み実XBRL 140件中136件で発生）。
+        let year = try #require(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.balanceSheet]))
+        let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(byTag["EquityIFRS"]?.label == "資本合計")
+        #expect(byTag["EquityIFRS"]?.label?.contains("残高") == false)
     }
 
     // MARK: - デンソー S100VWHL

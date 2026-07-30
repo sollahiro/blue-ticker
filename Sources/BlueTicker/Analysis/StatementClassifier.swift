@@ -75,13 +75,32 @@ enum StatementClassifier {
         let parentTagsByTag = primaryRole.flatMap { parentTagsByRoleTag[$0] }
         let preferredLabelRoleByTag = primaryRole.flatMap { preferredLabelByRoleTag[$0] }
         let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
-        let items = chosen.map { tag, fact in
+
+        // presentation linkbase の表示順・タグ名に加え、fact 自身の contextRef を最終的な
+        // タイブレークキーに使う（Opus 監査で発見・修正、2026-07-31）。CF の期首/期末残高調整行
+        // （`CashAndCashEquivalentsIFRS` 等）は同一タグ・同一 order のまま2行出るため、
+        // contextRef が無いと `chosen`（辞書由来でプロセスごとに走査順が変わりうる）の並びが
+        // そのまま出力順に漏れ、実行のたびに期首/期末の順序が入れ替わりかねなかった。
+        let ordered = chosen.sorted { lhs, rhs in
+            let lOrder = primaryRole.flatMap { lhs.fact.orderByRole?[$0] }
+            let rOrder = primaryRole.flatMap { rhs.fact.orderByRole?[$0] }
+            switch (lOrder, rOrder) {
+            case let (l?, r?) where l != r: return l < r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: break
+            }
+            if lhs.tag != rhs.tag { return lhs.tag < rhs.tag }
+            return lhs.fact.contextRef < rhs.fact.contextRef
+        }
+
+        return ordered.map { tag, fact in
             let order = primaryRole.flatMap { fact.orderByRole?[$0] }
             let section = parentTagsByTag.flatMap {
                 lineSection(for: tag, sectionType: sectionType, parentTagsByTag: $0)
             }
             let label = resolvedLabel(
-                for: tag, ctx: fact.contextRef, plainLabel: fact.label,
+                for: tag, ctx: fact.contextRef, sectionType: sectionType, plainLabel: fact.label,
                 preferredLabelRole: preferredLabelRoleByTag?[tag],
                 labelRoleVariantsByTag: labelRoleVariantsByTag)
             let calcComponents = componentsByTag?[tag]
@@ -91,17 +110,6 @@ enum StatementClassifier {
             return StatementLineItem(
                 tag: tag, label: label, value: fact.value, unit: fact.unitRef, order: order,
                 section: section, isTotal: calcComponents != nil, components: components)
-        }
-
-        // presentation linkbase の表示順が取れたタグを優先し、取れないタグはタグ名のアルファベット順へ
-        // フォールバックする（両方 order 無しの場合は従来どおりタグ名順のみで決定的）。
-        return items.sorted { lhs, rhs in
-            switch (lhs.order, rhs.order) {
-            case let (l?, r?): return l == r ? lhs.tag < rhs.tag : l < r
-            case (.some, nil): return true
-            case (nil, .some): return false
-            case (nil, nil): return lhs.tag < rhs.tag
-            }
         }
     }
 
@@ -116,23 +124,48 @@ enum StatementClassifier {
     /// 保持できない（`order`/`depth`/`parentTag` と同じ制約）。この特定パターンだけは fact 自身の
     /// context（前期末=当期首の instant か、当期末の instant か）から periodStartLabel/
     /// periodEndLabel ロールを直接選び直すことで区別する（実データ検証: トヨタ7203）。
+    ///
+    /// **CF 限定**（Opus 監査で発見・修正、2026-07-31）: 当初この分岐は sectionType を問わず
+    /// 常に評価していたため、BS の合計行（`EquityIFRS`/`NetAssetsIFRS` 等、標準タクソノミが
+    /// periodEndLabel を定義している概念）が `preferredLabel=totalLabel` を無視して常に
+    /// 「期末残高」表示になっていた（キャッシュ済み実XBRL 140件中136件で発生）。期首/期末の
+    /// 区別が必要なのは CF の残高調整行だけなので、CF 以外では従来どおり `preferredLabelRole`
+    /// を優先する。
     private static func resolvedLabel(
-        for tag: String, ctx: String, plainLabel: String?, preferredLabelRole: String?,
-        labelRoleVariantsByTag: [String: [String: String]]
+        for tag: String, ctx: String, sectionType: StatementSectionType, plainLabel: String?,
+        preferredLabelRole: String?, labelRoleVariantsByTag: [String: [String: String]]
     ) -> String? {
         let variants = labelRoleVariantsByTag[tag] ?? [:]
-        if ContextHelpers.isConsolidatedPriorInstant(ctx) || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
-            let periodStart = variants.first(where: { $0.key.contains("periodStartLabel") })?.value {
-            return periodStart
-        }
-        if ContextHelpers.isConsolidatedInstant(ctx) || ContextHelpers.isNonConsolidatedInstant(ctx),
-            let periodEnd = variants.first(where: { $0.key.contains("periodEndLabel") })?.value {
-            return periodEnd
+        if sectionType == .cashFlow {
+            if ContextHelpers.isConsolidatedPriorInstant(ctx)
+                || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
+                let periodStart = standardLabelVariant(variants, suffix: "periodStartLabel") {
+                return periodStart
+            }
+            if ContextHelpers.isConsolidatedInstant(ctx) || ContextHelpers.isNonConsolidatedInstant(ctx),
+                let periodEnd = standardLabelVariant(variants, suffix: "periodEndLabel") {
+                return periodEnd
+            }
         }
         guard let preferredLabelRole, let variant = variants[preferredLabelRole] else {
             return plainLabel
         }
         return variant
+    }
+
+    /// `suffix`（"periodStartLabel"/"periodEndLabel"）を含むロールの中から決定的に1つ選ぶ
+    /// （Opus 監査で発見・修正、2026-07-31）。標準 XBRL ロール（`http://www.xbrl.org/2003/role/…`）
+    /// を優先し、無ければ半期報告書用の EDINET 独自ロール（"Interim" を含む。文言が「中間期末残高」
+    /// 等に変わる）を除いた候補から辞書順で決定的に選ぶ（`Dictionary` の走査順は非決定的なため
+    /// `first(where:)` は使わない。同じ通期決算 XBRL でも実行ごとに異なる文言が選ばれ得ていた）。
+    private static func standardLabelVariant(_ variants: [String: String], suffix: String) -> String? {
+        let standardRole = "http://www.xbrl.org/2003/role/\(suffix)"
+        if let standard = variants[standardRole] { return standard }
+        let candidateKeys = variants.keys.filter { $0.contains(suffix) }.sorted()
+        if let nonInterim = candidateKeys.first(where: { !$0.contains("Interim") }) {
+            return variants[nonInterim]
+        }
+        return candidateKeys.first.flatMap { variants[$0] }
     }
 
     /// context がその sectionType で「連結の当期」「非連結の当期」のいずれに当たるかを判定する。

@@ -275,6 +275,21 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    fact 自身の context（前期末=当期首 instant か当期末 instant か）から
    periodStartLabel/periodEndLabel を直接選び直して区別する。
 
+   **Opus 監査で発見・修正（2026-07-31）**: 上記の期首/期末残高判定が当初 CF に限定されておらず、
+   標準タクソノミが periodEndLabel を定義している BS の合計行タグ（`EquityIFRS`/`NetAssets` 等）
+   まで対象になっていたため、`preferredLabel=totalLabel`（「資本合計」等）が無視され常に
+   「期末残高」表示になっていた（キャッシュ済み実XBRL 140件中136件で発生）。CF 限定に修正し、
+   さらにロール選択も `Dictionary.first(where:)`（走査順が非決定的）から標準 XBRL ロール
+   （`http://www.xbrl.org/2003/role/…`）優先の決定的選択に直した（EDINET 独自の中間報告書用
+   ロールと標準ロールが両方存在する場合、以前は実行のたびに異なる文言が選ばれ得た）。
+
+   `loadLabelsByTag`（`Analysis/XBRLUtils.swift`）は Stage 7 専用ではなく Stage 5/6
+   （`BreakdownExtractor` 経由）とも共有する共通関数のため、この標準タクソノミ補完は
+   `company_filing_sections`/`company_breakdowns` の格納ラベルにも波及する。`versioning.md` の
+   原則（XBRL fact のパースロジック変更時は `xbrlFactsCacheVersion` バンプ）には該当するが、
+   本番には `assets/taxonomy` が未配置のため現状は無害と判断し、**このバンプは見送る**（2026-07-31
+   ユーザー判断）。`assets/taxonomy` を本番に配置する場合は改めてバンプ要否を検討すること。
+
 8. **ツリー構造（`parent_tag`/`depth`）は不採用（2026-07-30 検討・撤回）**: presentation
    linkbase 上の直接の親タグ・深さを一度実装したが、実データ（デンソー6902）で確認したところ
    「表示上どこにネストするか」の情報でしかなく、v1 では本来解決したかった「合計行の二重計上を

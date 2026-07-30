@@ -545,6 +545,81 @@ import Testing
         #expect(items.first?.label == "現金及び預金")
     }
 
+    @Test func doesNotOverridePreferredLabelWithPeriodEndVariantOutsideCashFlow() {
+        // 回帰テスト（Opus 監査で発見・修正、2026-07-31）: BS の合計行タグが標準タクソノミの
+        // periodEndLabel（多くの JPFS/IFRS の資産・負債・純資産系タグに存在）を持つ場合、
+        // 期首/期末残高の区別は CF 専用のはずが sectionType を問わず先に評価されており、
+        // `preferredLabel=totalLabel`（例: トヨタ7203 の `EquityIFRS` → 「資本合計」）が
+        // 無視されて常に periodEndLabel（「期末残高」）になっていた
+        // （キャッシュ済み実XBRL 140件中136件で発生）。
+        let bsRole = role("ConsolidatedStatementOfFinancialPositionIFRS")
+        let tag = "EquityIFRS"
+        let totalLabelRole = "http://www.xbrl.org/2003/role/totalLabel"
+        let periodEndLabelRole = "http://www.xbrl.org/2003/role/periodEndLabel"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearInstant": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearInstant", value: 36_878_913, consolidation: "",
+                    role: bsRole, label: "資本")
+            ]
+        ]
+        let preferredLabelByRoleTag: [String: [String: String]] = [bsRole: [tag: totalLabelRole]]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: [totalLabelRole: "資本合計", periodEndLabelRole: "期末残高"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet, preferredLabelByRoleTag: preferredLabelByRoleTag,
+            labelRoleVariantsByTag: labelRoleVariantsByTag)
+        #expect(items.first?.label == "資本合計")
+    }
+
+    @Test func stillAppliesPeriodEndVariantWithinCashFlow() {
+        // 上のテストの対（回帰確認）: CF では引き続き期末残高バリアントが優先されること。
+        let cfRole = role("ConsolidatedStatementOfCashFlowsIFRS")
+        let tag = "CashAndCashEquivalentsIFRS"
+        let periodEndLabelRole = "http://www.xbrl.org/2003/role/periodEndLabel"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearInstant": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearInstant", value: 8_982_404, consolidation: "",
+                    role: cfRole, label: "現金及び現金同等物")
+            ]
+        ]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: [periodEndLabelRole: "現金及び現金同等物の期末残高"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .cashFlow, labelRoleVariantsByTag: labelRoleVariantsByTag)
+        #expect(items.first?.label == "現金及び現金同等物の期末残高")
+    }
+
+    @Test func prefersStandardPeriodLabelRoleOverEdinetInterimVariantDeterministically() {
+        // 回帰テスト（Opus 監査で発見・修正、2026-07-31）: 標準ロール
+        // （`http://www.xbrl.org/2003/role/periodEndLabel`）と EDINET 独自の中間報告書用ロール
+        // （`.../ConsolidatedInterim/role/periodEndLabel`、文言は「中間期末残高」）が両方存在する
+        // 場合、以前は `Dictionary.first(where:)` で走査順（プロセスごとに非決定的）に選んでいた。
+        // 標準ロールを優先し、決定的に選ぶこと。
+        let cfRole = role("ConsolidatedStatementOfCashFlowsIFRS")
+        let tag = "CashAndCashEquivalentsIFRS"
+        let standardRole = "http://www.xbrl.org/2003/role/periodEndLabel"
+        let interimRole = "http://disclosure.edinet-fsa.go.jp/jppfs/ConsolidatedInterim/role/periodEndLabel"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearInstant": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearInstant", value: 8_982_404, consolidation: "",
+                    role: cfRole, label: "現金及び現金同等物")
+            ]
+        ]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: [standardRole: "現金及び現金同等物の期末残高", interimRole: "現金及び現金同等物の中間期末残高"]
+        ]
+        for _ in 0..<20 {
+            let items = StatementClassifier.extractLineItems(
+                from: facts, sectionType: .cashFlow, labelRoleVariantsByTag: labelRoleVariantsByTag)
+            #expect(items.first?.label == "現金及び現金同等物の期末残高")
+        }
+    }
+
     // MARK: - 計算リンクベース由来の is_total/components
 
     @Test func marksTotalTagAndExposesWeightedComponentsFromCalculationLinkbase() {

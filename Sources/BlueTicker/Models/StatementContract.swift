@@ -116,6 +116,25 @@ public struct StatementLineItem: Codable, Sendable {
         self.components = components
     }
 
+    /// 手書き実装（Opus 監査で発見・修正、2026-07-31）: `isTotal` を非 Optional のまま
+    /// `decodeIfPresent(_:default:)` で読む。`company_statements.payload` は JSON カラムで
+    /// Fluent が直接デコードするため、この2フィールド追加前に格納された行（`is_total` キーが
+    /// 無い）があると合成 `Decodable` では `keyNotFound` で読み取り自体が失敗し、REST 読み出しも
+    /// `Stage7Ingest` の既存行チェックも共倒れする。現状 `company_statements` は本番・開発とも
+    /// 未書き込みで実害は無いが、将来の取り違えを避けるため決定的に安全側へ倒す。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tag = try container.decode(String.self, forKey: .tag)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        value = try container.decode(Double.self, forKey: .value)
+        unit = try container.decodeIfPresent(String.self, forKey: .unit)
+        order = try container.decodeIfPresent(Int.self, forKey: .order)
+        section = try container.decodeIfPresent(StatementLineSection.self, forKey: .section)
+        isTotal = try container.decodeIfPresent(Bool.self, forKey: .isTotal) ?? false
+        components = try container.decodeIfPresent(
+            [StatementLineComponent].self, forKey: .components)
+    }
+
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
     /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
     /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
