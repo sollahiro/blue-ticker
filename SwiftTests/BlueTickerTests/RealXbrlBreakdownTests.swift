@@ -79,6 +79,16 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(joined.contains("パワトレイン"))
         #expect(joined.contains("モビリティ"))
         #expect(!BreakdownExtractor.isRevenueTypeOnlyDecomposition(result.tables))
+        // issue #157: 売上マーカーが無くても事業ヒントで実質分解と判定され swap 済み
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent(result.tables))
+        #expect(BreakdownExtractor.tablesContainSubstantiveRevenueBreakdown(
+            result.tables, relativeTo: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: "| 外部顧客への売上収益 | 7539975 |",
+                    period: nil
+                ),
+            ]))
     }
 
     // MARK: - 住友ファーマ S100YH3M
@@ -135,9 +145,12 @@ private actor RealXbrlMockChat: ChatCompleting {
         let joined = result.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("Marketplace"))
         #expect(joined.contains("Fintech"))
+        #expect(joined.contains("その他"))
         let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: Self.xbrlDir("S100WQDW"))
         #expect(rr.method == "html_table")
         #expect(!BreakdownExtractor.tablesContainSalesEquivalent(rr.tables))
+        #expect(!BreakdownExtractor.tablesContainSubstantiveRevenueBreakdown(
+            rr.tables, relativeTo: result.tables))
         // swap していないこと（見出しが収益認識関係になっていない）
         #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
     }

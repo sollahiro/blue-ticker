@@ -982,6 +982,67 @@ import Foundation
         ]))
     }
 
+    /// issue #157: 売上マーカー無しでも事業ヒント／数値スケールで実質分解とスタブを区別する。
+    @Test func tablesContainSubstantiveRevenueBreakdownDistinguishesDensoFromMercariStub() {
+        let segmentSales = [
+            BreakdownTable(
+                heading: "セグメント情報",
+                markdown: """
+                | | 日本 | 北米 | 連結 |
+                |---|---|---|---|
+                | 外部顧客への売上収益 | 3000000 | 1000000 | 4000000 |
+                """,
+                period: "当期"
+            ),
+        ]
+        // デンソー型: 事業名＋合計のみ（売上マーカー無し）だが売上オーダー
+        let densoRR = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: """
+                | | 金額 |
+                |---|---|
+                | サーマルシステム | 1728469 |
+                | パワトレインシステム | 1438591 |
+                | 自動車分野計 | 7041252 |
+                | 合計 | 7161777 |
+                """,
+                period: "前期"
+            ),
+        ]
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent(densoRR))
+        #expect(BreakdownExtractor.tablesContainSubstantiveRevenueBreakdown(
+            densoRR, relativeTo: segmentSales))
+
+        // メルカリ型: 契約残高のみ（売上オーダー比 ≈ 0.002）
+        let mercariRR = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: """
+                | | 当期 |
+                |---|---|
+                | 顧客との契約から生じた債権 | 7933 |
+                | 契約負債 | 2445 |
+                """,
+                period: "当期"
+            ),
+        ]
+        #expect(!BreakdownExtractor.tablesContainSalesEquivalent(mercariRR))
+        #expect(!BreakdownExtractor.tablesContainSubstantiveRevenueBreakdown(
+            mercariRR, relativeTo: segmentSales))
+
+        // 売上マーカーがあればヒント無しでも実質分解
+        let markedRR = [
+            BreakdownTable(
+                heading: "収益認識関係",
+                markdown: "| 売上収益 | タイヤ | 4137233 |",
+                period: "当期"
+            ),
+        ]
+        #expect(BreakdownExtractor.tablesContainSubstantiveRevenueBreakdown(
+            markedRR, relativeTo: segmentSales))
+    }
+
     /// 表の外の脚注段落（化工品・多角化等）を収益認識候補の末尾に残す。
     @Test func revenueRecognitionInfoIncludesFootnoteParagraphs() {
         let escaped = """
@@ -1270,6 +1331,63 @@ import Foundation
             #expect(joined.contains("Marketplace"))
             #expect(joined.contains("Fintech"))
             #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
+        }
+    }
+
+    /// デンソー型 (issue #157): セグメントに売上マトリクスがあり、RR は事業名＋合計のみ
+    /// （売上マーカー無し）でも実質分解なら swap する。メルカリ型スタブ抑止を壊さないこと。
+    @Test func segmentInfoSwapsToIFRSRevenueWhenRRHasBusinessRowsWithoutSalesMarkers() throws {
+        let segmentTable = """
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;北米&lt;/td&gt;&lt;td&gt;連結&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;外部顧客への売上収益&lt;/td&gt;&lt;td&gt;3000000&lt;/td&gt;&lt;td&gt;1000000&lt;/td&gt;&lt;td&gt;4000000&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        """
+        let densoLikeRR = """
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;サーマルシステム&lt;/td&gt;&lt;td&gt;1728469&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;パワトレインシステム&lt;/td&gt;&lt;td&gt;1438591&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;モビリティエレクトロニクス&lt;/td&gt;&lt;td&gt;2017304&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;合計&lt;/td&gt;&lt;td&gt;7161777&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        """
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl
+            xmlns:xbrli="\(XBRLTestSupport.nsXbrli)"
+            xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+            xmlns:jppfs_cor="\(XBRLTestSupport.nsJppfs)"
+            xmlns:jpcrp_cor="\(XBRLTestSupport.nsJpcrp)"
+            xmlns:jpigp_cor="\(XBRLTestSupport.nsJpcrp)">
+          <xbrli:context id="CurrentYearDuration_JapanMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:JapanReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration_NorthAmericaMember">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+            <xbrli:scenario>
+              <xbrldi:explicitMember dimension="jppfs_cor:OperatingSegmentsAxis">jppfs_cor:NorthAmericaReportableSegmentMember</xbrldi:explicitMember>
+            </xbrli:scenario>
+          </xbrli:context>
+          <xbrli:context id="CurrentYearDuration">
+            <xbrli:entity><xbrli:identifier scheme="http://disclosure.edinet-fsa.go.jp">E12345</xbrli:identifier></xbrli:entity>
+            <xbrli:period><xbrli:startDate>2025-04-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+          </xbrli:context>
+          <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
+          <jppfs_cor:RevenueFromExternalCustomersIFRS contextRef="CurrentYearDuration_JapanMember" unitRef="JPY" decimals="-6">3000000000000</jppfs_cor:RevenueFromExternalCustomersIFRS>
+          <jppfs_cor:RevenueFromExternalCustomersIFRS contextRef="CurrentYearDuration_NorthAmericaMember" unitRef="JPY" decimals="-6">1000000000000</jppfs_cor:RevenueFromExternalCustomersIFRS>
+          <jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(segmentTable)</jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock>
+          <jpigp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock contextRef="CurrentYearDuration">\(densoLikeRR)</jpigp_cor:NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock>
+        </xbrli:xbrl>
+        """
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rr = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(rr.method == "html_table")
+            #expect(!BreakdownExtractor.tablesContainSalesEquivalent(rr.tables))
+
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+            let joined = result.tables.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("サーマル"))
+            #expect(joined.contains("パワトレイン"))
+            #expect(joined.contains("モビリティ"))
         }
     }
 
