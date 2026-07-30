@@ -191,10 +191,12 @@ enum BreakdownExtractor {
                 // メルカリ型: セグメント注記に Marketplace/Fintech の売上マトリクスがある一方、
                 // IFRS 売上収益注記は「分解はセグメント情報に記載」のポインタ＋契約負債表のみ。
                 // 無条件 swap すると製品表を失う（実データ検証: S100WQDW、2026-07-25）。
-                // セグメント側に売上相当があり RR 側に無いときだけ swap を抑止する
-                // （ブリヂストン等: セグメント表が空／地域のみで RR に製品表 → 従来どおり swap）。
+                // セグメント側に売上相当があり、かつ RR 側に実質的な売上分解が無いときだけ
+                // swap を抑止する。売上マーカー語の有無だけでは、デンソー型（事業名＋合計のみ
+                // で実分解あり）をメルカリ型スタブと誤判定する（issue #157、S100Y9T1）。
                 if !(tablesContainSalesEquivalent(result.tables)
-                    && !tablesContainSalesEquivalent(revenueRecognition.tables))
+                    && !tablesContainSubstantiveRevenueBreakdown(
+                        revenueRecognition.tables, relativeTo: result.tables))
                 {
                     return revenueRecognition
                 }
@@ -245,6 +247,57 @@ enum BreakdownExtractor {
         ]
         return markers.contains(where: { joined.contains($0) })
     }
+
+    /// RR 表群が「実質的な売上分解」を持つか（メルカリ型スタブとの区別、issue #157）。
+    ///
+    /// `tablesContainSalesEquivalent` だけでは区別できない:
+    /// - メルカリ: RR は契約債権・契約負債の残高表のみ（売上分解はセグメント注記へポインタ）
+    /// - デンソー: RR にサーマル等の事業別内訳があるが、行ラベルが「自動車分野計」「合計」のみで
+    ///   売上マーカー語を含まない
+    ///
+    /// 判定順:
+    /// 1. 売上マーカー語（ブリヂストン等）
+    /// 2. 事業・製品ヒント（デンソー: サーマル…。`isRevenueTypeOnlyDecomposition` と同じリスト）
+    /// 3. RR 最大絶対値 / セグメント最大絶対値 ≥ `substantiveRevenueScaleRatio`
+    ///    （売上オーダー vs 契約残高オーダー。実データ: デンソー≈0.82 / メルカリ≈0.04）
+    static func tablesContainSubstantiveRevenueBreakdown(
+        _ rrTables: [BreakdownTable], relativeTo segmentTables: [BreakdownTable]
+    ) -> Bool {
+        guard !rrTables.isEmpty else { return false }
+        if tablesContainSalesEquivalent(rrTables) { return true }
+        let joined = rrTables.map(\.markdown).joined(separator: "\n")
+        if revenueBreakdownBusinessHints.contains(where: { joined.contains($0) }) { return true }
+        let rrMax = maxAbsoluteNumericValue(in: rrTables)
+        let segmentMax = maxAbsoluteNumericValue(in: segmentTables)
+        guard rrMax > 0, segmentMax > 0 else { return false }
+        return rrMax / segmentMax >= substantiveRevenueScaleRatio
+    }
+
+    /// RR 最大値 / セグメント最大値がこの比率以上なら売上オーダーの分解とみなす。
+    /// メルカリ型契約残高（≈0.04）を切り、デンソー型売上合計（≈0.82）を通す（実データ 2026-07-30）。
+    static let substantiveRevenueScaleRatio: Double = 0.2
+
+    /// markdown 表セルから絶対値の最大を取る（抽出層に consolidatedSales が無いための代理指標）。
+    static func maxAbsoluteNumericValue(in tables: [BreakdownTable]) -> Double {
+        var maxValue = 0.0
+        for table in tables {
+            for line in table.markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+                for part in line.split(separator: "|", omittingEmptySubsequences: false) {
+                    let cell = part.trimmingCharacters(in: .whitespaces)
+                    guard let value = XBRLUtils.parseHtmlNumber(cell) else { continue }
+                    maxValue = max(maxValue, abs(value))
+                }
+            }
+        }
+        return maxValue
+    }
+
+    /// 事業・製品の粒度ヒント。種類分解判定の除外と、RR 実質分解判定の両方で使う。
+    /// 売上マーカーが無い事業別表（デンソー）を種類分解／スタブと誤判定しないため。
+    static let revenueBreakdownBusinessHints = [
+        "タイヤ", "サーマル", "パワトレイン", "モビリティ", "エレクトリ", "ソリューション",
+        "化工品", "多角化", "スペシャリティ",
+    ]
 
     /// EDINET/JPCRP タクソノミの専用タグ。単一セグメント企業がセグメント情報の記載を省略する旨を
     /// 開示する箇所（実データ確認: 千葉銀行「当行グループは、銀行業の単一セグメントであるため、
@@ -469,11 +522,7 @@ enum BreakdownExtractor {
         ]
         guard revenueTypeMarkers.contains(where: { joined.contains($0) }) else { return false }
         // 事業・製品の具体名が併記されていれば種類分解ではない（ブリヂストン: タイヤ、デンソー: サーマル…）
-        let businessHints = [
-            "タイヤ", "サーマル", "パワトレイン", "モビリティ", "エレクトリ", "ソリューション",
-            "化工品", "多角化", "スペシャリティ",
-        ]
-        if businessHints.contains(where: { joined.contains($0) }) { return false }
+        if revenueBreakdownBusinessHints.contains(where: { joined.contains($0) }) { return false }
         return true
     }
 
