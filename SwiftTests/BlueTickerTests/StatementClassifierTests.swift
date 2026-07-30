@@ -411,4 +411,214 @@ import Testing
         let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
         #expect(items.first?.section == nil)
     }
+
+    @Test func classifiesLiabilitiesTotalAsLiabilitiesDespiteAmbiguousCombinedAncestorHeader() {
+        // 回帰テスト（実データ検証: デンソー6902 IFRS）。負債合計 `LiabilitiesIFRS` の直接の親が
+        // 負債・純資産を束ねる見出し `LiabilitiesAndEquityIFRSAbstract`（Liabilit と Equity 両方の
+        // キーワードに一致）であるため、優先順位で確定させると誤って純資産へ分類されていた。
+        // 祖先が曖昧な場合はタグ自身の名前（"Liabilit" のみに一致）へフォールバックして解決する。
+        let bsRole = role("ConsolidatedStatementOfFinancialPositionIFRS")
+        let facts: XbrlFactIndex = [
+            "LiabilitiesIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "LiabilitiesIFRS", contextRef: "CurrentYearInstant", value: 2_936_082,
+                    consolidation: "", role: bsRole)
+            ]
+        ]
+        let parentTagsByRoleTag: [String: [String: Set<String>]] = [
+            bsRole: ["LiabilitiesIFRS": ["LiabilitiesAndEquityIFRSAbstract"]]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet, parentTagsByRoleTag: parentTagsByRoleTag)
+        #expect(items.first?.section == .liabilities)
+    }
+
+    @Test func equityMethodInvestmentUnderAssetsAncestorIsNotMisclassifiedByOwnNameFallback() {
+        // 回帰テスト: `classifyIfUnambiguous` の祖先曖昧時フォールバックはタグ自身の名前も見るが、
+        // 祖先が単一区分に確定できる場合はそちらが優先され、タグ名に含まれる無関係な部分文字列
+        // （"EquityMethod" の "Equity"）に惑わされてはならない。
+        let bsRole = role("ConsolidatedStatementOfFinancialPositionIFRS")
+        let facts: XbrlFactIndex = [
+            "InvestmentsAccountedForUsingEquityMethodIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "InvestmentsAccountedForUsingEquityMethodIFRS",
+                    contextRef: "CurrentYearInstant", value: 123_901, consolidation: "", role: bsRole)
+            ]
+        ]
+        let parentTagsByRoleTag: [String: [String: Set<String>]] = [
+            bsRole: [
+                "InvestmentsAccountedForUsingEquityMethodIFRS": ["NonCurrentAssetsIFRSAbstract"]
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet, parentTagsByRoleTag: parentTagsByRoleTag)
+        #expect(items.first?.section == .assets)
+    }
+
+    // MARK: - CF の現金同等物 期首/期末残高（Instant fact の受理）
+
+    @Test func includesCashReconciliationInstantFactsWithinCashFlowSection() {
+        // 回帰テスト（実データ検証: トヨタ7203 IFRS）。CF は大半が Duration だが、現金及び現金同等物の
+        // 期首/期末残高調整行は Instant 型 fact のまま CF の presentation role に現れる。
+        // Duration のみで判定すると黙って欠落していた。
+        let cfRole = role("ConsolidatedStatementOfCashFlowsIFRS")
+        let facts: XbrlFactIndex = [
+            "CashAndCashEquivalentsIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndCashEquivalentsIFRS", contextRef: "CurrentYearInstant",
+                    value: 8_982_404, consolidation: "", role: cfRole),
+                "Prior1YearInstant": XbrlFact(
+                    tag: "CashAndCashEquivalentsIFRS", contextRef: "Prior1YearInstant",
+                    value: 9_412_060, consolidation: "", role: cfRole),
+            ],
+            "NetCashProvidedByUsedInOperatingActivitiesIFRS": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "NetCashProvidedByUsedInOperatingActivitiesIFRS",
+                    contextRef: "CurrentYearDuration", value: 3_696_934, consolidation: "", role: cfRole)
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .cashFlow)
+        let cashValues = Set(
+            items.filter { $0.tag == "CashAndCashEquivalentsIFRS" }.map(\.value))
+        #expect(cashValues == [8_982_404, 9_412_060])
+        #expect(items.contains { $0.tag == "NetCashProvidedByUsedInOperatingActivitiesIFRS" })
+    }
+
+    @Test func excludesDeeperPriorYearInstantFactsFromCashFlowSection() {
+        // 前期首残高（Prior2YearInstant）は「当期」の CF には属さないため、CF 用に緩和した
+        // Instant 受理が前期分まで巻き込まないことを確認する。
+        let cfRole = role("ConsolidatedStatementOfCashFlowsIFRS")
+        let facts: XbrlFactIndex = [
+            "CashAndCashEquivalentsIFRS": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndCashEquivalentsIFRS", contextRef: "CurrentYearInstant",
+                    value: 8_982_404, consolidation: "", role: cfRole),
+                "Prior2YearInstant": XbrlFact(
+                    tag: "CashAndCashEquivalentsIFRS", contextRef: "Prior2YearInstant",
+                    value: 7_516_966, consolidation: "", role: cfRole),
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .cashFlow)
+        #expect(items.map(\.value) == [8_982_404])
+    }
+
+    // MARK: - preferredLabel に応じたラベル選択
+
+    @Test func usesTotalLabelVariantWhenPresentationArcPrefersIt() {
+        // 回帰テスト（実データ検証: 任天堂7974 J-GAAP）。`ValuationAndTranslationAdjustments` は
+        // presentationArc の `preferredLabel=totalLabel` により、通常ラベル「評価・換算差額等」
+        // ではなく合計ラベル「評価・換算差額等合計」を使うべき小計行。
+        let bsRole = role("BalanceSheet")
+        let tag = "ValuationAndTranslationAdjustments"
+        let totalLabelRole = "http://www.xbrl.org/2003/role/totalLabel"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearInstant": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearInstant", value: 237_581, consolidation: "",
+                    role: bsRole, label: "評価・換算差額等")
+            ]
+        ]
+        let preferredLabelByRoleTag: [String: [String: String]] = [bsRole: [tag: totalLabelRole]]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: [totalLabelRole: "評価・換算差額等合計"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet, preferredLabelByRoleTag: preferredLabelByRoleTag,
+            labelRoleVariantsByTag: labelRoleVariantsByTag)
+        #expect(items.first?.label == "評価・換算差額等合計")
+    }
+
+    @Test func fallsBackToPlainLabelWhenPreferredVariantIsMissing() {
+        let bsRole = role("BalanceSheet")
+        let facts: XbrlFactIndex = [
+            "CashAndDeposits": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndDeposits", contextRef: "CurrentYearInstant", value: 100,
+                    consolidation: "", role: bsRole, label: "現金及び預金")
+            ]
+        ]
+        let preferredLabelByRoleTag: [String: [String: String]] = [
+            bsRole: ["CashAndDeposits": "http://www.xbrl.org/2003/role/totalLabel"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet, preferredLabelByRoleTag: preferredLabelByRoleTag)
+        #expect(items.first?.label == "現金及び預金")
+    }
+
+    // MARK: - 計算リンクベース由来の is_total/components
+
+    @Test func marksTotalTagAndExposesWeightedComponentsFromCalculationLinkbase() {
+        // 実データ検証（任天堂7974 J-GAAP）: presentation の親子関係は表示上のネストでしかなく
+        // 二重計上を防げないが、計算リンクベース（`_cal.xml`、summation-item arc）は
+        // 「この行が何の合計か」を weight（+1/−1）付きで決定的に示す。
+        let bsRole = role("BalanceSheet")
+        let facts: XbrlFactIndex = [
+            "CurrentAssets": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CurrentAssets", contextRef: "CurrentYearInstant", value: 2_752_352,
+                    consolidation: "", role: bsRole)
+            ],
+            "CashAndDeposits": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndDeposits", contextRef: "CurrentYearInstant", value: 1_586_275,
+                    consolidation: "", role: bsRole)
+            ],
+        ]
+        let calculationComponentsByRoleTag: [String: [String: [CalcComponent]]] = [
+            bsRole: [
+                "CurrentAssets": [
+                    CalcComponent(tag: "CashAndDeposits", weight: 1),
+                    CalcComponent(tag: "Inventories", weight: 1),
+                ]
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet,
+            calculationComponentsByRoleTag: calculationComponentsByRoleTag)
+        let byTag = Dictionary(uniqueKeysWithValues: items.map { ($0.tag, $0) })
+        #expect(byTag["CurrentAssets"]?.isTotal == true)
+        #expect(byTag["CurrentAssets"]?.components?.map(\.tag) == ["CashAndDeposits", "Inventories"])
+        #expect(byTag["CurrentAssets"]?.components?.map(\.weight) == [1, 1])
+        #expect(byTag["CashAndDeposits"]?.isTotal == false)
+        #expect(byTag["CashAndDeposits"]?.components == nil)
+    }
+
+    @Test func expressesSubtractiveComponentsWithNegativeWeight() {
+        // 実データ検証: `GrossProfitIFRS = RevenueIFRS − CostOfSalesIFRS`（控除項目は weight=-1）。
+        let plRole = role("StatementOfProfitOrLossIFRS")
+        let facts: XbrlFactIndex = [
+            "GrossProfitIFRS": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "GrossProfitIFRS", contextRef: "CurrentYearDuration", value: 1_102_867,
+                    consolidation: "", role: plRole)
+            ]
+        ]
+        let calculationComponentsByRoleTag: [String: [String: [CalcComponent]]] = [
+            plRole: [
+                "GrossProfitIFRS": [
+                    CalcComponent(tag: "RevenueIFRS", weight: 1),
+                    CalcComponent(tag: "CostOfSalesIFRS", weight: -1),
+                ]
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .incomeStatement,
+            calculationComponentsByRoleTag: calculationComponentsByRoleTag)
+        #expect(items.first?.isTotal == true)
+        #expect(items.first?.components?.map(\.weight) == [1, -1])
+    }
+
+    @Test func isTotalIsFalseByDefaultWhenCalculationComponentsNotProvided() {
+        let bsRole = role("BalanceSheet")
+        let facts: XbrlFactIndex = [
+            "CashAndDeposits": [
+                "CurrentYearInstant": XbrlFact(
+                    tag: "CashAndDeposits", contextRef: "CurrentYearInstant", value: 100,
+                    consolidation: "", role: bsRole)
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .balanceSheet)
+        #expect(items.first?.isTotal == false)
+        #expect(items.first?.components == nil)
+    }
 }

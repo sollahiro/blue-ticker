@@ -235,4 +235,74 @@ import Foundation
             #expect(first == second)
         }
     }
+
+    // MARK: - 計算リンクベース（loadCalculationComponents）
+
+    private static let balanceSheetRole =
+        "http://disclosure.edinet-fsa.go.jp/role/jppfs/rol_ConsolidatedBalanceSheet"
+
+    /// `GrossProfit = NetSales(+1) + CostOfSales(-1)` を表す最小の計算リンクベース。
+    /// `CurrentAssets` の合計関係は同一 role 内に**わざと重複した arc**（同じ from/to/weight の
+    /// `<calculationArc>` を2本）を含める。presentation linkbase と同様、実データの XBRL には
+    /// 同一の集計関係が複数箇所で再定義される癖があるため、重複排除がされることを検証する。
+    private static func makeCalculationLinkbase() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:calculationLink xlink:type="extended" xlink:role="\(incomeStatementRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_GrossProfit" xlink:label="loc_GrossProfit"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetSales" xlink:label="loc_NetSales"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CostOfSales" xlink:label="loc_CostOfSales"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_GrossProfit" xlink:to="loc_NetSales" order="1" weight="1"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_GrossProfit" xlink:to="loc_CostOfSales" order="2" weight="-1"/>
+          </link:calculationLink>
+          <link:calculationLink xlink:type="extended" xlink:role="\(balanceSheetRole)">
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CurrentAssets" xlink:label="loc_CurrentAssets_1"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CashAndDeposits" xlink:label="loc_Cash_1"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CurrentAssets" xlink:label="loc_CurrentAssets_2"/>
+            <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_CashAndDeposits" xlink:label="loc_Cash_2"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_CurrentAssets_1" xlink:to="loc_Cash_1" order="1" weight="1"/>
+            <link:calculationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/summation-item" xlink:from="loc_CurrentAssets_2" xlink:to="loc_Cash_2" order="1" weight="1"/>
+          </link:calculationLink>
+        </link:linkbase>
+        """
+    }
+
+    @Test func loadCalculationComponentsExpressesAdditionAndSubtractionByWeight() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            let components = try #require(componentsByRoleTag[Self.incomeStatementRole]?["GrossProfit"])
+            #expect(components.map(\.tag) == ["NetSales", "CostOfSales"])
+            #expect(components.map(\.weight) == [1, -1])
+        }
+    }
+
+    @Test func loadCalculationComponentsScopesByRoleAndDoesNotLeakAcrossRoles() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            #expect(componentsByRoleTag[Self.incomeStatementRole]?["CurrentAssets"] == nil)
+            #expect(componentsByRoleTag[Self.balanceSheetRole]?["GrossProfit"] == nil)
+        }
+    }
+
+    /// 実データの癖の回帰テスト: 同一 role 内で同じ集計関係（同じ component・weight）が
+    /// 複数の `<loc>`/`<calculationArc>` の組で重複定義されても、構成要素は1回だけに収まる。
+    @Test func loadCalculationComponentsDedupesRepeatedArcsWithinTheSameRole() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: ["taxonomy_cal.xml": Self.makeCalculationLinkbase()]
+        ) { dir in
+            let componentsByRoleTag = XBRLUtils.loadCalculationComponents(in: dir)
+            let components = try #require(componentsByRoleTag[Self.balanceSheetRole]?["CurrentAssets"])
+            #expect(components.count == 1)
+            #expect(components.first?.tag == "CashAndDeposits")
+            #expect(components.first?.weight == 1)
+        }
+    }
 }

@@ -29,7 +29,13 @@ private func fakeYear(docID: String) -> StatementYear {
     StatementYear(
         fyEnd: "2025-03-31", financialPeriod: "通期", docId: docID,
         balanceSheet: [
-            StatementLineItem(tag: "TotalAssets", label: "資産合計", value: 4_624_727, unit: "JPY", order: nil)
+            StatementLineItem(
+                tag: "TotalAssets", label: "資産合計", value: 4_624_727, unit: "JPY", order: nil,
+                isTotal: true,
+                components: [
+                    StatementLineComponent(tag: "CurrentAssets", weight: 1),
+                    StatementLineComponent(tag: "NonCurrentAssets", weight: 1),
+                ])
         ],
         incomeStatement: [
             StatementLineItem(tag: "NetSales", label: "売上高", value: 1_000_000, unit: "JPY", order: nil)
@@ -56,6 +62,12 @@ private func fakeYear(docID: String) -> StatementYear {
             #expect(found.payload.balanceSheet[0].tag == "TotalAssets")
             #expect(found.payload.incomeStatement[0].value == 1_000_000)
             #expect(found.payload.cashFlow.isEmpty)
+
+            // is_total/components（計算リンクベース由来）が DB 往復（Fluent JSON カラム）で
+            // 失われないこと。
+            #expect(found.payload.balanceSheet[0].isTotal == true)
+            #expect(found.payload.balanceSheet[0].components?.map(\.tag) == ["CurrentAssets", "NonCurrentAssets"])
+            #expect(found.payload.balanceSheet[0].components?.map(\.weight) == [1, 1])
         }
     }
 

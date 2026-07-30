@@ -213,7 +213,14 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 fyEnd: "2025-03-31", financialPeriod: "通期", docId: "S1",
                 balanceSheet: [
                     StatementLineItem(
-                        tag: "TotalAssets", label: "資産合計", value: 1_000, unit: "JPY", order: nil)
+                        tag: "TotalAssets", label: "資産合計", value: 1_000, unit: "JPY", order: nil,
+                        isTotal: true,
+                        components: [
+                            StatementLineComponent(tag: "CurrentAssets", weight: 1),
+                            StatementLineComponent(tag: "CostOfSales", weight: -1),
+                        ]),
+                    StatementLineItem(
+                        tag: "CurrentAssets", label: "流動資産合計", value: 400, unit: "JPY", order: nil),
                 ],
                 incomeStatement: [], cashFlow: [])
             row.cacheVersion = statementCacheVersion
@@ -230,6 +237,20 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             let years = body?["years"] as? [[String: Any]]
             #expect(years?.first?["doc_id"] as? String == "S1")
+
+            // is_total/components が REST/MCP の JSON ワイヤーフォーマットまで正しく届くことを確認する
+            // （計算リンクベース由来。docs/statement-normalization-concept.md 実装方針10）。
+            let balanceSheet = years?.first?["balance_sheet"] as? [[String: Any]]
+            let totalAssets = balanceSheet?.first { $0["tag"] as? String == "TotalAssets" }
+            #expect(totalAssets?["is_total"] as? Bool == true)
+            let components = totalAssets?["components"] as? [[String: Any]]
+            #expect(components?.map { $0["tag"] as? String } == ["CurrentAssets", "CostOfSales"])
+            #expect(components?.map { $0["weight"] as? Int } == [1, -1])
+
+            // is_total が false の行は components が null（存在しない）のままであること。
+            let currentAssets = balanceSheet?.first { $0["tag"] as? String == "CurrentAssets" }
+            #expect(currentAssets?["is_total"] as? Bool == false)
+            #expect(currentAssets?["components"] == nil || currentAssets?["components"] is NSNull)
         }
     }
 
