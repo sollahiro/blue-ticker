@@ -16,6 +16,9 @@ struct StatementAnalyzer {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
         let parentTagsByRoleTag = XBRLUtils.loadPresentationParents(in: xbrlDir)
+        let preferredLabelByRoleTag = XBRLUtils.loadPreferredLabelRoles(in: xbrlDir)
+        let labelRoleVariantsByTag = XBRLUtils.loadLabelRoleVariants(in: xbrlDir)
+        let calculationComponentsByRoleTag = XBRLUtils.loadCalculationComponents(in: xbrlDir)
 
         var balanceSheet: [StatementLineItem] = []
         var incomeStatement: [StatementLineItem] = []
@@ -23,15 +26,24 @@ struct StatementAnalyzer {
 
         if statementTypes.contains(.balanceSheet) {
             balanceSheet = StatementClassifier.extractLineItems(
-                from: facts, sectionType: .balanceSheet, parentTagsByRoleTag: parentTagsByRoleTag)
+                from: facts, sectionType: .balanceSheet, parentTagsByRoleTag: parentTagsByRoleTag,
+                preferredLabelByRoleTag: preferredLabelByRoleTag,
+                labelRoleVariantsByTag: labelRoleVariantsByTag,
+                calculationComponentsByRoleTag: calculationComponentsByRoleTag)
         }
         if statementTypes.contains(.incomeStatement) {
             incomeStatement = StatementClassifier.extractLineItems(
-                from: facts, sectionType: .incomeStatement)
+                from: facts, sectionType: .incomeStatement,
+                preferredLabelByRoleTag: preferredLabelByRoleTag,
+                labelRoleVariantsByTag: labelRoleVariantsByTag,
+                calculationComponentsByRoleTag: calculationComponentsByRoleTag)
         }
         if statementTypes.contains(.cashFlow) {
             cashFlow = StatementClassifier.extractLineItems(
-                from: facts, sectionType: .cashFlow, parentTagsByRoleTag: parentTagsByRoleTag)
+                from: facts, sectionType: .cashFlow, parentTagsByRoleTag: parentTagsByRoleTag,
+                preferredLabelByRoleTag: preferredLabelByRoleTag,
+                labelRoleVariantsByTag: labelRoleVariantsByTag,
+                calculationComponentsByRoleTag: calculationComponentsByRoleTag)
         }
 
         return StatementYear(

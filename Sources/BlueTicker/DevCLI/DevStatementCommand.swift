@@ -79,7 +79,12 @@ struct DevStatementCommand: AsyncParsableCommand {
             let unit = item.unit ?? "-"
             let section = item.section.map { "<\($0.rawValue)>" } ?? ""
             let order = item.order.map { "order=\($0)" } ?? "order=nil"
-            print("  \(item.tag): \(label) = \(item.value) [\(unit)] \(section) \(order)")
+            let total = item.isTotal ? "TOTAL" : ""
+            let components =
+                item.components.map { comps in
+                    " = " + comps.map { "\($0.weight > 0 ? "+" : "")\($0.weight)*\($0.tag)" }.joined(separator: " ")
+                } ?? ""
+            print("  \(item.tag): \(label) = \(item.value) [\(unit)] \(section) \(order) \(total)\(components)")
         }
     }
 }

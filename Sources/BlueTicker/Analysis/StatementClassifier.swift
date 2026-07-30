@@ -37,12 +37,20 @@ enum StatementClassifier {
     /// linkbase の並び順（`XbrlFact.orderByRole`）を使い、取得できないタグはタグ名のアルファベット順を
     /// 決定的なフォールバックとする（末尾の `sorted` 参照）。`parentTagsByRoleTag`
     /// （`XBRLUtils.loadPresentationParents`）を渡すと BS/CF 行に `section`（資産/負債/純資産、
-    /// 営業/投資/財務）を付与する。省略時（テスト等）は常に nil。
+    /// 営業/投資/財務）を付与する。`preferredLabelByRoleTag`/`labelRoleVariantsByTag`
+    /// （`XBRLUtils.loadPreferredLabelRoles`/`loadLabelRoleVariants`）を渡すと合計行・期首/期末残高等の
+    /// ラベルを `preferredLabel` に応じたバリアントへ差し替える。`calculationComponentsByRoleTag`
+    /// （`XBRLUtils.loadCalculationComponents`）を渡すと `is_total`/`components` を付与する
+    /// （presentation の代表 role と同じ role URI を計算リンクベース側でも共有するため、
+    /// `primaryRole` をそのまま流用して1つに絞る）。いずれも省略時（テスト等）は元の挙動
+    /// （`section` は nil、ラベルは `fact.label` のまま、`is_total` は false）を維持する。
     static func extractLineItems(
         from facts: XbrlFactIndex, sectionType: StatementSectionType,
-        parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
+        parentTagsByRoleTag: [String: [String: Set<String>]] = [:],
+        preferredLabelByRoleTag: [String: [String: String]] = [:],
+        labelRoleVariantsByTag: [String: [String: String]] = [:],
+        calculationComponentsByRoleTag: [String: [String: [CalcComponent]]] = [:]
     ) -> [StatementLineItem] {
-        let isInstant = sectionType == .balanceSheet
         var consolidated: [(tag: String, fact: XbrlFact)] = []
         var nonConsolidated: [(tag: String, fact: XbrlFact)] = []
 
@@ -51,20 +59,7 @@ enum StatementClassifier {
                 let roles = fact.roles ?? fact.role.map { [$0] } ?? []
                 guard roles.contains(where: { classify(role: $0) == sectionType }) else { continue }
 
-                // 非連結側は isNonConsolidatedInstant/Duration ではなく isPureNonConsolidatedContext
-                // を使う（`_NonConsolidatedMember` に続けてセグメント軸メンバーが付いた
-                // dimensioned context を弾く。isNonConsolidatedInstant/Duration には
-                // isConsolidatedInstant/Duration にある `!ctx.hasSuffix("Member")` 相当の
-                // ガードが無く、素通しすると同一タグに複数のセグメント別値が紛れ込む）。
-                let patterns = isInstant ? Xbrl.instantContextPatterns : Xbrl.durationContextPatterns
-                let isConsolidated: Bool
-                let isNonConsolidated: Bool
-                if isInstant {
-                    isConsolidated = ContextHelpers.isConsolidatedInstant(ctx)
-                } else {
-                    isConsolidated = ContextHelpers.isConsolidatedDuration(ctx)
-                }
-                isNonConsolidated = ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: patterns)
+                let (isConsolidated, isNonConsolidated) = classifyContext(ctx, sectionType: sectionType)
                 guard isConsolidated || isNonConsolidated else { continue }
 
                 if isConsolidated {
@@ -78,14 +73,24 @@ enum StatementClassifier {
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
         let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
         let parentTagsByTag = primaryRole.flatMap { parentTagsByRoleTag[$0] }
+        let preferredLabelRoleByTag = primaryRole.flatMap { preferredLabelByRoleTag[$0] }
+        let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
         let items = chosen.map { tag, fact in
             let order = primaryRole.flatMap { fact.orderByRole?[$0] }
             let section = parentTagsByTag.flatMap {
                 lineSection(for: tag, sectionType: sectionType, parentTagsByTag: $0)
             }
+            let label = resolvedLabel(
+                for: tag, ctx: fact.contextRef, plainLabel: fact.label,
+                preferredLabelRole: preferredLabelRoleByTag?[tag],
+                labelRoleVariantsByTag: labelRoleVariantsByTag)
+            let calcComponents = componentsByTag?[tag]
+            let components = calcComponents.map {
+                $0.map { StatementLineComponent(tag: $0.tag, weight: $0.weight) }
+            }
             return StatementLineItem(
-                tag: tag, label: fact.label, value: fact.value, unit: fact.unitRef, order: order,
-                section: section)
+                tag: tag, label: label, value: fact.value, unit: fact.unitRef, order: order,
+                section: section, isTotal: calcComponents != nil, components: components)
         }
 
         // presentation linkbase の表示順が取れたタグを優先し、取れないタグはタグ名のアルファベット順へ
@@ -97,6 +102,75 @@ enum StatementClassifier {
             case (nil, .some): return false
             case (nil, nil): return lhs.tag < rhs.tag
             }
+        }
+    }
+
+    /// `preferredLabel`（presentationArc 属性。合計行・期首/期末残高等でどのラベルロールを使うべきか
+    /// の指示）が指すバリアントが見つかればそれを使い、無ければ通常のラベル（`fact.label`）へ
+    /// フォールバックする。実データ検証: 任天堂7974 の `ValuationAndTranslationAdjustments`
+    /// （`preferredLabel=totalLabel`）は通常ラベル「評価・換算差額等」ではなく合計ラベル
+    /// 「評価・換算差額等合計」を使うべきケース。
+    ///
+    /// `CashAndCashEquivalentsIFRS` のように同一タグが同一 role 内に2回（期首残高・期末残高）
+    /// 出現する場合、`preferredLabelByRoleTag` はタグ単位のためどちらか一方の preferredLabel しか
+    /// 保持できない（`order`/`depth`/`parentTag` と同じ制約）。この特定パターンだけは fact 自身の
+    /// context（前期末=当期首の instant か、当期末の instant か）から periodStartLabel/
+    /// periodEndLabel ロールを直接選び直すことで区別する（実データ検証: トヨタ7203）。
+    private static func resolvedLabel(
+        for tag: String, ctx: String, plainLabel: String?, preferredLabelRole: String?,
+        labelRoleVariantsByTag: [String: [String: String]]
+    ) -> String? {
+        let variants = labelRoleVariantsByTag[tag] ?? [:]
+        if ContextHelpers.isConsolidatedPriorInstant(ctx) || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
+            let periodStart = variants.first(where: { $0.key.contains("periodStartLabel") })?.value {
+            return periodStart
+        }
+        if ContextHelpers.isConsolidatedInstant(ctx) || ContextHelpers.isNonConsolidatedInstant(ctx),
+            let periodEnd = variants.first(where: { $0.key.contains("periodEndLabel") })?.value {
+            return periodEnd
+        }
+        guard let preferredLabelRole, let variant = variants[preferredLabelRole] else {
+            return plainLabel
+        }
+        return variant
+    }
+
+    /// context がその sectionType で「連結の当期」「非連結の当期」のいずれに当たるかを判定する。
+    ///
+    /// BS は常に Instant、PL は常に Duration だが、CF は両方が混在する: 大半の行は Duration
+    /// （フロー行）だが、現金及び現金同等物の期首/期末残高調整行は Instant 型 fact のまま CF の
+    /// presentation role に現れる（実データ検証: トヨタ7203 の `CashAndCashEquivalentsIFRS` が
+    /// `periodStartLabel`/`periodEndLabel` としてCF role内に2箇所出現）。CF を Duration のみで
+    /// 判定すると、この Instant fact が両判定に失敗し黙って欠落する（`isConsolidatedDuration` も
+    /// `isPureNonConsolidatedContext(durationContextPatterns)` も false になるため）。
+    private static func classifyContext(
+        _ ctx: String, sectionType: StatementSectionType
+    ) -> (isConsolidated: Bool, isNonConsolidated: Bool) {
+        switch sectionType {
+        case .balanceSheet:
+            return (
+                ContextHelpers.isConsolidatedInstant(ctx),
+                ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.instantContextPatterns)
+            )
+        case .incomeStatement:
+            return (
+                ContextHelpers.isConsolidatedDuration(ctx),
+                ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.durationContextPatterns)
+            )
+        case .cashFlow:
+            // 期首残高（periodStartLabel）は「当期首」＝前期末の instant context
+            // （Prior1YearInstant 相当）で報告されるため、当期の Instant に加えて
+            // 前期の Instant も CF に限り受理する。
+            let isConsolidated =
+                ContextHelpers.isConsolidatedDuration(ctx)
+                || ContextHelpers.isConsolidatedInstant(ctx)
+                || ContextHelpers.isConsolidatedPriorInstant(ctx)
+            let isNonConsolidated =
+                ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.durationContextPatterns)
+                || ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.instantContextPatterns)
+                || ContextHelpers.isPureNonConsolidatedContext(
+                    ctx, patterns: Xbrl.priorInstantContextPatterns)
+            return (isConsolidated, isNonConsolidated)
         }
     }
 
@@ -141,6 +215,10 @@ enum StatementClassifier {
     /// `CashAndDeposits` → `CurrentAssetsAbstract` → `AssetsAbstract`）でのみ判定できる
     /// （`docs/statement-normalization-concept.md`）。`parentTagsByTag` は同一タグが役割内で
     /// 複数回参照される場合に複数の親を持ちうるため、BFS で全経路を辿り最初に一致した祖先で確定する。
+    /// 祖先が複数区分のキーワードに同時一致する場合（負債合計と純資産合計を束ねる見出し、例:
+    /// `LiabilitiesAndEquityIFRSAbstract`）は曖昧なため確定させず、さらに上の祖先を辿り続ける
+    /// （`classifyIfUnambiguous` 参照。実データ検証: デンソー6902 の `LiabilitiesIFRS` がこの
+    /// 見出し直下にあり、優先順位で確定させると誤って純資産へ分類されていた）。
     private static func lineSection(
         for tag: String, sectionType: StatementSectionType, parentTagsByTag: [String: Set<String>]
     ) -> StatementLineSection? {
@@ -154,7 +232,7 @@ enum StatementClassifier {
                 guard !visited.contains(current) else { continue }
                 visited.insert(current)
                 for parent in parentTagsByTag[current] ?? [] {
-                    if let section = classifyAncestor(parent, sectionType: sectionType) {
+                    if let section = classifyIfUnambiguous(parent, sectionType: sectionType) {
                         return section
                     }
                     nextFrontier.insert(parent)
@@ -162,37 +240,51 @@ enum StatementClassifier {
             }
             frontier = nextFrontier
         }
-        return nil
+
+        // 祖先を辿っても確定しなかった場合、タグ自身の名前が単一区分を曖昧さなく示すときに限り
+        // 最後のフォールバックとして使う（実データ検証: デンソー6902 の `LiabilitiesIFRS`。直接の
+        // 親 `LiabilitiesAndEquityIFRSAbstract` は負債・純資産両方のキーワードを含み祖先経由では
+        // 確定できないが、タグ自身の名前は「負債」を曖昧さなく示す）。祖先の途中に単一一致する
+        // ものがあればそちらが優先されるため（`InvestmentsAccountedForUsingEquityMethodIFRS` の
+        // ような、"EquityMethod" 等キーワードを部分文字列として含むだけの明細タグは、祖先
+        // `NonCurrentAssetsIFRSAbstract` の単一一致で先に確定しここには到達しない）、ここに来るのは
+        // 祖先が曖昧または不明なタグ自身のみ。
+        return classifyIfUnambiguous(tag, sectionType: sectionType)
     }
 
-    /// 単一の祖先タグ名を区分キーワードへ照合する。判定順は `Constants/Xbrl.swift` のコメント参照
-    /// （BS は NetAssets/Equity → Liabilit → Asset の順が必須）。
-    private static func classifyAncestor(
-        _ ancestorTag: String, sectionType: StatementSectionType
+    /// 名前（祖先タグまたはタグ自身）から区分を判定する。0個一致（キーワードを含まない明細・見出し）
+    /// または複数区分を束ねる見出し・グランドトータル行は nil を返す（`lineSection` 参照）。
+    private static func classifyIfUnambiguous(
+        _ name: String, sectionType: StatementSectionType
     ) -> StatementLineSection? {
         switch sectionType {
         case .balanceSheet:
-            if Xbrl.statementNetAssetsAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .netAssets
-            }
-            if Xbrl.statementLiabilitiesAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .liabilities
-            }
-            if Xbrl.statementAssetsAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .assets
-            }
+            let matchesNetAssets = Xbrl.statementNetAssetsAncestorKeywords.contains(where: {
+                name.contains($0)
+            })
+            let matchesLiabilities = Xbrl.statementLiabilitiesAncestorKeywords.contains(where: {
+                name.contains($0)
+            })
+            let matchesAssets = Xbrl.statementAssetsAncestorKeywords.contains(where: { name.contains($0) })
+            // 負債合計と純資産合計を束ねる見出し（例: `LiabilitiesAndEquityIFRSAbstract`）は
+            // Liabilit と NetAssets/Equity の両方に一致する。これを真の曖昧さとして nil にする。
+            // 一方 "NetAssetsAbstract" は NetAssets キーワード自体に "Asset" が部分文字列として
+            // 含まれ Assets キーワードにも機械的に一致するが、これは意味的な曖昧さではないため
+            // Liabilit との同時一致だけを曖昧さの判定基準にする（優先順位: NetAssets/Equity →
+            // Liabilit → Asset。この順が必須な理由は上記の部分文字列混入のため）。
+            guard !(matchesLiabilities && matchesNetAssets) else { return nil }
+            if matchesNetAssets { return .netAssets }
+            if matchesLiabilities { return .liabilities }
+            if matchesAssets { return .assets }
             return nil
         case .cashFlow:
-            if Xbrl.statementOperatingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .operating
-            }
-            if Xbrl.statementInvestingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .investing
-            }
-            if Xbrl.statementFinancingAncestorKeywords.contains(where: { ancestorTag.contains($0) }) {
-                return .financing
-            }
-            return nil
+            let candidates: [(StatementLineSection, [String])] = [
+                (.operating, Xbrl.statementOperatingAncestorKeywords),
+                (.investing, Xbrl.statementInvestingAncestorKeywords),
+                (.financing, Xbrl.statementFinancingAncestorKeywords),
+            ]
+            let matches = candidates.filter { _, keywords in keywords.contains(where: { name.contains($0) }) }
+            return matches.count == 1 ? matches[0].0 : nil
         case .incomeStatement:
             return nil
         }

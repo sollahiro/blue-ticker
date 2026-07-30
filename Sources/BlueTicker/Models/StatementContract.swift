@@ -60,9 +60,29 @@ public enum StatementLineSection: String, Codable, Sendable {
     case financing
 }
 
+/// 合計行（`StatementLineItem.isTotal == true`）を構成する要素1件。計算リンクベース
+/// （`_cal.xml`、`summation-item` arc）由来。`weight` は加算=1・控除=−1（実データ上 ±1 のみ確認）。
+public struct StatementLineComponent: Codable, Sendable {
+    public var tag: String
+    public var weight: Int
+
+    public init(tag: String, weight: Int) {
+        self.tag = tag
+        self.weight = weight
+    }
+
+    public func jsonObject() -> [String: Any] {
+        ["tag": tag, "weight": weight]
+    }
+}
+
 /// BS/PL/CF いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
 /// 参照)。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
-/// 企業拡張タグの区別は docs/statement-normalization-concept.md「未決事項」参照（v1では未対応）。
+/// `isTotal`/`components` は presentation ではなく計算リンクベース由来（`docs/statement-
+/// normalization-concept.md` 実装方針8）。presentation の親子関係は表示上のネストでしかなく
+/// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
+/// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
+/// 「未決事項」参照（v1では未対応）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
     public var label: String?
@@ -70,14 +90,21 @@ public struct StatementLineItem: Codable, Sendable {
     public var unit: String?
     public var order: Int?
     public var section: StatementLineSection?
+    /// この行が計算リンクベース上の合計行（`summation-item` の from 側）かどうか。
+    public var isTotal: Bool
+    /// `isTotal == true` かつ構成要素が解決できた場合のみ非 nil。
+    public var components: [StatementLineComponent]?
 
     private enum CodingKeys: String, CodingKey {
         case tag, label, value, unit, order, section
+        case isTotal = "is_total"
+        case components
     }
 
     public init(
         tag: String, label: String?, value: Double, unit: String?, order: Int?,
-        section: StatementLineSection? = nil
+        section: StatementLineSection? = nil, isTotal: Bool = false,
+        components: [StatementLineComponent]? = nil
     ) {
         self.tag = tag
         self.label = label
@@ -85,11 +112,14 @@ public struct StatementLineItem: Codable, Sendable {
         self.unit = unit
         self.order = order
         self.section = section
+        self.isTotal = isTotal
+        self.components = components
     }
 
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
     /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
-    /// 該当する祖先が判定できた行のみ非 nil。
+    /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
+    /// 解決できた場合のみ非 nil。
     public func jsonObject() -> [String: Any] {
         [
             "tag": tag,
@@ -98,6 +128,8 @@ public struct StatementLineItem: Codable, Sendable {
             "unit": unit as Any? ?? NSNull(),
             "order": order as Any? ?? NSNull(),
             "section": section?.rawValue as Any? ?? NSNull(),
+            "is_total": isTotal,
+            "components": components.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
         ]
     }
 }

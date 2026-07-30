@@ -498,7 +498,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 表示順（order）は有価証券報告書の presentation linkbase 通り（取得できないタグはタグ名
                 アルファベット順へフォールバック）。BS/CF の各行には区分（section: assets/liabilities/
                 net_assets、operating/investing/financing）が付く場合がある（複数区分にまたがる合計行は
-                null）。PL の行には section を付けない。
+                null）。PL の行には section を付けない。各行の is_total は計算リンクベース由来で、true の
+                場合 components（構成タグと weight。+1=加算、-1=控除）から二重計上せず合計を検算・
+                再構成できる（複数区分にまたがるグランドトータル行も components は取得できる）。
                 例: GET /v1/companies/7203/statement?years=3
                 """
         ),
