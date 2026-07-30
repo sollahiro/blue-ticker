@@ -5,8 +5,12 @@
 // - 4506 住友ファーマ S100YH3M: 地域別 facts を維持し、製品別表を SegmentInfoLLM へ
 // - 6902 デンソー S100Y9T1: 地域別報告セグメント → IFRS 売上収益の事業区分（サーマル等）
 //
-// キャッシュが無い環境では `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
-// live LLM 経路は `XAI_API_KEY` / `XAI_MODEL` があるときだけ実行する。
+// `BLT_EDINET_API_KEY`（CI の swift-macos/swift-linux ジョブは secrets 経由で設定済み）が
+// あれば `SmokeCacheSupport.ensureCached` で不足キャッシュを自動取得して実データのまま検証する。
+// 抽出ロジック（Extraction）・モック応答での resolver 検証（Resolver）は LLM 呼び出しを
+// 伴わないため、鍵さえあれば CI で実行できる。鍵も既存キャッシュも無い環境ではテスト内で
+// SKIP する（`swift test` は緑のまま）。
+// live LLM 経路（LiveLLM）のみ `XAI_API_KEY` / `XAI_MODEL` があるときだけ実行する。
 
 import Testing
 import Foundation
@@ -47,10 +51,20 @@ private actor RealXbrlMockChat: ChatCompleting {
         FileManager.default.fileExists(atPath: xbrlDir(docID).path)
     }
 
+    /// `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、それでも無ければ SKIP する。
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard cacheAvailable(docID) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
     // MARK: - ブリヂストン S100XRPR
 
-    @Test(.enabled(if: cacheAvailable("S100XRPR"), "XBRL cache S100XRPR not available"))
-    func bridgestoneExtractsIFRSRevenueBusinessRowsAndFootnotes() throws {
+    @Test func bridgestoneExtractsIFRSRevenueBusinessRowsAndFootnotes() async throws {
+        guard await Self.ensureAvailable("S100XRPR") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XRPR"))
 
         #expect(result.method == "html_table")
@@ -68,8 +82,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - デンソー S100Y9T1
 
-    @Test(.enabled(if: cacheAvailable("S100Y9T1"), "XBRL cache S100Y9T1 not available"))
-    func densoExtractsIFRSRevenueBusinessSystemRows() throws {
+    @Test func densoExtractsIFRSRevenueBusinessSystemRows() async throws {
+        guard await Self.ensureAvailable("S100Y9T1") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100Y9T1"))
 
         #expect(result.method == "html_table")
@@ -93,14 +107,18 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - 住友ファーマ S100YH3M
 
-    @Test(.enabled(if: cacheAvailable("S100YH3M"), "XBRL cache S100YH3M not available"))
-    func sumitomoKeepsGeographyFactsAndProductTablesWithoutRevenueTypeSwap() throws {
+    @Test func sumitomoKeepsGeographyFactsAndProductTablesWithoutRevenueTypeSwap() async throws {
+        guard await Self.ensureAvailable("S100YH3M") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YH3M"))
 
         // IFRS 売上収益は製商品/知的財産の種類分解 → swap せず geography facts を維持
         #expect(result.method == "xbrl_facts")
         #expect(!result.facts.isEmpty)
-        #expect(result.tables.first?.heading == "セグメント情報")
+        // 製品・サービス別情報ブロックがあれば報告セグメント表より先に置かれる
+        // （extractSegmentInfo の設計、実データ 2026-07-31 時点で本書類に当該ブロックが追加された）。
+        #expect(result.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
+        #expect(result.tables.first?.heading == BreakdownExtractor.productOrServiceHeading
+            || result.tables.first?.heading == "セグメント情報")
 
         let joined = result.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("ラツーダ") || joined.contains("オルゴビクス") || joined.contains("製品"))
@@ -112,8 +130,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - ネクソン S100XSM4（2026-07-24）
 
-    @Test(.enabled(if: cacheAvailable("S100XSM4"), "XBRL cache S100XSM4 not available"))
-    func nexonKeepsGeographyFactsButExposesProductRevenueTable() throws {
+    @Test func nexonKeepsGeographyFactsButExposesProductRevenueTable() async throws {
+        guard await Self.ensureAvailable("S100XSM4") else { return }
         // 報告セグメントは Korea/Japan/China/NorthAmerica（地域）。
         // ゲーム課金・ロイヤリティ等の製品別はセグメント注記内の別表にあり、
         // 収益認識注記は無い → swap せず facts を残しつつ tables に製品別を載せる。
@@ -132,8 +150,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - メルカリ S100WQDW（2026-07-25）
 
-    @Test(.enabled(if: cacheAvailable("S100WQDW"), "XBRL cache S100WQDW not available"))
-    func mercariKeepsGeographyFactsAndMarketplaceMatrixWithoutRevenueStubSwap() throws {
+    @Test func mercariKeepsGeographyFactsAndMarketplaceMatrixWithoutRevenueStubSwap() async throws {
+        guard await Self.ensureAvailable("S100WQDW") else { return }
         // 報告セグメントは Japan Region / US（地域）。Marketplace/Fintech/その他の事業別は
         // セグメント注記内のマトリクスにあり、IFRS 売上収益注記はポインタ＋契約負債表のみ。
         // RR へ無条件 swap すると製品表を失う → facts+tables を残し SegmentInfoLLM へ。
@@ -157,8 +175,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - アサヒ S100VHC1（2026-07-24）
 
-    @Test(.enabled(if: cacheAvailable("S100VHC1"), "XBRL cache S100VHC1 not available"))
-    func asahiSwapsGeographySegmentsToIFRSRevenueProductMatrix() throws {
+    @Test func asahiSwapsGeographySegmentsToIFRSRevenueProductMatrix() async throws {
+        guard await Self.ensureAvailable("S100VHC1") else { return }
         // 報告セグメントは Japan/Europe/Oceania/SoutheastAsia（地域）。
         // 酒類/飲料/食品・薬品の製品別は IFRS 売上収益注記のマトリクス（列=製品、行=地域）。
         // Oceania を地域キーワードに含めないと allMembersAreGeography が false になり swap できない。
@@ -174,8 +192,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - 三菱商事 / あおぞら / 三井住友トラスト（2026-07-24）
 
-    @Test(.enabled(if: cacheAvailable("S100YB25"), "XBRL cache S100YB25 not available"))
-    func mitsubishiExtractsRevenue2BusinessGroups() throws {
+    @Test func mitsubishiExtractsRevenue2BusinessGroups() async throws {
+        guard await Self.ensureAvailable("S100YB25") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
         #expect(result.method == "html_table")
         #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
@@ -184,8 +202,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(joined.contains("地球環境") || joined.contains("マテリアル") || joined.contains("金属資源"))
     }
 
-    @Test(.enabled(if: cacheAvailable("S100YCRO"), "XBRL cache S100YCRO not available"))
-    func aozoraExtractsProductOrServiceOrdinaryRevenue() throws {
+    @Test func aozoraExtractsProductOrServiceOrdinaryRevenue() async throws {
+        guard await Self.ensureAvailable("S100YCRO") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YCRO"))
         #expect(!result.tables.isEmpty)
         #expect(result.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
@@ -194,8 +212,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(joined.contains("経常収益"))
     }
 
-    @Test(.enabled(if: cacheAvailable("S100YBGM"), "XBRL cache S100YBGM not available"))
-    func sumitomoTrustExtractsSubstantialGrossBusinessProfitBySegment() throws {
+    @Test func sumitomoTrustExtractsSubstantialGrossBusinessProfitBySegment() async throws {
+        guard await Self.ensureAvailable("S100YBGM") else { return }
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YBGM"))
         #expect(!result.tables.isEmpty)
         let joined = result.tables.map(\.markdown).joined(separator: "\n")
@@ -206,8 +224,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - エーザイ S100YB05（2026-07-25）
 
-    @Test(.enabled(if: cacheAvailable("S100YB05"), "XBRL cache S100YB05 not available"))
-    func eisaiKeepsGeographyFactsAndExposesNeurologyOncologyProductTable() throws {
+    @Test func eisaiKeepsGeographyFactsAndExposesNeurologyOncologyProductTable() async throws {
+        guard await Self.ensureAvailable("S100YB05") else { return }
         // 報告セグメントは Japan/Americas/China/EMEA/EastAsiaGlobalSouth（地域）。
         // ニューロロジー/オンコロジー領域製品は InformationAboutProductsAndServicesIFRS 側。
         // IFRS 売上収益注記は医薬品販売/ライセンスの種類分解 → swap せず facts+製品表を残し
@@ -232,8 +250,8 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - オリックス S100YG5L（2026-07-25、issue #103）
 
-    @Test(.enabled(if: cacheAvailable("S100YG5L"), "XBRL cache S100YG5L not available"))
-    func orixChainsCurrentPeriodBusinessSegmentTableAcrossColumnViews() throws {
+    @Test func orixChainsCurrentPeriodBusinessSegmentTableAcrossColumnViews() async throws {
+        guard await Self.ensureAvailable("S100YG5L") else { return }
         // issue #103 の回帰: US-GAAP の巨大注記内で「事業別収益(前期)→地域別収益(前期)→
         // 事業別収益(当期)→地域別収益(当期)」の4表が連続するが、列見出し（事業名/地域名）が
         // 表ごとに異なるため headerRowsMatch のみでは前期の1表で打ち切られ、当期表に
@@ -265,6 +283,16 @@ private actor RealXbrlMockChat: ChatCompleting {
         FileManager.default.fileExists(atPath: xbrlDir(docID).path)
     }
 
+    /// `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、それでも無ければ SKIP する。
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard cacheAvailable(docID) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
     /// 実抽出結果の当期表インデックス（タイヤ/サーマルを含む最初の当期表）。無ければ 0。
     private static func preferredTableIndex(_ tables: [BreakdownTable], containing needle: String) -> Int {
         if let i = tables.firstIndex(where: { $0.period == "当期" && $0.markdown.contains(needle) }) {
@@ -276,8 +304,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         return 0
     }
 
-    @Test(.enabled(if: cacheAvailable("S100XRPR"), "XBRL cache S100XRPR not available"))
-    func bridgestoneResolvesViaRevenueRecognitionLLM() async throws {
+    @Test func bridgestoneResolvesViaRevenueRecognitionLLM() async throws {
+        guard await Self.ensureAvailable("S100XRPR") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XRPR"))
         #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
 
@@ -312,8 +340,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
-    @Test(.enabled(if: cacheAvailable("S100Y9T1"), "XBRL cache S100Y9T1 not available"))
-    func densoResolvesViaRevenueRecognitionLLM() async throws {
+    @Test func densoResolvesViaRevenueRecognitionLLM() async throws {
+        guard await Self.ensureAvailable("S100Y9T1") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100Y9T1"))
         #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
 
@@ -353,8 +381,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
-    @Test(.enabled(if: cacheAvailable("S100YH3M"), "XBRL cache S100YH3M not available"))
-    func sumitomoResolvesViaSegmentInfoLLMFromProductTable() async throws {
+    @Test func sumitomoResolvesViaSegmentInfoLLMFromProductTable() async throws {
+        guard await Self.ensureAvailable("S100YH3M") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YH3M"))
         #expect(segments.method == "xbrl_facts")
         #expect(!segments.tables.isEmpty)
@@ -392,8 +420,8 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
-    @Test(.enabled(if: cacheAvailable("S100YB05"), "XBRL cache S100YB05 not available"))
-    func eisaiResolvesViaSegmentInfoLLMFromNeurologyOncologyTable() async throws {
+    @Test func eisaiResolvesViaSegmentInfoLLMFromNeurologyOncologyTable() async throws {
+        guard await Self.ensureAvailable("S100YB05") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB05"))
         #expect(segments.method == "xbrl_facts")
         #expect(segments.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
