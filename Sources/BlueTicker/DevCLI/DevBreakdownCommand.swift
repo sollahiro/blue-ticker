@@ -224,14 +224,19 @@ struct DevBreakdownCommand: AsyncParsableCommand {
 
     /// IndividualAnalyzer のキャッシュ優先結果から、対象 docID の売上（円）を取る。
     /// RawData.sales は百万円単位なので `millionYen` を掛けて円に戻す。
+    /// 窓は `analyzeDefaultYears`（Stage 6 保持窓と同じ 6 年）。指定 docID が窓に無い、
+    /// または売上未抽出なら nil（最新期へ無言フォールバックしない。issue #160）。
     private func loadLiveSales(ctx: AnalysisContext, docID: String) async -> Double? {
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: 3, useCache: true).resultOrNil,
-              let years = result.years, !years.isEmpty
+        guard let result = await analyzer.analyze(
+            code: ctx.code, analysisYears: Api.analyzeDefaultYears, useCache: true
+        ).resultOrNil,
+            let years = result.years, !years.isEmpty
         else { return nil }
 
-        let matched = years.first { $0.calculatedData.docID == docID } ?? years.first
-        guard let salesMillion = matched?.rawData.sales else { return nil }
+        guard let matched = years.first(where: { $0.calculatedData.docID == docID }),
+            let salesMillion = matched.rawData.sales
+        else { return nil }
         return salesMillion * Financial.millionYen
     }
 
