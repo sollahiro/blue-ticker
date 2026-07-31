@@ -96,6 +96,20 @@ run_with_timeout() {
   run_with_timeout "$BIN" ingest --stages 6 --limit "$LIMIT_STAGE6"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
 
+  # RO 子ブランチを WRITE 親へ reset（Neon API）。Secrets 未設定ならスキップ。
+  # 失敗しても ingest 本体の成否には影響させない（AGENTS.md「Neon Secrets」）。
+  if [ -n "${NEON_API_KEY:-}" ] && [ -n "${NEON_PROJECT_ID:-}" ] \
+    && [ -n "${NEON_RO_BRANCH_ID:-}" ] && [ -n "${NEON_WRITE_BRANCH_ID:-}" ]; then
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') neon RO reset-from-parent 開始 ====="
+    if "$REPO/scripts/neon-reset-ro-from-parent.sh"; then
+      echo "===== $(date '+%Y-%m-%d %H:%M:%S') neon RO reset-from-parent 完了 ====="
+    else
+      echo "$(date '+%Y-%m-%d %H:%M:%S') WARN: neon RO reset-from-parent に失敗しました（ingest 本体の成否には影響しません）"
+    fi
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: NEON_* 未設定のため RO reset-from-parent をスキップ"
+  fi
+
   # 公開ステータスページ（assets/apex-site/status.html）の再生成・push。
   # ingest 本体は既に成功しているため、ここが失敗しても全体は失敗扱いにしない
   # （DATABASE_URL は上の set -a; . .env; set +a で既に読み込み済み）。

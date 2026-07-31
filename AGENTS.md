@@ -27,7 +27,7 @@
 | 8 | 全銘柄展開に伴うロジック定着 | 本番 write | **する** |
 
 - **母集団**: Stage 6/7 は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。Stage 4/5 は同 CSV が処理順の優先のみ → 225 に閉じるなら `--codes` 等で明示。
-- **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_PROD_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。
+- **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_PROD_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
 
 ## 監査レビューとモデル分担
 
@@ -62,7 +62,13 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 | Secret | 用途 | 禁止 |
 |---|---|---|
 | `DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し | 本番を指させない |
-| `BLT_PROD_DATABASE_URL` | 本番 SELECT / 件数 | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
-| `BLT_PROD_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
+| `BLT_PROD_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子ブランチ**接続。作成／reset 時点のコピー） | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
+| `BLT_PROD_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝大元ブランチ**） | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
+| `NEON_API_KEY` | RO を親へ reset する Neon API 認証 | リポジトリへ書かない |
+| `NEON_PROJECT_ID` | Neon project id | — |
+| `NEON_WRITE_BRANCH_ID` | WRITE 親の `br-…`（`source_branch_id`） | 接続 URL の `ep-…` や `postgresql://` を流用しない |
+| `NEON_RO_BRANCH_ID` | RO 子の `br-…`（reset 対象） | 同上 |
+
+**RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。定期 sync（`blt-scheduled-sync.sh`）は上記 4 変数が揃っているとき ingest 後に自動実行（欠ける／失敗しても ingest 成否には影響させない）。手動: 同スクリプトをそのまま実行。
 
 **42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
