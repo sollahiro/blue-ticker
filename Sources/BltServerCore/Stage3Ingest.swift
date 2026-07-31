@@ -261,19 +261,26 @@ public func runStage3IngestCommand(
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
         if stages.contains(.breakdowns) {
-            // Stage 6: 日経225構成銘柄（`priority`）の有報について business → geography の順で
-            // 軸別に内訳を解決・格納。上場全体ではなく priority（`assets/nikkei225.csv`）を
-            // 対象母集団として渡す（LLM 費用抑制）。年数は Stage 5 と同じ集合から取るため
-            // stage5IngestYears を共用する。limit は軸ごとの呼び出しで独立に適用する。
+            // Stage 6: 既定は日経225（`priority`）を対象母集団（LLM 費用抑制）。
+            // `--codes` 指定時はその集合を母集団にする（CSV 未配置の Cloud 等でも
+            // 手動再ingestが attempted=0 にならない。issue #160）。
+            // 年数は Stage 5 と同じ集合から取るため stage5IngestYears を共用する。
+            // limit は軸ごとの呼び出しで独立に適用する。
+            let stage6Listed = codes ?? priority
+            if stage6Listed.isEmpty {
+                app.logger.warning(
+                    "Stage 6 listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "stage": "6", "reason": "empty_listed_codes"])
+            }
             let s6Business = try await runStage6Ingest(
-                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                db: app.db, listedCodes: stage6Listed, years: stage5IngestYears, limit: stageLimit,
                 explicitCodes: codes, axis: breakdownAxisBusiness, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveBusinessBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
             let s6Geography = try await runStage6Ingest(
-                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                db: app.db, listedCodes: stage6Listed, years: stage5IngestYears, limit: stageLimit,
                 explicitCodes: codes, axis: breakdownAxisGeography, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveGeographyBreakdown(
@@ -305,11 +312,16 @@ public func runStage3IngestCommand(
                 purged: s6Geography.purged)
         }
         if stages.contains(.statement) {
-            // Stage 7: 日経225構成銘柄（`priority`）の有報について BS/PL/CF を抽出・格納。
-            // Stage 6 と同じ理由で対象母集団は priority（`assets/nikkei225.csv`）に限定する
-            // （LLM は不要だが、実データ検証が日経225相当に留まるため。docs/statement-normalization-concept.md）。
+            // Stage 7: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
+            // （Stage 6 と同型。CSV 未配置でも手動再ingest可能）。
+            let stage7Listed = codes ?? priority
+            if stage7Listed.isEmpty {
+                app.logger.warning(
+                    "Stage 7 listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "stage": "7", "reason": "empty_listed_codes"])
+            }
             let s7 = try await runStage7Ingest(
-                db: app.db, listedCodes: priority, years: stage5IngestYears, limit: stageLimit,
+                db: app.db, listedCodes: stage7Listed, years: stage5IngestYears, limit: stageLimit,
                 explicitCodes: codes, logger: app.logger
             ) { docID in
                 await context.extractStatement(docID: docID)

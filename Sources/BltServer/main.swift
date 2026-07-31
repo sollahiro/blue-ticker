@@ -7,6 +7,8 @@
 //                                                            Stage 6 は日経225構成銘柄限定（LLM費用抑制）。
 //                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
+//                                                            Stage 6/7 では --codes を対象母集団にも使う
+//                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
