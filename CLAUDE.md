@@ -1,8 +1,11 @@
 @/Users/shutosorahiro/.claude/CLAUDE.md
+@AGENTS.md
 
 # BLUE TICKER — Claude Code ガイド
 
 日本株の財務データ基盤（Swift / SwiftPM）。ユーザー接点は REST / MCP。配布 CLI は廃止。
+
+原理原則・機能の実装サイクル・監査／モデル分担・Cursor Cloud 手順は `AGENTS.md`。下記はビルドとターゲット境界の正本。
 
 ## ビルド・テスト
 

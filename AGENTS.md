@@ -1,20 +1,68 @@
 # AGENTS.md
 
-プロジェクトの全体像・ビルド/テスト・ターゲット構成は `CLAUDE.md` と `docs/`（`architecture.md` ほか）を正本とする。以下は Cursor Cloud 環境固有の補足のみ。
+エージェント向けの作業合意。ビルド・ターゲット正本は `CLAUDE.md`、運用ルールは `.agents/rules/`、アーキテクチャは `docs/`。
 
-## Cursor Cloud specific instructions
+## 原理原則
 
-このリポジトリは Swift 6 / SwiftPM 製（REST サーバー `blt-server` と開発用 `TickerDev`。配布 CLI `ticker` は廃止）。開発環境は Linux（Ubuntu 24.04）。Swift 6.1 ツールチェーンは swiftly で導入済みで、`~/.profile`（`~/.local/share/swiftly/env.sh` を source）経由で PATH に入る。非ログインシェルで `swift` が見つからない場合は `. "$HOME/.local/share/swiftly/env.sh"` を先に実行する。
+- **コンテキスト**: 最も希少な資源。認知負荷と情報量を最小化し、指針・本ファイル自身も短く保つ。
+- **実データ・実測**: モックや推測より EDINET / Neon / 本番 read の実データと件数で判断する。ゲートは計測してから次へ。
+- **Git First**: Git が唯一の Source of Truth。永続判断は Git か memory、一時情報は残さない。履歴詳細は Git に委ねる。
+- **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は `CLAUDE.md`）。
+- **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。
 
-- **Linux での `swift build` / `swift test` には必ず `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を付ける**（swift-nio の `_NIOFileSystem` が Linux で `import CSystem` を欠くための一時回避策）。付けないと Vapor 依存のビルドが失敗する。背景は `.agents/rules/project/dependencies.md`「Linux 互換」と `docs/blt-server-roadmap.md`「Linux ビルドの既知の問題」、適用例は `.github/workflows/ci.yml` の `swift-linux` ジョブを参照。macOS では不要。
-- **`blt-server` は起動時に非空の `BLT_EDINET_API_KEY` を要求する**（未設定だと即終了）。EDINET を実際に叩くのは live filings / `sync` / `ingest` のみで、企業検索・業種一覧（`/v1/companies`・`/v1/sectors`）はローカルの `assets/EdinetcodeDlInfo.csv` を読むため EDINET へ接続しない。ローカル起動・検索系の動作確認だけなら `BLT_EDINET_API_KEY=dev-local-dummy` のようなダミー値で十分（本物の鍵は EDINET 実アクセス時のみ必要）。
-- サーバーはローカル既定で `127.0.0.1:3000` を bind する（`BLT_HOST` / `BLT_PORT` で上書き。Docker 既定は `0.0.0.0:8080`）。`DATABASE_URL` 未設定ならステートレス（DB なし）で起動し、財務系 read は 404/503 になる。`CF_ACCESS_TEAM_DOMAIN` 未設定なら無認証モード（ローカル開発専用）。
-- 動作確認例: `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server` で起動 →
-  `curl -s http://127.0.0.1:3000/healthz` /
-  `curl -s "http://127.0.0.1:3000/v1/companies?q=<社名>"`。
-  本番機械アクセスは Access Service Token（`docs/api-auth.md` / `docs/deploy.md`）。
-- DB 統合（`PostgresIntegrationTests`）や EDINET/LLM を伴うスモークテストは、それぞれ `BLT_TEST_POSTGRES_URL` / `BLT_EDINET_API_KEY`（実鍵）/ `XAI_API_KEY` 未設定時は自動 SKIP される（`swift test` は鍵なしでも緑になる）。`PostgresIntegrationTests` は使い捨ての検証用 Postgres（`BLT_TEST_POSTGRES_URL`）を前提とし、本番 `DATABASE_URL` とは別物。
-- **Neon 接続は Secrets で二本立て**（アプリ本体が読むのは常に `DATABASE_URL` のみ）:
-  - **`DATABASE_URL`**: 書き込み検証用の使い捨て Neon ブランチ（本番 `api.sollahiro.com` の DB とは隔離。値は運用で変わりうる）。このブランチ向けなら `blt-server sync` / `ingest` / `master-data-upload` を実行して問題ない。live EDINET 経路だけを確認したいなら書き込みを伴わない `swift run TickerDev summarize <code>`（in-process 解析）でも良い。
-  - **`BLT_PROD_DATABASE_URL`**: 本番 Neon の **読み取り専用** 用（未設定なら無視）。`psql "$BLT_PROD_DATABASE_URL" -c 'SELECT ...'` や件数確認など **SELECT のみ**。`sync` / `ingest` / `master-data-upload` / `DROP SCHEMA` / スキーマ変更、および `DATABASE_URL` にこれを入れてサーバー起動する（起動時 `autoMigrate` が走る）ことは禁止。本番データでの read 検証が必要なときだけ使う。
-  - **新規/空の Neon ブランチでハマる `autoMigrate` の注意点**（使い捨て `DATABASE_URL` 向け。`BLT_PROD_DATABASE_URL` では絶対に実行しない）: テーブルは存在するのに `_fluent_migrations` が空（過去のスキーマ痕跡が残った空ブランチ等）だと、起動時 `autoMigrate` が `CREATE TABLE ... relation "edinet_documents" already exists`（SQLSTATE 42P07）で失敗し、5 回リトライ後にサーバーが終了する。データが無い（空）ことを確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'` で作り直せば、次回起動時に `autoMigrate` がテーブル作成とマイグレーション記録をやり直して正常起動する（データが入っている DB では絶対に実行しないこと）。
+## 機能の実装サイクル
+
+新機能・Stage 拡張は次の順。**バンプ**は Neon `cache_version` のみ（`blueTickerVersion` ではない → `versioning.md`）。**公開範囲**（REST/MCP 解禁など）は機能ごとに都度確認。
+
+| # | 段階 | 書き込み先 | バンプ |
+|---|---|---|---|
+| 1 | 日経225限定で本番へ初期投入（最新年度を埋める。探索的試し書き禁止） | 本番 write | しない |
+| 2 | 最新年度 100% 後にロジック改善（母数＝最新有報が取れた社。欠測は正当か不具合か確認） | — | しない |
+| 3 | 改善結果を使い捨てで検証 | 使い捨て | しない |
+| 4 | 問題なければ公開（都度確認）し、225 **全件**を本番へ揃える | 本番 write | しない |
+| 5 | 全件を見たうえでのロジック改善 | — | しない |
+| 6 | 不審フラグ（`needs_review`・あいまい失敗・異常欠測など）は手動 ingest | 本番 write | しない |
+| 7 | 225 全体で問題なければ全銘柄へ拡張 | 本番 write | しない |
+| 8 | 全銘柄展開に伴うロジック定着 | 本番 write | **する** |
+
+- **母集団**: Stage 6/7 は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。Stage 4/5 は同 CSV が処理順の優先のみ → 225 に閉じるなら `--codes` 等で明示。
+- **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_PROD_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。
+
+## 監査レビューとモデル分担
+
+大幅変更・リファクタ・効率化の後は、実装セッション以外の主体に監査させ是々非々で判断する（単一ファイルでも対象）。
+
+- **渡すもの**: 仕様（契約）と diff のみ。結論へ誘導しない。
+- **問い**: 仕様を満たすか／既存を壊していないか。
+- **タイミング**: main マージ前（ブランチ高度＝品質ゲート）。
+- **手段**: `Agent` / `Task` のみ（Cursor CLI 不使用）。
+
+| 作業 | モデル |
+|---|---|
+| 本体（対話・設計・実装） | Grok 4.5 |
+| 監査レビュー | Grok 4.5、または難易度に応じて上位 |
+| 実装サブエージェント | Composer 2.5 |
+| 探索・並列調査 | Grok 4.5 |
+
+対象作業は表のモデルへ委譲する（本体セッションや Cloud でも同じ）。
+
+## Cursor Cloud
+
+Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
+
+- **build/test**: `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` 必須（`.agents/rules/project/dependencies.md`、`.github/workflows/ci.yml` の `swift-linux`）。
+- **起動**: 非空 `BLT_EDINET_API_KEY`（ダミー可）。既定 `127.0.0.1:3000`。`DATABASE_URL` なし＝ステートレス、`CF_ACCESS_TEAM_DOMAIN` なし＝無認証。例: `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server` → `curl -s http://127.0.0.1:3000/healthz`（認証は `docs/api-auth.md`）。
+- **テスト SKIP**: `BLT_TEST_POSTGRES_URL` / 実 EDINET 鍵 / `XAI_API_KEY` 未設定時（Neon Secrets とは別）。
+
+### Neon Secrets
+
+アプリが読むのは `DATABASE_URL` のみ。本番系は明示オプトイン（上表の書き込み先）。
+
+| Secret | 用途 | 禁止 |
+|---|---|---|
+| `DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し | 本番を指させない |
+| `BLT_PROD_DATABASE_URL` | 本番 SELECT / 件数 | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
+| `BLT_PROD_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
+
+**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
