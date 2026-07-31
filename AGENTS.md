@@ -32,13 +32,13 @@ Git を唯一の Source of Truth とする。永続化すべき判断・文脈�
 
 新機能・Stage 拡張は次の順で進める。ここでいうバンプは Neon `cache_version`（`blueTickerVersion` ではない。詳細は `.agents/rules/project/versioning.md`）。公開範囲（REST/MCP 解禁の有無など）は機能ごとに都度確認する。
 
-1. **日経225限定で本番書き込み** — `assets/nikkei225.csv` / `priorityIngestCodes()` で母集団を絞り、`BLT_PROD_WRITE_DATABASE_URL` 経由で本番へ ingest（探索的な試し書きはしない）。
+1. **日経225限定で本番書き込み** — 日経225を対象に `BLT_PROD_WRITE_DATABASE_URL` 経由で本番へ ingest（探索的な試し書きはしない）。母集団の絞り込み方は Stage 依存（Stage 6/7 は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。Stage 4/5 は同 CSV が処理順の優先のみなので、225 に閉じるなら `--codes` 等で明示する）。
 2. **最新年度が揃ったらロジック改善（バンプしない）** — 日経225のうち最新有報が取れた社を母数に 100% を見る。欠測は無視せず正当欠測か不具合かを確認する。改善しても `cache_version` は上げない。
 3. **使い捨てブランチで検証** — 改善後の書き込み・読み出しは `DATABASE_URL`（schema only 可）で確認する。
-4. **問題なければ公開し、225 全件取得** — 公開可否・公開面は都度確認。問題なければ日経225を全件 ingest する。
+4. **問題なければ公開し、225 全件取得** — 公開可否・公開面は都度確認。問題なければ `BLT_PROD_WRITE_DATABASE_URL` で日経225を全件 ingest する。
 5. **ロジック改善（バンプしない）** — 225 全件を見たうえでの修正。`cache_version` は上げない。
-6. **不審フラグは手動 ingest** — `needs_review`・あいまい失敗・異常な欠測など不審なものは通常巡回に任せきりにせず、手動 ingest で更新する。
-7. **225 全体で問題なければ全銘柄へ拡張** — 対象母集団を広げる。
+6. **不審フラグは手動 ingest** — `needs_review`・あいまい失敗・異常な欠測など不審なものは通常巡回に任せきりにせず、`BLT_PROD_WRITE_DATABASE_URL` で手動 ingest 更新する。
+7. **225 全体で問題なければ全銘柄へ拡張** — 対象母集団を広げ、`BLT_PROD_WRITE_DATABASE_URL` で本番 ingest する。
 8. **ロジック改善（バンプする）** — 全銘柄展開に伴うロジック定着時は該当 Stage の `cache_version` を上げ、再 ingest で収束させる。
 
 ## 監査レビューとモデル分担
