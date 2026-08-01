@@ -71,11 +71,11 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `4`（`fin-v4` 以上を 200。2026-07-28、上場廃止47社のfin-v2/v3行をDELETEで消化した後に引き上げ） |
 | `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `2`（`half-v2` 以上を 200。2026-07-28、同上場廃止組のhalf-v1行をDELETEで消化した後に引き上げ） |
-| `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v4"`（geography: 非流動資産表除外＋収益の分解フォールバック、2026-07-27） |
+| `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
 | `company_breakdowns`（Stage 6 business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts / not_applicable 経由のみ） | `businessBreakdownMinServableVersion` | 同上 | `1`（`…-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
-| `company_breakdowns`（Stage 6 geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。geography の決定的ロジック変更時のみバンプ） |
+| `company_breakdowns`（Stage 6 geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v8"`（電通型: 地域報告セグメント facts フォールバック、issue #163。決定的ロジック変更時のみバンプ） |
 | （同上・read 床） | `geographyBreakdownMinServableVersion` | 同上 | `1` |
 
 ### バンプ規則

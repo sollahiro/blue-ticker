@@ -15,7 +15,7 @@
 | Stage 4-half | `half-v2` への stale 消化継続中（issue #73 の半期報告書マッチング修正で導入）。合計 3,859 行中 `half-v2` 3,823・`half-v1` 36。read 床 `companyHalfFinancialsMinServableVersion = 1` |
 | Stage 5 | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
-| Stage 6 | 日経225限定。business 軸は 225/225 社ingest 済み。cache_version を軸別（`breakdown-business-v7`/`breakdown-geography-v7`）に分離し、geography 軸の Neon ingest 配線・REST/MCP 公開を 2026-07-27 に完了（品質ゲート: 最新有報 224/224 社で `needs_review=true` とあいまい失敗が 0 を確認）。軸別命名への切替は Neon 側は次回 ingest から反映（現状 business 行は旧共通名 `breakdown-v7` 等のまま） |
+| Stage 6 | 日経225限定。business 軸は 225/225 社ingest 済み。cache_version を軸別（`breakdown-business-v7`/`breakdown-geography-v8`）に分離し、geography 軸の Neon ingest 配線・REST/MCP 公開を 2026-07-27 に完了（品質ゲート: 最新有報 224/224 社で `needs_review=true` とあいまい失敗が 0 を確認）。電通型（報告セグメント＝地域）の geography `not_found` は issue #163。軸別命名への切替は Neon 側は次回 ingest から反映（現状 business 行は旧共通名 `breakdown-v7` 等のまま） |
 | Stage 7 | 日経225限定でスタート（2026-07-29）。DB(`company_statements`)/ingest(`--stages 7`)/REST/MCP 配線済み。presentation linkbase 由来の真の表示順(`order`)、BS/CF 行の区分(`section`: assets/liabilities/net_assets、operating/investing/financing)、標準タクソノミ補完によるラベル解決、計算リンクベース由来の合計行構成要素(`is_total`/`components`)まで対応済み（2026-07-31、v1のまま）。PL の利益段階ラベリングはスコープ外に確定（Stage 4 領域）。使い捨て Neon で実データ書き込み・読み出し検証済み（実XBRL9社でタグ漏れ・合計不一致なしを確認）。本番 Neon への日経225全社ingestは未実施 |
 | Stage 7 read 床 | **`statementMinServableVersion = 1`**（`statement-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |

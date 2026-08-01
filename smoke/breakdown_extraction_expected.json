@@ -928,9 +928,652 @@
   },
   "S100R7SI": {
     "geography": {
-      "facts": [],
-      "method": "not_found",
-      "tables": []
+      "method": "xbrl_facts",
+      "tables": [],
+      "facts": [
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 9444000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8910000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3434000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 4010000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1464000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8949000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 10075000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3028000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 5872000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1175000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_CorporateSharedMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 121000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 90000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 47000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 134000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 53000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 106000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 97000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 28000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 49000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 18000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 121000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 170000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 90000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 47000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 32000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 250000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 144000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 79000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 20000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 20809000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 6342000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 8936000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 5529000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 23604000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9262000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9919000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 4422000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 72
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 89
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 150
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 76
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1058000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2098000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 408000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1012000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 677000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1036000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2304000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 797000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1151000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 355000000
+        }
+      ]
     },
     "segments": {
       "facts": [
@@ -2531,9 +3174,488 @@
   },
   "S100UNQ0": {
     "geography": {
-      "facts": [],
-      "method": "not_found",
-      "tables": []
+      "method": "xbrl_facts",
+      "tables": [],
+      "facts": [
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 93408000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 31756000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 21141000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 15477000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 161784000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": -51271000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 77304000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 28025000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 17107000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 10728000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": 133166000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "NetSales",
+          "unitRef": "JPY",
+          "value": -37919000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 9442000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2667000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1351000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 745000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 14207000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -2231000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 4166000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1044000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 543000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 322000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 6076000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -450000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 50284000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 31753000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 21033000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 7441000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 110512000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_ReconcilingItemsMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 0.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 43126000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 27917000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 17073000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 7130000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 95247000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_ReconcilingItemsMember",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "RevenuesFromExternalCustomers",
+          "unitRef": "JPY",
+          "value": 0.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 43124000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 2000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 108000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 8036000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 51271000000.0
+        },
+        {
+          "contextRef": "Prior1YTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": -51271000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000JapanReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "JapanReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 34178000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AmericasReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AmericasReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 107000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000EuropeReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EuropeReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 34000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_jpcrp040300-q2r_E01481-000AsiaAndPacificReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "AsiaAndPacificReportableSegmentsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 3598000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_TotalOfReportableSegmentsAndOthersMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "TotalOfReportableSegmentsAndOthersMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": 37919000000.0
+        },
+        {
+          "contextRef": "CurrentYTDDuration_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "TransactionsWithOtherSegments",
+          "unitRef": "JPY",
+          "value": -37919000000.0
+        }
+      ]
     },
     "segments": {
       "facts": [
@@ -13591,9 +14713,652 @@
   },
   "S100W1K4": {
     "geography": {
-      "facts": [],
-      "method": "not_found",
-      "tables": []
+      "method": "xbrl_facts",
+      "tables": [],
+      "facts": [
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 7571000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 16703000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 6652000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 8404000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 1645000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 9458000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 10867000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 3599000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 4959000000
+        },
+        {
+          "contextRef": "Prior1YearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "Assets",
+          "unitRef": "JPY",
+          "value": 2309000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_CorporateSharedMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 220000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 52000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 14000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 31000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 6000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 218000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 54000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 13000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 33000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "DepreciationSegmentInformation",
+          "unitRef": "JPY",
+          "value": 6000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 104000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 64000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 19000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 43000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 223000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 9000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 4000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 3000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+          "unitRef": "JPY",
+          "value": 2000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 29159000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9544000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 14263000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 5352000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 0
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 22482000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 8557000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 9775000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "label": "完成工事高",
+          "tag": "NetSalesOfCompletedConstructionContracts",
+          "unitRef": "JPY",
+          "value": 4149000000
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "CorporateSharedMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 51
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 106
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 170
+        },
+        {
+          "contextRef": "CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "0",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "NumberOfEmployees",
+          "unitRef": "pure",
+          "value": 93
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1280000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 3993000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1134000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2389000000
+        },
+        {
+          "contextRef": "CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 469000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReconcilingItemsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReconcilingItemsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": -1154000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "ReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 2487000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000EasternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "EasternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 964000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000MiddleRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "MiddleRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 1257000000
+        },
+        {
+          "contextRef": "Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E00271-000WesternRegionReportableSegmentsMember",
+          "decimals": "-6",
+          "dimensions": {
+            "ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember",
+            "OperatingSegmentsAxis": "WesternRegionReportableSegmentsMember"
+          },
+          "tag": "OperatingIncome",
+          "unitRef": "JPY",
+          "value": 265000000
+        }
+      ]
     },
     "segments": {
       "facts": [
