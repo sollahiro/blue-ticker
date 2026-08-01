@@ -145,7 +145,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [~] statements: Statement（財務諸表 BS/PL/CF 完全正規化）。日経225限定で実装済み（現在地参照）。残: 本番 Neon への日経225全社 ingest。実装方針は `docs/statement-normalization-concept.md`
 - [ ] statements 母集団拡大（日経225限定→全銘柄）。LLM 不要でコスト制約はないが、銀行・保険等特殊タクソノミでの実データ検証未実施のため段階展開する（`docs/statement-normalization-concept.md`「未検証事項」）
 - [ ] statement-notes（構想）: 注記の網羅カタログではなく、Breakdown/Statement同様に項目を絞って正規化・構造化する。初期対象5項目: ①有利子負債計算用のキャッシュ・フロー計算書補足説明 ②資本性証券の株式銘柄及び公正価値 ③1株当たり利益情報 ④有形固定資産（明細） ⑤のれん及びその他の無形資産（今後拡張予定）。実データでのタグ/role名検証・契約設計とも未着手
-- [x] ステージ番号命名の見直し: 現行 Stage N はロールアウト段階（`AGENTS.md`）とデータレイヤ（本ロードマップ）の2軸を指しており衝突している。将来は製品名（Summarize/Filing/Analyze/Breakdown/Allocation/Pipeline/Statement、`docs/feature-tiers.md`）を対外語彙とし、Stage N は内部実装（テーブル名・cache_version）専用に格下げする方向を検討中。**完了（2026-08-01: CLI/ログ/コード/docs/scripts を意味ベースへ全面置換。監査レビュー待ち）**
 
 ## 関連ドキュメント
 
