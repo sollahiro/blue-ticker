@@ -194,16 +194,41 @@ enum BreakdownExtractor {
                 // セグメント側に売上相当があり、かつ RR 側に実質的な売上分解が無いときだけ
                 // swap を抑止する。売上マーカー語の有無だけでは、デンソー型（事業名＋合計のみ
                 // で実分解あり）をメルカリ型スタブと誤判定する（issue #157、S100Y9T1）。
-                if !(tablesContainSalesEquivalent(result.tables)
-                    && !tablesContainSubstantiveRevenueBreakdown(
-                        revenueRecognition.tables, relativeTo: result.tables))
-                {
+                //
+                // 電通型（issue #163）: 製品・サービス別表の売上語がキャプション側（「外部顧客からの収益」）
+                // にあり markdown セルに出ないため `tablesContainSalesEquivalent` だけでは守れない。
+                // さらに RR の契約債権残高が売上と同規模だと scale 判定が実質分解と誤認する
+                // （S100XS0O: 受取手形及び売掛金 ≈ 1.8兆 vs 製品別合計 ≈ 1.4兆）。
+                // 製品・サービス別見出しがあり RR が契約残高スタブならセグメント側を残す。
+                // オークマは RR に売上マーカー付き製品分解があり、従来どおり RR へ swap する。
+                let rrSubstantive = tablesContainSubstantiveRevenueBreakdown(
+                    revenueRecognition.tables, relativeTo: result.tables)
+                let rrContractStub = tablesLookLikeContractBalanceStub(revenueRecognition.tables)
+                let hasProductTables = result.tables.contains {
+                    $0.heading == productOrServiceHeading
+                }
+                let keepSegmentSide =
+                    (tablesContainSalesEquivalent(result.tables) && !rrSubstantive)
+                    || (hasProductTables && (rrContractStub || !rrSubstantive))
+                if !keepSegmentSide {
                     return revenueRecognition
                 }
             }
         }
 
         return result
+    }
+
+    /// RR 表が契約債権・契約資産・契約負債の残高推移だけで、売上分解を含まないか
+    /// （電通 NotesRevenue2 / メルカリ IFRS 売上収益スタブ）。
+    static func tablesLookLikeContractBalanceStub(_ tables: [BreakdownTable]) -> Bool {
+        guard !tables.isEmpty else { return false }
+        let joined = tables.map(\.markdown).joined(separator: "\n")
+        let contractMarkers = ["契約資産", "契約負債", "顧客との契約から生じた債権"]
+        guard contractMarkers.contains(where: joined.contains) else { return false }
+        if tablesContainSalesEquivalent(tables) { return false }
+        if revenueBreakdownBusinessHints.contains(where: { joined.contains($0) }) { return false }
+        return true
     }
 
     /// 収益認識/IFRS売上（Revenue2 含む）へ axis-aware に寄せるべきか。
@@ -237,6 +262,7 @@ enum BreakdownExtractor {
             "顧客との契約から生じる収益",
             "外部顧客に対する経常収益",
             "外部顧客への売上",
+            "外部顧客からの収益",  // 電通等 IFRS（issue #163）。「への売上」だけでは一致しない
             "外部収益",
             "売上収益",
             "売上高",
@@ -389,6 +415,11 @@ enum BreakdownExtractor {
     ///
     /// IFRS「地域別の情報」で外部顧客売上を省略し非流動資産だけを載せる会社（日本精工型）では、
     /// 資産表を候補から外し、注記「売上高」の収益の分解（地域×事業マトリクス）へフォールバックする。
+    ///
+    /// 電通型（issue #163）: 地域専用注記は重要国の文章開示＋非流動資産表のみで売上表が残らず、
+    /// GeographicArea dimension も無い。報告セグメント自体が日本/Americas/EMEA/APAC の地域軸なら
+    /// OperatingSegments の売上 facts を geography として採用する（business 軸は既に
+    /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
         var tables = extractFromTextBlocks(
@@ -418,7 +449,30 @@ enum BreakdownExtractor {
                 tables = revenueDecomp
             }
         }
-        return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
+        let result = buildResult(
+            xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
+        if result.method == "not_found",
+            let segmentGeography = extractGeographyFromReportableSegments(xbrlDir: xbrlDir)
+        {
+            return segmentGeography
+        }
+        return result
+    }
+
+    /// 報告セグメント（OperatingSegments 系）の売上 facts が全て地域軸相当なら geography として返す。
+    /// 事業名セグメントや国内海外×事業クロス（キッコーマン型）は `isGeographyAxis` が false。
+    private static func extractGeographyFromReportableSegments(xbrlDir: URL) -> ExtractedBreakdown? {
+        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = extractFactsByDimension(
+            xbrlDir: xbrlDir,
+            dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap
+        )
+        guard !facts.isEmpty,
+            factsContainRecognizedAmountTag(facts),
+            isGeographyAxis(facts)
+        else { return nil }
+        return ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
     }
 
     /// markdown 表のデータ行先頭セル（行ラベル）に地域名キーワードが十分あるか。

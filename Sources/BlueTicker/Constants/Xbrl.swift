@@ -680,6 +680,7 @@ enum Xbrl {
         "RevenueFromExternalCustomers",  // 丸井グループなど（単数形、IFRS接尾辞なし。実データ検証済み、2026-07-22）
         "TransactionsWithExternalCustomersIFRS",  // NTTなど（実データ検証済み、issue調査 2026-07-21）
         "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
+        "Revenue2IFRS",  // 電通など報告セグメント収益タグ（実データ検証: S100XS0O、issue #163）
     ]
 
     /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
@@ -805,6 +806,9 @@ enum Xbrl {
                  // case-sensitive の contains にヒットせず、地域軸が business+axis_ambiguous に誤分類される
                  // （実データ検証: S100YB05、2026-07-25）
         "Oceania",  // アサヒ等（Japan/Europe/Oceania/SoutheastAsia）。欠けると地域軸判定が崩れ収益認識の製品別へ swap できない（実データ検証 2026-07-24）
+        "APAC",  // 電通等: `APACReportableSegmentMember`。`Asia`/`Pacific` だけではヒットせず、
+                 // 4地域セグメントが地域軸判定から外れ geography が not_found のままになる
+                 // （実データ検証: S100XS0O、issue #163）
         "Korea",
         "Domestic",
         "Overseas",

@@ -289,6 +289,43 @@ import Foundation
         #expect(snap.needsReview == false)
     }
 
+    @Test func dentsuStyleAPACMembersClassifyAsGeography() throws {
+        // 電通型（issue #163）: `APACReportableSegmentMember`。`Asia`/`Pacific` だけでは
+        // ヒットせず、4地域が地域軸判定から外れる。
+        #expect(
+            BreakdownNormalizer.allMembersAreGeography([
+                "JapanReportableSegmentMember",
+                "AmericasReportableSegmentMember",
+                "EMEAReportableSegmentMember",
+                "APACReportableSegmentMember",
+            ]))
+        let facts = [
+            ("JapanReportableSegmentMember", 608_310_000_000.0),
+            ("AmericasReportableSegmentMember", 369_666_000_000.0),
+            ("EMEAReportableSegmentMember", 338_401_000_000.0),
+            ("APACReportableSegmentMember", 112_199_000_000.0),
+            ("ReconcilingItemsMember", 6_668_000_000.0),
+        ].map { label, value in
+            BreakdownFact(
+                tag: "Revenue2IFRS", contextRef: "CurrentYearDuration_\(label)",
+                dimensions: ["OperatingSegmentsAxis": label],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 1_435_245_000_000))
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+        #expect(snap.denominatorTag == "Revenue2IFRS")
+        let labels = Set(snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels == [
+            "JapanReportableSegmentMember",
+            "AmericasReportableSegmentMember",
+            "EMEAReportableSegmentMember",
+            "APACReportableSegmentMember",
+        ])
+    }
+
     /// INPEX旧filings型（J-GAAP時代）の回帰: 報告セグメントが Americas/AsiaAndOceania/
     /// Eurasia/Japan/MiddleEastAndAfrica という純粋な地域区分。`Eurasia`/`MiddleEastAndAfrica`
     /// が `segmentGeographyMemberKeywords` に無いと NXHD 免除条件（裸地域2件以上+非地域事業2件
