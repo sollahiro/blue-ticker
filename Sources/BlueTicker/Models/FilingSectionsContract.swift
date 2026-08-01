@@ -19,7 +19,9 @@ import Foundation
 /// 既に `section_keys` に "segments" を含むため、キー集合不一致による自動再抽出の対象にならない。
 /// v3 → v4（2026-07-27）: BreakdownExtractor.extractGeographyInfo の非流動資産表除外と
 /// 収益の分解フォールバック（日本精工型）を反映する抽出ロジック変更。
-public let filingSectionsCacheVersion = "sections-v4"
+/// v4 → v5（issue #163）: 報告セグメントが地域軸のとき OperatingSegments 売上 facts を
+/// geography へフォールバック（電通型）。`APAC` member キーワード追加を含む。
+public let filingSectionsCacheVersion = "sections-v5"
 
 /// filing-content read（REST）が 200 を返す最低抽出バージョン番号（`sections-vN` の N）。
 /// **明示指定**であり、「現行から N つ前」の機械オフセットではない。人手で上げる。

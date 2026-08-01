@@ -20,7 +20,7 @@ public let breakdownAxisGeography = "geography"
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 public let businessBreakdownCacheVersion = "breakdown-business-v7"
-public let geographyBreakdownCacheVersion = "breakdown-geography-v7"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v8"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
