@@ -1,4 +1,4 @@
-// 半期 Stage 4 取り込みの DB ロジック（企業選定・staleness 判定・upsert・limit）と
+// 半期財務取り込みの DB ロジック（企業選定・staleness 判定・upsert・limit）と
 // read 経路（loadStoredHalfFinancials のバージョン・年数ゲートと trim）を検証する。
 // 計算（computeHalfFinancials）は EDINET 依存のため、フェイク計算器を注入してネットワーク非依存で見る。
 
@@ -71,13 +71,13 @@ private func makeHalfSuccess(code: String, fyEnds: [String]) -> HalfFinancialsCo
 
 private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
 
-@Suite struct Stage4HalfIngestTests {
+@Suite struct HalfFinancialsIngestTests {
     @Test func ingestStoresHalfFinancialsForEachDistinctCompany() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
 
@@ -99,7 +99,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for an up-to-date company")
                 return makeHalfSuccess(code: "x", fyEnds: years3)
             }
@@ -115,7 +115,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S1", secCode: "72030", db: app.db)  // listedCodes に含む
             try await seedDocument("S2", secCode: "67580", db: app.db)  // 上場廃止想定・含まない
 
-            let summary = try await runStage4HalfIngest(
+            let summary = try await runHalfFinancialsIngest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
@@ -134,7 +134,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S1", secCode: "72030", db: app.db)  // explicitCodes に含む
             try await seedDocument("S2", secCode: "67580", db: app.db)  // 含まない
 
-            let summary = try await runStage4HalfIngest(
+            let summary = try await runHalfFinancialsIngest(
                 db: app.db, years: 5, limit: nil, explicitCodes: ["7203"]
             ) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
@@ -161,7 +161,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             pre.highWater = "2025-06-20 09:00"
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
                 return makeHalfSuccess(code: "x", fyEnds: years3)
             }
@@ -170,8 +170,8 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
         }
     }
 
-    /// Stage 4-half は通期(120/130)に加え半期/四半期(140/160)も消費種別に含む。
-    /// 通期のみを見る Stage 4 とは異なり、140 の新規提出だけでも再計算がトリガーされる。
+    /// 半期財務取り込み は通期(120/130)に加え半期/四半期(140/160)も消費種別に含む。
+    /// 通期のみを見る 財務取り込み とは異なり、140 の新規提出だけでも再計算がトリガーされる。
     @Test func recomputesWhenNewerQuarterlyFilingArrives() async throws {
         try await withMigratedApp { app in
             try await seedDocument(
@@ -189,7 +189,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 "S2", secCode: "72030", docTypeCode: "140",
                 submitDateTime: "2025-08-01 09:00", db: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
 
@@ -213,7 +213,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -233,7 +233,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             stale.requestedYears = 5
             try await stale.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
             #expect(summary.stored == 1)
@@ -245,7 +245,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
     @Test func ingestCountsComputeFailuresWithoutStoring() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
             #expect(summary.failed == 1)
             #expect(summary.notApplicable == 0)
             #expect(summary.stored == 0)
@@ -258,7 +258,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
     @Test func ingestCountsNotApplicableSeparatelyFromFailed() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 .notApplicable
             }
             #expect(summary.attempted == 1)
@@ -279,10 +279,10 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
                 "S1", secCode: "72030", docTypeCode: "120",
                 submitDateTime: "2025-06-20 09:00", db: app.db)
 
-            let first = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            let first = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
             #expect(first.notApplicable == 1)
 
-            let second = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in
+            let second = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run again when high-water is unchanged")
                 return .notApplicable
             }
@@ -300,7 +300,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument(
                 "S1", secCode: "72030", docTypeCode: "120",
                 submitDateTime: "2025-06-20 09:00", db: app.db)
-            _ = try await runStage4HalfIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            _ = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
 
             #expect(try await loadStoredHalfFinancials(code: "7203", years: 5, db: app.db) == nil)
             #expect(try await loadStoredHalfAnalysis(code: "7203", years: 5, db: app.db) == nil)
@@ -313,7 +313,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             try await seedDocument("S2", secCode: "67580", db: app.db)
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 2) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: 2) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
             #expect(summary.attempted == 2)
@@ -333,7 +333,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             stale.requestedYears = 5
             try await stale.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 1) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: 1) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
 
@@ -367,7 +367,7 @@ private let years3 = ["2023-03-31", "2024-03-31", "2025-03-31"]
             staleHighWater.highWater = "2025-06-01 09:00"  // 現在の提出日時より古い → 新規有報あり
             try await staleHighWater.create(on: app.db)
 
-            let summary = try await runStage4HalfIngest(db: app.db, years: 5, limit: 1) { code in
+            let summary = try await runHalfFinancialsIngest(db: app.db, years: 5, limit: 1) { code in
                 makeHalfSuccess(code: code, fyEnds: years3)
             }
 

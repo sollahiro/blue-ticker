@@ -1,13 +1,13 @@
 import ArgumentParser
 import Foundation
 
-/// Stage 7（Statement 本体）の BS/PL/CF 抽出を目視確認するための開発用コマンド。
+/// Statement 取り込み（Statement 本体）の BS/PL/CF 抽出を目視確認するための開発用コマンド。
 /// `--bs`/`--pl`/`--cf` は少なくとも1つ必須（未指定時はエラー。「とりあえず全部」を暗黙で
 /// 返さない）。EDINET から実際に XBRL を取得する（smoke fixture 経路は無い）。
 struct DevStatementCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "statement",
-        abstract: "Stage 7 の BS/PL/CF 抽出を実行し目視確認する（開発用）"
+        abstract: "Statement 取り込み の BS/PL/CF 抽出を実行し目視確認する（開発用）"
     )
 
     @Argument(help: "銘柄コード")

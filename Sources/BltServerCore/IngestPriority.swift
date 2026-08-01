@@ -1,4 +1,4 @@
-// Stage 4/4-half/5/6 共通の候補列並び替え。ユーザーが用意した優先コード一覧
+// financials/half-financials/filing-sections/breakdowns 共通の候補列並び替え。ユーザーが用意した優先コード一覧
 // （`assets/nikkei225.csv`、`BltServerContext.priorityIngestCodes()`）を候補選定の後段で
 // 先頭へ寄せる。対象選定（何を取り込むか）ではなく処理順序（何から取り込むか）のみを変える。
 

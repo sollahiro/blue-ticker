@@ -1,4 +1,4 @@
-// Stage 3 取り込み: edinet_documents の各書類について XBRL を取得（Stage 2）・パースし、
+// 数値 fact 取り込み: edinet_documents の各書類について XBRL を取得（XBRL 取得キャッシュ）・パースし、
 // 数値 fact インデックスを edinet_xbrl_facts へ upsert する。
 // 取得・パースは BlueTickerCore のファサード（parseXbrlFactIndex）に委譲し、
 // ここでは候補選定・staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
@@ -9,7 +9,7 @@ import Foundation
 import Vapor
 
 /// 取り込み結果のサマリ。
-public struct Stage3IngestSummary: Sendable, Equatable {
+public struct FactsIngestSummary: Sendable, Equatable {
     /// 取り込みを試みた書類数（skip を除く）。
     public let attempted: Int
     /// パース・格納に成功した書類数。
@@ -26,9 +26,9 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 
 /// edinet_documents の書類を新しい順に走査し、未パース or バージョン不一致のものを取り込む。
 /// `limit` は新規取り込み件数の上限（XBRL ダウンロードが重いためバッチ実行用）。
-func runStage3Ingest(
+func runFactsIngest(
     db: Database, limit: Int?, logger: Logger? = nil, parse: XbrlFactParser
-) async throws -> Stage3IngestSummary {
+) async throws -> FactsIngestSummary {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocument.query(on: db)
             .sort(\.$submitDateTime, .descending)
@@ -47,7 +47,7 @@ func runStage3Ingest(
         guard let docID = doc.id else { continue }
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
             break
         }
         let existing = try await withDbRetry(
@@ -74,7 +74,7 @@ func runStage3Ingest(
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 3 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
@@ -91,7 +91,7 @@ func runStage3Ingest(
         attempted += 1
         guard let payload = await parse(docID) else {
             failed += 1
-            logger?.warning("Stage 3 取り込み失敗: docID=\(docID)")
+            logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
             continue
         }
         try await withDbRetry(
@@ -102,7 +102,7 @@ func runStage3Ingest(
         stored += 1
     }
 
-    return Stage3IngestSummary(
+    return FactsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped)
 }
 
@@ -136,41 +136,42 @@ func storeXbrlFacts(
 
 // MARK: - CLI エントリ
 
-/// Stage 4 取り込みで格納する年数。要求が増えても再計算が走らないよう余裕を持たせる
+/// 財務取り込みで格納する年数。要求が増えても再計算が走らないよう余裕を持たせる
 /// （REST の financials は years 既定 5。read 時に要求年数へ縮める）。
-let stage4IngestYears = 6
+let financialsIngestYears = 6
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
-/// Stage 4（計算済み財務サマリ）→ Stage 4-half（半期）→ Stage 5（有報セクション）→
-/// Stage 6（事業別内訳・business軸のみ・日経225構成銘柄限定）を取り込む。
+/// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
+/// 内訳取り込み（事業別内訳・business軸のみ・日経225構成銘柄限定）を取り込む。
 ///
-/// Stage 3（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
+/// 数値 fact 取り込み（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
 /// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
 /// branch logical size 上限 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）が
 /// できるまで蓄積を止める。停止は可逆で、`includeFacts: true`（CLI: `--with-facts`）で
-/// 再開できる。Stage 4 の `computeFinancials` は自前で生 XBRL を DL するため、Stage 3 を
-/// 飛ばしても Stage 4/4-half は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
+/// 再開できる。財務取り込みの `computeFinancials` は自前で生 XBRL を DL するため、数値 fact 取り込みを
+/// 飛ばしても financials/half-financials は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
 ///
-/// `stages` は実行する Stage 4/4-half/5/6 の集合（CLI: `--stages 5` 等）。既定は全ステージ。
-/// 例えば Stage 5 だけを先に流したいとき、重い Stage 4/4-half の全件 drain を挟まずに済む。
-/// Stage 3 は `stages` に含めず、従来どおり `includeFacts` で別制御する。
-/// `codes` は Stage 4/4-half/5/6 の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
+/// `targets` は実行する financials/half-financials/filing-sections/breakdowns/statements の集合
+/// （CLI: `--stages filing-sections` 等）。既定は全対象。
+/// 例えば有報セクション取り込みだけを先に流したいとき、重い financials/half-financials の全件 drain を挟まずに済む。
+/// 数値 fact 取り込みは `targets` に含めず、従来どおり `includeFacts` で別制御する。
+/// `codes` は financials/half-financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
-/// Stage 3 は `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
-/// Stage 6 の対象母集団は `listed`（上場全体）ではなく `priority`（日経225構成銘柄）に限定する
-/// （LLM 呼び出し費用抑制。`priority` 空集合＝`assets/nikkei225.csv` 未配置時は Stage 6 対象0件）。
+/// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
+/// 内訳取り込みの対象母集団は `listed`（上場全体）ではなく `priority`（日経225構成銘柄）に限定する
+/// （LLM 呼び出し費用抑制。`priority` 空集合＝`assets/nikkei225.csv` 未配置時は内訳取り込み対象0件）。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
-public func runStage3IngestCommand(
+public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
-    stages: Set<IngestStage> = Set(IngestStage.allCases),
+    targets: Set<IngestTarget> = Set(IngestTarget.allCases),
     codes: Set<String>? = nil
 ) async throws {
     guard let context = await makeBltServerContext() else {
-        throw Stage1SyncError.apiKeyMissing
+        throw DocumentSyncError.apiKeyMissing
     }
     guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
-        throw Stage1SyncError.databaseUnavailable
+        throw DocumentSyncError.databaseUnavailable
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])
@@ -178,19 +179,19 @@ public func runStage3IngestCommand(
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        // 上場・国内法人の対象ユニバース。Stage 4/4-half/5 共通で候補を絞り込み、
+        // 上場・国内法人の対象ユニバース。financials/half-financials/filing-sections 共通で候補を絞り込み、
         // 上場廃止・外国法人など二度と成功しない企業への無駄なリトライを避ける。
         let listed = await context.listedCompanyCodes()
         // ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）。対象選定ではなく
-        // Stage 4/4-half/5 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
+        // financials/half-financials/filing-sections 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
         let priority = await context.priorityIngestCodes()
         if !priority.isEmpty {
             app.logger.notice(
                 "Priority ingest codes loaded",
                 metadata: ["event": "priority_codes_loaded", "count": "\(priority.count)"])
         }
-        // `--codes` 指定時は Stage 4/4-half/5 の対象をその集合へ絞り、`limit` は無視して全件処理する
-        // （手動・単発の対象は小さい前提。Stage 3 は doc 単位のためスコープ外）。
+        // `--codes` 指定時は financials/half-financials/filing-sections の対象をその集合へ絞り、`limit` は無視して全件処理する
+        // （手動・単発の対象は小さい前提。数値 fact 取り込みは doc 単位のためスコープ外）。
         let stageLimit = codes == nil ? limit : nil
         if let codes {
             app.logger.notice(
@@ -198,39 +199,39 @@ public func runStage3IngestCommand(
                 metadata: ["event": "explicit_codes_loaded", "count": "\(codes.count)"])
         }
         if includeFacts {
-            let s3 = try await runStage3Ingest(db: app.db, limit: limit, logger: app.logger) { docID in
+            let s3 = try await runFactsIngest(db: app.db, limit: limit, logger: app.logger) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
             }
             logIngestSummary(
-                app.logger, stage: "3", attempted: s3.attempted, stored: s3.stored,
+                app.logger, target: "facts", attempted: s3.attempted, stored: s3.stored,
                 failed: s3.failed, skipped: s3.skipped)
         } else {
             app.logger.notice(
-                "Stage 3 facts ingest disabled",
-                metadata: ["event": "ingest_skipped", "stage": "3", "reason": "issue_22"])
+                "facts ingest disabled",
+                metadata: ["event": "ingest_skipped", "target": "facts", "reason": "issue_22"])
         }
-        if stages.contains(.financials) {
-            let s4 = try await runStage4Ingest(
-                db: app.db, years: stage4IngestYears, limit: stageLimit, listedCodes: listed,
+        if targets.contains(.financials) {
+            let s4 = try await runFinancialsIngest(
+                db: app.db, years: financialsIngestYears, limit: stageLimit, listedCodes: listed,
                 explicitCodes: codes, priorityCodes: priority, logger: app.logger
             ) { code in
-                await context.computeFinancials(code: code, years: stage4IngestYears)
+                await context.computeFinancials(code: code, years: financialsIngestYears)
             }
             let coverage = try? await withDbRetry(logger: app.logger, context: "company_financials 集計") {
                 try await countServableCompanyFinancials(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "4", attempted: s4.attempted, stored: s4.stored,
+                app.logger, target: "financials", attempted: s4.attempted, stored: s4.stored,
                 failed: s4.failed, skipped: s4.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
                 notApplicable: s4.notApplicable)
         }
-        if stages.contains(.half) {
-            let s4h = try await runStage4HalfIngest(
-                db: app.db, years: stage4HalfIngestYears, limit: stageLimit, listedCodes: listed,
+        if targets.contains(.halfFinancials) {
+            let s4h = try await runHalfFinancialsIngest(
+                db: app.db, years: halfFinancialsIngestYears, limit: stageLimit, listedCodes: listed,
                 explicitCodes: codes, priorityCodes: priority, logger: app.logger
             ) { code in
-                await context.computeHalfFinancials(code: code, years: stage4HalfIngestYears)
+                await context.computeHalfFinancials(code: code, years: halfFinancialsIngestYears)
             }
             let halfCoverage = try? await withDbRetry(
                 logger: app.logger, context: "company_half_financials 集計"
@@ -238,15 +239,15 @@ public func runStage3IngestCommand(
                 try await countServableCompanyHalfFinancials(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "4half", attempted: s4h.attempted, stored: s4h.stored,
+                app.logger, target: "half-financials", attempted: s4h.attempted, stored: s4h.stored,
                 failed: s4h.failed, skipped: s4h.skipped,
                 servable: halfCoverage?.servable, unservable: halfCoverage?.unservable,
                 notApplicable: s4h.notApplicable)
         }
-        if stages.contains(.sections) {
-            // Stage 5: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
-            let s5 = try await runStage5Ingest(
-                db: app.db, listedCodes: listed, years: stage5IngestYears,
+        if targets.contains(.filingSections) {
+            // 有報セクション取り込み: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。
+            let s5 = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: listed, years: filingSectionsIngestYears,
                 sectionKeys: currentFilingSectionKeys(), limit: stageLimit, explicitCodes: codes,
                 priorityCodes: priority, logger: app.logger
             ) { docID in
@@ -256,31 +257,31 @@ public func runStage3IngestCommand(
                 try await countServableFilingSections(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "5", attempted: s5.attempted, stored: s5.stored,
+                app.logger, target: "filing-sections", attempted: s5.attempted, stored: s5.stored,
                 failed: s5.failed, skipped: s5.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
-        if stages.contains(.breakdowns) {
-            // Stage 6: 既定は日経225（`priority`）を対象母集団（LLM 費用抑制）。
+        if targets.contains(.breakdowns) {
+            // 内訳取り込み: 既定は日経225（`priority`）を対象母集団（LLM 費用抑制）。
             // `--codes` 指定時はその集合を母集団にする（CSV 未配置の Cloud 等でも
             // 手動再ingestが attempted=0 にならない。issue #160）。
-            // 年数は Stage 5 と同じ集合から取るため stage5IngestYears を共用する。
+            // 年数は 有報セクション取り込み と同じ集合から取るため filingSectionsIngestYears を共用する。
             // limit は軸ごとの呼び出しで独立に適用する。
-            let stage6Listed = codes ?? priority
-            if stage6Listed.isEmpty {
+            let breakdownListed = codes ?? priority
+            if breakdownListed.isEmpty {
                 app.logger.warning(
-                    "Stage 6 listed codes empty (nikkei225.csv missing and no --codes); skipping",
-                    metadata: ["event": "ingest_skipped", "stage": "6", "reason": "empty_listed_codes"])
+                    "内訳取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
-            let s6Business = try await runStage6Ingest(
-                db: app.db, listedCodes: stage6Listed, years: stage5IngestYears, limit: stageLimit,
+            let s6Business = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, axis: breakdownAxisBusiness, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveBusinessBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
-            let s6Geography = try await runStage6Ingest(
-                db: app.db, listedCodes: stage6Listed, years: stage5IngestYears, limit: stageLimit,
+            let s6Geography = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, axis: breakdownAxisGeography, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveGeographyBreakdown(
@@ -292,7 +293,7 @@ public func runStage3IngestCommand(
                 try await countServableBreakdowns(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "6", attempted: s6Business.attempted, stored: s6Business.stored,
+                app.logger, target: "breakdowns", attempted: s6Business.attempted, stored: s6Business.stored,
                 failed: s6Business.failed, skipped: s6Business.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
                 notApplicable: s6Business.notApplicable,
@@ -301,7 +302,7 @@ public func runStage3IngestCommand(
                 notApplicableUnknown: s6Business.notApplicableUnknown,
                 purged: s6Business.purged)
             logIngestSummary(
-                app.logger, stage: "6-geography", attempted: s6Geography.attempted,
+                app.logger, target: "breakdowns-geography", attempted: s6Geography.attempted,
                 stored: s6Geography.stored, failed: s6Geography.failed, skipped: s6Geography.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
                 notApplicable: s6Geography.notApplicable,
@@ -311,17 +312,17 @@ public func runStage3IngestCommand(
                 notApplicableUnknown: s6Geography.notApplicableUnknown,
                 purged: s6Geography.purged)
         }
-        if stages.contains(.statement) {
-            // Stage 7: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
-            // （Stage 6 と同型。CSV 未配置でも手動再ingest可能）。
-            let stage7Listed = codes ?? priority
-            if stage7Listed.isEmpty {
+        if targets.contains(.statements) {
+            // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
+            // （内訳取り込み と同型。CSV 未配置でも手動再ingest可能）。
+            let statementListed = codes ?? priority
+            if statementListed.isEmpty {
                 app.logger.warning(
-                    "Stage 7 listed codes empty (nikkei225.csv missing and no --codes); skipping",
-                    metadata: ["event": "ingest_skipped", "stage": "7", "reason": "empty_listed_codes"])
+                    "Statement 取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "target": "statements", "reason": "empty_listed_codes"])
             }
-            let s7 = try await runStage7Ingest(
-                db: app.db, listedCodes: stage7Listed, years: stage5IngestYears, limit: stageLimit,
+            let s7 = try await runStatementIngest(
+                db: app.db, listedCodes: statementListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, logger: app.logger
             ) { docID in
                 await context.extractStatement(docID: docID)
@@ -330,7 +331,7 @@ public func runStage3IngestCommand(
                 try await countServableStatements(db: app.db)
             }
             logIngestSummary(
-                app.logger, stage: "7", attempted: s7.attempted, stored: s7.stored,
+                app.logger, target: "statements", attempted: s7.attempted, stored: s7.stored,
                 failed: s7.failed, skipped: s7.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s7.purged)
         }

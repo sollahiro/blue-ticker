@@ -10,7 +10,7 @@
 // BreakdownExtractor の axis-aware swap）とは別レイヤーで、呼び出し側が組み合わせて使う。
 //
 // ライブ read 経路（REST/MCP）や ingest には配線しない（concept doc で確定済み: LLM は
-// Stage 4/5 と同じ ingest バッチ経路に置く方針だが、永続化スキーマは未確定のため現時点では
+// financials/filing-sections と同じ ingest バッチ経路に置く方針だが、永続化スキーマは未確定のため現時点では
 // dev ツールでの手動検証のみ）。
 
 import Foundation

@@ -62,20 +62,20 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 
 ## Neon キャッシュバージョン（グローバル非連動）
 
-`blt-server` の Neon テーブルの staleness 判定は **`blueTickerVersion` と独立した専用定数**で行う。ローカル derived とコスト構造が逆（再生成に EDINET からの XBRL 再ダウンロード＋再パース／再計算が伴い高コスト）なため、月内 Micro バンプで毎回全件再 ingest が走らないよう、グローバルバージョンから切り離している。Stage 3・Stage 4 で別定数を持つ。
+`blt-server` の Neon テーブルの staleness 判定は **`blueTickerVersion` と独立した専用定数**で行う。ローカル derived とコスト構造が逆（再生成に EDINET からの XBRL 再ダウンロード＋再パース／再計算が伴い高コスト）なため、月内 Micro バンプで毎回全件再 ingest が走らないよう、グローバルバージョンから切り離している。facts・financials で別定数を持つ。
 
 | テーブル | 定数 | 置き場所 | 現在値 |
 |---|---|---|---|
-| `edinet_xbrl_facts`（Stage 3 RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
-| `company_financials`（Stage 4 derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
+| `edinet_xbrl_facts`（facts RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
+| `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `4`（`fin-v4` 以上を 200。2026-07-28、上場廃止47社のfin-v2/v3行をDELETEで消化した後に引き上げ） |
-| `company_half_financials`（Stage 4-half derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
+| `company_half_financials`（half-financials derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
 | （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `2`（`half-v2` 以上を 200。2026-07-28、同上場廃止組のhalf-v1行をDELETEで消化した後に引き上げ） |
-| `company_filing_sections`（Stage 5 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
+| `company_filing_sections`（filing-sections 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_breakdowns`（Stage 6 business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`） |
+| `company_breakdowns`（breakdowns business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`） |
 | （同上・read 床。xbrl_facts / not_applicable 経由のみ） | `businessBreakdownMinServableVersion` | 同上 | `1`（`…-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
-| `company_breakdowns`（Stage 6 geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v8"`（電通型: 地域報告セグメント facts フォールバック、issue #163。決定的ロジック変更時のみバンプ） |
+| `company_breakdowns`（breakdowns geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v8"`（電通型: 地域報告セグメント facts フォールバック、issue #163。決定的ロジック変更時のみバンプ） |
 | （同上・read 床） | `geographyBreakdownMinServableVersion` | 同上 | `1` |
 
 ### バンプ規則
@@ -98,7 +98,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 
 `companyFinancialsCacheVersion` / `filingSectionsCacheVersion` 等の**現行版**を上げると、既存の Neon 行は全件が一度だけ stale 判定され、次回 `blt-server ingest` で再パース／再計算される。これは想定どおりの移行コスト。XBRL ダウンロードが重い（9MB/件）ため、必要なら `--limit` でバッチ分割して取り込む。
 
-Stage 4 / Stage 5 read は現行版完全一致ではなく各 min servable 以上を返すため、現行版バンプ直後も床以上の旧行は 200 のまま（バンプの崖を避ける）。ingest は引き続き現行版へ収束する。
+financials / filing-sections read は現行版完全一致ではなく各 min servable 以上を返すため、現行版バンプ直後も床以上の旧行は 200 のまま（バンプの崖を避ける）。ingest は引き続き現行版へ収束する。
 
 ### 軸分離後の移行（`breakdown-v7` → `breakdown-business-v7` / `breakdown-geography-v7`）
 
@@ -106,6 +106,6 @@ Stage 4 / Stage 5 read は現行版完全一致ではなく各 min servable 以�
 
 business 軸の `businessBreakdownCacheVersion` バンプは geography 軸の行を stale にせず、逆も同様（ingest は軸パラメータごとに独立して staleness 判定する）。
 
-### Stage 5 / extractor 修正と geography LLM 行の再計算
+### filing-sections / extractor 修正と geography LLM 行の再計算
 
-`filingSectionsCacheVersion`（sections-v4 等）のバンプや `BreakdownExtractor` の geography 抽出修正だけでは、**既存の `geography_llm` 行（needs_review=false）は再計算されない**（LLM 行は content_hash + needs_review でのみ再試行。`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。抽出ロジック改善の恩恵を geography LLM 行に届けるには、該当軸の LLM 行を `needs_review=true` に更新するか削除してから `blt-server ingest --stages 6` を実行する（business 軸の `segment_info_llm` も同型）。
+`filingSectionsCacheVersion`（sections-v4 等）のバンプや `BreakdownExtractor` の geography 抽出修正だけでは、**既存の `geography_llm` 行（needs_review=false）は再計算されない**（LLM 行は content_hash + needs_review でのみ再試行。`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。抽出ロジック改善の恩恵を geography LLM 行に届けるには、該当軸の LLM 行を `needs_review=true` に更新するか削除してから `blt-server ingest --stages breakdowns` を実行する（business 軸の `segment_info_llm` も同型）。

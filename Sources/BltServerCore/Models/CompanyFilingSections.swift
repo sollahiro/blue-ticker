@@ -1,8 +1,8 @@
-// Stage 5: 有報1件分の抽出済みセクション本文（FilingSectionsPayload）= 1 行。
+// 有報セクション取り込み: 有報1件分の抽出済みセクション本文（FilingSectionsPayload）= 1 行。
 // filing-content を「serving=read-only」に載せるため、重い SwiftSoup 抽出を ingest 時に済ませて
 // 格納し、REST の read 経路は EDINET 取得・パースなしで返す（大企業有報のライブ抽出は 1GB OOM を実測）。
 //
-// 過去書類も保持するため docID を主キーにする（Stage 3 edinet_xbrl_facts と同型）。
+// 過去書類も保持するため docID を主キーにする（XBRL 数値 RAW edinet_xbrl_facts と同型）。
 // read-by-code のため code（4 桁）と submit_date_time（最新選択）を別カラムに持つ。
 // cache_version は filingSectionsCacheVersion（blueTickerVersion 非連動）。公開契約は payload を
 // 復元した {code, doc_id, sections} であり、本テーブルはサーバー内部スキーマ。

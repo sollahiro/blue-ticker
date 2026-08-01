@@ -1,13 +1,14 @@
 // blt-server エントリポイント。
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
-//   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    Stage 1 書類一覧を DB へ同期
-//   blt-server ingest [--limit N] [--with-facts] [--stages 4,4half,5,6] [--codes 7203,6758]
-//                                                            Stage 4/4-half/5/6 を DB へ取り込み（--stages で対象を選択、既定は全て。
-//                                                            Stage 6 は日経225構成銘柄限定（LLM費用抑制）。
-//                                                            --with-facts で Stage 3 数値 fact も。既定は停止。issue #22。
+//   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
+//   blt-server ingest [--limit N] [--with-facts] [--stages financials,half-financials,
+//                     filing-sections,breakdowns,statements] [--codes 7203,6758]
+//                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
+//                                                            breakdowns/statements は日経225構成銘柄限定。
+//                                                            --with-facts で XBRL 数値 fact も取り込む。既定は停止。issue #22。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
-//                                                            Stage 6/7 では --codes を対象母集団にも使う
+//                                                            breakdowns/statements では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
@@ -54,13 +55,13 @@ let argv = CommandLine.arguments
 do {
     // 第1引数がサブコマンドなら分岐する（無ければサーバー起動）。
     if argv.count > 1, argv[1] == "sync" {
-        try await runStage1SyncCommand(
+        try await runDocumentSyncCommand(
             from: optionValue("--from", in: argv),
             to: optionValue("--to", in: argv)
         )
     } else if argv.count > 1, argv[1] == "ingest" {
-        guard let stages = parseIngestStages(optionValue("--stages", in: argv)) else {
-            printError("blt-server error: --stages は 4,4half,5,6 のカンマ区切りで指定してください\n")
+        guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
+            printError("blt-server error: --stages は financials,half-financials,filing-sections,breakdowns,statements のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。
@@ -72,10 +73,10 @@ do {
             printError("blt-server error: --codes は証券コードのカンマ区切りで指定してください\n")
             exit(1)
         }
-        try await runStage3IngestCommand(
+        try await runFactsIngestCommand(
             limit: optionValue("--limit", in: argv).flatMap(Int.init),
             includeFacts: argv.contains("--with-facts"),
-            stages: stages,
+            targets: targets,
             codes: codes
         )
     } else if argv.count > 1, argv[1] == "master-data-upload" {

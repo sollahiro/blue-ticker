@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// Stage 7（Statement 本体）の BS/PL/CF 判定・抽出の仕様を検証する。
+/// Statement 取り込み（Statement 本体）の BS/PL/CF 判定・抽出の仕様を検証する。
 /// 実データ検証（キャッシュ済み実XBRL 158社）で確認した role 命名パターン
 /// （J-GAAP/IFRS）を fixture として再現する。
 @Suite struct StatementClassifierTests {
@@ -67,7 +67,7 @@ import Testing
     }
 
     @Test func fallsBackToNonConsolidatedWhenNoConsolidatedContextExists() {
-        // 子会社を持たない小規模企業（学び: Breakdown Stage 6 と同型）。
+        // 子会社を持たない小規模企業（学び: Breakdown 内訳取り込み と同型）。
         let facts: XbrlFactIndex = [
             "NetSales": [
                 "CurrentYearDuration_NonConsolidated": XbrlFact(

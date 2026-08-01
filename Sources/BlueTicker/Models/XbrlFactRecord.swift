@@ -1,6 +1,6 @@
 import Foundation
 
-/// Stage 3（XBRL 数値 RAW）の格納用レコード。内部型 `XbrlFact` の Codable 版で、
+/// XBRL 数値 RAW（XBRL 数値 RAW）の格納用レコード。内部型 `XbrlFact` の Codable 版で、
 /// tag・contextRef は格納時のマップキー（[tag: [contextRef: XbrlFactRecord]]）になるため持たない。
 /// パース結果を欠落なく保持する（RAW スキーマ）。公開契約ではなくサーバー内部スキーマ。
 public struct XbrlFactRecord: Codable, Sendable, Equatable {

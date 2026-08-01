@@ -1,4 +1,4 @@
-// Stage 1 同期の DB 書き込みロジック（ネットワーク非依存部）を検証する。
+// 書類同期の DB 書き込みロジック（ネットワーク非依存部）を検証する。
 // 取得（fetchDocumentsForSync）は EDINET 依存のため対象外。upsert・高水位更新・開始日解決を見る。
 
 import BlueTickerCore
@@ -34,7 +34,7 @@ private func record(
         submitDateTime: "2025-06-20 09:00", docDescription: "有価証券報告書")
 }
 
-@Suite struct Stage1SyncTests {
+@Suite struct DocumentSyncTests {
     @Test func applyDocumentsCreatesNewRows() async throws {
         try await withMigratedApp { app in
             let counts = try await applyDocuments(
@@ -110,7 +110,7 @@ private func record(
             #expect(explicit == "2025-01-01")
 
             // 状態なし・未指定 → missingStartDate。
-            await #expect(throws: Stage1SyncError.self) {
+            await #expect(throws: DocumentSyncError.self) {
                 _ = try await resolveStartDate(from: nil, db: app.db)
             }
 
@@ -121,8 +121,8 @@ private func record(
         }
     }
 
-    @Test func computeStage1SyncedThroughClampsOnFetchFailure() {
-        let synced = computeStage1SyncedThrough(
+    @Test func computeDocumentSyncedThroughClampsOnFetchFailure() {
+        let synced = computeDocumentSyncedThrough(
             from: "2025-06-01",
             to: "2025-06-20",
             previousSyncedThrough: "2025-05-31",
@@ -132,8 +132,8 @@ private func record(
         #expect(synced == "2025-06-14")
     }
 
-    @Test func computeStage1SyncedThroughKeepsPreviousWhenApplyIncomplete() {
-        let synced = computeStage1SyncedThrough(
+    @Test func computeDocumentSyncedThroughKeepsPreviousWhenApplyIncomplete() {
+        let synced = computeDocumentSyncedThrough(
             from: "2025-06-01",
             to: "2025-06-20",
             previousSyncedThrough: "2025-05-31",
@@ -143,8 +143,8 @@ private func record(
         #expect(synced == "2025-05-31")
     }
 
-    @Test func computeStage1SyncedThroughAdvancesToToWhenFullySuccessful() {
-        let synced = computeStage1SyncedThrough(
+    @Test func computeDocumentSyncedThroughAdvancesToToWhenFullySuccessful() {
+        let synced = computeDocumentSyncedThrough(
             from: "2025-06-01",
             to: "2025-06-20",
             previousSyncedThrough: "2025-05-31",

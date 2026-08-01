@@ -33,7 +33,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-/// 有報1件（annual report）を投入する。Stage 5/6 の docsTarget（stage5Candidates）算出に必要。
+/// 有報1件（annual report）を投入する。filing-sections/breakdowns の docsTarget（filingSectionCandidates）算出に必要。
 private func seedAnnualReportDoc(
     _ docID: String, secCode: String, submit: String = "2025-06-20 09:00", db: Database
 ) async throws {
@@ -375,7 +375,7 @@ private func seedBreakdown(
     @Test func breakdownCurrentVersionPctIsZeroNotOverflowingWhenDocsTargetIsZero() async throws {
         try await withMigratedApp { app in
             // priorityCodes は空だが、既存行はある（優先コード一覧が未配置・空のケースを模す）。
-            // stage5Candidates の対象コードが空なので docsTarget は 0 になる。
+            // filingSectionCandidates の対象コードが空なので docsTarget は 0 になる。
             try await seedBreakdown(
                 docID: "S1", axis: breakdownAxisBusiness, code: "7203",
                 source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)

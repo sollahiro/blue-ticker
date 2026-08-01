@@ -1,8 +1,8 @@
-// 半期 Stage 4: 企業1社分の計算済み半期財務サマリ（公開契約 HalfFinancialsResponse）= 1 行。
+// 半期 財務取り込み: 企業1社分の計算済み半期財務サマリ（公開契約 HalfFinancialsResponse）= 1 行。
 // HalfYearAnalyzer（FY/2Q から H1/H2 を導出・waterfall）を含む高コスト計算を ingest 時に済ませて
 // 格納し、REST の half-financials read 経路は EDINET 取得・XBRL パースなしで返せる（OOM 回避）。
 //
-// company_financials（通期 Stage 4）と別テーブル。cache_version は通期と独立した
+// company_financials（通期 財務取り込み）と別テーブル。cache_version は通期と独立した
 // companyHalfFinancialsCacheVersion に連動する（半期計算ロジック変更時のみバンプ）。
 // 公開契約は response の中身（HalfFinancialsResponse）側であり、本テーブルはサーバー内部スキーマ。
 
@@ -30,7 +30,7 @@ final class CompanyHalfFinancials: Model, @unchecked Sendable {
     @Field(key: "requested_years")
     var requestedYears: Int
 
-    /// 計算の基にした書類集合（`Api.stage4HalfFreshnessDocTypes`）の max(submitDateTime)。
+    /// 計算の基にした書類集合（`Api.halfFinancialsFreshnessDocTypes`）の max(submitDateTime)。
     /// 次回 ingest でこれより新しい提出があれば再計算する（high-water 鮮度トリガー）。
     /// 既存行は NULL（マイグレーション後の初回 ingest で一度だけ再計算される）。
     @OptionalField(key: "high_water")

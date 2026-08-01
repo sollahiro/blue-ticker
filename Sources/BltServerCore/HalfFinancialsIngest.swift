@@ -1,7 +1,7 @@
-// 半期 Stage 4 取り込み: edinet_documents に存在する企業（証券コード）について半期財務サマリを
+// 半期財務取り込み: edinet_documents に存在する企業（証券コード）について半期財務サマリを
 // 計算し、company_half_financials へ upsert する。計算は BlueTickerCore のファサード
 // （computeHalfFinancials）に委譲し、ここでは企業選定・staleness 判定・DB upsert のみを担う
-// （ネットワーク非依存でテスト可能）。通期 Stage 4（Stage4Ingest.swift）と同構造。
+// （ネットワーク非依存でテスト可能）。通期財務取り込み（FinancialsIngest.swift）と同構造。
 //
 // 計算は HalfYearAnalyzer（FY/2Q から H1/H2 導出・waterfall）を含み高コストなため、ローカル等で
 // ingest し Neon へ保存する。REST サーバー（Fly 等）は読むだけにして OOM を回避する。
@@ -12,14 +12,14 @@ import Fluent
 import Foundation
 import Logging
 
-/// 半期 Stage 4 取り込みで格納する年数（HalfYearAnalyzer の探索上限＝全集合）。
+/// 半期財務取り込みで格納する年数（HalfYearAnalyzer の探索上限＝全集合）。
 /// read 時に要求年数へ縮める（REST の half-financials は years 既定 3）。
-let stage4HalfIngestYears = Api.halfMaxYears
+let halfFinancialsIngestYears = Api.halfMaxYears
 
-/// Stage 4-half 取り込み結果のサマリ。`notApplicable`（半期報告書未提出等、設計通り）を
-/// `failed`（抽出できず要調査）と分けて数える点が通期 Stage 4 の `Stage4IngestSummary` と異なる
+/// 半期財務取り込み結果のサマリ。`notApplicable`（半期報告書未提出等、設計通り）を
+/// `failed`（抽出できず要調査）と分けて数える点が通期財務取り込みの `FinancialsIngestSummary` と異なる
 /// （issue #73 フォローアップ）。
-public struct Stage4HalfIngestSummary: Sendable, Equatable {
+public struct HalfFinancialsIngestSummary: Sendable, Equatable {
     /// 計算を試みた企業数（skip を除く。notApplicable も含む＝実際に compute を呼んだ数）。
     public let attempted: Int
     /// 計算・格納に成功した企業数。
@@ -37,18 +37,18 @@ public struct Stage4HalfIngestSummary: Sendable, Equatable {
 public typealias HalfFinancialsComputer = @Sendable (String) async -> HalfFinancialsComputeResult
 
 /// edinet_documents の企業（証券コード）を走査し、未計算 or バージョン不一致／年数不足のものを計算・格納する。
-/// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 Stage 4 と同ロジック。
+/// `limit` は新規計算件数の上限（計算が重いためバッチ実行用）。通期 財務取り込み と同ロジック。
 /// `listedCodes` を渡すと候補をその集合に絞る（上場廃止・外国法人等、二度と成功しない企業への
 /// 無駄なリトライを避ける。`nil` は絞り込みなし＝従来どおり全企業）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
-func runStage4HalfIngest(
+func runHalfFinancialsIngest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
     explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [], logger: Logger? = nil,
     compute: HalfFinancialsComputer
-) async throws -> Stage4HalfIngestSummary {
+) async throws -> HalfFinancialsIngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
-        db: db, docTypes: Api.stage4HalfFreshnessDocTypes, logger: logger)
+        db: db, docTypes: Api.halfFinancialsFreshnessDocTypes, logger: logger)
     let listedFiltered = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
     let codes = explicitCodes.map { explicit in listedFiltered.filter { explicit.contains($0) } } ?? listedFiltered
 
@@ -67,7 +67,7 @@ func runStage4HalfIngest(
         let highWater = highWaterMap[code]
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
+                "DB接続が不安定なため 半期財務取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
             break
         }
         let existing = try await withDbRetry(
@@ -102,7 +102,7 @@ func runStage4HalfIngest(
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 4-half を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)社は次回スケジュールで再試行)"
+                "DB接続が不安定なため 半期財務取り込み を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)社は次回スケジュールで再試行)"
             )
             break
         }
@@ -132,7 +132,7 @@ func runStage4HalfIngest(
             // 半期報告書未提出等、設計通りの対象外。プレースホルダ行（periods 空）を保存し、
             // 次回 ingest で highWater 一致のまま無駄な再試行を繰り返さないようにする
             // （読み取り経路 loadStoredHalfFinancials/loadStoredHalfAnalysis は periods 空を検出し
-            // 404 を維持する。annual 側 Stage4Ingest.swift の notApplicable と同型、issue #86 派生）。
+            // 404 を維持する。annual 側 FinancialsIngest.swift の notApplicable と同型、issue #86 派生）。
             // ノイズになるため warning ログは出さない。
             try await withDbRetry(
                 logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
@@ -144,11 +144,11 @@ func runStage4HalfIngest(
             notApplicable += 1
         case .failed:
             failed += 1
-            logger?.warning("Stage 4-half 取り込み失敗: code=\(code)")
+            logger?.warning("半期財務取り込み失敗: code=\(code)")
         }
     }
 
-    return Stage4HalfIngestSummary(
+    return HalfFinancialsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
         skipped: skipped)
 }
@@ -186,7 +186,7 @@ func storeCompanyHalfFinancials(
 // MARK: - servable/unservable 集計
 
 /// `cache_version` のみを対象にした軽量射影（`response` の JSONB を転送しない）。
-/// company_half_financials 全件の servable/unservable 集計用（通期 Stage 4 と同型）。
+/// company_half_financials 全件の servable/unservable 集計用（通期 財務取り込み と同型）。
 final class CompanyHalfFinancialsCacheVersionOnly: Model, @unchecked Sendable {
     static let schema = CompanyHalfFinancials.schema
 
@@ -210,13 +210,13 @@ func countServableCompanyHalfFinancials(db: Database) async throws -> (servable:
 
 // MARK: - read 経路（REST half-financials）
 
-/// 格納済み半期 Stage 4 結果を code で引き、read 床（`companyHalfFinancialsMinServableVersion`）以上 &
+/// 格納済み半期 財務取り込み 結果を code で引き、read 床（`companyHalfFinancialsMinServableVersion`）以上 &
 /// 要求年数を満たすなら years に縮めた JSON を返す。
 /// 無い・床未満・年数不足なら nil（呼び出し側は 404 を返す。ライブ計算へはフォールバックしない）。
 /// `periods` 空（半期報告書未提出の notApplicable プレースホルダ）も nil（404）とする。
 ///
 /// 要求年数は半期算出上限（`Api.halfMaxYears`）へクランプする。半期はこの年数までしか作れず
-/// 格納（`stage4HalfIngestYears`）もそこで頭打ちのため、上限超の要求でも上限ぶんを warm read で返す。
+/// 格納（`halfFinancialsIngestYears`）もそこで頭打ちのため、上限超の要求でも上限ぶんを warm read で返す。
 /// クランプしないと CLI 既定（`analyzeDefaultYears`=6 > 5）が常に guard を外し DB を空振りする。
 func loadStoredHalfFinancials(code: String, years: Int, db: Database) async throws -> [String: Any]? {
     let effectiveYears = min(years, Api.halfMaxYears)
@@ -229,7 +229,7 @@ func loadStoredHalfFinancials(code: String, years: Int, db: Database) async thro
     return row.response.trimmed(toYears: effectiveYears).summaryJsonObject()
 }
 
-/// 格納済み半期 Stage 4 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
+/// 格納済み半期 財務取り込み 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
 /// 含めた JSON を返す。読み取り床・年数要件・クランプは `loadStoredHalfFinancials` と同一
 /// （同じ格納行を使う。新規テーブル・cache_version は導入しない）。
 func loadStoredHalfAnalysis(code: String, years: Int, db: Database) async throws -> [String: Any]? {

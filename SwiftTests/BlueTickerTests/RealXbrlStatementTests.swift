@@ -1,4 +1,4 @@
-// 実 EDINET XBRL キャッシュ（analysis_cache）での Stage 7 Statement 抽出の golden 回帰テスト。
+// 実 EDINET XBRL キャッシュ（analysis_cache）での Statement 取り込み Statement 抽出の golden 回帰テスト。
 //
 // 対象（2026-07-31 実データ検証で確定した値）:
 // - 7203 トヨタ自動車 S100VWVY（IFRS連結、2025-03期）

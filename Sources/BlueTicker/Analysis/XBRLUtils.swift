@@ -245,7 +245,7 @@ enum XBRLUtils {
 
     /// ラベルリンクベースから {local_tag: {ラベルロールURI: テキスト}} を作る（`loadLabelsByTag` の
     /// ロール別・非収束版）。`preferredLabel`（presentation linkbase の presentationArc 属性。合計行・
-    /// 期首/期末残高等でどのロールのラベルを使うべきかを示す）に応じて Stage 7 Statement が正しい
+    /// 期首/期末残高等でどのロールのラベルを使うべきかを示す）に応じて Statement 取り込み Statement が正しい
     /// バリアントを選ぶために使う。同一ディレクトリはキャッシュを返す。
     static func loadLabelRoleVariants(in dir: URL) -> [String: [String: String]] {
         _cacheLock.lock()
@@ -289,7 +289,7 @@ enum XBRLUtils {
     }
 
     /// 標準タクソノミのラベルを {tag: {ラベルロールURI: テキスト}} の形（ロール別）で返す。
-    /// `preferredLabel`（合計行・期首/期末残高等）に応じたラベル選択に使う（Stage 7 Statement 専用、
+    /// `preferredLabel`（合計行・期首/期末残高等）に応じたラベル選択に使う（Statement 取り込み Statement 専用、
     /// `loadLabelRoleVariants` 参照）。
     static func loadStandardTaxonomyLabelRoleVariants() -> [String: [String: String]] {
         standardTaxonomyLabels().variants
@@ -832,7 +832,7 @@ private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
     var labelsByTag: [String: String] = [:]
     /// {tag: {ラベルロールURI: テキスト}}。`labelsByTag`（標準ラベル1つに収束させたもの）とは別に
     /// 全ロールを保持する。`preferredLabel`（合計行・期首/期末残高等）でロール別に異なるラベルを
-    /// 選ぶ必要がある Stage 7 Statement 専用（`loadLabelRoleVariants` 参照）。
+    /// 選ぶ必要がある Statement 取り込み Statement 専用（`loadLabelRoleVariants` 参照）。
     var labelsByTagAndRole: [String: [String: String]] = [:]
 
     private var locByLabel: [String: String] = [:]

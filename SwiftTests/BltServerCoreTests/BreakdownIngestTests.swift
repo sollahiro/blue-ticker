@@ -1,9 +1,9 @@
-// Stage 6 取り込みの DB ロジック（対象選定・staleness 判定・upsert・limit・purge）と
+// 内訳取り込みの DB ロジック（対象選定・staleness 判定・upsert・limit・purge）と
 // read 経路（loadStoredBreakdown）、および servable/unservable 集計を検証する。
 // 解決（resolveBusinessBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
 // ネットワーク非依存で見る。
 //
-// Stage 5 との最大の違い（意図的に重点検証する）:
+// 有報セクション取り込み との最大の違い（意図的に重点検証する）:
 // - xbrl_facts 経由（決定的）の行は cache_version のバージョン不一致で再試行してよい。
 // - LLM 経由（source != xbrl_facts）の行は cache_version のバンプだけでは再試行しない
 //   （needs_review=true のときのみ）。read の servable 判定も同じ非対称性を持つ
@@ -51,14 +51,14 @@ private func seedDoc(
     model.submitDateTime = submit
     try await model.create(on: db)
 
-    // Stage 6 は分母売上（Stage 4）が無いと解決に進まない（missing sales → skip / not_found）。
+    // 内訳取り込み は分母売上（財務取り込み）が無いと解決に進まない（missing sales → skip / not_found）。
     // 有報候補の seed には対応する financials 行も添える。
     if let secCode, docType == nil || docType == Api.docTypeAnnualReport {
         try await seedSalesForDoc(code: String(secCode.prefix(4)), docID: docID, db: db)
     }
 }
 
-/// Stage 6 テスト用: docID に紐づく売上を company_financials へ足す（同一 code は追記）。
+/// 内訳取り込み テスト用: docID に紐づく売上を company_financials へ足す（同一 code は追記）。
 private func seedSalesForDoc(
     code: String, docID: String, salesMillionYen: Double = 1_000_000, db: Database
 ) async throws {
@@ -142,7 +142,7 @@ extension BreakdownLoadResult {
     }
 }
 
-@Suite struct Stage6IngestTests {
+@Suite struct BreakdownIngestTests {
 
     // MARK: - 対象選定・取り込み
 
@@ -151,7 +151,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -169,7 +169,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)  // target
             try await seedDoc("S2", secCode: "99990", db: app.db)  // not in target (日経225外)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -184,7 +184,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)  // 有報120
             try await seedDoc("S2", secCode: "72030", docType: "160", db: app.db)  // 半期
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -198,7 +198,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .notApplicable(reason: breakdownNotApplicableGeographyOnly) }
 
@@ -220,7 +220,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            _ = try await runStage6Ingest(
+            _ = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
@@ -231,7 +231,7 @@ extension BreakdownLoadResult {
     }
 
     /// Opus監査で指摘（issue #132）: 既存の実データ行（LLM経由でneeds_review=trueの再試行対象等）が
-    /// 一時的な解決失敗（LLM停止・Stage4未計算等）でnotApplicableへ「格下げ」されると、正しいデータを
+    /// 一時的な解決失敗（LLM停止・Financials未計算等）でnotApplicableへ「格下げ」されると、正しいデータを
     /// 破壊してしまう。既存が実データを持つ場合は上書きせず、次回また再試行対象として残すべき。
     @Test func ingestDoesNotOverwriteExistingRealDataWithNotApplicablePlaceholder() async throws {
         try await withMigratedApp { app in
@@ -244,7 +244,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: businessBreakdownCacheVersion,
                 needsReview: true, contentHash: "real-hash", llmAudit: audit)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
@@ -270,7 +270,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceNotApplicable, cacheVersion: "old-version",
                 notApplicableReason: breakdownNotApplicableGeographyOnly)
 
-            _ = try await runStage6Ingest(
+            _ = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h9", audit: nil) }
 
@@ -291,7 +291,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceNotApplicable, cacheVersion: "old-version",
                 notApplicableReason: breakdownNotApplicableGeographyOnly)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
 
@@ -308,7 +308,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in
                 Issue.record("resolver must not run for an up-to-date not_applicable row")
@@ -327,7 +327,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S2", secCode: "67580", db: app.db)  // single segment
             try await seedDoc("S3", secCode: "99840", db: app.db)  // unknown
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: nil
             ) { docID, _ in
                 switch docID {
@@ -348,7 +348,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .failed }
 
@@ -363,7 +363,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in
                 Issue.record("resolver must not run for an up-to-date row")
@@ -382,7 +382,7 @@ extension BreakdownLoadResult {
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, cacheVersion: "old-version")
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
 
@@ -394,7 +394,7 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// Stage 5 との最大の差分: LLM 経由の行は cache_version のバンプだけでは再試行しない
+    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version のバンプだけでは再試行しない
     /// （needs_review=false なら据え置き）。
     @Test func ingestDoesNotReattemptLLMRowOnVersionBumpAloneWhenNotFlagged() async throws {
         try await withMigratedApp { app in
@@ -404,7 +404,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "old-version",
                 needsReview: false)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in
                 Issue.record("LLM-sourced row without needs_review must not be re-resolved on version bump")
@@ -424,7 +424,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: businessBreakdownCacheVersion,
                 needsReview: true)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(needsReview: false), source: breakdownSourceSegmentInfoLLM, contentHash: "h3", audit: nil) }
 
@@ -442,7 +442,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S2", secCode: "67580", db: app.db)
             try await seedDoc("S3", secCode: "99840", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: 2
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -459,7 +459,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S25", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
             try await seedRow("S22", code: "7203", submit: "2022-06-20 09:00", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -474,7 +474,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S22", secCode: "72030", submit: "2022-06-20 09:00", db: app.db)
             try await seedDoc("S23", secCode: "72030", submit: "2023-06-20 09:00", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
@@ -512,7 +512,7 @@ extension BreakdownLoadResult {
             try await row.create(on: app.db)
 
             // RawData.Sales は百万円建て（FinancialsResponse.unit）。consolidatedSalesForDoc は
-            // Stage 6 正規化器が期待する円単位へ変換して返す。
+            // 内訳取り込み 正規化器が期待する円単位へ変換して返す。
             let sales = try await consolidatedSalesForDoc(code: "7203", docID: "S1", db: app.db)
             #expect(sales == 4_624_727 * Financial.millionYen)
             let salesOtherYear = try await consolidatedSalesForDoc(code: "7203", docID: "S0", db: app.db)
@@ -539,7 +539,7 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// Stage 5 との最大の差分: LLM 経由の行は cache_version が古くても常に servable。
+    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version が古くても常に servable。
     @Test func countServableAlwaysCountsLLMRowsRegardlessOfVersion() async throws {
         try await withMigratedApp { app in
             try await seedRow(
@@ -646,7 +646,7 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// Stage 5 との最大の差分: LLM 経由の行は cache_version が古くても read 可能。
+    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version が古くても read 可能。
     @Test func loadReturnsLLMRowEvenWithOldCacheVersion() async throws {
         try await withMigratedApp { app in
             try await seedRow(
@@ -735,7 +735,7 @@ extension BreakdownLoadResult {
     }
 
     /// 最新書類が notApplicable の場合、より古い書類に実データがあってもそれは返さない
-    /// （最新の状態を正しく反映する。Stage4 の notApplicablePlaceholder と同じ設計判断）。
+    /// （最新の状態を正しく反映する。Financials の notApplicablePlaceholder と同じ設計判断）。
     @Test func loadPrefersLatestNotApplicableOverOlderRealData() async throws {
         try await withMigratedApp { app in
             try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
@@ -776,7 +776,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
             ) { _, _ in
@@ -801,7 +801,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
             ) { _, _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
@@ -821,7 +821,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
             ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
@@ -845,7 +845,7 @@ extension BreakdownLoadResult {
                 "S24", code: "7203", submit: "2024-06-20 09:00", db: app.db,
                 axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts)
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 1, limit: nil,
                 axis: breakdownAxisGeography
             ) { _, _ in
@@ -890,7 +890,7 @@ extension BreakdownLoadResult {
                 axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts,
                 cacheVersion: "breakdown-business-v0")
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisBusiness
             ) { _, _ in
@@ -920,7 +920,7 @@ extension BreakdownLoadResult {
                 axis: breakdownAxisGeography, source: breakdownSourceXbrlFacts,
                 cacheVersion: "breakdown-geography-v0")
 
-            let summary = try await runStage6Ingest(
+            let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
             ) { _, _ in

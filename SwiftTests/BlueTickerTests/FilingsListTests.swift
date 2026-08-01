@@ -4,7 +4,7 @@ import Testing
 @testable import BlueTickerCore
 
 /// filingsList の仕様: 提出日時降順・docID 重複排除・直近 maxYears 年度窓・最大 50 件・スキーマ。
-/// Stage 1 DB read 経路（getFilingsFromRecords）の純粋部分。ライブ経路と同一の filing スキーマを返す。
+/// 書類同期 DB read 経路（getFilingsFromRecords）の純粋部分。ライブ経路と同一の filing スキーマを返す。
 @Suite struct FilingsListTests {
     private func rec(
         _ docID: String, docType: String = "120",

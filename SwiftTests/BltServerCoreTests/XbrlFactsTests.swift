@@ -1,4 +1,4 @@
-// Stage 3 マイグレーション・JSONB round-trip の検証。
+// 数値 fact マイグレーション・JSONB round-trip の検証。
 // edinet_xbrl_facts に書類単位の fact インデックスを格納し、ネストマップ（tag→ctx→fact）・
 // 配列メタ・nil メタが欠落なく往復することを確認する（本番は JSONB、テストは SQLite の TEXT）。
 
@@ -24,7 +24,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-@Suite struct Stage3FactsTests {
+@Suite struct XbrlFactsTests {
     @Test func factsPayloadRoundTripsNestedMapAndMeta() async throws {
         try await withMigratedApp { app in
             let payload: XbrlFactIndexPayload = [

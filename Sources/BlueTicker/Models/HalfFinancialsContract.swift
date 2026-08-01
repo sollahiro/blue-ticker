@@ -1,7 +1,7 @@
 // 半期 financials API の公開契約。サーバーとクライアントで共有する単一の Codable 型。
 //
 // 設計意図（financials の FinancialsContract と同思想）:
-// - サーバー（Stage 4-half ingest の computeHalfFinancials → JSONB 保存 → read で jsonObject()）は
+// - サーバー（半期財務取り込み ingest の computeHalfFinancials → JSONB 保存 → read で jsonObject()）は
 //   この型で JSON を生成・保存し、remote CLI（RemoteAPIClient）は同じ型でデコードして [HalfPeriod] に
 //   復元する（計算はサーバー集約・キー定義を 1 か所に集約しドリフトを防ぐ）。
 // - 年度メトリクスは financials と同じ flatten 形（FinancialsYear）を再利用し、内部モデル
@@ -14,7 +14,7 @@
 
 import Foundation
 
-/// 半期 Stage 4 の計算結果。「対象外」（半期報告書が未提出等、設計通りで再提出待ち）と
+/// 半期 財務取り込み の計算結果。「対象外」（半期報告書が未提出等、設計通りで再提出待ち）と
 /// 「失敗」（書類はあるが抽出できない、要調査）を区別する（issue #73 のフォローアップ）。
 /// ingest サマリで前者を failed カウントへ混入させないために使う。
 public enum HalfFinancialsComputeResult: Sendable {
@@ -23,7 +23,7 @@ public enum HalfFinancialsComputeResult: Sendable {
     case failed
 }
 
-/// Neon の半期 Stage 4 キャッシュ（`company_half_financials.cache_version`）の計算バージョン。
+/// Neon の半期 財務取り込み キャッシュ（`company_half_financials.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、半期計算ロジック（HalfYearAnalyzer / buildH2Entry）または
 /// 本契約型（HalfFinancialsResponse / HalfFinancialsPeriod）の意味を変えたときのみバンプする
 /// （financials の `companyFinancialsCacheVersion` と同思想・全社再計算が高コストなため）。
@@ -91,7 +91,7 @@ struct HalfFinancialsPeriod: Codable, Sendable {
 
 // MARK: - レスポンス（トップレベル封筒）
 
-// public: BltServerCore（半期 Stage 4 derived キャッシュ）がこの型を JSONB として保存・読込する。
+// public: BltServerCore（半期 財務取り込み derived キャッシュ）がこの型を JSONB として保存・読込する。
 public struct HalfFinancialsResponse: Codable, Sendable {
     var schemaVersion: Int
     var code: String
@@ -175,7 +175,7 @@ extension HalfFinancialsResponse {
     }
 
     /// 半期報告書未提出等、計算対象外だった企業のプレースホルダ（`periods` 空）。
-    /// public: Stage 4-half ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
+    /// public: 半期財務取り込み ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
     /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う
     /// （読み取り経路 `loadStoredHalfFinancials`/`loadStoredHalfAnalysis` は `periods` 空を検出し
     /// 404 を維持する。annual 側の `FinancialsResponse.notApplicablePlaceholder` と同型）。
@@ -185,7 +185,7 @@ extension HalfFinancialsResponse {
             currency: "JPY", unit: "百万円", periods: [])
     }
 
-    /// 格納済み `periods` の件数。public: Stage 4-half read 経路（BltServerCore）が
+    /// 格納済み `periods` の件数。public: 半期財務取り込み read 経路（BltServerCore）が
     /// notApplicable プレースホルダ（`periods` 空）を検出して 404 を維持するために使う。
     public var periodCount: Int { periods.count }
 }

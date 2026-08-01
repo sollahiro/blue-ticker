@@ -1,4 +1,4 @@
-// 事業別・地域別売上の比較用コモンモデル（Stage 6, docs/breakdown-normalization-concept.md）
+// 事業別・地域別売上の比較用コモンモデル（内訳取り込み, docs/breakdown-normalization-concept.md）
 // BreakdownExtractor の xbrl_facts 結果を BreakdownSnapshot（比較可能な正規化スナップショット）へ写す。
 //
 // html_table 由来（method == "html_table"）は行パース未実装のため対象外（nil を返す）。
@@ -33,7 +33,7 @@ enum BreakdownNormalizer {
     /// ExtractedBreakdown（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// 適用不可（html_table / not_found / 該当タグなし）の場合は nil。
     /// 銀行等、外部売上高に相当する概念を持たない金融機関は粗利益/営業純益基準へフォールバックする。
-    /// Stage 4 の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
+    /// 財務取り込み の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
     /// セグメント注記に外部顧客売上タグがあれば内部小計基準で解決する
     /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
     static func normalize(_ result: ExtractedBreakdown, consolidatedSales: Double?) -> BreakdownSnapshot? {
@@ -45,7 +45,7 @@ enum BreakdownNormalizer {
             return snapshot
         }
         // 連結売上が取れないときでも、セグメント側の外部顧客売上タグで分母を組む
-        // （Stage 4 sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
+        // （財務取り込み sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
         if let external = normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentExternalRevenueTags,
             profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue")
@@ -115,10 +115,10 @@ enum BreakdownNormalizer {
             }
         }
 
-        // 高島屋型: Stage 4 が NetSales（売上高）を取る一方、セグメント注記の
-        // RevenuesFromExternalCustomers は営業収益ベース。Stage 4 売上を分母にしたままだと
+        // 高島屋型: 財務取り込み が NetSales（売上高）を取る一方、セグメント注記の
+        // RevenuesFromExternalCustomers は営業収益ベース。財務取り込み 売上を分母にしたままだと
         // amount/denominator が 1 を大きく超え比較不能になる（実データ: S100Y4X5、2026-07-25）。
-        // 小計（または segment 合計）が Stage 4 売上と ±5% 超乖離するときは注記側に揃える。
+        // 小計（または segment 合計）が 財務取り込み 売上と ±5% 超乖離するときは注記側に揃える。
         // segmentSum は 2 次判定後の kinds で再集計する（小計へ昇格した行を含めない）。
         let segmentSum = perMember.keys.filter { kinds[$0] == "segment" }
             .reduce(0.0) { $0 + perMember[$1]!.value }

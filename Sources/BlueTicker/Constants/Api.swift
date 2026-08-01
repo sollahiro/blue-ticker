@@ -2,7 +2,7 @@ public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
     /// Chat Completions 互換エンドポイントの既定ベースURL（`XAI_BASE_URL` 未設定時のフォールバック）。
-    /// Stage 6 の html_table 正規化（`GeographyBreakdownLLMNormalizer`）でのみ使用。
+    /// 内訳取り込み の html_table 正規化（`GeographyBreakdownLLMNormalizer`）でのみ使用。
     static let xaiBaseURL = "https://api.x.ai/v1"
 
     /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
@@ -36,7 +36,7 @@ public enum Api {
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
     public static let halfFinancialsYearsDefault = 3
-    /// Stage 7（Statement）read の既定年数。`stage5IngestYears`（6年保持）以下に収める。
+    /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
     public static let statementYearsDefault = 5
 
     // 件数上限
@@ -57,8 +57,8 @@ public enum Api {
 
     /// 半期分析で算出・格納できる最大年数（HalfYearAnalyzer の探索上限）。
     /// 半期は FY/2Q の組から H1/H2 を導出する都合でこの年数までしか作れない。
-    /// 格納（Stage 4-half）・read クランプ・分析の単一の真実源。
-    /// BltServerCore（Stage 4-half ingest / read クランプ）からも参照するため public。
+    /// 格納（半期財務取り込み）・read クランプ・分析の単一の真実源。
+    /// BltServerCore（半期財務取り込み ingest / read クランプ）からも参照するため public。
     public static let halfMaxYears = 5
 
     /// REST read パス（Routes.swift）で Neon cold-start（scale-to-zero 後の再接続）を
@@ -68,10 +68,10 @@ public enum Api {
     public static let dbReadRetryMaxBackoffSeconds: Double = 4
 
     /// `withDbRetry` のエラーログに含めるエラー詳細（`String(reflecting:)`）の最大文字数。
-    /// Stage 3/4 の facts/response は JSONB で巨大なため、ログ行が肥大化しないよう切り詰める。
+    /// 数値 fact 取り込み/財務取り込みの facts/response は JSONB で巨大なため、ログ行が肥大化しないよう切り詰める。
     public static let dbRetryErrorLogMaxLength = 2000
 
-    /// ingest（Stage 3/4/4-half/5）で「DB が不安定」と判断してその場でループを打ち切るまでの
+    /// ingest（数値 fact 取り込み/財務取り込み/半期財務取り込み/有報セクション取り込み）で「DB が不安定」と判断してその場でループを打ち切るまでの
     /// リトライ発生回数の閾値。Neon の scale-to-zero 明けの再接続が不調な状態が続くと、
     /// 1件ずつは（数回リトライの末に）復旧してもトータルでは長時間を浪費するため、
     /// 閾値超で早期中断し、残りは次回スケジュールに委ねる。
@@ -124,7 +124,7 @@ public enum Api {
     static let xbrlProcessConcurrency = 2
 
     // 書類種別
-    // Stage 5 取り込み（BltServerCore）が有報のみを対象にするため public。
+    // 有報セクション取り込み（BltServerCore）が有報のみを対象にするため public。
     public static let docTypeAnnualReport = "120"
     static let docTypeAmendment = "130"           // 訂正有価証券報告書
     static let docTypeQuarterlyReport = "140"
@@ -142,31 +142,31 @@ public enum Api {
     /// financials とは独立採番。レスポンス形を破壊的に変更したときのみ +1 する。
     static let halfFinancialsSchemaVersion = 1
 
-    /// Stage 1 同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
+    /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
     /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない
     /// （有報中心の財務計算に対し、訂正は訂正有報(130)のみ採用する設計）。
     /// filings 表示用の上位集合とは別セット → `filingsDisplayDocTypes`。
-    static let stage1SyncDocTypes: Set<String> = [
+    static let documentSyncDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
         docTypeQuarterlyReport,
         docTypeHalfYearReport,
     ]
 
-    /// Stage 4（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
+    /// 財務取り込み（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
     /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（有報＋訂正有報）とだけ
     /// 揃える。これ以外の新規提出（四半期等）では通期の再計算をトリガーしない。
-    /// BltServerCore（Stage4Ingest）から参照するため public。
-    public static let stage4FreshnessDocTypes: Set<String> = [
+    /// BltServerCore（FinancialsIngest）から参照するため public。
+    public static let financialsFreshnessDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
     ]
 
-    /// Stage 4-half（company_half_financials）の high-water 鮮度判定が対象とする書類種別。
+    /// 半期財務取り込み（company_half_financials）の high-water 鮮度判定が対象とする書類種別。
     /// `HalfYearAnalyzer` → `EdinetDiscovery.buildHalfYearDocumentIndexForCode` が消費する
     /// 有報＋半期/四半期に加え、通期側の訂正(130)も含める（訂正で FY 基準が動き、半期の
-    /// 再計算が必要になるため）。BltServerCore（Stage4HalfIngest）から参照するため public。
-    public static let stage4HalfFreshnessDocTypes: Set<String> = [
+    /// 再計算が必要になるため）。BltServerCore（HalfFinancialsIngest）から参照するため public。
+    public static let halfFinancialsFreshnessDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
         docTypeQuarterlyReport,
@@ -174,7 +174,7 @@ public enum Api {
     ]
 
     /// filings 表示（CLI `filings`）で採用する書類種別。探索済み書類に対する表示フィルタで、
-    /// 訂正を含む全 6 種の上位集合（Stage 1 sync 用より広い。上の別セットと区別）。
+    /// 訂正を含む全 6 種の上位集合（書類同期 sync 用より広い。上の別セットと区別）。
     static let filingsDisplayDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,

@@ -1,8 +1,8 @@
-// Stage 7 取り込みの DB ロジック（対象選定＝ stage5Candidates 再利用・staleness 判定・upsert・limit・
+// Statement 取り込みの DB ロジック（対象選定＝ filingSectionCandidates 再利用・staleness 判定・upsert・limit・
 // purge）と read 経路（loadStoredStatement の code 直近N件／doc_id 指定・バージョンゲート）を検証する。
 // 抽出（extractStatement）は EDINET 依存のため、フェイク抽出器を注入してネットワーク非依存で見る。
 //
-// Stage 6 と異なり決定論のみ（LLM 不要）のため、staleness 判定は Stage 5 と同型（cache_version
+// 内訳取り込み と異なり決定論のみ（LLM 不要）のため、staleness 判定は 有報セクション取り込み と同型（cache_version
 // 不一致のみで再試行。needs_review/source の非対称性は無い）。
 
 import BlueTickerCore
@@ -52,7 +52,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
         incomeStatement: [], cashFlow: [])
 }
 
-@Suite struct Stage7IngestTests {
+@Suite struct StatementIngestTests {
 
     // MARK: - 対象選定・取り込み
 
@@ -61,7 +61,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil
             ) { docID in fakeYear(docID: docID) }
 
@@ -78,7 +78,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S1", secCode: "72030", db: app.db)  // target
             try await seedDoc("S2", secCode: "99990", db: app.db)  // not in target (日経225外)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { docID in fakeYear(docID: docID) }
 
@@ -92,7 +92,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S1", secCode: "72030", db: app.db)  // 有報120
             try await seedDoc("S2", secCode: "72030", docType: "160", db: app.db)  // 半期
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { docID in fakeYear(docID: docID) }
 
@@ -107,7 +107,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S24", secCode: "72030", submit: "2024-06-20 09:00", db: app.db)
             try await seedDoc("S25", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { docID in fakeYear(docID: docID) }
 
@@ -132,7 +132,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             old.cacheVersion = statementCacheVersion
             try await old.create(on: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { docID in fakeYear(docID: docID) }
 
@@ -152,7 +152,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             pre.cacheVersion = statementCacheVersion
             try await pre.create(on: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in
                 Issue.record("extractor must not run for an up-to-date document")
@@ -175,7 +175,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             stale.cacheVersion = "old-version"
             try await stale.create(on: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { docID in fakeYear("fresh", docID: docID) }
 
@@ -193,7 +193,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S2", secCode: "67580", db: app.db)
             try await seedDoc("S3", secCode: "99840", db: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: 2
             ) { docID in fakeYear(docID: docID) }
 
@@ -206,7 +206,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage7Ingest(
+            let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in nil }
 

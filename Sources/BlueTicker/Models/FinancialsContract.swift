@@ -1,7 +1,7 @@
 // financials API の公開契約（flatten 形）。サーバーとクライアントで共有する単一の Codable 型。
 //
 // 設計意図:
-// - サーバー（Stage 4 ingest の computeFinancials → DB 格納 → read で jsonObject()）は
+// - サーバー（財務取り込み ingest の computeFinancials → DB 格納 → read で jsonObject()）は
 //   この型から JSON を生成し、remote CLI（RemoteAPIClient）は同じ型でデコードして MetricsResult に復元する。
 //   キー定義が 1 か所（CodingKeys）に集約され、契約のドリフトを防ぐ（「統一」）。
 // - 内部モデル（MetricsResult/RawData/CalculatedData）は直シリアライズせず、ここで
@@ -14,7 +14,7 @@
 
 import Foundation
 
-/// Stage 4（通期）の計算結果。「対象外」（有価証券報告書が未提出、新規上場等で設計通り・再提出待ち）と
+/// 財務取り込み（通期）の計算結果。「対象外」（有価証券報告書が未提出、新規上場等で設計通り・再提出待ち）と
 /// 「失敗」（書類はあるが抽出できない、要調査）を区別する（`HalfFinancialsComputeResult` と同型。issue #86）。
 /// ingest サマリで前者を failed カウントへ混入させないために使う。
 public enum FinancialsComputeResult: Sendable {
@@ -23,11 +23,11 @@ public enum FinancialsComputeResult: Sendable {
     case failed
 }
 
-/// Neon Stage 4 キャッシュ（`company_financials.cache_version`）の計算バージョン。
+/// Neon 財務取り込み キャッシュ（`company_financials.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）
 /// または本契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変えたときのみバンプする。
 /// グローバルバージョンに連動させないことで、月内 Micro バンプで高コストな全社再計算
-/// （XBRL 再ダウンロード＋HTML 依存抽出の再実行）を走らせない（Stage 3 の `xbrlFactsCacheVersion` と同思想）。
+/// （XBRL 再ダウンロード＋HTML 依存抽出の再実行）を走らせない（XBRL 数値 RAW の `xbrlFactsCacheVersion` と同思想）。
 ///
 /// PR #27（6836 売掛金の企業拡張タグ対応）はこのバージョンをバンプせず fin-v3 のまま合流した。
 /// 抽出ロジック変更の反映（既存キャッシュ済み行の再計算）は、他の同種修正が貯まってから
@@ -381,7 +381,7 @@ extension FinancialsYear {
     }
 
     /// Analyze（`docs/feature-tiers.md`）専用の増減分解フィールド。Summarize（financials）の応答からは
-    /// これらを外す。値自体は Stage 4 ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
+    /// これらを外す。値自体は 財務取り込み ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
     /// 対象は Analyze（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
     /// 注意: 「`SummarizeCommand.levelMetrics` に無いフィールド」全般ではない
     /// （`eps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
@@ -428,7 +428,7 @@ extension FinancialsYear {
 
 // MARK: - レスポンス（トップレベル封筒）
 
-// public: BltServerCore（Stage 4 derived キャッシュ）がこの型を JSONB として保存・読込する。
+// public: BltServerCore（財務取り込み derived キャッシュ）がこの型を JSONB として保存・読込する。
 // 内部メンバーは internal のまま（モジュール外からは Codable 経由でのみ扱う）。
 public struct FinancialsResponse: Codable, Sendable {
     var schemaVersion: Int
@@ -467,22 +467,22 @@ extension FinancialsResponse {
         return result
     }
 
-    /// 指定 docID の年度エントリの売上高（円）。public: Stage 6（BltServerCore）が事業別内訳の分母
-    /// （連結外部売上）を Stage 4 の計算済み結果から再利用するために使う（自前で XBRL から
-    /// 再抽出しない。重複ロジック回避）。`years[].sales` は `unit`（百万円）建てのため、Stage 6 の
+    /// 指定 docID の年度エントリの売上高（円）。public: 内訳取り込み（BltServerCore）が事業別内訳の分母
+    /// （連結外部売上）を 財務取り込み の計算済み結果から再利用するために使う（自前で XBRL から
+    /// 再抽出しない。重複ロジック回避）。`years[].sales` は `unit`（百万円）建てのため、内訳取り込み の
     /// 正規化器が期待する円単位へここで変換する。該当年度が無ければ nil。
     public func salesForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.sales.map { $0 * Financial.millionYen }
     }
 
     /// 当該 docID の年次エントリがあるか（売上の有無は問わない）。
-    /// Stage 6 が「Stage 4 未計算」と「計算済みだが売上抽出不能」を分けるために使う。
+    /// 内訳取り込み が「財務取り込み 未計算」と「計算済みだが売上抽出不能」を分けるために使う。
     public func hasDoc(_ docID: String) -> Bool {
         years.contains { $0.docId == docID }
     }
 
     /// 有価証券報告書未提出等、計算対象外だった企業のプレースホルダ（`years` 空）。
-    /// public: Stage 4 ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
+    /// public: 財務取り込み ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
     /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う
     /// （読み取り経路 `loadStoredFinancials`/`loadStoredAnalysis` は `years` 空を検出し 404 を維持する。
     /// issue #86）。
@@ -492,12 +492,12 @@ extension FinancialsResponse {
             currency: "JPY", unit: "百万円", years: [])
     }
 
-    /// 格納済み `years` の件数。public: Stage 4 read 経路（BltServerCore）が
+    /// 格納済み `years` の件数。public: 財務取り込み read 経路（BltServerCore）が
     /// notApplicable プレースホルダ（`years` 空）を検出して 404 を維持するために使う（issue #86）。
     public var yearCount: Int { years.count }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
-    /// public: BltServerCore の Stage 4 read 経路が格納済みレスポンスを JSON へ落とすために使う。
+    /// public: BltServerCore の 財務取り込み read 経路が格納済みレスポンスを JSON へ落とすために使う。
     public func jsonObject() -> [String: Any] {
         [
             "schema_version": schemaVersion,
@@ -547,7 +547,7 @@ extension FinancialsResponse {
     }
 
     /// years を新しい順の先頭 n 件に縮めたコピーを返す（n 以上ならそのまま）。
-    /// Stage 4 derived キャッシュは要求年数以上で格納し、read 時に要求年数へ縮める。
+    /// 財務取り込み derived キャッシュは要求年数以上で格納し、read 時に要求年数へ縮める。
     ///
     /// ライブ計算経路は要求年数ちょうどの年度集合で waterfall を回すため、最古年は前年が無く
     /// 増減系フィールドが null になる（Waterfall.swift の各ループは k>=1 のみ設定）。DB 経路は

@@ -7,7 +7,7 @@
 // が html_table になっているケース。
 //
 // ライブ read 経路（REST/MCP）や ingest には配線しない（他の LLM 正規化器と同じ理由。
-// concept doc で確定済み: LLM は Stage 4/5 と同じ ingest バッチ経路に置く方針だが、
+// concept doc で確定済み: LLM は financials/filing-sections と同じ ingest バッチ経路に置く方針だが、
 // 永続化スキーマ配線自体は今後の検討事項1で未着手）。
 
 import Foundation

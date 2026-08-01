@@ -1,4 +1,4 @@
-// Stage 4/4-half/5 共通の候補並び替え（prioritized）の仕様を検証する。
+// financials/half-financials/filing-sections 共通の候補並び替え（prioritized）の仕様を検証する。
 // 対象選定ではなく処理順序のみを変えること・元の相対順序を保つ（安定ソート）ことを確認する。
 
 import Testing

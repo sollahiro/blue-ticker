@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-/// Stage 6 の事業別/地域別正規化を目視確認するための開発用コマンド。
+/// 内訳取り込み の事業別/地域別正規化を目視確認するための開発用コマンド。
 ///
 /// - smoke 経路（既定）: `smoke/breakdown_extraction_expected.json` + `smoke/smoke_expected/` のみ使用。EDINET 不要。
 /// - live 経路（`--live`）: EDINET から最新（または指定）有報 XBRL を取得し、
@@ -10,7 +10,7 @@ import Foundation
 struct DevBreakdownCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "breakdown",
-        abstract: "Stage 6 の事業別/地域別正規化を実行し目視確認する（開発用）"
+        abstract: "内訳取り込み の事業別/地域別正規化を実行し目視確認する（開発用）"
     )
 
     enum Source: String, ExpressibleByArgument {
@@ -224,7 +224,7 @@ struct DevBreakdownCommand: AsyncParsableCommand {
 
     /// IndividualAnalyzer のキャッシュ優先結果から、対象 docID の売上（円）を取る。
     /// RawData.sales は百万円単位なので `millionYen` を掛けて円に戻す。
-    /// 窓は `analyzeDefaultYears`（Stage 6 保持窓と同じ 6 年）。指定 docID が窓に無い、
+    /// 窓は `analyzeDefaultYears`（内訳取り込み 保持窓と同じ 6 年）。指定 docID が窓に無い、
     /// または売上未抽出なら nil（最新期へ無言フォールバックしない。issue #160）。
     private func loadLiveSales(ctx: AnalysisContext, docID: String) async -> Double? {
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)

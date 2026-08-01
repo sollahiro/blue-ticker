@@ -30,11 +30,11 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
-    /// Stage 6 business 軸の html_table 正規化（LLM）に使うクライアント。
+    /// 内訳取り込み business 軸の html_table 正規化（LLM）に使うクライアント。
     /// `XAI_BUSINESS_*`（未設定時は旧 `XAI_*`）が無いときは `UnavailableChatClient`。
     /// xbrl_facts 経路はこのフィールドに触れない。
     let businessChatClient: ChatCompleting
-    /// Stage 6 geography 軸の html_table 正規化（LLM）に使うクライアント。
+    /// 内訳取り込み geography 軸の html_table 正規化（LLM）に使うクライアント。
     /// `XAI_GEOGRAPHY_*` 未設定時は `UnavailableChatClient`（旧 `XAI_*` へのフォールバックなし）。
     let geographyChatClient: ChatCompleting
 
@@ -60,13 +60,13 @@ private func resolveEdinetApiKey() async -> String? {
     return (envKey?.isEmpty == false) ? envKey : nil
 }
 
-/// Stage 6 の LLM 軸。Server / DevCLI で同じ命名規約の env を読む（実装は意図的に別）。
+/// 内訳取り込み の LLM 軸。Server / DevCLI で同じ命名規約の env を読む（実装は意図的に別）。
 enum XaiBreakdownAxis: String, Sendable {
     case business
     case geography
 }
 
-/// Stage 6 の LLM（Chat Completions 互換）エンドポイントを軸別に環境変数から解決する。
+/// 内訳取り込み の LLM（Chat Completions 互換）エンドポイントを軸別に環境変数から解決する。
 /// - business: `XAI_BUSINESS_API_KEY` / `XAI_BUSINESS_MODEL` / `XAI_BUSINESS_BASE_URL`。
 ///   未設定時は旧 `XAI_API_KEY` / `XAI_MODEL` / `XAI_BASE_URL` にフォールバック。
 /// - geography: `XAI_GEOGRAPHY_API_KEY` / `XAI_GEOGRAPHY_MODEL` / `XAI_GEOGRAPHY_BASE_URL` のみ
@@ -115,7 +115,7 @@ private struct UnavailableChatClient: ChatCompleting {
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
-/// LLM キー未設定でも Stage 6 の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
+/// LLM キー未設定でも 内訳取り込み の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
 public func makeBltServerContext() async -> BltServerContext? {
     guard let key = await resolveEdinetApiKey() else {
         return nil
@@ -173,7 +173,7 @@ public extension BltServerContext {
         return .ok(["code": code, "name": stock?.coName ?? "", "filings": filings])
     }
 
-    /// Stage 1 DB（`edinet_documents`）から取り込んだ書類レコードで filings 応答を組み立てる。
+    /// 書類同期 DB（`edinet_documents`）から取り込んだ書類レコードで filings 応答を組み立てる。
     /// ライブ EDINET 探索（getFilings）と同一スキーマを返す read 経路。EDINET 取得を伴わず OOM を避ける。
     /// records は呼び出し側（BltServerCore）が当該銘柄分を DB から引いて渡す（空なら呼ばれない）。
     func getFilingsFromRecords(
@@ -185,7 +185,7 @@ public extension BltServerContext {
     }
 
     /// 財務サマリ（公開契約 `FinancialsResponse`）を計算する。
-    /// Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。
+    /// 財務取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。
     /// EDINET 取得・XBRL パースを伴う高コスト処理。「有価証券報告書未提出」（対象外）と
     /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
@@ -208,7 +208,7 @@ public extension BltServerContext {
     }
 
     /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。
-    /// 半期 Stage 4 取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。HalfYearAnalyzer は
+    /// 半期財務取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。HalfYearAnalyzer は
     /// 内部で 5 年分を構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば
     /// 全集合が返る。EDINET 取得・XBRL パースを伴う高コスト処理。
     /// 「半期報告書未提出」（対象外）と「抽出失敗」を区別して返す（戻り値パターン、issue #73 フォローアップ）。
@@ -226,7 +226,7 @@ public extension BltServerContext {
         }
     }
 
-    /// Stage 5: 書類1件分の XBRL を取得（Stage 2 キャッシュ経由）し、全セクションを抽出して
+    /// 有報セクション取り込み: 書類1件分の XBRL を取得（XBRL 取得キャッシュ経由）し、全セクションを抽出して
     /// 格納用 payload を返す。重い SwiftSoup 抽出を含むため **ingest 専用**（大企業の有報で 1GB OOM を
     /// 実測。serving のライブ抽出は撤去し、read は Neon 格納済みを返す）。ダウンロード失敗は nil（戻り値パターン）。
     /// texts は xbrlSections 全 key を格納（未検出は ""）、specials は segments/geography。
@@ -251,15 +251,15 @@ public extension BltServerContext {
         return FilingSectionsPayload(texts: texts, specials: specials)
     }
 
-    /// 上場ユニバース（東証上場）の 4 桁コード集合。Stage 5 取り込みの対象選定に使う
+    /// 上場ユニバース（東証上場）の 4 桁コード集合。有報セクション取り込みの対象選定に使う
     /// （EDINET 公式 CSV の「上場区分」から導出。roadmap の著作権判断参照）。
     func listedCompanyCodes() async -> Set<String> {
         await masterDataManager.listedCodes()
     }
 
-    /// Stage 7（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。決定論のみ（LLM不要）。
-    /// `extractFilingSections`（Stage 5）と同型: 1書類分のみを扱い、複数年度の履歴集約・
-    /// 「対象外」判定は行わない（Stage7Ingest 実装時に code+years 単位のラッパーを追加する想定。
+    /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。決定論のみ（LLM不要）。
+    /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約・
+    /// 「対象外」判定は行わない（StatementIngest 実装時に code+years 単位のラッパーを追加する想定。
     /// docs/statement-normalization-concept.md）。ダウンロード失敗は nil（戻り値パターン）。
     func extractStatement(
         docID: String, statementTypes: Set<StatementSectionType> = Set(StatementSectionType.allCases)
@@ -269,16 +269,16 @@ public extension BltServerContext {
     }
 
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
-    /// Stage 4/4-half/5 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
+    /// financials/half-financials/filing-sections 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
     /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
     func priorityIngestCodes() async -> Set<String> {
         loadPriorityIngestCodes()
     }
 }
 
-// MARK: - Stage 6 取り込み（事業別・地域別内訳）
+// MARK: - 内訳取り込み（事業別・地域別内訳）
 
-/// Stage 6 内訳（business / geography）の解決結果（`computeHalfFinancials` と同じ3値パターン）。
+/// 内訳取り込み 内訳（business / geography）の解決結果（`computeHalfFinancials` と同じ3値パターン）。
 public enum BreakdownResolveResult: Sendable {
     /// 解決成功。格納用ペイロード一式。
     case resolved(
@@ -286,7 +286,7 @@ public enum BreakdownResolveResult: Sendable {
         audit: LLMBreakdownAuditPayload?)
     /// 書類の取得・抽出自体は成功したが、当該軸の内訳が解決できなかった。
     /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか。
-    /// 呼び出し元の `Stage6Ingest` が `company_breakdowns.not_applicable_reason` へ永続化する
+    /// 呼び出し元の `BreakdownIngest` が `company_breakdowns.not_applicable_reason` へ永続化する
     /// （business / geography どちらも REST/MCP の 404 応答へ反映）。
     case notApplicable(reason: String)
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。行は作らない。
@@ -294,11 +294,11 @@ public enum BreakdownResolveResult: Sendable {
 }
 
 public extension BltServerContext {
-    /// Stage 6: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
+    /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
-    /// `consolidatedSales` は呼び出し側（Stage 4 で計算済みの当該書類の連結売上高）が渡す
-    /// （Stage 6 は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
+    /// `consolidatedSales` は呼び出し側（財務取り込み で計算済みの当該書類の連結売上高）が渡す
+    /// （内訳取り込み は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
     func resolveBusinessBreakdown(
         docID: String, consolidatedSales: Double?
     ) async -> BreakdownResolveResult {
@@ -320,7 +320,7 @@ public extension BltServerContext {
             contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
     }
 
-    /// Stage 6: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
+    /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
     /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
     /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
     /// `unknown`（要再試行）。
@@ -401,7 +401,7 @@ private func breakdownContentHash(
     return String(format: "%016llx", hash)
 }
 
-/// 内部型 ExtractedBreakdown を公開格納用 ExtractedBreakdownPayload へ写経する（Stage 3 の XbrlFactRecord 方式）。
+/// 内部型 ExtractedBreakdown を公開格納用 ExtractedBreakdownPayload へ写経する（数値 fact 取り込み の XbrlFactRecord 方式）。
 private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedBreakdownPayload {
     ExtractedBreakdownPayload(
         method: r.method,
@@ -415,22 +415,22 @@ private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedB
         })
 }
 
-// MARK: - Stage 1 同期
+// MARK: - 書類同期
 
 public extension BltServerContext {
-    /// Stage 1 同期用に、指定期間（YYYY-MM-DD）の EDINET 書類を正規化済みレコードで返す。
-    /// seed 種別（Api.stage1SyncDocTypes）に絞り、docID で重複排除する。
+    /// 書類同期用に、指定期間（YYYY-MM-DD）の EDINET 書類を正規化済みレコードで返す。
+    /// seed 種別（Api.documentSyncDocTypes）に絞り、docID で重複排除する。
     /// 取得失敗日は `failedDates` に含め、高水位を進めない判定に使う。
-    func fetchDocumentsForSync(from: String, to: String) async -> Stage1FetchResult {
+    func fetchDocumentsForSync(from: String, to: String) async -> DocumentFetchResult {
         guard let start = parseDateString(from), let end = parseDateString(to), start <= end else {
-            return Stage1FetchResult(records: [], failedDates: [])
+            return DocumentFetchResult(records: [], failedDates: [])
         }
         let byDate = await edinetClient.getDocumentsForDateRange(start: start, end: end)
         let failedDates = byDate.compactMap { date, docs -> String? in
             docs == nil ? date : nil
         }
         let allDocs = byDate.values.compactMap { $0 }.flatMap { $0 }
-        return Stage1FetchResult(
+        return DocumentFetchResult(
             records: mapEdinetDocumentRecords(allDocs),
             failedDates: failedDates
         )
@@ -445,7 +445,7 @@ func mapEdinetDocumentRecords(_ docs: [[String: Any]]) -> [EdinetDocumentRecord]
     for doc in docs {
         guard let docID = doc["docID"] as? String, !docID.isEmpty else { continue }
         guard let docType = doc["docTypeCode"] as? String,
-              Api.stage1SyncDocTypes.contains(docType) else { continue }
+              Api.documentSyncDocTypes.contains(docType) else { continue }
         guard seen.insert(docID).inserted else { continue }
         records.append(EdinetDocumentRecord(
             docID: docID,
@@ -473,7 +473,7 @@ private func nonEmptyString(_ value: Any?) -> String? {
 
 // MARK: - filings 応答の組み立て（ライブ／DB read 共通）
 
-/// Stage 1 DB レコードから filings の配列を組み立てる純粋関数（ネットワーク・DB 非依存・テスト対象）。
+/// 書類同期 DB レコードから filings の配列を組み立てる純粋関数（ネットワーク・DB 非依存・テスト対象）。
 /// 提出日時降順 → docID 重複排除 → 直近 maxYears 年度窓 → 最大 50 件。
 /// 年度窓は最新書類の期末年を起点に maxYears 年ぶんを残す（ライブ探索の analysisYears に対応）。
 ///
@@ -534,12 +534,12 @@ func docTypeLabel(_ code: String) -> String? {
     }
 }
 
-// MARK: - Stage 3 取り込み（XBRL 数値 fact）
+// MARK: - 数値 fact 取り込み（XBRL 数値 fact）
 
 public extension BltServerContext {
-    /// Stage 3: 書類1件分の XBRL をダウンロード（Stage 2）してパースし、
+    /// 数値 fact 取り込み: 書類1件分の XBRL をダウンロード（XBRL 取得キャッシュ）してパースし、
     /// 数値 fact インデックス（公開 Codable `XbrlFactIndexPayload`）を返す。
-    /// IndividualAnalyzer と同じ `nilAsZero: false` で収集し、Stage 4 が消費する値と一致させる。
+    /// IndividualAnalyzer と同じ `nilAsZero: false` で収集し、財務取り込み が消費する値と一致させる。
     /// ダウンロード失敗・fact 0 件は nil（戻り値パターン）。生 XBRL はローカルキャッシュに保持する。
     func parseXbrlFactIndex(docID: String) async -> XbrlFactIndexPayload? {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }

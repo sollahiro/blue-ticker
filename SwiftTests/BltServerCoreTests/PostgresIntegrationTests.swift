@@ -4,7 +4,7 @@
 //
 // BLT_TEST_POSTGRES_URL が設定されたときのみ実行する（未設定なら skip）。CI の
 // swift-linux ジョブでは常に設定される。EDINET ネットワークは不要で、
-// Stage 3 取り込みは runStage3Ingest にフェイクパーサを注入して DB 書き込み経路だけを通す。
+// 数値 fact 取り込みは runFactsIngest にフェイクパーサを注入して DB 書き込み経路だけを通す。
 //
 //   docker run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine
 //   BLT_TEST_POSTGRES_URL='postgres://postgres:blt@localhost:55432/blt?sslmode=disable' \
@@ -73,9 +73,9 @@ import Vapor
     }
 
     @Test(.enabled(if: postgresURL != nil, "BLT_TEST_POSTGRES_URL not set"))
-    func stage1And3WriteAndReadBackOnPostgres() async throws {
+    func documentAndFactsWriteAndReadBackOnPostgres() async throws {
         try await withPostgresApp { app in
-            // Stage 1: upsert 冪等性（同 docID 再投入で重複行を作らない）。
+            // 書類同期: upsert 冪等性（同 docID 再投入で重複行を作らない）。
             let rec = EdinetDocumentRecord(
                 docID: "S100E2E1", edinetCode: "E00001", secCode: "72030", filerName: "テスト株式会社",
                 docTypeCode: "120", ordinanceCode: "010", formCode: "030000",
@@ -91,7 +91,7 @@ import Vapor
                 try await EdinetSyncState.find(EdinetSyncState.singletonID, on: app.db))
             #expect(state.syncedThrough == "2025-06-20")
 
-            // Stage 3: ingest（フェイクパーサ）で JSONB を書き、読み戻しで完全一致を確認。
+            // 数値 fact: ingest（フェイクパーサ）で JSONB を書き、読み戻しで完全一致を確認。
             let payload: XbrlFactIndexPayload = [
                 "NetSales": [
                     "CurrentYearDuration": XbrlFactRecord(
@@ -103,7 +103,7 @@ import Vapor
                     "CurrentYearInstant": XbrlFactRecord(value: 9999, consolidation: "consolidated"),
                 ],
             ]
-            let summary = try await runStage3Ingest(db: app.db, limit: nil) { _ in payload }
+            let summary = try await runFactsIngest(db: app.db, limit: nil) { _ in payload }
             #expect(summary.stored == 1)
             #expect(summary.attempted == 1)
 
@@ -112,7 +112,7 @@ import Vapor
             #expect(row.cacheVersion == xbrlFactsCacheVersion)
 
             // 再実行は現行バージョン済みのため skip（staleness 判定が Postgres でも効く）。
-            let rerun = try await runStage3Ingest(db: app.db, limit: nil) { _ in
+            let rerun = try await runFactsIngest(db: app.db, limit: nil) { _ in
                 Issue.record("fresh document must not be re-parsed")
                 return payload
             }
