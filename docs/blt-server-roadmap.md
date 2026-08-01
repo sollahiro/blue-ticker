@@ -15,8 +15,8 @@
 | Stage 4-half | `half-v2` への stale 消化継続中（issue #73 の半期報告書マッチング修正で導入）。合計 3,859 行中 `half-v2` 3,823・`half-v1` 36。read 床 `companyHalfFinancialsMinServableVersion = 1` |
 | Stage 5 | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | Stage 5 read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
-| Stage 6 | 日経225限定。business 軸は 225/225 社ingest 済み。cache_version を軸別（`breakdown-business-v7`/`breakdown-geography-v8`）に分離し、geography 軸の Neon ingest 配線・REST/MCP 公開を 2026-07-27 に完了（品質ゲート: 最新有報 224/224 社で `needs_review=true` とあいまい失敗が 0 を確認）。電通型（報告セグメント＝地域）の geography `not_found` は issue #163。軸別命名への切替は Neon 側は次回 ingest から反映（現状 business 行は旧共通名 `breakdown-v7` 等のまま） |
-| Stage 7 | 日経225限定でスタート（2026-07-29）。DB(`company_statements`)/ingest(`--stages 7`)/REST/MCP 配線済み。presentation linkbase 由来の真の表示順(`order`)、BS/CF 行の区分(`section`: assets/liabilities/net_assets、operating/investing/financing)、標準タクソノミ補完によるラベル解決、計算リンクベース由来の合計行構成要素(`is_total`/`components`)まで対応済み（2026-07-31、v1のまま）。PL の利益段階ラベリングはスコープ外に確定（Stage 4 領域）。使い捨て Neon で実データ書き込み・読み出し検証済み（実XBRL9社でタグ漏れ・合計不一致なしを確認）。本番 Neon への日経225全社ingestは未実施 |
+| Stage 6 | 日経225限定。business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27、225/225社）。cache_version は軸別（`breakdown-business-v7`/`breakdown-geography-v8`）。既知の残課題: 電通型 geography `not_found`（issue #163）。詳細は `docs/breakdown-normalization-concept.md` |
+| Stage 7 | 日経225限定でスタート（2026-07-29）。DB/ingest/REST/MCP 配線済み。表示順(`order`)・区分(`section`)・合計行構成要素(`is_total`/`components`)まで対応（`statement-v1`）。PL の利益段階ラベリングはスコープ外（Stage 4 領域）。本番 Neon への日経225全社 ingest は未実施 |
 | Stage 7 read 床 | **`statementMinServableVersion = 1`**（`statement-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
 | MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。9 ツール（`search_companies`・`get_analysis`・`get_half_analysis`・`get_statement` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
@@ -54,31 +54,9 @@ financials / filing-content の REST read は現行版との完全一致では�
 - 床の引き上げは、該当旧版の stale 消化完了後に行う（引き上げで servable 穴を作らない）。
 - `/healthz` の `company_financials_min_servable` / `filing_sections_min_servable` で現行床を確認できる。
 
-### ローカル CLI 廃止ゲート（2026-07-09 確定・2026-07-16 実施）
+### ローカル CLI 廃止（完了）
 
-**トリガー**: ユニバース全銘柄が **Stage 4 read 床以上（servable）** の `company_financials` 行を持つ。
-
-完了の定義（当初）:
-
-- `edinet_documents` から導出できる証券コードについて、`company_financials.cache_version` が床以上（いま `fin-v2`+）
-- 残欠は恒久 failed（財務報告書なし等）として切り分け済みで、定期 ingest の Stage 4 **missing** が実質ゼロ（床未満だけの行は「空白一巡」に数えない）
-
-**実施時点の実測**（2026-07-16、Neon `company_financials` 直接集計）: servable 3,870 / ユニバース 3,944 = **98.1%**。
-
-**未格納 73 社の切り分け完了**（2026-07-17）: 71 社は EDINET マスタで上場廃止・外国法人に該当し `listedCodes` フィルタで恒久的に対象外（設計通り。ウエルシアHD(3141)・イオンモール(8905) 等は実在の上場廃止・株式交換による完全子会社化を実データで確認済み）。残り 2 社（436A・441A）は新規上場で初回有報未提出のため一時的に failed（提出後に自然解消見込み）。ユニバース分母（3,944）は過去に書類提出歴のある全銘柄の延べ数で、実質対象ユニバースは ~3,874 社（servable 3,872 / 3,874 = **99.9%**）。追加対応不要。
-
-補足:
-
-- 現行版（`fin-v4`）への揃えは**削除の必須条件にしない**（床以上なら remote は 200。stale 版アップグレードは同ジョブが継続）
-- Stage 4-half / Stage 5 の全社 drain も必須条件にしない（Stage 5 は床=1 で旧行も読める）
-- 床を後で引き上げるときは、引き上げ後もゲート条件（全銘柄 servable）を満たすこと
-
-完了後の手順（実施済み）:
-
-1. ~~`backend=local` を deprecation（警告＋ドキュメント）~~ → 経由せず直接撤去（2026-07-16 時点で `backend=local` の実利用報告なし）
-2. `ticker`（配布 CLI）からユーザー向け local 経路を削除。EDINET 直叩きロジックは `Sources/BlueTicker/DevCLI/`（`BlueTickerCore` 内・internal）へ移設し、配布しない新ターゲット `TickerDev`（`Package.swift` の `products` 非搭載）からのみ呼べる。詳細は `docs/architecture.md`「ターゲット構成と依存方向」
-3. remote 未格納／床未満は 404 のまま。local フォールバックは戻さない
-4. 未格納 73 社は切り分け済み（上記参照）。本ゲートの遂行条件から除外して実施し、追加対応は不要と判断
+2026-07-16 実施。トリガーはユニバース全銘柄の `company_financials` が Stage 4 read 床以上（servable）。実測 servable 3,872 / 実質対象ユニバース 3,874 社 = **99.9%**（残り2社は新規上場で初回有報未提出のため一時的 failed、提出後に自然解消見込み）。EDINET 直叩きロジックは配布しない `TickerDev`（`Sources/BlueTicker/DevCLI/`）からのみ呼べる形へ移設済み（構成は `CLAUDE.md`「ターゲット構成」参照）。経緯・実施手順は Git 履歴参照。
 
 ## デプロイモード
 
@@ -118,14 +96,12 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 公開契約は financials / half-financials 等の REST レスポンス（`schema_version` 独立採番）。Stage 3 RAW は非公開。人間向け Access SSO は維持（CLI 廃止後もブラウザ・MCP OAuth 用）。
 
-`sector` は REST 化済み（`GET /v1/sectors`）。CLI 配布物からも `EdinetcodeDlInfo.csv` の同梱を撤去した。
-
 ## ゴール / 非ゴール
 
 **ゴール**
 
 - ユーザー向け実行環境を blt-server（remote/cloud）へ集約する（達成）
-- 全銘柄が Stage 4 read 床以上で servable になったらユーザー向け `backend=local` を廃止する（2026-07-16 実施。servable 98.1%・未格納 74 社は既知残欠として許容）
+- 全銘柄が Stage 4 read 床以上で servable になったらユーザー向け `backend=local` を廃止する（2026-07-16 実施。servable 99.9%、残 2 社は既知残欠として許容）
 
 **非ゴール**
 
@@ -163,20 +139,13 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。origin APIキー要否もここで再判断。情報未公開のため詳細設計は保留）
 - [ ] Stage 5 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
-- [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。business 軸（日経225構成銘柄限定）は抽出・正規化・永続化・ingest(`--stages 6`)/REST(`breakdown`)/MCP(`get_breakdown`)まで実装済み（PR #87/#88/#91 + business軸配線）。銀行・保険の粗利益/営業純益基準、NTT等のタグ一般化、小松製作所の年度ラベルチェーン修正等を2026-07-21〜22に反映。E/F判定（地域のみ・単一セグメント記載省略）の検知結果明示化はDBスキーマ・REST/MCP応答まで反映済み（issue #130/#132、`source="not_applicable"`プレースホルダ行＋404ボディの`reason`フィールド）。html_table経由でLLMがgeography-only等と判定したケースがunknownに落ちる分類漏れも解消済み（issue #135）。オリックス等の巨大単一USGAAP注記でのセグメント当期テーブル抽出（issue #103、PR #126）、ZOZO/ベイカレント/JPXの非収益OperatingSegmentsAxis facts誤判定（issue #137、PR #138）、野村の金融費用控除後分母取り違え（issue #105、PR #109で分母をセグメント表小計へフォールバックする方式で解消済み）、資生堂型の地域facts併存によるE/F誤判定（PR #139）も解消済み。日経225は225/225社が最低1件ingest済み（2026-07-26時点）。geography 軸の **Neon ingest 配線は PR #141**（軸別 LLM キー `XAI_BUSINESS_*`/`XAI_GEOGRAPHY_*`、`GeographyBreakdownResolver`、Stage6 を business→geography の2パス）。**REST/MCP の geography 公開は 2026-07-27 に解禁**（公開ゲート＝使い捨て Neon（Stage6-devブランチ）で最新有報224/224社を確認し `needs_review=true` とあいまい失敗が0を確認済み。正当欠測 `not_found` は別カウント。直近の抽出修正3件（NSK型収益分解フォールバック・クボタ型キャプション順序・スズキ型資産表除外）は実データで再検証しゲート判定に影響しないことを確認）。構想は `docs/breakdown-normalization-concept.md`「今後の検討事項」
+- [~] Stage 6: 事業別・地域別売上の正規化（企業間比較用）。日経225は business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27）。残課題は電通型 geography `not_found`（issue #163）。構想は `docs/breakdown-normalization-concept.md`「今後の検討事項」
 - [ ] 抽出ロジック変更時の差分検証ツール
 - [ ] LLM による抽出値の抜き打ち整合評価
-- [~] Stage 7/8: Statement（財務諸表 BS/PL/CF 完全正規化＋注記）。抽出ロジック・DevCLI は実装済み（PR #153）。DB（`company_statements`）/ingest(`--stages 7`)/REST(`GET /v1/companies/{code}/statement`)/MCP(`get_statement`) 配線を実装済み（2026-07-29、対象は日経225限定でスタート。実装方針は `docs/statement-normalization-concept.md`「実装方針」参照）。presentation linkbase 由来の真の表示順（`order`）、BS/CF 行の区分（`section`）対応も実装済み
-（2026-07-30、`statement-v1` のまま。本番未マージで移行コストゼロだったため v2 バンプ不要と判断。
-詳細は「実装方針」3・6）。PL の利益段階ラベリングはスコープ外に確定（Stage 4 領域）。使い捨て Neon
-への実 EDINET 取り込みで書き込み・REST/MCP 読み出しを実地検証済み（トヨタ7203・ソニー6758・出光興産5019、
-`swift test` green、Cursor CLI 監査済み）。日経225未配置環境（本 dev 環境含む）では `priorityIngestCodes()` が空集合になり Stage 7 の対象は0件（Stage 6 と同じ既知の制約）。
-2026-07-31、実データ目視確認で発見した3件のバグ（標準タグのラベル未解決・CFの現金同等物期首/期末残高欠落・
-デンソー型の負債合計誤区分）を修正し、計算リンクベース由来の合計行構成要素（`is_total`/`components`）を
-新規実装（詳細は「実装方針」7〜10）。トヨタ・デンソー・任天堂を golden 回帰テスト化
-（`RealXbrlStatementTests.swift`）、他6社（ソニー・SBI新生銀行・武田薬品・ソフトバンクグループ・
-キヤノン・三菱重工業）でも smoke 検証しタグ漏れ・実質的な合計不一致なしを確認済み
+- [~] Stage 7: Statement（財務諸表 BS/PL/CF 完全正規化）。日経225限定で実装済み（現在地参照）。残: 本番 Neon への日経225全社 ingest。実装方針は `docs/statement-normalization-concept.md`
 - [ ] Stage 7 母集団拡大（日経225限定→全銘柄）。LLM 不要でコスト制約はないが、銀行・保険等特殊タクソノミでの実データ検証未実施のため段階展開する（`docs/statement-normalization-concept.md`「未検証事項」）
+- [ ] Stage 8（構想）: 注記の網羅カタログではなく、Breakdown/Statement同様に項目を絞って正規化・構造化する。初期対象5項目: ①有利子負債計算用のキャッシュ・フロー計算書補足説明 ②資本性証券の株式銘柄及び公正価値 ③1株当たり利益情報 ④有形固定資産（明細） ⑤のれん及びその他の無形資産（今後拡張予定）。実データでのタグ/role名検証・契約設計とも未着手
+- [ ] ステージ番号命名の見直し（構想）: 現行 Stage N はロールアウト段階（`AGENTS.md`）とデータレイヤ（本ロードマップ）の2軸を指しており衝突している。将来は製品名（Summarize/Filing/Analyze/Breakdown/Allocation/Pipeline/Statement、`docs/feature-tiers.md`）を対外語彙とし、Stage N は内部実装（テーブル名・cache_version）専用に格下げする方向を検討中。未着手
 
 ## 関連ドキュメント
 
