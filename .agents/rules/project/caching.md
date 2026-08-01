@@ -20,7 +20,6 @@ analysis_cache/
     xbrl_numeric_index/
     xbrl_sections/
     analysis/
-    half_year/
     misc/
 ```
 
@@ -47,7 +46,6 @@ external キャッシュは原則としてグローバルバージョンに連�
 
 ```swift
 "individual_analysis_\(code)"
-"half_year_periods_\(code)"
 ```
 
 短すぎるキー（`"\(code)"` や `"data"` など）は衝突リスクがあるため使わない。

@@ -20,6 +20,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateCompanyFinancials())
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
+        app.migrations.add(DropCompanyHalfFinancials())
         app.migrations.add(CreateCompanyFilingSections())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
@@ -63,25 +64,6 @@ private func seedFinancials(
     let row = CompanyFinancials()
     row.id = code
     row.response = try makeFinancialsResponse(code: code)
-    row.cacheVersion = version
-    row.requestedYears = 1
-    try await row.create(on: db)
-}
-
-private func makeHalfResponse(code: String) throws -> HalfFinancialsResponse {
-    let dict: [String: Any] = [
-        "schema_version": 1, "code": code, "name": "テスト",
-        "currency": "JPY", "unit": "百万円",
-        "periods": [["label": "2025H1", "half": "H1", "year": ["fy_end": "2025-03-31"]]],
-    ]
-    let data = try JSONSerialization.data(withJSONObject: dict)
-    return try JSONDecoder().decode(HalfFinancialsResponse.self, from: data)
-}
-
-private func seedHalfFinancials(code: String, version: String, db: Database) async throws {
-    let row = CompanyHalfFinancials()
-    row.id = code
-    row.response = try makeHalfResponse(code: code)
     row.cacheVersion = version
     row.requestedYears = 1
     try await row.create(on: db)
@@ -135,7 +117,7 @@ private func seedBreakdown(
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203", "6758"], priorityCodes: ["7203"])
 
-            #expect(report.stages.count == 5)
+            #expect(report.stages.count == 4)
             for stage in report.stages {
                 #expect(stage.companiesCovered == 0)
                 #expect(stage.coveragePct == 0.0)
@@ -183,21 +165,6 @@ private func seedBreakdown(
 
             #expect(financials.coveragePct == 100.0)  // 対象2社とも行はある
             #expect(financials.currentVersionPct == 50.0)  // うち現行版は1社のみ
-        }
-    }
-
-    @Test func halfFinancialsCurrentVersionPctDropsWhileCoverageStaysFullWithStaleVersionRow() async throws {
-        try await withMigratedApp { app in
-            try await seedHalfFinancials(
-                code: "7203", version: companyHalfFinancialsCacheVersion, db: app.db)
-            try await seedHalfFinancials(code: "6758", version: "half-v1", db: app.db)  // 旧版
-
-            let report = try await buildIngestStatusReport(
-                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
-            let half = try #require(report.stages.first { $0.key == "half_financials" })
-
-            #expect(half.coveragePct == 100.0)
-            #expect(half.currentVersionPct == 50.0)
         }
     }
 

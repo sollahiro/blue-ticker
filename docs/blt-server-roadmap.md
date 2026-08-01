@@ -12,14 +12,13 @@
 | facts | スキーマあり・**取り込み停止中**（issue #22。512MB 対策。`--with-facts` で再開可） |
 | financials | バックフィル継続中。`company_financials` 合計 3,876 行（`fin-v4` 3,829・`fin-v3` 29・`fin-v2` 18）。ユニバース ~3,944 社 |
 | financials read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
-| half-financials | `half-v2` への stale 消化継続中（issue #73 の半期報告書マッチング修正で導入）。合計 3,859 行中 `half-v2` 3,823・`half-v1` 36。read 床 `companyHalfFinancialsMinServableVersion = 1` |
 | filing-sections | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | filing-sections read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
 | breakdowns | 日経225限定。business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27、225/225社）。cache_version は軸別（`breakdown-business-v7`/`breakdown-geography-v8`）。既知の残課題: 電通型 geography `not_found`（issue #163）。詳細は `docs/breakdown-normalization-concept.md` |
 | statements | 日経225限定でスタート（2026-07-29）。DB/ingest/REST/MCP 配線済み。表示順(`order`)・区分(`section`)・合計行構成要素(`is_total`/`components`)まで対応（`statement-v1`）。PL の利益段階ラベリングはスコープ外（financials 領域）。本番 Neon への日経225全社 ingest は未実施 |
 | statements read 床 | **`statementMinServableVersion = 1`**（`statement-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
-| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。9 ツール（`search_companies`・`get_analysis`・`get_half_analysis`・`get_statement` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
+| MCP | **Phase 1・Phase 2 とも完了**（2026-07-12）。`blt-server`（Vapor）にルートパス（`POST /`）として埋め込み。8 ツール（`search_companies`・`get_analysis`・`get_statement` 等。`docs/feature-tiers.md`「Summarize / Analyze の境界」参照）。`api.<domain>`（Phase 1・SSO 経由）に加え、新規サブドメイン `mcp.<domain>` に Managed OAuth for Access を有効化し、Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアントにも対応（origin コード変更なし）。Claude Desktop での接続・ツール呼び出しまで実機確認済み。手順は `deploy.md`「MCP（Managed OAuth）」参照 |
 
 カバレッジは Neon の `cache_version` 別件数で確認する（例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`）。
 
@@ -41,7 +40,7 @@
 
 ### financials / filing-sections read 床（min servable）
 
-financials / filing-content の REST read は現行版との完全一致ではなく、**明示した最低世代以上**を返す。half は単一版のため床未導入（`half-v2` 時に同型追加）。
+financials / filing-content の REST read は現行版との完全一致ではなく、**明示した最低世代以上**を返す。
 
 | 定数 | 役割 |
 |---|---|
@@ -74,7 +73,6 @@ financials / filing-content の REST read は現行版との完全一致では�
 | (生 XBRL) | ローカル / Fly Volume（生 XBRL） | 保持継続。R2 退避は容量問題化まで延期 |
 | facts | DB `edinet_xbrl_facts` | 停止中（#22） |
 | financials | DB `company_financials` | **バックフィル中（廃止ゲート＝床以上 servable）**。read は床以上・未格納/床未満 404 |
-| half-financials | DB `company_half_financials` | バックフィル中 |
 | filing-sections | DB `company_filing_sections` | バックフィル中。read は床以上（いま `sections-v1`+）・未格納/床未満 404 |
 
 重い ingest はローカル→Neon。Fly serving は read-only（ライブ計算フォールバックなし）。
@@ -94,7 +92,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 | iOS（将来） | しない | REST | 予定 |
 | blt-server | **唯一の計算者** | ingest ＋ DB read | サーバー |
 
-公開契約は financials / half-financials 等の REST レスポンス（`schema_version` 独立採番）。facts RAW は非公開。人間向け Access SSO は維持（CLI 廃止後もブラウザ・MCP OAuth 用）。
+公開契約は financials 等の REST レスポンス（`schema_version` 独立採番）。facts RAW は非公開。人間向け Access SSO は維持（CLI 廃止後もブラウザ・MCP OAuth 用）。
 
 ## ゴール / 非ゴール
 
@@ -123,7 +121,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 ### 進行中
 
-- [~] financials 現行版への stale 消化 / half-financials / filing-sections — 同ジョブが継続
+- [~] financials 現行版への stale 消化 / filing-sections — 同ジョブが継続
 
 ### 次（優先度順）
 

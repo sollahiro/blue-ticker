@@ -268,7 +268,7 @@ func runBreakdownIngest(
 /// 両 LLM 正規化器はいずれも分母 nil（または 0）を許容せず即 nil を返す（=`.notApplicable`）ため、
 /// 財務取り込み未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
 /// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、財務取り込みが先に
-/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（financials→half-financials→filing-sections→breakdowns）はこれを満たす）。
+/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（financials→filing-sections→breakdowns）はこれを満たす）。
 func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
     return financials.response.salesForDoc(docID)

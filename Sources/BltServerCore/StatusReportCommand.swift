@@ -1,4 +1,4 @@
-// `blt-server status-report`: 5 ステージ（financials / half_financials / filing_sections /
+// `blt-server status-report`: 4 ステージ（financials / filing_sections /
 // breakdown_business / breakdown_geography）のカバレッジ・鮮度を集計し、JSON を stdout へ出す。
 // 出力は `assets/apex-site/status.html`（静的公開ページ）を生成するシェルスクリプト
 // （`scripts/generate-status-page.sh`）が読む契約。ここでは日経225構成銘柄の実コードは一切
@@ -19,22 +19,6 @@ import Vapor
 /// company_financials の code / cache_version / updated_at のみを対象にした軽量射影。
 final class CompanyFinancialsStatusProjection: Model, @unchecked Sendable {
     static let schema = CompanyFinancials.schema
-
-    @ID(custom: "code", generatedBy: .user)
-    var id: String?
-
-    @Field(key: "cache_version")
-    var cacheVersion: String
-
-    @Timestamp(key: "updated_at", on: .update)
-    var updatedAt: Date?
-
-    init() {}
-}
-
-/// company_half_financials の code / cache_version / updated_at のみを対象にした軽量射影。
-final class CompanyHalfFinancialsStatusProjection: Model, @unchecked Sendable {
-    static let schema = CompanyHalfFinancials.schema
 
     @ID(custom: "code", generatedBy: .user)
     var id: String?
@@ -101,7 +85,7 @@ public struct IngestStageStatus: Codable, Sendable, Equatable {
     public let companiesCovered: Int
     public let companiesTarget: Int
     public let coveragePct: Double
-    /// financials / half_financials は 1 行 = 1 社（doc 次元を持たない）ため nil。
+    /// financials は 1 行 = 1 社（doc 次元を持たない）ため nil。
     public let docsCovered: Int?
     public let docsTarget: Int?
     public let currentVersionPct: Double
@@ -177,7 +161,7 @@ private struct StatusRow {
     let updatedAt: Date?
 }
 
-/// financials / half_financials 向け（1 行 = 1 社。doc 次元なし。current_version_pct の分母は
+/// financials 向け（1 行 = 1 社。doc 次元なし。current_version_pct の分母は
 /// companiesTarget）。`targetCodes` に無い行（上場廃止等で対象母集団から外れたが、まだ purge
 /// されていない残存行）は分子側から除外する。除外しないと coverage_pct / current_version_pct が
 /// 100% を超えうる（分母を偽装するバグと同じ症状が分子の混入からも起こりうる。監査で指摘・修正）。
@@ -228,8 +212,8 @@ private func buildDocumentLevelStage(
         stale: isStageStale(lastUpdated: lastUpdated, now: now))
 }
 
-/// 5 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
-/// `listedCodes` は financials/half/filing_sections の対象母集団、`priorityCodes`
+/// 4 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
+/// `listedCodes` は financials/filing_sections の対象母集団、`priorityCodes`
 /// （`assets/nikkei225.csv`）は breakdown_business/breakdown_geography の対象母集団
 /// （内訳取り込み の実 ingest スコープと同じ絞り込み）。
 public func buildIngestStatusReport(
@@ -243,19 +227,6 @@ public func buildIngestStatusReport(
             StatusRow(
                 code: $0.id ?? "", isCurrentVersion: $0.cacheVersion == companyFinancialsCacheVersion,
                 isServable: isServableCompanyFinancialsCacheVersion($0.cacheVersion),
-                updatedAt: $0.updatedAt)
-        },
-        targetCodes: listedCodes, now: now)
-
-    // half_financials
-    let halfRows = try await CompanyHalfFinancialsStatusProjection.query(on: db).all()
-    let halfFinancials = buildCompanyLevelStage(
-        key: "half_financials", label: "半期財務データ",
-        rows: halfRows.map {
-            StatusRow(
-                code: $0.id ?? "",
-                isCurrentVersion: $0.cacheVersion == companyHalfFinancialsCacheVersion,
-                isServable: isServableCompanyHalfFinancialsCacheVersion($0.cacheVersion),
                 updatedAt: $0.updatedAt)
         },
         targetCodes: listedCodes, now: now)
@@ -319,7 +290,7 @@ public func buildIngestStatusReport(
 
     return IngestStatusReport(
         generatedAt: isoString(from: now),
-        stages: [financials, halfFinancials, filingSections, breakdownBusiness, breakdownGeography])
+        stages: [financials, filingSections, breakdownBusiness, breakdownGeography])
 }
 
 // MARK: - CLI エントリ

@@ -2,7 +2,7 @@ import Foundation
 
 // ticker analyze / summarize / filing の表示ロジック。remote 経路（Ticker* コマンド）と
 // ローカル経路（Dev* コマンド、DevCLI/）の両方から呼ばれる共通コード。取得手段（remote/local）に
-// 依存せず、共通のドメインモデル（YearEntry / HalfPeriod / ExtractedBreakdown 等）だけを受け取る。
+// 依存せず、共通のドメインモデル（YearEntry / ExtractedBreakdown 等）だけを受け取る。
 
 // MARK: - ticker analyze（増減分析）
 
@@ -23,40 +23,7 @@ enum AnalyzeRendering {
         printError("\n水準値の一覧は \(commandPrefix) summarize で確認できます。\n")
     }
 
-    /// 半期の増減分析を表示する。
-    static func renderHalf(_ periods: [HalfPeriod]) {
-        printError("\n[半期 増減分析]\n")
-        // 前期 = 同じ半期（H1/H2）の直近の過去期。欠落期があってもラベル意味（前年同期差）を保つ。
-        let priors: [HalfPeriod?] = periods.indices.map { i in
-            periods[..<i].last { $0.half == periods[i].half }
-        }
-        render(
-            periods: periods,
-            priors: priors,
-            columnLabels: periods.map { $0.label },
-            entry: { $0.yearEntry },
-            latest: periods.last?.yearEntry
-        )
-    }
-
-    /// 半期表示用の期間ラベルを、実際に取得できたデータから組み立てる。
-    static func halfAnalysisPeriodText(_ periods: [HalfPeriod]) -> String {
-        let completedFYEnds = Set(periods.filter { $0.half == "H2" }.compactMap { $0.fyEnd })
-        let completedYears = completedFYEnds.count
-        let hasCurrentH1 = periods.contains {
-            guard $0.half == "H1", let fyEnd = $0.fyEnd else { return false }
-            return !completedFYEnds.contains(fyEnd)
-        }
-        if completedYears > 0 {
-            return hasCurrentH1
-                ? "分析対象期間: 直近 \(completedYears) 年分 + 当期H1"
-                : "分析対象期間: 直近 \(completedYears) 年分"
-        }
-        let halfPeriods = periods.filter { $0.half == "H1" || $0.half == "H2" }.count
-        return "分析対象期間: 半期 \(halfPeriods) 期分"
-    }
-
-    // MARK: - 5ブロック描画（年次・半期で共有）
+    // MARK: - 5ブロック描画
 
     private static func render<T>(periods: [T], priors: [T?], columnLabels: [String], entry: @escaping (T) -> YearEntry, latest: YearEntry?) {
         MetricsTable.printHeader(title: "項目 \\ 期", columnLabels: columnLabels)
@@ -185,25 +152,7 @@ enum SummarizeRendering {
         printError(MetricsTable.separator(columns: periods.count) + "\n")
     }
 
-    static func printHalfTable(periods: [HalfPeriod]) {
-        guard !periods.isEmpty else {
-            printError("半期データが見つかりませんでした。\n")
-            return
-        }
-
-        printError("\n[半期財務推移]\n")
-        MetricsTable.printHeader(title: "項目 \\ 期", columnLabels: periods.map { $0.label })
-
-        // 年次と同じレベル指標を半期に適用（getter を yearEntry 経由に変換）
-        let metrics = levelMetrics(latest: periods.last?.yearEntry).map { (label, getter) in
-            (label, { (p: HalfPeriod) in getter(p.yearEntry) })
-        }
-        MetricsTable.printNumericRows(periods, metrics)
-        MetricsTable.printStringRows(periods, [("DocID", { $0.yearEntry.calculatedData.docID })])
-        printError(MetricsTable.separator(columns: periods.count) + "\n")
-    }
-
-    // MARK: - レベル指標定義（年次・半期で共有）
+    // MARK: - レベル指標定義
 
     private static func levelMetrics(latest: YearEntry?) -> [(String, (YearEntry) -> Double?)] {
         let salesLabel = latest?.rawData.salesLabel.map { "\($0) (百万)" } ?? "売上高 (百万)"

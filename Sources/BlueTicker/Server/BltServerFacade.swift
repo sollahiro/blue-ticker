@@ -207,25 +207,6 @@ public extension BltServerContext {
         }
     }
 
-    /// 半期財務サマリ（公開契約 `HalfFinancialsResponse`）を計算する。
-    /// 半期財務取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。HalfYearAnalyzer は
-    /// 内部で 5 年分を構築し analysisYears へ trim するため、years に全集合分（半期最大年数）を渡せば
-    /// 全集合が返る。EDINET 取得・XBRL パースを伴う高コスト処理。
-    /// 「半期報告書未提出」（対象外）と「抽出失敗」を区別して返す（戻り値パターン、issue #73 フォローアップ）。
-    func computeHalfFinancials(code: String, years: Int) async -> HalfFinancialsComputeResult {
-        let analyzer = HalfYearAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
-        switch await analyzer.analyze(code: code, analysisYears: years) {
-        case .periods(let periods):
-            let stock = await masterDataManager.getByCode(code)
-            return .success(
-                HalfFinancialsResponse(code: code, name: stock?.coName ?? "", periods: periods))
-        case .notApplicable:
-            return .notApplicable
-        case .failed:
-            return .failed
-        }
-    }
-
     /// 有報セクション取り込み: 書類1件分の XBRL を取得（XBRL 取得キャッシュ経由）し、全セクションを抽出して
     /// 格納用 payload を返す。重い SwiftSoup 抽出を含むため **ingest 専用**（大企業の有報で 1GB OOM を
     /// 実測。serving のライブ抽出は撤去し、read は Neon 格納済みを返す）。ダウンロード失敗は nil（戻り値パターン）。
@@ -269,7 +250,7 @@ public extension BltServerContext {
     }
 
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
-    /// financials/half-financials/filing-sections 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
+    /// financials/filing-sections 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
     /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
     func priorityIngestCodes() async -> Set<String> {
         loadPriorityIngestCodes()
@@ -278,7 +259,7 @@ public extension BltServerContext {
 
 // MARK: - 内訳取り込み（事業別・地域別内訳）
 
-/// 内訳取り込み 内訳（business / geography）の解決結果（`computeHalfFinancials` と同じ3値パターン）。
+/// 内訳取り込み 内訳（business / geography）の解決結果（`computeFinancials` と同じ3値パターン）。
 public enum BreakdownResolveResult: Sendable {
     /// 解決成功。格納用ペイロード一式。
     case resolved(

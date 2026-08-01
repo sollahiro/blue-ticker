@@ -14,7 +14,7 @@
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared サイドカーの Tunnel トークン。設定時のみコンテナ内で cloudflared を起動 | **secret**（Cloudflare 本番時） |
 | `DATABASE_URL` | Neon Postgres 接続文字列 | **secret**（未設定なら DB なしのステートレス動作） |
 
-`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`company_half_financials`・`filing_sections`・`filing_sections_min_servable`・`breakdown_business`・`breakdown_business_min_servable`・`breakdown_geography`・`breakdown_geography_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
+`/healthz` は認証不要で `{"status":"ok","cache_versions":{...}}` を返す（ヘルスチェック用）。`cache_versions` はイメージが今話している derived キャッシュバージョン（`xbrl_facts`・`company_financials`・`company_financials_min_servable`・`filing_sections`・`filing_sections_min_servable`・`breakdown_business`・`breakdown_business_min_servable`・`breakdown_geography`・`breakdown_geography_min_servable`）で、キャッシュバージョンバンプ後に `fly deploy` を忘れていないか curl 一発で確認できる。`*_min_servable` は各 read の床（明示定数。現行版との完全一致ではない）。
 
 認証モードは `/v1` 配下で起動時に env から1つ選ばれる: ① `CF_ACCESS_TEAM_DOMAIN` 設定時 → Cloudflare Access、② 未設定 → 無認証（ローカル開発専用・起動時 warning）。**公開デプロイは常に `CF_ACCESS_TEAM_DOMAIN` を設定すること**（Bearer トークンによる self-host 認証は廃止済み）。本番（Cloudflare）手順は「Cloudflare Access（本番認証・方式A）」を参照。
 
@@ -215,16 +215,18 @@ Claude.ai / Claude Desktop の Custom Connector・ChatGPT のコネクタのよ�
 
 ### 定期同期（ローカル launchd）
 
-ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` は対象別に分けて実行し、既定値は `financials=80` / `half-financials=80` / `filing-sections=50` / `breakdowns=30`（空白解消優先・Mac 負荷抑制。breakdowns は日経225構成銘柄限定・LLM 呼び出しを伴うためより保守的な既定値）。上書きは env `BLT_INGEST_LIMIT_FINANCIALS` / `BLT_INGEST_LIMIT_HALF_FINANCIALS` / `BLT_INGEST_LIMIT_FILING_SECTIONS` / `BLT_INGEST_LIMIT_BREAKDOWNS` を使う。`BLT_INGEST_LIMIT` は後方互換として「4対象の共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。breakdowns の LLM 呼び出しには軸別キーが必要: business は `XAI_BUSINESS_API_KEY` / `XAI_BUSINESS_MODEL`（任意で `XAI_BUSINESS_BASE_URL`。未設定時は旧 `XAI_API_KEY` / `XAI_MODEL` / `XAI_BASE_URL` にフォールバック）、geography は `XAI_GEOGRAPHY_API_KEY` / `XAI_GEOGRAPHY_MODEL`（任意で `XAI_GEOGRAPHY_BASE_URL`。旧 `XAI_*` へのフォールバックなし）。未設定でも各軸の xbrl_facts 経路は動くが、html_table 経路は notApplicable（`unknown`・要再試行）になる。`BLT_INGEST_LIMIT_BREAKDOWNS` は business / geography 各パスに独立適用される。
+ラッパースクリプト `scripts/blt-scheduled-sync.sh` が `.env` を読み込み、リリースビルド済みバイナリで `sync`→`ingest` を実行してログ（`.build/blt-scheduled.log`）に追記する。`ingest` は対象別に分けて実行し、既定値は `financials=80` / `filing-sections=50` / `breakdowns=30`（空白解消優先・Mac 負荷抑制。breakdowns は日経225構成銘柄限定・LLM 呼び出しを伴うためより保守的な既定値）。上書きは env `BLT_INGEST_LIMIT_FINANCIALS` / `BLT_INGEST_LIMIT_FILING_SECTIONS` / `BLT_INGEST_LIMIT_BREAKDOWNS` を使う。`BLT_INGEST_LIMIT` は後方互換として「3対象の共通既定値」として扱う。plist はテンプレートから生成する共有ファイル（`scripts/launchd/com.sollahiro.blt-sync.plist.template`）のため、マシン固有のチューニング値は `.env` 側に置く。breakdowns の LLM 呼び出しには軸別キーが必要: business は `XAI_BUSINESS_API_KEY` / `XAI_BUSINESS_MODEL`（任意で `XAI_BUSINESS_BASE_URL`。未設定時は旧 `XAI_API_KEY` / `XAI_MODEL` / `XAI_BASE_URL` にフォールバック）、geography は `XAI_GEOGRAPHY_API_KEY` / `XAI_GEOGRAPHY_MODEL`（任意で `XAI_GEOGRAPHY_BASE_URL`。旧 `XAI_*` へのフォールバックなし）。未設定でも各軸の xbrl_facts 経路は動くが、html_table 経路は notApplicable（`unknown`・要再試行）になる。`BLT_INGEST_LIMIT_BREAKDOWNS` は business / geography 各パスに独立適用される。
 
-> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` を対象別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（financials=80 / half-financials=80 / filing-sections=50 / breakdowns=30）から始め、必要なら `.env` の対象別 limit を下げる。
+> **長時間ランは transient な接続エラーで巻き戻る**: `ingest` を対象別に分けていても、limit を大きくしすぎると 1 ランが長くなり途中で Neon 接続がリセット（PSQLError）される。完走率を優先し、まずは既定（financials=80 / filing-sections=50 / breakdowns=30）から始め、必要なら `.env` の対象別 limit を下げる。
 
 各対象には実行時間の上限（既定 5400 秒＝90 分）を設けており、Mac のスリープ等で Neon 接続がハングして超過した場合は SIGTERM→SIGKILL で強制終了し次の対象へ進む。上書きは `.env` の `BLT_STAGE_TIMEOUT_SECONDS` を使う。また実行中は `caffeinate -i -s -w $$` でシステム/アイドルスリープを抑止する（スクリプト終了時に自動解除）。
 
 ```bash
 # 1. リリースビルド（コード変更後は再実行が必須）
-#    旧バイナリは新しく配線した取り込み対象（例: half-financials）を黙って飛ばし、
+#    旧バイナリは新しく配線した取り込み対象を黙って飛ばし、
 #    ログにその対象の完了行が出ないまま該当テーブルが埋まらない。
+#    取り込み対象の削除（テーブル DROP を伴う移行）後に再ビルドを忘れると、
+#    旧バイナリの status-report 等が存在しないテーブルへ問い合わせてエラーになる。
 swift build -c release --product blt-server
 
 # 2. .env を作成（キー名は .env.example を参照。DATABASE_URL / BLT_EDINET_API_KEY が必須）
@@ -239,15 +241,15 @@ tail -f .build/blt-scheduled.log
 
 plist はリポジトリの絶対パスを埋め込む必要があるためマシン固有＝Git 非管理（テンプレートは `scripts/launchd/com.sollahiro.blt-sync.plist.template`、Git 管理下）。新しい Mac へ移行する場合も `git clone` → 上記手順だけで再構築できる。
 
-初回バックフィル中（全 ~3,944 社。breakdowns は日経225構成銘柄のみ）は本ジョブが少しずつ `company_financials`（および half-financials の `company_half_financials`）を埋める（1 日 4 回・6 時間おき、既定 limit は financials=80 / half-financials=80 / filing-sections=50 / breakdowns=30）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
+初回バックフィル中（全 ~3,944 社。breakdowns は日経225構成銘柄のみ）は本ジョブが少しずつ `company_financials` を埋める（1 日 4 回・6 時間おき、既定 limit は financials=80 / filing-sections=50 / breakdowns=30）。`sync` は初回のみ `synced_through` から当日までの catch-up で重くなるが、以後は増分。`computeFinancials` のロジック・契約変更で `companyFinancialsCacheVersion` をバンプした後は Fly 側イメージの更新が必要だが、main への push（CI 成功後）で自動反映される（`operations.md`「定常運用の保守ポイント」）。財務系 read はライブ計算フォールバックを持たない（DB 専用・未格納 404・DB 非接続 503）ため、サーバーが重い計算で OOM することはない。
 
-全対象完了後、`scripts/blt-scheduled-sync.sh` は末尾で `scripts/generate-status-page.sh` を呼ぶ。`blt-server status-report`（5対象のカバレッジ・鮮度を集計する DB read-only サブコマンド）の出力で Pages サイトの `/status.html`（`assets/apex-site/status.html`）を再生成し、内容に差分があれば同ファイルのみを `main` へ自動コミット・push する（Cloudflare Pages `sollahiro-apex` の GitHub 連携により push で自動再デプロイされる。連携自体は Git 管理外＝ダッシュボード設定のため `operations.md`「Git の外にある状態」参照）。日経225構成銘柄の実コードは出力しない（集計件数のみ）。このステップの失敗は ingest 本体の成否に影響しない（ログに WARN を残すのみ）。
+全対象完了後、`scripts/blt-scheduled-sync.sh` は末尾で `scripts/generate-status-page.sh` を呼ぶ。`blt-server status-report`（4対象のカバレッジ・鮮度を集計する DB read-only サブコマンド）の出力で Pages サイトの `/status.html`（`assets/apex-site/status.html`）を再生成し、内容に差分があれば同ファイルのみを `main` へ自動コミット・push する（Cloudflare Pages `sollahiro-apex` の GitHub 連携により push で自動再デプロイされる。連携自体は Git 管理外＝ダッシュボード設定のため `operations.md`「Git の外にある状態」参照）。日経225構成銘柄の実コードは出力しない（集計件数のみ）。このステップの失敗は ingest 本体の成否に影響しない（ログに WARN を残すのみ）。
 
 ### ingest の優先順位・breakdowns の対象選定（任意・ローカル専用）
 
-`assets/nikkei225.csv`（証券コード列を含む CSV。日経225等、ユーザーが用意する任意ファイル）を配置すると、financials/half-financials/filing-sections の取り込み候補のうちそのコードに一致する企業を候補列の先頭へ寄せる（対象選定ではなく処理順序のみ変える）。`limit` 付きバッチで全社バックフィルが終わっていない間、主要銘柄を優先的に埋めたい場合に使う。
+`assets/nikkei225.csv`（証券コード列を含む CSV。日経225等、ユーザーが用意する任意ファイル）を配置すると、financials/filing-sections の取り込み候補のうちそのコードに一致する企業を候補列の先頭へ寄せる（対象選定ではなく処理順序のみ変える）。`limit` 付きバッチで全社バックフィルが終わっていない間、主要銘柄を優先的に埋めたい場合に使う。
 
-**breakdowns のみ用途が異なる**: 同じ `assets/nikkei225.csv` を、処理順序ではなく取り込み対象そのものの絞り込みに使う（LLM 呼び出し費用抑制。東証上場全体ではなく当該ファイルに一致する企業のみが breakdowns の候補になる）。ファイル未配置なら breakdowns の対象は 0 件（financials/half-financials/filing-sections のような「優先なしで全社対象」へのフォールバックはしない）。
+**breakdowns のみ用途が異なる**: 同じ `assets/nikkei225.csv` を、処理順序ではなく取り込み対象そのものの絞り込みに使う（LLM 呼び出し費用抑制。東証上場全体ではなく当該ファイルに一致する企業のみが breakdowns の候補になる）。ファイル未配置なら breakdowns の対象は 0 件（financials/filing-sections のような「優先なしで全社対象」へのフォールバックはしない）。
 
 指数構成銘柄リストは編集著作物のため、このファイルは `.gitignore` 済み（git 管理・リリース配布物に含めない）。未配置なら従来どおり優先なしで動作する。取得元 CSV のフォーマットが多少崩れていても（Web からのコピペ由来のセクション見出し行・ヘッダー行・改行混入等）、先頭列が証券コード形式（先頭が数字の英数字4文字）の行だけを拾うため実用上問題にならない。
 

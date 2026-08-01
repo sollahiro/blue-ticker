@@ -112,19 +112,6 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
-    @Test func getHalfAnalysisReturnsErrorResultWhenNotStored() async throws {
-        try await withMcpApp(databases: true) { app in
-            let (status, json) = try await postMcp(
-                app, toolCallBody(name: "get_half_analysis", arguments: ["code": "7203"]))
-            #expect(status == .ok)
-            let result = json?["result"] as? [String: Any]
-            #expect(result?["isError"] as? Bool == true)
-            let content = result?["content"] as? [[String: Any]]
-            let text = content?.first?["text"] as? String
-            #expect(text?.contains("未集計") == true)
-        }
-    }
-
     /// issue #132: REST の 404 ボディ拡張と同じ意味論を MCP エラーテキストにも反映する。
     @Test func getBreakdownReturnsReasonWhenNotApplicable() async throws {
         try await withMcpApp(databases: true) { app in

@@ -3,11 +3,11 @@ import Foundation
 @testable import BlueTickerCore
 
 // analyze / summarize --format json の出力キー契約。
-// MetricsJSON.print は JSONEncoder().encode(MetricsResult / [HalfPeriod]) の結果を
+// MetricsJSON.print は JSONEncoder().encode(MetricsResult) の結果を
 // 整形して出力するだけなので、CodingKeys のキー名がそのまま CLI JSON 出力の公開契約になる。
 // キー名の変更（リネーム・大文字小文字の変更を含む）は破壊的変更であることをここで固定する。
 // リモート REST 契約（FinancialsResponse）は RemoteContractTests が守る。本スイートはローカル
-// 分析パス（MetricsResult / HalfPeriod）の契約を守る。
+// 分析パス（MetricsResult）の契約を守る。
 
 @Suite struct MetricsJSONContractTests {
 
@@ -114,15 +114,5 @@ import Foundation
         // Optional の nil フィールドはキーごと出力されない（null を出さない）
         let dict = try encodeToDictionary(MetricsResult(code: "7203"))
         #expect(Set(dict.keys) == ["code"])
-    }
-
-    // MARK: - HalfPeriod（half）
-
-    @Test func halfPeriodUsesSnakeCaseKeys() throws {
-        let period = HalfPeriod(
-            label: "24H1", half: "H1", fyEnd: "2024-03-31", yearEntry: makeYearEntry())
-        let dict = try encodeToDictionary(period)
-        #expect(Set(dict.keys) == ["label", "half", "fy_end", "year_entry"])
-        #expect((dict["year_entry"] as? [String: Any])?.keys.contains("RawData") == true)
     }
 }

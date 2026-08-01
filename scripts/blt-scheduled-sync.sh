@@ -1,7 +1,7 @@
 #!/bin/zsh
 # blt-server 定期同期ジョブ（ローカル launchd 用）。
 #
-# sync (書類一覧 → Neon) → financials/half-financials/filing-sections/breakdowns (ingest: 計算済み財務サマリ・
+# sync (書類一覧 → Neon) → financials/filing-sections/breakdowns (ingest: 計算済み財務サマリ・
 # 有報セクション・事業別内訳 → Neon) をローカルで実行する。重い ingest を Fly(1GB) で
 # 走らせると OOM するため、計算はローカル・Fly は company_financials 等を読むだけ。
 # XBRL 数値 fact（facts）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
@@ -16,7 +16,7 @@
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:
 #   swift build -c release --product blt-server
 #
-# ingest 件数は対象別に .env で上書きできる（既定: financials=80 / half-financials=80 /
+# ingest 件数は対象別に .env で上書きできる（既定: financials=80 /
 # filing-sections=50 / breakdowns=30）。BLT_INGEST_LIMIT がある場合は後方互換として全対象既定値に使う。
 #
 # 各対象には実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
@@ -48,7 +48,7 @@ if [ ! -f "$REPO/.env" ]; then
 fi
 
 # .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）。
-# BLT_INGEST_LIMIT_FINANCIALS / _HALF_FINANCIALS / _FILING_SECTIONS / _BREAKDOWNS（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
+# BLT_INGEST_LIMIT_FINANCIALS / _FILING_SECTIONS / _BREAKDOWNS（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
 # 生成する共有ファイルのため、マシン固有のチューニング値は .env 側に置く）。
 set -a
 . "$REPO/.env"
@@ -56,7 +56,6 @@ set +a
 
 DEFAULT_LIMIT="${BLT_INGEST_LIMIT:-}"
 LIMIT_FINANCIALS="${BLT_INGEST_LIMIT_FINANCIALS:-${DEFAULT_LIMIT:-80}}"
-LIMIT_HALF_FINANCIALS="${BLT_INGEST_LIMIT_HALF_FINANCIALS:-${DEFAULT_LIMIT:-80}}"
 LIMIT_FILING_SECTIONS="${BLT_INGEST_LIMIT_FILING_SECTIONS:-${DEFAULT_LIMIT:-50}}"
 LIMIT_BREAKDOWNS="${BLT_INGEST_LIMIT_BREAKDOWNS:-${DEFAULT_LIMIT:-30}}"
 STAGE_TIMEOUT_SECONDS="${BLT_STAGE_TIMEOUT_SECONDS:-5400}"
@@ -88,8 +87,6 @@ run_with_timeout() {
   run_with_timeout "$BIN" sync
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest financials --limit $LIMIT_FINANCIALS 開始 ====="
   run_with_timeout "$BIN" ingest --stages financials --limit "$LIMIT_FINANCIALS"
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest half-financials --limit $LIMIT_HALF_FINANCIALS 開始 ====="
-  run_with_timeout "$BIN" ingest --stages half-financials --limit "$LIMIT_HALF_FINANCIALS"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest filing-sections --limit $LIMIT_FILING_SECTIONS 開始 ====="
   run_with_timeout "$BIN" ingest --stages filing-sections --limit "$LIMIT_FILING_SECTIONS"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest breakdowns --limit $LIMIT_BREAKDOWNS 開始 ====="

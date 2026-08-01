@@ -18,15 +18,6 @@ enum MetricsJSON {
         }
     }
 
-    static func print(_ periods: [HalfPeriod]) {
-        let opts: JSONSerialization.WritingOptions = [.prettyPrinted, .sortedKeys]
-        if let data = try? JSONEncoder().encode(periods),
-           let arr = try? JSONSerialization.jsonObject(with: data),
-           let outData = try? JSONSerialization.data(withJSONObject: arr, options: opts),
-           let str = String(data: outData, encoding: .utf8) {
-            Swift.print(str)
-        }
-    }
 }
 
 // MARK: - 表組みプリミティブ
@@ -86,7 +77,7 @@ enum MetricsTable {
 
     /// 前年差メトリクス行を出力する。
     /// getter は (当期, 前期) を受け取る。`priors[i]` が当期 `periods[i]` の比較対象（前期）で、
-    /// nil の列は前期が無いため "-"。年次・半期で前期の取り方が異なるため呼び出し側で priors を与える。
+    /// nil の列は前期が無いため "-"。呼び出し側で priors を与える。
     /// 全列 nil の行はスキップ。
     static func printDeltaRows<T>(_ periods: [T], priors: [T?], _ metrics: [(String, (_ cur: T, _ prior: T) -> Double?)], decimals: Int = 2) {
         for (label, getter) in metrics {

@@ -35,7 +35,6 @@ public enum Api {
     public static let sectorCompaniesLimitDefault = 20
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
-    public static let halfFinancialsYearsDefault = 3
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
     public static let statementYearsDefault = 5
 
@@ -55,12 +54,6 @@ public enum Api {
     static let filingsMaxDocuments = 50     // server read（getFilings / filingsList）の filings 上限
     static let filingsCliMaxDocuments = 10  // CLI `filings` コマンドの表示上限
 
-    /// 半期分析で算出・格納できる最大年数（HalfYearAnalyzer の探索上限）。
-    /// 半期は FY/2Q の組から H1/H2 を導出する都合でこの年数までしか作れない。
-    /// 格納（半期財務取り込み）・read クランプ・分析の単一の真実源。
-    /// BltServerCore（半期財務取り込み ingest / read クランプ）からも参照するため public。
-    public static let halfMaxYears = 5
-
     /// REST read パス（Routes.swift）で Neon cold-start（scale-to-zero 後の再接続）を
     /// 吸収するための DB リトライ設定。ingest（`withDbRetry` 既定値、最大5回/16秒）より
     /// 短めにし、DB が本当に落ちている場合に同期リクエストを長時間ブロックしないようにする。
@@ -71,7 +64,7 @@ public enum Api {
     /// 数値 fact 取り込み/財務取り込みの facts/response は JSONB で巨大なため、ログ行が肥大化しないよう切り詰める。
     public static let dbRetryErrorLogMaxLength = 2000
 
-    /// ingest（数値 fact 取り込み/財務取り込み/半期財務取り込み/有報セクション取り込み）で「DB が不安定」と判断してその場でループを打ち切るまでの
+    /// ingest（数値 fact 取り込み/財務取り込み/有報セクション取り込み）で「DB が不安定」と判断してその場でループを打ち切るまでの
     /// リトライ発生回数の閾値。Neon の scale-to-zero 明けの再接続が不調な状態が続くと、
     /// 1件ずつは（数回リトライの末に）復旧してもトータルでは長時間を浪費するため、
     /// 閾値超で早期中断し、残りは次回スケジュールに委ねる。
@@ -138,10 +131,6 @@ public enum Api {
     ///     支払利息・流動/固定資産負債・PPE・ネット D/E・capex/buyback/RD・配当内訳等を追加。
     static let financialsSchemaVersion = 2
 
-    /// 半期 financials レスポンス（HalfFinancialsResponse）の公開契約バージョン。
-    /// financials とは独立採番。レスポンス形を破壊的に変更したときのみ +1 する。
-    static let halfFinancialsSchemaVersion = 1
-
     /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
     /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない
     /// （有報中心の財務計算に対し、訂正は訂正有報(130)のみ採用する設計）。
@@ -160,17 +149,6 @@ public enum Api {
     public static let financialsFreshnessDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
-    ]
-
-    /// 半期財務取り込み（company_half_financials）の high-water 鮮度判定が対象とする書類種別。
-    /// `HalfYearAnalyzer` → `EdinetDiscovery.buildHalfYearDocumentIndexForCode` が消費する
-    /// 有報＋半期/四半期に加え、通期側の訂正(130)も含める（訂正で FY 基準が動き、半期の
-    /// 再計算が必要になるため）。BltServerCore（HalfFinancialsIngest）から参照するため public。
-    public static let halfFinancialsFreshnessDocTypes: Set<String> = [
-        docTypeAnnualReport,
-        docTypeAmendment,
-        docTypeQuarterlyReport,
-        docTypeHalfYearReport,
     ]
 
     /// filings 表示（CLI `filings`）で採用する書類種別。探索済み書類に対する表示フィルタで、

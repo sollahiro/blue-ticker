@@ -60,7 +60,6 @@ actor CacheManager {
     private func categoryDir(_ key: String) -> URL {
         let sub: String
         if key.hasPrefix("individual_analysis_") { sub = "analysis" }
-        else if key.hasPrefix("half_year_periods_") { sub = "half_year" }
         else if key.hasPrefix("edinet_docs_") { sub = "document_discovery" }
         else if key.hasPrefix("xbrl_parsed_") { sub = "xbrl_numeric_index" }
         else if key.hasPrefix("xbrl_sections_") { sub = "xbrl_sections" }

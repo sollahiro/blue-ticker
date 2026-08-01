@@ -14,7 +14,6 @@ struct IngestTargetTests {
     @Test("単一対象を選択")
     func singleTarget() {
         #expect(parseIngestTargets("financials") == [.financials])
-        #expect(parseIngestTargets("half-financials") == [.halfFinancials])
         #expect(parseIngestTargets("filing-sections") == [.filingSections])
         #expect(parseIngestTargets("breakdowns") == [.breakdowns])
         #expect(parseIngestTargets("statements") == [.statements])
@@ -24,10 +23,7 @@ struct IngestTargetTests {
     func multipleTargets() {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
-            parseIngestTargets("filing-sections,financials,half-financials")
-                == [.filingSections, .financials, .halfFinancials])
-        #expect(
-            parseIngestTargets("financials,half-financials,filing-sections,breakdowns,statements")
+            parseIngestTargets("financials,filing-sections,breakdowns,statements")
                 == Set(IngestTarget.allCases))
     }
 

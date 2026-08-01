@@ -176,26 +176,12 @@ private func dispatchMcpTool(
                 code: code, years: Api.financialsYearsDefault, db: db, logger: logger),
             notFoundMessage: "財務データは未集計です")
 
-    case "get_half_financial_summary":
-        let code = args["code"]?.stringValue ?? ""
-        return mapStoredResult(
-            await serveStoredHalfFinancials(
-                code: code, years: Api.halfMaxYears, db: db, logger: logger),
-            notFoundMessage: "半期財務データは未集計です")
-
     case "get_analysis":
         let code = args["code"]?.stringValue ?? ""
         return mapStoredResult(
             await serveStoredAnalysis(
                 code: code, years: Api.financialsYearsDefault, db: db, logger: logger),
             notFoundMessage: "財務データは未集計です")
-
-    case "get_half_analysis":
-        let code = args["code"]?.stringValue ?? ""
-        return mapStoredResult(
-            await serveStoredHalfAnalysis(
-                code: code, years: Api.halfMaxYears, db: db, logger: logger),
-            notFoundMessage: "半期財務データは未集計です")
 
     case "get_filing_content":
         let code = args["code"]?.stringValue ?? ""

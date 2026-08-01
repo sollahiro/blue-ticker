@@ -38,9 +38,9 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateEdinetXbrlFacts())
     // 財務取り込み: 計算済み財務サマリ（company_financials、企業単位 JSONB）。
     app.migrations.add(CreateCompanyFinancials())
-    // 半期財務取り込み: 計算済み半期財務サマリ（company_half_financials、企業単位 JSONB）。
+    // 半期財務取り込み（凍結済み・削除しない。テーブルは DropCompanyHalfFinancials で削除）。
     app.migrations.add(CreateCompanyHalfFinancials())
-    // 財務取り込み / 4-half: high-water 鮮度トリガー列の追加（issue #26）。
+    // 財務取り込み: high-water 鮮度トリガー列の追加（issue #26）。
     app.migrations.add(AddHighWaterToCompanyFinancials())
     // 有報セクション取り込み: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
@@ -54,6 +54,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
     // Statement 取り込み: BS/PL/CF 完全正規化（company_statements、書類単位 JSONB）。対象は日経225限定。
     app.migrations.add(CreateCompanyStatements())
+    // 半期分析機能の削除に伴い company_half_financials テーブルを削除（不可逆）。
+    app.migrations.add(DropCompanyHalfFinancials())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

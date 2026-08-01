@@ -6,8 +6,6 @@
 public enum IngestTarget: String, CaseIterable, Sendable {
     /// 通期財務サマリ（company_financials）。
     case financials
-    /// 半期財務サマリ（company_half_financials）。
-    case halfFinancials = "half-financials"
     /// 有報セクション本文（company_filing_sections）。
     case filingSections = "filing-sections"
     /// 事業別・地域別内訳（company_breakdowns）。ingest は business→geography。
