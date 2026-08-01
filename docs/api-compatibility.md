@@ -33,7 +33,7 @@
 
 ### 応答 `schema_version`（主）
 
-- 契約ごと（financials / half-financials 等）に独立採番する整数
+- 契約ごと（financials 等）に独立採番する整数
 - **フィールド単位の breaking** では、影響する契約の `schema_version` だけを上げる
 - URL は `/v1` のままでよい
 - 現行値の定義箇所例: `Api.financialsSchemaVersion`（`Sources/BlueTicker/Constants/Api.swift`）

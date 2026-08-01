@@ -3,7 +3,7 @@ import Foundation
 
 // TickerDev（配布しない開発用ローカル解析 CLI）の唯一の public エントリポイント。
 // Server/BltServerFacade.swift と同型のナロー facade: このモジュール（BlueTickerCore）内の
-// 実装（EdinetAPIClient・IndividualAnalyzer・HalfYearAnalyzer 等）はすべて internal のまま保ち、
+// 実装（EdinetAPIClient・IndividualAnalyzer 等）はすべて internal のまま保ち、
 // Sources/TickerDevMain/ から到達できる公開面はこの1点のみに絞る。
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 public struct DevCLIEntry: AsyncParsableCommand {

@@ -20,24 +20,9 @@ struct DevAnalyzeCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "キャッシュを使用しない")
     var noCache = false
 
-    @Flag(name: .long, help: "半期データを表示")
-    var half = false
-
     func run() async throws {
         let ctx = try await MetricsLoader.prepare(rawCode: code)
         printError("\n分析中: \(ctx.code) \(ctx.name) ...\n")
-
-        if half {
-            let halfAnalyzer = HalfYearAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-            guard let periods = await halfAnalyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).periodsOrNil else {
-                printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
-                throw ExitCode.failure
-            }
-            printError(AnalyzeRendering.halfAnalysisPeriodText(periods) + "\n")
-            if json { MetricsJSON.print(periods); return }
-            AnalyzeRendering.renderHalf(periods)
-            return
-        }
         printError("分析対象期間: 直近 \(years) 年分\n")
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)

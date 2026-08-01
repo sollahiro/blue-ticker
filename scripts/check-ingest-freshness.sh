@@ -38,9 +38,6 @@ WITH checks AS (
   SELECT 'company_financials'::text AS name,
          (SELECT max(updated_at) FROM company_financials) AS latest
   UNION ALL
-  SELECT 'company_half_financials',
-         (SELECT max(updated_at) FROM company_half_financials)
-  UNION ALL
   SELECT 'company_filing_sections',
          (SELECT max(updated_at) FROM company_filing_sections)
   UNION ALL

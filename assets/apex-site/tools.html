@@ -305,7 +305,7 @@
     <div class="page">
       <h2>財務サマリーを取る</h2>
       <p class="section-lead"><span class="feature-badge">summarize</span> 格納済みの財務諸表の数値（水準値）をそのまま返す。</p>
-      <div class="tool-grid cols-2">
+      <div class="tool-grid">
 
         <div class="light-card catalog-card">
           <div class="catalog-head">
@@ -319,18 +319,6 @@
           </div>
         </div>
 
-        <div class="light-card catalog-card">
-          <div class="catalog-head">
-            <div class="catalog-name">半期財務サマリー<span class="id">get-half-financials</span></div>
-            <span class="mcp-badge">get_half_financial_summary</span>
-          </div>
-          <p class="catalog-desc">銘柄コードの半期財務サマリーを返します（格納済みデータのみ）。直近5年分。前年差は get_half_analysis へ。</p>
-          <div class="catalog-meta">
-            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/half-financials?years=3</span></div>
-            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/half-financials?years=3</span></div>
-          </div>
-        </div>
-
       </div>
     </div>
   </section>
@@ -339,7 +327,7 @@
     <div class="page">
       <h2>増減を分析する</h2>
       <p class="section-lead"><span class="feature-badge">analyze</span> 独自の分析手法に基づいた前年差・要因分解の計算値。</p>
-      <div class="tool-grid cols-2">
+      <div class="tool-grid">
 
         <div class="light-card catalog-card">
           <div class="catalog-head">
@@ -350,18 +338,6 @@
           <div class="catalog-meta">
             <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/analysis?years=5</span></div>
             <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/analysis?years=5</span></div>
-          </div>
-        </div>
-
-        <div class="light-card catalog-card">
-          <div class="catalog-head">
-            <div class="catalog-name">半期増減分析<span class="id">get-half-analysis</span></div>
-            <span class="mcp-badge">get_half_analysis</span>
-          </div>
-          <p class="catalog-desc">銘柄コードの半期増減分析（前年差分解）を返します。get_half_financial_summary と同じ水準値に加え、get_analysis と同じ増減分解フィールドを含む（前期は「同じ半期の直近過去期」）。直近5年分。</p>
-          <div class="catalog-meta">
-            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/half-analysis?years=3</span></div>
-            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/half-analysis?years=3</span></div>
           </div>
         </div>
 

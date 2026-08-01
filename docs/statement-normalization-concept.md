@@ -217,8 +217,8 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
    qualifiedName の namespace prefix を保持しておらず、追加するには `collectNumericFacts` 系の
    XML パーサ本体の拡張が要る（影響範囲が `XBRLUtils.swift` 全体に及ぶ）。実需が具体化してから
    `StatementLineItem` に非破壊で追加できる（Codable のため後方互換）
-5. **半期報告書への対応**: v1 では対象外（通期のみ）。`company_half_financials` 同様の需要が
-   あるかは未確認のため、まず本体（通期）を出荷してから判断する
+5. **半期報告書への対応**: v1 では対象外（通期のみ）。需要があるかは未確認のため、
+   まず本体（通期）を出荷してから判断する
 6. **BS/CF 行の区分（`section`）**: v1 のうちに実装した（2026-07-30、`order` と同じ理由で
    `statement-v2` を切らず v1 のまま拡張。本番 `company_statements` の日経225全社ingestが
    まだ未実施のため移行コストが実質ゼロ）。`StatementLineItem.section` に BS は

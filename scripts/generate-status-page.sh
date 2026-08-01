@@ -1,13 +1,13 @@
 #!/bin/zsh
 # assets/apex-site/status.html（公開ステータスページ）を最新の ingest 状況で再生成する。
 #
-# blt-scheduled-sync.sh の末尾（全ステージ完了後）から呼ばれる想定。5ステージ
-# （financials/half_financials/filing_sections/breakdown_business/breakdown_geography）の
+# blt-scheduled-sync.sh の末尾（全ステージ完了後）から呼ばれる想定。4ステージ
+# （financials/filing_sections/breakdown_business/breakdown_geography）の
 # カバレッジ・鮮度を「blt-server status-report」（DB read-only、日経225銘柄一覧そのものは
 # 出力しない）で取得し、status.html の HTML コメントマーカー間だけを書き換える。
 # 差分があれば status.html のみをコミット・push する（他ファイルは触らない）。
 #
-# 「最終更新」表示は毎回 blt-server status-report 実行時刻（JST）に更新するため、5ステージの
+# 「最終更新」表示は毎回 blt-server status-report 実行時刻（JST）に更新するため、4ステージの
 # 数値が前回から一切変わっていなくても diff は毎回発生し、実質ほぼ毎回コミットされる
 # （呼び出し元は6時間おき）。これは意図した挙動： ステータスページは「巡回ジョブが生きていて
 # 直近いつ確認したか」も伝える情報の一部であり、数値に変化が無い実行を無言でスキップすると、
@@ -122,8 +122,8 @@ printf '<!-- STATUS_GENERATED_AT -->%s<!-- /STATUS_GENERATED_AT -->' "$generated
 replace_marker "STATUS_GENERATED_AT" "$gen_tmp"
 rm -f "$gen_tmp"
 
-# 固定順（financials / half_financials / filing_sections / breakdown_business / breakdown_geography）。
-STAGE_KEYS=(financials half_financials filing_sections breakdown_business breakdown_geography)
+# 固定順（financials / filing_sections / breakdown_business / breakdown_geography）。
+STAGE_KEYS=(financials filing_sections breakdown_business breakdown_geography)
 
 for key in "${STAGE_KEYS[@]}"; do
   stage_json="$(echo "$report_json" | jq -c --arg k "$key" '.stages[] | select(.key == $k)')"
@@ -176,7 +176,7 @@ for key in "${STAGE_KEYS[@]}"; do
     echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${coverage_pct}%\"></div></div>"
     echo "          <p class=\"stage-line\">対象${servable_unit}数あたりの格納済み（serviceable）: <span class=\"num\">${servable_covered}</span>/<span class=\"num\">${servable_target}</span>${servable_unit}（<span class=\"num\">${servable_pct}</span>%）</p>"
     echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${servable_pct}%\"></div></div>"
-    # docs_target がある（financials/half_financials 以外）ステージのみ、書類ベースの補助行を出す。
+    # docs_target がある（financials 以外）ステージのみ、書類ベースの補助行を出す。
     if [ "$docs_target" != "null" ]; then
       echo "          <div class=\"stage-sub\">書類ベースでは <span class=\"num\">${docs_covered}</span>/<span class=\"num\">${docs_target}</span> 件を格納・最新ロジックへの反映: <span class=\"num\">${current_version_pct}</span>%"
       echo "            <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${current_version_pct}%\"></div></div>"

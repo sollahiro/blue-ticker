@@ -28,95 +28,11 @@ import Foundation
     // fixtureID -> スキップするフィールド名のセット
     private static let knownGaps: [String: Set<String>] = [:]
 
-    // MARK: - 半期 Fixture → docID マッピング（tmp_cache/edinet/）
-
-    private static let halfDocIDs: [String: String] = [
-        "2802_2024-09-30": "S100UOCS",  // 味の素 IFRS
-        "2871_2024-09-30": "S100UNLH",  // ニチレイ J-GAAP
-        "3490_2024-08-31": "S100UIP3",  // AZplanning J-GAAP
-        "4901_2024-09-30": "S100URI3",  // 富士フイルム US-GAAP
-        "6103_2024-09-30": "S100UNQ0",  // オークマ J-GAAP
-        "6326_2025-06-30": "S100WGPM",  // クボタ IFRS
-        "7269_2024-09-30": "S100UPIM",  // スズキ IFRS
-        "7422_2025-06-20": "S100WFWX",  // 東邦レマック J-GAAP
-        "7751_2025-06-30": "S100WH4C",  // キヤノン US-GAAP
-        "8306_2024-09-30": "S100UV81",  // 三菱UFJ J-GAAP
-        "8316_2024-09-30": "S100UV9L",  // 三井住友 J-GAAP
-    ]
-
-    // 半期スモーク用の既知ギャップ
-    private static let halfKnownGaps: [String: Set<String>] = [:]
-
     // MARK: - 相対誤差許容度
 
     private static let relTol = 1e-4
 
     // MARK: - テスト本体
-
-    @Test func testHalfSmokeAll() async throws {
-        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_half_expected")
-        let xbrlBase = SmokeCacheSupport.cacheDir
-
-        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_half_expected が見つかりません")
-            return
-        }
-        await SmokeCacheSupport.ensureCached(Self.halfDocIDs.values)
-        guard FileManager.default.fileExists(atPath: xbrlBase.path) else {
-            print("SKIP   tmp_cache/edinet が見つかりません（BLT_EDINET_API_KEY 未設定）")
-            return
-        }
-
-        let fixtures = try FileManager.default.contentsOfDirectory(at: fixtureDir, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix(".") }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-
-        var results: [(id: String, status: String, detail: String)] = []
-
-        for fixturePath in fixtures {
-            let fixtureID = fixturePath.deletingPathExtension().lastPathComponent
-
-            guard let docID = Self.halfDocIDs[fixtureID] else {
-                results.append((fixtureID, "SKIP", "docID 未登録"))
-                continue
-            }
-
-            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
-            guard FileManager.default.fileExists(atPath: xbrlDir.path) else {
-                results.append((fixtureID, "SKIP", "XBRL キャッシュなし: \(docID)_xbrl"))
-                continue
-            }
-
-            let expected = try loadFixture(fixturePath)
-            let name = expected["name"] as? String ?? fixtureID
-
-            if isAllNull(expected) {
-                results.append((fixtureID, "SKIP", "全フィールドが null"))
-                continue
-            }
-
-            let actual = extractFromXBRL(xbrlDir: xbrlDir)
-
-            let gaps = Self.halfKnownGaps[fixtureID] ?? []
-            // 半期ファイルは capex/rd/interestExpense が null → compare が自動スキップ
-            let diffs = compare(expected: expected, actual: actual, fixtureID: fixtureID, gaps: gaps)
-
-            if diffs.isEmpty {
-                results.append((fixtureID, "OK", name))
-            } else {
-                let detail = diffs.map { "  \($0)" }.joined(separator: "\n")
-                results.append((fixtureID, "DIFF", "\(name)\n\(detail)"))
-            }
-        }
-
-        for r in results {
-            print("\(r.status.padding(toLength: 6, withPad: " ", startingAt: 0)) \(r.id): \(r.detail)")
-        }
-
-        let failures = results.filter { $0.status == "DIFF" }
-        #expect(failures.isEmpty, Comment(rawValue: "半期スモークテスト失敗:\n" + failures.map { "\($0.id): \($0.detail)" }.joined(separator: "\n")))
-    }
 
     @Test func testSmokeAll() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

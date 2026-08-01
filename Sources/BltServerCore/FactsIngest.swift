@@ -149,13 +149,13 @@ let financialsIngestYears = 6
 /// branch logical size 上限 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）が
 /// できるまで蓄積を止める。停止は可逆で、`includeFacts: true`（CLI: `--with-facts`）で
 /// 再開できる。財務取り込みの `computeFinancials` は自前で生 XBRL を DL するため、数値 fact 取り込みを
-/// 飛ばしても financials/half-financials は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
+/// 飛ばしても financials は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
 ///
-/// `targets` は実行する financials/half-financials/filing-sections/breakdowns/statements の集合
+/// `targets` は実行する financials/filing-sections/breakdowns/statements の集合
 /// （CLI: `--stages filing-sections` 等）。既定は全対象。
-/// 例えば有報セクション取り込みだけを先に流したいとき、重い financials/half-financials の全件 drain を挟まずに済む。
+/// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// 数値 fact 取り込みは `targets` に含めず、従来どおり `includeFacts` で別制御する。
-/// `codes` は financials/half-financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
+/// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
@@ -179,18 +179,18 @@ public func runFactsIngestCommand(
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        // 上場・国内法人の対象ユニバース。financials/half-financials/filing-sections 共通で候補を絞り込み、
+        // 上場・国内法人の対象ユニバース。financials/filing-sections 共通で候補を絞り込み、
         // 上場廃止・外国法人など二度と成功しない企業への無駄なリトライを避ける。
         let listed = await context.listedCompanyCodes()
         // ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）。対象選定ではなく
-        // financials/half-financials/filing-sections 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
+        // financials/filing-sections 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
         let priority = await context.priorityIngestCodes()
         if !priority.isEmpty {
             app.logger.notice(
                 "Priority ingest codes loaded",
                 metadata: ["event": "priority_codes_loaded", "count": "\(priority.count)"])
         }
-        // `--codes` 指定時は financials/half-financials/filing-sections の対象をその集合へ絞り、`limit` は無視して全件処理する
+        // `--codes` 指定時は financials/filing-sections の対象をその集合へ絞り、`limit` は無視して全件処理する
         // （手動・単発の対象は小さい前提。数値 fact 取り込みは doc 単位のためスコープ外）。
         let stageLimit = codes == nil ? limit : nil
         if let codes {
@@ -225,24 +225,6 @@ public func runFactsIngestCommand(
                 failed: s4.failed, skipped: s4.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable,
                 notApplicable: s4.notApplicable)
-        }
-        if targets.contains(.halfFinancials) {
-            let s4h = try await runHalfFinancialsIngest(
-                db: app.db, years: halfFinancialsIngestYears, limit: stageLimit, listedCodes: listed,
-                explicitCodes: codes, priorityCodes: priority, logger: app.logger
-            ) { code in
-                await context.computeHalfFinancials(code: code, years: halfFinancialsIngestYears)
-            }
-            let halfCoverage = try? await withDbRetry(
-                logger: app.logger, context: "company_half_financials 集計"
-            ) {
-                try await countServableCompanyHalfFinancials(db: app.db)
-            }
-            logIngestSummary(
-                app.logger, target: "half-financials", attempted: s4h.attempted, stored: s4h.stored,
-                failed: s4h.failed, skipped: s4h.skipped,
-                servable: halfCoverage?.servable, unservable: halfCoverage?.unservable,
-                notApplicable: s4h.notApplicable)
         }
         if targets.contains(.filingSections) {
             // 有報セクション取り込み: 上場企業の有報セクション本文を抽出・格納（filing-content の read-only 化）。

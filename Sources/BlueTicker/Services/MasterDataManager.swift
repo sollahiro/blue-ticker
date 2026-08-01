@@ -83,7 +83,7 @@ actor MasterDataManager {
     }
 
     /// 上場（EDINET「上場区分」==「上場」）かつ国内法人・組合（外国法人・組合を除く）の
-    /// 4 桁証券コード集合。financials/half-financials/filing-sections 取り込みの対象ユニバース（東証上場の国内企業）を
+    /// 4 桁証券コード集合。financials/filing-sections 取り込みの対象ユニバース（東証上場の国内企業）を
     /// EDINET 公式 CSV から導出する（TOPIX/日経の構成銘柄リストは編集著作物の懸念があるため使わない）。
     /// 上場廃止で CSV から消えた企業は自然に含まれない（別途の除外処理は不要）。
     func listedCodes() async -> Set<String> {

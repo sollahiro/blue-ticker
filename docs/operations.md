@@ -4,7 +4,7 @@
 
 ## 大前提: データはすべて EDINET から再導出可能
 
-Neon の全テーブル（sync 書類一覧・facts RAW fact・financials/half-financials 財務サマリ・filing-sections セクション本文・breakdowns 事業別/地域別内訳）と Fly Volume の内容（EDINET 取得キャッシュ）は、いずれも **EDINET API から `sync` → `ingest` で再構築できる導出データ**であり、真実源は EDINET にある。したがってどのサービスの移行・障害でも「失われて困る一次データ」は存在しない。ただし全社バックフィルは数日〜1週間規模かかるため、実移行では dump/restore（後述）で時間を買うのが現実的。
+Neon の全テーブル（sync 書類一覧・facts RAW fact・financials 財務サマリ・filing-sections セクション本文・breakdowns 事業別/地域別内訳）と Fly Volume の内容（EDINET 取得キャッシュ）は、いずれも **EDINET API から `sync` → `ingest` で再構築できる導出データ**であり、真実源は EDINET にある。したがってどのサービスの移行・障害でも「失われて困る一次データ」は存在しない。ただし全社バックフィルは数日〜1週間規模かかるため、実移行では dump/restore（後述）で時間を買うのが現実的。
 
 ## サービス別の結合点と代替可能性
 
@@ -43,7 +43,7 @@ R2（生 XBRL 退避）は延期中で、現時点でコード上の結合はな
 
 - **blt-server / ingest のログは JSON 1 行**: `bootstrapBltLogging` が stderr に `{"timestamp","level","logger","message","metadata"}` を出す。ingest 完了は `metadata.event=ingest_summary`（`failed>0` は warning）。DB リトライは `db_retry` / `db_retry_exhausted`。リクエストごとのアクセスログは `metadata.event=http_access`（`AccessLogMiddleware`、`Sources/BltServerCore/Routes.swift`）で `method`/`path`/`status`/`duration_ms` を1行記録する（認証情報は含まない）。`fly logs` や `.build/blt-scheduled.log` から `jq` / grep で拾える。
 - **MCP/REST のレイテンシ切り分けは `http_access` の `duration_ms` を基準にする**: クライアント側の体感速度（往復）と `duration_ms`（サーバー内処理のみ）を突き合わせると、blt-server 本体（Vapor + Neon）が律速しているか、それより手前（Cloudflare Tunnel / Access、または MCP クライアント側の再接続・認証）が律速しているかを切り分けられる。2026-07-16 の実測では `duration_ms` は常に一桁〜150ms程度だったのに対し、クライアント往復は 8〜79 秒と大きく乖離しており、ボトルネックはサーバー本体ではなくその手前にあると判明した（fly deploy 直後は特に悪化し、10〜15分で徐々に収束する傾向を確認。Cloudflare Tunnel の再接続に起因する可能性）。継続調査は roadmap の TODO を参照。
-- **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（facts/financials/half-financials/filing-sections）はローカル Mac の launchd で回している（Fly 上では OOM・issue #34/#35 参照）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。外形監視は `scripts/check-ingest-freshness.sh`（`DATABASE_URL` 必須・既定 36h）。`company_financials` / `company_half_financials` / `company_filing_sections` / `edinet_sync_state` の `max(updated_at)` が閾値を超えると exit 1。cron / 手動で回す（Fly `/healthz` では検知できない）。
+- **launchd ingest ジョブが単一 Mac 依存**: 重い ingest（facts/financials/filing-sections）はローカル Mac の launchd で回している（Fly 上では OOM・issue #34/#35 参照）。Mac が止まるとデータ鮮度が止まる（read 配信は影響なし）。plist・`.env` は Git 非管理＝このマシンにしかない。外形監視は `scripts/check-ingest-freshness.sh`（`DATABASE_URL` 必須・既定 36h）。`company_financials` / `company_filing_sections` / `edinet_sync_state` の `max(updated_at)` が閾値を超えると exit 1。cron / 手動で回す（Fly `/healthz` では検知できない）。
 - **キャッシュバージョンバンプと Fly デプロイの同期（自動化済み・2026-07-05）**: main への push で CI が成功すると、GitHub Actions（`.github/workflows/deploy.yml`、`workflow_run` トリガー）がデプロイ関連パス（`Sources/**`・`scripts/**`・`assets/**`・`Dockerfile`・`fly.toml`・`Package.*`）の変更を判定して `flyctl deploy --remote-only` を自動実行するため、手動 `fly deploy` は不要（`FLY_API_TOKEN` repo secret 必須）。CI が失敗した push はデプロイされない。手動再デプロイは deploy.yml の `workflow_dispatch`（パス判定をスキップして必ずデプロイ）。バンプ規則は `versioning.md`「Neon キャッシュバージョン」を参照。`/healthz` の `cache_versions` で今イメージが話しているバージョンを curl 一発で確認できる。
 - **cloudflared のバージョン固定更新**: `CLOUDFLARED_VERSION` / `CLOUDFLARED_SHA256` の固定運用は `deploy.md`「C. Dockerfile に cloudflared サイドカーを同梱」を参照。セキュリティ更新は自動で入らないため、数ヶ月に一度 releases を確認して両方を書き換える。
 - **Cloudflare SSO セッションの失効**: ユーザー介在クライアントは Access Session Duration 経過後に再ログイン。機械向けは Service Token（`docs/api-auth.md` / `deploy.md`）。

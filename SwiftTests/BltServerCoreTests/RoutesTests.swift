@@ -106,10 +106,6 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(versions?["xbrl_facts"] as? String == xbrlFactsCacheVersion)
             #expect(versions?["company_financials"] as? String == companyFinancialsCacheVersion)
             #expect(versions?["company_financials_min_servable"] as? Int == companyFinancialsMinServableVersion)
-            #expect(versions?["company_half_financials"] as? String == companyHalfFinancialsCacheVersion)
-            #expect(
-                versions?["company_half_financials_min_servable"] as? Int
-                    == companyHalfFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
             #expect(versions?["breakdown_business"] as? String == businessBreakdownCacheVersion)
@@ -154,9 +150,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         try await withApp { app in
             for path in [
                 "/v1/companies/7203/financials",
-                "/v1/companies/7203/half-financials",
                 "/v1/companies/7203/analysis",
-                "/v1/companies/7203/half-analysis",
                 "/v1/companies/7203/filing-content",
             ] {
                 let (status, json) = try await send(app, path)
@@ -181,27 +175,11 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
-    @Test func halfFinancialsReturns404WhenNotStored() async throws {
-        try await withApp(databases: true) { app in
-            let (status, json) = try await send(app, "/v1/companies/7203/half-financials")
-            #expect(status == .notFound)
-            #expect(json?["error"] as? String == "半期財務データは未集計です")
-        }
-    }
-
     @Test func analysisReturns404WhenNotStored() async throws {
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/analysis")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "財務データは未集計です")
-        }
-    }
-
-    @Test func halfAnalysisReturns404WhenNotStored() async throws {
-        try await withApp(databases: true) { app in
-            let (status, json) = try await send(app, "/v1/companies/7203/half-analysis")
-            #expect(status == .notFound)
-            #expect(json?["error"] as? String == "半期財務データは未集計です")
         }
     }
 

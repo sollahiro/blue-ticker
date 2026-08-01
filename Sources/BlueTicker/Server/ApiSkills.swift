@@ -246,48 +246,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Summarize（水準値）。増減分解が必要なら get-analysis。半期は get-half-financials。
+                Summarize（水準値）。増減分解が必要なら get-analysis。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。ライブ計算へはフォールバックしない。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
                 例: GET /v1/companies/6103/financials?years=5
-                """
-        ),
-        ApiSkill(
-            id: "get-half-financials",
-            name: "半期財務サマリー",
-            description: """
-                銘柄コードの半期財務サマリーを返します（格納済みデータのみ。未集計の場合は空を返します）。
-                損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.halfMaxYears)年分を返します。
-                前年差・要因分解（増減分析）は get_half_analysis を使ってください。
-                """,
-            method: "GET",
-            path: "/v1/companies/{code}/half-financials",
-            mcpTool: "get_half_financial_summary",
-            feature: "summarize",
-            parameters: [
-                ApiSkillParameter(
-                    name: "code",
-                    location: .path,
-                    type: .string,
-                    description: "銘柄コード（例: 6103）",
-                    required: true
-                ),
-                ApiSkillParameter(
-                    name: "years",
-                    location: .query,
-                    type: .integer,
-                    description: "取得年数（上限 \(Api.halfMaxYears) へクランプ）",
-                    required: false,
-                    defaultValue: .int(Api.halfFinancialsYearsDefault),
-                    mcpExposed: false
-                ),
-            ],
-            instructions: """
-                半期の Summarize。増減分解は get-half-analysis。通期は get-financials。
-                格納済みデータのみ。未集計は 404、DB 非接続は 503。
-                MCP は years 固定（\(Api.halfMaxYears)）。REST のみ years クエリで調整可。
-                例: GET /v1/companies/6103/half-financials?years=3
                 """
         ),
         ApiSkill(
@@ -327,43 +290,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
                 例: GET /v1/companies/6103/analysis?years=5
-                """
-        ),
-        ApiSkill(
-            id: "get-half-analysis",
-            name: "半期増減分析",
-            description: """
-                銘柄コードの半期増減分析（前年差分解）を返します（格納済みデータのみ。未集計の場合は空を返します）。
-                get_half_financial_summary と同じ水準値に加え、get_analysis と同じ増減分解フィールドを含みます
-                （前期は「同じ半期の直近過去期」）。直近\(Api.halfMaxYears)年分を返します。
-                """,
-            method: "GET",
-            path: "/v1/companies/{code}/half-analysis",
-            mcpTool: "get_half_analysis",
-            feature: "analyze",
-            parameters: [
-                ApiSkillParameter(
-                    name: "code",
-                    location: .path,
-                    type: .string,
-                    description: "銘柄コード（例: 6103）",
-                    required: true
-                ),
-                ApiSkillParameter(
-                    name: "years",
-                    location: .query,
-                    type: .integer,
-                    description: "取得年数（上限 \(Api.halfMaxYears) へクランプ）",
-                    required: false,
-                    defaultValue: .int(Api.halfFinancialsYearsDefault),
-                    mcpExposed: false
-                ),
-            ],
-            instructions: """
-                半期の Analyze。水準値だけなら get-half-financials。
-                格納済みデータのみ。未集計は 404、DB 非接続は 503。
-                MCP は years 固定（\(Api.halfMaxYears)）。REST のみ years クエリで調整可。
-                例: GET /v1/companies/6103/half-analysis?years=3
                 """
         ),
         ApiSkill(

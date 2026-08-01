@@ -2,7 +2,7 @@
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
-//   blt-server ingest [--limit N] [--with-facts] [--stages financials,half-financials,
+//   blt-server ingest [--limit N] [--with-facts] [--stages financials,
 //                     filing-sections,breakdowns,statements] [--codes 7203,6758]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
 //                                                            breakdowns/statements は日経225構成銘柄限定。
@@ -13,7 +13,7 @@
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
-//   blt-server status-report                                5 ステージ（financials/half_financials/
+//   blt-server status-report                                4 ステージ（financials/
 //                                                            filing_sections/breakdown_business/
 //                                                            breakdown_geography）のカバレッジ・鮮度を
 //                                                            JSON で stdout へ出力（DB read-only）。
@@ -61,7 +61,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
-            printError("blt-server error: --stages は financials,half-financials,filing-sections,breakdowns,statements のカンマ区切りで指定してください\n")
+            printError("blt-server error: --stages は financials,filing-sections,breakdowns,statements のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

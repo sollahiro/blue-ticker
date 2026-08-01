@@ -20,24 +20,10 @@ struct DevSummarizeCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "キャッシュを使用しない")
     var noCache = false
 
-    @Flag(name: .long, help: "半期データを表示")
-    var half = false
-
     func run() async throws {
         let ctx = try await MetricsLoader.prepare(rawCode: code)
         printError("\n集計中: \(ctx.code) \(ctx.name) ...\n")
         printError("対象期間: 直近 \(years) 年分\n")
-
-        if half {
-            let halfAnalyzer = HalfYearAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-            guard let periods = await halfAnalyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).periodsOrNil else {
-                printError("エラー: 半期財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
-                throw ExitCode.failure
-            }
-            if json { MetricsJSON.print(periods); return }
-            SummarizeRendering.printHalfTable(periods: periods)
-            return
-        }
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
         guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).resultOrNil else {

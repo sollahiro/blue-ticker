@@ -1,11 +1,12 @@
-// company_half_financials テーブルの作成。企業単位の計算済み半期財務サマリを JSONB 1 セルに持つ。
-// company_financials（通期）と同構造。response は .json（Postgres では JSONB、SQLite では TEXT）。
+// company_half_financials テーブルの作成（凍結済み・変更しない）。
+// 半期分析機能は削除済み（テーブル自体は DropCompanyHalfFinancials で削除）。
+// Model 型は削除済みのため、スキーマ名は当時と同じ値をリテラルで参照する。
 
 import Fluent
 
 struct CreateCompanyHalfFinancials: AsyncMigration {
     func prepare(on database: Database) async throws {
-        try await database.schema(CompanyHalfFinancials.schema)
+        try await database.schema("company_half_financials")
             .field("code", .string, .identifier(auto: false))
             .field("response", .json, .required)
             .field("cache_version", .string, .required)
@@ -15,6 +16,6 @@ struct CreateCompanyHalfFinancials: AsyncMigration {
     }
 
     func revert(on database: Database) async throws {
-        try await database.schema(CompanyHalfFinancials.schema).delete()
+        try await database.schema("company_half_financials").delete()
     }
 }

@@ -40,13 +40,11 @@ import Testing
     @Test func devAnalyzeDefaultsFlagsAreOff() throws {
         let cmd = try DevAnalyzeCommand.parse(["7203"])
         #expect(!cmd.json)
-        #expect(!cmd.half)
     }
 
     @Test func devAnalyzeParsesLongOptionsAndFlags() throws {
-        let cmd = try DevAnalyzeCommand.parse(["7203", "--json", "--half", "--years", "4"])
+        let cmd = try DevAnalyzeCommand.parse(["7203", "--json", "--years", "4"])
         #expect(cmd.json)
-        #expect(cmd.half)
         #expect(cmd.years == 4)
     }
 

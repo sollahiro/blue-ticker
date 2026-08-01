@@ -15,7 +15,7 @@
 import Foundation
 
 /// 財務取り込み（通期）の計算結果。「対象外」（有価証券報告書が未提出、新規上場等で設計通り・再提出待ち）と
-/// 「失敗」（書類はあるが抽出できない、要調査）を区別する（`HalfFinancialsComputeResult` と同型。issue #86）。
+/// 「失敗」（書類はあるが抽出できない、要調査）を区別する（issue #86）。
 /// ingest サマリで前者を failed カウントへ混入させないために使う。
 public enum FinancialsComputeResult: Sendable {
     case success(FinancialsResponse)

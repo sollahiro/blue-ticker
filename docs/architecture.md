@@ -72,7 +72,7 @@ graph TD
 
 ## リクエストフロー（REST / TickerDev）
 
-クライアント（curl / MCP / 将来 iOS）は blt-server の REST（または MCP）を叩く。**財務系（financials / half-financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
+クライアント（curl / MCP / 将来 iOS）は blt-server の REST（または MCP）を叩く。**財務系（financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
 
 ```mermaid
 flowchart LR
@@ -103,7 +103,6 @@ flowchart LR
 | `GET /v1/sectors` | `allSectors` | 東証33業種の一覧と業種別銘柄数 |
 | `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
 | `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（financials）。read 床は `companyFinancialsMinServableVersion` |
-| `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（half-financials） |
 | `GET /v1/companies/{code}/filing-content` | `getFilingContent` | 有報セクション本文・セグメント |
 | `GET /v1/companies/{code}/breakdown?axis=business\|geography` | DB read（`company_breakdowns`。日経225構成銘柄限定。未格納/床未満は404、E/F/unknown等の理由はボディの`reason`で返す） | 事業別・地域別売上の正規化内訳（breakdowns）。business/geography 両軸公開 |
 | `GET /v1/companies/{code}/statement?years=&doc_id=` | DB read（`company_statements`。日経225構成銘柄限定。未格納/床未満は404） | BS/PL/CF の全項目正規化（statements）。企業間の科目統一はしない。表示順（order）は未対応（常に null） |
@@ -141,7 +140,7 @@ flowchart TD
     s1 -->|永続化| db1[("edinet_documents<br/>edinet_sync_state")]
     s2 -->|ローカル保持| fs[("external/edinet/xbrl<br/>(Fly Volume)")]
     s3 -->|書類単位 JSONB| db3[("edinet_xbrl_facts")]
-    s4 -->|企業単位 JSONB| db4[("company_financials<br/>company_half_financials")]
+    s4 -->|企業単位 JSONB| db4[("company_financials")]
     db4 -->|DB read| out(["financials API / CLI 表示"])
 ```
 
@@ -151,7 +150,6 @@ flowchart TD
 | XBRL ファイル | ローカル保持（financials が生 HTML を要するため即削除不可） | `ingest` から取得・保持 |
 | facts (XBRL パース) | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest --with-facts` 実装済み（RAW アーカイブ。financials は消費せず生 XBRL を読む） |
 | financials (TICKER 計算) | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は床以上（いま `fin-v2`+）を DB 専用返却（未格納・床未満 404・ライブ計算フォールバックなし） |
-| half-financials (半期計算) | DB（`company_half_financials`・企業単位 JSONB） | 通期と同型（`ingest` 格納・DB 専用 read・years クランプ） |
 
 facts RAW はサーバー内部の中間生成物で非公開。公開するのは financials の計算済み財務サマリのみ。
 

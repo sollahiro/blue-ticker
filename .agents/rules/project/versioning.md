@@ -69,8 +69,6 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | `edinet_xbrl_facts`（facts RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
 | `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `4`（`fin-v4` 以上を 200。2026-07-28、上場廃止47社のfin-v2/v3行をDELETEで消化した後に引き上げ） |
-| `company_half_financials`（half-financials derived） | `companyHalfFinancialsCacheVersion` | `Models/HalfFinancialsContract.swift` | `"half-v2"` |
-| （同上・read 床） | `companyHalfFinancialsMinServableVersion` | 同上 | `2`（`half-v2` 以上を 200。2026-07-28、同上場廃止組のhalf-v1行をDELETEで消化した後に引き上げ） |
 | `company_filing_sections`（filing-sections 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
 | `company_breakdowns`（breakdowns business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v7"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`） |
@@ -85,8 +83,6 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 - `xbrlFactsCacheVersion`: XBRL fact のパースロジック（`parseXbrlFactIndex`）、または RAW スキーマ（`XbrlFactRecord` / `XbrlFactIndexPayload`）を変更したとき
 - `companyFinancialsCacheVersion`: 財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）、または公開契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変更したとき
 - `companyFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。financials read が 200 を返す最低世代 N を人手で上げるとき。現行から N つ前の機械オフセットにはしない。引き上げは該当旧版の stale 消化完了後（servable 穴を作らない）。不変条件: 床 ≤ 現行 `fin-vN` の N。比較は数値パース（文字列辞書順禁止）
-- `companyHalfFinancialsCacheVersion`: 半期計算ロジック（`HalfYearAnalyzer` / `buildH2Entry` / `EdinetDiscovery` の書類マッチング等、計算対象ドキュメントの選定を含む）、または公開契約型（`HalfFinancialsResponse` / `HalfFinancialsPeriod`）の意味を変更したとき
-- `companyHalfFinancialsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。half financials read が 200 を返す最低世代 N を人手で上げるとき。規則は financials 床と同型（`half-v2` バンプ時に導入・床は `1` のまま据え置き）
 - `filingSectionsCacheVersion`: セクション抽出ロジック（`XBRLParser.extractSections` / `BreakdownExtractor` / `cleanText` の cap 等）、または格納契約型（`FilingSectionsPayload` / `ExtractedBreakdownPayload`）の意味を変更したとき。**セクションの「追加」はバンプ不要**（`section_keys` 列の不一致で当該行のみ自動再抽出される）
 - `filingSectionsMinServableVersion`: **serving ポリシー変更**（再計算トリガーではない）。filing-content read の最低世代 N。規則は financials 床と同型
 - `businessBreakdownCacheVersion`: business 軸の xbrl_facts 経路の分類・正規化ロジック（`BreakdownNormalizer` / member 分類定数）、`BreakdownExtractor.classifyNotApplicableReason`（business の E/F/unknown）、または business 向け `BreakdownSnapshotPayload` の意味を変える破壊的変更のとき。geography 軸の行は巻き込まない。LLM 経由の行はバンプだけでは再計算しない（needs_review=false の行は据え置き。詳細は `docs/breakdown-normalization-concept.md`「今後の検討事項8」）

@@ -10,7 +10,7 @@ private let percent = 100.0
 
 /// `IndividualAnalyzer.fetchAndBuild` の結果。「有価証券報告書が未提出」（対象外、新規上場等で
 /// 初回本決算前）と「書類はあるが抽出できない」（失敗、要調査）を呼び出し元が区別できるようにする
-/// （`HalfYearFetchOutcome` と同型。issue #86）。
+/// （issue #86）。
 enum IndividualAnalyzeOutcome {
     case result(MetricsResult)
     case notApplicable

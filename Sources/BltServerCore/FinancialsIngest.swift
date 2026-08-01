@@ -12,8 +12,7 @@ import Foundation
 import Logging
 
 /// 財務取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
-/// `failed`（抽出できず要調査）と分けて数える点が半期財務取り込みの `HalfFinancialsIngestSummary` と同型
-/// （issue #86）。
+/// `failed`（抽出できず要調査）と分けて数える（issue #86）。
 public struct FinancialsIngestSummary: Sendable, Equatable {
     /// 計算を試みた企業数（skip を除く。notApplicable も含む＝実際に compute を呼んだ数）。
     public let attempted: Int

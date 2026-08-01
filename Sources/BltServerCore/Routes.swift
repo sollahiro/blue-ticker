@@ -38,8 +38,6 @@ func registerRoutes(
                 "xbrl_facts": xbrlFactsCacheVersion,
                 "company_financials": companyFinancialsCacheVersion,
                 "company_financials_min_servable": companyFinancialsMinServableVersion,
-                "company_half_financials": companyHalfFinancialsCacheVersion,
-                "company_half_financials_min_servable": companyHalfFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
                 "breakdown_business": businessBreakdownCacheVersion,
@@ -67,7 +65,7 @@ func registerRoutes(
     }
     let v1 = authenticated.grouped("v1")
 
-    // DB（Neon）接続の有無。財務系（financials / half-financials）は格納済みデータのみを返し、
+    // DB（Neon）接続の有無。財務系（financials）は格納済みデータのみを返し、
     // 未接続なら 503・未格納なら 404 とする（ライブ計算へは落とさない＝OOM 回避）。
     // filings は軽量な EDINET 一覧取得のため未格納時のライブ取得を許容する。
     let dbAvailable = !app.databases.ids().isEmpty
@@ -131,19 +129,6 @@ func registerRoutes(
             notFoundMessage: "財務データは未集計です")
     }
 
-    // GET /v1/companies/{code}/half-financials?years=3
-    // 半期財務サマリ。DB（半期 財務取り込み derived キャッシュ company_half_financials）の格納済み結果のみ
-    // を返す（read で years を半期上限へクランプ）。financials と同じく未格納・古いは 404、ライブ計算へは
-    // フォールバックしない。
-    v1.get("companies", ":code", "half-financials") { req async -> Response in
-        let code = req.parameters.get("code") ?? ""
-        let years = req.query[Int.self, at: "years"] ?? Api.halfFinancialsYearsDefault
-        return makeStoredDataResponse(
-            await serveStoredHalfFinancials(
-                code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
-            notFoundMessage: "半期財務データは未集計です")
-    }
-
     // GET /v1/companies/{code}/analysis?years=5
     // Analyze（`docs/feature-tiers.md`）。DB（財務取り込み derived キャッシュ company_financials、
     // financials と同じ格納行）から増減分解フィールド（事業利益ウォーターフォール・ROIC/ROE分解・
@@ -155,18 +140,6 @@ func registerRoutes(
             await serveStoredAnalysis(
                 code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
             notFoundMessage: "財務データは未集計です")
-    }
-
-    // GET /v1/companies/{code}/half-analysis?years=3
-    // Analyze の半期版。DB（半期 財務取り込み derived キャッシュ company_half_financials、half-financials
-    // と同じ格納行）から増減分解フィールドを含めて返す。
-    v1.get("companies", ":code", "half-analysis") { req async -> Response in
-        let code = req.parameters.get("code") ?? ""
-        let years = req.query[Int.self, at: "years"] ?? Api.halfFinancialsYearsDefault
-        return makeStoredDataResponse(
-            await serveStoredHalfAnalysis(
-                code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
-            notFoundMessage: "半期財務データは未集計です")
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
@@ -337,26 +310,6 @@ func serveStoredFinancials(
     }
 }
 
-/// `half-financials` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
-func serveStoredHalfFinancials(
-    code: String, years: Int, db: Database?, logger: Logger
-) async -> StoredDataServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredHalfFinancials(code: code, years: years, db: db)
-        }
-        guard let stored else { return .notFound }
-        return .ok(stored)
-    } catch {
-        return .dbUnavailable
-    }
-}
-
 /// `analysis`（Analyze・年次）の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 func serveStoredAnalysis(
     code: String, years: Int, db: Database?, logger: Logger
@@ -369,26 +322,6 @@ func serveStoredAnalysis(
             logger: logger
         ) {
             try await loadStoredAnalysis(code: code, years: years, db: db)
-        }
-        guard let stored else { return .notFound }
-        return .ok(stored)
-    } catch {
-        return .dbUnavailable
-    }
-}
-
-/// `half-analysis`（Analyze・半期）の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
-func serveStoredHalfAnalysis(
-    code: String, years: Int, db: Database?, logger: Logger
-) async -> StoredDataServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredHalfAnalysis(code: code, years: years, db: db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)
