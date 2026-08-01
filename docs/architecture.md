@@ -39,7 +39,7 @@ graph TD
     subgraph servercore["BltServerCore — Web/DB 依存を隔離"]
         Transport["Routes / BltServerEntry<br/>(Vapor)"]
         DB["Database · Migrations · Models<br/>(Fluent + Postgres)"]
-        Stages["Stage1Sync · Stage3Ingest"]
+        Ingest["DocumentSync · FactsIngest · FinancialsIngest · FilingSectionsIngest · BreakdownIngest · StatementIngest"]
     end
 
     ext["外部パッケージ:<br/>Vapor · Fluent · Postgres"]
@@ -57,8 +57,8 @@ graph TD
     Services --> Analysis
     Services --> API
     Transport --> Server
-    Stages --> Server
-    DB -.->|Stage1/3 永続化| Stages
+    Ingest --> Server
+    DB -.->|sync/ingest 永続化| Ingest
 ```
 
 `Package.swift` の `products` には `blt-server`（`BltServer`）のみを載せる。`TickerDev` は products 非搭載（`swift run TickerDev` のみ）。配布 `ticker` と Homebrew release パイプラインは廃止済み。
@@ -102,11 +102,11 @@ flowchart LR
 | `GET /v1/sectors/{sector}/companies` | `searchBySector` | セクター別企業 |
 | `GET /v1/sectors` | `allSectors` | 東証33業種の一覧と業種別銘柄数 |
 | `GET /v1/companies/{code}/filings` | `getFilingsFromRecords`（DB read。未同期銘柄は `getFilings` ライブ探索） | 提出書類一覧 |
-| `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（Stage 4）。read 床は `companyFinancialsMinServableVersion` |
-| `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（Stage 4-half） |
+| `GET /v1/companies/{code}/financials` | DB read（`company_financials`。床未満・未格納 404・DB 非接続 503） | 計算済み財務指標（financials）。read 床は `companyFinancialsMinServableVersion` |
+| `GET /v1/companies/{code}/half-financials` | DB read（`company_half_financials`。years は `Api.halfMaxYears` へクランプ） | 半期財務指標（half-financials） |
 | `GET /v1/companies/{code}/filing-content` | `getFilingContent` | 有報セクション本文・セグメント |
-| `GET /v1/companies/{code}/breakdown?axis=business\|geography` | DB read（`company_breakdowns`。日経225構成銘柄限定。未格納/床未満は404、E/F/unknown等の理由はボディの`reason`で返す） | 事業別・地域別売上の正規化内訳（Stage 6）。business/geography 両軸公開 |
-| `GET /v1/companies/{code}/statement?years=&doc_id=` | DB read（`company_statements`。日経225構成銘柄限定。未格納/床未満は404） | BS/PL/CF の全項目正規化（Stage 7）。企業間の科目統一はしない。表示順（order）は未対応（常に null） |
+| `GET /v1/companies/{code}/breakdown?axis=business\|geography` | DB read（`company_breakdowns`。日経225構成銘柄限定。未格納/床未満は404、E/F/unknown等の理由はボディの`reason`で返す） | 事業別・地域別売上の正規化内訳（breakdowns）。business/geography 両軸公開 |
+| `GET /v1/companies/{code}/statement?years=&doc_id=` | DB read（`company_statements`。日経225構成銘柄限定。未格納/床未満は404） | BS/PL/CF の全項目正規化（statements）。企業間の科目統一はしない。表示順（order）は未対応（常に null） |
 
 レスポンス契約は単一の Codable 型から導出（`Models/FinancialsContract.swift`）。エラー封筒は `{"error":..., "status":N}`。
 
@@ -125,17 +125,17 @@ Vapor のルーティングはホスト名では分岐しないため、`api.<do
 
 Phase 1 は既存 `api.<domain>` の配下（`/v1` と同一の SSO ポリシー）で疎通する。Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアント向けには、**Phase 2**（2026-07-12 完了）として新規サブドメイン `mcp.<domain>` を Cloudflare Tunnel に追加し、パスなしの専用 Access アプリケーションに **Managed OAuth for Access** を有効化した（Managed OAuth はパス指定のあるドメインには設定できないため、`api.<domain>/mcp` のようなパス限定アプリでは有効化できず、専用サブドメインが必須だった）。discovery・`/authorize`・`/token`・DCR は Cloudflare エッジ側で完結し、origin（Vapor）側のコード変更は不要 — OAuth 完了後に origin が受け取るリクエストは Phase 1 と同じエッジ信頼のまま。Claude Desktop での接続・ツール呼び出しまで実機確認済み。ダッシュボード手順は `deploy.md`「MCP（Managed OAuth）」を参照。
 
-## データパイプライン（Stage 1〜4）
+## データパイプライン（sync/ingest）
 
-EDINET → 計算済み JSON までの 4 段。Stage 4 はサーバー計算に集約し、クライアントは表示に専念する。
+EDINET → 計算済み JSON までの流れ。financials 等はサーバー計算に集約し、クライアントは表示に専念する。
 
 ```mermaid
 flowchart TD
     edinet[("EDINET API v2")]
-    s1["Stage 1: 書類一覧取得<br/>blt-server sync"]
-    s2["Stage 2: XBRL ファイル取得<br/>downloadDocument"]
-    s3["Stage 3: XBRL パース (RAW fact)<br/>blt-server ingest"]
-    s4["Stage 4: TICKER 計算<br/>blt-server ingest"]
+    s1["sync: 書類一覧取得<br/>blt-server sync"]
+    s2["XBRL ファイル取得<br/>downloadDocument"]
+    s3["facts: XBRL パース (RAW fact)<br/>blt-server ingest --with-facts"]
+    s4["financials: TICKER 計算<br/>blt-server ingest"]
 
     edinet --> s1 --> s2 --> s3 --> s4
     s1 -->|永続化| db1[("edinet_documents<br/>edinet_sync_state")]
@@ -145,15 +145,15 @@ flowchart TD
     db4 -->|DB read| out(["financials API / CLI 表示"])
 ```
 
-| Stage | 保存先 | 状態 |
+| 取り込み対象 | 保存先 | 状態 |
 |---|---|---|
-| 1 書類一覧 | DB（`edinet_documents` / `edinet_sync_state`） | スキーマ・`sync` 実装済み。filings read も DB 優先 |
-| 2 XBRL ファイル | ローカル保持（Stage 4 が生 HTML を要するため即削除不可） | `ingest` から取得・保持 |
-| 3 XBRL パース | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest` 実装済み（RAW アーカイブ。Stage 4 は消費せず生 XBRL を読む） |
-| 4 TICKER 計算 | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は床以上（いま `fin-v2`+）を DB 専用返却（未格納・床未満 404・ライブ計算フォールバックなし） |
-| 4-half 半期計算 | DB（`company_half_financials`・企業単位 JSONB） | 通期と同型（`ingest` 格納・DB 専用 read・years クランプ） |
+| sync (書類一覧) | DB（`edinet_documents` / `edinet_sync_state`） | スキーマ・`sync` 実装済み。filings read も DB 優先 |
+| XBRL ファイル | ローカル保持（financials が生 HTML を要するため即削除不可） | `ingest` から取得・保持 |
+| facts (XBRL パース) | DB（`edinet_xbrl_facts`・書類単位 JSONB） | スキーマ・`ingest --with-facts` 実装済み（RAW アーカイブ。financials は消費せず生 XBRL を読む） |
+| financials (TICKER 計算) | DB（`company_financials`・企業単位 JSONB） | `ingest` で計算・格納。read は床以上（いま `fin-v2`+）を DB 専用返却（未格納・床未満 404・ライブ計算フォールバックなし） |
+| half-financials (半期計算) | DB（`company_half_financials`・企業単位 JSONB） | 通期と同型（`ingest` 格納・DB 専用 read・years クランプ） |
 
-Stage 3 RAW はサーバー内部の中間生成物で非公開。公開するのは Stage 4 の計算済み財務サマリのみ。
+facts RAW はサーバー内部の中間生成物で非公開。公開するのは financials の計算済み財務サマリのみ。
 
 ## キャッシュとデプロイ
 
@@ -178,7 +178,7 @@ graph LR
 
 - compute / TLS / secrets / scheduler: **Fly.io**（self-host も同一 Docker イメージ）
 - DB: **Neon**（serverless Postgres、`DATABASE_URL` 未設定ならステートレス EDINET プロキシとして起動）
-- オブジェクトストレージ: **Cloudflare R2**（Stage 2 退避先、容量問題化まで延期）
+- オブジェクトストレージ: **Cloudflare R2**（生 XBRL 退避、容量問題化まで延期）
 
 詳細・残タスクは `blt-server-roadmap.md`、XBRL 解析仕様は `xbrl-parsing.md`、デプロイ手順は `deploy.md`、外部サービスの結合点・代替可能性・保守ポイントは `operations.md` を参照。
 

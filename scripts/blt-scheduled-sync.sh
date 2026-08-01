@@ -1,13 +1,13 @@
 #!/bin/zsh
 # blt-server 定期同期ジョブ（ローカル launchd 用）。
 #
-# Stage 1 (sync: 書類一覧 → Neon) → Stage 4/4-half/5/6 (ingest: 計算済み財務サマリ・
+# sync (書類一覧 → Neon) → financials/half-financials/filing-sections/breakdowns (ingest: 計算済み財務サマリ・
 # 有報セクション・事業別内訳 → Neon) をローカルで実行する。重い ingest を Fly(1GB) で
 # 走らせると OOM するため、計算はローカル・Fly は company_financials 等を読むだけ。
-# Stage 3（XBRL 数値 fact）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
+# XBRL 数値 fact（facts）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
-# Stage 6 は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
+# breakdowns は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
 # LLM は軸別（XAI_BUSINESS_* / XAI_GEOGRAPHY_*。business のみ旧 XAI_* フォールバック可）。
 # 未設定でも xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
 # REST/MCP は business / geography の両軸を公開する（2026-07-27、品質ゲート通過後に解禁）。
@@ -16,11 +16,11 @@
 # バイナリはリリースビルドを使う。コード変更後は手動で再ビルドすること:
 #   swift build -c release --product blt-server
 #
-# ingest 件数はステージ別に .env で上書きできる（既定: Stage4=80 / Stage4-half=80 /
-# Stage5=50 / Stage6=30）。BLT_INGEST_LIMIT がある場合は後方互換として全ステージ既定値に使う。
+# ingest 件数は対象別に .env で上書きできる（既定: financials=80 / half-financials=80 /
+# filing-sections=50 / breakdowns=30）。BLT_INGEST_LIMIT がある場合は後方互換として全対象既定値に使う。
 #
-# 各ステージには実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
-# 強制終了して次のステージへ進む（Neon 接続不安定によるハング対策）。上書きは
+# 各対象には実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
+# 強制終了して次の対象へ進む（Neon 接続不安定によるハング対策）。上書きは
 # .env の BLT_STAGE_TIMEOUT_SECONDS を使う。
 # インストール手順は docs/deploy.md「定期同期（ローカル launchd）」を参照。
 
@@ -48,17 +48,17 @@ if [ ! -f "$REPO/.env" ]; then
 fi
 
 # .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）。
-# BLT_INGEST_LIMIT_STAGE4 / _STAGE4_HALF / _STAGE5 / _STAGE6（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
+# BLT_INGEST_LIMIT_FINANCIALS / _HALF_FINANCIALS / _FILING_SECTIONS / _BREAKDOWNS（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
 # 生成する共有ファイルのため、マシン固有のチューニング値は .env 側に置く）。
 set -a
 . "$REPO/.env"
 set +a
 
 DEFAULT_LIMIT="${BLT_INGEST_LIMIT:-}"
-LIMIT_STAGE4="${BLT_INGEST_LIMIT_STAGE4:-${DEFAULT_LIMIT:-80}}"
-LIMIT_STAGE4_HALF="${BLT_INGEST_LIMIT_STAGE4_HALF:-${DEFAULT_LIMIT:-80}}"
-LIMIT_STAGE5="${BLT_INGEST_LIMIT_STAGE5:-${DEFAULT_LIMIT:-50}}"
-LIMIT_STAGE6="${BLT_INGEST_LIMIT_STAGE6:-${DEFAULT_LIMIT:-30}}"
+LIMIT_FINANCIALS="${BLT_INGEST_LIMIT_FINANCIALS:-${DEFAULT_LIMIT:-80}}"
+LIMIT_HALF_FINANCIALS="${BLT_INGEST_LIMIT_HALF_FINANCIALS:-${DEFAULT_LIMIT:-80}}"
+LIMIT_FILING_SECTIONS="${BLT_INGEST_LIMIT_FILING_SECTIONS:-${DEFAULT_LIMIT:-50}}"
+LIMIT_BREAKDOWNS="${BLT_INGEST_LIMIT_BREAKDOWNS:-${DEFAULT_LIMIT:-30}}"
 STAGE_TIMEOUT_SECONDS="${BLT_STAGE_TIMEOUT_SECONDS:-5400}"
 
 # コマンドをバックグラウンドで実行し、$STAGE_TIMEOUT_SECONDS 秒経っても生きていれば
@@ -86,14 +86,14 @@ run_with_timeout() {
 {
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') sync 開始 ====="
   run_with_timeout "$BIN" sync
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage4 --limit $LIMIT_STAGE4 開始 ====="
-  run_with_timeout "$BIN" ingest --stages 4 --limit "$LIMIT_STAGE4"
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage4-half --limit $LIMIT_STAGE4_HALF 開始 ====="
-  run_with_timeout "$BIN" ingest --stages 4half --limit "$LIMIT_STAGE4_HALF"
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage5 --limit $LIMIT_STAGE5 開始 ====="
-  run_with_timeout "$BIN" ingest --stages 5 --limit "$LIMIT_STAGE5"
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest stage6 --limit $LIMIT_STAGE6 開始 ====="
-  run_with_timeout "$BIN" ingest --stages 6 --limit "$LIMIT_STAGE6"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest financials --limit $LIMIT_FINANCIALS 開始 ====="
+  run_with_timeout "$BIN" ingest --stages financials --limit "$LIMIT_FINANCIALS"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest half-financials --limit $LIMIT_HALF_FINANCIALS 開始 ====="
+  run_with_timeout "$BIN" ingest --stages half-financials --limit "$LIMIT_HALF_FINANCIALS"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest filing-sections --limit $LIMIT_FILING_SECTIONS 開始 ====="
+  run_with_timeout "$BIN" ingest --stages filing-sections --limit "$LIMIT_FILING_SECTIONS"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest breakdowns --limit $LIMIT_BREAKDOWNS 開始 ====="
+  run_with_timeout "$BIN" ingest --stages breakdowns --limit "$LIMIT_BREAKDOWNS"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
 
   # RO 子ブランチを WRITE 親へ reset（Neon API）。Secrets 未設定ならスキップ。

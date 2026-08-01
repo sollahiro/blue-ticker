@@ -19,7 +19,7 @@ primary_region = "nrt"
 [build]
   dockerfile = "Dockerfile"
 
-# キャッシュ・設定の永続化（Stage 1 の真実源は Neon。これは EDINET 取得キャッシュ等）。
+# キャッシュ・設定の永続化（sync の真実源は Neon。これは EDINET 取得キャッシュ等）。
 [[mounts]]
   source = "blt_data"
   destination = "/data"

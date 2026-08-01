@@ -36,7 +36,7 @@ XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以
 | `BreakdownExtractor.swift` | セグメント・地域別情報（TextBlock HTML表 → dimension 付き fact） |
 | `XBRLSectionParser.swift` | 有価証券報告書セクション（リスク・MD&A 等）テキスト抽出 |
 
-### Stage 6 事業別・地域別内訳の正規化（`docs/breakdown-normalization-concept.md`）
+### breakdowns 事業別・地域別内訳の正規化（`docs/breakdown-normalization-concept.md`）
 
 | ファイル | 役割 |
 |---|---|
