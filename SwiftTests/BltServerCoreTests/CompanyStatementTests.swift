@@ -1,6 +1,6 @@
-// Stage 7 の永続化スキーマ（company_statements）が意図どおり動くかを検証する。
+// Statement 取り込み の永続化スキーマ（company_statements）が意図どおり動くかを検証する。
 // docs/statement-normalization-concept.md「実装方針」参照。モデル・マイグレーションのみを見る
-// （ingest/read の実配線の検証は Stage7IngestTests.swift）。
+// （ingest/read の実配線の検証は StatementIngestTests.swift）。
 
 import BlueTickerCore
 import Fluent

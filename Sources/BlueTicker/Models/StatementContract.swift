@@ -1,4 +1,4 @@
-// Statement（BS/PL/CF 完全正規化、Stage 7）API の公開契約の骨組み。
+// Statement（BS/PL/CF 完全正規化、Statement 取り込み）API の公開契約の骨組み。
 // docs/statement-normalization-concept.md 参照。
 //
 // 現時点では型定義のみ（compute 関数・DB モデル・ingest・REST・MCP 配線は未実装）。
@@ -9,7 +9,7 @@
 
 import Foundation
 
-/// Stage 7（Statement 本体）の計算結果。「対象外」（有価証券報告書未提出等）と「失敗」
+/// Statement 取り込み（Statement 本体）の計算結果。「対象外」（有価証券報告書未提出等）と「失敗」
 /// （書類はあるが抽出できない）を区別する（`FinancialsComputeResult` と同型。issue #86）。
 public enum StatementComputeResult: Sendable {
     case success(StatementResponse)
@@ -17,10 +17,10 @@ public enum StatementComputeResult: Sendable {
     case failed
 }
 
-/// Neon Stage 7 キャッシュ（`company_statements.cache_version`、未実装）の計算バージョン。
+/// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`、未実装）の計算バージョン。
 /// `blueTickerVersion` とは独立し、抽出ロジックまたは本契約型の意味を変えたときのみバンプする
 /// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/project/versioning.md`）。
-/// 注記（Stage 8）は別バージョン系統になる想定で、本定数には連動させない。
+/// 注記（注記取り込み）は別バージョン系統になる想定で、本定数には連動させない。
 public let statementCacheVersion = "statement-v1"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。
@@ -120,7 +120,7 @@ public struct StatementLineItem: Codable, Sendable {
     /// `decodeIfPresent(_:default:)` で読む。`company_statements.payload` は JSON カラムで
     /// Fluent が直接デコードするため、この2フィールド追加前に格納された行（`is_total` キーが
     /// 無い）があると合成 `Decodable` では `keyNotFound` で読み取り自体が失敗し、REST 読み出しも
-    /// `Stage7Ingest` の既存行チェックも共倒れする。現状 `company_statements` は本番・開発とも
+    /// `StatementIngest` の既存行チェックも共倒れする。現状 `company_statements` は本番・開発とも
     /// 未書き込みで実害は無いが、将来の取り違えを避けるため決定的に安全側へ倒す。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,7 +197,7 @@ public struct StatementYear: Codable, Sendable {
     }
 }
 
-/// Statement API の公開レスポンス（本体・Stage 7）。
+/// Statement API の公開レスポンス（本体・Statement 取り込み）。
 public struct StatementResponse: Codable, Sendable {
     public var schemaVersion: Int
     public var code: String

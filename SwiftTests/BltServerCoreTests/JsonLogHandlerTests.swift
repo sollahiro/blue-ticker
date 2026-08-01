@@ -27,7 +27,7 @@ import Testing
                 message: "ingest summary",
                 metadata: [
                     "event": "ingest_summary",
-                    "stage": "4",
+                    "target": "financials",
                     "failed": .stringConvertible(0),
                 ],
                 source: "test",
@@ -48,21 +48,21 @@ import Testing
         #expect(json["timestamp"] is String)
         let metadata = try #require(json["metadata"] as? [String: Any])
         #expect(metadata["event"] as? String == "ingest_summary")
-        #expect(metadata["stage"] as? String == "4")
+        #expect(metadata["target"] as? String == "financials")
         #expect(metadata["failed"] as? String == "0")
     }
 
     @Test func logIngestSummaryUsesWarningWhenFailed() {
         let handler = CapturingHandler()
         let logger = Logger(label: "test") { _ in handler }
-        logIngestSummary(logger, stage: "4", attempted: 3, stored: 2, failed: 1, skipped: 0)
+        logIngestSummary(logger, target: "financials", attempted: 3, stored: 2, failed: 1, skipped: 0)
         #expect(handler.messages.count == 1)
         #expect(handler.messages[0].level == .warning)
         #expect(handler.messages[0].metadata["event"] == .string("ingest_summary"))
         #expect(handler.messages[0].metadata["failed"]?.description == "1")
 
         handler.messages.removeAll()
-        logIngestSummary(logger, stage: "4", attempted: 3, stored: 3, failed: 0, skipped: 0)
+        logIngestSummary(logger, target: "financials", attempted: 3, stored: 3, failed: 0, skipped: 0)
         #expect(handler.messages[0].level == .notice)
     }
 }

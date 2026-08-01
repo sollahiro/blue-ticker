@@ -1,4 +1,4 @@
-// Stage 1: EDINET 書類一覧の 1 件 = 1 行。
+// 書類同期: EDINET 書類一覧の 1 件 = 1 行。
 // ファイルキャッシュ（document_indexes/doc_index_<year>.json の documents[]）の DB 版。
 // 公開契約は financials レスポンス側であり、本テーブルはサーバー内部スキーマ（後で柔軟に変更可）。
 //

@@ -1,4 +1,4 @@
-// Stage 5 取り込み: 上場企業（東証上場）の有報について、セクション本文を抽出し
+// 有報セクション取り込み: 上場企業（東証上場）の有報について、セクション本文を抽出し
 // company_filing_sections へ upsert する。抽出は BlueTickerCore のファサード（extractFilingSections）に
 // 委譲し、ここでは対象選定・staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
@@ -7,7 +7,7 @@
 // 環境で ingest し、Neon へ保存する。
 //
 // 対象は「東証上場（EDINET 上場区分）× 有報(120) × 直近 years 件（≈ years 年。有報は通常年1件）」。
-// 直近 years 件を超えた過去書類は既存行があれば purge（削除）し、無期限累積を防ぐ。窓は Stage 4
+// 直近 years 件を超えた過去書類は既存行があれば purge（削除）し、無期限累積を防ぐ。窓は財務取り込み
 // （financials 6年）と揃え、トレンド分析と同じ期間分の本文を読めるようにする。
 // 容量（Neon 512MB）のため上限を設ける。ストレージ強化＝issue #22 決定後に緩められる。
 
@@ -16,12 +16,12 @@ import Fluent
 import Foundation
 import Logging
 
-/// Stage 5 取り込みで保持する有報の件数（1社あたり直近 N 件。有報は通常年1件のため ≈ N 年）。
-/// Stage 4 の financials 計算年数（6年）と揃える。ストレージ強化後に緩められる。
-let stage5IngestYears = 6
+/// 有報セクション取り込みで保持する有報の件数（1社あたり直近 N 件。有報は通常年1件のため ≈ N 年）。
+/// 財務取り込みの financials 計算年数（6年）と揃える。ストレージ強化後に緩められる。
+let filingSectionsIngestYears = 6
 
-/// Stage 5 取り込み結果のサマリ。
-public struct Stage5IngestSummary: Sendable, Equatable {
+/// 有報セクション取り込み結果のサマリ。
+public struct FilingSectionsIngestSummary: Sendable, Equatable {
     /// 抽出を試みた書類数（skip を除く）。
     public let attempted: Int
     /// 抽出・格納に成功した書類数。
@@ -42,12 +42,12 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
-func runStage5Ingest(
+func runFilingSectionsIngest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     logger: Logger? = nil, extract: FilingSectionsExtractor
-) async throws -> Stage5IngestSummary {
-    let sets = try await stage5Candidates(
+) async throws -> FilingSectionsIngestSummary {
+    let sets = try await filingSectionCandidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
     let baseCandidates = sets.keep
 
@@ -63,7 +63,7 @@ func runStage5Ingest(
     for cand in baseCandidates {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+                "DB接続が不安定なため 有報セクション取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
             break
         }
         let existing = try await withDbRetry(
@@ -92,7 +92,7 @@ func runStage5Ingest(
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 5 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため 有報セクション取り込み を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
@@ -111,7 +111,7 @@ func runStage5Ingest(
         attempted += 1
         guard let payload = await extract(cand.docID) else {
             failed += 1
-            logger?.warning("Stage 5 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
+            logger?.warning("有報セクション取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
             continue
         }
         try await withDbRetry(
@@ -130,7 +130,7 @@ func runStage5Ingest(
     var purged = 0
     for docID in sets.purge {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため Stage 5 purge を中断します(リトライ\(unhealthyRetries)回)")
+            logger?.error("DB接続が不安定なため 有報セクション取り込み purge を中断します(リトライ\(unhealthyRetries)回)")
             break
         }
         let deleted = try await withDbRetry(
@@ -143,12 +143,12 @@ func runStage5Ingest(
         if deleted { purged += 1 }
     }
 
-    return Stage5IngestSummary(
+    return FilingSectionsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
 }
 
 /// 取り込み候補（保持窓内。docID・4桁コード・提出日時）と、保持窓を超えた既存書類の docID（purge 対象）。
-struct Stage5CandidateSets {
+struct FilingSectionCandidateSets {
     let keep: [(docID: String, code: String, submitDateTime: String)]
     let purge: [String]
 }
@@ -156,10 +156,10 @@ struct Stage5CandidateSets {
 /// 取り込み候補（保持窓内）と purge 対象をまとめて返す。
 /// 「上場（listedCodes）× 有報(120) × 各社 提出日時降順の直近 years 件」を keep、それを超えた分を purge とする。
 /// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
-func stage5Candidates(
+func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
     logger: Logger? = nil
-) async throws -> Stage5CandidateSets {
+) async throws -> FilingSectionCandidateSets {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocument.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
@@ -193,7 +193,7 @@ func stage5Candidates(
         if $0.submitDateTime != $1.submitDateTime { return $0.submitDateTime > $1.submitDateTime }
         return $0.docID < $1.docID
     }
-    return Stage5CandidateSets(keep: sortedKeep, purge: purge)
+    return FilingSectionCandidateSets(keep: sortedKeep, purge: purge)
 }
 
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。
@@ -254,7 +254,7 @@ func countServableFilingSections(db: Database) async throws -> (servable: Int, u
 
 // MARK: - read 経路（REST filing-content）
 
-/// 格納済み Stage 5 セクションを引いて公開契約 {code, doc_id, sections} を返す。
+/// 格納済み 有報セクション取り込み セクションを引いて公開契約 {code, doc_id, sections} を返す。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち床以上）。
 /// 床は `filingSectionsMinServableVersion`（明示定数。現行版との完全一致ではない）。
 /// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。

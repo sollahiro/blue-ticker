@@ -1,4 +1,4 @@
-// Stage 4 取り込み: edinet_documents に存在する企業（証券コード）について財務サマリを計算し、
+// 財務取り込み: edinet_documents に存在する企業（証券コード）について財務サマリを計算し、
 // company_financials へ upsert する。計算は BlueTickerCore のファサード（computeFinancials）に
 // 委譲し、ここでは企業選定・staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
@@ -11,10 +11,10 @@ import Fluent
 import Foundation
 import Logging
 
-/// Stage 4 取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
-/// `failed`（抽出できず要調査）と分けて数える点が Stage 4-half の `Stage4HalfIngestSummary` と同型
+/// 財務取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
+/// `failed`（抽出できず要調査）と分けて数える点が半期財務取り込みの `HalfFinancialsIngestSummary` と同型
 /// （issue #86）。
-public struct Stage4IngestSummary: Sendable, Equatable {
+public struct FinancialsIngestSummary: Sendable, Equatable {
     /// 計算を試みた企業数（skip を除く。notApplicable も含む＝実際に compute を呼んだ数）。
     public let attempted: Int
     /// 計算・格納に成功した企業数。
@@ -37,13 +37,13 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsComp
 /// 無駄なリトライを避ける。`nil` は絞り込みなし＝従来どおり全企業）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
-func runStage4Ingest(
+func runFinancialsIngest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
     explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [], logger: Logger? = nil,
     compute: FinancialsComputer
-) async throws -> Stage4IngestSummary {
+) async throws -> FinancialsIngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
-        db: db, docTypes: Api.stage4FreshnessDocTypes, logger: logger)
+        db: db, docTypes: Api.financialsFreshnessDocTypes, logger: logger)
     let listedFiltered = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
     let codes = explicitCodes.map { explicit in listedFiltered.filter { explicit.contains($0) } } ?? listedFiltered
 
@@ -62,7 +62,7 @@ func runStage4Ingest(
         let highWater = highWaterMap[code]
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 4 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
+                "DB接続が不安定なため 財務取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
             break
         }
         let existing = try await withDbRetry(
@@ -97,7 +97,7 @@ func runStage4Ingest(
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 4 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)社は次回スケジュールで再試行)"
+                "DB接続が不安定なため 財務取り込み を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)社は次回スケジュールで再試行)"
             )
             break
         }
@@ -138,11 +138,11 @@ func runStage4Ingest(
             notApplicable += 1
         case .failed:
             failed += 1
-            logger?.warning("Stage 4 取り込み失敗: code=\(code)")
+            logger?.warning("財務取り込み失敗: code=\(code)")
         }
     }
 
-    return Stage4IngestSummary(
+    return FinancialsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
         skipped: skipped)
 }
@@ -235,7 +235,7 @@ func countServableCompanyFinancials(db: Database) async throws -> (servable: Int
 
 // MARK: - read 経路（REST financials）
 
-/// 格納済み Stage 4 結果を code で引き、read 床以上 & 要求年数を満たすなら years に縮めた JSON を返す。
+/// 格納済み 財務取り込み 結果を code で引き、read 床以上 & 要求年数を満たすなら years に縮めた JSON を返す。
 /// 床は `companyFinancialsMinServableVersion`（明示定数。現行版との完全一致ではない）。
 /// 無い・床未満・年数不足なら nil（呼び出し側は 404。ライブ計算へはフォールバックしない）。
 /// `years` 空（有価証券報告書未提出の notApplicable プレースホルダ、issue #86）も nil（404）とする。
@@ -250,7 +250,7 @@ func loadStoredFinancials(code: String, years: Int, db: Database) async throws -
     return row.response.trimmed(toYears: years).summaryJsonObject()
 }
 
-/// 格納済み Stage 4 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
+/// 格納済み 財務取り込み 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
 /// 含めた JSON を返す。読み取り床・年数要件は `loadStoredFinancials` と同一（同じ格納行を使う。
 /// 新規テーブル・cache_version は導入しない）。
 func loadStoredAnalysis(code: String, years: Int, db: Database) async throws -> [String: Any]? {

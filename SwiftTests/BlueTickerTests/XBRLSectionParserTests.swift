@@ -3,7 +3,7 @@ import Foundation
 @testable import BlueTickerCore
 
 // XBRLParser（Analysis/XBRLSectionParser.swift）のセクション抽出仕様。
-// 有報セクション本文は Stage 5 で Neon に格納され、抽出ロジックの変更は
+// 有報セクション本文は 有報セクション取り込み で Neon に格納され、抽出ロジックの変更は
 // filingSectionsCacheVersion のバンプ判断に直結する（versioning.md）。ここでは合成
 // フィクスチャで HTML 経由（extractSection / extractSections）・TextBlock 経由
 // （extractSectionsByType）・報告書種別判定（detectReportType）の挙動を固定する。
@@ -74,7 +74,7 @@ import Foundation
     }
 
     @Test func extractSectionCapsTextAtTenThousandChars() throws {
-        // cleanText は 10,000 文字で切り詰めて "..." を付ける（Stage 5 格納サイズの上限）
+        // cleanText は 10,000 文字で切り詰めて "..." を付ける（有報セクション取り込み 格納サイズの上限）
         let long = String(repeating: "あ", count: 12_000)
         let html = "<html><body><h3>【事業等のリスク】</h3><p>\(long)</p><h3>次の見出し</h3></body></html>"
         try withDir { dir in

@@ -81,7 +81,7 @@ private func sendWithHeaders(
     return (response.status, json, response.headers)
 }
 
-/// 公開契約 FinancialsResponse を JSON 経由で構築する（Stage4IngestTests.makeResponse と同型）。
+/// 公開契約 FinancialsResponse を JSON 経由で構築する（FinancialsIngestTests.makeResponse と同型）。
 private func makeDemoFinancialsResponse(code: String, years: Int) throws -> FinancialsResponse {
     let yrs = (0..<years).map { ["fy_end": "20\(20 + $0)-03-31"] }
     let dict: [String: Any] = [

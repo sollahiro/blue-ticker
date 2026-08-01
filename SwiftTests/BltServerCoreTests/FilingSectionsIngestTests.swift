@@ -1,4 +1,4 @@
-// Stage 5 取り込みの DB ロジック（対象選定＝上場×有報×直近N年・staleness 判定・upsert・limit）と
+// 有報セクション取り込みの DB ロジック（対象選定＝上場×有報×直近N年・staleness 判定・upsert・limit）と
 // read 経路（loadStoredFilingSections の code 最新／doc_id 指定・バージョンゲート・sections 絞り込み）を検証する。
 // 抽出（extractFilingSections）は EDINET 依存のため、フェイク抽出器を注入してネットワーク非依存で見る。
 
@@ -48,7 +48,7 @@ private func fakePayload(_ marker: String = "risk") -> FilingSectionsPayload {
 
 private let keys = "business_risks,mda,segments"
 
-@Suite struct Stage5IngestTests {
+@Suite struct FilingSectionsIngestTests {
 
     // MARK: - 対象選定・取り込み
 
@@ -57,7 +57,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -74,7 +74,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S1", secCode: "72030", db: app.db)  // listed
             try await seedDoc("S2", secCode: "99990", db: app.db)  // not in listedCodes
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -88,7 +88,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S1", secCode: "72030", db: app.db)  // explicitCodes に含む
             try await seedDoc("S2", secCode: "67580", db: app.db)  // 含まない
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: nil,
                 explicitCodes: ["7203"]
             ) { _ in fakePayload() }
@@ -105,7 +105,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S2", secCode: "72030", docType: "160", db: app.db)  // 半期
             try await seedDoc("S3", secCode: "72030", docType: nil, db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -121,7 +121,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S2", secCode: "1234", db: app.db)  // 5 桁でない
             try await seedDoc("S3", secCode: "12345", db: app.db)  // 末尾 0 でない
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["1234", "1234"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -137,7 +137,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S24", secCode: "72030", submit: "2024-06-20 09:00", db: app.db)
             try await seedDoc("S25", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -168,7 +168,7 @@ private let keys = "business_risks,mda,segments"
             old.sectionKeys = keys
             try await old.create(on: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -183,7 +183,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S22", secCode: "72030", submit: "2022-06-20 09:00", db: app.db)
             try await seedDoc("S23", secCode: "72030", submit: "2023-06-20 09:00", db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload() }
 
@@ -203,7 +203,7 @@ private let keys = "business_risks,mda,segments"
             pre.sectionKeys = keys
             try await pre.create(on: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in
                 Issue.record("extractor must not run for an up-to-date document")
@@ -227,7 +227,7 @@ private let keys = "business_risks,mda,segments"
             stale.sectionKeys = keys
             try await stale.create(on: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload("fresh") }
 
@@ -251,7 +251,7 @@ private let keys = "business_risks,mda,segments"
             pre.sectionKeys = "business_risks,mda"  // 旧セクション集合（segments 追加前）
             try await pre.create(on: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in fakePayload("fresh") }
 
@@ -268,7 +268,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S2", secCode: "67580", db: app.db)
             try await seedDoc("S3", secCode: "99840", db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, sectionKeys: keys,
                 limit: 2
             ) { _ in fakePayload() }
@@ -293,7 +293,7 @@ private let keys = "business_risks,mda,segments"
             stale.sectionKeys = keys
             try await stale.create(on: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: 1
             ) { _ in fakePayload("fresh") }
 
@@ -309,7 +309,7 @@ private let keys = "business_risks,mda,segments"
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage5Ingest(
+            let summary = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
             ) { _ in nil }
 

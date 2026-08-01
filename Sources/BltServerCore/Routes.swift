@@ -106,7 +106,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/filings?max_years=5
-    // DB（Stage 1 `edinet_documents`）に同期済みの書類があればそれを読んで返す
+    // DB（書類同期 `edinet_documents`）に同期済みの書類があればそれを読んで返す
     // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
@@ -118,7 +118,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/financials?years=5
-    // DB（Stage 4 derived キャッシュ company_financials）の格納済み結果のみを返す。
+    // DB（財務取り込み derived キャッシュ company_financials）の格納済み結果のみを返す。
     // 重い XBRL 取得・計算はローカル ingest→Neon に閉じ込め、サーバーは読むだけにして OOM を防ぐ。
     // 未格納・古い・年数不足は 404（バックフィルが追いつけば warm read になる）。
     // ライブ計算へはフォールバックしない（1リクエストでサーバー全体を OOM 落ちさせる地雷を断つ）。
@@ -132,7 +132,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/half-financials?years=3
-    // 半期財務サマリ。DB（半期 Stage 4 derived キャッシュ company_half_financials）の格納済み結果のみ
+    // 半期財務サマリ。DB（半期 財務取り込み derived キャッシュ company_half_financials）の格納済み結果のみ
     // を返す（read で years を半期上限へクランプ）。financials と同じく未格納・古いは 404、ライブ計算へは
     // フォールバックしない。
     v1.get("companies", ":code", "half-financials") { req async -> Response in
@@ -145,7 +145,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/analysis?years=5
-    // Analyze（`docs/feature-tiers.md`）。DB（Stage 4 derived キャッシュ company_financials、
+    // Analyze（`docs/feature-tiers.md`）。DB（財務取り込み derived キャッシュ company_financials、
     // financials と同じ格納行）から増減分解フィールド（事業利益ウォーターフォール・ROIC/ROE分解・
     // ネットキャッシュ差分・運転資本/CCC差分）を含めて返す。未格納・古い・年数不足は 404。
     v1.get("companies", ":code", "analysis") { req async -> Response in
@@ -158,7 +158,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/half-analysis?years=3
-    // Analyze の半期版。DB（半期 Stage 4 derived キャッシュ company_half_financials、half-financials
+    // Analyze の半期版。DB（半期 財務取り込み derived キャッシュ company_half_financials、half-financials
     // と同じ格納行）から増減分解フィールドを含めて返す。
     v1.get("companies", ":code", "half-analysis") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
@@ -170,9 +170,9 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
-    // DB（Stage 5 company_filing_sections）の格納済みセクション本文のみを返す。
+    // DB（有報セクション取り込み company_filing_sections）の格納済みセクション本文のみを返す。
     // 有報のライブ抽出（9MB DL＋SwiftSoup）は大企業で 1GB OOM を実測したため撤去し、重い抽出は
-    // ingest（Stage 5）へ閉じ込めた。未抽出は 404・DB 非接続は 503（financials と同型・フォールバックなし）。
+    // ingest（有報セクション取り込み）へ閉じ込めた。未抽出は 404・DB 非接続は 503（financials と同型・フォールバックなし）。
     v1.get("companies", ":code", "filing-content") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
@@ -186,9 +186,9 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
-    // DB（Stage 6 company_breakdowns）の格納済み内訳のみを返す。
+    // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
     // axis は business / geography（省略時 business）。それ以外の軸は行が無く 404 になる。
-    // Stage 6 の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown-normalization-concept.md）。
+    // 内訳取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown-normalization-concept.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
@@ -201,8 +201,8 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/statement?years=5&doc_id=...
-    // DB（Stage 7 company_statements）の格納済み BS/PL/CF のみを返す。ライブ抽出へはフォールバック
-    // しない（Stage 5/6 と同型）。Stage 7 の対象母集団は日経225構成銘柄のみ（ingest 側の制約。
+    // DB（Statement 取り込み company_statements）の格納済み BS/PL/CF のみを返す。ライブ抽出へはフォールバック
+    // しない（filing-sections/breakdowns と同型）。Statement 取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。
     // docs/statement-normalization-concept.md「実装方針」1）。
     v1.get("companies", ":code", "statement") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
@@ -232,7 +232,7 @@ func registerRoutes(
 
     // GET /v1/demo/companies?q=...
     // sollahiro.com/demo（子サイト）の実データ検索専用。company_breakdowns に格納済みの銘柄
-    // （Stage 6 対象母集団＝日経225構成銘柄）に絞って返す。日経225の構成銘柄一覧そのものは
+    // （内訳取り込み 対象母集団＝日経225構成銘柄）に絞って返す。日経225の構成銘柄一覧そのものは
     // 編集著作物のため配布・公開しない設計（PriorityIngestCodes.swift 参照）。クエリ必須にし、
     // 全件列挙（一覧公開）にならないようにする。
     // このパスは Cloudflare Access の対象外（Bypass ポリシー）にして無認証公開する想定。
@@ -420,7 +420,7 @@ func serveStoredFilingSections(
 }
 
 /// `statement` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
-/// ライブ抽出へのフォールバックは行わない（Stage 5 と同じ理由。決定論のみだが EDINET DL 自体は重い）。
+/// ライブ抽出へのフォールバックは行わない（有報セクション取り込み と同じ理由。決定論のみだが EDINET DL 自体は重い）。
 func serveStoredStatement(
     code: String, docId: String?, years: Int, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {
@@ -459,7 +459,7 @@ func breakdownNotFoundMessage(axis: String) -> String {
 }
 
 /// `breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
-/// ライブ解決へのフォールバックは行わない（Stage 5 と同じ理由。LLM 呼び出しを serving 経路に持ち込まない）。
+/// ライブ解決へのフォールバックは行わない（有報セクション取り込み と同じ理由。LLM 呼び出しを serving 経路に持ち込まない）。
 func serveStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database?, logger: Logger
 ) async -> BreakdownServeResult {

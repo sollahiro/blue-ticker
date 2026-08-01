@@ -15,19 +15,19 @@ func bootstrapBltLogging(from environment: inout Environment) throws {
     }
 }
 
-/// ingest ステージ完了を JSON metadata 付きで 1 行出す。
+/// ingest 対象の完了を JSON metadata 付きで 1 行出す。
 /// `failed > 0` のときは warning（成功のみ notice）。
 /// `servable`/`unservable` は read 床（`*MinServableVersion`）で見た DB 全体のカバレッジ
-/// （今回の ingest 件数ではなくテーブル全件の集計）。床のあるステージ（4 / 4-half / 5）で付与し、
-/// 床の概念が無いステージは nil で省略する。
-/// `notApplicable` は計算対象外（例: 半期報告書未提出）でスキップした件数。区別しないステージは nil で省略する
+/// （今回の ingest 件数ではなくテーブル全件の集計）。床のある対象で付与し、
+/// 床の概念が無い対象は nil で省略する。
+/// `notApplicable` は計算対象外（例: 半期報告書未提出）でスキップした件数。区別しない対象は nil で省略する
 /// （issue #73 フォローアップ。failed に混入させず設計通りの挙動と区別する）。
 /// `notApplicableGeographyOnly`/`notApplicableSingleSegmentDisclosed`/`notApplicableUnknown` は
-/// Stage 6 の notApplicable 内訳（issue #130、E/F判定の検知結果明示化）。区別しないステージは nil で省略する。
-/// `purged` は保持窓を超えたため削除した既存行数（Stage 5 retention）。区別しないステージは nil で省略する。
+/// 内訳取り込みの notApplicable 内訳（issue #130、E/F判定の検知結果明示化）。区別しない対象は nil で省略する。
+/// `purged` は保持窓を超えたため削除した既存行数。区別しない対象は nil で省略する。
 func logIngestSummary(
     _ logger: Logger,
-    stage: String,
+    target: String,
     attempted: Int,
     stored: Int,
     failed: Int,
@@ -42,7 +42,7 @@ func logIngestSummary(
 ) {
     var metadata: Logger.Metadata = [
         "event": "ingest_summary",
-        "stage": .string(stage),
+        "target": .string(target),
         "attempted": .stringConvertible(attempted),
         "stored": .stringConvertible(stored),
         "failed": .stringConvertible(failed),

@@ -1,5 +1,5 @@
 // OpenAI Chat Completions 互換の汎用 LLM クライアント。
-// Stage 6 の html_table 正規化（Analysis/GeographyBreakdownLLMNormalizer.swift）専用。
+// 内訳取り込み の html_table 正規化（Analysis/GeographyBreakdownLLMNormalizer.swift）専用。
 // プロバイダ非依存（xAI Grok / ローカル OpenAI 互換サーバーいずれも ChatCompletionEndpoint の
 // 差し替えだけで動く想定。docs/breakdown-normalization-concept.md 参照）。
 

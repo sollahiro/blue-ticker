@@ -1,21 +1,21 @@
-// Stage 5（有報セクションテキスト）の格納用 Codable 契約。
+// 有報セクション取り込み（有報セクションテキスト）の格納用 Codable 契約。
 // filing-content を「serving=read-only」に載せるため、ingest 時に抽出したセクション本文を
 // この payload で Neon（company_filing_sections）へ格納し、read は DB から復元して返す。
 //
 // 内部型 ExtractedBreakdown（Analysis/BreakdownExtractor.swift, internal）は露出させず、
-// Stage 3 の XbrlFact → XbrlFactRecord 写経と同じパターンで ExtractedBreakdownPayload へ写す。
+// XBRL 数値 RAW の XbrlFact → XbrlFactRecord 写経と同じパターンで ExtractedBreakdownPayload へ写す。
 // Foundation のみ依存（BlueTickerCore/Models 配置。Fluent モデルは BltServerCore 側）。
 
 import Foundation
 
-/// Neon Stage 5 キャッシュ（company_filing_sections.cache_version）の抽出／スキーマバージョン。
+/// Neon 有報セクション取り込み キャッシュ（company_filing_sections.cache_version）の抽出／スキーマバージョン。
 /// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / BreakdownExtractor /
 /// cleanText の cap 等）または本 payload スキーマの意味を変えたときのみバンプする。
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
 ///
 /// v2 → v3（issue #93）: BreakdownExtractor.extractSegmentInfo に東京エレクトロン型
 /// （単一セグメントで報告セグメント開示省略・method == "not_found"）の収益認識関係注記
-/// フォールバックを追加した抽出ロジック変更を反映する。該当企業の Stage 5 `segments` は
+/// フォールバックを追加した抽出ロジック変更を反映する。該当企業の 有報セクション取り込み `segments` は
 /// 既に `section_keys` に "segments" を含むため、キー集合不一致による自動再抽出の対象にならない。
 /// v3 → v4（2026-07-27）: BreakdownExtractor.extractGeographyInfo の非流動資産表除外と
 /// 収益の分解フォールバック（日本精工型）を反映する抽出ロジック変更。

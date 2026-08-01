@@ -3,7 +3,7 @@ import Foundation
 @testable import BlueTickerCore
 
 /// BreakdownNormalizer を smoke/breakdown_extraction_expected.json（golden facts）+ smoke/smoke_expected/*.json
-/// （連結売上）に対して実行し、Stage 6 コモンモデルの挙動を検証する。
+/// （連結売上）に対して実行し、内訳取り込み コモンモデルの挙動を検証する。
 /// ライブ XBRL キャッシュは不要（golden JSON のみで完結する）。
 @Suite struct BreakdownNormalizerTests {
 
@@ -627,7 +627,7 @@ import Foundation
 
     @Test func externalRevenueResolvesViaInternalSubtotalWhenConsolidatedSalesMissing() throws {
         // SOMPO / T&D / 東宝型（2026-07-24）: セグメント注記に外部顧客売上タグはあるが
-        // Stage 4 の years[].sales が null（保険の経常収益ラベルのみ等）のため分母を渡せない。
+        // 財務取り込み の years[].sales が null（保険の経常収益ラベルのみ等）のため分母を渡せない。
         // 売上ホワイトリストタグで内部小計基準へフォールバックできること。
         func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
             BreakdownFact(
@@ -676,8 +676,8 @@ import Foundation
         #expect(snap.denominator == 100_000_000_000)
     }
 
-    @Test func salesBasisAlignsDenominatorWhenStage4SalesFarFromSegmentTotal() throws {
-        // 高島屋型（S100Y4X5）: Stage 4 は NetSales（売上高）だが、セグメント注記の
+    @Test func salesBasisAlignsDenominatorWhenFinancialsSalesFarFromSegmentTotal() throws {
+        // 高島屋型（S100Y4X5）: 財務取り込み は NetSales（売上高）だが、セグメント注記の
         // RevenuesFromExternalCustomers は営業収益ベース。小計に揃えて分母を差し替える。
         func fact(_ member: String, _ value: Double) -> BreakdownFact {
             BreakdownFact(

@@ -1,8 +1,8 @@
-// Stage 6（事業別・地域別売上の正規化スナップショット）の格納用 Codable 契約。
+// 内訳取り込み（事業別・地域別売上の正規化スナップショット）の格納用 Codable 契約。
 // docs/breakdown-normalization-concept.md「今後の検討事項5」参照。
 //
 // 内部型 BreakdownSnapshot/BreakdownRow/LLMBreakdownAudit（Analysis/BreakdownNormalizer.swift,
-// Analysis/GeographyBreakdownLLMNormalizer.swift, internal）は露出させず、Stage 5 の
+// Analysis/GeographyBreakdownLLMNormalizer.swift, internal）は露出させず、有報セクション取り込み の
 // ExtractedBreakdown → ExtractedBreakdownPayload 写経と同じパターンで公開 Codable 型へ写す。
 // Foundation のみ依存（BlueTickerCore/Models 配置。Fluent モデルは BltServerCore 側）。
 
@@ -12,7 +12,7 @@ import Foundation
 public let breakdownAxisBusiness = "business"
 public let breakdownAxisGeography = "geography"
 
-/// Neon Stage 6 キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
+/// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
 /// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
@@ -62,7 +62,7 @@ public let breakdownNotApplicableNotFound = "not_found"
 
 /// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
 /// E/F（business）と geography の正当欠測（`not_found`）が該当。`unknown` や正規化/LLM 失敗は
-/// `needs_review=true` で再処理キューへ載せる（Stage 6 ingest と共用）。
+/// `needs_review=true` で再処理キューへ載せる（内訳取り込み ingest と共用）。
 public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Bool {
     reason == breakdownNotApplicableGeographyOnly
         || reason == breakdownNotApplicableSingleSegmentDisclosed
@@ -96,7 +96,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
 
 /// xbrl_facts と同じく決定的ロジックで解決され、`cache_version` 世代で再計算・read 可否を
 /// 判定すべき source かどうか。LLM 経由（segment_info_llm 等）は content_hash + needs_review
-/// でのみ扱うためここには含めない（`isServableBreakdown` / Stage 6 ingest の staleness 判定で共用）。
+/// でのみ扱うためここには含めない（`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
 public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
     source == breakdownSourceXbrlFacts || source == breakdownSourceNotApplicable
 }

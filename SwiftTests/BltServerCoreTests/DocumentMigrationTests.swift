@@ -1,4 +1,4 @@
-// Stage 1 マイグレーションの検証。
+// 書類同期 マイグレーションの検証。
 // インメモリ SQLite に migration を実走させ、edinet_documents / edinet_sync_state の
 // スキーマがモデルと整合し、行が round-trip することを確認する（本番は Postgres）。
 
@@ -9,7 +9,7 @@ import Vapor
 
 @testable import BltServerCore
 
-/// インメモリ SQLite で Stage 1 マイグレーションを適用した Application を生成し、
+/// インメモリ SQLite で 書類同期 マイグレーションを適用した Application を生成し、
 /// body 実行後に確実に shutdown する（Application.make は asyncShutdown が必須）。
 private func withMigratedApp(_ body: (Application) async throws -> Void) async throws {
     let app = try await Application.make(.testing)
@@ -26,7 +26,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-@Suite struct Stage1MigrationTests {
+@Suite struct DocumentMigrationTests {
     @Test func edinetDocumentRoundTripsAllFields() async throws {
         try await withMigratedApp { app in
             let doc = EdinetDocument()

@@ -1,5 +1,5 @@
-// Stage 6: 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショット（BreakdownSnapshotPayload）= 1 行。
-// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。company_filing_sections（Stage 5,
+// 内訳取り込み: 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショット（BreakdownSnapshotPayload）= 1 行。
+// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。company_filing_sections（有報セクション取り込み,
 // 生のsegments/geography表）とは別テーブル — LLM 経由の行（source != xbrl_facts）は
 // content_hash + needs_review でのみ再計算し、cache_version バンプでの全件再計算対象にしない
 // ため（decisive/deterministic 経路と再計算経済性が違う。今後の検討事項8）。

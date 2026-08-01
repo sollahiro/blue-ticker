@@ -1,4 +1,4 @@
-// Stage 7（Statement 本体）の BS/PL/CF 判定・抽出。docs/statement-normalization-concept.md 参照。
+// Statement 取り込み（Statement 本体）の BS/PL/CF 判定・抽出。docs/statement-normalization-concept.md 参照。
 //
 // XBRLUtils.collectAllNumericFacts が既に付与している role/label メタデータを使い、
 // タグを事前に決め打ちせず（企業拡張タグも含め）BS/PL/CF へ振り分ける。実データ検証
@@ -32,7 +32,7 @@ enum StatementClassifier {
 
     /// fact index から指定した statement type の当期・行一覧を抽出する。
     ///
-    /// 連結優先・非連結フォールバック（`ContextHelpers` 既存ロジックを流用。学び: Breakdown Stage 6
+    /// 連結優先・非連結フォールバック（`ContextHelpers` 既存ロジックを流用。学び: Breakdown 内訳取り込み
     /// と同じく、子会社を持たない小規模企業は連結コンテキストを持たない）。表示順は presentation
     /// linkbase の並び順（`XbrlFact.orderByRole`）を使い、取得できないタグはタグ名のアルファベット順を
     /// 決定的なフォールバックとする（末尾の `sorted` 参照）。`parentTagsByRoleTag`

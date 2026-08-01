@@ -1,4 +1,4 @@
-// 実 EDINET XBRL キャッシュ（analysis_cache）での Stage 6 business 抽出・解決の回帰テスト。
+// 実 EDINET XBRL キャッシュ（analysis_cache）での 内訳取り込み business 抽出・解決の回帰テスト。
 //
 // 対象（2026-07-24 実データ検証）:
 // - 5108 ブリヂストン S100XRPR: 地域別報告セグメント → IFRS 売上収益の粗い事業区分（タイヤ/その他）

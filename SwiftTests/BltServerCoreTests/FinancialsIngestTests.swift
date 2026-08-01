@@ -1,4 +1,4 @@
-// Stage 4 取り込みの DB ロジック（企業選定・重複排除・staleness 判定・upsert・limit）と
+// 財務取り込みの DB ロジック（企業選定・重複排除・staleness 判定・upsert・limit）と
 // read 経路（loadStoredFinancials のバージョン・年数ゲートと trim）を検証する。
 // 計算（computeFinancials）は EDINET 依存のため、フェイク計算器を注入してネットワーク非依存で見る。
 
@@ -29,7 +29,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     try await app.asyncShutdown()
 }
 
-/// secCode 付きの書類を 1 件投入する（Stage 4 は secCode から企業を導出する）。
+/// secCode 付きの書類を 1 件投入する（財務取り込み は secCode から企業を導出する）。
 /// docTypeCode / submitDateTime は high-water 判定のテストで可変にできるよう引数化する。
 private func seedDocument(
     _ docID: String, secCode: String?, docTypeCode: String = "120",
@@ -85,13 +85,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
     return try JSONDecoder().decode(FinancialsResponse.self, from: data)
 }
 
-@Suite struct Stage4IngestTests {
+@Suite struct FinancialsIngestTests {
     @Test func ingestStoresFinancialsForEachDistinctCompany() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -112,7 +112,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S1", secCode: "72030", db: app.db)  // listedCodes に含む
             try await seedDocument("S2", secCode: "67580", db: app.db)  // 上場廃止想定・含まない
 
-            let summary = try await runStage4Ingest(
+            let summary = try await runFinancialsIngest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203"]
             ) { code in
                 fakeSuccess(code: code, years: 5)
@@ -130,7 +130,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S1", secCode: "72030", db: app.db)
             try await seedDocument("S2", secCode: "67580", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -146,7 +146,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S1", secCode: "72030", db: app.db)  // explicitCodes に含む
             try await seedDocument("S2", secCode: "67580", db: app.db)  // 含まない
 
-            let summary = try await runStage4Ingest(
+            let summary = try await runFinancialsIngest(
                 db: app.db, years: 5, limit: nil, explicitCodes: ["7203"]
             ) { code in
                 fakeSuccess(code: code, years: 5)
@@ -165,7 +165,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "67580", db: app.db)  // listedCodes に含まない
             try await seedDocument("S3", secCode: "99840", db: app.db)  // explicitCodes に含まない
 
-            let summary = try await runStage4Ingest(
+            let summary = try await runFinancialsIngest(
                 db: app.db, years: 5, limit: nil, listedCodes: ["7203", "9984"],
                 explicitCodes: ["7203"]
             ) { code in
@@ -184,7 +184,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S1", secCode: "72030", db: app.db)
             try await seedDocument("S2", secCode: "72030", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -200,7 +200,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "1234", db: app.db)  // 5 桁でない
             try await seedDocument("S3", secCode: "12345", db: app.db)  // 末尾 0 でない
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -220,7 +220,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for a fresh company")
                 return fakeSuccess(code: "x", years: 5)
             }
@@ -246,7 +246,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.highWater = "2025-06-20 09:00"
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when high-water matches")
                 return fakeSuccess(code: "x", years: 5)
             }
@@ -274,7 +274,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
                 "S2", secCode: "72030", docTypeCode: "130",
                 submitDateTime: "2026-01-15 09:00", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -298,13 +298,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.highWater = "2025-06-01 09:00"
             try await pre.create(on: app.db)
 
-            // 四半期報告書(140)は Stage 4 の消費種別（120/130）に含まれないため、
+            // 四半期報告書(140)は 財務取り込み の消費種別（120/130）に含まれないため、
             // より新しい提出があっても通期の high-water は前進しない。
             try await seedDocument(
                 "S2", secCode: "72030", docTypeCode: "140",
                 submitDateTime: "2025-08-01 09:00", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run when only a non-consumed doc type arrives")
                 return fakeSuccess(code: "x", years: 5)
             }
@@ -327,7 +327,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.highWater = "2025-01-01 09:00"  // 現在の max より古い → 再計算対象
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .failed }
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -347,7 +347,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.requestedYears = 3
             try await pre.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -368,7 +368,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             stale.requestedYears = 6
             try await stale.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -384,7 +384,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .failed }
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -400,7 +400,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
@@ -417,7 +417,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
                 "S1", secCode: "72030", docTypeCode: "120",
                 submitDateTime: "2025-06-20 09:00", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
 
             #expect(summary.notApplicable == 1)
             let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
@@ -436,10 +436,10 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
                 "S1", secCode: "72030", docTypeCode: "120",
                 submitDateTime: "2025-06-20 09:00", db: app.db)
 
-            let first = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            let first = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
             #expect(first.notApplicable == 1)
 
-            let second = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in
+            let second = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run again when high-water is unchanged")
                 return .notApplicable
             }
@@ -457,7 +457,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument(
                 "S1", secCode: "72030", docTypeCode: "120",
                 submitDateTime: "2025-06-20 09:00", db: app.db)
-            _ = try await runStage4Ingest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            _ = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
 
             #expect(try await loadStoredFinancials(code: "7203", years: 5, db: app.db) == nil)
             #expect(try await loadStoredAnalysis(code: "7203", years: 5, db: app.db) == nil)
@@ -470,7 +470,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "67580", db: app.db)
             try await seedDocument("S3", secCode: "99840", db: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 2) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: 2) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -492,7 +492,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             stale.requestedYears = 6
             try await stale.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: 1) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -527,7 +527,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             staleHighWater.highWater = "2025-06-01 09:00"  // 現在の提出日時より古い → 新規有報あり
             try await staleHighWater.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 1) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: 1) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -569,7 +569,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             staleVersion.highWater = "2025-06-20 09:00"  // seedDocument のデフォルトと一致
             try await staleVersion.create(on: app.db)
 
-            let summary = try await runStage4Ingest(db: app.db, years: 5, limit: 2) { code in
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: 2) { code in
                 fakeSuccess(code: code, years: 5)
             }
 
@@ -585,7 +585,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             try await seedDocument("S2", secCode: "67580", db: app.db)
             try await seedDocument("S3", secCode: "99840", db: app.db)  // 優先指定・投入順は最後
 
-            let summary = try await runStage4Ingest(
+            let summary = try await runFinancialsIngest(
                 db: app.db, years: 5, limit: 1, priorityCodes: ["9984"]
             ) { code in
                 fakeSuccess(code: code, years: 5)

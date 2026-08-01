@@ -231,7 +231,7 @@ private func buildDocumentLevelStage(
 /// 5 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
 /// `listedCodes` は financials/half/filing_sections の対象母集団、`priorityCodes`
 /// （`assets/nikkei225.csv`）は breakdown_business/breakdown_geography の対象母集団
-/// （Stage 6 の実 ingest スコープと同じ絞り込み）。
+/// （内訳取り込み の実 ingest スコープと同じ絞り込み）。
 public func buildIngestStatusReport(
     db: Database, listedCodes: Set<String>, priorityCodes: Set<String>, now: Date = Date()
 ) async throws -> IngestStatusReport {
@@ -262,8 +262,8 @@ public func buildIngestStatusReport(
 
     // filing_sections（対象母集団: listedCodes）
     let sectionRows = try await CompanyFilingSectionsStatusProjection.query(on: db).all()
-    let sectionCandidates = try await stage5Candidates(
-        db: db, listedCodes: listedCodes, years: stage5IngestYears)
+    let sectionCandidates = try await filingSectionCandidates(
+        db: db, listedCodes: listedCodes, years: filingSectionsIngestYears)
     let sectionsDocsTarget = sectionCandidates.keep.count
     let filingSections = buildDocumentLevelStage(
         key: "filing_sections", label: "有価証券報告書の本文データ",
@@ -276,9 +276,9 @@ public func buildIngestStatusReport(
         targetCodes: listedCodes, docsTarget: sectionsDocsTarget, now: now)
 
     // breakdown_business / breakdown_geography（対象母集団: priorityCodes＝日経225構成銘柄。
-    // 実 Stage 6 ingest と同じ母集団・窓のため候補集合は 1 回だけ計算して両軸で共有する）。
-    let breakdownCandidates = try await stage5Candidates(
-        db: db, listedCodes: priorityCodes, years: stage5IngestYears)
+    // 実 内訳取り込み ingest と同じ母集団・窓のため候補集合は 1 回だけ計算して両軸で共有する）。
+    let breakdownCandidates = try await filingSectionCandidates(
+        db: db, listedCodes: priorityCodes, years: filingSectionsIngestYears)
     let breakdownDocsTarget = breakdownCandidates.keep.count
 
     let businessRows = try await CompanyBreakdownStatusProjection.query(on: db)
@@ -329,10 +329,10 @@ public func buildIngestStatusReport(
 /// `scripts/generate-status-page.sh` が呼び出して JSON を捕捉し、静的ページへ反映する）。
 public func runStatusReportCommand() async throws {
     guard let context = await makeBltServerContext() else {
-        throw Stage1SyncError.apiKeyMissing
+        throw DocumentSyncError.apiKeyMissing
     }
     guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
-        throw Stage1SyncError.databaseUnavailable
+        throw DocumentSyncError.databaseUnavailable
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])

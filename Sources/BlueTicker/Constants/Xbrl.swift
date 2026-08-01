@@ -665,12 +665,12 @@ enum Xbrl {
         "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock",
     ]
 
-    // MARK: - 事業別・地域別内訳の正規化（Stage 6, docs/breakdown-normalization-concept.md）
+    // MARK: - 事業別・地域別内訳の正規化（内訳取り込み, docs/breakdown-normalization-concept.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
     /// （netSalesTags と同様、resolveItemPreferCurrent 相当の走査で先頭から一致するものを採用）。
     /// 銀行等はここに一致するタグを持たない（NetRevenue / ConsolidatedGrossProfit 等）ため、
-    /// Stage 6 v1 の対象外は本リストとの不一致という形で自然に成立する。
+    /// 内訳取り込み v1 の対象外は本リストとの不一致という形で自然に成立する。
     static let segmentExternalRevenueTags: [String] = [
         "SalesToExternalCustomersIFRS",
         "RevenueFromExternalCustomersIFRS",
@@ -860,7 +860,7 @@ enum Xbrl {
     static let segmentSpecificGeographyLabelKeywordsJa: [String] =
         segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
 
-    // MARK: - Statement（BS/PL/CF 完全正規化, Stage 7, docs/statement-normalization-concept.md）
+    // MARK: - Statement（BS/PL/CF 完全正規化, Statement 取り込み, docs/statement-normalization-concept.md）
 
     /// role URI の末尾セクション名（`XBRLUtils.sectionNameFromRole`）が注記・補足表であることを示す
     /// 接頭辞。`NotesConsolidatedBalanceSheet` のように本表と同じキーワードを含むため、

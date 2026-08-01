@@ -188,7 +188,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
-    // MARK: - get_statement（Stage 7）
+    // MARK: - get_statement（Statement 取り込み）
 
     @Test func getStatementReturnsErrorResultWhenNotStored() async throws {
         try await withMcpApp(databases: true) { app in

@@ -1,10 +1,10 @@
-// Stage 4: 企業1社分の計算済み財務サマリ（公開契約 FinancialsResponse）= 1 行。
+// 財務取り込み: 企業1社分の計算済み財務サマリ（公開契約 FinancialsResponse）= 1 行。
 // HTML 依存抽出・waterfall を含む高コスト計算を ingest 時に済ませて格納し、
 // REST の financials read 経路は EDINET 取得・XBRL パースなしで返せるようにする（OOM 回避）。
 //
-// edinet_xbrl_facts（Stage 3 RAW）とは別物。こちらは Stage 4 derived（計算結果）であり、
+// edinet_xbrl_facts（XBRL 数値 RAW RAW）とは別物。こちらは 財務取り込み derived（計算結果）であり、
 // cache_version は companyFinancialsCacheVersion（blueTickerVersion 非連動）に連動する。
-// 計算ロジック変更時のみバンプし、月内 Micro バンプで全社再計算を強制しない（Stage 3 と同思想）。
+// 計算ロジック変更時のみバンプし、月内 Micro バンプで全社再計算を強制しない（XBRL 数値 RAW と同思想）。
 // 公開契約は response の中身（FinancialsResponse）側であり、本テーブルはサーバー内部スキーマ。
 
 import BlueTickerCore
@@ -31,7 +31,7 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     @Field(key: "requested_years")
     var requestedYears: Int
 
-    /// 計算の基にした書類集合（`Api.stage4FreshnessDocTypes`）の max(submitDateTime)。
+    /// 計算の基にした書類集合（`Api.financialsFreshnessDocTypes`）の max(submitDateTime)。
     /// 次回 ingest でこれより新しい提出があれば再計算する（high-water 鮮度トリガー）。
     /// 既存行は NULL（マイグレーション後の初回 ingest で一度だけ再計算される）。
     @OptionalField(key: "high_water")

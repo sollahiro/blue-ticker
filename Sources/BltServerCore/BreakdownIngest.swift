@@ -1,20 +1,20 @@
-// Stage 6 取り込み: 日経225構成銘柄の有報について軸別（business / geography）の内訳を解決し
+// 内訳取り込み: 日経225構成銘柄の有報について軸別（business / geography）の内訳を解決し
 // company_breakdowns へ upsert する。解決は BlueTickerCore のファサード
 // （resolveBusinessBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
 // staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
-// 呼び出し元（Stage3Ingest）が business → geography の順で本関数を2回呼ぶ。
+// 呼び出し元（FactsIngest）が business → geography の順で本関数を2回呼ぶ。
 // REST/MCP の read（loadStoredBreakdown）は business / geography の両軸を公開する
 // （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
 // 対象は東証上場全体ではなく日経225構成銘柄に限定する（LLM 呼び出し費用を抑えるため。呼び出し元
-// `Stage3Ingest.swift` が `priorityIngestCodes()`（`assets/nikkei225.csv`）を `stage5Candidates` の
+// `FactsIngest.swift` が `priorityIngestCodes()`（`assets/nikkei225.csv`）を `filingSectionCandidates` の
 // `listedCodes` 引数として渡すことで実現する。ファイル未配置時は空集合＝対象0件（安全側））。
 //
-// 候補選定ロジック自体は Stage 5（`stage5Candidates`、「対象 × 有報(120) × 直近 years 件」）を再利用する
-// （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が Stage 5 と同じ
-// `stage5IngestYears` を渡す想定（Stage 6 専用の別値は持たない）。
+// 候補選定ロジック自体は有報セクション取り込み（`filingSectionCandidates`、「対象 × 有報(120) × 直近 years 件」）を再利用する
+// （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が有報セクション取り込みと同じ
+// `filingSectionsIngestYears` を渡す想定（内訳取り込み専用の別値は持たない）。
 //
-// staleness 判定は Stage 5 と異なる（docs/breakdown-normalization-concept.md「今後の検討事項8」）。
+// staleness 判定は有報セクション取り込みと異なる（docs/breakdown-normalization-concept.md「今後の検討事項8」）。
 // - xbrl_facts 経由（決定的）: cache_version が現行と不一致なら再計算してよい（安価・再現可能）。
 // - LLM 経由（source != xbrl_facts）: cache_version のバンプだけでは再計算しない。needs_review が
 //   true の行のみ再試行対象にする（同一 docID の入力は不変のため、content_hash は書き込むが
@@ -26,8 +26,8 @@ import Fluent
 import Foundation
 import Logging
 
-/// Stage 6 取り込み結果のサマリ。
-public struct Stage6IngestSummary: Sendable, Equatable {
+/// 内訳取り込み結果のサマリ。
+public struct BreakdownIngestSummary: Sendable, Equatable {
     /// 解決を試みた書類数（skip を除く）。
     public let attempted: Int
     /// 解決・格納に成功した書類数。
@@ -55,19 +55,19 @@ public struct Stage6IngestSummary: Sendable, Equatable {
 public typealias BreakdownResolveFn =
     @Sendable (String, Double?) async -> BreakdownResolveResult
 
-/// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定。ファイル名は Stage 5 と揃えて汎用化して
+/// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定。ファイル名は 有報セクション取り込み と揃えて汎用化して
 /// いるが対象は上場全体ではない）の有報（直近 years 年ぶん）を走査し、未解決 or 再試行対象
 /// （needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。`limit` は新規解決件数の
 /// 上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
-/// `explicitCodes` / `priorityCodes` は Stage 5 と同じ意味。`axis` は `business` / `geography`。
-func runStage6Ingest(
+/// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味。`axis` は `business` / `geography`。
+func runBreakdownIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     axis: String = breakdownAxisBusiness,
     logger: Logger? = nil, resolve: BreakdownResolveFn
-) async throws -> Stage6IngestSummary {
+) async throws -> BreakdownIngestSummary {
     let currentCacheVersion = breakdownCacheVersion(forAxis: axis)
-    let sets = try await stage5Candidates(
+    let sets = try await filingSectionCandidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
     let baseCandidates = sets.keep
 
@@ -87,7 +87,7 @@ func runStage6Ingest(
     for cand in baseCandidates {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 6 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+                "DB接続が不安定なため 内訳取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
             break
         }
         let key = CompanyBreakdown.compositeID(docID: cand.docID, axis: axis)
@@ -117,7 +117,7 @@ func runStage6Ingest(
     for cand in candidates {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 6(\(axis)) を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため 内訳取り込み(\(axis)) を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
@@ -144,21 +144,21 @@ func runStage6Ingest(
         }
 
         // 分母売上なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
-        // 過去の成功行（例: 保険の前年）を隠してしまう。Stage 4 が当該 doc を既に計算済みなら
+        // 過去の成功行（例: 保険の前年）を隠してしまう。財務取り込み が当該 doc を既に計算済みなら
         // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
         guard let sales = salesOrNil, sales != 0 else {
-            let stage4HasDoc = try await withDbRetry(
-                logger: logger, context: "docID=\(cand.docID) Stage4有無",
+            let financialsHasDoc = try await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID) financials有無",
                 onRetry: { unhealthyRetries += 1 }
             ) {
                 try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
             }
-            if stage4HasDoc {
+            if financialsHasDoc {
                 notApplicable += 1
                 // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
                 if let existing, existing.source != breakdownSourceNotApplicable {
                     logger?.warning(
-                        "Stage 6(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
+                        "内訳取り込み(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
                     )
                 } else {
                     let placeholder = BreakdownSnapshotPayload(
@@ -204,12 +204,12 @@ func runStage6Ingest(
             }
             // 既存行が実データ（source != not_applicable）を保持している場合は上書きしない。
             // 再試行（needsReview=true や cache_version 不一致）の対象になった行が、LLM 一時停止・
-            // Stage 4 未計算等の一時的な理由で今回だけ notApplicable 判定された場合に、既存の
+            // 財務取り込み 未計算等の一時的な理由で今回だけ notApplicable 判定された場合に、既存の
             // 正しいデータを破壊してしまうため（Opus監査で指摘、issue #132）。`.failed` と同じ
             // 「今回は進展なし、次回また再試行対象になる」扱いにする。
             if let existing, existing.source != breakdownSourceNotApplicable {
                 logger?.warning(
-                    "Stage 6(\(axis)): 既存の実データ行を notApplicable(\(reason)) で上書きしません(次回再試行): docID=\(cand.docID) code=\(cand.code)"
+                    "内訳取り込み(\(axis)): 既存の実データ行を notApplicable(\(reason)) で上書きしません(次回再試行): docID=\(cand.docID) code=\(cand.code)"
                 )
             } else {
                 // E/F / geography not_found は決定的判定のため needsReview=false。
@@ -231,7 +231,7 @@ func runStage6Ingest(
             }
         case .failed:
             failed += 1
-            logger?.warning("Stage 6(\(axis)) 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
+            logger?.warning("内訳取り込み(\(axis)) 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
         }
     }
 
@@ -240,7 +240,7 @@ func runStage6Ingest(
     var purged = 0
     for docID in sets.purge {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため Stage 6(\(axis)) purge を中断します(リトライ\(unhealthyRetries)回)")
+            logger?.error("DB接続が不安定なため 内訳取り込み(\(axis)) purge を中断します(リトライ\(unhealthyRetries)回)")
             break
         }
         let key = CompanyBreakdown.compositeID(docID: docID, axis: axis)
@@ -254,7 +254,7 @@ func runStage6Ingest(
         if deleted { purged += 1 }
     }
 
-    return Stage6IngestSummary(
+    return BreakdownIngestSummary(
         attempted: attempted, stored: stored, notApplicable: notApplicable,
         notApplicableGeographyOnly: notApplicableGeographyOnly,
         notApplicableSingleSegmentDisclosed: notApplicableSingleSegmentDisclosed,
@@ -262,20 +262,20 @@ func runStage6Ingest(
         failed: failed, skipped: skipped, purged: purged)
 }
 
-/// company_financials（Stage 4）から当該書類（docID）の連結売上高を引く。Stage 6 は自前で
-/// XBRL から売上を再抽出せず、既に計算済みの Stage 4 の値を再利用する（重複ロジック回避）。
-/// Stage 4 が当該コード・当該書類をまだ計算していない場合は nil。`BreakdownNormalizer` /
+/// company_financials（財務取り込み）から当該書類（docID）の連結売上高を引く。内訳取り込みは自前で
+/// XBRL から売上を再抽出せず、既に計算済みの財務取り込みの値を再利用する（重複ロジック回避）。
+/// 財務取り込みが当該コード・当該書類をまだ計算していない場合は nil。`BreakdownNormalizer` /
 /// 両 LLM 正規化器はいずれも分母 nil（または 0）を許容せず即 nil を返す（=`.notApplicable`）ため、
-/// Stage 4 未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
-/// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、Stage 4 が先に
-/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（4→4half→5→6）はこれを満たす）。
+/// 財務取り込み未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
+/// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、財務取り込みが先に
+/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（financials→half-financials→filing-sections→breakdowns）はこれを満たす）。
 func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
     return financials.response.salesForDoc(docID)
 }
 
-/// Stage 4 が当該 code/docID の年次エントリを既に持っているか（売上の有無は問わない）。
-/// 分母売上なしの Stage 6 判定で「未計算」と「計算済みだが売上抽出不能」を分けるために使う。
+/// 財務取り込み が当該 code/docID の年次エントリを既に持っているか（売上の有無は問わない）。
+/// 分母売上なしの 内訳取り込み 判定で「未計算」と「計算済みだが売上抽出不能」を分けるために使う。
 func companyFinancialsHasDoc(code: String, docID: String, db: Database) async throws -> Bool {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return false }
     return financials.response.hasDoc(docID)
@@ -365,7 +365,7 @@ enum BreakdownLoadResult {
     case absent
 }
 
-/// 格納済み Stage 6 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
+/// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
 /// axis は "business" / "geography" を受け付ける（geography は 2026-07-27、品質ゲート
 /// ＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁。それ以外の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。

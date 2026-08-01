@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// Statement 公開契約（Stage 7 骨組み）のバージョニング・Codable 往復の仕様を検証する。
+/// Statement 公開契約（Statement 取り込み 骨組み）のバージョニング・Codable 往復の仕様を検証する。
 @Suite struct StatementContractTests {
     @Test func cacheVersionNumberParsesStatementVN() {
         #expect(statementCacheVersionNumber("statement-v1") == 1)

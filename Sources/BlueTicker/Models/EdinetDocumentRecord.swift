@@ -1,6 +1,6 @@
 import Foundation
 
-/// Stage 1 同期用の正規化済み EDINET 書類メタ 1 件。
+/// 書類同期用の正規化済み EDINET 書類メタ 1 件。
 /// ファサードが EDINET の動的 JSON（[String: Any]）を正規化してこの型で返し、
 /// BltServerCore 側が DB モデル（EdinetDocument）へ写す。日付は YYYY-MM-DD（規約）。
 public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
@@ -43,8 +43,8 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
     }
 }
 
-/// Stage 1 同期の EDINET 取得結果。取得失敗日を高水位計算に渡す。
-public struct Stage1FetchResult: Sendable, Equatable {
+/// 書類同期の EDINET 取得結果。取得失敗日を高水位計算に渡す。
+public struct DocumentFetchResult: Sendable, Equatable {
     public let records: [EdinetDocumentRecord]
     /// getDocumentsForDateRange で nil になった日（YYYY-MM-DD）。
     public let failedDates: [String]

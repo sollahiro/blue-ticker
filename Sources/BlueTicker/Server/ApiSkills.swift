@@ -462,7 +462,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 試みずそのまま構造化して返します（格納済みデータのみ）。Summarize/Analyze の絞り込んだ
                 ~20指標とは異なり、開示された全項目（企業拡張タグ含む）を返します。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
-                注記（Stage 8）は別ツール（未実装）の対象。
+                注記（statement-notes）は別ツール（未実装）の対象。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",

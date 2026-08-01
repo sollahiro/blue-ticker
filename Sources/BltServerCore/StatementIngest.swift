@@ -1,19 +1,19 @@
-// Stage 7 取り込み: 日経225構成銘柄の有報について BS/PL/CF を抽出し company_statements へ upsert する。
+// Statement 取り込み: 日経225構成銘柄の有報について BS/PL/CF を抽出し company_statements へ upsert する。
 // 抽出は BlueTickerCore のファサード（extractStatement）に委譲し、ここでは対象選定・staleness 判定・
 // DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
-// `stage5Candidates`（`listedCodes × 有報(120) × 直近 years 件`）をそのまま再利用し、返ってきた
+// `filingSectionCandidates`（`listedCodes × 有報(120) × 直近 years 件`）をそのまま再利用し、返ってきた
 // docID ごとに抽出結果を1行として格納する（company_filing_sections と同じ「1書類=1行」設計）。
-// 複数年度対応は本関数の呼び出し元が stage5Candidates から複数 docID を受け取ることで自然に
+// 複数年度対応は本関数の呼び出し元が filingSectionCandidates から複数 docID を受け取ることで自然に
 // 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
 // （docs/statement-normalization-concept.md「実装方針」2）。
 //
-// 対象母集団は Stage 6 と同じ日経225限定でスタートする。Stage 7 は LLM 不要でコスト制約は
+// 対象母集団は内訳取り込みと同じ日経225限定でスタートする。Statement 取り込みは LLM 不要でコスト制約は
 // 無いが、実データ検証（158社）が銀行・保険等の特殊タクソノミを網羅していないため、まず
 // 母集団を絞って様子を見る（呼び出し元が `listedCodes` に `priorityIngestCodes()` を渡すことで
 // 実現する。同「実装方針」1）。
 //
-// staleness 判定は決定論のみ（LLM 不要）のため Stage 6 より単純: cache_version 不一致のみで
+// staleness 判定は決定論のみ（LLM 不要）のため内訳取り込みより単純: cache_version 不一致のみで
 // 再抽出対象にする（company_breakdowns の needs_review 相当の概念は無い）。
 
 import BlueTickerCore
@@ -21,8 +21,8 @@ import Fluent
 import Foundation
 import Logging
 
-/// Stage 7 取り込み結果のサマリ。
-public struct Stage7IngestSummary: Sendable, Equatable {
+/// Statement 取り込み結果のサマリ。
+public struct StatementIngestSummary: Sendable, Equatable {
     /// 抽出を試みた書類数（skip を除く）。
     public let attempted: Int
     /// 抽出・格納に成功した書類数。
@@ -41,13 +41,13 @@ public typealias StatementExtractor = @Sendable (String) async -> StatementYear?
 
 /// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定）の有報（直近 years 年ぶん）を走査し、
 /// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
-/// `explicitCodes` / `priorityCodes` は Stage 5/6 と同じ意味。
-func runStage7Ingest(
+/// `explicitCodes` / `priorityCodes` は filing-sections/breakdowns と同じ意味。
+func runStatementIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     logger: Logger? = nil, extract: StatementExtractor
-) async throws -> Stage7IngestSummary {
-    let sets = try await stage5Candidates(
+) async throws -> StatementIngestSummary {
+    let sets = try await filingSectionCandidates(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
     let baseCandidates = sets.keep
 
@@ -62,7 +62,7 @@ func runStage7Ingest(
     for cand in baseCandidates {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 7 を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
+                "DB接続が不安定なため Statement 取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
             break
         }
         let existing = try await withDbRetry(
@@ -86,7 +86,7 @@ func runStage7Ingest(
     for cand in candidates {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 7 を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため Statement 取り込み を中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
             )
             break
         }
@@ -103,7 +103,7 @@ func runStage7Ingest(
         attempted += 1
         guard let payload = await extract(cand.docID) else {
             failed += 1
-            logger?.warning("Stage 7 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
+            logger?.warning("Statement 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
             continue
         }
         try await withDbRetry(
@@ -121,7 +121,7 @@ func runStage7Ingest(
     var purged = 0
     for docID in sets.purge {
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため Stage 7 purge を中断します(リトライ\(unhealthyRetries)回)")
+            logger?.error("DB接続が不安定なため Statement 取り込み purge を中断します(リトライ\(unhealthyRetries)回)")
             break
         }
         let deleted = try await withDbRetry(
@@ -134,7 +134,7 @@ func runStage7Ingest(
         if deleted { purged += 1 }
     }
 
-    return Stage7IngestSummary(
+    return StatementIngestSummary(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
 }
 
@@ -195,10 +195,10 @@ func countServableStatements(db: Database) async throws -> (servable: Int, unser
 
 // MARK: - read 経路（REST/MCP statement）
 
-/// 格納済み Stage 7 行を code で引き、公開契約 `StatementResponse` の JSON を返す。
+/// 格納済み Statement 取り込み 行を code で引き、公開契約 `StatementResponse` の JSON を返す。
 /// `docId` 指定時はその書類（当該 code のもの）1件のみ、省略時は当該 code の直近 `years` 件
 /// （提出日時降順・床以上）を束ねる。床は `statementMinServableVersion`（明示定数）。
-/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない。Stage 5 と同型）。
+/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない。有報セクション取り込み と同型）。
 func loadStoredStatement(
     code: String, docId: String?, years: Int, db: Database
 ) async throws -> [String: Any]? {

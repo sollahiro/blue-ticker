@@ -1,4 +1,4 @@
-// Stage 1 同期: EDINET 書類一覧を DB（edinet_documents）へ取り込み、
+// 書類同期: EDINET 書類一覧を DB（edinet_documents）へ取り込み、
 // 同期高水位（edinet_sync_state.synced_through）を進める。
 // 取得・正規化は BlueTickerCore のファサード（fetchDocumentsForSync）に委譲し、
 // ここでは DB への upsert と高水位更新のみを担う。
@@ -9,7 +9,7 @@ import Foundation
 import Vapor
 
 /// 同期結果のサマリ。
-public struct Stage1SyncSummary: Sendable, Equatable {
+public struct DocumentSyncSummary: Sendable, Equatable {
     public let from: String
     public let to: String
     /// 実際に DB へ書き込んだ synced_through（部分失敗時は to より前になる）。
@@ -19,7 +19,7 @@ public struct Stage1SyncSummary: Sendable, Equatable {
     public let updated: Int
 }
 
-enum Stage1SyncError: Error, CustomStringConvertible {
+enum DocumentSyncError: Error, CustomStringConvertible {
     /// 初回同期で開始日が決められない（同期状態なし・--from 未指定）。
     case missingStartDate
     /// DATABASE_URL 未設定で DB が無い。
@@ -41,18 +41,18 @@ enum Stage1SyncError: Error, CustomStringConvertible {
 
 /// EDINET 書類を期間取得して DB へ upsert し、synced_through を to へ進める。
 /// from 解決順位: 明示指定 > 既存 synced_through > （いずれも無ければ）missingStartDate。
-func runStage1Sync(
+func runDocumentSync(
     context: BltServerContext,
     db: Database,
     from: String?,
     to: String,
     logger: Logger? = nil
-) async throws -> Stage1SyncSummary {
+) async throws -> DocumentSyncSummary {
     let resolvedFrom = try await resolveStartDate(from: from, db: db, logger: logger)
     let previousSyncedThrough = try await loadSyncedThrough(db: db, logger: logger)
     let fetchResult = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
     let counts = try await applyDocuments(fetchResult.records, db: db, logger: logger)
-    let syncedThrough = computeStage1SyncedThrough(
+    let syncedThrough = computeDocumentSyncedThrough(
         from: resolvedFrom,
         to: to,
         previousSyncedThrough: previousSyncedThrough,
@@ -61,12 +61,12 @@ func runStage1Sync(
     )
     if syncedThrough != to {
         logger?.warning(
-            "Stage 1 同期を部分完了: requested_to=\(to) synced_through=\(syncedThrough) apply_completed=\(counts.completed) failed_fetch_days=\(fetchResult.failedDates.count)"
+            "書類同期を部分完了: requested_to=\(to) synced_through=\(syncedThrough) apply_completed=\(counts.completed) failed_fetch_days=\(fetchResult.failedDates.count)"
         )
     }
     try await upsertSyncState(syncedThrough: syncedThrough, db: db, logger: logger)
 
-    return Stage1SyncSummary(
+    return DocumentSyncSummary(
         from: resolvedFrom, to: to, syncedThrough: syncedThrough,
         fetched: fetchResult.records.count,
         created: counts.created, updated: counts.updated)
@@ -85,7 +85,7 @@ func applyDocuments(
         // 他ステージと同様、各項目の先頭で判定する（本ループに continue は無いが一貫性のため）。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため Stage 1 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため 書類同期 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated)件は次回スケジュールで再試行)"
             )
             return (created, updated, completed: false)
         }
@@ -131,7 +131,7 @@ func applyDocuments(
 }
 
 /// 部分失敗時は高水位を進めない（または取得失敗日の前日までに留める）。
-func computeStage1SyncedThrough(
+func computeDocumentSyncedThrough(
     from: String,
     to: String,
     previousSyncedThrough: String?,
@@ -163,7 +163,7 @@ func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async 
         try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
     }
     if let state { return state.syncedThrough }
-    throw Stage1SyncError.missingStartDate
+    throw DocumentSyncError.missingStartDate
 }
 
 /// synced_through を upsert する（単一行）。
@@ -178,7 +178,7 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 
 // MARK: - read 経路（REST filings）
 
-/// 指定銘柄（4 桁証券コード）の Stage 1 書類を DB から引いて正規化レコードで返す。
+/// 指定銘柄（4 桁証券コード）の 書類同期 書類を DB から引いて正規化レコードで返す。
 /// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため LIKE プレフィックスで突き合わせる
 /// （ライブ探索の hasPrefix(code4) と同条件）。該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
@@ -228,12 +228,12 @@ extension EdinetDocument {
 
 /// `blt-server sync` の本体。Application を一時的に起動して DB を配線し、同期を実行する。
 /// to 未指定なら UTC の当日。DATABASE_URL 未設定なら databaseUnavailable を投げる。
-public func runStage1SyncCommand(from: String?, to: String?) async throws {
+public func runDocumentSyncCommand(from: String?, to: String?) async throws {
     guard let context = await makeBltServerContext() else {
-        throw Stage1SyncError.apiKeyMissing
+        throw DocumentSyncError.apiKeyMissing
     }
     guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
-        throw Stage1SyncError.databaseUnavailable
+        throw DocumentSyncError.databaseUnavailable
     }
 
     var env = Environment(name: "production", arguments: ["blt-server"])
@@ -241,13 +241,13 @@ public func runStage1SyncCommand(from: String?, to: String?) async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let summary = try await runStage1Sync(
+        let summary = try await runDocumentSync(
             context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
         app.logger.notice(
-            "Stage 1 sync summary",
+            "書類同期 sync summary",
             metadata: [
                 "event": "sync_summary",
-                "stage": "1",
+                "target": "documents",
                 "from": .string(summary.from),
                 "to": .string(summary.to),
                 "synced_through": .string(summary.syncedThrough),

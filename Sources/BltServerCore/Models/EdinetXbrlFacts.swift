@@ -1,8 +1,8 @@
-// Stage 3: 書類1件分の XBRL 数値 RAW（パース済み fact インデックス）= 1 行。
-// Stage 4 は書類単位に全 fact をまとめて読んで計算するため、書類単位の JSONB 1 セルに格納する。
+// 数値 fact 取り込み: 書類1件分の XBRL 数値 RAW（パース済み fact インデックス）= 1 行。
+// 財務取り込み は書類単位に全 fact をまとめて読んで計算するため、書類単位の JSONB 1 セルに格納する。
 // 公開契約は financials レスポンス側であり、本テーブルはサーバー内部スキーマ（後で柔軟に変更可）。
 //
-// EDINET XBRL のパース（XbrlFactIndex → 本ペイロード）は Stage 2/3 取り込みタスクで追加する。
+// EDINET XBRL のパース（XbrlFactIndex → 本ペイロード）は XBRL 取得・数値 fact 取り込みタスクで追加する。
 // ここではスキーマ定義のみを置く。
 
 import BlueTickerCore

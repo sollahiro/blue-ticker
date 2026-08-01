@@ -1,6 +1,6 @@
 // Fluent（DB 層）の配線。
 // DATABASE_URL（Neon の Postgres 接続文字列）が設定されているときのみ Postgres を登録し、
-// Stage 1 のマイグレーションを適用する。
+// 書類同期 のマイグレーションを適用する。
 // 未設定なら DB なしで起動する（現行のステートレス EDINET プロキシ動作を維持）。
 //
 // `autoMigrate` は withDbRetry で包む。ingest 本体の DB 操作は既にリトライ済みだが、
@@ -31,28 +31,28 @@ func configureDatabase(_ app: Application) async throws {
         "Postgres 接続プール設定: maxConnectionsPerEventLoop=\(Api.dbMaxConnectionsPerEventLoop) connectionPoolTimeout=\(Api.dbConnectionPoolTimeoutSeconds)s"
     )
 
-    // Stage 1: 書類一覧（edinet_documents）と同期進捗（edinet_sync_state）。
+    // 書類同期: 書類一覧（edinet_documents）と同期進捗（edinet_sync_state）。
     app.migrations.add(CreateEdinetDocument())
     app.migrations.add(CreateEdinetSyncState())
-    // Stage 3: XBRL 数値 RAW（edinet_xbrl_facts、書類単位 JSONB）。
+    // 数値 fact 取り込み: XBRL 数値 RAW（edinet_xbrl_facts、書類単位 JSONB）。
     app.migrations.add(CreateEdinetXbrlFacts())
-    // Stage 4: 計算済み財務サマリ（company_financials、企業単位 JSONB）。
+    // 財務取り込み: 計算済み財務サマリ（company_financials、企業単位 JSONB）。
     app.migrations.add(CreateCompanyFinancials())
-    // Stage 4-half: 計算済み半期財務サマリ（company_half_financials、企業単位 JSONB）。
+    // 半期財務取り込み: 計算済み半期財務サマリ（company_half_financials、企業単位 JSONB）。
     app.migrations.add(CreateCompanyHalfFinancials())
-    // Stage 4 / 4-half: high-water 鮮度トリガー列の追加（issue #26）。
+    // 財務取り込み / 4-half: high-water 鮮度トリガー列の追加（issue #26）。
     app.migrations.add(AddHighWaterToCompanyFinancials())
-    // Stage 5: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
+    // 有報セクション取り込み: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
     // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。
     app.migrations.add(CreateEdinetMasterSnapshot())
-    // Stage 6: 事業別内訳（company_breakdowns、書類×軸単位 JSONB）。
+    // 内訳取り込み: 事業別内訳（company_breakdowns、書類×軸単位 JSONB）。
     app.migrations.add(CreateCompanySegmentBreakdowns())
     // company_segment_breakdowns → company_breakdowns へのテーブル名変更（Breakdown 系命名への統一）。
     app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
     // business 軸が解決できなかった理由（E/F/unknown）の永続化列（issue #132）。
     app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
-    // Stage 7: BS/PL/CF 完全正規化（company_statements、書類単位 JSONB）。対象は日経225限定。
+    // Statement 取り込み: BS/PL/CF 完全正規化（company_statements、書類単位 JSONB）。対象は日経225限定。
     app.migrations.add(CreateCompanyStatements())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
