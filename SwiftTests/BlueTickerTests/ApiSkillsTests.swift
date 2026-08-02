@@ -21,7 +21,7 @@ import Testing
             names == [
                 "search_companies", "search_by_sector", "get_filings",
                 "get_financial_summary",
-                "get_analysis", "get_filing_content",
+                "get_waterfall", "get_filing_content",
                 "get_breakdown", "get_statement",
             ])
         // REST 専用（MCP なし）

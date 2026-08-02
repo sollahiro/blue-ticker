@@ -49,7 +49,7 @@ Blue Ticker の強みは独自の分析ロジック（要因分解・正規化�
 
 ## 機能taxonomyとの関係
 
-機能群は「構造化 → 正規化 → 視覚化」の3層で再整理を検討中（詳細合意でき次第 `feature-tiers.md` に反映）。Cube は視覚化層のうち **Analyze（waterfall＝financials の要因分解）の派生**と位置づける。Breakdown（事業別・地域別内訳）の立体化は Cube ではなく、Allocation（Sankey）側の iOS 拡張候補として別扱いにする方針。
+機能群は「構造化 → 正規化 → 視覚化」の3層で再整理を検討中（詳細合意でき次第 `feature-tiers.md` に反映）。Cube は視覚化層のうち **Waterfall（financials の要因分解）の派生**と位置づける。Breakdown（事業別・地域別内訳）の立体化は Cube ではなく、Allocation（Sankey）側の iOS 拡張候補として別扱いにする方針。
 
 ## 未確定事項（次回以降に詰める）
 

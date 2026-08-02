@@ -220,13 +220,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
                 損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
-                前年差・要因分解（増減分析）は get_analysis を使ってください。
+                前年差・要因分解（増減分析）は get_waterfall を使ってください。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",
             mcpTool: "get_financial_summary",
-            feature: "summarize",
+            feature: "summary",
             parameters: [
                 ApiSkillParameter(
                     name: "code",
@@ -246,7 +246,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Summarize（水準値）。増減分解が必要なら get-analysis。
+                Summary（水準値）。増減分解が必要なら get-waterfall。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。ライブ計算へはフォールバックしない。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
@@ -254,7 +254,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """
         ),
         ApiSkill(
-            id: "get-analysis",
+            id: "get-waterfall",
             name: "通期増減分析",
             description: """
                 銘柄コードの増減分析（前年差分解）を年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
@@ -264,9 +264,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 金額単位は百万円（JPY）、比率は%、日数は日。
                 """,
             method: "GET",
-            path: "/v1/companies/{code}/analysis",
-            mcpTool: "get_analysis",
-            feature: "analyze",
+            path: "/v1/companies/{code}/waterfall",
+            mcpTool: "get_waterfall",
+            feature: "waterfall",
             parameters: [
                 ApiSkillParameter(
                     name: "code",
@@ -286,10 +286,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Analyze（Summarize + 前年差・要因分解）。水準値だけなら get-financials で足りる。
+                Waterfall（Summary + 前年差・要因分解）。水準値だけなら get-financials で足りる。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
-                例: GET /v1/companies/6103/analysis?years=5
+                例: GET /v1/companies/6103/waterfall?years=5
                 """
         ),
         ApiSkill(
@@ -385,7 +385,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表（BS/PL/CF）完全正規化",
             description: """
                 有価証券報告書から貸借対照表・損益計算書・キャッシュ・フロー計算書を、企業間の科目統一を
-                試みずそのまま構造化して返します（格納済みデータのみ）。Summarize/Analyze の絞り込んだ
+                試みずそのまま構造化して返します（格納済みデータのみ）。Summary/Waterfall の絞り込んだ
                 ~20指標とは異なり、開示された全項目（企業拡張タグ含む）を返します。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
                 注記（statement-notes）は別ツール（未実装）の対象。

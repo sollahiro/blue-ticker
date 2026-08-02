@@ -5,7 +5,7 @@
 ## 主な機能
 
 - 銘柄検索・業種一覧
-- 年次の財務サマリ（Summarize）と増減分析（Analyze）
+- 年次の財務サマリ（Summary）と増減分析（Waterfall）
 - 有価証券報告書のセクション本文（Filing）
 - 事業別・地域別売上の内訳（Breakdown・整備中）
 

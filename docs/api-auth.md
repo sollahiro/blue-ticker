@@ -37,7 +37,7 @@
 
 - REST 機械入口の識別子 = Service Token（`api.*`）
 - MCP 入口の識別子 = Managed OAuth クライアント（`mcp.*`）
-- 面別メーター・「MCP Analyze だけ無料」等は、Gateway / 案2 検討時にこの分離を前提にする
+- 面別メーター・「MCP Waterfall だけ無料」等は、Gateway / 案2 検討時にこの分離を前提にする
 
 ## 案2への移行（必要なとき）
 

@@ -129,11 +129,11 @@ func registerRoutes(
             notFoundMessage: "財務データは未集計です")
     }
 
-    // GET /v1/companies/{code}/analysis?years=5
-    // Analyze（`docs/feature-tiers.md`）。DB（財務取り込み derived キャッシュ company_financials、
+    // GET /v1/companies/{code}/waterfall?years=5
+    // Waterfall（`docs/feature-tiers.md`）。DB（財務取り込み derived キャッシュ company_financials、
     // financials と同じ格納行）から増減分解フィールド（事業利益ウォーターフォール・ROIC/ROE分解・
     // ネットキャッシュ差分・運転資本/CCC差分）を含めて返す。未格納・古い・年数不足は 404。
-    v1.get("companies", ":code", "analysis") { req async -> Response in
+    v1.get("companies", ":code", "waterfall") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         return makeStoredDataResponse(
@@ -310,7 +310,7 @@ func serveStoredFinancials(
     }
 }
 
-/// `analysis`（Analyze・年次）の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+/// `waterfall`（Waterfall・年次）の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 func serveStoredAnalysis(
     code: String, years: Int, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {

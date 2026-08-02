@@ -13,7 +13,7 @@ import Testing
     @Test func devRootRegistersAllDocumentedSubcommands() {
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
         let expected: Set = [
-            "search", "analyze", "summarize", "cache", "filings", "filing", "breakdown", "statement",
+            "search", "waterfall", "summary", "cache", "filings", "filing", "breakdown", "statement",
         ]
         #expect(names == expected)
     }
@@ -23,9 +23,9 @@ import Testing
         #expect(cmd is CacheStatus)
     }
 
-    @Test func parsingAnalyzeFromDevRootDispatchesToDevAnalyzeCommand() throws {
-        let parsed = try DevCLIEntry.parseAsRoot(["analyze", "7203"])
-        let cmd = try #require(parsed as? DevAnalyzeCommand)
+    @Test func parsingWaterfallFromDevRootDispatchesToDevWaterfallCommand() throws {
+        let parsed = try DevCLIEntry.parseAsRoot(["waterfall", "7203"])
+        let cmd = try #require(parsed as? DevWaterfallCommand)
         #expect(cmd.code == "7203")
     }
 
@@ -35,22 +35,22 @@ import Testing
         #expect(cmd.query == "トヨタ")
     }
 
-    // MARK: - Dev analyze の引数パース
+    // MARK: - Dev waterfall の引数パース
 
-    @Test func devAnalyzeDefaultsFlagsAreOff() throws {
-        let cmd = try DevAnalyzeCommand.parse(["7203"])
+    @Test func devWaterfallDefaultsFlagsAreOff() throws {
+        let cmd = try DevWaterfallCommand.parse(["7203"])
         #expect(!cmd.json)
     }
 
-    @Test func devAnalyzeParsesLongOptionsAndFlags() throws {
-        let cmd = try DevAnalyzeCommand.parse(["7203", "--json", "--years", "4"])
+    @Test func devWaterfallParsesLongOptionsAndFlags() throws {
+        let cmd = try DevWaterfallCommand.parse(["7203", "--json", "--years", "4"])
         #expect(cmd.json)
         #expect(cmd.years == 4)
     }
 
-    @Test func devAnalyzeWithoutCodeFailsToParse() {
+    @Test func devWaterfallWithoutCodeFailsToParse() {
         #expect(throws: (any Error).self) {
-            _ = try DevAnalyzeCommand.parse([])
+            _ = try DevWaterfallCommand.parse([])
         }
     }
 
@@ -118,7 +118,7 @@ import Testing
         #expect(cmd.edinetDocIndexYears == Api.documentIndexKeepYears)
     }
 
-    // MARK: - 表示列ラベル（analyze / summarize の列見出し）
+    // MARK: - 表示列ラベル（waterfall / summary の列見出し）
 
     private func entry(fyEnd: String?, perType: String? = nil) -> YearEntry {
         var raw = RawData()

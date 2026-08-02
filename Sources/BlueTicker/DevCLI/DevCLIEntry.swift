@@ -13,8 +13,8 @@ public struct DevCLIEntry: AsyncParsableCommand {
         version: blueTickerVersion,
         subcommands: [
             DevSearchCommand.self,
-            DevAnalyzeCommand.self,
-            DevSummarizeCommand.self,
+            DevWaterfallCommand.self,
+            DevSummaryCommand.self,
             CacheCommand.self,
             DevFilingsCommand.self,
             DevFilingCommand.self,

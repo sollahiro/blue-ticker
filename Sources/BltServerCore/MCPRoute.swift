@@ -176,7 +176,7 @@ private func dispatchMcpTool(
                 code: code, years: Api.financialsYearsDefault, db: db, logger: logger),
             notFoundMessage: "財務データは未集計です")
 
-    case "get_analysis":
+    case "get_waterfall":
         let code = args["code"]?.stringValue ?? ""
         return mapStoredResult(
             await serveStoredAnalysis(

@@ -13,7 +13,7 @@
 swift build                          # blt-server / TickerDev バイナリを生成
 swift test                           # 全テスト（Swift Testing）
 .build/debug/blt-server --help       # ローカル実行（要 BLT_EDINET_API_KEY 等）
-swift run TickerDev analyze <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
+swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
 ```
 
 ## ターゲット構成と依存ルール
