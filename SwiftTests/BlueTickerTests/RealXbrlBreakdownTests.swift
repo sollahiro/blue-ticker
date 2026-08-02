@@ -268,6 +268,89 @@ private actor RealXbrlMockChat: ChatCompleting {
     }
 }
 
+// 実 EDINET XBRL キャッシュでの Stage 6 employees/research_and_development 軸の回帰テスト。
+// 2026-08-01 監査指摘: `CorporateSharedMember`（本社機能等の少額バケツ）を "subtotal" に分類すると
+// 合計チェックから除外され、これを含めないと sum(segment) が常に total を下回るため
+// 5%乖離警告が恒常的な誤検知になる（needs_review=true が固定化し再ingestループになる）。
+// 京セラ S100TSIJ は実データでこの境界（乖離ちょうど4.98%）を踏む代表例。
+@Suite struct RealXbrlEmployeesRDBreakdownTests {
+
+    private static let xbrlRoot: URL = {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+    }()
+
+    private static func xbrlDir(_ docID: String) -> URL {
+        xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+    }
+
+    private static func cacheAvailable(_ docID: String) -> Bool {
+        FileManager.default.fileExists(atPath: xbrlDir(docID).path)
+    }
+
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard cacheAvailable(docID) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
+    // MARK: - 京セラ S100TSIJ（2026-08-01）
+
+    @Test func kyoceraEmployeesReconcilesCorporateSharedAsAdditiveNotSubtotal() async throws {
+        guard await Self.ensureAvailable("S100TSIJ") else { return }
+        let xbrlDir = Self.xbrlDir("S100TSIJ")
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+
+        // 全社合計は Stage 4 計算済みの値を想定した固定値（実データ: 73,165人）。
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(facts: facts, total: 73_165, axis: "employees"))
+
+        #expect(snapshot.axis == "employees")
+        #expect(snapshot.denominator == 73_165)
+        // CorporateShared を含めた実際の内訳合計が総数に一致するため、誤検知の
+        // needs_review が立たないこと（監査指摘の核心）。
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.warnings.isEmpty)
+
+        let corporateShared = try #require(
+            snapshot.rows.first { $0.labelRaw == "CorporateSharedMember" })
+        // 代替総合計（subtotal）ではなく、合計に加算される少額バケツ（reconciling）として
+        // 分類されること。誤って "subtotal" のままだと表示側が総数を3,645人と誤認する
+        // （監査指摘 #3、served payload への波及）。
+        #expect(corporateShared.rowKind == "reconciling")
+        #expect(corporateShared.amount == 3_645)
+
+        let segmentSum = snapshot.rows.map(\.amount).reduce(0, +)
+        #expect(segmentSum == snapshot.denominator)
+    }
+
+    @Test func kyoceraResearchAndDevelopmentResolvesWithoutWarning() async throws {
+        guard await Self.ensureAvailable("S100TSIJ") else { return }
+        let xbrlDir = Self.xbrlDir("S100TSIJ")
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 132_502_000_000, axis: "research_and_development"))
+
+        #expect(snapshot.axis == "research_and_development")
+        #expect(snapshot.needsReview == false)
+        let labels = Set(snapshot.rows.map(\.labelRaw))
+        #expect(labels.contains("ComponentsReportableSegmentsMember"))
+        #expect(labels.contains("DevicesAndModulesReportableSegmentsMember"))
+        #expect(labels.contains("OtherReportableSegmentsMember"))
+    }
+}
+
 @Suite struct RealXbrlBreakdownResolverTests {
 
     private static let xbrlRoot: URL = {

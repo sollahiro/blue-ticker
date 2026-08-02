@@ -269,6 +269,22 @@ public func runFactsIngestCommand(
                 await context.resolveGeographyBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
+            // employees/research_and_development は連結売上ではなく 財務取り込み 計算済みの従業員数・
+            // 研究開発費合計を分母(全社合計)として使う(重複ロジック回避、2026-08-01 監査指摘対応)。
+            let s6Employees = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisEmployees, logger: app.logger,
+                denominatorForDoc: employeesForDocFromFinancials
+            ) { docID, total in
+                await context.resolveEmployeesBreakdown(docID: docID, total: total)
+            }
+            let s6RD = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisResearchAndDevelopment, logger: app.logger,
+                denominatorForDoc: rdForDocFromFinancials
+            ) { docID, total in
+                await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
+            }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
             ) {
@@ -293,6 +309,25 @@ public func runFactsIngestCommand(
                     .notApplicableSingleSegmentDisclosed,
                 notApplicableUnknown: s6Geography.notApplicableUnknown,
                 purged: s6Geography.purged)
+            logIngestSummary(
+                app.logger, target: "breakdowns-employees", attempted: s6Employees.attempted,
+                stored: s6Employees.stored, failed: s6Employees.failed, skipped: s6Employees.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6Employees.notApplicable,
+                notApplicableGeographyOnly: s6Employees.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6Employees
+                    .notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6Employees.notApplicableUnknown,
+                purged: s6Employees.purged)
+            logIngestSummary(
+                app.logger, target: "breakdowns-rd", attempted: s6RD.attempted,
+                stored: s6RD.stored, failed: s6RD.failed, skipped: s6RD.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6RD.notApplicable,
+                notApplicableGeographyOnly: s6RD.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6RD.notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6RD.notApplicableUnknown,
+                purged: s6RD.purged)
         }
         if targets.contains(.statements) {
             // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする

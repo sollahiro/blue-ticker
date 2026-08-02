@@ -388,7 +388,12 @@ enum BreakdownServeResult {
 
 /// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
 func breakdownNotFoundMessage(axis: String) -> String {
-    axis == breakdownAxisGeography ? "地域別内訳は未算出です" : "事業別内訳は未算出です"
+    switch axis {
+    case breakdownAxisGeography: return "地域別内訳は未算出です"
+    case breakdownAxisEmployees: return "従業員数の内訳は未算出です"
+    case breakdownAxisResearchAndDevelopment: return "研究開発費の内訳は未算出です"
+    default: return "事業別内訳は未算出です"
+    }
 }
 
 /// `breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。

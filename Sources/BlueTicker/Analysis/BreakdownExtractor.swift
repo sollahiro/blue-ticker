@@ -1066,7 +1066,11 @@ enum BreakdownExtractor {
         return contextMap
     }
 
-    private static func extractFactsByDimension(
+    /// dimension 付き fact を抽出する（売上等への意味づけはしない汎用処理）。
+    /// `BltServerContext.resolveEmployeesBreakdown`/`resolveResearchAndDevelopmentBreakdown`
+    /// （`Server/BltServerFacade.swift`、Stage 6 employees / research_and_development 軸）
+    /// からも再利用するため internal のまま公開する。
+    static func extractFactsByDimension(
         xbrlDir: URL,
         dimensionKeywords: [String],
         contextMap: [String: [String: String]]

@@ -335,7 +335,60 @@ public extension BltServerContext {
     }
 }
 
+public extension BltServerContext {
+    /// Stage 6: 書類1件分の employees 軸内訳を解決する（2026-08-01追加）。`NumberOfEmployees` /
+    /// `NumberOfGroupEmployees` のセグメント dimension 付き fact のみを対象にした決定論経路
+    /// （LLM フォールバックなし）。`total`（全社合計の従業員数）は Stage 4 が既に計算済みの値を
+    /// 呼び出し側（`Stage6Ingest.swift`）が `company_financials` から引いて渡す（自前で XBRL から
+    /// 再抽出しない。重複ロジック回避、`resolveBusinessBreakdown` の `consolidatedSales` と同型）。
+    func resolveEmployeesBreakdown(
+        docID: String, total: Double?
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        guard
+            let snapshot = BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: total, axis: breakdownAxisEmployees)
+        else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+            contentHash: hash, audit: nil)
+    }
+
+    /// Stage 6: 書類1件分の research_and_development 軸内訳を解決する（2026-08-01追加）。
+    /// `resolveEmployeesBreakdown` と同型（決定論のみ、LLM フォールバックなし。`total` は
+    /// Stage 4 計算済みの研究開発費全社合計を呼び出し側が渡す）。
+    func resolveResearchAndDevelopmentBreakdown(
+        docID: String, total: Double?
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        guard
+            let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment)
+        else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+            contentHash: hash, audit: nil)
+    }
+}
+
 /// 内部型 BreakdownSnapshot を公開格納用 BreakdownSnapshotPayload へ写経する。
+
 private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
         axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
