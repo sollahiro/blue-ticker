@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Analyze — 機能デモ | BLUE TICKER</title>
-<meta name="description" content="財務諸表の数値を独自の定義式で再計算する BLUE TICKER の Analyze 機能デモです。トヨタ自動車の実データで事業利益・ROE・ROICの分解を図解します。">
+<title>Waterfall — 機能デモ | BLUE TICKER</title>
+<meta name="description" content="財務諸表の数値を独自の定義式で再計算する BLUE TICKER の Waterfall 機能デモです。トヨタ自動車の実データで事業利益・ROE・ROICの分解を図解します。">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -184,7 +184,7 @@
   }
   .readout b { color: var(--ink); font-weight: 700; }
 
-  /* ---- formula diagram (Analyze 定義式) ---- */
+  /* ---- formula diagram (Waterfall 定義式) ---- */
   .formula-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
   .formula-box {
     flex: 1 1 180px; background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
@@ -302,11 +302,11 @@
 
 <main>
   <div class="intro">
-    <h1>Analyze — 独自の計算式で分析する</h1>
+    <h1>Waterfall — 独自の計算式で分析する</h1>
     <p class="lead">財務諸表の数値を BLUE TICKER 独自の定義式で再計算します。トヨタ自動車(7203) 2025年3月期の実データで計算過程を示します。</p>
   </div>
 
-  <section class="demo-analyze">
+  <section class="demo-waterfall">
     <div class="page">
       <h2 class="block-title">事業利益の定義</h2>
       <div class="formula-row">
@@ -549,7 +549,7 @@
       </div>
 
       <p class="cross-links" style="margin-top:36px;">
-        <a href="summarize.html">Summarize — 財務サマリーを検索する →</a>
+        <a href="summary.html">Summary — 財務サマリーを検索する →</a>
         <a href="filing.html">Filing — 提出書類の本文を要約する →</a>
         <a href="breakdown.html">Breakdown — 事業別売上高の内訳 →</a>
       </p>

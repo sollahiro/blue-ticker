@@ -236,7 +236,7 @@
   <section class="hero" style="border-top:none; padding-top:20px;">
     <h1>公開ツール一覧</h1>
     <p class="lead">AIエージェントやアプリケーションから呼び出せる、BLUE TICKER の全機能一覧です。REST API と MCP ツールは同じカタログを共有しています。</p>
-    <p class="note">通常の API は Cloudflare Access 経由の認可が必要です（<code>summarize.html</code> の実データ検索は認証不要の限定公開エンドポイントです）。</p>
+    <p class="note">通常の API は Cloudflare Access 経由の認可が必要です（<code>summary.html</code> の実データ検索は認証不要の限定公開エンドポイントです）。</p>
   </section>
 
   <section>
@@ -304,7 +304,7 @@
   <section>
     <div class="page">
       <h2>財務サマリーを取る</h2>
-      <p class="section-lead"><span class="feature-badge">summarize</span> 格納済みの財務諸表の数値（水準値）をそのまま返す。</p>
+      <p class="section-lead"><span class="feature-badge">summary</span> 格納済みの財務諸表の数値（水準値）をそのまま返す。</p>
       <div class="tool-grid">
 
         <div class="light-card catalog-card">
@@ -312,7 +312,7 @@
             <div class="catalog-name">通期財務サマリー<span class="id">get-financials</span></div>
             <span class="mcp-badge">get_financial_summary</span>
           </div>
-          <p class="catalog-desc">銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ）。損益・CF・バランスシート・収益性指標（水準値）を含む。直近5年分。前年差・要因分解は get_analysis へ。金額単位は百万円(JPY)、比率は%、株主指標は円。</p>
+          <p class="catalog-desc">銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ）。損益・CF・バランスシート・収益性指標（水準値）を含む。直近5年分。前年差・要因分解は get_waterfall へ。金額単位は百万円(JPY)、比率は%、株主指標は円。</p>
           <div class="catalog-meta">
             <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/financials?years=5</span></div>
             <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/financials?years=5</span></div>
@@ -326,18 +326,18 @@
   <section>
     <div class="page">
       <h2>増減を分析する</h2>
-      <p class="section-lead"><span class="feature-badge">analyze</span> 独自の分析手法に基づいた前年差・要因分解の計算値。</p>
+      <p class="section-lead"><span class="feature-badge">waterfall</span> 独自の分析手法に基づいた前年差・要因分解の計算値。</p>
       <div class="tool-grid">
 
         <div class="light-card catalog-card">
           <div class="catalog-head">
-            <div class="catalog-name">通期増減分析<span class="id">get-analysis</span></div>
-            <span class="mcp-badge">get_analysis</span>
+            <div class="catalog-name">通期増減分析<span class="id">get-waterfall</span></div>
+            <span class="mcp-badge">get_waterfall</span>
           </div>
           <p class="catalog-desc">銘柄コードの増減分析（前年差分解）を年度別に返します。get_financial_summary と同じ水準値に加え、事業利益ウォーターフォール（売上差/粗利率差/販管費差影響）、ROIC・ROE前年差の要因分解、ネットキャッシュ前年差、運転資本・CCC前年差（DSO/DIO/DPO差影響）を含む。直近5年分。金額単位百万円(JPY)、比率%、日数は日。</p>
           <div class="catalog-meta">
-            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/analysis?years=5</span></div>
-            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/analysis?years=5</span></div>
+            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/companies/{code}/waterfall?years=5</span></div>
+            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/companies/6103/waterfall?years=5</span></div>
           </div>
         </div>
 
@@ -382,7 +382,7 @@
   <section>
     <div class="page">
       <div class="light-card auth-note">
-        認証について: 通常の API は Cloudflare Access 経由の認可が必要です。MCP コネクタとしての接続方法は<a href="mcp.html">MCPページ</a>を参照してください。<code>summarize.html</code> の実データ検索は、この一覧を試すための認証不要の限定公開エンドポイントです。
+        認証について: 通常の API は Cloudflare Access 経由の認可が必要です。MCP コネクタとしての接続方法は<a href="mcp.html">MCPページ</a>を参照してください。<code>summary.html</code> の実データ検索は、この一覧を試すための認証不要の限定公開エンドポイントです。
       </div>
     </div>
   </section>

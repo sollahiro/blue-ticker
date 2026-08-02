@@ -380,10 +380,10 @@ extension FinancialsYear {
         return dict
     }
 
-    /// Analyze（`docs/feature-tiers.md`）専用の増減分解フィールド。Summarize（financials）の応答からは
+    /// Waterfall（`docs/feature-tiers.md`）専用の増減分解フィールド。Summary（financials）の応答からは
     /// これらを外す。値自体は 財務取り込み ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
-    /// 対象は Analyze（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
-    /// 注意: 「`SummarizeCommand.levelMetrics` に無いフィールド」全般ではない
+    /// 対象は Waterfall（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
+    /// 注意: 「`SummaryRendering.levelMetrics` に無いフィールド」全般ではない
     /// （`eps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
     static let analysisOnlyKeys: Set<String> = [
         "business_profit", "business_profit_margin",
@@ -395,14 +395,14 @@ extension FinancialsYear {
         "working_capital", "dso", "dio", "dpo", "ccc",
     ]
 
-    /// Summarize（financials）応答用 JSON。`analysisOnlyKeys` を除いた水準値のみを返す。
+    /// Summary（financials）応答用 JSON。`analysisOnlyKeys` を除いた水準値のみを返す。
     func summaryJsonObject() -> [String: Any] {
         var dict = jsonObject()
         for key in Self.analysisOnlyKeys { dict.removeValue(forKey: key) }
         return dict
     }
 
-    /// Analyze（analysis）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker analyze` の
+    /// Waterfall（waterfall）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker waterfall` の
     /// ④⑤ブロック（ネットキャッシュ差分・運転資本/CCC差分の要因分解）を `prior`（直前期。無ければ nil）
     /// との差分からその場で計算して追加する。DB には保存しない（read 時のみの投影）。
     func analysisJsonObject(prior: FinancialsYear?) -> [String: Any] {
@@ -511,7 +511,7 @@ extension FinancialsResponse {
         ]
     }
 
-    /// Summarize（financials）応答用の全キー JSON オブジェクト（`years` 各要素は
+    /// Summary（financials）応答用の全キー JSON オブジェクト（`years` 各要素は
     /// `analysisOnlyKeys` を除いた水準値のみ）。public: BltServerCore の financials read 経路が使う。
     public func summaryJsonObject() -> [String: Any] {
         [
@@ -526,11 +526,11 @@ extension FinancialsResponse {
         ]
     }
 
-    /// Analyze（analysis）応答用の全キー JSON オブジェクト。`years`（新しい順）を隣接ペアで走査し、
+    /// Waterfall（waterfall）応答用の全キー JSON オブジェクト。`years`（新しい順）を隣接ペアで走査し、
     /// 各年度に増減分解フィールド（④⑤ブロック含む）を付与する。呼び出し側は `trimmed(toYears:)` を
     /// 先に適用してから呼ぶこと（trim 後の集合内で前年差を計算するため。`FinancialsYear.jsonObject()`
     /// が保持する①②③の増減分解フィールドは ingest 時に計算済みで、trim 済みの集合とも整合している）。
-    /// public: BltServerCore の analysis read 経路が使う。
+    /// public: BltServerCore の waterfall read 経路が使う。
     public func analysisJsonObject() -> [String: Any] {
         [
             "schema_version": schemaVersion,

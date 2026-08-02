@@ -1,11 +1,11 @@
 import ArgumentParser
 import Foundation
 
-/// `ticker analyze` のローカル解析版（開発用。EDINET を直接叩き in-process で計算する）。
-struct DevAnalyzeCommand: AsyncParsableCommand {
+/// `ticker summary` のローカル解析版（開発用。EDINET を直接叩き in-process で計算する）。
+struct DevSummaryCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "analyze",
-        abstract: "銘柄の財務指標を増減分析（前年差分解）します（ローカル解析）"
+        commandName: "summary",
+        abstract: "銘柄の主要財務指標を一覧表示します（ローカル解析）"
     )
 
     @Argument(help: "銘柄コード")
@@ -22,16 +22,16 @@ struct DevAnalyzeCommand: AsyncParsableCommand {
 
     func run() async throws {
         let ctx = try await MetricsLoader.prepare(rawCode: code)
-        printError("\n分析中: \(ctx.code) \(ctx.name) ...\n")
-        printError("分析対象期間: 直近 \(years) 年分\n")
+        printError("\n集計中: \(ctx.code) \(ctx.name) ...\n")
+        printError("対象期間: 直近 \(years) 年分\n")
 
         let analyzer = IndividualAnalyzer(edinetClient: ctx.client, cacheManager: ctx.cacheManager)
-        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).resultOrNil,
-              let yearsData = result.years, !yearsData.isEmpty else {
+        guard let result = await analyzer.analyze(code: ctx.code, analysisYears: years, useCache: !noCache).resultOrNil else {
             printError("エラー: 財務データの取得に失敗しました。APIキーが正しいか、書類が存在するか確認してください。\n")
             throw ExitCode.failure
         }
         if json { MetricsJSON.print(result); return }
-        AnalyzeRendering.renderAnnual(yearsData, commandPrefix: "ticker-dev")
+        SummaryRendering.printYearTable(result: result)
+        printError("\n増減分析は ticker-dev waterfall、定性情報は ticker-dev filing で確認できます。\n")
     }
 }

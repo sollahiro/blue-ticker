@@ -1,7 +1,7 @@
 # 財務諸表完全正規化の構想（statements / statement-notes）
 
 有価証券報告書 XBRL の BS/PL/CF を、絞り込みなしで構造化して返す機能（Statement）の設計メモ。
-関連: Summarize/Analyze（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（breakdowns、
+関連: Summary/Waterfall（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（breakdowns、
 `docs/breakdown-normalization-concept.md`）は事業別・地域別売上の意味正規化。Statement は
 どちらとも異なり「開示された全項目を、企業間の科目統一を試みず、忠実に構造化する」ことが本体。
 
@@ -9,7 +9,7 @@
 
 | 機能 | 提供価値 | 対象範囲 |
 |---|---|---|
-| Summarize / Analyze | 絞り込んだ主要指標（売上・利益・ROE 等 ~20 項目） | `Extractors.swift` の**固定タグリスト** |
+| Summary / Waterfall | 絞り込んだ主要指標（売上・利益・ROE 等 ~20 項目） | `Extractors.swift` の**固定タグリスト** |
 | Breakdown | 事業別・地域別売上の**企業間比較用**正規化スナップショット | セグメント注記・地域注記のみ |
 | **Statement**（本構想） | 開示された BS/PL/CF の**全項目**をそのまま構造化 | XBRL 全 fact（標準タグ＋企業拡張タグ） |
 
@@ -86,7 +86,7 @@ J-GAAP/IFRS 問わず以下のキーワード判定に収束することを確�
 のような**同一エンドポイント内のクエリパラメータ分岐では課金境界を満たせない**（両軸とも同じ
 ティアだから成立していた設計であり、ティアを分けたい場合の前例にはならない）。
 
-Summarize/Analyze と同型の**別エンドポイント・別ツール**分割を採用する。
+Summary/Waterfall と同型の**別エンドポイント・別ツール**分割を採用する。
 
 | 機能 | REST | MCP | ingest 対象 | 想定ティア |
 |---|---|---|---|---|

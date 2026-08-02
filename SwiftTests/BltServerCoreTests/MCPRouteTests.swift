@@ -99,10 +99,10 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
-    @Test func getAnalysisReturnsErrorResultWhenNotStored() async throws {
+    @Test func getWaterfallReturnsErrorResultWhenNotStored() async throws {
         try await withMcpApp(databases: true) { app in
             let (status, json) = try await postMcp(
-                app, toolCallBody(name: "get_analysis", arguments: ["code": "7203"]))
+                app, toolCallBody(name: "get_waterfall", arguments: ["code": "7203"]))
             #expect(status == .ok)
             let result = json?["result"] as? [String: Any]
             #expect(result?["isError"] as? Bool == true)

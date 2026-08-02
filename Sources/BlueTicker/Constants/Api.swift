@@ -46,7 +46,7 @@ public enum Api {
     /// BltServerCore（Routes.swift）から参照するため public。
     public static let demoSearchResultLimit = 8
 
-    /// `/v1/demo/*` に CORS で許可するオリジン。summarize.html が同一オリジンでない
+    /// `/v1/demo/*` に CORS で許可するオリジン。summary.html が同一オリジンでない
     /// api.sollahiro.com へ fetch するため必要（ブラウザは Access-Control-Allow-Origin が
     /// 一致しないとレスポンスをスクリプトから読ませない）。BltServerCore（Routes.swift）から
     /// 参照するため public。
@@ -104,7 +104,7 @@ public enum Api {
     /// 同一 JSON-RPC id の同時リクエスト（issue #254）で応答待ちの継続（continuation）が永久に
     /// resume されず、HTTP リクエストが無期限にハングすることがある（upstream 未修正・
     /// blue-ticker issue #84 で追跡）。
-    /// この上限は「格納データ系ツール（get_analysis 等）が `withDbRetry` 経由で DB 再接続を
+    /// この上限は「格納データ系ツール（get_waterfall 等）が `withDbRetry` 経由で DB 再接続を
     /// 最大3回試行し、1回あたり `dbOperationTimeoutSeconds`（60秒）まで正常に待つ」既存仕様上の
     /// 理論上限（60×3+backoff ≈ 183秒）より長く取り、正常だが遅い応答を誤ってタイムアウト扱い
     /// しないようにする。

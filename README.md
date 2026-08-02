@@ -5,7 +5,7 @@
 ## 主な機能
 
 - 銘柄検索・業種一覧
-- 年次の財務サマリ（Summarize）と増減分析（Analyze）
+- 年次の財務サマリ（Summary）と増減分析（Waterfall）
 - 有価証券報告書のセクション本文（Filing）
 - 事業別・地域別売上の内訳（Breakdown・整備中）
 
@@ -40,7 +40,7 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
 |---|---|---|
 | `GET` | `/v1/companies?q=` | 企業検索 |
 | `GET` | `/v1/companies/{code}/financials` | 年次財務サマリ |
-| `GET` | `/v1/companies/{code}/analysis` | 年次増減分析 |
+| `GET` | `/v1/companies/{code}/waterfall` | 年次増減分析 |
 | `GET` | `/v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET` | `/v1/skills` | 能力カタログ |
 
@@ -49,7 +49,7 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
 
 ### MCP
 
-Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_analysis`）。
+Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_waterfall`）。
 
 ## ドキュメント
 

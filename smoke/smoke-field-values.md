@@ -81,7 +81,7 @@ tests/
 ### 1. 実際の値を確認する
 
 ```bash
-ticker analyze 4901 --years 1 --format json | python3 -m json.tool
+ticker waterfall 4901 --years 1 --format json | python3 -m json.tool
 ```
 
 または XBRL 解析結果を直接確認する場合は、`SmokeTests.swift` の比較出力（DIFF 行）を参照する。

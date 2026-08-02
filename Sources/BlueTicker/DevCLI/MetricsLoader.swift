@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-// Dev*(analyze/summarize) コマンドが共有する財務データ取得ヘルパー。
+// Dev*(waterfall/summary) コマンドが共有する財務データ取得ヘルパー。
 // API キー検証・銘柄コード検証・クライアント構築・会社名解決をまとめる。
 
 /// 銘柄分析に必要なクライアント群と会社メタ情報。

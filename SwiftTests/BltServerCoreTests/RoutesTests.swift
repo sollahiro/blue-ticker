@@ -150,7 +150,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         try await withApp { app in
             for path in [
                 "/v1/companies/7203/financials",
-                "/v1/companies/7203/analysis",
+                "/v1/companies/7203/waterfall",
                 "/v1/companies/7203/filing-content",
             ] {
                 let (status, json) = try await send(app, path)
@@ -175,9 +175,9 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
-    @Test func analysisReturns404WhenNotStored() async throws {
+    @Test func waterfallReturns404WhenNotStored() async throws {
         try await withApp(databases: true) { app in
-            let (status, json) = try await send(app, "/v1/companies/7203/analysis")
+            let (status, json) = try await send(app, "/v1/companies/7203/waterfall")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "財務データは未集計です")
         }
@@ -305,7 +305,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(json?["id"] as? String == "get-financials")
             #expect(json?["path"] as? String == "/v1/companies/{code}/financials")
             #expect(json?["mcp_tool"] as? String == "get_financial_summary")
-            #expect((json?["instructions"] as? String)?.contains("Summarize") == true)
+            #expect((json?["instructions"] as? String)?.contains("Summary") == true)
             let parameters = json?["parameters"] as? [[String: Any]]
             #expect(parameters?.contains { $0["name"] as? String == "years" } == true)
         }

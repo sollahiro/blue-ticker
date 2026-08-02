@@ -2,7 +2,7 @@ import ArgumentParser
 import Foundation
 
 /// TickerDev（開発用ローカル解析 CLI）共通の「API キー解決 → EdinetCacheStore → EdinetAPIClient 構築」
-/// ボイラープレート。dev*(analyze/summarize/filings/filing/search) / cache(prepare/catchup/refresh) /
+/// ボイラープレート。dev*(waterfall/summary/filings/filing/search) / cache(prepare/catchup/refresh) /
 /// MetricsLoader の重複を 1 箇所へ集約する。
 enum EdinetClientLoader {
     /// EDINET API キーを解決する。TickerDev は配布しないため `BLT_EDINET_API_KEY` env のみを見る。

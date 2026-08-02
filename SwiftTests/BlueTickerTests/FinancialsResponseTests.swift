@@ -74,7 +74,7 @@ import Testing
         #expect(Api.financialsSchemaVersion == 2)
     }
 
-    // MARK: - Summarize / Analyze の境界（docs/feature-tiers.md）
+    // MARK: - Summary / Waterfall の境界（docs/feature-tiers.md）
 
     private func twoYearResult() throws -> MetricsResult {
         try decodeResult(#"""
@@ -109,7 +109,7 @@ import Testing
         let y = years[0]
 
         for key in FinancialsYear.analysisOnlyKeys {
-            #expect(y.keys.contains(key) == false, "\(key) は Analyze 専用のため Summarize に含めない")
+            #expect(y.keys.contains(key) == false, "\(key) は Waterfall 専用のため Summary に含めない")
         }
         // 水準値（ticker summarize が表示する項目）は残る。
         #expect(y["roic"] as? Double == 9.0)
@@ -144,7 +144,7 @@ import Testing
         #expect(older["net_cash_change"] is NSNull)
         #expect(older["ccc_change"] is NSNull)
 
-        // Analyze は Summarize の水準値も含むスーパーセット。
+        // Waterfall は Summary の水準値も含むスーパーセット。
         #expect(newer["roic"] as? Double == 9.0)
     }
 }

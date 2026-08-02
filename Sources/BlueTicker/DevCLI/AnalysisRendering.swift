@@ -1,12 +1,12 @@
 import Foundation
 
-// ticker analyze / summarize / filing の表示ロジック。remote 経路（Ticker* コマンド）と
+// ticker waterfall / summary / filing の表示ロジック。remote 経路（Ticker* コマンド）と
 // ローカル経路（Dev* コマンド、DevCLI/）の両方から呼ばれる共通コード。取得手段（remote/local）に
 // 依存せず、共通のドメインモデル（YearEntry / ExtractedBreakdown 等）だけを受け取る。
 
-// MARK: - ticker analyze（増減分析）
+// MARK: - ticker waterfall（増減分析）
 
-enum AnalyzeRendering {
+enum WaterfallRendering {
     /// 年次の増減分析を表示する。`commandPrefix` は案内文言に使うコマンド名（`ticker` / `ticker-dev`）。
     static func renderAnnual(_ yearsData: [YearEntry], commandPrefix: String = "ticker") {
         let periods = yearsData.reversed().map { $0 }  // 古い順（前年差の基準）
@@ -20,7 +20,7 @@ enum AnalyzeRendering {
             entry: { $0 },
             latest: periods.last
         )
-        printError("\n水準値の一覧は \(commandPrefix) summarize で確認できます。\n")
+        printError("\n水準値の一覧は \(commandPrefix) summary で確認できます。\n")
     }
 
     // MARK: - 5ブロック描画
@@ -132,9 +132,9 @@ enum AnalyzeRendering {
     }
 }
 
-// MARK: - ticker summarize（水準値一覧）
+// MARK: - ticker summary（水準値一覧）
 
-enum SummarizeRendering {
+enum SummaryRendering {
     static func printYearTable(result: MetricsResult) {
         guard let yearsData = result.years, !yearsData.isEmpty else {
             printError("指標データが見つかりませんでした。\n")
