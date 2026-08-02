@@ -75,6 +75,12 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     )
     var debugCapex = false
 
+    @Flag(
+        name: .customLong("debug-issued-shares"),
+        help: "--debug-doc と併用。issued_shares note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+    )
+    var debugIssuedShares = false
+
     func run() async throws {
         let cacheDir = URL(fileURLWithPath: cacheDirPath)
         let xbrlRoot = edinetCacheDir(cacheDir).appendingPathComponent("xbrl", isDirectory: true)
@@ -277,6 +283,32 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             print(
                 "resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count) withTable=\(withTable)"
             )
+            return
+        }
+        if let debugDoc, debugIssuedShares {
+            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
+            Self.debugIssuedShares(docID: debugDoc, xbrlDir: dir)
+            return
+        }
+        if debugDoc == nil, debugIssuedShares {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var resolvedCount = 0
+            var notApplicableCount = 0
+            for dir in dirs {
+                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+                switch StatementNotesResolver.resolveIssuedShares(xbrlDir: dir) {
+                case .resolved:
+                    resolvedCount += 1
+                case .notApplicable:
+                    notApplicableCount += 1
+                    print("notApplicable: \(docID)")
+                case .failed: break
+                }
+            }
+            print("resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count)")
             return
         }
         if let debugDoc {
@@ -650,6 +682,25 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             for s in payload.capexSegments ?? [] {
                 print(
                     "  segment=\(s.segmentName ?? "(total)") amount=\(s.investmentAmount.map { String($0) } ?? "-") yoy=\(s.yoyPercent.map { String($0) } ?? "-") isTotal=\(s.isTotal) desc=\((s.description ?? "-").prefix(30))"
+                )
+            }
+        case .notApplicable(let reason):
+            print("notApplicable(\(reason))")
+        case .failed:
+            print("failed")
+        }
+    }
+
+    // MARK: - デバッグ(Stage 8 issued_shares note_type)
+
+    static func debugIssuedShares(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir) {
+        case .resolved(let payload, let source, let contentHash):
+            let events = payload.issuedSharesEvents ?? []
+            print("source=\(source) contentHash=\(contentHash) count=\(events.count)")
+            for e in events {
+                print(
+                    "  date=\(e.date) sharesDelta=\(e.sharesDelta.map { String($0) } ?? "-") sharesBalance=\(e.sharesBalance.map { String($0) } ?? "-") capitalDelta=\(e.capitalDelta.map { String($0) } ?? "-") capitalBalance=\(e.capitalBalance.map { String($0) } ?? "-") reserveDelta=\(e.capitalReserveDelta.map { String($0) } ?? "-") reserveBalance=\(e.capitalReserveBalance.map { String($0) } ?? "-")"
                 )
             }
         case .notApplicable(let reason):

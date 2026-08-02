@@ -316,6 +316,15 @@ public extension BltServerContext {
         return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
     }
 
+    /// 財務諸表注記取り込み: 書類1件分の `issued_shares` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveIssuedShares` に委譲する（発行済株式総数・資本金等の推移を
+    /// 決議・イベント単位のテーブルとしてXBRL直接抽出、LLM不要）。財務取り込み の期末単一値 passthrough
+    /// を置き換える（実データレビューで推移テーブルの構造が判明したため、2026-08-02）。
+    func resolveIssuedSharesNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir)
+    }
+
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePolicyHoldingSecurities` に委譲する（EDINET標準タクソノミの
     /// 銘柄別構造化タグから決定論で抽出、LLM 不要）。

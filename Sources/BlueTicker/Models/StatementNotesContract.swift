@@ -123,6 +123,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public var securities: [PolicyHoldingSecurityPayload]?
     public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
+    public var issuedSharesEvents: [IssuedSharesEventPayload]?
     public var needsReview: Bool
     public var warnings: [String]
 
@@ -130,6 +131,7 @@ public struct StatementNotePayload: Codable, Sendable {
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         securities: [PolicyHoldingSecurityPayload]? = nil,
         dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
+        issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         needsReview: Bool = false, warnings: [String] = []
     ) {
         self.value = value
@@ -138,6 +140,7 @@ public struct StatementNotePayload: Codable, Sendable {
         self.securities = securities
         self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
+        self.issuedSharesEvents = issuedSharesEvents
         self.needsReview = needsReview
         self.warnings = warnings
     }
@@ -151,6 +154,7 @@ public struct StatementNotePayload: Codable, Sendable {
             "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
         ]
@@ -216,6 +220,45 @@ public struct DividendEventPayload: Codable, Sendable {
             "resolution_body": resolutionBody as Any? ?? NSNull(),
             "dividend_per_share": dividendPerShare as Any? ?? NSNull(),
             "total_amount": totalAmount as Any? ?? NSNull(),
+        ]
+    }
+}
+
+/// 発行済株式総数・資本金等の推移1行分（`issued_shares` note_type 専用）。表の「年月日」欄は
+/// 単発日付（例:「2019年５月31日」）と期間表記（例:「自2018年４月１日 至2019年３月31日」）が
+/// 会社によって混在するため、`date` はセルのテキストをそのまま保持し加工しない。株数・金額は
+/// ヘッダーの単位表記（株/千株、千円/百万円）を判定して常に「株」「円」の生値へ正規化する。
+public struct IssuedSharesEventPayload: Codable, Sendable {
+    public var date: String
+    public var sharesDelta: Double?
+    public var sharesBalance: Double?
+    public var capitalDelta: Double?
+    public var capitalBalance: Double?
+    public var capitalReserveDelta: Double?
+    public var capitalReserveBalance: Double?
+
+    public init(
+        date: String, sharesDelta: Double?, sharesBalance: Double?, capitalDelta: Double?,
+        capitalBalance: Double?, capitalReserveDelta: Double?, capitalReserveBalance: Double?
+    ) {
+        self.date = date
+        self.sharesDelta = sharesDelta
+        self.sharesBalance = sharesBalance
+        self.capitalDelta = capitalDelta
+        self.capitalBalance = capitalBalance
+        self.capitalReserveDelta = capitalReserveDelta
+        self.capitalReserveBalance = capitalReserveBalance
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "date": date,
+            "shares_delta": sharesDelta as Any? ?? NSNull(),
+            "shares_balance": sharesBalance as Any? ?? NSNull(),
+            "capital_delta": capitalDelta as Any? ?? NSNull(),
+            "capital_balance": capitalBalance as Any? ?? NSNull(),
+            "capital_reserve_delta": capitalReserveDelta as Any? ?? NSNull(),
+            "capital_reserve_balance": capitalReserveBalance as Any? ?? NSNull(),
         ]
     }
 }

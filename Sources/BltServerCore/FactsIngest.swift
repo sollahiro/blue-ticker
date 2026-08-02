@@ -379,7 +379,7 @@ public func runFactsIngestCommand(
                     ),
                     (
                         statementNoteTypeIssuedShares,
-                        StatementNotesFinancialsPassthroughResolvers.issuedShares(db: app.db)
+                        { docID, _ in await context.resolveIssuedSharesNote(docID: docID) }
                     ),
                     (
                         statementNoteTypeResearchAndDevelopment,

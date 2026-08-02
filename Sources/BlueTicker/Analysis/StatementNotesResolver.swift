@@ -506,6 +506,103 @@ enum StatementNotesResolver {
         return nil
     }
 
+    /// 発行済株式総数・資本金等の推移（`issued_shares` note_type）。
+    ///
+    /// 実データ検証（2026-08-02）: `ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock` 内の
+    /// HTML表は「年月日／発行済株式総数増減数／総数残高／資本金増減額／資本金残高／資本準備金
+    /// 増減額／資本準備金残高」の決議・イベント単位テーブル。以下の揺れを実データで確認済み:
+    /// - 単位が会社ごとに揺れる（株数=株/千株、金額=千円/百万円）。ヘッダー文言から都度判定し、
+    ///   常に「株」「円」の生値へ正規化する（列固定にしない）
+    /// - 「自◯年◯月◯日 至◯年◯月◯日」という期間表記の行が挟まる会社がある。日立は変動なし
+    ///   確認用（3つの増減欄＝株数・資本金・資本準備金がすべて「－」）だが、メルカリは新株予約権
+    ///   行使の集約開示（増減欄が実数）に使っており、「単発日付か期間表記か」では判定できない。
+    ///   Notes は基本 XBRL からそのまま構造化する方針のため、なるべく行を省かない: 3つの増減欄の
+    ///   いずれか1つでも実数なら採用する（残高欄は前行から常に繰り越されるため判定に使わない）。
+    ///   JT・横河電機は株数は動かず資本準備金だけ動いた行（会社法448条に基づく振替）を持ち、
+    ///   株数増減欄だけで判定すると取りこぼす（実データで発見）
+    /// - メルカリは各セルが「普通株式」というラベル行＋数値行の2つの`<p>`を1つの`<td>`にまとめて
+    ///   持つ（例:「普通株式 2,840,500」）。列固定・完全一致パースだと数値を取りこぼすため、
+    ///   セルの末尾トークンを数値として解釈する方式にする
+    /// - 自己株式消却による減少は「△」表記（例: 日立・ソフトバンクG）
+    /// - 表に現れない期末後の増減（例: 日立の注記6「2023年５月31日付で新株発行」）は脚注の
+    ///   自由記述にしかなく構造化抽出の対象外（決議日/表記載基準のみ、他note_typeと同様の割り切り）
+    static func resolveIssuedShares(xbrlDir: URL) -> StatementNoteResolveResult {
+        guard let events = parseIssuedSharesTable(xbrlDir: xbrlDir), !events.isEmpty else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+        let hash = events.map { "\($0.date):\($0.sharesDelta ?? -1):\($0.sharesBalance ?? -1)" }
+            .joined(separator: ";")
+        return .resolved(
+            payload: StatementNotePayload(issuedSharesEvents: events),
+            source: statementNoteSourceXbrlFacts, contentHash: hash)
+    }
+
+    /// セルのテキストが金額欄（数値または「－」）として解釈できるか。ラベル文字列（日付・
+    /// 「（注）」等）は対象外。
+    private static func isIssuedSharesAmountToken(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if ["－", "-", "—", "―"].contains(trimmed) { return true }
+        return issuedSharesAmountValue(text) != nil
+    }
+
+    /// 金額欄の値。「－」は nil（実変動なし）。メルカリのように「普通株式 2,840,500」のような
+    /// ラベル＋数値の複合セルは、空白区切りの末尾トークンを数値として解釈する。
+    private static func issuedSharesAmountValue(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if let v = XBRLUtils.parseTextblockCellValue(trimmed) { return v }
+        if ["－", "-", "—", "―"].contains(trimmed) { return nil }
+        guard let lastToken = trimmed.split(separator: " ").last else { return nil }
+        return XBRLUtils.parseTextblockCellValue(String(lastToken))
+    }
+
+    private static func parseIssuedSharesTable(xbrlDir: URL) -> [IssuedSharesEventPayload]? {
+        guard let html = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: "ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock"),
+            let soup = try? SwiftSoup.parse(html),
+            let tables = (try? soup.select("table"))?.array()
+        else { return nil }
+
+        for table in tables {
+            let rows = gridRows(from: table)
+            var sharesScale = 1.0
+            var yenScale = 1.0
+            var events: [IssuedSharesEventPayload] = []
+            for cols in rows {
+                guard !cols.isEmpty else { continue }
+                let joined = cols.joined(separator: " ")
+                if joined.contains("千株") { sharesScale = 1000 }
+                if joined.contains("百万円") { yenScale = 1_000_000 } else if joined.contains("千円") {
+                    yenScale = 1000
+                }
+
+                let amountTokens = cols.filter { isIssuedSharesAmountToken($0) }
+                guard amountTokens.count >= 2 else { continue }
+                let sharesDelta = issuedSharesAmountValue(amountTokens[0])
+                let sharesBalance = issuedSharesAmountValue(amountTokens[1])
+                let capitalDelta = amountTokens.count > 2 ? issuedSharesAmountValue(amountTokens[2]) : nil
+                let capitalBalance = amountTokens.count > 3 ? issuedSharesAmountValue(amountTokens[3]) : nil
+                let reserveDelta = amountTokens.count > 4 ? issuedSharesAmountValue(amountTokens[4]) : nil
+                let reserveBalance = amountTokens.count > 5 ? issuedSharesAmountValue(amountTokens[5]) : nil
+                // 3つの増減欄がすべて「－」＝実変動なしの参考行（日立の期間ラベル行等）は除外。
+                // いずれか1つでも実数があれば採用する（JT・横河電機のように株数は動かず資本準備金
+                // だけ動く行を取りこぼさないため）。
+                guard sharesDelta != nil || capitalDelta != nil || reserveDelta != nil else { continue }
+
+                let date = cols[0].trimmingCharacters(in: .whitespaces)
+                events.append(
+                    IssuedSharesEventPayload(
+                        date: date, sharesDelta: sharesDelta.map { $0 * sharesScale },
+                        sharesBalance: sharesBalance.map { $0 * sharesScale },
+                        capitalDelta: capitalDelta.map { $0 * yenScale },
+                        capitalBalance: capitalBalance.map { $0 * yenScale },
+                        capitalReserveDelta: reserveDelta.map { $0 * yenScale },
+                        capitalReserveBalance: reserveBalance.map { $0 * yenScale }))
+            }
+            if !events.isEmpty { return events }
+        }
+        return nil
+    }
+
     /// `<table>` の各 `<tr>` を `rowspan` を展開した仮想グリッド（列固定・欠損セルなし）へ変換する。
     /// `colspan` は非対応（本note_typeで観測されていない。必要になれば拡張する）。
     private static func gridRows(from table: Element) -> [[String]] {

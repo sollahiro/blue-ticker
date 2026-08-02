@@ -1,15 +1,15 @@
-// 財務諸表注記取り込みのうち、Stage 4（company_financials）が既に計算済みの値をそのまま再公開する
-// 決定論 note_type 4種（発行済株式数・研究開発費・設備投資概要・自己株式取得）を検証する。
-// dividends・per_share_information は実データレビュー（2026-08-02）でXBRL直接抽出
-// （`StatementNotesResolver.resolveDividends`/`resolvePerShareInformation`）へ置き換え済みのため
+// 財務諸表注記取り込みのうち、財務取り込み（company_financials）が既に計算済みの値をそのまま再公開する
+// 決定論 note_type（研究開発費・自己株式取得）を検証する。
+// dividends・per_share_information・capital_expenditures_overview・issued_shares は実データレビュー
+// （2026-08-02）でXBRL直接抽出（`StatementNotesResolver` の各 resolve メソッド）へ置き換え済みのため
 // 対象外（`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照）。
 // 自前で XBRL を再抽出しないため、フェイク抽出器ではなく `CompanyFinancials` の実データ構造を
 // シードし、`StatementNotesFinancialsPassthroughResolvers` が正しい値・単位で再公開するかを見る。
 //
 // 汎用機構（対象選定・staleness 判定・upsert・skip・purge）は `runStatementNotesIngest` に一本化されて
-// おり Stage 6/7 と同型のため、その挙動は代表として research_and_development resolver 1つで検証する
-// （4種すべてで同じ機構テストを繰り返さない）。各 note_type 固有の検証は「正しい値・単位で
-// 再公開されるか」「Stage 4 未計算時は failed」「値が nil のときは not_applicable(not_found)」の3点。
+// おり 内訳取り込み・Statement 取り込み と同型のため、その挙動は代表として research_and_development
+// resolver 1つで検証する（同じ機構テストを繰り返さない）。各 note_type 固有の検証は「正しい値・単位で
+// 再公開されるか」「財務取り込み未計算時は failed」「値が nil のときは not_applicable(not_found)」の3点。
 
 import Fluent
 import FluentSQLiteDriver
@@ -52,17 +52,16 @@ private func seedDoc(
 }
 
 /// 財務取り込み（company_financials）へ、指定 docID の1年度分をシードする。単位は `RawData`/
-/// `CalculatedData` の生の意味（EPS=円、RD/Buyback=百万円、ShOutFY=株）のまま渡す
+/// `CalculatedData` の生の意味（EPS=円、RD/Buyback=百万円）のまま渡す
 /// （`FinancialsYear` 変換時に 内訳取り込み の `salesForDoc` と同じ百万円→円変換が起きる）。
 private func seedFinancials(
     code: String, docID: String,
-    eps: Double? = nil, issuedShares: Double? = nil, rdMillionYen: Double? = nil,
+    eps: Double? = nil, rdMillionYen: Double? = nil,
     buybackMillionYen: Double? = nil, db: Database
 ) async throws {
     var fields: [String: Any] = ["fy_end": "2025-03-31", "FinancialPeriod": "通期"]
     var raw: [String: Any] = [:]
     if let eps { raw["EPS"] = eps }
-    if let issuedShares { raw["ShOutFY"] = issuedShares }
     if let rdMillionYen { raw["RD"] = rdMillionYen }
     if let buybackMillionYen { raw["Buyback"] = buybackMillionYen }
     fields["RawData"] = raw
@@ -100,24 +99,6 @@ private func seedFinancials(
 @Suite struct StatementNotesIngestTests {
 
     // MARK: - note_type 別: 正しい値・単位の再公開
-
-    @Test func issuedSharesRepublishesShareCountFromFinancials() async throws {
-        try await withMigratedApp { app in
-            try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", issuedShares: 3_000_000, db: app.db)
-
-            let summary = try await runStatementNotesIngest(
-                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeIssuedShares,
-                resolve: StatementNotesFinancialsPassthroughResolvers.issuedShares(db: app.db))
-
-            #expect(summary.stored == 1)
-            let key = CompanyStatementNote.compositeID(docID: "S1", noteType: statementNoteTypeIssuedShares)
-            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.payload.value == 3_000_000)
-            #expect(row.payload.unit == "shares")
-        }
-    }
 
     @Test func researchAndDevelopmentConvertsMillionYenToYen() async throws {
         try await withMigratedApp { app in
