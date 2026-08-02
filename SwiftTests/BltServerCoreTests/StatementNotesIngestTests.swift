@@ -51,14 +51,12 @@ private func seedDoc(
     try await model.create(on: db)
 }
 
-/// Stage 4（company_financials）へ、指定 docID の1年度分をシードする。単位は `RawData`/
-/// `CalculatedData` の生の意味（EPS=円、RD/Capex/Buyback=百万円、DividendSS=百万円、
-/// ShOutFY=株）のまま渡す（`FinancialsYear` 変換時に Stage 6 の `salesForDoc` と同じ
-/// 百万円→円変換が起きる）。
+/// 財務取り込み（company_financials）へ、指定 docID の1年度分をシードする。単位は `RawData`/
+/// `CalculatedData` の生の意味（EPS=円、RD/Buyback=百万円、ShOutFY=株）のまま渡す
+/// （`FinancialsYear` 変換時に 内訳取り込み の `salesForDoc` と同じ百万円→円変換が起きる）。
 private func seedFinancials(
     code: String, docID: String,
     eps: Double? = nil, issuedShares: Double? = nil, rdMillionYen: Double? = nil,
-    capexMillionYen: Double? = nil, dividendSsMillionYen: Double? = nil,
     buybackMillionYen: Double? = nil, db: Database
 ) async throws {
     var fields: [String: Any] = ["fy_end": "2025-03-31", "FinancialPeriod": "通期"]
@@ -66,11 +64,9 @@ private func seedFinancials(
     if let eps { raw["EPS"] = eps }
     if let issuedShares { raw["ShOutFY"] = issuedShares }
     if let rdMillionYen { raw["RD"] = rdMillionYen }
-    if let capexMillionYen { raw["Capex"] = capexMillionYen }
     if let buybackMillionYen { raw["Buyback"] = buybackMillionYen }
     fields["RawData"] = raw
-    var calc: [String: Any] = ["DocID": docID]
-    if let dividendSsMillionYen { calc["DividendSS"] = dividendSsMillionYen }
+    let calc: [String: Any] = ["DocID": docID]
     fields["CalculatedData"] = calc
 
     let data = try JSONSerialization.data(withJSONObject: fields)
@@ -139,24 +135,6 @@ private func seedFinancials(
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
             #expect(row.payload.value == 500 * Financial.millionYen)
             #expect(row.payload.unit == "yen")
-        }
-    }
-
-    @Test func capitalExpendituresOverviewConvertsMillionYenToYen() async throws {
-        try await withMigratedApp { app in
-            try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", capexMillionYen: 800, db: app.db)
-
-            let summary = try await runStatementNotesIngest(
-                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeCapitalExpendituresOverview,
-                resolve: StatementNotesFinancialsPassthroughResolvers.capitalExpendituresOverview(db: app.db))
-
-            #expect(summary.stored == 1)
-            let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeCapitalExpendituresOverview)
-            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.payload.value == 800 * Financial.millionYen)
         }
     }
 

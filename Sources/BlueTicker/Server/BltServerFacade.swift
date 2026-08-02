@@ -297,6 +297,16 @@ public extension BltServerContext {
         return StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir)
     }
 
+    /// 財務諸表注記取り込み: 書類1件分の `capital_expenditures_overview` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveCapitalExpendituresOverview` に委譲する（複数セグメント企業は
+    /// 注記のセグメント別テーブルをXBRL直接抽出、単一セグメント企業は総額タグへフォールバック）。
+    /// 財務取り込み の単一値 passthrough を置き換える（実データレビューで複数セグメント企業は
+    /// セグメント別テーブルを持つと判明したため、2026-08-02）。
+    func resolveCapitalExpendituresOverviewNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir)
+    }
+
     /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
     /// 構造化タグから決定論で抽出、LLM 不要）。Stage 4 の単一集計値 passthrough を置き換える

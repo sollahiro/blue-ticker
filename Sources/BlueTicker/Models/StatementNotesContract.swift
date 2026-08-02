@@ -122,20 +122,22 @@ public struct StatementNotePayload: Codable, Sendable {
     public var items: [StatementLineItem]?
     public var securities: [PolicyHoldingSecurityPayload]?
     public var dividendEvents: [DividendEventPayload]?
+    public var capexSegments: [CapexSegmentPayload]?
     public var needsReview: Bool
     public var warnings: [String]
 
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         securities: [PolicyHoldingSecurityPayload]? = nil,
-        dividendEvents: [DividendEventPayload]? = nil, needsReview: Bool = false,
-        warnings: [String] = []
+        dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
+        needsReview: Bool = false, warnings: [String] = []
     ) {
         self.value = value
         self.unit = unit
         self.items = items
         self.securities = securities
         self.dividendEvents = dividendEvents
+        self.capexSegments = capexSegments
         self.needsReview = needsReview
         self.warnings = warnings
     }
@@ -148,8 +150,42 @@ public struct StatementNotePayload: Codable, Sendable {
             "items": items.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
+        ]
+    }
+}
+
+/// 設備投資1セグメント分（`capital_expenditures_overview` note_type 専用）。単一セグメント企業
+/// （報告セグメントが1つで内訳表を持たない）は `segmentName: nil` の1行のみを返す。前年度比（％）・
+/// 主な内容・目的はXBRLタグとして構造化されておらず注記のHTML表にのみ存在するため、
+/// `resolveCapitalExpendituresOverview` が表をパースして埋める（複数セグメント企業のみ）。
+public struct CapexSegmentPayload: Codable, Sendable {
+    public var segmentName: String?
+    public var investmentAmount: Double?
+    public var yoyPercent: Double?
+    public var description: String?
+    public var isTotal: Bool
+
+    public init(
+        segmentName: String?, investmentAmount: Double?, yoyPercent: Double?, description: String?,
+        isTotal: Bool = false
+    ) {
+        self.segmentName = segmentName
+        self.investmentAmount = investmentAmount
+        self.yoyPercent = yoyPercent
+        self.description = description
+        self.isTotal = isTotal
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "segment_name": segmentName as Any? ?? NSNull(),
+            "investment_amount": investmentAmount as Any? ?? NSNull(),
+            "yoy_percent": yoyPercent as Any? ?? NSNull(),
+            "description": description as Any? ?? NSNull(),
+            "is_total": isTotal,
         ]
     }
 }

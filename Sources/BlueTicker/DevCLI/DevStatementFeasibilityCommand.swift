@@ -69,6 +69,12 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     )
     var debugPerShare = false
 
+    @Flag(
+        name: .customLong("debug-capex"),
+        help: "--debug-doc と併用。capital_expenditures_overview note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+    )
+    var debugCapex = false
+
     func run() async throws {
         let cacheDir = URL(fileURLWithPath: cacheDirPath)
         let xbrlRoot = edinetCacheDir(cacheDir).appendingPathComponent("xbrl", isDirectory: true)
@@ -239,6 +245,37 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             }
             print(
                 "resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count) withBps=\(withBps) withDilutedEps=\(withDilutedEps)"
+            )
+            return
+        }
+        if let debugDoc, debugCapex {
+            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
+            Self.debugCapex(docID: debugDoc, xbrlDir: dir)
+            return
+        }
+        if debugDoc == nil, debugCapex {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var resolvedCount = 0
+            var notApplicableCount = 0
+            var withTable = 0
+            for dir in dirs {
+                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+                switch StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: dir) {
+                case .resolved(let payload, _, _):
+                    resolvedCount += 1
+                    let segments = payload.capexSegments ?? []
+                    if segments.contains(where: { $0.segmentName != nil }) { withTable += 1 }
+                case .notApplicable:
+                    notApplicableCount += 1
+                    print("notApplicable: \(docID)")
+                case .failed: break
+                }
+            }
+            print(
+                "resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count) withTable=\(withTable)"
             )
             return
         }
@@ -596,6 +633,24 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             print("source=\(source) contentHash=\(contentHash)")
             for item in payload.items ?? [] {
                 print("  tag=\(item.tag) label=\(item.label ?? "?") value=\(item.value) unit=\(item.unit ?? "-")")
+            }
+        case .notApplicable(let reason):
+            print("notApplicable(\(reason))")
+        case .failed:
+            print("failed")
+        }
+    }
+
+    // MARK: - デバッグ(Stage 8 capital_expenditures_overview note_type)
+
+    static func debugCapex(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir) {
+        case .resolved(let payload, let source, let contentHash):
+            print("source=\(source) contentHash=\(contentHash)")
+            for s in payload.capexSegments ?? [] {
+                print(
+                    "  segment=\(s.segmentName ?? "(total)") amount=\(s.investmentAmount.map { String($0) } ?? "-") yoy=\(s.yoyPercent.map { String($0) } ?? "-") isTotal=\(s.isTotal) desc=\((s.description ?? "-").prefix(30))"
+                )
             }
         case .notApplicable(let reason):
             print("notApplicable(\(reason))")

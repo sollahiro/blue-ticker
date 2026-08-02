@@ -500,12 +500,6 @@ extension FinancialsResponse {
         years.first { $0.docId == docID }?.rd.map { $0 * Financial.millionYen }
     }
 
-    /// 指定 docID の設備投資額（円、設備投資等の概要優先）。財務諸表注記取り込み の
-    /// `capital_expenditures_overview` note_type 用。
-    public func capexForDoc(_ docID: String) -> Double? {
-        years.first { $0.docId == docID }?.capex.map { $0 * Financial.millionYen }
-    }
-
     /// 指定 docID の自己株式取得額（円）。財務諸表注記取り込み の `treasury_stock_acquisition` note_type 用。
     public func treasuryStockAcquisitionForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.buyback.map { $0 * Financial.millionYen }

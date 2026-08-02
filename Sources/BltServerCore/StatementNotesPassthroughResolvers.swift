@@ -56,14 +56,6 @@ enum StatementNotesFinancialsPassthroughResolvers {
         }
     }
 
-    static func capitalExpendituresOverview(db: Database) -> StatementNoteResolveFn {
-        { docID, code in
-            (try? await resolveStatementNoteFromFinancials(
-                code: code, docID: docID, unit: "yen", db: db,
-                extractValue: { $0.capexForDoc(docID) })) ?? .failed
-        }
-    }
-
     static func treasuryStockAcquisition(db: Database) -> StatementNoteResolveFn {
         { docID, code in
             (try? await resolveStatementNoteFromFinancials(

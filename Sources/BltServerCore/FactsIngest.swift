@@ -387,7 +387,7 @@ public func runFactsIngestCommand(
                     ),
                     (
                         statementNoteTypeCapitalExpendituresOverview,
-                        StatementNotesFinancialsPassthroughResolvers.capitalExpendituresOverview(db: app.db)
+                        { docID, _ in await context.resolveCapitalExpendituresOverviewNote(docID: docID) }
                     ),
                     (
                         statementNoteTypeDividends,

@@ -709,4 +709,89 @@ import Testing
         #expect(items.first { $0.tag == "bps" }?.label == "１株当たり親会社株主持分")
         #expect(items.allSatisfy { $0.unit == "yen_per_share" })
     }
+
+    // MARK: - capital_expenditures_overview golden（ユーザー実データ確認済み 2026-08-02）
+    //
+    // 単一セグメント企業（レーザーテック）は注記が自由記述の文章のみで、総額タグ
+    // （`Xbrl.capexOverviewTags`）1本が唯一の数値源。複数セグメント企業は注記HTML内の
+    // セグメント別テーブルをパースする（列数・ヘッダー文言・rowspanの使われ方が会社ごとに揺れる
+    // ため `parseCapexTable` は内容ベースの列判定と rowspan 展開グリッドで対応、実装コメント参照）。
+    //
+    // コニカミノルタは「デジタルワークプレイス事業」「プロフェッショナルプリント事業」が
+    // 同じ金額（rowspanで結合された1つのセル）を共有する結合開示で、注記自体が2セグメントを
+    // 分けて開示していない。両行が同一investmentAmountを返すのは仕様どおりで、単純合計すると
+    // 二重計上になる点はユーザー確認済み（golden化はせず特性として記録するに留める）。
+
+    @Test(.enabled(if: cacheAvailable("S100JRT9"), "XBRL cache S100JRT9 not available"))
+    func goldenCapexLaserTecSingleSegmentFallsBackToTotalTag() throws {
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100JRT9"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 1)
+        #expect(segments[0].segmentName == nil)
+        #expect(segments[0].investmentAmount == 510_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100QZT0"), "XBRL cache S100QZT0 not available"))
+    func goldenCapexHitachiFourColumnTable() throws {
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100QZT0"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["デジタルシステム＆サービス"]?.investmentAmount == 64_900_000_000)
+        #expect(byName["デジタルシステム＆サービス"]?.yoyPercent == 101)
+        #expect(byName["デジタルシステム＆サービス"]?.description == "製品開発、データセンタの維持・更新")
+        #expect(byName["日立金属"]?.investmentAmount == 20_100_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.investmentAmount == 349_700_000_000)
+        #expect(segments.filter { !$0.isTotal }.count == 8)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100QZOM"), "XBRL cache S100QZOM not available"))
+    func goldenCapexSoftBankGroupTwoColumnTableWithRowspanLabel() throws {
+        // 先頭行に「報告セグメント」を1文字ずつ縦書き表示する rowspan セル（区分見出し）が入る。
+        // これを除いた実データ列（セグメント名/金額）が正しく取れることを確認する
+        // （実装当初のバグで先頭セグメント「持株会社投資事業」が欠落していた）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100QZOM"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["持株会社投資事業"]?.investmentAmount == 1_032_000_000)
+        #expect(byName["ソフトバンク事業"]?.investmentAmount == 761_834_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.investmentAmount == 799_130_000_000)
+        let sum = segments.filter { !$0.isTotal }.reduce(0.0) { $0 + ($1.investmentAmount ?? 0) }
+        #expect(sum == total.investmentAmount)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100QYHM"), "XBRL cache S100QYHM not available"))
+    func goldenCapexKobeSteelExcludesSubtotalFromSum() throws {
+        // 「報告セグメント計」は他行（鉄鋼アルミ〜電力）の小計であり、isTotal=trueで区別する。
+        // 個別セグメント行だけを合計すると合計行にほぼ一致する（実装当初のバグで小計を個別
+        // セグメント扱いし二重計上していた）。原本の各行が百万円単位で丸められているため
+        // 3,000,000円の残差が出る（実データ確認済み・丸め誤差、許容範囲内）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100QYHM"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.filter { $0.isTotal }.count == 2)
+        let subtotal = try #require(segments.first { $0.segmentName == "報告セグメント計" })
+        #expect(subtotal.investmentAmount == 93_903_000_000)
+        let grandTotal = try #require(segments.last { $0.isTotal })
+        #expect(grandTotal.investmentAmount == 97_302_000_000)
+        let sum = segments.filter { !$0.isTotal }.reduce(0.0) { $0 + ($1.investmentAmount ?? 0) }
+        #expect(abs(sum - grandTotal.investmentAmount!) <= 3_000_000)
+    }
 }

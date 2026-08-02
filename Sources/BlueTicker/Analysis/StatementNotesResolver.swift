@@ -7,6 +7,7 @@
 // タグされていると判明したため決定論で実装する（下記 resolvePolicyHoldingSecurities 参照）。
 
 import Foundation
+import SwiftSoup
 #if canImport(FoundationXML)
 import FoundationXML
 #endif
@@ -407,6 +408,134 @@ enum StatementNotesResolver {
               fact.unitRef == "JPYPerShares"
         else { return nil }
         return fact.value
+    }
+
+    /// 設備投資等の概要（`capital_expenditures_overview` note_type）。
+    ///
+    /// 実データ検証（2026-08-02）: 単一セグメント企業（レーザーテック S100JRT9）は注記が自由記述の
+    /// 文章のみで、総額タグ（`Xbrl.capexOverviewTags`）1本が唯一の数値源。複数セグメント企業
+    /// （日立 S100QZT0）は注記HTML内にセグメント名・設備投資金額・前年度比・主な内容/目的の4列
+    /// テーブルを持つ。セグメント別の設備投資金額自体は `CapitalExpendituresOverviewOfCapitalExpendituresEtc`
+    /// タグにセグメントmember付きcontextでも構造化されているが、前年度比・主な内容/目的はタグ化
+    /// されておらずHTML表にしか無いため、表がある場合は表を正として解析する（構造化タグと
+    /// 二重に読まず、表の抽出結果に一本化する）。表が無ければ単一値へフォールバックする。
+    static func resolveCapitalExpendituresOverview(xbrlDir: URL) -> StatementNoteResolveResult {
+        if let segments = parseCapexTable(xbrlDir: xbrlDir), !segments.isEmpty {
+            let hash = segments.map { "\($0.segmentName ?? "-")=\($0.investmentAmount ?? -1)" }
+                .joined(separator: ";")
+            return .resolved(
+                payload: StatementNotePayload(capexSegments: segments),
+                source: statementNoteSourceXbrlFacts, contentHash: hash)
+        }
+
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let durationFS = fieldSetFromDuration(allTagElements)
+        guard let total = resolveItem(durationFS, tags: Xbrl.capexOverviewTags).current else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+        let segment = CapexSegmentPayload(
+            segmentName: nil, investmentAmount: total, yoyPercent: nil, description: nil)
+        return .resolved(
+            payload: StatementNotePayload(capexSegments: [segment]),
+            source: statementNoteSourceXbrlFacts, contentHash: "\(total)")
+    }
+
+    /// `OverviewOfCapitalExpendituresEtcTextBlock` 内のセグメント別テーブルをパースする。
+    /// 表が無ければ nil。金額の単位はヘッダーの「（億円）」「（百万円）」表記から判定する
+    /// （未検出時は円のまま）。
+    ///
+    /// 実データ検証（2026-08-02）: 列数・ヘッダー文言・`rowspan` の使われ方が会社ごとに揺れる。
+    /// - 日立: 4列（セグメント名/設備投資金額（億円）/前年度比（％）/主な内容・目的）、rowspanなし
+    /// - ソフトバンクグループ: 2列（セグメントの名称/設備投資額（百万円））、先頭行に「報告セグメント」
+    ///   を1文字ずつ縦書き表示する区分見出しセルが `rowspan` で複数行にまたがる（実データではない）
+    /// - コニカミノルタ: 3列、`rowspan` が金額・目的セルに付き2つのセグメント名で1つの金額を共有
+    ///   （デジタルワークプレイス事業/プロフェッショナルプリント事業が22,148百万円を共有）
+    ///
+    /// 固定の列位置に依存すると上記いずれかで欠落・ズレが起きるため、`gridRows` で `rowspan` を
+    /// 展開した仮想グリッドを作り、「セグメント名の直後に来る最初の数値セル＝金額、その次の数値
+    /// セルがあればYoY%、さらに残りの非空文字セルは説明」という内容ベースの列判定にする
+    /// （列インデックス固定にしない）。
+    private static func parseCapexTable(xbrlDir: URL) -> [CapexSegmentPayload]? {
+        guard let html = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: "OverviewOfCapitalExpendituresEtcTextBlock"),
+            let soup = try? SwiftSoup.parse(html),
+            let tables = (try? soup.select("table"))?.array()
+        else { return nil }
+
+        for table in tables {
+            let rows = gridRows(from: table)
+            var scale: Double?
+            var segments: [CapexSegmentPayload] = []
+            for cols in rows {
+                guard !cols.isEmpty else { continue }
+                if cols.contains(where: { $0.contains("設備投資") }) {
+                    if cols.contains(where: { $0.contains("億円") }) { scale = 100_000_000 }
+                    else if cols.contains(where: { $0.contains("百万円") }) { scale = 1_000_000 }
+                    continue
+                }
+                guard let scale else { continue }
+                guard let amountIdx = cols.firstIndex(where: { XBRLUtils.parseTextblockCellValue($0) != nil }),
+                      amountIdx > 0
+                else { continue }
+                let amount = XBRLUtils.parseTextblockCellValue(cols[amountIdx])!
+                let name = cols[amountIdx - 1]
+                let after = Array(cols[(amountIdx + 1)...])
+                var yoy: Double?
+                var description: String?
+                if let first = after.first, let v = XBRLUtils.parseTextblockCellValue(first) {
+                    yoy = v
+                    description = after.count > 1 ? after[1] : nil
+                } else {
+                    description = after.first
+                }
+                if let d = description, d.isEmpty || d == "－" { description = nil }
+                let normalizedName = name.replacingOccurrences(of: "　", with: "").replacingOccurrences(
+                    of: " ", with: "")
+                // 「計」で終わる行（合計・小計・報告セグメント計等）は他行の集約であり、
+                // 個別セグメントとして加算すると二重集計になる（実データ検証: 神戸製鋼所 S100QYHM
+                // の「報告セグメント計」が鉄鋼アルミ〜電力7segmentの小計だった）。segmentNameは
+                // ラベルのまま保持し、isTotalで集約行だと分かるようにする。
+                let isTotal = normalizedName.hasSuffix("計")
+                segments.append(
+                    CapexSegmentPayload(
+                        segmentName: name, investmentAmount: amount * scale, yoyPercent: yoy,
+                        description: description, isTotal: isTotal))
+            }
+            if !segments.isEmpty { return segments }
+        }
+        return nil
+    }
+
+    /// `<table>` の各 `<tr>` を `rowspan` を展開した仮想グリッド（列固定・欠損セルなし）へ変換する。
+    /// `colspan` は非対応（本note_typeで観測されていない。必要になれば拡張する）。
+    private static func gridRows(from table: Element) -> [[String]] {
+        guard let trs = (try? table.select("tr"))?.array() else { return [] }
+        var pending: [Int: (text: String, remaining: Int)] = [:]
+        var result: [[String]] = []
+        for tr in trs {
+            guard let tds = (try? tr.select("td"))?.array() else { continue }
+            var cols: [String] = []
+            var col = 0
+            var cellIdx = 0
+            while true {
+                if let p = pending[col], p.remaining > 0 {
+                    cols.append(p.text)
+                    pending[col] = p.remaining == 1 ? nil : (p.text, p.remaining - 1)
+                    col += 1
+                    continue
+                }
+                guard cellIdx < tds.count else { break }
+                let td = tds[cellIdx]
+                let text = (try? td.text(trimAndNormaliseWhitespace: true)) ?? ""
+                let rowspan = Int((try? td.attr("rowspan")) ?? "") ?? 1
+                cols.append(text)
+                if rowspan > 1 { pending[col] = (text, rowspan - 1) }
+                cellIdx += 1
+                col += 1
+            }
+            result.append(cols)
+        }
+        return result
     }
 
     private static let dividendRowContextRegex = try? NSRegularExpression(
