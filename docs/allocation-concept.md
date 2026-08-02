@@ -1,12 +1,12 @@
 # Allocation（配分構造の可視化）構想
 
-**未着手**の将来構想メモ。今回（Stage 6 breakdown軸拡張・Stage 8 statement-notes）整備した
+**未着手**の将来構想メモ。今回（内訳取り込み breakdown軸拡張・財務諸表注記取り込み）整備した
 データを、後から「配分構造」という観点で束ねて使うための土台の記録。実装はしない。
 
 ## 目的
 
 収益・利益・投資の配分構造をサンキー図でクライアント側が描画できる形で返す機能。
-`analyze` のウォーターフォール分解（サーバーは前年差の要因分解値を返すのみで、グラフ描画は
+`waterfall` のウォーターフォール分解（サーバーは前年差の要因分解値を返すのみで、グラフ描画は
 クライアント側）と同じ役割分担: **サーバーは分解済みの数値（ノード・フロー量）を返すだけで、
 描画（レイアウト・色・インタラクション）は持たない**。
 
@@ -25,12 +25,12 @@
 
 | Allocation観点 | 材料（今回実装済み） |
 |---|---|
-| 地域別 | Stage 6 `geography` breakdown軸 |
-| 製品別・事業別 | Stage 6 `business` breakdown軸 |
-| 利益構造別 | Stage 7 statement（PL本体）＋ Stage 8 `sga_breakdown` note_type（販管費内訳） |
-| 投資構造別 | Stage 8 `capital_expenditures_overview`／`research_and_development`／`dividends` note_type |
+| 地域別 | 内訳取り込み `geography` breakdown軸 |
+| 製品別・事業別 | 内訳取り込み `business` breakdown軸 |
+| 利益構造別 | Statement取り込み（PL本体）＋ 財務諸表注記取り込み `sga_breakdown` note_type（販管費内訳） |
+| 投資構造別 | 財務諸表注記取り込み `capital_expenditures_overview`／`research_and_development`／`dividends` note_type |
 
-`employees`／`research_and_development` breakdown軸（Stage 6、今回追加）は「人員配分」観点として
+`employees`／`research_and_development` breakdown軸（内訳取り込み、今回追加）は「人員配分」観点として
 将来追加する余地があるが、上表には含めない（v1想定の4観点に絞る）。
 
 ## 非対象（今回のスコープ外）
@@ -45,5 +45,5 @@
 ## 関連ドキュメント
 
 - `docs/breakdown-normalization-concept.md` — geography/business breakdown軸
-- `docs/statement-normalization-concept.md` — Stage 7 statement本体・Stage 8 statement-notes
-- `docs/blt-server-roadmap.md` — Stage 8 の索引ポインタ
+- `docs/statement-normalization-concept.md` — Statement取り込み本体・財務諸表注記取り込み
+- `docs/blt-server-roadmap.md` — 財務諸表注記取り込み の索引ポインタ

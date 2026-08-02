@@ -118,12 +118,12 @@ private func seedFinancials(
     }
 
 
-    // MARK: - 異常系: Stage 4 未計算 / 値なし
+    // MARK: - 異常系: 財務取り込み 未計算 / 値なし
 
-    @Test func ingestFailsWithoutStoringWhenStage4HasNotComputedDocYet() async throws {
+    @Test func ingestFailsWithoutStoringWhenFinancialsHasNotComputedDocYet() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            // company_financials 行を一切シードしない（Stage 4 未計算）。
+            // company_financials 行を一切シードしない（財務取り込み 未計算）。
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
@@ -137,10 +137,10 @@ private func seedFinancials(
         }
     }
 
-    @Test func ingestWritesNotApplicableWhenStage4HasDocButValueIsNil() async throws {
+    @Test func ingestWritesNotApplicableWhenFinancialsHasDocButValueIsNil() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            // Stage 4 は当該 docID を計算済みだが研究開発費なし（rdMillionYen 省略）。
+            // 財務取り込み は当該 docID を計算済みだが研究開発費なし（rdMillionYen 省略）。
             try await seedFinancials(code: "7203", docID: "S1", eps: 100, db: app.db)
 
             let summary = try await runStatementNotesIngest(
@@ -158,10 +158,10 @@ private func seedFinancials(
         }
     }
 
-    // MARK: - 汎用機構（代表として research_and_development resolver で検証、Stage 6/7 と同型）
+    // MARK: - 汎用機構（代表として research_and_development resolver で検証、内訳取り込み・Statement取り込み と同型）
     //
     // per_share_information はXBRL直接抽出（`StatementNotesResolver.resolvePerShareInformation`）へ
-    // 置き換え済みのため、Stage4単一値passthroughのままの research_and_development を代表に使う
+    // 置き換え済みのため、財務取り込み単一値passthroughのままの research_and_development を代表に使う
     // （2026-08-02、`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` にgolden回帰あり）。
 
     @Test func ingestSkipsWhenStoredAtCurrentVersion() async throws {

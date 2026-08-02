@@ -600,7 +600,7 @@ import Testing
     // 「配当の状況」注記（role=DividendPolicy）の `DateOfResolutionDividendsOfSurplus`・
     // `ResolutionDividendsOfSurplus`・`DividendPerShareDividendsOfSurplus`・
     // `TotalAmountOfDividendsDividendsOfSurplus` が `FilingDateInstant_Row{N}Member` で
-    // 決議ごとに行番号付けされている。当初 Stage 4 の `dividendSs`（株主資本等変動計算書の
+    // 決議ごとに行番号付けされている。当初 財務取り込み の `dividendSs`（株主資本等変動計算書の
     // 当期変動額）単一値を再公開していたが、実データレビューでこの単一値は「その事業年度の
     // 業績に対応する配当（中間+期末）」ではなく「そのSS計算期間中に純資産を減少させた配当
     // （前期末配当+当期中間配当）」という別概念であり、期末配当の扱いが1期ずれることが
@@ -671,10 +671,10 @@ import Testing
     // で判定してはならない、小松製作所 S100QYNI で確認済み）。カバレッジ実測（144件）:
     // EPS 144/144、BPS 142/144、潜在株式調整後EPS 88/144。
     //
-    // IFRS企業のEPS/潜在株式調整後EPSはStage7（Statement、損益計算書）とタグ・値が完全一致する
+    // IFRS企業のEPS/潜在株式調整後EPSはStatement取り込み（Statement、損益計算書）とタグ・値が完全一致する
     // （`jpigp_cor:BasicEarningsLossPerShareIFRS`はrole=ConsolidatedStatementOfProfitOrLossIFRSで
     // 損益計算書本体のfactそのもの、同じ値がnotesにも出るのは意図的な重複でズレではない、
-    // ユーザー確認済み）。BPSはどちらの会計基準でもStage7では取得不可（role=BusinessResultsOfGroup
+    // ユーザー確認済み）。BPSはどちらの会計基準でもStatement取り込みでは取得不可（role=BusinessResultsOfGroup
     // でBS/PL/CFいずれにも分類されない）。
 
     @Test(.enabled(if: cacheAvailable("S100JRT9"), "XBRL cache S100JRT9 not available"))

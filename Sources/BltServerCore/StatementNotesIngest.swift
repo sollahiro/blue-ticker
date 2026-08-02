@@ -221,7 +221,7 @@ func storeStatementNote(
 
 // MARK: - read 経路（REST/MCP statement notes）
 
-/// `loadStoredStatementNote` の結果3値。`BreakdownLoadResult`（Stage 6）と同型
+/// `loadStoredStatementNote` の結果3値。`BreakdownLoadResult`（内訳取り込み）と同型
 /// （「行が無い/read不可」と「行はあるが対象外だった（reason付き）」を区別する）。
 enum StatementNoteLoadResult {
     /// 実データあり。公開契約 {code, doc_id, note_type, note} の JSON。

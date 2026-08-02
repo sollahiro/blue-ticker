@@ -1,9 +1,9 @@
 // 財務諸表注記取り込み: 財務諸表注記（Statement Notes）の格納用 Codable 契約。
 // docs/statement-normalization-concept.md「statement-notes（今後）」・plan（財務諸表注記取り込み実装計画）参照。
 //
-// company_breakdowns（Stage 6）と同型の設計: note_type ごとに1行（"\(docID)#\(noteType)" 合成キー）、
+// company_breakdowns（内訳取り込み）と同型の設計: note_type ごとに1行（"\(docID)#\(noteType)" 合成キー）、
 // 決定論経路は cache_version 世代でゲート、LLM 経由は needs_review + content_hash でのみ再計算する。
-// company_statements（Stage 7 本体）とは別テーブル（バージョニング独立・課金境界をエンドポイント
+// company_statements（Statement取り込み 本体）とは別テーブル（バージョニング独立・課金境界をエンドポイント
 // 単位で分離するため。docs/feature-tiers.md）。
 //
 // 政策保有株式（policyHoldingSecurities）は当初「LLM必須」と見込んでいたが、実データ検証
@@ -99,7 +99,7 @@ public func isServableStatementNote(source: String, cacheVersion: String, noteTy
     return n >= statementNoteMinServableVersion(forType: noteType)
 }
 
-/// 財務諸表注記取り込み ingest（書類1件・note_type1つ分）の計算結果。`BreakdownResolveResult`（Stage 6）と同型の
+/// 財務諸表注記取り込み ingest（書類1件・note_type1つ分）の計算結果。`BreakdownResolveResult`（内訳取り込み）と同型の
 /// 3値パターン（`.agents/rules/project/error-handling.md`）。
 public enum StatementNoteResolveResult: Sendable {
     case resolved(payload: StatementNotePayload, source: String, contentHash: String)
@@ -108,10 +108,11 @@ public enum StatementNoteResolveResult: Sendable {
 }
 
 /// company_statement_notes.payload の中身。note_type によって使うフィールドが変わる緩めの構造:
-/// - スカラー値の note（EPS・発行済株式数・研究開発費合計・設備投資概要・配当金・自己株式取得）は
-///   `value`/`unit` を使う
-/// - 表形式の note（販管費内訳・PPE明細・のれん明細・借入金等明細表）は `items` を使う
+/// - スカラー値の note（研究開発費合計）は `value`/`unit` を使う
+/// - 表形式の note（EPS/BPS等・販管費内訳・PPE明細・のれん明細・借入金等明細表）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
+/// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式数の推移は
+///   `issuedSharesEvents`（いずれも決議・イベント単位のXBRL直接抽出、2026-08-02再設計）
 /// - 政策保有株式（決定論、銘柄別 XBRL タグ抽出）は `securities` を使う
 public struct StatementNotePayload: Codable, Sendable {
     public var value: Double?

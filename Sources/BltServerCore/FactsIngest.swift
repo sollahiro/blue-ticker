@@ -354,10 +354,11 @@ public func runFactsIngestCommand(
         }
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み
-            // 計算済みの値をそのまま再公開する6種（EPS/発行済株式数/研究開発費/設備投資概要/配当金/自己株式取得）と、
-            // XBRL から直接抽出する borrowings_schedule_cf_supplement / PPE・のれん明細（IFRS連結限定）/
+            // 計算済みの値をそのまま再公開するのは research_and_development のみ（passthrough）。
+            // EPS/発行済株式数/設備投資概要/配当金は注記からXBRL直接抽出（決議・イベント単位のテーブル
+            // 等）へ再設計済み。加えて borrowings_schedule_cf_supplement / PPE・のれん明細（IFRS連結限定）/
             // policy_holding_securities（EDINET標準タクソノミの銘柄別構造化タグ、決定論・LLM不要）を
-            // 実装・配信中（10 note_type）。
+            // 実装・配信中（9 note_type）。
             //
             // sga_breakdown は実装済みだが配信を見送り中（2026-08-02、実データレビューで判明:
             // XBRLタグとして開示されるのは常に非連結（`NonConsolidatedMember`）のみで、連結内訳は

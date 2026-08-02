@@ -673,7 +673,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
     }
 
-    // MARK: - デバッグ(Stage 8 capital_expenditures_overview note_type)
+    // MARK: - デバッグ(財務諸表注記取り込み capital_expenditures_overview note_type)
 
     static func debugCapex(docID: String, xbrlDir: URL) {
         switch StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir) {
@@ -691,7 +691,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
     }
 
-    // MARK: - デバッグ(Stage 8 issued_shares note_type)
+    // MARK: - デバッグ(財務諸表注記取り込み issued_shares note_type)
 
     static func debugIssuedShares(docID: String, xbrlDir: URL) {
         switch StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir) {

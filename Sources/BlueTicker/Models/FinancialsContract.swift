@@ -481,14 +481,14 @@ extension FinancialsResponse {
         years.contains { $0.docId == docID }
     }
 
-    /// 指定 docID の従業員数（全社合計・人）。Stage 6 の employees 軸が分母（全社合計）として
+    /// 指定 docID の従業員数（全社合計・人）。内訳取り込み の employees 軸が分母（全社合計）として
     /// 再利用するために使う（`salesForDoc` と同型、重複ロジック回避。2026-08-01 監査指摘対応）。
     /// `years[].employees` は `Int?` のためここで `Double` へ変換する。
     public func employeesForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.employees.map(Double.init)
     }
 
-    /// 指定 docID の研究開発費（円、連結・全社合計）。Stage 6 の research_and_development 軸の
+    /// 指定 docID の研究開発費（円、連結・全社合計）。内訳取り込み の research_and_development 軸の
     /// 分母（全社合計）、および 財務諸表注記取り込み の `research_and_development` note_type の両方が再利用する。
     /// `years[].rd` は百万円建てのため円へ変換する。
     public func rdForDoc(_ docID: String) -> Double? {

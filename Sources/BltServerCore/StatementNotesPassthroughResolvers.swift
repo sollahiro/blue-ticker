@@ -12,15 +12,15 @@
 // 持分変動計算書から取得する方針、別スコープ）。
 //
 // sga_breakdown・borrowings_schedule_cf_supplement・policy_holding_securities・PPE明細・のれん明細
-// のように Stage 4 に対応値が無い note_type も、この経路ではなく別途 XBRL 直接抽出（BlueTickerCore
+// のように 財務取り込み に対応値が無い note_type も、この経路ではなく別途 XBRL 直接抽出（BlueTickerCore
 // 側 resolver）を実装している。
 
 import BlueTickerCore
 import Fluent
 
-/// `code`/`docID` の Stage 4 計算結果から `extractValue` で当該 note_type の値（円・株数など、
+/// `code`/`docID` の 財務取り込み 計算結果から `extractValue` で当該 note_type の値（円・株数など、
 /// note_type ごとの単位のまま）を取り出し `StatementNoteResolveResult` へ変換する。
-/// Stage 4 が当該 docID をまだ計算していなければ `.failed`（次回 ingest で再試行。Stage 6 の
+/// 財務取り込み が当該 docID をまだ計算していなければ `.failed`（次回 ingest で再試行。内訳取り込み の
 /// 売上参照未計算時と同じ「進展なし」扱い）。計算済みだが値が無ければ `.notApplicable(not_found)`
 /// （正当欠測: 例えば当期配当が無い、または対象タグが開示されていない）。
 func resolveStatementNoteFromFinancials(

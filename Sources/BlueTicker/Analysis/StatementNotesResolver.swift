@@ -1,4 +1,4 @@
-// 財務諸表注記取り込み: Stage 4/6/7 が対象外の財務諸表注記（Statement Notes）を note_type ごとに解決する。
+// 財務諸表注記取り込み: 財務取り込み・内訳取り込み・Statement取り込み が対象外の財務諸表注記（Statement Notes）を note_type ごとに解決する。
 // note_type ごとの決定論ロジックをこの1ファイルに集約する（11種×別ファイルは過剰。
 // plan「Resolver: StatementNotesResolver.swift」参照）。
 //
@@ -28,7 +28,7 @@ enum StatementNotesResolver {
     /// S100VWVY もこの注記を持つ）。単体決算の損益計算書関係注記として開示されるかどうかは
     /// 会社ごとの開示判断であり、キャッシュ済み144件中99件で解決・45件が正当な
     /// `.notApplicable(not_found)`（該当 role 自体が無い）だった。したがって本 note_type の値は
-    /// 単体（非連結）ベースであり、Stage 4 の連結 SG&A 合計とは母集団が異なる（合算しても一致しない）。
+    /// 単体（非連結）ベースであり、財務取り込み の連結 SG&A 合計とは母集団が異なる（合算しても一致しない）。
     static func resolveSGABreakdown(xbrlDir: URL) -> StatementNoteResolveResult {
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
 
@@ -360,7 +360,7 @@ enum StatementNotesResolver {
     /// （IFRS企業の一部は希薄化効果のある証券が無く注記自体に希薄化後EPSを持たない）。
     ///
     /// 前期比較値は持たない。`company_statement_notes` はdocID（＝1事業年度）単位でingestされる
-    /// ため、前期値は前期docIDの`value`で取得できる（Stage4 `years[]` と同型、ユーザー判断
+    /// ため、前期値は前期docIDの`value`で取得できる（財務取り込み `years[]` と同型、ユーザー判断
     /// 2026-08-02）。
     static func resolvePerShareInformation(xbrlDir: URL) -> StatementNoteResolveResult {
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)

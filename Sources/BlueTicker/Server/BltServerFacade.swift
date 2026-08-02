@@ -290,7 +290,7 @@ public extension BltServerContext {
 
     /// 財務諸表注記取り込み: 書類1件分の `per_share_information` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePerShareInformation` に委譲する（「業績等の概要」の
-    /// 離散数値タグから決定論で抽出、LLM 不要）。Stage 4 の単一値（EPSのみ）passthrough を
+    /// 離散数値タグから決定論で抽出、LLM 不要）。財務取り込み の単一値（EPSのみ）passthrough を
     /// 置き換える（実データレビューでBPS・潜在株式調整後EPSも取得可能と判明、2026-08-02）。
     func resolvePerShareInformationNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
@@ -309,7 +309,7 @@ public extension BltServerContext {
 
     /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
-    /// 構造化タグから決定論で抽出、LLM 不要）。Stage 4 の単一集計値 passthrough を置き換える
+    /// 構造化タグから決定論で抽出、LLM 不要）。財務取り込み の単一集計値 passthrough を置き換える
     /// （実データレビューで決議単位のテーブル構造が判明したため、2026-08-02）。
     func resolveDividendsNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
@@ -413,10 +413,10 @@ public extension BltServerContext {
 }
 
 public extension BltServerContext {
-    /// Stage 6: 書類1件分の employees 軸内訳を解決する（2026-08-01追加）。`NumberOfEmployees` /
+    /// 内訳取り込み: 書類1件分の employees 軸内訳を解決する（2026-08-01追加）。`NumberOfEmployees` /
     /// `NumberOfGroupEmployees` のセグメント dimension 付き fact のみを対象にした決定論経路
-    /// （LLM フォールバックなし）。`total`（全社合計の従業員数）は Stage 4 が既に計算済みの値を
-    /// 呼び出し側（`Stage6Ingest.swift`）が `company_financials` から引いて渡す（自前で XBRL から
+    /// （LLM フォールバックなし）。`total`（全社合計の従業員数）は 財務取り込み が既に計算済みの値を
+    /// 呼び出し側（`BreakdownIngest.swift`）が `company_financials` から引いて渡す（自前で XBRL から
     /// 再抽出しない。重複ロジック回避、`resolveBusinessBreakdown` の `consolidatedSales` と同型）。
     func resolveEmployeesBreakdown(
         docID: String, total: Double?
@@ -439,9 +439,9 @@ public extension BltServerContext {
             contentHash: hash, audit: nil)
     }
 
-    /// Stage 6: 書類1件分の research_and_development 軸内訳を解決する（2026-08-01追加）。
+    /// 内訳取り込み: 書類1件分の research_and_development 軸内訳を解決する（2026-08-01追加）。
     /// `resolveEmployeesBreakdown` と同型（決定論のみ、LLM フォールバックなし。`total` は
-    /// Stage 4 計算済みの研究開発費全社合計を呼び出し側が渡す）。
+    /// 財務取り込み 計算済みの研究開発費全社合計を呼び出し側が渡す）。
     func resolveResearchAndDevelopmentBreakdown(
         docID: String, total: Double?
     ) async -> BreakdownResolveResult {

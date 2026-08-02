@@ -91,7 +91,7 @@ Summary/Waterfall と同型の**別エンドポイント・別ツール**分割�
 | 機能 | REST | MCP | ingest 対象 | 想定ティア |
 |---|---|---|---|---|
 | Statement（本体） | `GET /v1/companies/{code}/statement` | `get_statement` | statements | 無料想定 |
-| Statement Notes（注記） | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` | statement-notes | 有料想定 |
+| Statement Notes（注記、表示名は「Note」） | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` | statement-notes | 無料（`docs/feature-tiers.md`参照、構造化層は無料方針へ転換） |
 
 両者は別テーブル・別 ingest 対象として設計する（本体は決定論のみで完結するが、注記は
 breakdowns 同様 LLM フォールバックが必要になる可能性が高く、staleness・再計算方針が本体と異なる
@@ -150,7 +150,10 @@ StatementLineItem
   下記「実装方針」に沿って実装済み（2026-07-29、対象は日経225限定でスタート。使い捨て Neon
   への実データ書き込み・読み出しまで検証済み）。日経225全社への本番ingestはこれから
   （`assets/nikkei225.csv` を持つ本番/ローカル環境で `blt-server ingest --stages statements` を実行）。
-- **statement-notes（注記）**: 構想のみ。対象注記・正規化方式（LLM 要否含む）は未確定。
+- **statement-notes（注記）**: DB モデル・ingest・REST（`GET /v1/companies/{code}/statement/notes`）・
+  MCP（`get_statement_notes`）まで実装済み（2026-08-02、note_type 9種、対象は日経225限定）。
+  決定論のみ（LLM不要）で完結すると判明したため、当初想定していたLLMフォールバックは未使用。
+  詳細は `docs/blt-server-roadmap.md`「statement-notes」行参照。
 
 ## 今回（PR #153）のスコープ外（非ゴール）
 
@@ -158,7 +161,8 @@ PR #153（抽出ロジック・DevCLI）時点の切り分け。~~取り消し�
 
 - ~~DB モデル・マイグレーション・`StatementIngest.swift`・REST ルート・MCP ツール配線~~ → 実装済み（下記「実装方針」参照）
 - ~~複数年度の履歴集約~~ → `StatementIngest` が `filingSectionCandidates` の docID 反復で対応済み（下記「実装方針」2）
-- 注記（statement-notes）の抽出方式・対象注記の確定・LLM 要否判断
+- ~~注記（statement-notes）の抽出方式・対象注記の確定・LLM 要否判断~~ → note_type 9種を決定論のみ
+  （LLM不要）で実装済み（2026-08-02、`docs/blt-server-roadmap.md`参照）
 - 企業拡張タグの正規化ポリシー（そのまま出すか、正規化するか）の確定
 - 企業間の科目名統一（Breakdown 的な意味正規化）
 

@@ -451,7 +451,7 @@ enum StatementNoteServeResult {
 }
 
 /// `statement/notes` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
-/// ライブ解決へのフォールバックは行わない（Stage 5/6/7 と同型）。
+/// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
 func serveStoredStatementNote(
     code: String, docId: String?, noteType: String, db: Database?, logger: Logger
 ) async -> StatementNoteServeResult {

@@ -268,7 +268,7 @@ enum BreakdownNormalizer {
         )
     }
 
-    /// 従業員数のセグメント別内訳（Stage 6 employees 軸）。`normalizeCountBasis` 参照。
+    /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。
     static func normalizeEmployees(
         facts: [BreakdownFact], total: Double?, axis: String
     ) -> BreakdownSnapshot? {
@@ -277,7 +277,7 @@ enum BreakdownNormalizer {
             warningPrefix: "employees")
     }
 
-    /// 研究開発費（全社合計）のセグメント別内訳（Stage 6 research_and_development 軸）。
+    /// 研究開発費（全社合計）のセグメント別内訳（内訳取り込み research_and_development 軸）。
     /// `normalizeCountBasis` 参照。金額（人数ではない）だが計算の形は同一のため共用する。
     static func normalizeResearchAndDevelopment(
         facts: [BreakdownFact], total: Double?, axis: String
@@ -289,7 +289,7 @@ enum BreakdownNormalizer {
     }
 
     /// 従業員数・研究開発費など「セグメント dimension 付き fact ＋ 別途取得済みの全社合計値」から
-    /// 内訳スナップショットを組み立てる共通処理（Stage 6 employees / research_and_development 軸）。
+    /// 内訳スナップショットを組み立てる共通処理（内訳取り込み employees / research_and_development 軸）。
     ///
     /// 当初 `normalizeInternalSubtotalBasis`（銀行・保険の売上/粗利益向け）をそのまま転用したが、
     /// 実データ検証（S100TSIJ・S100VXJA、2026-08-01）で誤りが発覚したため専用実装にした。
@@ -297,7 +297,7 @@ enum BreakdownNormalizer {
     /// これは売上文脈では「全社合計」を表す会社があるための登録であり、従業員数・研究開発費文脈では
     /// 「本社機能等の少額バケツ」でしかない。これを分母に採用すると常にシェアが100%を超える
     /// （実データ: S100TSIJ 従業員数で分母3,645人に対し1セグメントだけで39,450人＝1082%）。
-    /// 全社合計は呼び出し側（`Stage6Ingest.swift` が `company_financials` から取得。Stage4 と
+    /// 全社合計は呼び出し側（`BreakdownIngest.swift` が `company_financials` から取得。財務取り込み と
     /// 同じ値を再利用し自前で XBRL から再抽出しない）が渡す前提とし、小計 member 名の
     /// マッチングには依存しない。
     ///

@@ -1,9 +1,9 @@
 // 財務諸表注記取り込み: 書類1件・note_type1つ分の財務諸表注記（StatementNotePayload）= 1 行。
 // 財務諸表注記取り込み実装計画（stateful-tickling-ritchie plan）・docs/statement-normalization-concept.md
-// 「statement-notes（今後）」参照。company_statements（Stage 7 本体）とは別テーブル
+// 「statement-notes（今後）」参照。company_statements（Statement取り込み 本体）とは別テーブル
 // （バージョニング独立・課金境界をエンドポイント単位で分離するため）。
 //
-// 主キーは "doc_id#note_type" の合成文字列。company_breakdowns（Stage 6）と同じ設計
+// 主キーは "doc_id#note_type" の合成文字列。company_breakdowns（内訳取り込み）と同じ設計
 // （本プロジェクトの既存テーブルは単一 String ID の慣習のため、複合IDではなくこの合成キーで揃える）。
 
 import BlueTickerCore

@@ -268,7 +268,7 @@ private actor RealXbrlMockChat: ChatCompleting {
     }
 }
 
-// 実 EDINET XBRL キャッシュでの Stage 6 employees/research_and_development 軸の回帰テスト。
+// 実 EDINET XBRL キャッシュでの 内訳取り込み employees/research_and_development 軸の回帰テスト。
 // 2026-08-01 監査指摘: `CorporateSharedMember`（本社機能等の少額バケツ）を "subtotal" に分類すると
 // 合計チェックから除外され、これを含めないと sum(segment) が常に total を下回るため
 // 5%乖離警告が恒常的な誤検知になる（needs_review=true が固定化し再ingestループになる）。
@@ -307,7 +307,7 @@ private actor RealXbrlMockChat: ChatCompleting {
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
 
-        // 全社合計は Stage 4 計算済みの値を想定した固定値（実データ: 73,165人）。
+        // 全社合計は 財務取り込み 計算済みの値を想定した固定値（実データ: 73,165人）。
         let snapshot = try #require(
             BreakdownNormalizer.normalizeEmployees(facts: facts, total: 73_165, axis: "employees"))
 
