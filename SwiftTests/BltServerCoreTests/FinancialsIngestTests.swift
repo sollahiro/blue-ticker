@@ -734,7 +734,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// financials（Summarize）は増減分解フィールド（Analyze 専用、`docs/feature-tiers.md`）を
+    /// financials（Summary）は増減分解フィールド（Waterfall 専用、`docs/feature-tiers.md`）を
     /// trim の有無に関わらず一切含まない。
     @Test func loadStoredFinancialsExcludesAnalysisOnlyFields() async throws {
         try await withMigratedApp { app in
@@ -751,7 +751,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             #expect(years.count == 3)
             for year in years {
                 for key in priorDependentKeys {
-                    #expect(year.keys.contains(key) == false, "\(key) は Summarize に含めない")
+                    #expect(year.keys.contains(key) == false, "\(key) は Summary に含めない")
                 }
             }
             // 前年非依存の項目は保持。
@@ -760,7 +760,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
     }
 
     /// trim で最古になった年は前年依存フィールドが null 化され、ライブ経路（最古年は前年なし）と一致する。
-    /// 前年非依存の項目（sales 等）と、最古でない年の前年依存値は保持される。Analyze 専用フィールドは
+    /// 前年非依存の項目（sales 等）と、最古でない年の前年依存値は保持される。Waterfall 専用フィールドは
     /// `loadStoredAnalysis` からのみ確認できる（`loadStoredFinancials` は含めない）。
     @Test func loadStoredAnalysisClearsPriorDependentMetricsOnTrimmedOldestYear() async throws {
         try await withMigratedApp { app in

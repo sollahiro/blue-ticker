@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-// analyze / summarize コマンドが共有する JSON 出力・表組みプリミティブ。
+// waterfall / summary コマンドが共有する JSON 出力・表組みプリミティブ。
 // remote 経路（Ticker* コマンド）とローカル経路（Dev* コマンド、DevCLI/MetricsLoader.swift）の
 // 両方から使われる。データ取得側（MetricsLoader/AnalysisContext）は DevCLI/ へ移設済み。
 

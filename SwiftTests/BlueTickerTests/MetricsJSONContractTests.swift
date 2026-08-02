@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-// analyze / summarize --format json の出力キー契約。
+// waterfall / summary --format json の出力キー契約。
 // MetricsJSON.print は JSONEncoder().encode(MetricsResult) の結果を
 // 整形して出力するだけなので、CodingKeys のキー名がそのまま CLI JSON 出力の公開契約になる。
 // キー名の変更（リネーム・大文字小文字の変更を含む）は破壊的変更であることをここで固定する。

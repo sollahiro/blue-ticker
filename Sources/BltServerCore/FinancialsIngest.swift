@@ -249,7 +249,7 @@ func loadStoredFinancials(code: String, years: Int, db: Database) async throws -
     return row.response.trimmed(toYears: years).summaryJsonObject()
 }
 
-/// 格納済み 財務取り込み 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Analyze）を
+/// 格納済み 財務取り込み 結果を code で引き、増減分解フィールド（`docs/feature-tiers.md` の Waterfall）を
 /// 含めた JSON を返す。読み取り床・年数要件は `loadStoredFinancials` と同一（同じ格納行を使う。
 /// 新規テーブル・cache_version は導入しない）。
 func loadStoredAnalysis(code: String, years: Int, db: Database) async throws -> [String: Any]? {
