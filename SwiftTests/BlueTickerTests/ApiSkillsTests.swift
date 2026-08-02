@@ -22,7 +22,7 @@ import Testing
                 "search_companies", "search_by_sector", "get_filings",
                 "get_financial_summary",
                 "get_waterfall", "get_filing_content",
-                "get_breakdown", "get_statement",
+                "get_breakdown", "get_statement", "get_statement_notes",
             ])
         // REST 専用（MCP なし）
         #expect(apiSkill(id: "list-sectors")?.mcpTool == nil)

@@ -11,6 +11,10 @@ import Foundation
 /// company_breakdowns.axis の公開定数（BltServerCore / REST / MCP / ingest で共用）。
 public let breakdownAxisBusiness = "business"
 public let breakdownAxisGeography = "geography"
+/// 従業員数のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
+public let breakdownAxisEmployees = "employees"
+/// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
+public let breakdownAxisResearchAndDevelopment = "research_and_development"
 
 /// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
@@ -21,10 +25,17 @@ public let breakdownAxisGeography = "geography"
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 public let businessBreakdownCacheVersion = "breakdown-business-v7"
 public let geographyBreakdownCacheVersion = "breakdown-geography-v8"
+public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
+public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
-    axis == breakdownAxisGeography ? geographyBreakdownCacheVersion : businessBreakdownCacheVersion
+    switch axis {
+    case breakdownAxisGeography: return geographyBreakdownCacheVersion
+    case breakdownAxisEmployees: return employeesBreakdownCacheVersion
+    case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
+    default: return businessBreakdownCacheVersion
+    }
 }
 
 /// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
@@ -76,16 +87,27 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 /// 不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
 public let businessBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
+public let employeesBreakdownMinServableVersion = 1
+public let researchAndDevelopmentBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
-    axis == breakdownAxisGeography ? geographyBreakdownMinServableVersion : businessBreakdownMinServableVersion
+    switch axis {
+    case breakdownAxisGeography: return geographyBreakdownMinServableVersion
+    case breakdownAxisEmployees: return employeesBreakdownMinServableVersion
+    case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
+    default: return businessBreakdownMinServableVersion
+    }
 }
 
-/// `breakdown-business-vN` / `breakdown-geography-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
+/// `breakdown-business-vN` / `breakdown-geography-vN` / `breakdown-employees-vN` /
+/// `breakdown-research-and-development-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
 /// パース不能なら nil（非 servable 扱い）。
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
-    let prefixes = ["breakdown-business-v", "breakdown-geography-v", "breakdown-v"]
+    let prefixes = [
+        "breakdown-business-v", "breakdown-geography-v", "breakdown-employees-v",
+        "breakdown-research-and-development-v", "breakdown-v",
+    ]
     for prefix in prefixes where version.hasPrefix(prefix) {
         let suffix = version.dropFirst(prefix.count)
         guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }

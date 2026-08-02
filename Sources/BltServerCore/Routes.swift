@@ -188,6 +188,23 @@ func registerRoutes(
             notFoundMessage: "財務諸表は未抽出です")
     }
 
+    // GET /v1/companies/{code}/statement/notes?note_type=policy_holding_securities&doc_id=...
+    // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
+    // `statement` 本体とは別エンドポイント（課金境界をエンドポイント単位で分離するため。
+    // docs/feature-tiers.md）。財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
+    v1.get("companies", ":code", "statement", "notes") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let docId = req.query[String.self, at: "doc_id"]
+        guard let noteType = req.query[String.self, at: "note_type"], !noteType.isEmpty else {
+            return errorResponse(.badRequest, message: "note_type は必須です")
+        }
+        return makeStatementNoteResponse(
+            await serveStoredStatementNote(
+                code: code, docId: docId, noteType: noteType, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            notFoundMessage: "指定された note_type の注記は未算出です")
+    }
+
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
@@ -388,7 +405,12 @@ enum BreakdownServeResult {
 
 /// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
 func breakdownNotFoundMessage(axis: String) -> String {
-    axis == breakdownAxisGeography ? "地域別内訳は未算出です" : "事業別内訳は未算出です"
+    switch axis {
+    case breakdownAxisGeography: return "地域別内訳は未算出です"
+    case breakdownAxisEmployees: return "従業員数の内訳は未算出です"
+    case breakdownAxisResearchAndDevelopment: return "研究開発費の内訳は未算出です"
+    default: return "事業別内訳は未算出です"
+    }
 }
 
 /// `breakdown` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
@@ -404,6 +426,43 @@ func serveStoredBreakdown(
             logger: logger
         ) {
             try await loadStoredBreakdown(code: code, docId: docId, axis: axis, db: db)
+        }
+        switch stored {
+        case .found(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .absent: return .notFound
+        }
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `statement/notes` 専用の DB 読み取り結果。`BreakdownServeResult` と同型（対象外 reason を
+/// 404 応答へ載せるため、他エンドポイントが共有する `StoredDataServeResult` とは別に持つ）。
+enum StatementNoteServeResult {
+    /// 成功。JSON 値（`[String: Any]`）。
+    case ok([String: Any])
+    /// 行はあるが当該 note_type が対象外だった（`statementNoteNotApplicable*` のいずれか）。404 だが理由を返す。
+    case notApplicable(reason: String)
+    /// 未格納（404 相当。reason 無し）。
+    case notFound
+    /// DB 未接続・読み取り失敗（503 相当）。
+    case dbUnavailable
+}
+
+/// `statement/notes` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+/// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
+func serveStoredStatementNote(
+    code: String, docId: String?, noteType: String, db: Database?, logger: Logger
+) async -> StatementNoteServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db)
         }
         switch stored {
         case .found(let value): return .ok(value)
@@ -515,6 +574,23 @@ private func makeStoredDataResponse(
 /// ときのみ 404 ボディへ `reason` を追加する。
 private func makeBreakdownResponse(
     _ result: BreakdownServeResult, notFoundMessage: String
+) -> Response {
+    switch result {
+    case .ok(let value):
+        return jsonResponse(value, status: .ok)
+    case .notApplicable(let reason):
+        return errorResponse(.notFound, message: notFoundMessage, reason: reason)
+    case .notFound:
+        return errorResponse(.notFound, message: notFoundMessage)
+    case .dbUnavailable:
+        return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+    }
+}
+
+/// `StatementNoteServeResult` を HTTP レスポンスへ変換する。`makeBreakdownResponse` と同型
+/// （ステータスは 404 のまま維持し、notApplicable のときのみ 404 ボディへ `reason` を追加する）。
+private func makeStatementNoteResponse(
+    _ result: StatementNoteServeResult, notFoundMessage: String
 ) -> Response {
     switch result {
     case .ok(let value):

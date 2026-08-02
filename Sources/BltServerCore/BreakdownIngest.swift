@@ -59,12 +59,22 @@ public typealias BreakdownResolveFn =
 /// いるが対象は上場全体ではない）の有報（直近 years 年ぶん）を走査し、未解決 or 再試行対象
 /// （needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。`limit` は新規解決件数の
 /// 上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
-/// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味。`axis` は `business` / `geography`。
+/// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味。`axis` は `business` / `geography` /
+/// `employees` / `research_and_development`。
+///
+/// `denominatorForDoc` は `resolve` に渡す第2引数（分母・全社合計値）を 財務取り込み
+/// （`company_financials`）から引く関数。business/geography は連結売上高（`consolidatedSalesForDoc`,
+/// 既定値）、employees/research_and_development は呼び出し元がそれぞれ従業員数・研究開発費の
+/// 合計取得関数を渡す（自前で XBRL から再抽出しない。重複ロジック回避）。値が nil/0 のときの
+/// 「財務取り込み未計算なら skip・計算済みだが値なしなら not_found」判定は軸に依らず共通。
 func runBreakdownIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     axis: String = breakdownAxisBusiness,
-    logger: Logger? = nil, resolve: BreakdownResolveFn
+    logger: Logger? = nil,
+    denominatorForDoc: @escaping @Sendable (String, String, Database) async throws -> Double? =
+        consolidatedSalesForDoc,
+    resolve: BreakdownResolveFn
 ) async throws -> BreakdownIngestSummary {
     let currentCacheVersion = breakdownCacheVersion(forAxis: axis)
     let sets = try await filingSectionCandidates(
@@ -137,16 +147,16 @@ func runBreakdownIngest(
         if let lim = limit, attempted >= lim { break }
         attempted += 1
 
-        let salesOrNil = try? await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID) 売上参照", onRetry: { unhealthyRetries += 1 }
+        let denominatorOrNil = try? await withDbRetry(
+            logger: logger, context: "docID=\(cand.docID) 分母参照", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await consolidatedSalesForDoc(code: cand.code, docID: cand.docID, db: db)
+            try await denominatorForDoc(cand.code, cand.docID, db)
         }
 
-        // 分母売上なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
+        // 分母なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
         // 過去の成功行（例: 保険の前年）を隠してしまう。財務取り込み が当該 doc を既に計算済みなら
         // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
-        guard let sales = salesOrNil, sales != 0 else {
+        guard let denominator = denominatorOrNil, denominator != 0 else {
             let financialsHasDoc = try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID) financials有無",
                 onRetry: { unhealthyRetries += 1 }
@@ -182,7 +192,7 @@ func runBreakdownIngest(
             continue
         }
 
-        switch await resolve(cand.docID, sales) {
+        switch await resolve(cand.docID, denominator) {
         case .resolved(let payload, let source, let contentHash, let audit):
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
@@ -272,6 +282,22 @@ func runBreakdownIngest(
 func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
     guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
     return financials.response.salesForDoc(docID)
+}
+
+/// company_financials（財務取り込み）から当該書類（docID）の従業員数（全社合計）を引く。
+/// `consolidatedSalesForDoc` と同型（`runBreakdownIngest` の `denominatorForDoc` に employees 軸から
+/// 渡す。自前で XBRL から再抽出しない。重複ロジック回避、2026-08-01 監査指摘対応）。
+func employeesForDocFromFinancials(code: String, docID: String, db: Database) async throws -> Double? {
+    guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
+    return financials.response.employeesForDoc(docID)
+}
+
+/// company_financials（財務取り込み）から当該書類（docID）の研究開発費（全社合計・円）を引く。
+/// `consolidatedSalesForDoc` と同型（`runBreakdownIngest` の `denominatorForDoc` に
+/// research_and_development 軸から渡す）。
+func rdForDocFromFinancials(code: String, docID: String, db: Database) async throws -> Double? {
+    guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
+    return financials.response.rdForDoc(docID)
 }
 
 /// 財務取り込み が当該 code/docID の年次エントリを既に持っているか（売上の有無は問わない）。
@@ -366,8 +392,10 @@ enum BreakdownLoadResult {
 }
 
 /// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
-/// axis は "business" / "geography" を受け付ける（geography は 2026-07-27、品質ゲート
-/// ＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁。それ以外の軸は absent）。
+/// axis は "business" / "geography" / "employees" / "research_and_development" を受け付ける
+/// （geography は 2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ
+/// 解禁。employees/research_and_development は 2026-08-01 追加、決定論のみで LLM 非依存だが
+/// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
 /// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
 /// 無い・read 不可なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
@@ -376,7 +404,10 @@ func loadStoredBreakdown(
 ) async throws -> BreakdownLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
-    guard axis == breakdownAxisBusiness || axis == breakdownAxisGeography else { return .absent }
+    guard
+        axis == breakdownAxisBusiness || axis == breakdownAxisGeography
+            || axis == breakdownAxisEmployees || axis == breakdownAxisResearchAndDevelopment
+    else { return .absent }
 
     let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {

@@ -269,6 +269,22 @@ public func runFactsIngestCommand(
                 await context.resolveGeographyBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
+            // employees/research_and_development は連結売上ではなく 財務取り込み 計算済みの従業員数・
+            // 研究開発費合計を分母(全社合計)として使う(重複ロジック回避、2026-08-01 監査指摘対応)。
+            let s6Employees = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisEmployees, logger: app.logger,
+                denominatorForDoc: employeesForDocFromFinancials
+            ) { docID, total in
+                await context.resolveEmployeesBreakdown(docID: docID, total: total)
+            }
+            let s6RD = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisResearchAndDevelopment, logger: app.logger,
+                denominatorForDoc: rdForDocFromFinancials
+            ) { docID, total in
+                await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
+            }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
             ) {
@@ -293,6 +309,25 @@ public func runFactsIngestCommand(
                     .notApplicableSingleSegmentDisclosed,
                 notApplicableUnknown: s6Geography.notApplicableUnknown,
                 purged: s6Geography.purged)
+            logIngestSummary(
+                app.logger, target: "breakdowns-employees", attempted: s6Employees.attempted,
+                stored: s6Employees.stored, failed: s6Employees.failed, skipped: s6Employees.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6Employees.notApplicable,
+                notApplicableGeographyOnly: s6Employees.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6Employees
+                    .notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6Employees.notApplicableUnknown,
+                purged: s6Employees.purged)
+            logIngestSummary(
+                app.logger, target: "breakdowns-rd", attempted: s6RD.attempted,
+                stored: s6RD.stored, failed: s6RD.failed, skipped: s6RD.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6RD.notApplicable,
+                notApplicableGeographyOnly: s6RD.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6RD.notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6RD.notApplicableUnknown,
+                purged: s6RD.purged)
         }
         if targets.contains(.statements) {
             // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
@@ -316,6 +351,82 @@ public func runFactsIngestCommand(
                 app.logger, target: "statements", attempted: s7.attempted, stored: s7.stored,
                 failed: s7.failed, skipped: s7.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s7.purged)
+        }
+        if targets.contains(.notes) {
+            // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み
+            // 計算済みの値をそのまま再公開するのは research_and_development のみ（passthrough）。
+            // EPS/発行済株式数/設備投資概要/配当金は注記からXBRL直接抽出（決議・イベント単位のテーブル
+            // 等）へ再設計済み。加えて borrowings_schedule_cf_supplement / PPE・のれん明細（IFRS連結限定）/
+            // policy_holding_securities（EDINET標準タクソノミの銘柄別構造化タグ、決定論・LLM不要）を
+            // 実装・配信中（9 note_type）。
+            //
+            // sga_breakdown は実装済みだが配信を見送り中（2026-08-02、実データレビューで判明:
+            // XBRLタグとして開示されるのは常に非連結（`NonConsolidatedMember`）のみで、連結内訳は
+            // タグ化されず本文自由記述にしかない会社が複数あった。「販管費内訳」として非連結値だけ
+            // 返すのは利用者を誤解させるためユーザー判断で保留。resolver・回帰テストは将来の連結
+            // 対応（本文解析/LLM要）に備えて残す。`StatementNotesResolver.resolveSGABreakdown` /
+            // `SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照。
+            let statementNotesListed = codes ?? priority
+            if statementNotesListed.isEmpty {
+                app.logger.warning(
+                    "財務諸表注記取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "target": "statement-notes", "reason": "empty_listed_codes"])
+            }
+            let statementNoteTypes:
+                [(noteType: String, resolve: StatementNoteResolveFn)] = [
+                    (
+                        statementNoteTypePerShareInformation,
+                        { docID, _ in await context.resolvePerShareInformationNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeIssuedShares,
+                        { docID, _ in await context.resolveIssuedSharesNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeResearchAndDevelopment,
+                        StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db)
+                    ),
+                    (
+                        statementNoteTypeCapitalExpendituresOverview,
+                        { docID, _ in await context.resolveCapitalExpendituresOverviewNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeDividends,
+                        { docID, _ in await context.resolveDividendsNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeBorrowingsScheduleCFSupplement,
+                        { docID, _ in await context.resolveBorrowingsScheduleCFSupplementNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypePropertyPlantEquipmentSchedule,
+                        { docID, _ in await context.resolvePropertyPlantEquipmentScheduleNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeGoodwillAndIntangibles,
+                        { docID, _ in await context.resolveGoodwillAndIntangiblesNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypePolicyHoldingSecurities,
+                        { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
+                    ),
+                ]
+            for entry in statementNoteTypes {
+                let s8 = try await runStatementNotesIngest(
+                    db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
+                    limit: stageLimit, explicitCodes: codes, noteType: entry.noteType,
+                    logger: app.logger, resolve: entry.resolve)
+                let coverage = try? await withDbRetry(
+                    logger: app.logger, context: "company_statement_notes(\(entry.noteType)) 集計"
+                ) {
+                    try await countServableStatementNotes(db: app.db)
+                }
+                logIngestSummary(
+                    app.logger, target: "statement-notes-\(entry.noteType)", attempted: s8.attempted,
+                    stored: s8.stored, failed: s8.failed, skipped: s8.skipped,
+                    servable: coverage?.servable, unservable: coverage?.unservable,
+                    notApplicable: s8.notApplicable, purged: s8.purged)
+            }
         }
     } catch {
         try? await app.asyncShutdown()

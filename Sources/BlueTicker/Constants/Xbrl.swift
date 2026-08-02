@@ -95,6 +95,23 @@ enum Xbrl {
         "BasicEarningsLossPerShareSummaryOfBusinessResults",       // JGAAP・汎用 Summary
     ]
 
+    /// 潜在株式調整後1株当たり当期利益（連結）。JGAAP のみ "Loss" を含まないタグ名になる
+    /// （EDINETタクソノミの命名不統一、実データ確認済み: レーザーテック S100JRT9）。
+    static let dilutedEpsTags: [String] = [
+        "DilutedEarningsLossPerShareIFRS",                            // IFRS 連結本表
+        "DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults",   // IFRS Summary
+        "DilutedEarningsLossPerShareUSGAAPSummaryOfBusinessResults", // US-GAAP Summary
+        "DilutedEarningsPerShareSummaryOfBusinessResults",           // JGAAP Summary（"Loss"なし）
+    ]
+
+    /// 1株当たり純資産額（JGAAP・連結）。IFRS企業の「1株当たり親会社株主持分」相当値は
+    /// `EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名は誤りだが `unitRef=JPYPerShares`
+    /// で実体が判別できる、実データ確認済み: 日立 S100QZT0「１株当たり親会社株主持分」ラベルと
+    /// 完全一致）に格納されており、別途 `unitRef` を見て判定する（`resolveEquityPerShareIFRS`）。
+    static let netAssetsPerShareTags: [String] = [
+        "NetAssetsPerShareSummaryOfBusinessResults",
+    ]
+
     // MARK: - 発行済普通株式数（期末残高）
 
     /// 発行済普通株式数（期末残高）。【株式の総数】表の普通株式（OrdinaryShareMember）を優先し、

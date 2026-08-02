@@ -14,6 +14,7 @@ import Testing
         let names = Set(DevCLIEntry.configuration.subcommands.compactMap { $0.configuration.commandName })
         let expected: Set = [
             "search", "waterfall", "summary", "cache", "filings", "filing", "breakdown", "statement",
+            "statement-feasibility",
         ]
         #expect(names == expected)
     }

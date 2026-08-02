@@ -17,13 +17,14 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("filing-sections") == [.filingSections])
         #expect(parseIngestTargets("breakdowns") == [.breakdowns])
         #expect(parseIngestTargets("statements") == [.statements])
+        #expect(parseIngestTargets("statement-notes") == [.notes])
     }
 
     @Test("複数対象をカンマ区切りで選択")
     func multipleTargets() {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
-            parseIngestTargets("financials,filing-sections,breakdowns,statements")
+            parseIngestTargets("financials,filing-sections,breakdowns,statements,statement-notes")
                 == Set(IngestTarget.allCases))
     }
 

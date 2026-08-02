@@ -268,6 +268,106 @@ enum BreakdownNormalizer {
         )
     }
 
+    /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。
+    static func normalizeEmployees(
+        facts: [BreakdownFact], total: Double?, axis: String
+    ) -> BreakdownSnapshot? {
+        normalizeCountBasis(
+            facts: facts, amountTags: Xbrl.employeeTags, total: total, axis: axis,
+            warningPrefix: "employees")
+    }
+
+    /// 研究開発費（全社合計）のセグメント別内訳（内訳取り込み research_and_development 軸）。
+    /// `normalizeCountBasis` 参照。金額（人数ではない）だが計算の形は同一のため共用する。
+    static func normalizeResearchAndDevelopment(
+        facts: [BreakdownFact], total: Double?, axis: String
+    ) -> BreakdownSnapshot? {
+        let amountTags = Xbrl.rdExpenseCommonTags + Xbrl.rdExpenseJGAAPTags + Xbrl.rdExpenseIFRSTags
+        return normalizeCountBasis(
+            facts: facts, amountTags: amountTags, total: total, axis: axis,
+            warningPrefix: "research_and_development")
+    }
+
+    /// 従業員数・研究開発費など「セグメント dimension 付き fact ＋ 別途取得済みの全社合計値」から
+    /// 内訳スナップショットを組み立てる共通処理（内訳取り込み employees / research_and_development 軸）。
+    ///
+    /// 当初 `normalizeInternalSubtotalBasis`（銀行・保険の売上/粗利益向け）をそのまま転用したが、
+    /// 実データ検証（S100TSIJ・S100VXJA、2026-08-01）で誤りが発覚したため専用実装にした。
+    /// `Xbrl.segmentSubtotalMemberNames` には `CorporateSharedMember`（全社共通）が含まれるが、
+    /// これは売上文脈では「全社合計」を表す会社があるための登録であり、従業員数・研究開発費文脈では
+    /// 「本社機能等の少額バケツ」でしかない。これを分母に採用すると常にシェアが100%を超える
+    /// （実データ: S100TSIJ 従業員数で分母3,645人に対し1セグメントだけで39,450人＝1082%）。
+    /// 全社合計は呼び出し側（`BreakdownIngest.swift` が `company_financials` から取得。財務取り込み と
+    /// 同じ値を再利用し自前で XBRL から再抽出しない）が渡す前提とし、小計 member 名の
+    /// マッチングには依存しない。
+    ///
+    /// `CorporateSharedMember`/`UnallocatedAmountsAndEliminationMember` は代替総合計ではなく
+    /// 「本社機能等の少額バケツ」であり、実際に総合計の一部として加算されている（実データ検証:
+    /// S100TSIJ 従業員数は segment 3件 + `CorporateSharedMember` の合計が総数と一致）。これを
+    /// 「subtotal」（合計チェック対象外）に分類すると sum(segment) が常に total を下回り、
+    /// 5%乖離チェックが恒常的に誤検知して needs_review=true が固定化する（監査指摘、2026-08-01）。
+    /// count-basis 文脈ではこれらを `countBasisAdditiveBucketMemberNames` として「reconciling」
+    /// （合計チェックには算入するが代替分母としては採用しない）に分類する。
+    private static let countBasisAdditiveBucketMemberNames: Set<String> = [
+        "CorporateSharedMember",
+        "UnallocatedAmountsAndEliminationMember",
+    ]
+
+    private static func normalizeCountBasis(
+        facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String
+    ) -> BreakdownSnapshot? {
+        guard let amountTag = amountTags.first(where: { tag in
+            facts.contains(where: { $0.tag == tag })
+        }) else { return nil }
+
+        let perMember = resolvePerMember(facts: facts, tag: amountTag)
+        guard !perMember.isEmpty else { return nil }
+
+        var kinds: [String: String] = [:]
+        for member in perMember.keys {
+            if Xbrl.segmentReconcilingMemberNames.contains(member)
+                || countBasisAdditiveBucketMemberNames.contains(member)
+            {
+                kinds[member] = "reconciling"
+            } else if Xbrl.segmentSubtotalMemberNames.contains(member) {
+                kinds[member] = "subtotal"
+            } else {
+                kinds[member] = "segment"
+            }
+        }
+        // 合計チェック・フォールバック分母は segment に加え reconciling（本社機能等の少額バケツ）も
+        // 算入する。subtotal（代替総合計 member）だけは二重計上を避けるため除外する。
+        let reconciledKinds: Set<String> = ["segment", "reconciling"]
+
+        var warnings: [String] = []
+        let denominator: Double
+        if let total, total > 0 {
+            denominator = total
+            let segmentSum = perMember.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+                .reduce(0.0) { $0 + perMember[$1]!.value }
+            if segmentSum > 0, abs(segmentSum - total) / total > 0.05 {
+                warnings.append("\(warningPrefix)_segment_sum_far_from_total")
+            }
+        } else {
+            // 全社合計 fact が取れない場合のみ segment+reconciling 行合計にフォールバックする（要レビュー）。
+            denominator = perMember.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+                .reduce(0.0) { $0 + perMember[$1]!.value }
+            warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
+        }
+        guard denominator > 0 else { return nil }
+
+        let rows = perMember.keys.sorted().map { member -> BreakdownRow in
+            let fact = perMember[member]!
+            return BreakdownRow(
+                labelRaw: member, amount: fact.value, share: fact.value / denominator,
+                profit: nil, rowKind: kinds[member]!)
+        }
+
+        return BreakdownSnapshot(
+            axis: axis, denominator: denominator, denominatorTag: amountTag, rows: rows,
+            sourceKind: "xbrl_facts", needsReview: !warnings.isEmpty, warnings: warnings)
+    }
+
     // MARK: - 内部ロジック
 
     /// ConsolidatedOrNonConsolidatedAxis が明示的に非連結を指していないこと。
