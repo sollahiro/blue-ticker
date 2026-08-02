@@ -352,6 +352,85 @@ public func runFactsIngestCommand(
                 failed: s7.failed, skipped: s7.skipped,
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s7.purged)
         }
+        if targets.contains(.notes) {
+            // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み
+            // 計算済みの値をそのまま再公開する6種（EPS/発行済株式数/研究開発費/設備投資概要/配当金/自己株式取得）と、
+            // XBRL から直接抽出する borrowings_schedule_cf_supplement / PPE・のれん明細（IFRS連結限定）/
+            // policy_holding_securities（EDINET標準タクソノミの銘柄別構造化タグ、決定論・LLM不要）を
+            // 実装・配信中（10 note_type）。
+            //
+            // sga_breakdown は実装済みだが配信を見送り中（2026-08-02、実データレビューで判明:
+            // XBRLタグとして開示されるのは常に非連結（`NonConsolidatedMember`）のみで、連結内訳は
+            // タグ化されず本文自由記述にしかない会社が複数あった。「販管費内訳」として非連結値だけ
+            // 返すのは利用者を誤解させるためユーザー判断で保留。resolver・回帰テストは将来の連結
+            // 対応（本文解析/LLM要）に備えて残す。`StatementNotesResolver.resolveSGABreakdown` /
+            // `SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照。
+            let statementNotesListed = codes ?? priority
+            if statementNotesListed.isEmpty {
+                app.logger.warning(
+                    "財務諸表注記取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    metadata: ["event": "ingest_skipped", "target": "statement-notes", "reason": "empty_listed_codes"])
+            }
+            let statementNoteTypes:
+                [(noteType: String, resolve: StatementNoteResolveFn)] = [
+                    (
+                        statementNoteTypePerShareInformation,
+                        { docID, _ in await context.resolvePerShareInformationNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeIssuedShares,
+                        StatementNotesFinancialsPassthroughResolvers.issuedShares(db: app.db)
+                    ),
+                    (
+                        statementNoteTypeResearchAndDevelopment,
+                        StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db)
+                    ),
+                    (
+                        statementNoteTypeCapitalExpendituresOverview,
+                        StatementNotesFinancialsPassthroughResolvers.capitalExpendituresOverview(db: app.db)
+                    ),
+                    (
+                        statementNoteTypeDividends,
+                        { docID, _ in await context.resolveDividendsNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeTreasuryStockAcquisition,
+                        StatementNotesFinancialsPassthroughResolvers.treasuryStockAcquisition(db: app.db)
+                    ),
+                    (
+                        statementNoteTypeBorrowingsScheduleCFSupplement,
+                        { docID, _ in await context.resolveBorrowingsScheduleCFSupplementNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypePropertyPlantEquipmentSchedule,
+                        { docID, _ in await context.resolvePropertyPlantEquipmentScheduleNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeGoodwillAndIntangibles,
+                        { docID, _ in await context.resolveGoodwillAndIntangiblesNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypePolicyHoldingSecurities,
+                        { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
+                    ),
+                ]
+            for entry in statementNoteTypes {
+                let s8 = try await runStatementNotesIngest(
+                    db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
+                    limit: stageLimit, explicitCodes: codes, noteType: entry.noteType,
+                    logger: app.logger, resolve: entry.resolve)
+                let coverage = try? await withDbRetry(
+                    logger: app.logger, context: "company_statement_notes(\(entry.noteType)) 集計"
+                ) {
+                    try await countServableStatementNotes(db: app.db)
+                }
+                logIngestSummary(
+                    app.logger, target: "statement-notes-\(entry.noteType)", attempted: s8.attempted,
+                    stored: s8.stored, failed: s8.failed, skipped: s8.skipped,
+                    servable: coverage?.servable, unservable: coverage?.unservable,
+                    notApplicable: s8.notApplicable, purged: s8.purged)
+            }
+        }
     } catch {
         try? await app.asyncShutdown()
         throw error

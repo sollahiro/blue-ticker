@@ -13,7 +13,7 @@ private let expectedToolNames: Set<String> = [
     "search_companies", "search_by_sector", "get_filings",
     "get_financial_summary",
     "get_waterfall", "get_filing_content",
-    "get_breakdown", "get_statement",
+    "get_breakdown", "get_statement", "get_statement_notes",
 ]
 
 private func makeTransport(

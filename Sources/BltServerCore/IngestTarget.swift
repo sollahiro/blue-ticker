@@ -13,6 +13,8 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     case breakdowns
     /// BS/PL/CF 完全正規化（company_statements）。対象は日経225限定でスタート。
     case statements
+    /// 財務諸表注記（company_statement_notes）。対象は statements と同じ日経225限定。
+    case notes = "statement-notes"
 }
 
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。

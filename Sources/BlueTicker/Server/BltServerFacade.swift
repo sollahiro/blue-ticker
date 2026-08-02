@@ -255,6 +255,64 @@ public extension BltServerContext {
     func priorityIngestCodes() async -> Set<String> {
         loadPriorityIngestCodes()
     }
+
+    /// 財務諸表注記取り込み: 書類1件分の `sga_breakdown` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveSGABreakdown` に委譲する（XBRL のみで完結・LLM 不要）。
+    func resolveSGABreakdownNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveSGABreakdown(xbrlDir: xbrlDir)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule_cf_supplement` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveBorrowingsScheduleCFSupplement`（＝`BorrowingsSchedule.extract`、
+    /// `IBDExtractor` と共有）に委譲する。
+    func resolveBorrowingsScheduleCFSupplementNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(allTagElements)
+        return StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: xbrlDir, accountingStandard: accountingStandard)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する（IFRS連結企業
+    /// 限定、J-GAAP単体の附属明細表は未対応。`StatementNotesResolver` のドキュメント参照）。
+    func resolvePropertyPlantEquipmentScheduleNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `goodwill_and_intangibles` note_type を解決する（IFRS連結企業限定、
+    /// J-GAAP単体には対応する法定附属明細表が無い）。
+    func resolveGoodwillAndIntangiblesNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `per_share_information` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolvePerShareInformation` に委譲する（「業績等の概要」の
+    /// 離散数値タグから決定論で抽出、LLM 不要）。Stage 4 の単一値（EPSのみ）passthrough を
+    /// 置き換える（実データレビューでBPS・潜在株式調整後EPSも取得可能と判明、2026-08-02）。
+    func resolvePerShareInformationNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
+    /// 構造化タグから決定論で抽出、LLM 不要）。Stage 4 の単一集計値 passthrough を置き換える
+    /// （実データレビューで決議単位のテーブル構造が判明したため、2026-08-02）。
+    func resolveDividendsNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
+    }
+
+    /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolvePolicyHoldingSecurities` に委譲する（EDINET標準タクソノミの
+    /// 銘柄別構造化タグから決定論で抽出、LLM 不要）。
+    func resolvePolicyHoldingSecuritiesNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir)
+    }
 }
 
 // MARK: - 内訳取り込み（事業別・地域別内訳）

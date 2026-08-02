@@ -392,7 +392,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 試みずそのまま構造化して返します（格納済みデータのみ）。Summary/Waterfall の絞り込んだ
                 ~20指標とは異なり、開示された全項目（企業拡張タグ含む）を返します。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
-                注記（statement-notes）は別ツール（未実装）の対象。
+                注記（statement-notes）は別ツール get-statement-notes の対象。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
@@ -432,6 +432,56 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 場合 components（構成タグと weight。+1=加算、-1=控除）から二重計上せず合計を検算・
                 再構成できる（複数区分にまたがるグランドトータル行も components は取得できる）。
                 例: GET /v1/companies/7203/statement?years=3
+                """
+        ),
+        ApiSkill(
+            id: "get-statement-notes",
+            name: "財務諸表注記",
+            description: """
+                貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
+                （EPS・発行済株式数・研究開発費・設備投資概要・配当金・自己株式取得・
+                借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細）を
+                note_type 単位で取得します（格納済みデータのみ）。
+                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                """,
+            method: "GET",
+            path: "/v1/companies/{code}/statement/notes",
+            mcpTool: "get_statement_notes",
+            feature: "statement_notes",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 7203）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "note_type",
+                    location: .query,
+                    type: .string,
+                    description: """
+                        注記種別: per_share_information / issued_shares / research_and_development / \
+                        capital_expenditures_overview / dividends / treasury_stock_acquisition / \
+                        borrowings_schedule_cf_supplement / policy_holding_securities / \
+                        property_plant_equipment_schedule / goodwill_and_intangibles
+                        """,
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "doc_id",
+                    location: .query,
+                    type: .string,
+                    description: "書類ID（省略時は最新の有価証券報告書）",
+                    required: false
+                ),
+            ],
+            instructions: """
+                Statement Notes（get-statement 本体の外にある財務諸表注記、note_type 単位）。
+                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                property_plant_equipment_schedule / goodwill_and_intangibles は IFRS連結企業限定
+                （J-GAAP単体の附属明細表は未対応）。
+                例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
                 """
         ),
     ]

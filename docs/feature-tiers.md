@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|
 | 構造化 | Filing | Basic | 無料 | 実装済 | 有報のテキスト |
 | 構造化 | Statement | Basic | 無料 | 実装済（日経225限定） | 財務諸表（BS/PL/CF）の全項目正規化 |
-| 構造化 | Note（旧 Statement Notes、名称検討中） | Basic | 無料 | 実装中（最終確認中・未マージ） | 財務諸表注記の構造化 |
+| 構造化 | Note（旧 Statement Notes、名称検討中） | Basic | 無料 | 実装済（日経225限定） | 財務諸表注記の構造化 |
 | 正規化 | Summary | Basic | 無料 | 実装済 | 財務諸表の数値 |
 | 正規化 | Breakdown | Basic | 有料 | 実装済 | 事業別・地域別のセグメント分析 |
 | 視覚化 | Waterfall | Basic | 有料 | 実装済 | 事業利益・ROIC・ROEの分解 |
@@ -43,7 +43,7 @@
 
 - 本体（BS/PL/CF 全項目、statements）と注記（Note、旧 statement-notes）は**別エンドポイント・別ツール**: `GET /v1/companies/{code}/statement`（MCP `get_statement`）/ `GET /v1/companies/{code}/statement/notes`（MCP `get_statement_notes`）。エンドポイント/ツール名自体は現状変更していない（表示名の Note 化のみ）。
 - **要検討**: 分離当初の理由は「本体無料・注記有料のティア分け」だったが、今回 Note を無料へ変更したため、この理由は成立しなくなった。エンドポイントを分けたまま維持するか、統合するかは未決定（データ形状・取得コストの違いなど他の理由で分離を続ける選択肢もある）。
-- 本体（`GET /v1/companies/{code}/statement`・`get_statement`）は DB/ingest/REST/MCP まで実装済み（2026-07-29、対象は日経225限定）。Note（statement-notes）は実装中・最終確認中（未マージ）。詳細は `docs/statement-normalization-concept.md`
+- 本体（`GET /v1/companies/{code}/statement`・`get_statement`）は DB/ingest/REST/MCP まで実装済み（2026-07-29、対象は日経225限定）。Note（statement-notes）も DB/ingest/REST/MCP まで実装済み（2026-08-02、対象は日経225限定）。詳細は `docs/statement-normalization-concept.md`
 
 ## Cube / Allocation（視覚化層の拡張）
 

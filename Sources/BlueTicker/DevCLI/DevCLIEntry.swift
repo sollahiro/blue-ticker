@@ -20,6 +20,7 @@ public struct DevCLIEntry: AsyncParsableCommand {
             DevFilingCommand.self,
             DevBreakdownCommand.self,
             DevStatementCommand.self,
+            DevStatementFeasibilityCommand.self,
         ]
     )
 

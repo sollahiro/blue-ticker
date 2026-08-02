@@ -208,6 +208,16 @@ private func dispatchMcpTool(
             await serveStoredStatement(code: code, docId: docId, years: years, db: db, logger: logger),
             notFoundMessage: "財務諸表は未抽出です")
 
+    case "get_statement_notes":
+        let code = args["code"]?.stringValue ?? ""
+        let docId = args["doc_id"]?.stringValue
+        guard let noteType = args["note_type"]?.stringValue, !noteType.isEmpty else {
+            return errorToolResult("note_type は必須です")
+        }
+        return mapStatementNoteResult(
+            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger),
+            notFoundMessage: "指定された note_type の注記は未算出です")
+
     default:
         return errorToolResult("Unknown tool: \(params.name)")
     }
@@ -241,6 +251,21 @@ private func mapStoredResult(
 /// （notApplicable のときのみエラー本文に `reason` を添える。issue #132）。
 private func mapBreakdownResult(
     _ result: BreakdownServeResult, notFoundMessage: String
+) -> CallTool.Result {
+    switch result {
+    case .ok(let value):
+        return jsonToolResult(value)
+    case .notApplicable(let reason):
+        return errorToolResult(notFoundMessage, reason: reason)
+    case .notFound:
+        return errorToolResult(notFoundMessage)
+    case .dbUnavailable:
+        return errorToolResult("財務データベースに接続できません")
+    }
+}
+
+private func mapStatementNoteResult(
+    _ result: StatementNoteServeResult, notFoundMessage: String
 ) -> CallTool.Result {
     switch result {
     case .ok(let value):

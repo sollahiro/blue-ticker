@@ -488,11 +488,27 @@ extension FinancialsResponse {
         years.first { $0.docId == docID }?.employees.map(Double.init)
     }
 
-    /// 指定 docID の研究開発費（円、連結・全社合計）。Stage 6 の research_and_development 軸が
-    /// 分母（全社合計）として再利用するために使う（`salesForDoc` と同型、重複ロジック回避）。
+    /// 指定 docID の発行済普通株式数（期末残高・株）。財務諸表注記取り込み の `issued_shares` note_type 用。
+    public func issuedSharesForDoc(_ docID: String) -> Double? {
+        years.first { $0.docId == docID }?.issuedShares
+    }
+
+    /// 指定 docID の研究開発費（円、連結・全社合計）。Stage 6 の research_and_development 軸の
+    /// 分母（全社合計）、および 財務諸表注記取り込み の `research_and_development` note_type の両方が再利用する。
     /// `years[].rd` は百万円建てのため円へ変換する。
     public func rdForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.rd.map { $0 * Financial.millionYen }
+    }
+
+    /// 指定 docID の設備投資額（円、設備投資等の概要優先）。財務諸表注記取り込み の
+    /// `capital_expenditures_overview` note_type 用。
+    public func capexForDoc(_ docID: String) -> Double? {
+        years.first { $0.docId == docID }?.capex.map { $0 * Financial.millionYen }
+    }
+
+    /// 指定 docID の自己株式取得額（円）。財務諸表注記取り込み の `treasury_stock_acquisition` note_type 用。
+    public func treasuryStockAcquisitionForDoc(_ docID: String) -> Double? {
+        years.first { $0.docId == docID }?.buyback.map { $0 * Financial.millionYen }
     }
 
     /// 有価証券報告書未提出等、計算対象外だった企業のプレースホルダ（`years` 空）。
