@@ -495,11 +495,6 @@ extension FinancialsResponse {
         years.first { $0.docId == docID }?.rd.map { $0 * Financial.millionYen }
     }
 
-    /// 指定 docID の自己株式取得額（円）。財務諸表注記取り込み の `treasury_stock_acquisition` note_type 用。
-    public func treasuryStockAcquisitionForDoc(_ docID: String) -> Double? {
-        years.first { $0.docId == docID }?.buyback.map { $0 * Financial.millionYen }
-    }
-
     /// 有価証券報告書未提出等、計算対象外だった企業のプレースホルダ（`years` 空）。
     /// public: 財務取り込み ingest（BltServerCore）が `.notApplicable` 判定時にこの行を保存し、
     /// 次回 ingest で highWater 一致のまま無駄な再計算を繰り返さないようにするために使う

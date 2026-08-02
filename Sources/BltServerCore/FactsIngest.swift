@@ -394,10 +394,6 @@ public func runFactsIngestCommand(
                         { docID, _ in await context.resolveDividendsNote(docID: docID) }
                     ),
                     (
-                        statementNoteTypeTreasuryStockAcquisition,
-                        StatementNotesFinancialsPassthroughResolvers.treasuryStockAcquisition(db: app.db)
-                    ),
-                    (
                         statementNoteTypeBorrowingsScheduleCFSupplement,
                         { docID, _ in await context.resolveBorrowingsScheduleCFSupplementNote(docID: docID) }
                     ),

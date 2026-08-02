@@ -462,7 +462,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .string,
                     description: """
                         注記種別: per_share_information / issued_shares / research_and_development / \
-                        capital_expenditures_overview / dividends / treasury_stock_acquisition / \
+                        capital_expenditures_overview / dividends / \
                         borrowings_schedule_cf_supplement / policy_holding_securities / \
                         property_plant_equipment_schedule / goodwill_and_intangibles
                         """,

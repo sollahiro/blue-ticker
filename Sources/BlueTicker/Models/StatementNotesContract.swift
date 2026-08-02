@@ -22,7 +22,6 @@ public let statementNoteTypeIssuedShares = "issued_shares"
 public let statementNoteTypeResearchAndDevelopment = "research_and_development"
 public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
-public let statementNoteTypeTreasuryStockAcquisition = "treasury_stock_acquisition"
 public let statementNoteTypeSGABreakdown = "sga_breakdown"
 public let statementNoteTypeBorrowingsScheduleCFSupplement = "borrowings_schedule_cf_supplement"
 /// 決定論（EDINET標準タクソノミの銘柄別構造化タグ、`StatementNotesResolver.resolvePolicyHoldingSecurities`
@@ -39,7 +38,6 @@ public let issuedSharesNoteCacheVersion = "notes-issued-shares-v1"
 public let researchAndDevelopmentNoteCacheVersion = "notes-rd-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
-public let treasuryStockAcquisitionNoteCacheVersion = "notes-treasury-stock-v1"
 public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
 public let borrowingsScheduleCFSupplementNoteCacheVersion = "notes-borrowings-schedule-v1"
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v1"
@@ -54,7 +52,6 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     case statementNoteTypeResearchAndDevelopment: return researchAndDevelopmentNoteCacheVersion
     case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
-    case statementNoteTypeTreasuryStockAcquisition: return treasuryStockAcquisitionNoteCacheVersion
     case statementNoteTypeSGABreakdown: return sgaBreakdownNoteCacheVersion
     case statementNoteTypeBorrowingsScheduleCFSupplement: return borrowingsScheduleCFSupplementNoteCacheVersion
     case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion

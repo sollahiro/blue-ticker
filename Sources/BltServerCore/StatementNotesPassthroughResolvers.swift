@@ -1,6 +1,6 @@
 // 財務諸表注記取り込み の決定論 note_type のうち、財務取り込み（company_financials）が有報 1 件ごとに
-// 既に計算・格納している値をそのまま再公開するだけの2種（研究開発費・自己株式取得）を解決する。
-// いずれも `Extractors.swift` の対応する Extractor が財務取り込み側で既に実行済みのため、
+// 既に計算・格納している値をそのまま再公開するだけの1種（研究開発費）を解決する。
+// `Extractors.swift` の対応する Extractor が財務取り込み側で既に実行済みのため、
 // 財務諸表注記取り込み側で同じ XBRL を再抽出しない（重複ロジック回避。`BreakdownIngest.swift` の
 // `consolidatedSalesForDoc` と同型の設計判断）。
 //
@@ -8,8 +8,8 @@
 // capital_expenditures_overview（セグメント別テーブル）・issued_shares（発行済株式総数・資本金等の
 // 推移テーブル）は当初この passthrough 経路で実装したが、実データレビュー（2026-08-02）で注記側が
 // より豊富な情報を持つと判明したため `StatementNotesResolver`（BlueTickerCore側、XBRL直接抽出）へ
-// 置き換えた。treasury_stock_acquisition も同様の置き換えを検討中（レビュー未完了時点では
-// この passthrough のまま）。
+// 置き換えた。treasury_stock_acquisition は note_type ごと廃止（自己株式の取得は Statement 側で
+// 持分変動計算書から取得する方針、別スコープ）。
 //
 // sga_breakdown・borrowings_schedule_cf_supplement・policy_holding_securities・PPE明細・のれん明細
 // のように Stage 4 に対応値が無い note_type も、この経路ではなく別途 XBRL 直接抽出（BlueTickerCore
@@ -37,7 +37,7 @@ func resolveStatementNoteFromFinancials(
         source: statementNoteSourceXbrlFacts, contentHash: String(value))
 }
 
-/// 財務取り込み passthrough 2種の `StatementNoteResolveFn` を組み立てる。note_type ごとに
+/// 財務取り込み passthrough 1種の `StatementNoteResolveFn` を組み立てる。note_type ごとに
 /// `FactsIngest.swift` から `runStatementNotesIngest` へそのまま渡す。DB 例外は `.failed`
 /// （次回再試行）へ落とす（`error-handling.md`: サービス層は throw せず戻り値で表現する）。
 enum StatementNotesFinancialsPassthroughResolvers {
@@ -46,14 +46,6 @@ enum StatementNotesFinancialsPassthroughResolvers {
             (try? await resolveStatementNoteFromFinancials(
                 code: code, docID: docID, unit: "yen", db: db,
                 extractValue: { $0.rdForDoc(docID) })) ?? .failed
-        }
-    }
-
-    static func treasuryStockAcquisition(db: Database) -> StatementNoteResolveFn {
-        { docID, code in
-            (try? await resolveStatementNoteFromFinancials(
-                code: code, docID: docID, unit: "yen", db: db,
-                extractValue: { $0.treasuryStockAcquisitionForDoc(docID) })) ?? .failed
         }
     }
 }

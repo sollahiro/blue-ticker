@@ -1,5 +1,5 @@
 // 財務諸表注記取り込みのうち、財務取り込み（company_financials）が既に計算済みの値をそのまま再公開する
-// 決定論 note_type（研究開発費・自己株式取得）を検証する。
+// 決定論 note_type（研究開発費）を検証する。
 // dividends・per_share_information・capital_expenditures_overview・issued_shares は実データレビュー
 // （2026-08-02）でXBRL直接抽出（`StatementNotesResolver` の各 resolve メソッド）へ置き換え済みのため
 // 対象外（`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照）。
@@ -56,14 +56,12 @@ private func seedDoc(
 /// （`FinancialsYear` 変換時に 内訳取り込み の `salesForDoc` と同じ百万円→円変換が起きる）。
 private func seedFinancials(
     code: String, docID: String,
-    eps: Double? = nil, rdMillionYen: Double? = nil,
-    buybackMillionYen: Double? = nil, db: Database
+    eps: Double? = nil, rdMillionYen: Double? = nil, db: Database
 ) async throws {
     var fields: [String: Any] = ["fy_end": "2025-03-31", "FinancialPeriod": "通期"]
     var raw: [String: Any] = [:]
     if let eps { raw["EPS"] = eps }
     if let rdMillionYen { raw["RD"] = rdMillionYen }
-    if let buybackMillionYen { raw["Buyback"] = buybackMillionYen }
     fields["RawData"] = raw
     let calc: [String: Any] = ["DocID": docID]
     fields["CalculatedData"] = calc
@@ -119,23 +117,6 @@ private func seedFinancials(
         }
     }
 
-    @Test func treasuryStockAcquisitionConvertsMillionYenToYen() async throws {
-        try await withMigratedApp { app in
-            try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", buybackMillionYen: 300, db: app.db)
-
-            let summary = try await runStatementNotesIngest(
-                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeTreasuryStockAcquisition,
-                resolve: StatementNotesFinancialsPassthroughResolvers.treasuryStockAcquisition(db: app.db))
-
-            #expect(summary.stored == 1)
-            let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeTreasuryStockAcquisition)
-            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.payload.value == 300 * Financial.millionYen)
-        }
-    }
 
     // MARK: - 異常系: Stage 4 未計算 / 値なし
 
@@ -159,17 +140,17 @@ private func seedFinancials(
     @Test func ingestWritesNotApplicableWhenStage4HasDocButValueIsNil() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            // Stage 4 は当該 docID を計算済みだが自己株式取得なし（buybackMillionYen 省略）。
+            // Stage 4 は当該 docID を計算済みだが研究開発費なし（rdMillionYen 省略）。
             try await seedFinancials(code: "7203", docID: "S1", eps: 100, db: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeTreasuryStockAcquisition,
-                resolve: StatementNotesFinancialsPassthroughResolvers.treasuryStockAcquisition(db: app.db))
+                noteType: statementNoteTypeResearchAndDevelopment,
+                resolve: StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db))
 
             #expect(summary.notApplicable == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeTreasuryStockAcquisition)
+                docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
             #expect(row.source == statementNoteSourceNotApplicable)
             #expect(row.notApplicableReason == statementNoteNotApplicableNotFound)

@@ -28,7 +28,7 @@
 | 地域別 | Stage 6 `geography` breakdown軸 |
 | 製品別・事業別 | Stage 6 `business` breakdown軸 |
 | 利益構造別 | Stage 7 statement（PL本体）＋ Stage 8 `sga_breakdown` note_type（販管費内訳） |
-| 投資構造別 | Stage 8 `capital_expenditures_overview`／`research_and_development`／`dividends`／`treasury_stock_acquisition` note_type |
+| 投資構造別 | Stage 8 `capital_expenditures_overview`／`research_and_development`／`dividends` note_type |
 
 `employees`／`research_and_development` breakdown軸（Stage 6、今回追加）は「人員配分」観点として
 将来追加する余地があるが、上表には含めない（v1想定の4観点に絞る）。
