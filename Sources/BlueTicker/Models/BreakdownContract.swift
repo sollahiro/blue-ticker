@@ -23,8 +23,8 @@ public let breakdownAxisResearchAndDevelopment = "research_and_development"
 /// （content_hash 一致・needs_review=false の行はそのまま据え置く。今後の検討事項8参照）。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
-public let businessBreakdownCacheVersion = "breakdown-business-v7"
-public let geographyBreakdownCacheVersion = "breakdown-geography-v8"
+public let businessBreakdownCacheVersion = "breakdown-business-v8"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v9"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 
@@ -136,15 +136,38 @@ public func isServableBreakdown(source: String, cacheVersion: String, axis: Stri
 /// BreakdownRow（内部型）の公開 Codable 写経。
 public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
+    // 表示用の解決済みラベル。xbrl_facts 経路は XBRL ラベルリンクベースの日本語ラベル（無ければ
+    // labelRaw にフォールバック）、html_table/LLM 経路は元々開示書類のテキストのため labelRaw と同値。
+    public var label: String
     public var amount: Double
     public var profit: Double?
     public var rowKind: String
 
-    public init(labelRaw: String, amount: Double, profit: Double?, rowKind: String) {
+    private enum CodingKeys: String, CodingKey {
+        case labelRaw, label, amount, profit, rowKind
+    }
+
+    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
         self.labelRaw = labelRaw
+        self.label = label
         self.amount = amount
         self.profit = profit
         self.rowKind = rowKind
+    }
+
+    /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
+    /// 非 Optional のまま `decodeIfPresent` で読み、無ければ `labelRaw` にフォールバックする。
+    /// `company_breakdowns.payload` は JSON カラムで Fluent が直接デコードするため、`label` 追加前に
+    /// 格納された本番行（business/geography 225社分、`label` キーが無い）は合成 `Decodable` では
+    /// `keyNotFound` で読み取り自体が失敗し、REST 読み出しも ingest の既存行チェックも共倒れする
+    /// （cache_version バンプで再計算される前の行が対象。Opus 監査で発見、2026-08-03）。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        labelRaw = try container.decode(String.self, forKey: .labelRaw)
+        label = try container.decodeIfPresent(String.self, forKey: .label) ?? labelRaw
+        amount = try container.decode(Double.self, forKey: .amount)
+        profit = try container.decodeIfPresent(Double.self, forKey: .profit)
+        rowKind = try container.decode(String.self, forKey: .rowKind)
     }
 }
 
@@ -199,6 +222,7 @@ public extension BreakdownRowPayload {
     func jsonObject() -> [String: Any] {
         [
             "label_raw": labelRaw,
+            "label": label,
             "amount": amount,
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,

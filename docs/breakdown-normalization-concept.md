@@ -106,7 +106,7 @@ BreakdownSnapshot
   unit: 百万円
   denominator: external_revenue          # 連結外部売上（金融機関は対象外＝スナップショット自体を作らない）
   denominator_tag: string                # 採用した売上系タグ名（候補リストのどれを使ったか。監査・再現用）
-  rows: [{ id?, label_raw, amount, share, row_kind: segment | subtotal | reconciling }]
+  rows: [{ id?, label_raw, label, amount, share, row_kind: segment | subtotal | reconciling }]
   source: { kind: html_table | xbrl_facts | revenue_recognition | usgaap_note, ref }
   as_reported: true                      # 組替補正しない
   needs_review: bool                     # 例: section 期待軸と判定軸のずれ
@@ -118,7 +118,7 @@ BreakdownSnapshot
 | 項目 | 方針 |
 |---|---|
 | 行の単位 | 軸ごと（事業 / 地域 / 製品）。報告セグメントが地域なら `geography` 側に載せるか、`axis=geography` の snapshot として出す |
-| 行ラベル | 開示の表記をそのまま使う。会社間の共通名への強制マップはしない |
+| 行ラベル | `label_raw` は開示の表記（`xbrl_facts` 経路は XBRL member 要素名、`html_table`/LLM 経路は開示書類のテキスト）をそのまま使う。会社間の共通名への強制マップはしない。`label` は表示用の解決済みラベル（`xbrl_facts` 経路は XBRL ラベルリンクベースの日本語ラベル、無ければ `label_raw` にフォールバック。`html_table`/LLM 経路は元々日本語のため `label_raw` と同値）。2026-08-03 追加（`breakdown-business-v8`/`breakdown-geography-v9`） |
 | 売上タグ解決 | 会計基準ごとの**候補タグリスト**から優先順で選ぶ（単一タグ決め打ちにしない）。例: IFRS→`SalesToExternalCustomersIFRS`/`RevenueFromExternalCustomersIFRS`、J-GAAP→`RevenuesFromExternalCustomers`。採用タグは `denominator_tag` に残す |
 | 小計・調整行 | `row_kind` で区別して rows には残すが、比較の分母・シェア計算には使わない。判定は名称リストではなく数値判定（学び7参照） |
 | 利益 | 比較の第一指標は売上割合。利益割合は任意・定義を明示 |
