@@ -306,10 +306,12 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
 
         // 全社合計は 財務取り込み 計算済みの値を想定した固定値（実データ: 73,165人）。
         let snapshot = try #require(
-            BreakdownNormalizer.normalizeEmployees(facts: facts, total: 73_165, axis: "employees"))
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 73_165, axis: "employees", labelsByTag: labelsByTag))
 
         #expect(snapshot.axis == "employees")
         #expect(snapshot.denominator == 73_165)
@@ -328,6 +330,14 @@ private actor RealXbrlMockChat: ChatCompleting {
 
         let segmentSum = snapshot.rows.map(\.amount).reduce(0, +)
         #expect(segmentSum == snapshot.denominator)
+
+        // ラベルリンクベースの日本語ラベルが解決されること（提出書類の label linkbase 実データ確認）。
+        // CorporateSharedMember は提出書類側の拡張ラベルが無く未解決（label == nil、公開層で
+        // labelRaw へフォールバック）。
+        let components = try #require(
+            snapshot.rows.first { $0.labelRaw == "ComponentsReportableSegmentsMember" })
+        #expect(components.label == "コンポーネント")
+        #expect(corporateShared.label == nil)
     }
 
     @Test func kyoceraResearchAndDevelopmentResolvesWithoutWarning() async throws {
@@ -337,10 +347,12 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
 
         let snapshot = try #require(
             BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 132_502_000_000, axis: "research_and_development"))
+                facts: facts, total: 132_502_000_000, axis: "research_and_development",
+                labelsByTag: labelsByTag))
 
         #expect(snapshot.axis == "research_and_development")
         #expect(snapshot.needsReview == false)
@@ -348,6 +360,27 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(labels.contains("ComponentsReportableSegmentsMember"))
         #expect(labels.contains("DevicesAndModulesReportableSegmentsMember"))
         #expect(labels.contains("OtherReportableSegmentsMember"))
+
+        let devicesAndModules = try #require(
+            snapshot.rows.first { $0.labelRaw == "DevicesAndModulesReportableSegmentsMember" })
+        #expect(devicesAndModules.label == "デバイス・モジュール")
+    }
+
+    /// business 軸（`normalizeSalesBasis` 経路）でも同じラベル解決が効くこと。
+    /// メンバー名は事業年度で変わりうるため固定文字列にせず、
+    /// 「少なくとも1行は生member名と異なる日本語ラベルに解決される」ことだけを検証する。
+    @Test func kyoceraBusinessAxisResolvesJapaneseLabels() async throws {
+        guard await Self.ensureAvailable("S100TSIJ") else { return }
+        let xbrlDir = Self.xbrlDir("S100TSIJ")
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
+        #expect(segments.method == "xbrl_facts")
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+
+        let snapshot = try #require(
+            BreakdownNormalizer.normalize(
+                segments, consolidatedSales: 1_069_763_000_000, labelsByTag: labelsByTag))
+        #expect(snapshot.axis == "business")
+        #expect(snapshot.rows.contains { $0.label != nil && $0.label != $0.labelRaw })
     }
 }
 
