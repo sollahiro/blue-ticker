@@ -81,11 +81,37 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     )
     var debugIssuedShares = false
 
+    @Flag(
+        name: .customLong("debug-ppe-schedule"),
+        help: "--debug-doc と併用。property_plant_equipment_schedule note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+    )
+    var debugPPESchedule = false
+
+    @Flag(
+        name: .customLong("debug-goodwill"),
+        help: "--debug-doc と併用。goodwill_and_intangibles note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+    )
+    var debugGoodwill = false
+
+    @Option(
+        name: .customLong("export-notes-review"),
+        help: "borrowings_schedule_cf_supplement/property_plant_equipment_schedule/goodwill_and_intangibles をキャッシュ全走査し、提出年度・会社名・結果をJSONで書き出す(ユーザーレビュー用)"
+    )
+    var exportNotesReviewPath: String?
+
     func run() async throws {
         let cacheDir = URL(fileURLWithPath: cacheDirPath)
         let xbrlRoot = edinetCacheDir(cacheDir).appendingPathComponent("xbrl", isDirectory: true)
         let fm = FileManager.default
 
+        if let exportNotesReviewPath {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            try Self.exportNotesReview(dirs: dirs, to: URL(fileURLWithPath: exportNotesReviewPath))
+            return
+        }
         if let debugDoc, let debugRole {
             let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
             Self.debugDumpByRole(docID: debugDoc, xbrlDir: dir, roleSubstring: debugRole)
@@ -126,15 +152,13 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
         if let debugDoc, debugBorrowingsSchedule {
             let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
-            let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
-            let accountingStandard = detectAccountingStandard(allTagElements)
-            switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
-                xbrlDir: dir, accountingStandard: accountingStandard)
-            {
+            switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: dir) {
             case .resolved(let payload, let source, let contentHash):
                 print("source=\(source) contentHash=\(contentHash)")
-                for item in payload.items ?? [] {
-                    print("  tag=\(item.tag) value=\(item.value) isTotal=\(item.isTotal)")
+                for c in payload.borrowingsComponents ?? [] {
+                    print(
+                        "  label=\(c.label) prior=\(c.priorBalance.map { String($0) } ?? "-") current=\(c.currentBalance.map { String($0) } ?? "-") rate%=\(c.averageInterestRatePercent.map { String($0) } ?? "-") isTotal=\(c.isTotal)"
+                    )
                 }
             case .notApplicable(let reason):
                 print("notApplicable(\(reason))")
@@ -152,11 +176,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             var notApplicableCount = 0
             for dir in dirs {
                 let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
-                let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
-                let accountingStandard = detectAccountingStandard(allTagElements)
-                switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
-                    xbrlDir: dir, accountingStandard: accountingStandard)
-                {
+                switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: dir) {
                 case .resolved: resolvedCount += 1; print("resolved: \(docID)")
                 case .notApplicable: notApplicableCount += 1
                 case .failed: break
@@ -305,6 +325,56 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
                 case .notApplicable:
                     notApplicableCount += 1
                     print("notApplicable: \(docID)")
+                case .failed: break
+                }
+            }
+            print("resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count)")
+            return
+        }
+        if let debugDoc, debugPPESchedule {
+            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
+            Self.debugPPESchedule(docID: debugDoc, xbrlDir: dir)
+            return
+        }
+        if debugDoc == nil, debugPPESchedule {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var resolvedCount = 0
+            var notApplicableCount = 0
+            for dir in dirs {
+                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+                switch StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: dir) {
+                case .resolved(let payload, _, _):
+                    resolvedCount += 1
+                    print("resolved: \(docID) items=\(payload.items?.count ?? 0)")
+                case .notApplicable: notApplicableCount += 1
+                case .failed: break
+                }
+            }
+            print("resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count)")
+            return
+        }
+        if let debugDoc, debugGoodwill {
+            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
+            Self.debugGoodwill(docID: debugDoc, xbrlDir: dir)
+            return
+        }
+        if debugDoc == nil, debugGoodwill {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var resolvedCount = 0
+            var notApplicableCount = 0
+            for dir in dirs {
+                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+                switch StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: dir) {
+                case .resolved(let payload, _, _):
+                    resolvedCount += 1
+                    print("resolved: \(docID) items=\(payload.items?.count ?? 0)")
+                case .notApplicable: notApplicableCount += 1
                 case .failed: break
                 }
             }
@@ -708,6 +778,126 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         case .failed:
             print("failed")
         }
+    }
+
+    // MARK: - デバッグ(財務諸表注記取り込み property_plant_equipment_schedule note_type)
+
+    static func debugPPESchedule(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir) {
+        case .resolved(let payload, let source, let contentHash):
+            print("source=\(source) contentHash=\(contentHash)")
+            for item in payload.items ?? [] {
+                print("  tag=\(item.tag) label=\(item.label ?? "?") value=\(item.value) unit=\(item.unit ?? "-")")
+            }
+        case .notApplicable(let reason):
+            print("notApplicable(\(reason))")
+        case .failed:
+            print("failed")
+        }
+    }
+
+    // MARK: - デバッグ(財務諸表注記取り込み goodwill_and_intangibles note_type)
+
+    static func debugGoodwill(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir) {
+        case .resolved(let payload, let source, let contentHash):
+            print("source=\(source) contentHash=\(contentHash)")
+            for item in payload.items ?? [] {
+                print("  tag=\(item.tag) label=\(item.label ?? "?") value=\(item.value) unit=\(item.unit ?? "-")")
+            }
+        case .notApplicable(let reason):
+            print("notApplicable(\(reason))")
+        case .failed:
+            print("failed")
+        }
+    }
+
+    // MARK: - ユーザーレビュー用エクスポート(borrowings_schedule_cf_supplement / property_plant_equipment_schedule / goodwill_and_intangibles)
+
+    private struct NotesReviewRow: Encodable {
+        var docID: String
+        var filerName: String?
+        var fiscalYearEnd: String?
+        var result: String
+        var reason: String?
+        var items: [StatementLineItem]?
+        var borrowingsComponents: [BorrowingsComponentPayload]?
+
+        private enum CodingKeys: String, CodingKey {
+            case docID = "doc_id"
+            case filerName = "filer_name"
+            case fiscalYearEnd = "fiscal_year_end"
+            case result, reason, items
+            case borrowingsComponents = "borrowings_components"
+        }
+    }
+
+    /// 提出書類の表紙情報(DEI)から会社名・決算期末日を読む。提出書類本体(PublicDoc)以外
+    /// (AuditDoc等)には jpdei_cor タグが無いため、含む最初のファイルで確定する。
+    private static func coverInfo(xbrlDir: URL) -> (filerName: String?, fiscalYearEnd: String?) {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file),
+                let text = String(data: data, encoding: .utf8),
+                text.contains("jpdei_cor:FilerNameInJapaneseDEI")
+            else { continue }
+            let filerName = extractDEITagText(text, tag: "FilerNameInJapaneseDEI")
+            let fiscalYearEnd =
+                extractDEITagText(text, tag: "CurrentFiscalYearEndDateDEI")
+                ?? extractDEITagText(text, tag: "CurrentPeriodEndDateDEI")
+            return (filerName, fiscalYearEnd)
+        }
+        return (nil, nil)
+    }
+
+    private static func extractDEITagText(_ xml: String, tag: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: ":\(tag)[^>]*>([^<]*)<") else { return nil }
+        let range = NSRange(xml.startIndex..<xml.endIndex, in: xml)
+        guard let match = regex.firstMatch(in: xml, range: range), let r = Range(match.range(at: 1), in: xml)
+        else { return nil }
+        return String(xml[r])
+    }
+
+    private static func notesReviewRows(
+        dirs: [URL], resolve: (URL) -> StatementNoteResolveResult
+    ) -> [NotesReviewRow] {
+        dirs.map { dir in
+            let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+            let cover = coverInfo(xbrlDir: dir)
+            switch resolve(dir) {
+            case .resolved(let payload, _, _):
+                return NotesReviewRow(
+                    docID: docID, filerName: cover.filerName, fiscalYearEnd: cover.fiscalYearEnd,
+                    result: "resolved", reason: nil, items: payload.items,
+                    borrowingsComponents: payload.borrowingsComponents)
+            case .notApplicable(let reason):
+                return NotesReviewRow(
+                    docID: docID, filerName: cover.filerName, fiscalYearEnd: cover.fiscalYearEnd,
+                    result: "not_applicable", reason: reason, items: nil, borrowingsComponents: nil)
+            case .failed:
+                return NotesReviewRow(
+                    docID: docID, filerName: cover.filerName, fiscalYearEnd: cover.fiscalYearEnd,
+                    result: "failed", reason: nil, items: nil, borrowingsComponents: nil)
+            }
+        }
+    }
+
+    static func exportNotesReview(dirs: [URL], to url: URL) throws {
+        let borrowings = notesReviewRows(dirs: dirs) {
+            StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: $0)
+        }
+        let ppe = notesReviewRows(dirs: dirs) { StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: $0) }
+        let goodwill = notesReviewRows(dirs: dirs) { StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: $0) }
+
+        let payload: [String: [NotesReviewRow]] = [
+            "borrowings_schedule_cf_supplement": borrowings,
+            "property_plant_equipment_schedule": ppe,
+            "goodwill_and_intangibles": goodwill,
+        ]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        try data.write(to: url)
+        printError("書き出し完了: \(url.path)\n")
     }
 
     // MARK: - 集計・出力

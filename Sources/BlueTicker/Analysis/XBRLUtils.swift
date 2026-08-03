@@ -669,12 +669,15 @@ enum XBRLUtils {
     }
 
     /// TextBlock 内 HTML 表セルの数値テキスト → Double（百万円単位の生値）。△/▲ は負、－ は nil。
+    /// 末尾の "%"／"％" は除去する（実データ検証2026-08-03、メルカリ S100RX8V の平均利率列は
+    /// "0.39%" のように単位付きで書かれる会社があり、付けたまま `Double()` に渡すと nil になる）。
     static func parseTextblockCellValue(_ text: String?) -> Double? {
         guard let t = text else { return nil }
         var s = t.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: "\u{00A0}", with: "")
             .replacingOccurrences(of: "　", with: "")
             .replacingOccurrences(of: " ", with: "")
+        if s.hasSuffix("%") || s.hasSuffix("％") { s.removeLast() }
         if s.isEmpty || ["－", "-", "—", "―"].contains(s) { return nil }
         let negative = s.hasPrefix("△") || s.hasPrefix("▲")
         s = s.replacingOccurrences(of: "△", with: "").replacingOccurrences(of: "▲", with: "")

@@ -109,10 +109,12 @@ public enum StatementNoteResolveResult: Sendable {
 
 /// company_statement_notes.payload の中身。note_type によって使うフィールドが変わる緩めの構造:
 /// - スカラー値の note（研究開発費合計）は `value`/`unit` を使う
-/// - 表形式の note（EPS/BPS等・販管費内訳・PPE明細・のれん明細・借入金等明細表）は `items` を使う
+/// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
 /// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式数の推移は
 ///   `issuedSharesEvents`（いずれも決議・イベント単位のXBRL直接抽出、2026-08-02再設計）
+/// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
+///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
 /// - 政策保有株式（決定論、銘柄別 XBRL タグ抽出）は `securities` を使う
 public struct StatementNotePayload: Codable, Sendable {
     public var value: Double?
@@ -122,6 +124,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
     public var issuedSharesEvents: [IssuedSharesEventPayload]?
+    public var borrowingsComponents: [BorrowingsComponentPayload]?
     public var needsReview: Bool
     public var warnings: [String]
 
@@ -130,6 +133,7 @@ public struct StatementNotePayload: Codable, Sendable {
         securities: [PolicyHoldingSecurityPayload]? = nil,
         dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
         issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
+        borrowingsComponents: [BorrowingsComponentPayload]? = nil,
         needsReview: Bool = false, warnings: [String] = []
     ) {
         self.value = value
@@ -139,6 +143,7 @@ public struct StatementNotePayload: Codable, Sendable {
         self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
         self.issuedSharesEvents = issuedSharesEvents
+        self.borrowingsComponents = borrowingsComponents
         self.needsReview = needsReview
         self.warnings = warnings
     }
@@ -152,9 +157,42 @@ public struct StatementNotePayload: Codable, Sendable {
             "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
+        ]
+    }
+}
+
+/// 借入金等明細表1区分分（`borrowings_schedule_cf_supplement` note_type 専用）。
+/// `averageInterestRatePercent` は明細表「平均利率（％）」列の生数値（例: 0.80 は年0.80%）。
+/// 開示されない行（一部のリース債務・合計行等）は「－」表記のため nil。
+public struct BorrowingsComponentPayload: Codable, Sendable {
+    public var label: String
+    public var priorBalance: Double?
+    public var currentBalance: Double?
+    public var averageInterestRatePercent: Double?
+    public var isTotal: Bool
+
+    public init(
+        label: String, priorBalance: Double?, currentBalance: Double?,
+        averageInterestRatePercent: Double?, isTotal: Bool = false
+    ) {
+        self.label = label
+        self.priorBalance = priorBalance
+        self.currentBalance = currentBalance
+        self.averageInterestRatePercent = averageInterestRatePercent
+        self.isTotal = isTotal
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "label": label,
+            "prior_balance": priorBalance as Any? ?? NSNull(),
+            "current_balance": currentBalance as Any? ?? NSNull(),
+            "average_interest_rate_percent": averageInterestRatePercent as Any? ?? NSNull(),
+            "is_total": isTotal,
         ]
     }
 }

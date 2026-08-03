@@ -9,6 +9,15 @@ import SwiftSoup
 
 enum BorrowingsSchedule {
 
+    /// 明細表1行分。`averageInterestRatePercent` は「平均利率（％）」列の生数値（例: 0.80 は年0.80%）。
+    /// 開示されない行（リース債務の一部・合計行等）は「－」「――」表記のため nil。
+    struct Row {
+        let label: String
+        let current: Double?
+        let prior: Double?
+        let averageInterestRatePercent: Double?
+    }
+
     /// リース債務行は「リース負債（流動/非流動）」へ正規化し、コードベース全体の表示ラベルに揃える。
     /// それ以外の区分（短期借入金・社債・長期借入金等）は明細表の表記をそのまま使う。
     private static func displayLabel(for normalizedLabel: String) -> String {
@@ -20,43 +29,131 @@ enum BorrowingsSchedule {
         return isCurrent ? "リース負債（流動）" : "リース負債（非流動）"
     }
 
-    /// 借入金等明細表から有利子負債を積み上げ抽出する。
-    /// IBD を XBRL タグで解決できない場合のフォールバック（会計基準は問わない）。
-    static func extract(xbrlDir: URL, accountingStandard: String) -> IBDResult? {
+    /// フィルタ通過前の1行分（インデント深さつき）。`label` は displayLabel 適用前の生ラベル。
+    private struct RawRow {
+        let label: String
+        let indent: Int
+        let current: Double?
+        let prior: Double?
+        let rate: Double?
+    }
+
+    /// ラベルの前後の全角/半角スペース・nbsp を除去する（"合計"／"計" 判定・displayLabel 適用の前処理）。
+    private static func normalizeLabel(_ raw: String) -> String {
+        raw.replacingOccurrences(of: "\u{00A0}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+    }
+
+    /// ラベルセルの先頭 `<p>` からインデント深さを読む。実データ検証（2026-08-02）: 階層表現は
+    /// 会社により2通りある。① CSS `margin-left`（例: あおぞら銀行、pxをそのまま深さに使う）
+    /// ② 全角/半角スペース・nbsp をラベル文字列先頭に付けるだけ（例: コンコルディア「　　借入金」、
+    /// しずおかFG「　借入金」。`margin-left` が無い/0 の場合はこちらにフォールバックする）。
+    /// `<p>` が無い（インデント情報自体が無い）行は 0（トップレベル）として扱う。
+    private static func indentLevel(of p: Element?) -> Int {
+        guard let p else { return 0 }
+        if let style = try? p.attr("style"),
+           let regex = try? NSRegularExpression(pattern: "margin-left:\\s*(\\d+)px"),
+           let match = regex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
+           let numRange = Range(match.range(at: 1), in: style),
+           let px = Int(style[numRange]), px > 0 {
+            return px
+        }
+        let raw = (try? p.text(trimAndNormaliseWhitespace: false)) ?? ""
+        return raw.prefix { $0 == " " || $0 == "\u{3000}" || $0 == "\u{00A0}" }.count
+    }
+
+    /// 「区分 | 当期首残高 | 当期末残高 | 平均利率 | 返済期限」表を1行ずつ読む共通処理
+    /// （`extract`・`extractRows` 両方から使う。表探索・合計行判定・合算フォールバックを1箇所に集約）。
+    ///
+    /// 実データ検証（2026-08-02）: 残高列の単位（「当期首残高（百万円）」等ヘッダー表記）は会社規模で
+    /// 揺れる（レーザーテック S100JRT9 等は千円、SOMPO S100R1LR・神戸製鋼所 S100QYHM 等は百万円）。
+    /// 単位を検出せず一律 `Financial.millionYen` で換算すると千円表記の会社は1000倍に水増しされる
+    /// （既存 golden test の 24,202,000,000 円は誤り。実際は千円ヘッダーにつき 24,202,000 円）。
+    /// `parseCapexTable`/`parseIssuedSharesTable` と同じくヘッダー文言から都度判定する。
+    ///
+    /// 実データ検証（2026-08-03、ユーザーレビューで発見）: 銀行・金融持株会社系は「借用金」（カテゴリ
+    /// 小計）の下に「再割引手形」「借入金」（内訳の実体行）がインデント付きで並ぶ階層表を使う
+    /// （あおぞら銀行・コンコルディア・しずおかFG・ふくおかFG・T&D等）。インデントを見ずに全行を
+    /// フラットに合算すると、小計行と内訳行が二重計上される。`indentLevel` で深さを読み、次の行が
+    /// より深い（＝自分の内訳が続く）行はカテゴリ小計として除外する。
+    ///
+    /// 実データ検証（2026-08-03）: ダイキン・T&D等の「その他有利子負債」は、内訳（コマーシャル・
+    /// ペーパー／割賦未払金等）が別 `<tr>` ではなく同一セル内に複数 `<p>` として縦積みされる（カテゴリ
+    /// 名の `<p>` に値が無く、後続の `<p>` に内訳ごとの値が並ぶ）。この場合はラベル・値それぞれの
+    /// `<p>` 配列を同じ添字で zip し、1行を複数の内訳行に分解する（"その他有利子負債 コマーシャル・
+    /// ペーパー(１年以内) 割賦未払金(１年以内) 割賦未払金(１年超)" のようにラベルが連結され数値も
+    /// 混ざっていたバグの修正）。
+    private static func parseJGaapScheduleTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         guard let html = XBRLUtils.extractTextblockHtml(
                 in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag),
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 
-        // 「合計」を含む表が本体明細表。後続の返済予定額の別表を除外するために選別する。
-        let table = tables.first { ((try? $0.text()) ?? "").contains("合計") } ?? tables.first
+        // 「計」を含む表が本体明細表（"合計" 表記の会社も "計" を含むため、この1条件で両対応）。
+        // 後続の返済予定額の別表を除外するために選別する。
+        let table = tables.first { ((try? $0.text()) ?? "").contains("計") } ?? tables.first
         guard let table, let rows = (try? table.select("tr"))?.array() else { return nil }
 
-        var components: [IBDComponentEntry] = []
+        let tableText = (try? table.text()) ?? ""
+        let scale: Double = tableText.contains("千円") ? 1_000
+            : tableText.contains("億円") ? 100_000_000
+            : Financial.millionYen
+
+        var rawRows: [RawRow] = []
         var totalCurrent: Double?
         var totalPrior: Double?
 
-        for row in rows {
+        rowLoop: for row in rows {
             guard let cells = (try? row.select("td, th"))?.array(), cells.count >= 3 else { continue }
-            let label = ((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
-                .replacingOccurrences(of: " ", with: "")
-                .replacingOccurrences(of: "　", with: "")
+            let labelPs = (try? cells[0].select("p"))?.array() ?? []
+
+            if labelPs.count > 1 {
+                // カテゴリ名+内訳が同一セルに縦積みされた行を、内訳ごとの行に分解する。
+                let priorPs = (try? cells[1].select("p"))?.array() ?? []
+                let currentPs = (try? cells[2].select("p"))?.array() ?? []
+                let ratePs = cells.count >= 4 ? (try? cells[3].select("p"))?.array() ?? [] : []
+                for i in labelPs.indices {
+                    let label = normalizeLabel((try? labelPs[i].text(trimAndNormaliseWhitespace: true)) ?? "")
+                    guard !label.isEmpty else { continue }
+                    let prior = i < priorPs.count ? XBRLUtils.parseTextblockCellValue(try? priorPs[i].text()) : nil
+                    let current = i < currentPs.count ? XBRLUtils.parseTextblockCellValue(try? currentPs[i].text()) : nil
+                    // カテゴリ名自体の行（値なし）を除外する。
+                    guard current != nil || prior != nil else { continue }
+                    let rate = i < ratePs.count ? XBRLUtils.parseTextblockCellValue(try? ratePs[i].text()) : nil
+                    // 縦積みされた内訳行は常に末端（それ以上の階層を持たない）として扱う。
+                    rawRows.append(RawRow(label: label, indent: Int.max, current: current, prior: prior, rate: rate))
+                }
+                continue
+            }
+
+            let label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
             guard !label.isEmpty else { continue }
 
             let prior = XBRLUtils.parseTextblockCellValue(try? cells[1].text())
             let current = XBRLUtils.parseTextblockCellValue(try? cells[2].text())
             // 区分ヘッダ・「該当事項はありません」等の非数値行を除外する。
             guard current != nil || prior != nil else { continue }
+            let rate = cells.count >= 4 ? XBRLUtils.parseTextblockCellValue(try? cells[3].text()) : nil
 
             if label == "合計" || label == "計" {
-                totalCurrent = current.map { $0 * Financial.millionYen }
-                totalPrior = prior.map { $0 * Financial.millionYen }
-                break   // 合計以降は返済予定額の別表
+                totalCurrent = current.map { $0 * scale }
+                totalPrior = prior.map { $0 * scale }
+                break rowLoop  // 合計以降は返済予定額の別表
             }
-            components.append((
-                label: displayLabel(for: label),
-                current: current.map { $0 * Financial.millionYen },
-                prior: prior.map { $0 * Financial.millionYen }
+            rawRows.append(RawRow(label: label, indent: indentLevel(of: labelPs.first), current: current, prior: prior, rate: rate))
+        }
+
+        // 次の行がより深いインデントを持つ行（＝内訳がぶら下がるカテゴリ小計）は除外し、二重計上を防ぐ。
+        var components: [Row] = []
+        for i in rawRows.indices {
+            if i + 1 < rawRows.count, rawRows[i + 1].indent > rawRows[i].indent { continue }
+            let r = rawRows[i]
+            components.append(Row(
+                label: displayLabel(for: r.label),
+                current: r.current.map { $0 * scale },
+                prior: r.prior.map { $0 * scale },
+                averageInterestRatePercent: r.rate
             ))
         }
 
@@ -69,13 +166,164 @@ enum BorrowingsSchedule {
         }
 
         guard totalCurrent != nil || totalPrior != nil else { return nil }
+        return (components, totalCurrent, totalPrior)
+    }
 
+    /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記からの抽出。J-GAAP附属明細表タグが
+    /// 無い、またはあっても財務諸表等規則の適用除外でクロスリファレンス文のみ（表なし）の場合に
+    /// `parseTable` からフォールバックとして呼ばれる。
+    ///
+    /// 実データ検証（2026-08-03、ユーザーレビューで発見。KDDI S100R0PR・HOYA S100VW2P）:
+    /// J-GAAP附属明細表と列構成が異なり「区分 | 前連結会計年度 | 当連結会計年度 | 平均利率(注) |
+    /// 返済期限」で、会社によって列間に罫線用の空白セル（幅6px程度のスペーサー）が挟まる
+    /// （KDDIはスペーサーあり、HOYAはスペーサーなし）。固定インデックスでは崩れるため、
+    /// ヘッダー行のセルテキスト（"前"／"当"／"利率"を含むか）から列位置を都度解決する。
+    ///
+    /// 階層構造も異なる。KDDIは「非流動」「流動」の2区分見出し（値なし）の下に実体行が並び、
+    /// 各区分の末尾にセクション小計「　小計」（nbsp+"小計"）が付く。HOYAは区分見出しが無く実体行
+    /// のみの後、真の合計「有利子負債合計」に続けて参考内訳「非流動負債合計」「流動負債合計」が
+    /// 続く。"小計"（完全一致）は常にセクション内訳のため除外して読み進め、それ以外で"計"に一致
+    /// するか"合計"で終わるラベル（"有利子負債合計"等）に達したら真の合計として確定し打ち切る。
+    /// こうしないとHOYAの参考内訳がコンポーネントに紛れ込み二重計上になる。
+    private static func parseIFRSNotesTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsAndBorrowingsTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsInterestBearingLiabilitiesTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBorrowingsOnlyTextblockTag)
+        guard let html, let soup = try? SwiftSoup.parse(html),
+              let tables = (try? soup.select("table"))?.array() else { return nil }
+
+        // 実データ検証（2026-08-03）: 平均利率・返済期限のどちらも列に持たない会社もある
+        // （村田製作所 S100TSIJ の IFRS初度適用年度は「区分｜移行日｜前連結会計年度末｜
+        // 当連結会計年度末」のみ）。「前」「当」を含む表を残高内訳表とみなす。ロールフォワード表
+        // （期首残高／キャッシュ・フロー／期末残高等）は「前」「当」を含まないため誤選択しない。
+        // 同一注記内に銘柄別の社債明細表（会社名・銘柄・発行年月日等、こちらも前/当を含む）が
+        // 続く／先行することがある（味の素 S100VXJA は銘柄別表が本体表より先に出現し、単純な
+        // `first` では誤って銘柄別表を拾ってしまうことを実データで確認）。銘柄別表は "銘柄" 列を
+        // 持つため、これを含む表は除外する。
+        //
+        // ソフトバンクグループ S100QZOM 実データ検証（2026-08-03）: 列見出しが「前」「当」ではなく
+        // 西暦日付そのもの（"2022年３月31日"／"2023年３月31日"）の会社がある。「前」「当」で
+        // 見つからない場合は日付パターンが2つ以上ある表にフォールバックする。
+        let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
+        func jpDateMatchCount(_ text: String) -> Int {
+            guard let jpDatePattern else { return 0 }
+            return jpDatePattern.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+        }
+        let table = tables.first {
+            let t = (try? $0.text()) ?? ""
+            guard !t.contains("銘柄") else { return false }
+            return (t.contains("前") && t.contains("当")) || jpDateMatchCount(t) >= 2
+        }
+        guard let table, let trs = (try? table.select("tr"))?.array() else { return nil }
+
+        let tableText = (try? table.text()) ?? ""
+        let scale: Double = tableText.contains("千円") ? 1_000
+            : tableText.contains("億円") ? 100_000_000
+            : Financial.millionYen
+
+        // ヘッダー行（前期/当期/平均利率列を持つ行）から列位置を解決する。固定インデックス禁止
+        // （スペーサー列の有無で位置が会社ごとに変わるため）。
+        var priorIdx: Int?
+        var currentIdx: Int?
+        var rateIdx: Int?
+        var headerRowIndex = -1
+        for (i, tr) in trs.enumerated() {
+            guard let cells = (try? tr.select("td, th"))?.array() else { continue }
+            var p: Int?
+            var c: Int?
+            var r: Int?
+            var dateCols: [Int] = []
+            for (j, cell) in cells.enumerated() {
+                let text = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
+                if p == nil, text.contains("前") { p = j }
+                if c == nil, text.contains("当") { c = j }
+                if text.contains("利率") { r = j }
+                if jpDateMatchCount(text) > 0 { dateCols.append(j) }
+            }
+            if p == nil, c == nil, dateCols.count >= 2 {
+                p = dateCols[0]
+                c = dateCols[1]
+            }
+            if let p, let c {
+                priorIdx = p
+                currentIdx = c
+                rateIdx = r
+                headerRowIndex = i
+                break
+            }
+        }
+        guard let priorIdx, let currentIdx, headerRowIndex >= 0, headerRowIndex + 1 < trs.count else { return nil }
+
+        var components: [Row] = []
+        var totalCurrent: Double?
+        var totalPrior: Double?
+
+        rowLoop: for tr in trs[(headerRowIndex + 1)...] {
+            guard let cells = (try? tr.select("td, th"))?.array(),
+                  cells.count > max(priorIdx, currentIdx) else { continue }
+            // 日東電工 S100VYH3 実データ検証（2026-08-03）: ラベル列の前に幅の狭いインデント専用の
+            // 空セルが挟まる会社がある。cells[0] が空なら cells[1] をラベルとして使う。
+            var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if label.isEmpty, cells.count > 1 {
+                label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+            }
+            guard !label.isEmpty else { continue }
+
+            let prior = XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text())
+            let current = XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text())
+            // 区分見出し（「非流動」「流動」等、値なし）を除外する。
+            guard current != nil || prior != nil else { continue }
+            let rate = rateIdx.flatMap { idx in
+                cells.count > idx ? XBRLUtils.parseTextblockCellValue(try? cells[idx].text()) : nil
+            }
+
+            if label == "小計" { continue }   // セクション単位の内訳小計は除外（二重計上防止）
+            if label == "計" || label.hasSuffix("合計") {
+                totalCurrent = current.map { $0 * scale }
+                totalPrior = prior.map { $0 * scale }
+                break rowLoop   // 真の合計に到達。以降の参考内訳（非流動負債合計等）は無視する
+            }
+            components.append(Row(
+                label: displayLabel(for: label),
+                current: current.map { $0 * scale },
+                prior: prior.map { $0 * scale },
+                averageInterestRatePercent: rate
+            ))
+        }
+
+        if totalCurrent == nil && totalPrior == nil {
+            let cs = components.compactMap { $0.current }
+            let ps = components.compactMap { $0.prior }
+            totalCurrent = cs.isEmpty ? nil : cs.reduce(0, +)
+            totalPrior = ps.isEmpty ? nil : ps.reduce(0, +)
+        }
+
+        guard totalCurrent != nil || totalPrior != nil else { return nil }
+        return (components, totalCurrent, totalPrior)
+    }
+
+    /// 表探索の入口。J-GAAP附属明細表を優先し、無ければIFRS注記へフォールバックする。
+    private static func parseTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        parseJGaapScheduleTable(xbrlDir: xbrlDir) ?? parseIFRSNotesTable(xbrlDir: xbrlDir)
+    }
+
+    /// 借入金等明細表から有利子負債を積み上げ抽出する。
+    /// IBD を XBRL タグで解決できない場合のフォールバック（会計基準は問わない）。
+    static func extract(xbrlDir: URL, accountingStandard: String) -> IBDResult? {
+        guard let parsed = parseTable(xbrlDir: xbrlDir) else { return nil }
+        let components: [IBDComponentEntry] = parsed.rows.map { ($0.label, $0.current, $0.prior) }
         return IBDResult(
-            total: totalCurrent,
-            priorTotal: totalPrior,
+            total: parsed.totalCurrent,
+            priorTotal: parsed.totalPrior,
             components: components,
             method: "borrowings_schedule",
             accountingStandard: accountingStandard
         )
+    }
+
+    /// 財務諸表注記取り込み `borrowings_schedule_cf_supplement` note_type 向け。`extract` と異なり
+    /// 平均利率も保持したまま行を返す（IBD 合算には使わない生の明細表データ）。
+    static func extractRows(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        parseTable(xbrlDir: xbrlDir)
     }
 }

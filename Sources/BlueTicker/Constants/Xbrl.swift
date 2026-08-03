@@ -360,6 +360,15 @@ enum Xbrl {
     /// 連結BSに有利子負債の数値タグが無い企業（リース債務が明細表のみに記載される等）のフォールバック源。
     static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
 
+    /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記 TextBlock タグ。J-GAAP附属明細表タグが
+    /// 存在しない、または財務諸表等規則の適用除外でクロスリファレンス文のみ（表なし）の場合に使う
+    /// （実データ検証2026-08-03: KDDI・JT・味の素は前者、HOYAは後者のタグを使用）。
+    static let ifrsBondsAndBorrowingsTextblockTag = "NotesBondsAndBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
+    static let ifrsInterestBearingLiabilitiesTextblockTag = "NotesInterestBearingLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-03）: エーザイ・SUBARU・アドバンテスト・アマダ・M3・日東電工等はこちらの
+    /// タグ（社債を別注記に切り出し「借入金」のみ）を使う。
+    static let ifrsBorrowingsOnlyTextblockTag = "NotesBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
+
     // MARK: - 支払利息タグ
 
     static let interestExpenseJGAAPTags: [String] = ["InterestExpensesNOE"]
