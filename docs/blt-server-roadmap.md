@@ -14,7 +14,7 @@
 | financials read 床 | **`companyFinancialsMinServableVersion = 2`**（`fin-v2` 以上を 200。`fin-v1` は 404）。明示定数・機械オフセットではない |
 | filing-sections | `sections-v4` へバンプ済み（2026-07-27、geography 非流動資産表除外＋収益の分解フォールバック）。Neon 側はまだ旧版のみ（`sections-v3` 1,299・`v2` 1,711・`v1` 1,459、合計 4,469）。次回 ingest から `v4` へ収束見込み |
 | filing-sections read 床 | **`filingSectionsMinServableVersion = 1`**（`sections-v1` 以上を 200）。明示定数 |
-| breakdowns | 日経225限定。business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27、225/225社）。cache_version は軸別（`breakdown-business-v7`/`breakdown-geography-v8`）。既知の残課題: 電通型 geography `not_found`（issue #163）。詳細は `docs/breakdown-normalization-concept.md` |
+| breakdowns | 日経225限定。business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27、225/225社）。cache_version は軸別（`breakdown-business-v8`/`breakdown-geography-v9`、2026-08-03 PR#173でJP `label`フィールド追加のためバンプ）。employees/research_and_development軸を新設（v1）、2026-08-04 定期launchd job経由で日経225への初回ingest開始（未公開・REST/MCP解禁は別途確認）。既知の残課題: 電通型 geography `not_found`（issue #163）。詳細は `docs/breakdown-normalization-concept.md` |
 | statements | 日経225限定でスタート（2026-07-29）。DB/ingest/REST/MCP 配線済み。表示順(`order`)・区分(`section`)・合計行構成要素(`is_total`/`components`)まで対応（`statement-v1`）。PL の利益段階ラベリングはスコープ外（financials 領域）。本番 Neon への日経225全社 ingest は未実施 |
 | statements read 床 | **`statementMinServableVersion = 1`**（`statement-v1` 以上を 200）。明示定数 |
 | 定期ジョブ | ローカル launchd `com.sollahiro.blt-sync`（4h おき）。Fly は read 専用（ingest は OOM するためローカル） |
