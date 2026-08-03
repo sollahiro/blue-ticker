@@ -366,6 +366,222 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(devicesAndModules.label == "デバイス・モジュール")
     }
 
+    // MARK: - employees/research_and_development 軸 実データゴールデン（2026-08-03、10社レビュー）
+    //
+    // ユーザーが10社（日経225）のemployees/research_and_development軸抽出結果を実データで
+    // 目視確認済み（生XBRLと突き合わせ、SCREEN HD「上記セグメント以外9,151」・日東電工
+    // 「全社技術部門10,725」等、注記本文にのみ存在しXBRL dimensionタグが無い値の欠測を確認）。
+    // needs_review=false の行のみ確認対象とし、正しさが確認できた絶対値をgolden化する
+    // （needs_review=true の行は開示側の構造的欠測であり別途対応、docs/breakdown-normalization-concept.md）。
+    // 割合ではなく実額（人数・円）で確認したユーザー指摘に合わせ、golden も実額のみを見る。
+
+    private static func employeesFactsAndLabels(
+        _ docID: String
+    ) -> (facts: [BreakdownFact], labels: [String: String]) {
+        let dir = xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+    }
+
+    @Test func yokogawaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VY8X") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VY8X")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 17_670, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 17_670)
+        let empControl = try #require(
+            emp.rows.first { $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember" })
+        #expect(empControl.amount == 16_781)
+        #expect(empControl.label == "制御")
+
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 32_061_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == false)
+        let rdControl = try #require(
+            rd.rows.first { $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember" })
+        #expect(rdControl.amount == 28_835_000_000)
+        #expect(rdControl.label == "制御")
+    }
+
+    @Test func mitsubishiMotorsEmployeesMatchesDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VZMJ") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VZMJ")
+
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 28_572, axis: "employees", labelsByTag: labels))
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.rows.map(\.amount).reduce(0, +) == 28_572)
+        let car = try #require(snapshot.rows.first { $0.labelRaw == "CarSegmentMember" })
+        #expect(car.amount == 28_384)
+        #expect(car.label == "自動車事業")
+        let financial = try #require(snapshot.rows.first { $0.labelRaw == "FinancialSegmentMember" })
+        #expect(financial.amount == 188)
+        #expect(financial.label == "金融事業")
+    }
+
+    @Test func itochuEmployeesMatchesDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VYN4") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VYN4")
+
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 115_089, axis: "employees", labelsByTag: labels))
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.rows.map(\.amount).reduce(0, +) == 115_089)
+        let food = try #require(snapshot.rows.first { $0.labelRaw == "FoodReportableSegmentMember" })
+        #expect(food.amount == 31_380)
+        #expect(food.label == "食料")
+    }
+
+    @Test func nittoDenkoEmployeesMatchesDisclosedSegmentTotalsRDStaysNeedsReview() async throws {
+        guard await Self.ensureAvailable("S100VYH3") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VYH3")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 25_769, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 25_769)
+        let optronics = try #require(
+            emp.rows.first { $0.labelRaw == "OptronicsReportableSegmentMember" })
+        #expect(optronics.amount == 12_798)
+        #expect(optronics.label == "オプトロニクス")
+
+        // R&D は注記本文（HTMLテキストブロック）に「全社技術部門10,725百万円」の内訳が
+        // あるが XBRL dimension タグが無いため未タグ分が残り、needs_review=true が正しい
+        // （2026-08-03 実データ確認。SCREEN HD も同型）。
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 46_771_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == true)
+        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
+    }
+
+    @Test func hondaEmployeesMatchesDisclosedSegmentTotalsRDStaysNeedsReview() async throws {
+        guard await Self.ensureAvailable("S100VYOD") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VYOD")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 194_173, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 194_173)
+        let automobile = try #require(
+            emp.rows.first { $0.labelRaw == "AutomobileBusinessReportableSegmentMember" })
+        #expect(automobile.amount == 133_665)
+        #expect(automobile.label == "四輪事業")
+
+        // R&D 注記21は費用の性質別（発生支出／資産化／償却）の調整であり事業セグメント別の
+        // 内訳ではない。四輪事業のR&D費はこの書類のどこにも（タグにもテキストにも）
+        // セグメント単位で開示されていない正当な欠測（2026-08-03 実データ確認）。
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 1_099_482_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == true)
+        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
+    }
+
+    @Test func nomuraResearchInstituteEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VZKL") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VZKL")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 16_679, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 16_679)
+        let industrialIT = try #require(
+            emp.rows.first { $0.labelRaw == "IndustrialITSolutionsReportableSegmentMember" })
+        #expect(industrialIT.amount == 6_034)
+        #expect(industrialIT.label == "産業ＩＴソリューション")
+
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 6_114_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == false)
+        let financialIT = try #require(
+            rd.rows.first { $0.labelRaw == "FinancialITSolutionsReportableSegmentMember" })
+        #expect(financialIT.amount == 2_929_000_000)
+        #expect(financialIT.label == "金融ＩＴソリューション")
+    }
+
+    @Test func toyotaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VWVY") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VWVY")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 383_853, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 383_853)
+        let automotive = try #require(
+            emp.rows.first { $0.labelRaw == "AutomotiveReportableSegmentMember" })
+        #expect(automotive.amount == 339_062)
+        #expect(automotive.label == "自動車")
+
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 1_326_496_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == false)
+        let automotiveRD = try #require(
+            rd.rows.first { $0.labelRaw == "AutomotiveReportableSegmentMember" })
+        #expect(automotiveRD.amount == 1_310_754_000_000)
+        #expect(automotiveRD.label == "自動車")
+    }
+
+    @Test func sumitomoCorpEmployeesMatchesDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VYV6") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VYV6")
+
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 83_327, axis: "employees", labelsByTag: labels))
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.rows.map(\.amount).reduce(0, +) == 83_327)
+        let mediaDigital = try #require(
+            snapshot.rows.first { $0.labelRaw == "MediaAndDigitalReportableSegmentMember" })
+        #expect(mediaDigital.amount == 20_816)
+        #expect(mediaDigital.label == "メディア・デジタル")
+    }
+
+    @Test func ajinomotoEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+        guard await Self.ensureAvailable("S100VXJA") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100VXJA")
+
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 34_860, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.rows.map(\.amount).reduce(0, +) == 34_860)
+        let seasonings = try #require(
+            emp.rows.first { $0.labelRaw == "SeasoningsAndFoodsReportableSegmentMember" })
+        #expect(seasonings.amount == 22_096)
+        #expect(seasonings.label == "調味料・食品")
+
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 30_921_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == false)
+        let healthcare = try #require(
+            rd.rows.first { $0.labelRaw == "HealthcareAndOthersReportableSegmentMember" })
+        #expect(healthcare.amount == 11_212_000_000)
+        #expect(healthcare.label == "ヘルスケア等")
+    }
+
     /// business 軸（`normalizeSalesBasis` 経路）でも同じラベル解決が効くこと。
     /// メンバー名は事業年度で変わりうるため固定文字列にせず、
     /// 「少なくとも1行は生member名と異なる日本語ラベルに解決される」ことだけを検証する。
