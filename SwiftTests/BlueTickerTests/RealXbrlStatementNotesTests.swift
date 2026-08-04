@@ -393,6 +393,39 @@ import Testing
         #expect(total.currentBalance == 1_776_849_000_000)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（住友金属鉱山 S100YJ6N、標準タグ「その他の金融負債」に完全な表）
+    //
+    // 実データ検証（2026-08-04、ユーザー実データ提示で合計値を確認）: 自社拡張タグではなく標準タグ
+    // `NotesOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock`に、社債・借入金・
+    // リースに加えデリバティブ負債・その他も含む区分｜前期｜当期｜平均利率｜返済期限の完全な表が
+    // 格納される。列間に罫線用の空白スペーサー列（KDDIと同型）を挟む。
+
+    @Test(.enabled(if: cacheAvailable("S100YJ6N"), "XBRL cache S100YJ6N not available"))
+    func goldenBorrowingsSumitomoMetalMiningOtherFinancialLiabilitiesStandardTag() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YJ6N"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTermBorrowings = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTermBorrowings.priorBalance == 70_463_000_000)
+        #expect(shortTermBorrowings.currentBalance == 133_960_000_000)
+        #expect(shortTermBorrowings.averageInterestRatePercent == 1.95)
+
+        // 社債・借入金・リース以外の非借入項目（デリバティブ負債・その他）も注記どおりそのまま構造化される。
+        let derivatives = try #require(components.first { $0.label.contains("デリバティブ負債") })
+        #expect(derivatives.priorBalance == 9_670_000_000)
+        #expect(derivatives.currentBalance == 5_750_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 588_229_000_000)
+        #expect(total.currentBalance == 691_184_000_000)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

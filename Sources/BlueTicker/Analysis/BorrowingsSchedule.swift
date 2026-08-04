@@ -191,6 +191,7 @@ enum BorrowingsSchedule {
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBorrowingsOnlyTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsOtherFinancialLiabilitiesTextblockTag)
         guard let html, let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 

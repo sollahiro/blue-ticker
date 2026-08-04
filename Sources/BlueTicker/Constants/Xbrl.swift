@@ -377,6 +377,11 @@ enum Xbrl {
     /// 投資契約負債」を1注記にまとめる（自社拡張タグ）。「区分｜移行日｜前期｜当期｜平均利率｜
     /// 返済期限」の6列（J-GAAP附属明細表に「移行日」列が1つ増えた形）で、末尾「合計」行を持つ。
     static let ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag = "NotesBondsIssuedBorrowingsAndInvestmentContractLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、住友金属鉱山 S100YJ6N）: 標準タグ（自社拡張ではない）「その他の
+    /// 金融負債に関する注記」に、社債・借入金・リースに加えデリバティブ負債・その他も含む完全な
+    /// 区分｜前期｜当期｜平均利率｜返済期限表が格納される。列間に罫線用の空白スペーサー列を挟む
+    /// （KDDIと同型）。標準タグのため他社でも使われている可能性がある。
+    static let ifrsOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
 
     /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
     /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。
