@@ -39,18 +39,23 @@ struct SearchView: View {
             CubeView(company: company, client: client)
         }
         .searchable(text: $query, prompt: "銘柄コード・社名")
-        .onChange(of: query) { _, newValue in
-            search(newValue)
+        // クエリが変わるたびに直前の検索を自動キャンセルする(.task(id:) の標準挙動)。
+        // 古い応答が新しい結果を上書きする競合を防ぐ(手動 Task 起動+onChange だと発生する)。
+        .task(id: query) {
+            await search(query)
         }
         .onAppear {
-            // スクリーンショット検証用の一時的なデバッグフック(later removed)。
-            if let seed = ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_QUERY"] {
-                query = seed
-            }
+            #if DEBUG
+                // スクリーンショット検証用の一時的なデバッグフック(later removed)。リリースビルドには含まれない。
+                if let seed = ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_QUERY"] {
+                    query = seed
+                }
+            #endif
         }
     }
 
-    private func search(_ query: String) {
+    @MainActor
+    private func search(_ query: String) async {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             results = []
             errorMessage = nil
@@ -58,15 +63,16 @@ struct SearchView: View {
         }
         isLoading = true
         errorMessage = nil
-        Task {
-            do {
-                results = try await client.searchCompanies(query: query)
-            } catch {
-                results = []
-                errorMessage = "検索に失敗しました: \(error.localizedDescription)"
-            }
-            isLoading = false
+        do {
+            results = try await client.searchCompanies(query: query)
+        } catch {
+            // クエリ変更による自動キャンセル(URLSession は URLError(.cancelled) を投げる)は
+            // 古い検索の後始末であり、ユーザーへエラー表示しない。
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
+            results = []
+            errorMessage = "検索に失敗しました: \(error.localizedDescription)"
         }
+        isLoading = false
     }
 }
 

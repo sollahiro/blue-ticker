@@ -45,6 +45,40 @@ struct BusinessProfitWaterfallBarsTests {
 
         #expect(year.businessProfitWaterfallBars() == nil)
     }
+
+    @Test("負のデルタバー(販管費)を含めても各バーの描画区間が階段状に連続する")
+    func negativeDeltaBarConnectsToNeighboringBars() {
+        // 実データ(トヨタ2025年03月期)。販管費は負のデルタで、正面画面(FrontFaceView)の
+        // yEnd = cumulativeStart + value の計算と食い違うと1本分ずれて描画される回帰を防ぐ。
+        let year = WaterfallYear(
+            businessProfit: 7_744_095,
+            businessProfitChange: 264_765,
+            salesChangeImpact: 749_752,
+            grossMarginChangeImpact: 282_082,
+            sgaChangeImpact: -767_069
+        )
+        let bars = year.businessProfitWaterfallBars() ?? []
+        let deltaBars = bars.filter { $0.kind == .delta }
+
+        // 各バーの描画区間(向きは問わないので min/max で判定)。
+        func drawnInterval(_ bar: WaterfallBar) -> (low: Double, high: Double) {
+            let end = bar.cumulativeStart + bar.value
+            return (min(bar.cumulativeStart, end), max(bar.cumulativeStart, end))
+        }
+
+        let intervals = deltaBars.map(drawnInterval)
+        #expect(intervals[0] == (7_479_330, 8_229_082))  // 売上要因
+        #expect(intervals[1] == (8_229_082, 8_511_164))  // 利益率変化
+        #expect(intervals[2] == (7_744_095, 8_511_164))  // 販管費(負)
+
+        // 隣接バーは high または low で接続し、階段が途切れない。
+        for (a, b) in zip(intervals, intervals.dropFirst()) {
+            #expect(a.high == b.high || a.high == b.low)
+        }
+
+        // 最後のバーの下端は当期事業利益と一致する(負のデルタで着地する)。
+        #expect(intervals.last?.low == year.businessProfit)
+    }
 }
 
 @Suite("WaterfallResponse.series")

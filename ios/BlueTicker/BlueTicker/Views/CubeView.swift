@@ -48,17 +48,20 @@ struct CubeView: View {
         .navigationTitle(company.name)
         .task { await load() }
         .onAppear {
-            // スクリーンショット検証用の一時的なデバッグフック(later removed)。
-            switch ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_FACE"] {
-            case "side": face = .side
-            case "top": face = .top
-            default: break
-            }
+            #if DEBUG
+                // スクリーンショット検証用の一時的なデバッグフック(later removed)。リリースビルドには含まれない。
+                switch ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_FACE"] {
+                case "side": face = .side
+                case "top": face = .top
+                default: break
+                }
+            #endif
         }
     }
 
     // MARK: - データ取得
 
+    @MainActor
     private func load() async {
         isLoading = true
         errorMessage = nil

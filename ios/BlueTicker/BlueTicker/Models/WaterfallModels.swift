@@ -32,7 +32,7 @@ struct WaterfallYear: Codable, Identifiable {
     var roe: Double?
     var roic: Double?
 
-    var id: String { fyEnd ?? financialPeriod ?? UUID().uuidString }
+    var id: String { fyEnd ?? financialPeriod ?? "" }
 
     enum CodingKeys: String, CodingKey {
         case fyEnd = "fy_end"
@@ -91,7 +91,10 @@ extension WaterfallYear {
     /// サーバーが返す `businessProfitChange` 系フィールドは前年比較込みで計算済み（クライアント側で再計算しない）。
     /// いずれか欠落時は nil（前年データが無い最古期など）。
     func businessProfitWaterfallBars() -> [WaterfallBar]? {
-        guard let current = businessProfit,
+        // 金融機関(経常利益・事業利益ベース)は事業利益分解の対象外。
+        // 既存CLI(AnalysisRendering.swift の bpAvailable)と同じ判定。
+        guard !["経常利益", "事業利益"].contains(opLabel ?? ""),
+            let current = businessProfit,
             let change = businessProfitChange,
             let salesImpact = salesChangeImpact,
             let marginImpact = grossMarginChangeImpact,
@@ -110,10 +113,10 @@ extension WaterfallYear {
             ("利益率変化", marginImpact, WaterfallMetric.marginImpact),
             ("販管費", sgaImpact, WaterfallMetric.sgaImpact),
         ] {
+            // yEnd(描画側)は cumulativeStart + value で計算するため、符号によらず
+            // 加算前の cursor を開始点にする(負のデルタは cursor から cursor+delta へ下向きに描かれる)。
             bars.append(
-                WaterfallBar(
-                    label: label, value: delta, cumulativeStart: delta >= 0 ? cursor : cursor + delta,
-                    kind: .delta, metric: metric))
+                WaterfallBar(label: label, value: delta, cumulativeStart: cursor, kind: .delta, metric: metric))
             cursor += delta
         }
         bars.append(
