@@ -543,6 +543,42 @@ import Testing
         #expect(total.currentBalance == 25_711_000_000)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（トヨタ自動車 S100Y8NY、ロールフォワード表の期末残高列を抽出）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: `有利子負債`注記に前/当の比較列を持つ
+    // 通常表が無く、会計年度ごとに「期首残高｜キャッシュ・フロー内訳｜非資金変動内訳｜期末残高」の
+    // ロールフォワード表が2つ（前年度分・当年度分）並ぶ。列見出しの年と月日が別々の<p>に分かれ
+    // 空白を挟むため通常の日付検出では見つからない。各行の最終セル（期末残高）だけを読むことで
+    // 中間のCF内訳列数に依存せず頑健に抽出し、区分内小計（流動合計／非流動合計）を除外して
+    // 真の合計「有利子負債合計」で確定する。
+
+    @Test(.enabled(if: cacheAvailable("S100Y8NY"), "XBRL cache S100Y8NY not available"))
+    func goldenBorrowingsToyotaExtractsEndingBalanceFromRollforwardTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100Y8NY"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTermDebt = try #require(components.first { $0.label == "短期借入債務" })
+        #expect(shortTermDebt.priorBalance == 5_464_469_000_000)
+        #expect(shortTermDebt.currentBalance == 5_699_083_000_000)
+
+        let currentPortionOfLeases = try #require(components.first { $0.label == "１年以内返済予定長期リース負債" })
+        #expect(currentPortionOfLeases.priorBalance == 92_147_000_000)
+        #expect(currentPortionOfLeases.currentBalance == 163_435_000_000)
+
+        // 区分内小計（流動合計・非流動合計）は混入しないこと。
+        #expect(!components.contains { $0.label.contains("流動合計") })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 38_792_879_000_000)
+        #expect(total.currentBalance == 43_205_469_000_000)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

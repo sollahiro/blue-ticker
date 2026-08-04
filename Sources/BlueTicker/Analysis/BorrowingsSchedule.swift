@@ -596,6 +596,74 @@ enum BorrowingsSchedule {
         return nil
     }
 
+    /// トヨタ自動車 S100Y8NY 実データ検証（2026-08-04）: `ifrsInterestBearingLiabilitiesTextblockTag`は
+    /// 存在するが、前/当の比較列を持つ通常表ではなく、会計年度ごとに「期首残高｜キャッシュ・フロー
+    /// 内訳｜非資金変動内訳｜期末残高」のロールフォワード表が2つ（前年度分・当年度分）並ぶ。列見出しは
+    /// 中間の内訳列を除き日付のみ（"帳簿価額"等のラベルは無い）。各行の最終セルが期末残高のため、
+    /// ラベル（先頭セル）と最終セルの組だけを読む（中間のCF内訳列数が会社によらず変わっても頑健）。
+    /// 短期借入債務・１年以内返済予定長期借入債務・長期借入債務・（各）リース負債を拾い、区分内小計
+    /// 「流動合計」「非流動合計」は除外、真の合計「有利子負債合計」に達したら打ち切る。
+    private static func parseRollforwardEndingBalancePairTables(
+        in document: Document
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let tables = (try? document.select("table"))?.array(),
+              let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日") else { return nil }
+
+        struct EndingBalanceTable { let closingDate: String; let rows: [(label: String, value: Double)]; let total: Double }
+        var candidates: [EndingBalanceTable] = []
+        for table in tables {
+            guard let trs = (try? table.select("tr"))?.array(), trs.count > 3 else { continue }
+            // トヨタ自動車 S100Y8NY 実データ検証（2026-08-04）: 年（例「2024年」）と月日（例「４月１日」）が
+            // セル内で別々の<p>に分かれており、text()が間に空白を挟むため空白を除去してから日付照合する。
+            let headerText = trs.prefix(2).compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
+                .joined(separator: " ").replacingOccurrences(of: " ", with: "")
+            let dateMatches = jpDatePattern.matches(in: headerText, range: NSRange(headerText.startIndex..., in: headerText))
+                .compactMap { Range($0.range, in: headerText).map { String(headerText[$0]) } }
+            guard dateMatches.count >= 2, let closingDate = dateMatches.last else { continue }
+
+            var rows: [(String, Double)] = []
+            var total: Double?
+            rowLoop: for tr in trs {
+                guard let cells = (try? tr.select("td, th"))?.array(), let first = cells.first, cells.count >= 2 else { continue }
+                let label = normalizeLabel((try? first.text(trimAndNormaliseWhitespace: true)) ?? "")
+                guard !label.isEmpty, let value = XBRLUtils.parseTextblockCellValue(try? cells[cells.count - 1].text()) else { continue }
+                if label == "有利子負債合計" {
+                    total = value
+                    break rowLoop
+                }
+                if label.hasSuffix("合計") { continue }   // 流動合計・非流動合計（区分内小計）は除外
+                guard label.contains("社債") || label.contains("借入") || label.contains("リース") else { continue }
+                rows.append((label, value))
+            }
+            guard rows.count >= 2, let total else { continue }
+            candidates.append(EndingBalanceTable(closingDate: closingDate, rows: rows, total: total))
+        }
+        guard candidates.count == 2 else { return nil }
+        let sorted = candidates.sorted { $0.closingDate < $1.closingDate }
+
+        let priorMap = Dictionary(sorted[0].rows, uniquingKeysWith: { first, _ in first })
+        let currentMap = Dictionary(sorted[1].rows, uniquingKeysWith: { first, _ in first })
+        var orderedLabels: [String] = []
+        var seen: Set<String> = []
+        for label in (sorted[0].rows + sorted[1].rows).map(\.label) where !seen.contains(label) {
+            seen.insert(label)
+            orderedLabels.append(label)
+        }
+        let tableText = (try? document.text()) ?? ""
+        let scale: Double = tableText.contains("千円") ? 1_000
+            : tableText.contains("億円") ? 100_000_000
+            : Financial.millionYen
+        let components = orderedLabels.map { label in
+            Row(
+                label: label,
+                current: currentMap[label].map { $0 * scale },
+                prior: priorMap[label].map { $0 * scale },
+                averageInterestRatePercent: nil
+            )
+        }
+        return (components, sorted[1].total * scale, sorted[0].total * scale)
+    }
+
     /// ディスコ S100YC6I・中外製薬 S100XTBJ 実データ検証（2026-08-04）: 借入金等明細表／社債・借入金
     /// 注記が無くても、リース負債のみ計上している会社がある（無借金だがオペレーティングリース資産を
     /// 保有）。「リース取引に関する注記」専用タグを最終フォールバックとして試す。この注記はリース
@@ -655,6 +723,16 @@ enum BorrowingsSchedule {
             ?? parseIFRSNotesTable(xbrlDir: xbrlDir)
             ?? parseIFRSFinancialInstrumentsNote(xbrlDir: xbrlDir)
             ?? parseLeaseOnlyNote(xbrlDir: xbrlDir)
+            ?? parseRollforwardNote(xbrlDir: xbrlDir)
+    }
+
+    /// トヨタ自動車 S100Y8NY 実データ検証（2026-08-04）: `ifrsInterestBearingLiabilitiesTextblockTag`は
+    /// `parseIFRSNotesTable`の前/当比較表探索では解決できない（ロールフォワード形式のため）。
+    /// 同じタグを`parseRollforwardEndingBalancePairTables`で再解析する。
+    private static func parseRollforwardNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsInterestBearingLiabilitiesTextblockTag),
+              let soup = try? SwiftSoup.parse(html) else { return nil }
+        return parseRollforwardEndingBalancePairTables(in: soup)
     }
 
     /// 借入金等明細表から有利子負債を積み上げ抽出する。
