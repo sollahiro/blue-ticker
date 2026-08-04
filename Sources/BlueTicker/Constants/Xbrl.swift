@@ -368,6 +368,15 @@ enum Xbrl {
     /// 実データ検証（2026-08-03）: エーザイ・SUBARU・アドバンテスト・アマダ・M3・日東電工等はこちらの
     /// タグ（社債を別注記に切り出し「借入金」のみ）を使う。
     static let ifrsBorrowingsOnlyTextblockTag = "NotesBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、三菱重工業 S100YHZG）: 「社債、借入金及びその他の金融負債」注記
+    /// （自社拡張タグ）。区分｜前期｜当期の3列で「前」「当」を含み、末尾「合計」行で真の合計が
+    /// 確定するため`parseComparisonTable`をそのまま適用できる（デリバティブ負債・債権流動化に
+    /// 伴う支払債務等、社債・借入金・リース以外の項目も注記どおりそのまま構造化して含める）。
+    static let ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag = "NotesBondsBorrowingsAndOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、東京海上ホールディングス S100YLS8）: 保険会社は「社債、借入金及び
+    /// 投資契約負債」を1注記にまとめる（自社拡張タグ）。「区分｜移行日｜前期｜当期｜平均利率｜
+    /// 返済期限」の6列（J-GAAP附属明細表に「移行日」列が1つ増えた形）で、末尾「合計」行を持つ。
+    static let ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag = "NotesBondsIssuedBorrowingsAndInvestmentContractLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
 
     /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
     /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。
