@@ -21,7 +21,8 @@ enum GeographyBreakdownResolver {
     /// geography（地域別情報）の ExtractedBreakdown から geography 軸の BreakdownSnapshot を解決する。
     /// LLM 呼び出しは html_table 経路でのみ発生し、xbrl_facts で解決できれば呼ばない。
     static func resolve(
-        geography: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
+        geography: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        labelsByTag: [String: String] = [:]
     ) async -> (snapshot: BreakdownSnapshot?, source: GeographyBreakdownSource, audit: LLMBreakdownAudit?) {
         switch geography.method {
         case "not_found":
@@ -29,7 +30,7 @@ enum GeographyBreakdownResolver {
 
         case "xbrl_facts":
             if let snapshot = BreakdownNormalizer.normalize(
-                geography, consolidatedSales: consolidatedSales),
+                geography, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag),
                 snapshot.axis == "geography"
             {
                 return (snapshot, .xbrlFacts, nil)

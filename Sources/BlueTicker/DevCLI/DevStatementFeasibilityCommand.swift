@@ -633,16 +633,17 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             fieldSet: fieldSetFromInstant(allTagElements), tagElements: allTagElements
         ).current
         print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil")")
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeEmployees(
-                facts: facts, total: total, axis: breakdownAxisEmployees)
+                facts: facts, total: total, axis: breakdownAxisEmployees, labelsByTag: labelsByTag)
         else {
             print("normalizeEmployees: nil")
             return
         }
         print("axis=\(snapshot.axis) denominator=\(snapshot.denominator) denominatorTag=\(snapshot.denominatorTag) needsReview=\(snapshot.needsReview) warnings=\(snapshot.warnings)")
         for row in snapshot.rows {
-            print("  - label=\(row.labelRaw) amount=\(row.amount) share=\(row.share.map { String(format: "%.4f", $0) } ?? "-") rowKind=\(row.rowKind)")
+            print("  - label=\(row.labelRaw)(\(row.label ?? "-")) amount=\(row.amount) share=\(row.share.map { String(format: "%.4f", $0) } ?? "-") rowKind=\(row.rowKind)")
         }
     }
 
@@ -664,16 +665,18 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             fieldSet: fieldSetFromDuration(allTagElements), accountingStandard: accountingStandard
         ).current
         print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil")")
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment)
+                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment,
+                labelsByTag: labelsByTag)
         else {
             print("normalizeResearchAndDevelopment: nil")
             return
         }
         print("axis=\(snapshot.axis) denominator=\(snapshot.denominator) denominatorTag=\(snapshot.denominatorTag) needsReview=\(snapshot.needsReview) warnings=\(snapshot.warnings)")
         for row in snapshot.rows {
-            print("  - label=\(row.labelRaw) amount=\(row.amount) share=\(row.share.map { String(format: "%.4f", $0) } ?? "-") rowKind=\(row.rowKind)")
+            print("  - label=\(row.labelRaw)(\(row.label ?? "-")) amount=\(row.amount) share=\(row.share.map { String(format: "%.4f", $0) } ?? "-") rowKind=\(row.rowKind)")
         }
     }
 

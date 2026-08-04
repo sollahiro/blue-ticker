@@ -9,6 +9,10 @@ import Foundation
 
 struct BreakdownRow: Equatable {
     var labelRaw: String
+    // XBRL ラベルリンクベースから解決した日本語ラベル（xbrl_facts 経路のみ。html_table/LLM 経路は
+    // labelRaw が既に開示書類のテキストそのもの＝日本語のため nil のまま。公開層で
+    // `label ?? labelRaw` にフォールバックする）。
+    var label: String? = nil
     var amount: Double
     var share: Double?
     var profit: Double?  // 対応する利益タグが無ければ nil（任意フィールド）
@@ -36,11 +40,15 @@ enum BreakdownNormalizer {
     /// 財務取り込み の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
     /// セグメント注記に外部顧客売上タグがあれば内部小計基準で解決する
     /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
-    static func normalize(_ result: ExtractedBreakdown, consolidatedSales: Double?) -> BreakdownSnapshot? {
+    static func normalize(
+        _ result: ExtractedBreakdown, consolidatedSales: Double?,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
         if let consolidatedSales, consolidatedSales != 0,
-           let snapshot = normalizeSalesBasis(facts: result.facts, consolidatedSales: consolidatedSales)
+           let snapshot = normalizeSalesBasis(
+               facts: result.facts, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
         {
             return snapshot
         }
@@ -48,24 +56,27 @@ enum BreakdownNormalizer {
         // （財務取り込み sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
         if let external = normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentExternalRevenueTags,
-            profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue")
+            profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue",
+            labelsByTag: labelsByTag)
         {
             return external
         }
         if let bank = normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentBankGrossProfitTags,
-            profitTags: Xbrl.segmentBankNetOperatingProfitTags, warningPrefix: "bank")
+            profitTags: Xbrl.segmentBankNetOperatingProfitTags, warningPrefix: "bank",
+            labelsByTag: labelsByTag)
         {
             return bank
         }
         return normalizeInternalSubtotalBasis(
             facts: result.facts, amountTags: Xbrl.segmentInsuranceRevenueTags,
-            profitTags: Xbrl.segmentInsuranceServiceResultTags, warningPrefix: "insurance")
+            profitTags: Xbrl.segmentInsuranceServiceResultTags, warningPrefix: "insurance",
+            labelsByTag: labelsByTag)
     }
 
     /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
     private static func normalizeSalesBasis(
-        facts: [BreakdownFact], consolidatedSales: Double
+        facts: [BreakdownFact], consolidatedSales: Double, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
@@ -161,6 +172,7 @@ enum BreakdownNormalizer {
             let fact = perMember[member]!
             return BreakdownRow(
                 labelRaw: member,
+                label: labelsByTag[member],
                 amount: fact.value,
                 share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
@@ -197,7 +209,8 @@ enum BreakdownNormalizer {
     /// 「Japanese...」のような事業本部名を地域名の部分一致で誤検知するため、この経路では
     /// 地域別開示が来る想定が無く再利用しない）。
     private static func normalizeInternalSubtotalBasis(
-        facts: [BreakdownFact], amountTags: [String], profitTags: [String], warningPrefix: String
+        facts: [BreakdownFact], amountTags: [String], profitTags: [String], warningPrefix: String,
+        labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
@@ -247,6 +260,7 @@ enum BreakdownNormalizer {
             let fact = perMember[member]!
             return BreakdownRow(
                 labelRaw: member,
+                label: labelsByTag[member],
                 amount: fact.value,
                 share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
@@ -270,22 +284,22 @@ enum BreakdownNormalizer {
 
     /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。
     static func normalizeEmployees(
-        facts: [BreakdownFact], total: Double?, axis: String
+        facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         normalizeCountBasis(
             facts: facts, amountTags: Xbrl.employeeTags, total: total, axis: axis,
-            warningPrefix: "employees")
+            warningPrefix: "employees", labelsByTag: labelsByTag)
     }
 
     /// 研究開発費（全社合計）のセグメント別内訳（内訳取り込み research_and_development 軸）。
     /// `normalizeCountBasis` 参照。金額（人数ではない）だが計算の形は同一のため共用する。
     static func normalizeResearchAndDevelopment(
-        facts: [BreakdownFact], total: Double?, axis: String
+        facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         let amountTags = Xbrl.rdExpenseCommonTags + Xbrl.rdExpenseJGAAPTags + Xbrl.rdExpenseIFRSTags
         return normalizeCountBasis(
             facts: facts, amountTags: amountTags, total: total, axis: axis,
-            warningPrefix: "research_and_development")
+            warningPrefix: "research_and_development", labelsByTag: labelsByTag)
     }
 
     /// 従業員数・研究開発費など「セグメント dimension 付き fact ＋ 別途取得済みの全社合計値」から
@@ -314,7 +328,8 @@ enum BreakdownNormalizer {
     ]
 
     private static func normalizeCountBasis(
-        facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String
+        facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String,
+        labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
@@ -359,8 +374,8 @@ enum BreakdownNormalizer {
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
             let fact = perMember[member]!
             return BreakdownRow(
-                labelRaw: member, amount: fact.value, share: fact.value / denominator,
-                profit: nil, rowKind: kinds[member]!)
+                labelRaw: member, label: labelsByTag[member], amount: fact.value,
+                share: fact.value / denominator, profit: nil, rowKind: kinds[member]!)
         }
 
         return BreakdownSnapshot(

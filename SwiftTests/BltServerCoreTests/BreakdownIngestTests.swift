@@ -101,7 +101,7 @@ private func fakePayload(
         axis: axis, denominator: 1_000_000, denominatorTag: "income_statement.sales",
         rows: [
             BreakdownRowPayload(
-                labelRaw: "セグメントA", amount: 500_000, profit: nil, rowKind: "segment")
+                labelRaw: "セグメントA", label: "セグメントA", amount: 500_000, profit: nil, rowKind: "segment")
         ],
         sourceKind: "test", needsReview: needsReview, warnings: needsReview ? ["test_flag"] : [])
 }

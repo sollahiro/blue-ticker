@@ -362,8 +362,10 @@ public extension BltServerContext {
         else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 
         let hash = breakdownContentHash(extracted: segments, consolidatedSales: consolidatedSales)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         let result = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: consolidatedSales, client: businessChatClient)
+            segments: segments, consolidatedSales: consolidatedSales, client: businessChatClient,
+            labelsByTag: labelsByTag)
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
@@ -389,8 +391,10 @@ public extension BltServerContext {
         }
 
         let hash = breakdownContentHash(extracted: geography, consolidatedSales: consolidatedSales)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         let result = await GeographyBreakdownResolver.resolve(
-            geography: geography, consolidatedSales: consolidatedSales, client: geographyChatClient)
+            geography: geography, consolidatedSales: consolidatedSales, client: geographyChatClient,
+            labelsByTag: labelsByTag)
         guard let snapshot = result.snapshot else {
             // Resolver の notFound は「地域注記なし」または LLM の applicable=false。
             // audit があれば LLM が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
@@ -423,9 +427,10 @@ public extension BltServerContext {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeEmployees(
-                facts: facts, total: total, axis: breakdownAxisEmployees)
+                facts: facts, total: total, axis: breakdownAxisEmployees, labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -447,9 +452,11 @@ public extension BltServerContext {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment)
+                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment,
+                labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -468,8 +475,8 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
         axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
         rows: s.rows.map {
             BreakdownRowPayload(
-                labelRaw: $0.labelRaw, amount: $0.amount, profit: $0.profit,
-                rowKind: $0.rowKind)
+                labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
+                profit: $0.profit, rowKind: $0.rowKind)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
 }

@@ -151,7 +151,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 axis: breakdownAxisGeography, denominator: 1_000_000,
                 denominatorTag: "income_statement.sales",
                 rows: [
-                    BreakdownRowPayload(labelRaw: "日本", amount: 600_000, profit: nil, rowKind: "segment")
+                    BreakdownRowPayload(labelRaw: "日本", label: "日本", amount: 600_000, profit: nil, rowKind: "segment")
                 ],
                 sourceKind: breakdownSourceGeographyLLM, needsReview: false, warnings: [])
             row.needsReview = false

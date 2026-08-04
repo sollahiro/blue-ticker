@@ -151,6 +151,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
         let geographyLLM = LLMClientLoader.resolveEndpoint(axis: .geography)
             .map { ChatCompletionClient(endpoint: $0) }
 
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+
         if axis == .all || axis == .business {
             let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
             printError("\n=== business (segments) method=\(segments.method) ===\n")
@@ -158,7 +160,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
 
             if let client = businessLLM {
                 let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-                    segments: segments, consolidatedSales: sales, client: client
+                    segments: segments, consolidatedSales: sales, client: client,
+                    labelsByTag: labelsByTag
                 )
                 printError("source: \(source.rawValue)\n")
                 printAudit(audit)
@@ -170,7 +173,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                         segments: segments, sales: sales, xbrlDir: xbrlDir,
                         llmHint: audit?.notApplicableReason)
                 }
-            } else if let snapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: sales),
+            } else if let snapshot = BreakdownNormalizer.normalize(
+                          segments, consolidatedSales: sales, labelsByTag: labelsByTag),
                       snapshot.axis == "business" {
                 printError("source: xbrl_facts（LLM未設定・決定的経路のみ）\n")
                 printSnapshot(snapshot)
@@ -197,7 +201,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
 
             let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
                 geography: geography, consolidatedSales: sales,
-                client: geographyLLM ?? UnavailableDevChatClient()
+                client: geographyLLM ?? UnavailableDevChatClient(),
+                labelsByTag: labelsByTag
             )
             printError("source: \(source.rawValue)\n")
             printAudit(audit)
@@ -327,7 +332,7 @@ struct DevBreakdownCommand: AsyncParsableCommand {
         for row in snapshot.rows {
             let shareText = row.share.map { String(format: "%.4f", $0) } ?? "-"
             let profitText = row.profit.map { String(Int($0)) } ?? "-"
-            print("  - label=\(row.labelRaw) amount（円）=\(Int(row.amount)) share=\(shareText) profit=\(profitText) rowKind=\(row.rowKind)")
+            print("  - label=\(row.labelRaw)(\(row.label ?? "-")) amount（円）=\(Int(row.amount)) share=\(shareText) profit=\(profitText) rowKind=\(row.rowKind)")
         }
         let segmentShare = snapshot.rows
             .filter { $0.rowKind == "segment" }

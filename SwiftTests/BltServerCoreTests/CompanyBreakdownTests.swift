@@ -6,6 +6,7 @@ import BlueTickerCore
 import Fluent
 import FluentSQLiteDriver
 import Foundation
+import SQLKit
 import Testing
 import Vapor
 
@@ -35,8 +36,8 @@ private func fakeSnapshot(
         denominator: 4_624_727_000_000,
         denominatorTag: "income_statement.sales",
         rows: [
-            BreakdownRowPayload(labelRaw: "プリンティング", amount: 2_487_885_000_000, profit: nil, rowKind: "segment"),
-            BreakdownRowPayload(labelRaw: "メディカル", amount: 579_723_000_000, profit: nil, rowKind: "segment"),
+            BreakdownRowPayload(labelRaw: "プリンティング", label: "プリンティング", amount: 2_487_885_000_000, profit: nil, rowKind: "segment"),
+            BreakdownRowPayload(labelRaw: "メディカル", label: "メディカル", amount: 579_723_000_000, profit: nil, rowKind: "segment"),
         ],
         sourceKind: sourceKind,
         needsReview: needsReview,
@@ -162,6 +163,36 @@ private func fakeSnapshot(
 
             let found = try #require(try await CompanyBreakdown.find("S100BBBB#business", on: app.db))
             #expect(found.notApplicableReason == nil)
+        }
+    }
+
+    /// `label` フィールド追加（2026-08-03、`breakdown-business-v8`）より前に格納された行は
+    /// payload JSON に `label` キーを持たない。合成 Decodable のままだと `keyNotFound` で読み取り
+    /// 自体が失敗する（Opus 監査で発見）。生 SQL で `label` キー無しの旧形式 JSON を直接書き込み、
+    /// `find` が失敗せず `labelRaw` へフォールバックすることを確認する。
+    @Test func decodesPreLabelFieldPayloadByFallingBackToLabelRaw() async throws {
+        try await withMigratedApp { app in
+            let legacyPayloadJSON = """
+                {"axis":"business","denominator":100.0,"denominatorTag":"income_statement.sales",\
+                "rows":[{"labelRaw":"旧行","amount":50.0,"profit":null,"rowKind":"segment"}],\
+                "sourceKind":"xbrl_facts","needsReview":false,"warnings":[]}
+                """
+            let db = try #require(app.db as? any SQLDatabase)
+            try await db.raw(
+                """
+                INSERT INTO company_breakdowns
+                    (id, doc_id, axis, code, submit_date_time, payload, needs_review, source, content_hash, cache_version)
+                VALUES
+                    ('S100LEGACY#business', 'S100LEGACY', 'business', '0001', '2025-01-01 00:00',
+                     \(bind: legacyPayloadJSON), false, \(bind: breakdownSourceXbrlFacts), 'h',
+                     \(bind: businessBreakdownCacheVersion))
+                """
+            ).run()
+
+            let found = try #require(try await CompanyBreakdown.find("S100LEGACY#business", on: app.db))
+            #expect(found.payload.rows.count == 1)
+            #expect(found.payload.rows[0].labelRaw == "旧行")
+            #expect(found.payload.rows[0].label == "旧行")
         }
     }
 

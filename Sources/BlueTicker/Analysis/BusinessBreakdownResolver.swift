@@ -27,9 +27,11 @@ enum BusinessBreakdownResolver {
     /// business 軸の BreakdownSnapshot を解決する。LLM 呼び出しは html_table 経路でのみ発生し、
     /// xbrl_facts で business 判定できた場合は呼び出さない（決定的経路を優先し LLM 費用を最小化）。
     static func resolve(
-        segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
+        segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        labelsByTag: [String: String] = [:]
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
-        let factsSnapshot = BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)
+        let factsSnapshot = BreakdownNormalizer.normalize(
+            segments, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business かつ needs_review が
         //    立っていなければ確信度が高いのでそのまま採用する。
