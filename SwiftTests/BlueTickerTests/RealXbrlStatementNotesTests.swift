@@ -567,7 +567,9 @@ import Testing
         #expect(shortTermDebt.priorBalance == 5_464_469_000_000)
         #expect(shortTermDebt.currentBalance == 5_699_083_000_000)
 
-        let currentPortionOfLeases = try #require(components.first { $0.label == "１年以内返済予定長期リース負債" })
+        // 「１年以内返済予定長期リース負債」「長期リース負債」の生ラベルは、他経路
+        // （`parseComparisonTable`）と揃えるため`displayLabel`で正規化される。
+        let currentPortionOfLeases = try #require(components.first { $0.label == "リース負債（流動）" })
         #expect(currentPortionOfLeases.priorBalance == 92_147_000_000)
         #expect(currentPortionOfLeases.currentBalance == 163_435_000_000)
 

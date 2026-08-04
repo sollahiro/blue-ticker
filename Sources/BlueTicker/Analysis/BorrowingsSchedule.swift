@@ -653,9 +653,12 @@ enum BorrowingsSchedule {
         let scale: Double = tableText.contains("千円") ? 1_000
             : tableText.contains("億円") ? 100_000_000
             : Financial.millionYen
+        // 他経路（`parseComparisonTable`等）と表示ラベルを揃えるため、リース行は`displayLabel`で
+        // 「リース負債（流動/非流動）」へ正規化する（トヨタの生ラベルは「１年以内返済予定長期
+        // リース負債」「長期リース負債」で、既存のマーカー判定がそのまま適用できる）。
         let components = orderedLabels.map { label in
             Row(
-                label: label,
+                label: displayLabel(for: label),
                 current: currentMap[label].map { $0 * scale },
                 prior: priorMap[label].map { $0 * scale },
                 averageInterestRatePercent: nil
