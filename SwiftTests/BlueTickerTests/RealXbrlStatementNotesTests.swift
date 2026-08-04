@@ -494,6 +494,55 @@ import Testing
         #expect(total.currentBalance == 292_013_000_000)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（ディスコ S100YC6I、無借金だがリース負債のみ計上）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 借入金等明細表は「該当事項はありません」
+    // だが、J-GAAP「リース取引に関する注記」（標準タグ）に「区分｜前期｜当期」の単純な表
+    // （１年内／１年超／合計）でリース負債の残高が開示される。リース以外の話題を含まないタグの
+    // ため、通常の社債・借入金キーワード必須の候補選定を適用せず`parseLeaseOnlyNote`で解決する。
+
+    @Test(.enabled(if: cacheAvailable("S100YC6I"), "XBRL cache S100YC6I not available"))
+    func goldenBorrowingsDiscoDebtFreeButHasLeaseLiabilities() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YC6I"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 2_647_000_000)
+        #expect(total.currentBalance == 3_714_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（中外製薬 S100XTBJ、無借金だがリース負債のみ計上・IFRS版）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 借入金等明細表・社債及び借入金注記の
+    // いずれも存在しないが、IFRS版「リース」注記（標準タグ）に満期構成ペアテーブル形式（会計年度末
+    // ごとに別テーブル、「帳簿価額」列）でリース負債の残高が開示される。「リース負債」1行のみの表
+    // のため、`parseMaturityBucketPairTables`の通常の2行以上要件を`minMatchingRows: 1`で緩めて解決する。
+
+    @Test(.enabled(if: cacheAvailable("S100XTBJ"), "XBRL cache S100XTBJ not available"))
+    func goldenBorrowingsChugaiDebtFreeButHasLeaseLiabilitiesIFRS() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100XTBJ"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let leaseLiabilities = try #require(components.first { $0.label.contains("リース") })
+        #expect(leaseLiabilities.priorBalance == 10_897_000_000)
+        #expect(leaseLiabilities.currentBalance == 25_711_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 25_711_000_000)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

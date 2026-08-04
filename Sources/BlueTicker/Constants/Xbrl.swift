@@ -390,6 +390,13 @@ enum Xbrl {
     /// その他の金融負債に関する注記」は資産セクションと負債セクションが同一タグ内に併存し、負債側に
     /// 「有利子負債（注）」という単一集約行を持つ（社債・借入金・リースへの内訳分解はされない）。
     static let ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialAssetsAndOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ディスコ S100YC6I・中外製薬 S100XTBJ）: 借入金等明細表が「該当事項は
+    /// ありません」でも、リース負債のみ計上している会社がある。J-GAAP「リース取引に関する注記」
+    /// （標準タグ）は「区分｜前期｜当期」の単純な表（１年内／１年超／合計）。
+    static let jGaapLeasesNoteTextblockTag = "NotesLeasesConsolidatedFinancialStatementsTextBlock"
+    /// IFRS版「リース」注記（標準タグ）。満期構成のペアテーブル形式（会計年度末ごとに別テーブル、
+    /// 「帳簿価額」列を持つ）でリース負債の残高を開示する。
+    static let ifrsLeasesTextblockTag = "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock"
 
     /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
     /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。

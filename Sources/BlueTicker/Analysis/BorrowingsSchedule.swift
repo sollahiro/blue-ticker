@@ -419,7 +419,9 @@ enum BorrowingsSchedule {
     /// 持つ）が並ぶパターンからの抽出。信用リスク・プットオプション等の無関係な行や、会社ごとに構成が
     /// 異なる「合計」「控除」行の混入を避けるため、社債・借入金・リース関連ラベルの帳簿価額のみを拾い、
     /// 合計は自前で積み上げる。実データ検証（2026-08-04: 日立 S100QZT0・ソニーグループ S100QZT6）。
-    private static func parseMaturityBucketPairTables(in document: Document) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+    private static func parseMaturityBucketPairTables(
+        in document: Document, minMatchingRows: Int = 2
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         guard let allElements = (try? document.getAllElements())?.array(),
               let tables = (try? document.select("table"))?.array(),
               let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日") else { return nil }
@@ -521,9 +523,10 @@ enum BorrowingsSchedule {
             } else {
                 continue
             }
-            // 少なくとも2行の借入金系ラベルを持つ表のみを対象とする（公正価値ヘッジ等の無関係な表を除外）。
+            // 少なくとも`minMatchingRows`行の借入金系ラベルを持つ表のみを対象とする（公正価値ヘッジ等の
+            // 無関係な表を除外）。既定2行だが、リース専用注記等トピックが単一の場合は1行に緩める。
             let values = bookValues(table)
-            guard values.count >= 2 else { continue }
+            guard values.count >= minMatchingRows else { continue }
             candidates.append(DatedTable(date: dateText, table: table, values: values))
         }
         // いすゞ自動車 S100YFBQ 実データ検証（2026-08-04）: 同一日付の表が「金融負債の期日別残高」注記と
@@ -593,6 +596,31 @@ enum BorrowingsSchedule {
         return nil
     }
 
+    /// ディスコ S100YC6I・中外製薬 S100XTBJ 実データ検証（2026-08-04）: 借入金等明細表／社債・借入金
+    /// 注記が無くても、リース負債のみ計上している会社がある（無借金だがオペレーティングリース資産を
+    /// 保有）。「リース取引に関する注記」専用タグを最終フォールバックとして試す。この注記はリース
+    /// 以外の話題を含まないため、他の経路と異なり社債・借入金キーワード必須の候補選定は適用しない。
+    private static func parseLeaseOnlyNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.jGaapLeasesNoteTextblockTag),
+           let soup = try? SwiftSoup.parse(html),
+           let tables = (try? soup.select("table"))?.array() {
+            let table = tables.first {
+                let t = (try? $0.text()) ?? ""
+                return t.contains("前") && t.contains("当")
+            }
+            if let table, let result = parseComparisonTable(table) { return result }
+        }
+        // 中外製薬 S100XTBJ 実データ検証（2026-08-04）: このタグはリース以外の話題を含まないため
+        // 「リース負債」1行のみでも有効な満期構成ペアテーブルとみなす（通常経路の2行以上要件
+        // ＝無関係な表の誤選択防止は、単一トピックの本タグには不要）。
+        if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag),
+           let soup = try? SwiftSoup.parse(html),
+           let paired = parseMaturityBucketPairTables(in: soup, minMatchingRows: 1) {
+            return paired
+        }
+        return nil
+    }
+
     /// 三井物産 S100YAVT 実データ検証（2026-08-04）: 連結BSの短期負債・1年内返済予定の長期負債・
     /// 長期負債（非流動、リース負債等を含め合算済み）が個別の数値タグとして存在する会社では、
     /// 注記のHTML明細表（区分見出し行と金額行が分離しラベル品質が悪い等）をパースするより
@@ -626,6 +654,7 @@ enum BorrowingsSchedule {
             ?? parseJGaapScheduleTable(xbrlDir: xbrlDir)
             ?? parseIFRSNotesTable(xbrlDir: xbrlDir)
             ?? parseIFRSFinancialInstrumentsNote(xbrlDir: xbrlDir)
+            ?? parseLeaseOnlyNote(xbrlDir: xbrlDir)
     }
 
     /// 借入金等明細表から有利子負債を積み上げ抽出する。
