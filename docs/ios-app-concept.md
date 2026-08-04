@@ -1,6 +1,6 @@
 # iOSアプリ構想 — 立体的財務分析エクスプローラ
 
-方向性のメモ。技術仕様・画面遷移の詳細設計はまだ行わない（`architecture.md`「デプロイモード」参照どおり iOS は将来クライアントとして既に見込み済み）。
+方向性のメモ。`architecture.md`「デプロイモード」参照どおり iOS は将来クライアントとして既に見込み済み。実装状況は下記「実装状況」参照。
 
 ## コンセプト
 
@@ -45,16 +45,28 @@ Blue Ticker の強みは独自の分析ロジック（要因分解・正規化�
 - API 契約（REST `/v1` が正）とクライアント実装を同じリポジトリに置くことで、エンドポイント変更時の追従漏れを防ぎやすい
 - 認証まわり（iOS SSO・OIDC+PKCE）は roadmap に未着手項目として既に記録済み（`blt-server-roadmap.md`）
 
-想定配置: `ios/`（または `apps/ios/`）配下に独立 Xcode プロジェクト。`swift build` / CI の対象には含めない（Xcode ビルドは別ワークフロー）。
+実際の配置: `ios/BlueTicker/` 配下に独立 Xcode プロジェクト（xcodegen の `project.yml` が正本、`.xcodeproj` は生成物として同居コミット）。`swift build` / CI の対象には含めない（Xcode ビルドは別ワークフロー）。
 
 ## 機能taxonomyとの関係
 
 機能群は「構造化 → 正規化 → 視覚化」の3層で再整理を検討中（詳細合意でき次第 `feature-tiers.md` に反映）。Cube は視覚化層のうち **Waterfall（financials の要因分解）の派生**と位置づける。Breakdown（事業別・地域別内訳）の立体化は Cube ではなく、Allocation（Sankey）側の iOS 拡張候補として別扱いにする方針。
 
+## 実装状況（検索＋Cube MVP）
+
+`ios/BlueTicker/`（SwiftUI、iOS 17+）に検索画面と Cube 画面を実装済み。
+
+- **検索画面**: `GET /v1/companies?q=` を叩いて銘柄コード・社名で検索し、結果をタップで Cube 画面へ遷移する
+- **Cube 画面**: `GET /v1/companies/{code}/waterfall?years=5` の応答（`FinancialsContract.swift` の `analysisJsonObject()`）から3面を構成する
+  - 正面: 事業利益増減ウォーターフォール（前期事業利益 → 売上要因 → 利益率変化 → 販管費 → 当期事業利益。既存 CLI の `ticker waterfall`「① 事業利益増減分析」と同じフィールドを使用。税金・その他の枠は現状データに対応フィールドが無いため未実装）
+  - 側面: 正面／上面で選択中の項目の5年推移（Swift Charts の LineMark）
+  - 上面: 選択中年度の事業利益前年差の内訳を**カード表示**（式表示ではなく）。タップで側面へ遷移する
+  - 面の切り替えはスワイプ操作＋ `rotation3DEffect` によるフリップアニメーション（3D 変換。SceneKit は不使用）
+- **接続先**: ローカル無認証 blt-server（`http://127.0.0.1:3000`）固定。本番接続・認証（Cloudflare Access / iOS SSO）は未実装
+- **テスト**: `BlueTickerTests`（Swift Testing）でウォーターフォールのバー生成・5年推移抽出の境界値を検証
+
 ## 未確定事項（次回以降に詰める）
 
-- 「計算ロジック」を式表示にするかカード表示にするか、またその情報を API レスポンスからどう組み立てるか（現状 API は計算済みの値を返すのみで、計算過程の構造化データは持っていない）
-- 5年固定か、レンジ可変にするか
-- 立方体回転のインタラクション実装方式（SwiftUI 3D 変換 / SceneKit 等）
-- オフライン・キャッシュ方針
-- 認証方式（iOS SSO・OIDC+PKCE の具体化）
+- オフライン・キャッシュ方針（未実装。毎回ライブ fetch）
+- 本番接続・認証方式（iOS SSO・OIDC+PKCE の具体化。roadmap 未着手のまま）
+- 5年固定は決定（`years=5`）だが、レンジ可変にするかは未検討
+- 立方体3面のうち「上面カードから側面への遷移」は実装済みだが、側面から上面への直接遷移など、3面すべての相互遷移は未実装（正面が常に経由点）
