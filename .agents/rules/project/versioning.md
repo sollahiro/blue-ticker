@@ -67,7 +67,7 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 | テーブル | 定数 | 置き場所 | 現在値 |
 |---|---|---|---|
 | `edinet_xbrl_facts`（facts RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
-| `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v4"` |
+| `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v5"`（`BorrowingsSchedule.extract`大幅改修、2026-08-05） |
 | （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `4`（`fin-v4` 以上を 200。2026-07-28、上場廃止47社のfin-v2/v3行をDELETEで消化した後に引き上げ） |
 | `company_filing_sections`（filing-sections 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
 | （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |

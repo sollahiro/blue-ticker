@@ -360,6 +360,52 @@ enum Xbrl {
     /// 連結BSに有利子負債の数値タグが無い企業（リース債務が明細表のみに記載される等）のフォールバック源。
     static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
 
+    /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記 TextBlock タグ。J-GAAP附属明細表タグが
+    /// 存在しない、または財務諸表等規則の適用除外でクロスリファレンス文のみ（表なし）の場合に使う
+    /// （実データ検証2026-08-03: KDDI・JT・味の素は前者、HOYAは後者のタグを使用）。
+    static let ifrsBondsAndBorrowingsTextblockTag = "NotesBondsAndBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
+    static let ifrsInterestBearingLiabilitiesTextblockTag = "NotesInterestBearingLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-03）: エーザイ・SUBARU・アドバンテスト・アマダ・M3・日東電工等はこちらの
+    /// タグ（社債を別注記に切り出し「借入金」のみ）を使う。
+    static let ifrsBorrowingsOnlyTextblockTag = "NotesBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、三菱重工業 S100YHZG）: 「社債、借入金及びその他の金融負債」注記
+    /// （自社拡張タグ）。区分｜前期｜当期の3列で「前」「当」を含み、末尾「合計」行で真の合計が
+    /// 確定するため`parseComparisonTable`をそのまま適用できる（デリバティブ負債・債権流動化に
+    /// 伴う支払債務等、社債・借入金・リース以外の項目も注記どおりそのまま構造化して含める）。
+    static let ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag = "NotesBondsBorrowingsAndOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、東京海上ホールディングス S100YLS8）: 保険会社は「社債、借入金及び
+    /// 投資契約負債」を1注記にまとめる（自社拡張タグ）。「区分｜移行日｜前期｜当期｜平均利率｜
+    /// 返済期限」の6列（J-GAAP附属明細表に「移行日」列が1つ増えた形）で、末尾「合計」行を持つ。
+    static let ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag = "NotesBondsIssuedBorrowingsAndInvestmentContractLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、住友金属鉱山 S100YJ6N）: 標準タグ（自社拡張ではない）「その他の
+    /// 金融負債に関する注記」に、社債・借入金・リースに加えデリバティブ負債・その他も含む完全な
+    /// 区分｜前期｜当期｜平均利率｜返済期限表が格納される。列間に罫線用の空白スペーサー列を挟む
+    /// （KDDIと同型）。標準タグのため他社でも使われている可能性がある。
+    static let ifrsOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、三井物産 S100YAVT）: 自社拡張タグ「金融及びその他の債務に関する
+    /// 開示」に「短期銀行借入金等」表と「長期債務」表が別々に格納される（後者は担保付/無担保の
+    /// 区分内小計「計」を持つ階層構造で、真の合計は末尾の「合計」のみ）。
+    static let ifrsDisclosuresAboutFinancialAndOtherTradeLiabilitiesTextblockTag = "NotesDisclosuresAboutFinancialAndOtherTradeLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ファーストリテイリング S100X6X6）: 標準タグ「その他の金融資産及び
+    /// その他の金融負債に関する注記」は資産セクションと負債セクションが同一タグ内に併存し、負債側に
+    /// 「有利子負債（注）」という単一集約行を持つ（社債・借入金・リースへの内訳分解はされない）。
+    static let ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialAssetsAndOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ディスコ S100YC6I・中外製薬 S100XTBJ）: 借入金等明細表が「該当事項は
+    /// ありません」でも、リース負債のみ計上している会社がある。J-GAAP「リース取引に関する注記」
+    /// （標準タグ）は「区分｜前期｜当期」の単純な表（１年内／１年超／合計）。
+    static let jGaapLeasesNoteTextblockTag = "NotesLeasesConsolidatedFinancialStatementsTextBlock"
+    /// IFRS版「リース」注記（標準タグ）。満期構成のペアテーブル形式（会計年度末ごとに別テーブル、
+    /// 「帳簿価額」列を持つ）でリース負債の残高を開示する。
+    static let ifrsLeasesTextblockTag = "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock"
+
+    /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
+    /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。
+    /// 実データ検証（2026-08-04: アステラス S100R0I6・丸紅 S100VYGC・日立 S100QZT0）。
+    static let ifrsFinancialInstrumentsTextblockTag = "NotesFinancialInstrumentsConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ソニーグループ S100QZT6）: 社債・借入金の満期構成表が上記の汎用タグではなく
+    /// この専用タグ（自社拡張要素）に格納される。
+    static let ifrsShortTermBorrowingsAndLongTermDebtTextblockTag = "NotesShortTermBorrowingsAndLongTermDebtConsolidatedFinancialStatementsIFRSTextBlock"
+
     // MARK: - 支払利息タグ
 
     static let interestExpenseJGAAPTags: [String] = ["InterestExpensesNOE"]

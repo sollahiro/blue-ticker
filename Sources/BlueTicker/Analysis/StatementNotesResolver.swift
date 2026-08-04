@@ -70,37 +70,43 @@ enum StatementNotesResolver {
     /// IBD計算用CF補足（`borrowings_schedule_cf_supplement` note_type）。
     ///
     /// 連結附属明細表「借入金等明細表」の構成科目（短期借入金・社債・長期借入金・リース負債等）を
-    /// 表として公開する。解析ロジックは `BorrowingsSchedule.extract`（`IBDExtractor` が XBRL タグ
-    /// 未整備企業向けフォールバックとして既に使っている本番コード）をそのまま再利用し、
-    /// 自前で明細表を再パースしない（重複ロジック回避）。合計行は `isTotal: true` で区別する。
-    static func resolveBorrowingsScheduleCFSupplement(
-        xbrlDir: URL, accountingStandard: String
-    ) -> StatementNoteResolveResult {
-        guard
-            let result = BorrowingsSchedule.extract(
-                xbrlDir: xbrlDir, accountingStandard: accountingStandard)
-        else {
+    /// 当期首/当期末残高・平均利率つきで表として公開する。解析ロジックは
+    /// `BorrowingsSchedule.extractRows`（`IBDExtractor` が使う `extract` と表探索・合計行判定を
+    /// 共有、`BorrowingsSchedule.parseTable`）をそのまま再利用し、自前で明細表を再パースしない
+    /// （重複ロジック回避）。合計行は `isTotal: true` で区別する（平均利率は「－」表記のため nil）。
+    ///
+    /// v2（2026-08-02）: 当初は当期末残高のみ `items: [StatementLineItem]` で返していたが、実データ
+    /// レビュー（ユーザー、SOMPO S100R1LR）で平均利率・当期首残高も欲しいとの要望があり、
+    /// `BorrowingsComponentPayload` へ切り出した（単一値の `StatementLineItem` では複数値を表現
+    /// できないため）。返済期限（表の5列目）はユーザー判断で対象外（フリーテキストで構造化コストが
+    /// 見合わない）。
+    static func resolveBorrowingsScheduleCFSupplement(xbrlDir: URL) -> StatementNoteResolveResult {
+        guard let result = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
 
-        var items: [StatementLineItem] = result.components.compactMap { component in
-            guard let value = component.current else { return nil }
-            return StatementLineItem(
-                tag: component.label, label: component.label, value: value, unit: "yen", order: nil)
+        var components: [BorrowingsComponentPayload] = result.rows.compactMap { row in
+            guard row.current != nil || row.prior != nil else { return nil }
+            return BorrowingsComponentPayload(
+                label: row.label, priorBalance: row.prior, currentBalance: row.current,
+                averageInterestRatePercent: row.averageInterestRatePercent)
         }
-        if let total = result.total {
-            items.append(
-                StatementLineItem(
-                    tag: "合計", label: "合計", value: total, unit: "yen", order: nil, isTotal: true))
+        if result.totalCurrent != nil || result.totalPrior != nil {
+            components.append(
+                BorrowingsComponentPayload(
+                    label: "合計", priorBalance: result.totalPrior, currentBalance: result.totalCurrent,
+                    averageInterestRatePercent: nil, isTotal: true))
         }
-        guard !items.isEmpty else {
+        guard !components.isEmpty else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
 
-        let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
+        let hash = components.map {
+            "\($0.label)=\($0.priorBalance ?? -1),\($0.currentBalance ?? -1),\($0.averageInterestRatePercent ?? -1)"
+        }.joined(separator: ";")
         return .resolved(
-            payload: StatementNotePayload(items: items), source: statementNoteSourceXbrlFacts,
-            contentHash: hash)
+            payload: StatementNotePayload(borrowingsComponents: components),
+            source: statementNoteSourceXbrlFacts, contentHash: hash)
     }
 
     /// 有形固定資産の種類別明細（`property_plant_equipment_schedule` note_type）。
@@ -140,11 +146,19 @@ enum StatementNotesResolver {
 
     /// IFRS注記に共通の「資産区分ごとに正味帳簿価額・取得原価・累計償却/減損の3タグが揃う」構造から
     /// 正味帳簿価額タグだけを抽出する共通処理（PPE・のれん双方で使う）。
-    private static let ifrsComponentSuffixes = [
-        "AcquisitionCostIFRS",
-        "AccumulatedDepreciationAndImpairmentLossesIFRS",
-        "AccumulatedAmortizationAndImpairmentLossesIFRS",
-        "AccumulatedImpairmentLossesIFRS",
+    ///
+    /// 実データ検証（2026-08-02、トヨタ S100VWVY）: 「取得原価」「累計償却/減損」を示す
+    /// キーワード（`AcquisitionCost`/`AccumulatedDepreciation`/`AccumulatedAmortization`/
+    /// `AccumulatedImpairment`）の後に付く語尾は会社により揺れる（トヨタの
+    /// `VehiclesAndEquipmentOnOperatingLeasesAccumulatedDepreciationAndImpairmentIFRS` は
+    /// 「Losses」が無く固定サフィックス完全一致では除外できなかった）。除外判定はサフィックス
+    /// 完全一致ではなくキーワードの部分一致にする（トヨタはPPE区分ごとに正味帳簿価額タグ自体を
+    /// 持たず取得原価・累計償却の2タグのみのため、修正後は本note_typeが正しく notApplicable になる）。
+    private static let ifrsComponentKeywords = [
+        "AcquisitionCost",
+        "AccumulatedDepreciation",
+        "AccumulatedAmortization",
+        "AccumulatedImpairment",
     ]
 
     private static func resolveIFRSCategorySchedule(
@@ -152,13 +166,18 @@ enum StatementNotesResolver {
     ) -> StatementNoteResolveResult {
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
 
+        // 表示順は presentation linkbase の並び順（`XbrlFact.orderByRole`、Statement 本体の
+        // `StatementClassifier` と同じ仕組み）を使う。取得できないタグはタグ名のアルファベット順に
+        // フォールバックする（決定的な順序を保つため）。
         var labelsByTag: [String: String?] = [:]
+        var orderByTag: [String: Int] = [:]
         for (tag, ctxMap) in facts
-        where tag.hasSuffix("IFRS") && !ifrsComponentSuffixes.contains(where: { tag.hasSuffix($0) }) {
+        where tag.hasSuffix("IFRS") && !ifrsComponentKeywords.contains(where: { tag.contains($0) }) {
             for fact in ctxMap.values {
                 let roles = fact.roles ?? fact.role.map { [$0] } ?? []
-                if roles.contains(where: { XBRLUtils.sectionNameFromRole($0) == roleName }) {
+                if let matchedRole = roles.first(where: { XBRLUtils.sectionNameFromRole($0) == roleName }) {
                     labelsByTag[tag] = fact.label
+                    if let order = fact.orderByRole?[matchedRole] { orderByTag[tag] = order }
                     break
                 }
             }
@@ -174,12 +193,20 @@ enum StatementNotesResolver {
         var items: [StatementLineItem] = []
         for (tag, label) in labelsByTag {
             guard let value = instantFS[tag]?.current else { continue }
-            items.append(StatementLineItem(tag: tag, label: label, value: value, unit: "yen", order: nil))
+            items.append(
+                StatementLineItem(tag: tag, label: label, value: value, unit: "yen", order: orderByTag[tag]))
         }
         guard !items.isEmpty else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
-        items.sort { $0.tag < $1.tag }
+        items.sort { lhs, rhs in
+            switch (lhs.order, rhs.order) {
+            case let (l?, r?) where l != r: return l < r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: return lhs.tag < rhs.tag
+            }
+        }
 
         let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
         return .resolved(

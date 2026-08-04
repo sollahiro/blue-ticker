@@ -264,14 +264,11 @@ public extension BltServerContext {
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule_cf_supplement` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveBorrowingsScheduleCFSupplement`（＝`BorrowingsSchedule.extract`、
-    /// `IBDExtractor` と共有）に委譲する。
+    /// `StatementNotesResolver.resolveBorrowingsScheduleCFSupplement`（＝`BorrowingsSchedule.extractRows`、
+    /// `IBDExtractor` が使う `extract` と表探索ロジックを共有）に委譲する。
     func resolveBorrowingsScheduleCFSupplementNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let accountingStandard = detectAccountingStandard(allTagElements)
-        return StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
-            xbrlDir: xbrlDir, accountingStandard: accountingStandard)
+        return StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する（IFRS連結企業

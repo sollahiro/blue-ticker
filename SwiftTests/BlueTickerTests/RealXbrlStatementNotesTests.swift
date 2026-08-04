@@ -107,38 +107,604 @@ import Testing
         #expect(reason == statementNoteNotApplicableNotFound)
     }
 
-    // MARK: - borrowings_schedule_cf_supplement（S100JRT9、リース負債のみの明細表）
+    // MARK: - borrowings_schedule_cf_supplement（S100JRT9、リース負債のみの明細表・千円単位）
+    //
+    // 実データレビュー（2026-08-02、ユーザーからの実データ確認依頼で発見）: 明細表のヘッダー単位は
+    // 会社規模で揺れる（レーザーテック等は「（千円）」、SOMPO・神戸製鋼所等は「（百万円）」）。
+    // 修正前は単位を見ず一律 `Financial.millionYen` で換算しており、千円ヘッダーの会社は実際の
+    // 1000倍の値を返していた（当時の golden 値 24,202,000,000円 → 正しくは 24,202,000円。
+    // レーザーテック当時の総資産 81,794,071,000円 に対し妥当な規模かで裏取り済み）。
 
     @Test(.enabled(if: cacheAvailable("S100JRT9"), "XBRL cache S100JRT9 not available"))
     func borrowingsScheduleExtractsComponentsSummingExactlyToTotal() throws {
-        let allTagElements = XBRLUtils.collectAllNumericElements(
-            in: Self.xbrlDir("S100JRT9"), nilAsZero: false)
-        let accountingStandard = detectAccountingStandard(allTagElements)
         let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
-            xbrlDir: Self.xbrlDir("S100JRT9"), accountingStandard: accountingStandard)
+            xbrlDir: Self.xbrlDir("S100JRT9"))
         guard case .resolved(let payload, let source, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
         }
         #expect(source == statementNoteSourceXbrlFacts)
-        let items = try #require(payload.items)
+        let components = try #require(payload.borrowingsComponents)
 
-        // 実データ検証済みの値（2026-08-01）: リース負債（流動）+ リース負債（非流動）= 合計。
-        let total = try #require(items.first { $0.isTotal })
-        #expect(total.value == 24_202_000_000)
-        let componentSum = items.filter { !$0.isTotal }.map(\.value).reduce(0, +)
-        #expect(componentSum == total.value)
+        // 実データ検証済みの値（2026-08-02、単位バグ修正後）: リース負債（流動）+ リース負債（非流動）= 合計。
+        // 平均利率はいずれも表記「－」（開示なし）のため nil。
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 24_202_000)
+        #expect(total.priorBalance == 3_445_000)
+        #expect(total.averageInterestRatePercent == nil)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
     }
 
-    // MARK: - borrowings_schedule_cf_supplement（S100TSIJ、明細表自体が無い）
+    // MARK: - borrowings_schedule_cf_supplement（SOMPO S100R1LR、平均利率・百万円単位）
+    //
+    // 実データ検証（2026-08-02、ユーザー確認済み）: 短期借入金の当期首50百万円・当期末180百万円・
+    // 平均利率0.80%が実際のHTML注記の表と完全一致することを確認済み。合計行の平均利率は「－」
+    // （複数金利の単純合計につき意味を持たないため開示されない）ので nil。
 
-    @Test(.enabled(if: cacheAvailable("S100TSIJ"), "XBRL cache S100TSIJ not available"))
-    func borrowingsScheduleNotApplicableWhenScheduleAbsent() {
-        let allTagElements = XBRLUtils.collectAllNumericElements(
-            in: Self.xbrlDir("S100TSIJ"), nilAsZero: false)
-        let accountingStandard = detectAccountingStandard(allTagElements)
+    @Test(.enabled(if: cacheAvailable("S100R1LR"), "XBRL cache S100R1LR not available"))
+    func goldenBorrowingsSompoInterestRatesAndPriorBalance() throws {
         let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
-            xbrlDir: Self.xbrlDir("S100TSIJ"), accountingStandard: accountingStandard)
+            xbrlDir: Self.xbrlDir("S100R1LR"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let components = try #require(payload.borrowingsComponents)
+        let shortTerm = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTerm.priorBalance == 50_000_000)
+        #expect(shortTerm.currentBalance == 180_000_000)
+        #expect(shortTerm.averageInterestRatePercent == 0.80)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 662_453_000_000)
+        #expect(total.priorBalance == 479_122_000_000)
+        #expect(total.averageInterestRatePercent == nil)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（あおぞら銀行 S100R24O、カテゴリ小計の二重計上防止）
+    //
+    // 実データ検証（2026-08-03、ユーザーレビューで発見）: 銀行業の明細表は「借用金」（連結BS上の
+    // 負債科目名、カテゴリ小計）の下に「再割引手形」「借入金」（内訳の実体行）がインデント付きで
+    // 並ぶ。インデントを見ずに全行を合算すると「借用金」と「借入金」が二重計上され、合計が
+    // 実際の約2倍（865,193百万円）になっていた。インデント深さで小計行を除外した結果、正しい
+    // 合計（借入金 + リース負債流動 + リース負債非流動 = 432,851百万円）になることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100R24O"), "XBRL cache S100R24O not available"))
+    func goldenBorrowingsAozoraBankExcludesCategorySubtotal() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100R24O"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let components = try #require(payload.borrowingsComponents)
+
+        // 「借用金」（カテゴリ小計）はコンポーネントに含まれず、実体行の「借入金」のみが残ること。
+        #expect(components.contains { $0.label == "借入金" })
+        #expect(!components.contains { $0.label == "借用金" })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 525_873_000_000)
+        #expect(total.priorBalance == 432_851_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（KDDI S100R0PR、IFRS注記・セクション小計の除外）
+    //
+    // 実データ検証（2026-08-03）: J-GAAP附属明細表タグが存在しないIFRS企業は
+    // `NotesBondsAndBorrowingsConsolidatedFinancialStatementsIFRSTextBlock` 注記へフォールバックする。
+    // 「非流動」「流動」の2区分見出し下に実体行＋セクション小計「　小計」（nbsp+"小計"）が続き、
+    // 末尾に真の合計「　合計」がある。セクション小計を除外しないと二重計上になることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100R0PR"), "XBRL cache S100R0PR not available"))
+    func goldenBorrowingsKDDIIfrsNotesExcludesSectionSubtotal() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100R0PR"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        #expect(!components.contains { $0.label == "小計" })
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 1_252_194_000_000)
+        #expect(total.priorBalance == 1_208_121_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（丸紅 S100VYGC、見出しアンカー方式）
+    //
+    // 実データ検証（2026-08-04）: J-GAAP附属明細表・IFRS専用タグ（社債及び借入金/有利子負債）の
+    // いずれも無く、「金融商品に関する注記」汎用タグ（`NotesFinancialInstrumentsConsolidatedFinancialStatementsIFRSTextBlock`）
+    // の中に「⑤　社債及び借入金」「社債及び借入金の帳簿価額の内訳は以下のとおりであります。」という
+    // 見出し段落の直後に前/当の内訳表がある。この汎用タグは為替リスク・売掛金等、無関係な表も多数
+    // 含むため、見出しテキストをアンカーにして直後の表だけを選ぶ必要があることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YAY4"), "XBRL cache S100YAY4 not available"))
+    func goldenBorrowingsMarubeniHeadingAnchoredComparisonTable() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YAY4"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let bonds = try #require(components.first { $0.label == "社債" })
+        #expect(bonds.priorBalance == 512_546_000_000)
+        #expect(bonds.currentBalance == 431_951_000_000)
+        let borrowings = try #require(components.first { $0.label == "借入金" })
+        #expect(borrowings.priorBalance == 1_935_890_000_000)
+        #expect(borrowings.currentBalance == 1_927_051_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 2_409_977_000_000)
+        #expect(total.priorBalance == 2_535_010_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（日立製作所 S100YGBO、満期構成ペアテーブル）
+    //
+    // 実データ検証（2026-08-04）: 前/当の比較列を持つ表が無く、「金融商品に関する注記」汎用タグの
+    // 中に会計年度末ごとの別テーブル（先頭行に単一の日付、「帳簿価額｜契約上のキャッシュ・フロー｜
+    // １年以内｜１年超５年以内｜５年超」列を持つ満期構成表）が2つ並ぶ。信用リスク・
+    // 非支配持分プットオプション等の無関係な行が混入しないよう、社債・借入金・リース関連ラベルの
+    // 帳簿価額のみを合算していることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YGBO"), "XBRL cache S100YGBO not available"))
+    func goldenBorrowingsHitachiMaturityBucketPairTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YGBO"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // プット・オプション等、社債・借入金・リース以外の行は混入しないこと。
+        #expect(!components.contains { $0.label.contains("プット") })
+
+        let bonds = try #require(components.first { $0.label == "社債" })
+        #expect(bonds.priorBalance == 220_000_000_000)
+        #expect(bonds.currentBalance == 220_000_000_000)
+        let longTerm = try #require(components.first { $0.label == "長期借入金" })
+        #expect(longTerm.priorBalance == 653_797_000_000)
+        #expect(longTerm.currentBalance == 443_696_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 1_009_037_000_000)
+        #expect(total.priorBalance == 1_206_116_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（ソニーグループ S100YE2C、自社拡張タグ＋rowspanヘッダー補正）
+    //
+    // 実データ検証（2026-08-04）: 満期構成表が汎用「金融商品に関する注記」タグではなく自社拡張タグ
+    // （`NotesShortTermBorrowingsAndLongTermDebtConsolidatedFinancialStatementsIFRSTextBlock`）に
+    // 格納される。さらにヘッダー行が「項目」列をrowspanで上段と共有しヘッダー行自体には値列の
+    // 先頭に「項目」のプレースホルダーが無いため、そのまま列位置を使うとデータ行と1列ズレる
+    // （直後のデータ行のセル数がヘッダー行より多い分だけ右にずらす補正が必要）ことを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YE2C"), "XBRL cache S100YE2C not available"))
+    func goldenBorrowingsSonyGroupExtensionTagWithRowspanHeaderOffset() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YE2C"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTerm = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTerm.priorBalance == 1_843_959_000_000)
+        #expect(shortTerm.currentBalance == 51_183_000_000)
+        let unsecuredBonds = try #require(components.first { $0.label == "無担保社債" })
+        #expect(unsecuredBonds.priorBalance == 664_390_000_000)
+        #expect(unsecuredBonds.currentBalance == 474_343_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 1_041_986_000_000)
+        #expect(total.priorBalance == 3_598_776_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（三菱重工業 S100YHZG、自社拡張タグ・非借入項目を含む全体構造化）
+    //
+    // 実データ検証（2026-08-04）: 「社債、借入金及びその他の金融負債」注記（自社拡張タグ）は
+    // 区分｜前期｜当期の3列で「前」「当」を含み、社債・借入金・リース以外にデリバティブ負債・
+    // 債権流動化等に伴う支払債務・その他も同一表に並ぶ。`parseComparisonTable`はラベルで絞り込まず、
+    // 注記自身の「合計」行をそのまま採用する設計のため、これらの非借入項目も含めてそのまま
+    // 構造化されることを確認する（Statementとしての全体構造化方針、ユーザー承認2026-08-04）。
+
+    @Test(.enabled(if: cacheAvailable("S100YHZG"), "XBRL cache S100YHZG not available"))
+    func goldenBorrowingsMitsubishiHeavyIndustriesExtensionTagIncludesNonDebtItems() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YHZG"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 社債・借入金・リース以外の非借入項目も注記どおりそのまま構造化されること。
+        let derivatives = try #require(components.first { $0.label.contains("デリバティブ負債") })
+        #expect(derivatives.priorBalance == 6_331_000_000)
+        #expect(derivatives.currentBalance == 12_332_000_000)
+        let securitization = try #require(components.first { $0.label.contains("債権流動化") })
+        #expect(securitization.priorBalance == 288_041_000_000)
+        #expect(securitization.currentBalance == 174_610_000_000)
+
+        let bonds = try #require(components.first { $0.label.contains("社債") })
+        #expect(bonds.priorBalance == 225_000_000_000)
+        #expect(bonds.currentBalance == 200_000_000_000)
+
+        // 注記自身の「合計」行をそのまま採用する（自前フィルタ合算ではない）。開示側の丸め誤差
+        // （各行を百万円単位に丸めた後の合算のため、合計行と3百万円ずれる）があるため、
+        // 個別行の合算とは一致検証しない。
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 1_131_274_000_000)
+        #expect(total.currentBalance == 876_241_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（東京海上ホールディングス S100YLS8、保険会社の投資契約負債込み拡張タグ）
+    //
+    // 実データ検証（2026-08-04）: 保険会社は「社債、借入金及び投資契約負債」を1注記にまとめる
+    // 自社拡張タグを使う。列構成は「区分｜移行日｜前期｜当期｜平均利率｜返済期限」（J-GAAP附属
+    // 明細表に「移行日」列が1つ増えた形）で、`parseComparisonTable`のヘッダー検出（"前"/"当"の
+    // 部分一致）が「移行日」列に惑わされず正しく前期/当期列を解決できることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YLS8"), "XBRL cache S100YLS8 not available"))
+    func goldenBorrowingsTokioMarineHoldingsExtensionTagIncludesInvestmentContractLiabilities() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YLS8"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let investmentContractLiabilities = try #require(
+            components.first { $0.label.contains("投資契約負債") && $0.label.contains("除く") })
+        #expect(investmentContractLiabilities.priorBalance == 515_627_000_000)
+        #expect(investmentContractLiabilities.currentBalance == 617_474_000_000)
+        #expect(investmentContractLiabilities.averageInterestRatePercent == 4.8)
+
+        let bonds = try #require(components.first { $0.label.contains("社債") })
+        #expect(bonds.priorBalance == 225_761_000_000)
+        #expect(bonds.currentBalance == 227_575_000_000)
+
+        // 注記自身の「合計」行をそのまま採用する（開示側の丸め誤差があるため個別行の合算とは
+        // 一致検証しない。三菱重工業と同様）。
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 1_418_466_000_000)
+        #expect(total.currentBalance == 1_776_849_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（住友金属鉱山 S100YJ6N、標準タグ「その他の金融負債」に完全な表）
+    //
+    // 実データ検証（2026-08-04、ユーザー実データ提示で合計値を確認）: 自社拡張タグではなく標準タグ
+    // `NotesOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock`に、社債・借入金・
+    // リースに加えデリバティブ負債・その他も含む区分｜前期｜当期｜平均利率｜返済期限の完全な表が
+    // 格納される。列間に罫線用の空白スペーサー列（KDDIと同型）を挟む。
+
+    @Test(.enabled(if: cacheAvailable("S100YJ6N"), "XBRL cache S100YJ6N not available"))
+    func goldenBorrowingsSumitomoMetalMiningOtherFinancialLiabilitiesStandardTag() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YJ6N"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTermBorrowings = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTermBorrowings.priorBalance == 70_463_000_000)
+        #expect(shortTermBorrowings.currentBalance == 133_960_000_000)
+        #expect(shortTermBorrowings.averageInterestRatePercent == 1.95)
+
+        // 社債・借入金・リース以外の非借入項目（デリバティブ負債・その他）も注記どおりそのまま構造化される。
+        let derivatives = try #require(components.first { $0.label.contains("デリバティブ負債") })
+        #expect(derivatives.priorBalance == 9_670_000_000)
+        #expect(derivatives.currentBalance == 5_750_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 588_229_000_000)
+        #expect(total.currentBalance == 691_184_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（三井物産 S100YAVT、連結BS直接タグを注記より優先）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 「短期銀行借入金等」表と「長期債務」表が
+    // 別々の注記表に分かれ、後者は区分見出し行（値なし）と金額行（返済期限・利率テキストがラベル）
+    // が分離しラベル品質が悪い。連結BSには`ShortTermDebtCLIFRS`／`CurrentPortionOfLongTermDebtCLIFRS`／
+    // `LongTermDebtNCLIFRS`という個別の数値タグが揃っており（`LongTermDebtNCLIFRS`は標準タグ、他は
+    // 自社拡張タグだがローカル名で解決）、リース負債等も`LongTermDebtNCLIFRS`に正しく合算済みのため、
+    // 注記のHTML明細表より直接タグを優先する（`parseDirectDebtFacts`）。
+
+    @Test(.enabled(if: cacheAvailable("S100YAVT"), "XBRL cache S100YAVT not available"))
+    func goldenBorrowingsMitsuiPrefersDirectConsolidatedDebtTagsOverMessyNoteTable() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YAVT"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 直接タグ経由のため3行（短期負債／1年内返済予定の長期負債／長期負債）のみで、
+        // 注記の返済期限・利率テキストのような不明瞭なラベルは混入しない。
+        #expect(components.filter { !$0.isTotal }.count == 3)
+
+        let shortTermDebt = try #require(components.first { $0.label == "短期負債" })
+        #expect(shortTermDebt.priorBalance == 163_909_000_000)
+        #expect(shortTermDebt.currentBalance == 166_249_000_000)
+
+        let longTermDebt = try #require(components.first { $0.label == "長期負債" })
+        #expect(longTermDebt.priorBalance == 4_047_663_000_000)
+        #expect(longTermDebt.currentBalance == 5_032_042_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 4_841_260_000_000)
+        #expect(total.currentBalance == 5_707_766_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（ファーストリテイリング S100X6X6、資産/負債併存タグから負債側のみ選択）
+    //
+    // 実データ検証（2026-08-04、ユーザー提示の実データで確認）: 標準タグ「その他の金融資産及び
+    // その他の金融負債に関する注記」は資産セクションと負債セクションが同一タグ内に併存し、資産側の
+    // 表も「前」「当」列を持つため銘柄除外だけでは資産表を誤選択する。社債・借入金・リース・
+    // 有利子負債のいずれかを含む表のみを対象にする条件を追加して負債側を正しく選択する。負債側は
+    // 「有利子負債（注）」という単一集約行のみ（社債/借入金/リースへの内訳分解はされない）。
+
+    @Test(.enabled(if: cacheAvailable("S100X6X6"), "XBRL cache S100X6X6 not available"))
+    func goldenBorrowingsFastRetailingSelectsLiabilitiesTableNotAssetsTable() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100X6X6"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let interestBearingDebt = try #require(components.first { $0.label.contains("有利子負債") })
+        #expect(interestBearingDebt.priorBalance == 240_935_000_000)
+        #expect(interestBearingDebt.currentBalance == 211_328_000_000)
+
+        // 資産側の項目（債券・敷金保証金等）が混入しないこと。
+        #expect(!components.contains { $0.label.contains("債券") })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 315_917_000_000)
+        #expect(total.currentBalance == 292_013_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（ディスコ S100YC6I、無借金だがリース負債のみ計上）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 借入金等明細表は「該当事項はありません」
+    // だが、J-GAAP「リース取引に関する注記」（標準タグ）に「区分｜前期｜当期」の単純な表
+    // （１年内／１年超／合計）でリース負債の残高が開示される。リース以外の話題を含まないタグの
+    // ため、通常の社債・借入金キーワード必須の候補選定を適用せず`parseLeaseOnlyNote`で解決する。
+
+    @Test(.enabled(if: cacheAvailable("S100YC6I"), "XBRL cache S100YC6I not available"))
+    func goldenBorrowingsDiscoDebtFreeButHasLeaseLiabilities() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YC6I"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 2_647_000_000)
+        #expect(total.currentBalance == 3_714_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（中外製薬 S100XTBJ、無借金だがリース負債のみ計上・IFRS版）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 借入金等明細表・社債及び借入金注記の
+    // いずれも存在しないが、IFRS版「リース」注記（標準タグ）に満期構成ペアテーブル形式（会計年度末
+    // ごとに別テーブル、「帳簿価額」列）でリース負債の残高が開示される。「リース負債」1行のみの表
+    // のため、`parseMaturityBucketPairTables`の通常の2行以上要件を`minMatchingRows: 1`で緩めて解決する。
+
+    @Test(.enabled(if: cacheAvailable("S100XTBJ"), "XBRL cache S100XTBJ not available"))
+    func goldenBorrowingsChugaiDebtFreeButHasLeaseLiabilitiesIFRS() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100XTBJ"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let leaseLiabilities = try #require(components.first { $0.label.contains("リース") })
+        #expect(leaseLiabilities.priorBalance == 10_897_000_000)
+        #expect(leaseLiabilities.currentBalance == 25_711_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 25_711_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（トヨタ自動車 S100Y8NY、ロールフォワード表の期末残高列を抽出）
+    //
+    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: `有利子負債`注記に前/当の比較列を持つ
+    // 通常表が無く、会計年度ごとに「期首残高｜キャッシュ・フロー内訳｜非資金変動内訳｜期末残高」の
+    // ロールフォワード表が2つ（前年度分・当年度分）並ぶ。列見出しの年と月日が別々の<p>に分かれ
+    // 空白を挟むため通常の日付検出では見つからない。各行の最終セル（期末残高）だけを読むことで
+    // 中間のCF内訳列数に依存せず頑健に抽出し、区分内小計（流動合計／非流動合計）を除外して
+    // 真の合計「有利子負債合計」で確定する。
+
+    @Test(.enabled(if: cacheAvailable("S100Y8NY"), "XBRL cache S100Y8NY not available"))
+    func goldenBorrowingsToyotaExtractsEndingBalanceFromRollforwardTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100Y8NY"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTermDebt = try #require(components.first { $0.label == "短期借入債務" })
+        #expect(shortTermDebt.priorBalance == 5_464_469_000_000)
+        #expect(shortTermDebt.currentBalance == 5_699_083_000_000)
+
+        // 「１年以内返済予定長期リース負債」「長期リース負債」の生ラベルは、他経路
+        // （`parseComparisonTable`）と揃えるため`displayLabel`で正規化される。
+        let currentPortionOfLeases = try #require(components.first { $0.label == "リース負債（流動）" })
+        #expect(currentPortionOfLeases.priorBalance == 92_147_000_000)
+        #expect(currentPortionOfLeases.currentBalance == 163_435_000_000)
+
+        // 区分内小計（流動合計・非流動合計）は混入しないこと。
+        #expect(!components.contains { $0.label.contains("流動合計") })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 38_792_879_000_000)
+        #expect(total.currentBalance == 43_205_469_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（東京電力ホールディングス S100YIHR、縦積みセルの直前行が消えるバグ）
+    //
+    // 監査指摘・実データ検証（2026-08-05）: J-GAAP附属明細表で「その他有利子負債」区分の下に
+    // 「コマーシャル・ペーパー(１年以内に償還)」が同一セル内に縦積み（<p>2つ）で開示される。
+    // 修正前は縦積み由来の行（内部的にインデント`Int.max`を持つ）を、直前の無関係な通常行の
+    // 「内訳がぶら下がる小計」と誤認識し、直前行（短期借入金）ごと消していた
+    // （東京電力の場合、表中最大の行=短期借入金2,926,354百万円が欠落）。
+
+    @Test(.enabled(if: cacheAvailable("S100YIHR"), "XBRL cache S100YIHR not available"))
+    func goldenBorrowingsTepcoPrecedingRowSurvivesVerticalStackSibling() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YIHR"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 縦積み行（その他有利子負債区分のコマーシャル・ペーパー）の直前にある通常行が消えないこと。
+        let shortTerm = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTerm.priorBalance == 2_867_871_000_000)
+        #expect(shortTerm.currentBalance == 2_926_354_000_000)
+
+        // 縦積み内訳自体（カテゴリ見出し「その他有利子負債」は値なしのため除外され、
+        // 内訳「コマーシャル・ペーパー」のみが値を持つ）も正しく抽出されること。
+        let other = try #require(components.first { $0.label == "その他有利子負債" })
+        #expect(other.priorBalance == 25_000_000_000)
+        #expect(other.currentBalance == 62_000_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 3_122_693_000_000)
+        #expect(total.currentBalance == 3_245_726_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（三菱地所 S100YBLA、列幅折り返しラベルの誤分解と小計二重計上）
+    //
+    // 監査指摘・実データ検証（2026-08-05）: 「ノンリコース長期借入金（1年以内に返済予定の」＋
+    // 「ものを除く）」のように、単に列幅で折り返しただけの1つのラベルが同一セル内で`<p>`2つに
+    // 分かれる会社がある。修正前はこれを縦積み複数項目と誤認識し、後半`<p>`が値なし判定で
+    // 行ごと消え、かつ縦積み由来の`Int.max`インデントが直前の「長期借入金」行を巻き込んで消す
+    // 二重の欠落を起こしていた。あわせて「小計」区分（担保付＋無担保等の内訳合計）が
+    // 明細行として二重計上されないことも確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YBLA"), "XBRL cache S100YBLA not available"))
+    func goldenBorrowingsMitsubishiEstateHandlesLineWrapAndExcludesSubtotal() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YBLA"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 列幅折り返しで<p>が2つに分かれても、ラベルが結合された1つの行として残ること
+        // （途中で切れた「ノンリコース長期借入金（1年以内に返済予定の」ではない）。
+        let nonRecourse = try #require(components.first { $0.label.contains("ノンリコース長期借入金") })
+        #expect(nonRecourse.label == "ノンリコース長期借入金（1年以内に返済予定のものを除く）")
+        #expect(nonRecourse.priorBalance == 13_287_000_000)
+        #expect(nonRecourse.currentBalance == 51_151_000_000)
+
+        // 折り返し行の直前にある無関係な行（長期借入金）も消えないこと。
+        let longTerm = try #require(components.first { $0.label == "長期借入金（1年以内に返済予定のものを除く）" })
+        #expect(longTerm.priorBalance == 2_221_483_000_000)
+        #expect(longTerm.currentBalance == 2_323_601_000_000)
+
+        // 区分内小計「小計」は明細行として混入しないこと（真の合計は「合計」のみ）。
+        #expect(!components.contains { $0.label == "小計" })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 2_539_157_000_000)
+        #expect(total.currentBalance == 2_737_494_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（HOYA S100Y90T、無関係なロールフォワード表の誤合算とリース区分マーカー漏れ）
+    //
+    // 監査発覚・実データ検証（2026-08-05）: 三井物産向けに実装した「複数テーブル合算」ロジックが、
+    // HOYAでは本体の前/当比較表とは別に同じ科目をロールフォワード形式で重複開示する2表まで
+    // 誤って合算対象に含めてしまい、三重計上・マイナス値混入を起こしていた（新規リグレッション）。
+    // 行ラベルの重複が無い場合のみ合算するガードを追加して修正。あわせて「短期リース負債」が
+    // `displayLabel`の判定マーカーに"短期"が無かったため誤って「非流動」に分類されていたのも修正。
+
+    @Test(.enabled(if: cacheAvailable("S100Y90T"), "XBRL cache S100Y90T not available"))
+    func goldenBorrowingsHoyaAvoidsCombiningUnrelatedRollforwardTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100Y90T"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 本体の前/当比較表のみが採用され、無関係なロールフォワード表2つと合算されないこと
+        // （合算されると短期借入金・長期借入金等が3重に計上され、マイナス値も混入する）。
+        #expect(components.filter { !$0.isTotal }.count == 5)
+        #expect(!components.contains { ($0.currentBalance ?? 0) < 0 })
+
+        // 「短期リース負債」は"短期"マーカーにより正しく流動に分類されること
+        // （非流動と誤分類されると「長期リース負債」と表示ラベルが衝突し重複行になる）。
+        let currentLease = try #require(components.first { $0.label == "リース負債（流動）" })
+        #expect(currentLease.priorBalance == 8_031_000_000)
+        #expect(currentLease.currentBalance == 8_623_000_000)
+        let nonCurrentLease = try #require(components.first { $0.label == "リース負債（非流動）" })
+        #expect(nonCurrentLease.priorBalance == 17_093_000_000)
+        #expect(nonCurrentLease.currentBalance == 17_005_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 37_284_000_000)
+        #expect(total.currentBalance == 42_241_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
+    //
+    // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの
+    // いずれも存在しない。借入金等の残高は「金融商品に関する注記」内の流動性リスク（期日別
+    // キャッシュ・フロー）表にのみ現れるが、これは残高を期間比較する表ではなく満期バケット別の
+    // 表のため、本 note_type の契約（当期首/当期末残高・平均利率）には対応できない
+    // （S100TSIJ・村田製作所は2026-08-03のIFRS注記対応で解決するようになったため差し替え）。
+    @Test(.enabled(if: cacheAvailable("S100QYCY"), "XBRL cache S100QYCY not available"))
+    func borrowingsScheduleNotApplicableWhenScheduleAbsent() {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100QYCY"))
         guard case .notApplicable(let reason) = result else {
             Issue.record("expected .notApplicable, got \(result)")
             return
