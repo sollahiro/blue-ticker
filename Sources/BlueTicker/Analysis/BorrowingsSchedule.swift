@@ -192,6 +192,8 @@ enum BorrowingsSchedule {
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsOtherFinancialLiabilitiesTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsDisclosuresAboutFinancialAndOtherTradeLiabilitiesTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag)
         guard let html, let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 
@@ -212,12 +214,40 @@ enum BorrowingsSchedule {
             guard let jpDatePattern else { return 0 }
             return jpDatePattern.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
         }
-        let table = tables.first {
+        // ファーストリテイリング S100X6X6 実データ検証（2026-08-04）: 「その他の金融資産及びその他の
+        // 金融負債」のように資産・負債セクションが同一タグ内に併存する会社がある。資産側の表も
+        // 「前」「当」列を持つため銘柄除外だけでは資産表を誤選択する。社債・借入金・リース・
+        // 有利子負債のいずれかを含む表のみを対象にする。
+        let candidateTables = tables.filter {
             let t = (try? $0.text()) ?? ""
             guard !t.contains("銘柄") else { return false }
+            guard t.contains("社債") || t.contains("借入金") || t.contains("リース") || t.contains("有利子負債") else { return false }
             return (t.contains("前") && t.contains("当")) || jpDateMatchCount(t) >= 2
         }
-        if let table, let result = parseComparisonTable(table) { return result }
+        // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「短期銀行借入金等」と「長期債務」が別々の表
+        // に分かれる（短期表のみを拾うと不完全な合計になる）。該当する表が複数あれば全て解析し、
+        // 行を連結・合計を合算する。三菱重工業 S100YHZG 実データ検証（2026-08-04）: 相殺（ネッティング）
+        // 開示表も「社債、借入金」を区分見出しに含み前/当列を持つため候補に混入するが、真の「合計」行を
+        // 持たず`parseComparisonTable`のフォールバック自己合算（無関係な行の総和）で見かけ上成功して
+        // しまう。合算対象は明示的な「合計」行を持つ表のみに限定する（フォールバック合算の表は除外）。
+        func hasExplicitTotalRow(_ table: Element) -> Bool {
+            guard let trs = (try? table.select("tr"))?.array() else { return false }
+            for tr in trs {
+                guard let cells = (try? tr.select("td, th"))?.array(), let first = cells.first else { continue }
+                let label = normalizeLabel((try? first.text(trimAndNormaliseWhitespace: true)) ?? "")
+                if label.hasSuffix("合計") { return true }
+            }
+            return false
+        }
+        let combinableTables = candidateTables.filter(hasExplicitTotalRow)
+        let parsedCombinable = combinableTables.compactMap { parseComparisonTable($0) }
+        if parsedCombinable.count > 1 {
+            let combinedRows = parsedCombinable.flatMap(\.rows)
+            let totalCurrent = parsedCombinable.compactMap(\.totalCurrent).reduce(0, +)
+            let totalPrior = parsedCombinable.compactMap(\.totalPrior).reduce(0, +)
+            return (combinedRows, totalCurrent, totalPrior)
+        }
+        if let table = candidateTables.first, let result = parseComparisonTable(table) { return result }
 
         // パナソニックHD S100YETA 実データ検証（2026-08-04）: 専用タグ配下でも「前」「当」を含む表が
         // ロールフォワード表（残高｜変動｜残高、列見出しに前/当を持たない）で、`tables.first` が
@@ -277,7 +307,37 @@ enum BorrowingsSchedule {
                 break
             }
         }
-        guard let priorIdx, let currentIdx, headerRowIndex >= 0, headerRowIndex + 1 < trs.count else { return nil }
+        guard var priorIdx, var currentIdx, headerRowIndex >= 0, headerRowIndex + 1 < trs.count else { return nil }
+
+        // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「前期／当期」見出し行の直下に「金額｜利率｜
+        // 金額｜利率」という実列見出し行が続く2段ヘッダーがある。上段だけでは前期・当期の列位置が
+        // 実データ行（金額・利率がそれぞれ別列）とズレる（当期の値の代わりに前期の利率を読んでしまう）。
+        // 直下の行に「金額」が2回以上現れる場合はそちらを実ヘッダーとして列位置を取り直す。
+        if let subHeaderCells = (try? trs[headerRowIndex + 1].select("td, th"))?.array() {
+            let amountCols = subHeaderCells.enumerated().compactMap { j, cell -> Int? in
+                let text = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
+                return text.contains("金額") ? j : nil
+            }
+            let rateCols = subHeaderCells.enumerated().compactMap { j, cell -> Int? in
+                let text = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
+                return text.contains("利率") ? j : nil
+            }
+            if amountCols.count >= 2 {
+                // このサブヘッダー行自体はラベル列を持たない（「金額｜利率｜金額｜利率」の4セルのみ）が、
+                // 直後の実データ行は先頭にラベル列を持つ（5セル）。ソニーグループ同様、セル数の差分だけ
+                // 右にずらす。
+                var offset = 0
+                if headerRowIndex + 2 < trs.count,
+                   let dataCells = (try? trs[headerRowIndex + 2].select("td, th"))?.array() {
+                    offset = max(0, dataCells.count - subHeaderCells.count)
+                }
+                priorIdx = amountCols[0] + offset
+                currentIdx = amountCols[1] + offset
+                rateIdx = (rateCols.count >= 2 ? rateCols[1] : rateCols.first).map { $0 + offset }
+                headerRowIndex += 1
+            }
+        }
+        guard headerRowIndex + 1 < trs.count else { return nil }
 
         var components: [Row] = []
         var totalCurrent: Double?
@@ -302,8 +362,11 @@ enum BorrowingsSchedule {
                 cells.count > idx ? XBRLUtils.parseTextblockCellValue(try? cells[idx].text()) : nil
             }
 
-            if label == "小計" { continue }   // セクション単位の内訳小計は除外（二重計上防止）
-            if label == "計" || label.hasSuffix("合計") {
+            // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「担保付長期債務」「無担保長期債務」の
+            // 各区分末尾に無印の「計」（区分内小計）が付き、表全体の真の合計は末尾の「合計」のみ。
+            // 「小計」と同様に区分内小計として読み飛ばす（"計"単独は真の合計として確定しない）。
+            if label == "小計" || label == "計" { continue }
+            if label.hasSuffix("合計") {
                 totalCurrent = current.map { $0 * scale }
                 totalPrior = prior.map { $0 * scale }
                 break rowLoop   // 真の合計に到達。以降の参考内訳（非流動負債合計等）は無視する
@@ -530,10 +593,37 @@ enum BorrowingsSchedule {
         return nil
     }
 
-    /// 表探索の入口。J-GAAP附属明細表を優先し、無ければIFRS注記（専用タグ→汎用タグの順）へ
-    /// フォールバックする。
+    /// 三井物産 S100YAVT 実データ検証（2026-08-04）: 連結BSの短期負債・1年内返済予定の長期負債・
+    /// 長期負債（非流動、リース負債等を含め合算済み）が個別の数値タグとして存在する会社では、
+    /// 注記のHTML明細表（区分見出し行と金額行が分離しラベル品質が悪い等）をパースするより
+    /// こちらを優先する。3タグとも揃っている場合のみ採用する（一部だけでは合計が不完全になるため）。
+    /// ローカル名で引く（`XBRLUtils.collectAllNumericFacts`は名前空間プレフィックスを問わない）ため
+    /// 標準タグ・自社拡張タグのどちらでも解決する。
+    private static func parseDirectDebtFacts(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
+        let tagLabels: [(tag: String, label: String)] = [
+            ("ShortTermDebtCLIFRS", "短期負債"),
+            ("CurrentPortionOfLongTermDebtCLIFRS", "1年内返済予定の長期負債"),
+            ("LongTermDebtNCLIFRS", "長期負債"),
+        ]
+        var rows: [Row] = []
+        for (tag, label) in tagLabels {
+            guard let currentFact = facts[tag]?["CurrentYearInstant"] else { continue }
+            let priorValue = facts[tag]?["Prior1YearInstant"]?.value
+            rows.append(Row(label: label, current: currentFact.value, prior: priorValue, averageInterestRatePercent: nil))
+        }
+        guard rows.count == tagLabels.count else { return nil }
+        let totalCurrent = rows.compactMap(\.current).reduce(0, +)
+        let priorValues = rows.compactMap(\.prior)
+        let totalPrior = priorValues.count == rows.count ? priorValues.reduce(0, +) : nil
+        return (rows, totalCurrent, totalPrior)
+    }
+
+    /// 表探索の入口。直接タグ（揃っている場合）→ J-GAAP附属明細表 → IFRS注記（専用タグ→汎用タグの順）
+    /// の順にフォールバックする。
     private static func parseTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        parseJGaapScheduleTable(xbrlDir: xbrlDir)
+        parseDirectDebtFacts(xbrlDir: xbrlDir)
+            ?? parseJGaapScheduleTable(xbrlDir: xbrlDir)
             ?? parseIFRSNotesTable(xbrlDir: xbrlDir)
             ?? parseIFRSFinancialInstrumentsNote(xbrlDir: xbrlDir)
     }

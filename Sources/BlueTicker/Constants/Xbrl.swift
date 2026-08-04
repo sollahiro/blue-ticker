@@ -382,6 +382,14 @@ enum Xbrl {
     /// 区分｜前期｜当期｜平均利率｜返済期限表が格納される。列間に罫線用の空白スペーサー列を挟む
     /// （KDDIと同型）。標準タグのため他社でも使われている可能性がある。
     static let ifrsOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、三井物産 S100YAVT）: 自社拡張タグ「金融及びその他の債務に関する
+    /// 開示」に「短期銀行借入金等」表と「長期債務」表が別々に格納される（後者は担保付/無担保の
+    /// 区分内小計「計」を持つ階層構造で、真の合計は末尾の「合計」のみ）。
+    static let ifrsDisclosuresAboutFinancialAndOtherTradeLiabilitiesTextblockTag = "NotesDisclosuresAboutFinancialAndOtherTradeLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ファーストリテイリング S100X6X6）: 標準タグ「その他の金融資産及び
+    /// その他の金融負債に関する注記」は資産セクションと負債セクションが同一タグ内に併存し、負債側に
+    /// 「有利子負債（注）」という単一集約行を持つ（社債・借入金・リースへの内訳分解はされない）。
+    static let ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag = "NotesOtherFinancialAssetsAndOtherFinancialLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
 
     /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
     /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。
