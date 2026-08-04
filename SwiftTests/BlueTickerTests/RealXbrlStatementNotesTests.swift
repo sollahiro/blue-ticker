@@ -217,6 +217,108 @@ import Testing
         #expect(componentSum == total.currentBalance)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（丸紅 S100VYGC、見出しアンカー方式）
+    //
+    // 実データ検証（2026-08-04）: J-GAAP附属明細表・IFRS専用タグ（社債及び借入金/有利子負債）の
+    // いずれも無く、「金融商品に関する注記」汎用タグ（`NotesFinancialInstrumentsConsolidatedFinancialStatementsIFRSTextBlock`）
+    // の中に「⑤　社債及び借入金」「社債及び借入金の帳簿価額の内訳は以下のとおりであります。」という
+    // 見出し段落の直後に前/当の内訳表がある。この汎用タグは為替リスク・売掛金等、無関係な表も多数
+    // 含むため、見出しテキストをアンカーにして直後の表だけを選ぶ必要があることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YAY4"), "XBRL cache S100YAY4 not available"))
+    func goldenBorrowingsMarubeniHeadingAnchoredComparisonTable() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YAY4"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let bonds = try #require(components.first { $0.label == "社債" })
+        #expect(bonds.priorBalance == 512_546_000_000)
+        #expect(bonds.currentBalance == 431_951_000_000)
+        let borrowings = try #require(components.first { $0.label == "借入金" })
+        #expect(borrowings.priorBalance == 1_935_890_000_000)
+        #expect(borrowings.currentBalance == 1_927_051_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 2_409_977_000_000)
+        #expect(total.priorBalance == 2_535_010_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（日立製作所 S100YGBO、満期構成ペアテーブル）
+    //
+    // 実データ検証（2026-08-04）: 前/当の比較列を持つ表が無く、「金融商品に関する注記」汎用タグの
+    // 中に会計年度末ごとの別テーブル（先頭行に単一の日付、「帳簿価額｜契約上のキャッシュ・フロー｜
+    // １年以内｜１年超５年以内｜５年超」列を持つ満期構成表）が2つ並ぶ。信用リスク・
+    // 非支配持分プットオプション等の無関係な行が混入しないよう、社債・借入金・リース関連ラベルの
+    // 帳簿価額のみを合算していることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YGBO"), "XBRL cache S100YGBO not available"))
+    func goldenBorrowingsHitachiMaturityBucketPairTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YGBO"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // プット・オプション等、社債・借入金・リース以外の行は混入しないこと。
+        #expect(!components.contains { $0.label.contains("プット") })
+
+        let bonds = try #require(components.first { $0.label == "社債" })
+        #expect(bonds.priorBalance == 220_000_000_000)
+        #expect(bonds.currentBalance == 220_000_000_000)
+        let longTerm = try #require(components.first { $0.label == "長期借入金" })
+        #expect(longTerm.priorBalance == 653_797_000_000)
+        #expect(longTerm.currentBalance == 443_696_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 1_009_037_000_000)
+        #expect(total.priorBalance == 1_206_116_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（ソニーグループ S100YE2C、自社拡張タグ＋rowspanヘッダー補正）
+    //
+    // 実データ検証（2026-08-04）: 満期構成表が汎用「金融商品に関する注記」タグではなく自社拡張タグ
+    // （`NotesShortTermBorrowingsAndLongTermDebtConsolidatedFinancialStatementsIFRSTextBlock`）に
+    // 格納される。さらにヘッダー行が「項目」列をrowspanで上段と共有しヘッダー行自体には値列の
+    // 先頭に「項目」のプレースホルダーが無いため、そのまま列位置を使うとデータ行と1列ズレる
+    // （直後のデータ行のセル数がヘッダー行より多い分だけ右にずらす補正が必要）ことを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YE2C"), "XBRL cache S100YE2C not available"))
+    func goldenBorrowingsSonyGroupExtensionTagWithRowspanHeaderOffset() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YE2C"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let shortTerm = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTerm.priorBalance == 1_843_959_000_000)
+        #expect(shortTerm.currentBalance == 51_183_000_000)
+        let unsecuredBonds = try #require(components.first { $0.label == "無担保社債" })
+        #expect(unsecuredBonds.priorBalance == 664_390_000_000)
+        #expect(unsecuredBonds.currentBalance == 474_343_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.currentBalance == 1_041_986_000_000)
+        #expect(total.priorBalance == 3_598_776_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

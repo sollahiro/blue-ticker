@@ -369,6 +369,14 @@ enum Xbrl {
     /// タグ（社債を別注記に切り出し「借入金」のみ）を使う。
     static let ifrsBorrowingsOnlyTextblockTag = "NotesBorrowingsConsolidatedFinancialStatementsIFRSTextBlock"
 
+    /// 専用タグを持たない企業向けの最終フォールバック。「金融商品に関する注記」汎用TextBlock
+    /// （為替・信用リスク等を含む多数表の中に、社債・借入金の内訳表または満期構成表が埋め込まれる）。
+    /// 実データ検証（2026-08-04: アステラス S100R0I6・丸紅 S100VYGC・日立 S100QZT0）。
+    static let ifrsFinancialInstrumentsTextblockTag = "NotesFinancialInstrumentsConsolidatedFinancialStatementsIFRSTextBlock"
+    /// 実データ検証（2026-08-04、ソニーグループ S100QZT6）: 社債・借入金の満期構成表が上記の汎用タグではなく
+    /// この専用タグ（自社拡張要素）に格納される。
+    static let ifrsShortTermBorrowingsAndLongTermDebtTextblockTag = "NotesShortTermBorrowingsAndLongTermDebtConsolidatedFinancialStatementsIFRSTextBlock"
+
     // MARK: - 支払利息タグ
 
     static let interestExpenseJGAAPTags: [String] = ["InterestExpensesNOE"]
