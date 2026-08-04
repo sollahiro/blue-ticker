@@ -581,6 +581,119 @@ import Testing
         #expect(total.currentBalance == 43_205_469_000_000)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（東京電力ホールディングス S100YIHR、縦積みセルの直前行が消えるバグ）
+    //
+    // 監査指摘・実データ検証（2026-08-05）: J-GAAP附属明細表で「その他有利子負債」区分の下に
+    // 「コマーシャル・ペーパー(１年以内に償還)」が同一セル内に縦積み（<p>2つ）で開示される。
+    // 修正前は縦積み由来の行（内部的にインデント`Int.max`を持つ）を、直前の無関係な通常行の
+    // 「内訳がぶら下がる小計」と誤認識し、直前行（短期借入金）ごと消していた
+    // （東京電力の場合、表中最大の行=短期借入金2,926,354百万円が欠落）。
+
+    @Test(.enabled(if: cacheAvailable("S100YIHR"), "XBRL cache S100YIHR not available"))
+    func goldenBorrowingsTepcoPrecedingRowSurvivesVerticalStackSibling() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YIHR"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 縦積み行（その他有利子負債区分のコマーシャル・ペーパー）の直前にある通常行が消えないこと。
+        let shortTerm = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTerm.priorBalance == 2_867_871_000_000)
+        #expect(shortTerm.currentBalance == 2_926_354_000_000)
+
+        // 縦積み内訳自体（カテゴリ見出し「その他有利子負債」は値なしのため除外され、
+        // 内訳「コマーシャル・ペーパー」のみが値を持つ）も正しく抽出されること。
+        let other = try #require(components.first { $0.label == "その他有利子負債" })
+        #expect(other.priorBalance == 25_000_000_000)
+        #expect(other.currentBalance == 62_000_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 3_122_693_000_000)
+        #expect(total.currentBalance == 3_245_726_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（三菱地所 S100YBLA、列幅折り返しラベルの誤分解と小計二重計上）
+    //
+    // 監査指摘・実データ検証（2026-08-05）: 「ノンリコース長期借入金（1年以内に返済予定の」＋
+    // 「ものを除く）」のように、単に列幅で折り返しただけの1つのラベルが同一セル内で`<p>`2つに
+    // 分かれる会社がある。修正前はこれを縦積み複数項目と誤認識し、後半`<p>`が値なし判定で
+    // 行ごと消え、かつ縦積み由来の`Int.max`インデントが直前の「長期借入金」行を巻き込んで消す
+    // 二重の欠落を起こしていた。あわせて「小計」区分（担保付＋無担保等の内訳合計）が
+    // 明細行として二重計上されないことも確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YBLA"), "XBRL cache S100YBLA not available"))
+    func goldenBorrowingsMitsubishiEstateHandlesLineWrapAndExcludesSubtotal() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YBLA"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 列幅折り返しで<p>が2つに分かれても、ラベルが結合された1つの行として残ること
+        // （途中で切れた「ノンリコース長期借入金（1年以内に返済予定の」ではない）。
+        let nonRecourse = try #require(components.first { $0.label.contains("ノンリコース長期借入金") })
+        #expect(nonRecourse.label == "ノンリコース長期借入金（1年以内に返済予定のものを除く）")
+        #expect(nonRecourse.priorBalance == 13_287_000_000)
+        #expect(nonRecourse.currentBalance == 51_151_000_000)
+
+        // 折り返し行の直前にある無関係な行（長期借入金）も消えないこと。
+        let longTerm = try #require(components.first { $0.label == "長期借入金（1年以内に返済予定のものを除く）" })
+        #expect(longTerm.priorBalance == 2_221_483_000_000)
+        #expect(longTerm.currentBalance == 2_323_601_000_000)
+
+        // 区分内小計「小計」は明細行として混入しないこと（真の合計は「合計」のみ）。
+        #expect(!components.contains { $0.label == "小計" })
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 2_539_157_000_000)
+        #expect(total.currentBalance == 2_737_494_000_000)
+    }
+
+    // MARK: - borrowings_schedule_cf_supplement（HOYA S100Y90T、無関係なロールフォワード表の誤合算とリース区分マーカー漏れ）
+    //
+    // 監査発覚・実データ検証（2026-08-05）: 三井物産向けに実装した「複数テーブル合算」ロジックが、
+    // HOYAでは本体の前/当比較表とは別に同じ科目をロールフォワード形式で重複開示する2表まで
+    // 誤って合算対象に含めてしまい、三重計上・マイナス値混入を起こしていた（新規リグレッション）。
+    // 行ラベルの重複が無い場合のみ合算するガードを追加して修正。あわせて「短期リース負債」が
+    // `displayLabel`の判定マーカーに"短期"が無かったため誤って「非流動」に分類されていたのも修正。
+
+    @Test(.enabled(if: cacheAvailable("S100Y90T"), "XBRL cache S100Y90T not available"))
+    func goldenBorrowingsHoyaAvoidsCombiningUnrelatedRollforwardTables() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100Y90T"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 本体の前/当比較表のみが採用され、無関係なロールフォワード表2つと合算されないこと
+        // （合算されると短期借入金・長期借入金等が3重に計上され、マイナス値も混入する）。
+        #expect(components.filter { !$0.isTotal }.count == 5)
+        #expect(!components.contains { ($0.currentBalance ?? 0) < 0 })
+
+        // 「短期リース負債」は"短期"マーカーにより正しく流動に分類されること
+        // （非流動と誤分類されると「長期リース負債」と表示ラベルが衝突し重複行になる）。
+        let currentLease = try #require(components.first { $0.label == "リース負債（流動）" })
+        #expect(currentLease.priorBalance == 8_031_000_000)
+        #expect(currentLease.currentBalance == 8_623_000_000)
+        let nonCurrentLease = try #require(components.first { $0.label == "リース負債（非流動）" })
+        #expect(nonCurrentLease.priorBalance == 17_093_000_000)
+        #expect(nonCurrentLease.currentBalance == 17_005_000_000)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 37_284_000_000)
+        #expect(total.currentBalance == 42_241_000_000)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

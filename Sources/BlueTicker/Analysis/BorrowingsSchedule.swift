@@ -24,18 +24,37 @@ enum BorrowingsSchedule {
         guard normalizedLabel.contains("リース") else { return normalizedLabel }
         // 「1年以内に返済予定のものを除く」は非流動。"1年以内" を含むため除外判定を先に行う。
         if normalizedLabel.contains("除く") { return "リース負債（非流動）" }
-        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "流動"]
+        // HOYA S100Y90T 実データ検証（2026-08-05）: 「短期リース負債」「長期リース負債」という
+        // 対で開示する会社がある。"短期" が判定マーカーに無かったため両方とも「非流動」に
+        // 誤分類され区別が失われていた（値も欠落したように見えるラベル重複を引き起こす）。
+        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "流動", "短期"]
         let isCurrent = currentMarkers.contains { normalizedLabel.contains($0) }
         return isCurrent ? "リース負債（流動）" : "リース負債（非流動）"
     }
 
     /// フィルタ通過前の1行分（インデント深さつき）。`label` は displayLabel 適用前の生ラベル。
+    /// `isVerticalStackItem` は同一セル内の縦積み（カテゴリ+内訳）から分解された行かどうか
+    /// （直前の無関係な行を巻き込んで誤って除外しないための区別。詳細は呼び出し元コメント参照）。
     private struct RawRow {
         let label: String
         let indent: Int
         let current: Double?
         let prior: Double?
         let rate: Double?
+        let isVerticalStackItem: Bool
+    }
+
+    /// ラベルセル内の `<p>` 分割が「カテゴリ名+内訳の縦積み」か「単に列幅で折り返しただけの
+    /// 1つのラベル」かを、開き括弧の対応関係で判定する。東京電力 S100YIHR・ダイキン S100YFQL
+    /// 実データ検証（2026-08-05）: 縦積みは各 `<p>` が独立した完結語（「その他有利子負債」
+    /// 「コマーシャル・ペーパー(１年以内に償還)」等、括弧が各々で閉じている）。三菱地所 S100YBLA
+    /// 実データ検証: 折り返しは括弧の途中で行が割れる（「ノンリコース長期借入金（1年以内に返済予定の」
+    /// ＋「ものを除く）」で前半の開き括弧が後半まで閉じない）。前半セグメントで開き括弧が閉じ括弧より
+    /// 多ければ折り返しとみなす。
+    private static func isLineWrapContinuation(firstSegment: String) -> Bool {
+        let opens = firstSegment.filter { $0 == "（" || $0 == "(" }.count
+        let closes = firstSegment.filter { $0 == "）" || $0 == ")" }.count
+        return opens > closes
     }
 
     /// ラベルの前後の全角/半角スペース・nbsp を除去する（"合計"／"計" 判定・displayLabel 適用の前処理）。
@@ -107,8 +126,14 @@ enum BorrowingsSchedule {
         rowLoop: for row in rows {
             guard let cells = (try? row.select("td, th"))?.array(), cells.count >= 3 else { continue }
             let labelPs = (try? cells[0].select("p"))?.array() ?? []
+            let firstLabelSegment = labelPs.first.flatMap { try? $0.text(trimAndNormaliseWhitespace: true) } ?? ""
 
-            if labelPs.count > 1 {
+            // 東京電力 S100YIHR・ダイキン S100YFQL 実データ検証（2026-08-05）: labelPs.count > 1 は
+            // 「カテゴリ名+内訳の縦積み」だけでなく、三菱地所 S100YBLA のような「単に列幅で折り返した
+            // 1つのラベル」も含む（開き括弧が閉じないまま次の<p>へ続く）。折り返しの場合は縦積みとして
+            // 分解せず、cells[0].text() で全<p>を結合した1つのラベルとして通常行と同じ経路で処理する
+            // （でないと後半`<p>`の「値なし」判定で行自体が消え、前半`<p>`だけの途中で切れたラベルが残る）。
+            if labelPs.count > 1, !isLineWrapContinuation(firstSegment: firstLabelSegment) {
                 // カテゴリ名+内訳が同一セルに縦積みされた行を、内訳ごとの行に分解する。
                 let priorPs = (try? cells[1].select("p"))?.array() ?? []
                 let currentPs = (try? cells[2].select("p"))?.array() ?? []
@@ -121,8 +146,11 @@ enum BorrowingsSchedule {
                     // カテゴリ名自体の行（値なし）を除外する。
                     guard current != nil || prior != nil else { continue }
                     let rate = i < ratePs.count ? XBRLUtils.parseTextblockCellValue(try? ratePs[i].text()) : nil
-                    // 縦積みされた内訳行は常に末端（それ以上の階層を持たない）として扱う。
-                    rawRows.append(RawRow(label: label, indent: Int.max, current: current, prior: prior, rate: rate))
+                    // 縦積みされた内訳行は常に末端（それ以上の階層を持たない）として扱う。直前の
+                    // 無関係な行を「自分の子」と誤認させないよう `isVerticalStackItem` で区別する。
+                    rawRows.append(RawRow(
+                        label: label, indent: Int.max, current: current, prior: prior, rate: rate,
+                        isVerticalStackItem: true))
                 }
                 continue
             }
@@ -141,13 +169,22 @@ enum BorrowingsSchedule {
                 totalPrior = prior.map { $0 * scale }
                 break rowLoop  // 合計以降は返済予定額の別表
             }
-            rawRows.append(RawRow(label: label, indent: indentLevel(of: labelPs.first), current: current, prior: prior, rate: rate))
+            // 三菱地所 S100YBLA 実データ検証（2026-08-05）: `parseComparisonTable` と同様、区分内
+            // 小計「小計」は除外する（真の合計は別行の「合計」）。除外しないと二重計上になる。
+            if label == "小計" { continue }
+            rawRows.append(RawRow(
+                label: label, indent: indentLevel(of: labelPs.first), current: current, prior: prior, rate: rate,
+                isVerticalStackItem: false))
         }
 
         // 次の行がより深いインデントを持つ行（＝内訳がぶら下がるカテゴリ小計）は除外し、二重計上を防ぐ。
+        // ただし次の行が縦積み分解由来（`isVerticalStackItem`）の場合は、同一セル内で完結した別カテゴリの
+        // 内訳であり直前の行とは無関係なため、除外の根拠にしない（東京電力 S100YIHR・ダイキン S100YFQL
+        // 実データ検証2026-08-05: これを区別しないと直前の無関係な行の値が消える）。
         var components: [Row] = []
         for i in rawRows.indices {
-            if i + 1 < rawRows.count, rawRows[i + 1].indent > rawRows[i].indent { continue }
+            if i + 1 < rawRows.count, !rawRows[i + 1].isVerticalStackItem,
+               rawRows[i + 1].indent > rawRows[i].indent { continue }
             let r = rawRows[i]
             components.append(Row(
                 label: displayLabel(for: r.label),
@@ -241,12 +278,22 @@ enum BorrowingsSchedule {
         }
         let combinableTables = candidateTables.filter(hasExplicitTotalRow)
         let parsedCombinable = combinableTables.compactMap { parseComparisonTable($0) }
-        if parsedCombinable.count > 1 {
+        // HOYA S100Y90T 実データ検証（2026-08-05）: 本体の前/当比較表とは別に、同じ科目
+        // （短期借入金・長期借入金・リース負債等）をロールフォワード形式（期首残高｜CF変動｜
+        // 期末残高）で重複開示する表が2つ並び、いずれも「合計」行を持つため合算対象に混入する
+        // （本体表と合わせて三重計上になる）。三井物産のような正当な合算（短期表＋長期表）は
+        // ラベルが重複しない前提のため、行ラベルに重複が無い場合のみ合算する。重複があれば
+        // 合算せず、`hasExplicitTotalRow` を満たす最初の1件のみを使う（ロールフォワード表は
+        // 後述の他経路で無視される）。
+        let allLabels = parsedCombinable.flatMap { $0.rows.map(\.label) }
+        let hasDuplicateLabels = Set(allLabels).count != allLabels.count
+        if parsedCombinable.count > 1, !hasDuplicateLabels {
             let combinedRows = parsedCombinable.flatMap(\.rows)
             let totalCurrent = parsedCombinable.compactMap(\.totalCurrent).reduce(0, +)
             let totalPrior = parsedCombinable.compactMap(\.totalPrior).reduce(0, +)
             return (combinedRows, totalCurrent, totalPrior)
         }
+        if let result = parsedCombinable.first { return result }
         if let table = candidateTables.first, let result = parseComparisonTable(table) { return result }
 
         // パナソニックHD S100YETA 実データ検証（2026-08-04）: 専用タグ配下でも「前」「当」を含む表が
@@ -675,6 +722,12 @@ enum BorrowingsSchedule {
         if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.jGaapLeasesNoteTextblockTag),
            let soup = try? SwiftSoup.parse(html),
            let tables = (try? soup.select("table"))?.array() {
+            // 監査指摘（2026-08-05）: 「前/当を含む最初の表」を無絞りで採用しており、リース以外の
+            // 話題を持つ表を誤って拾う理論上の余地はある。ただしディスコ S100YC6I 実データ検証では
+            // 表本体に「リース」という語自体が無い（区分ラベルが「１年内」「１年超」のみ）ため、
+            // 表内キーワード必須にすると正当なケースまで壊れる。本タグはリース以外の話題を含まない
+            // 単一トピック注記のため、`hasExplicitTotalRow` と同様「合計」行を持つ最初の表という
+            // 制約のみに留める（`parseComparisonTable` 自体が合計行の無い表を弾く）。
             let table = tables.first {
                 let t = (try? $0.text()) ?? ""
                 return t.contains("前") && t.contains("当")

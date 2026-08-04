@@ -39,7 +39,9 @@ public let researchAndDevelopmentNoteCacheVersion = "notes-rd-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
 public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
-public let borrowingsScheduleCFSupplementNoteCacheVersion = "notes-borrowings-schedule-v1"
+/// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
+/// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
+public let borrowingsScheduleCFSupplementNoteCacheVersion = "notes-borrowings-schedule-v2"
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v1"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"

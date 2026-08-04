@@ -32,7 +32,11 @@ public enum FinancialsComputeResult: Sendable {
 /// PR #27（6836 売掛金の企業拡張タグ対応）はこのバージョンをバンプせず fin-v3 のまま合流した。
 /// 抽出ロジック変更の反映（既存キャッシュ済み行の再計算）は、他の同種修正が貯まってから
 /// まとめて fin-v4 へバンプし、全社再 ingest を一度に走らせる方針のため意図的に保留している。
-public let companyFinancialsCacheVersion = "fin-v4"
+///
+/// v5（2026-08-05）: `BorrowingsSchedule.extract`（financials の有利子負債フォールバック、
+/// `Extractors.swift`）を大幅改修（借入金等明細表のスケール判定・インデント処理バグ修正、
+/// IFRS/J-GAAP多数のフォールバック経路追加）。財務値に影響するためバンプする。
+public let companyFinancialsCacheVersion = "fin-v5"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
