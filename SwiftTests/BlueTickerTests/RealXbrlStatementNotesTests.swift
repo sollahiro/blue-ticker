@@ -694,6 +694,52 @@ import Testing
         #expect(total.currentBalance == 42_241_000_000)
     }
 
+    // MARK: - borrowings_schedule_cf_supplement（ＳＢＩホールディングス S100YK3R、無関係な別内訳表との誤合算防止）
+    //
+    // ユーザーとの対話で発見・実データ検証（2026-08-06）: 「20 社債及び借入金」注記の専用タグ
+    // （`NotesBondsAndBorrowingsConsolidatedFinancialStatementsIFRSTextBlock`）1本の中に、
+    // (1)社債及び借入金の内訳表（合計は連結BSの`BondsAndBorrowingsLiabilitiesIFRS`と一致）とは別に、
+    // 「売却目的保有資産に直接関連する負債の内訳」表が同居する。後者は社債及び借入金の集約1行に
+    // 顧客預金・その他の金融負債・その他の負債という無関係な科目を加えた別集計で、これも「合計」行を
+    // 持つため三井物産向けの複数表合算ロジックに誤って混入し、2表の合計を足した無意味な数値
+    // （10,848,195百万円）を返していた。社債・借入金・リース系ラベルのみで構成される表だけを合算
+    // 対象にすることで、正しい内訳表単独（合計7,010,122百万円）が採用されることを確認する。
+
+    @Test(.enabled(if: cacheAvailable("S100YK3R"), "XBRL cache S100YK3R not available"))
+    func goldenBorrowingsSBIHoldingsExcludesUnrelatedAssetsHeldForSaleLiabilitiesTable() throws {
+        let result = StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(
+            xbrlDir: Self.xbrlDir("S100YK3R"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        // 「売却目的保有資産に直接関連する負債の内訳」表の科目は混入しないこと。
+        #expect(!components.contains { $0.label == "顧客預金" })
+        #expect(!components.contains { $0.label == "その他の金融負債" })
+        #expect(!components.contains { $0.label == "売却目的保有資産に直接関連する負債" })
+        #expect(!components.contains { $0.label == "その他の負債" })
+        #expect(components.filter { !$0.isTotal }.count == 6)
+
+        let shortTermBorrowings = try #require(components.first { $0.label == "短期借入金" })
+        #expect(shortTermBorrowings.priorBalance == 1_037_324_000_000)
+        #expect(shortTermBorrowings.currentBalance == 1_050_778_000_000)
+        #expect(shortTermBorrowings.averageInterestRatePercent == 1.11)
+
+        let borrowedMoney = try #require(components.first { $0.label == "借用金" })
+        #expect(borrowedMoney.priorBalance == 2_157_609_000_000)
+        #expect(borrowedMoney.currentBalance == 3_082_036_000_000)
+
+        // 連結BSの`BondsAndBorrowingsLiabilitiesIFRS`（社債及び借入金）と一致すること。
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 5_721_388_000_000)
+        #expect(total.currentBalance == 7_010_122_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
     // MARK: - borrowings_schedule_cf_supplement（第一三共 S100QYCY、明細表自体が無い）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの

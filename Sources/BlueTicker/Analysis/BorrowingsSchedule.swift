@@ -287,12 +287,32 @@ enum BorrowingsSchedule {
         // 後述の他経路で無視される）。
         let allLabels = parsedCombinable.flatMap { $0.rows.map(\.label) }
         let hasDuplicateLabels = Set(allLabels).count != allLabels.count
-        if parsedCombinable.count > 1, !hasDuplicateLabels {
+        // ＳＢＩホールディングス S100YK3R 実データ検証（2026-08-06）: 同一テキストブロック内に
+        // 「社債及び借入金の内訳」表（合計＝連結BSの社債及び借入金と一致する正解）とは別に、
+        // 「売却目的保有資産に直接関連する負債の内訳」表が並ぶ。後者は社債及び借入金の集約1行に
+        // 加え顧客預金・その他の金融負債・その他の負債という無関係な科目が同居し、こちらも「合計」
+        // 行を持つため合算対象に混入する（ラベルは前者と重複しないため三井物産向けの重複排除では
+        // 防げない）。三菱重工業・住友金属鉱山・東京海上のように「1つの正当な表」自体にデリバティブ
+        // 負債等の非借入項目が意図的に混在するケースがあるため、この判定は「合算するかどうか」の
+        // 判断にのみ使い、単一表の採否には使わない（`isDebtOnlyTable`を`parsedCombinable`全体の
+        // フィルタにすると、単一の正当な混在表まで弾かれて`hasExplicitTotalRow`を経由しない
+        // `candidateTables.first`の無防備な再パースに落ち、三菱重工業向けに追加したネッティング表
+        // 除外ガードを迂回してしまう）。
+        func isDebtOnlyTable(_ parsed: (rows: [Row], totalCurrent: Double?, totalPrior: Double?)) -> Bool {
+            let debtKeywords = ["社債", "借入", "借用金", "リース", "コマーシャル・ペーパー", "有利子負債"]
+            return parsed.rows.allSatisfy { row in debtKeywords.contains { row.label.contains($0) } }
+        }
+        if parsedCombinable.count > 1, !hasDuplicateLabels, parsedCombinable.allSatisfy(isDebtOnlyTable) {
             let combinedRows = parsedCombinable.flatMap(\.rows)
             let totalCurrent = parsedCombinable.compactMap(\.totalCurrent).reduce(0, +)
             let totalPrior = parsedCombinable.compactMap(\.totalPrior).reduce(0, +)
             return (combinedRows, totalCurrent, totalPrior)
         }
+        // ＳＢＩホールディングス: 合算しない場合、複数の非合算対象候補（表0＝正しい内訳、表3＝
+        // 無関係カテゴリ混在）の中から、存在すれば純粋な社債・借入金系ラベルのみの表を優先する
+        // （DOM順に依存せず正解表を選ぶ。三菱重工業等、唯一の候補自体が非借入項目を含む場合は
+        // 該当なしとなり次のプレーンな`.first`にフォールスルーする＝挙動不変）。
+        if let pureDebtFirst = parsedCombinable.first(where: isDebtOnlyTable) { return pureDebtFirst }
         if let result = parsedCombinable.first { return result }
         if let table = candidateTables.first, let result = parseComparisonTable(table) { return result }
 
