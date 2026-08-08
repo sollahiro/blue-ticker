@@ -67,7 +67,7 @@ enum StatementNotesResolver {
             contentHash: hash)
     }
 
-    /// IBD計算用CF補足（`borrowings_schedule_cf_supplement` note_type）。
+    /// IBD計算用CF補足（`borrowings_schedule` note_type）。
     ///
     /// 連結附属明細表「借入金等明細表」の構成科目（短期借入金・社債・長期借入金・リース負債等）を
     /// 当期首/当期末残高・平均利率つきで表として公開する。解析ロジックは
@@ -80,7 +80,7 @@ enum StatementNotesResolver {
     /// `BorrowingsComponentPayload` へ切り出した（単一値の `StatementLineItem` では複数値を表現
     /// できないため）。返済期限（表の5列目）はユーザー判断で対象外（フリーテキストで構造化コストが
     /// 見合わない）。
-    static func resolveBorrowingsScheduleCFSupplement(xbrlDir: URL) -> StatementNoteResolveResult {
+    static func resolveBorrowingsSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
         guard let result = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }

@@ -11,7 +11,7 @@
 // 置き換えた。treasury_stock_acquisition は note_type ごと廃止（自己株式の取得は Statement 側で
 // 持分変動計算書から取得する方針、別スコープ）。
 //
-// sga_breakdown・borrowings_schedule_cf_supplement・policy_holding_securities・PPE明細・のれん明細
+// sga_breakdown・borrowings_schedule・policy_holding_securities・PPE明細・のれん明細
 // のように 財務取り込み に対応値が無い note_type も、この経路ではなく別途 XBRL 直接抽出（BlueTickerCore
 // 側 resolver）を実装している。
 
