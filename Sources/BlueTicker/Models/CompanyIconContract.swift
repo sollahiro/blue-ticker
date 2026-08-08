@@ -9,7 +9,7 @@ import Foundation
 public let companyIconsCacheVersion = "icons-v1"
 
 /// 会社アイコン取り込み（1書類分）の抽出・アップロード結果。R2への格納が完了した状態のみを表す
-/// （途中失敗は戻り値パターンにより nil。`BltServerContext.extractAndUploadCompanyIcon` が返す）。
+/// （途中失敗は `CompanyIconExtractFailure`。`BltServerContext.extractAndUploadCompanyIcon` が返す）。
 public struct CompanyIconExtractResult: Sendable, Equatable {
     public let sourceURL: String
     public let r2ObjectKey: String
@@ -21,3 +21,25 @@ public struct CompanyIconExtractResult: Sendable, Equatable {
         self.contentType = contentType
     }
 }
+
+/// 会社アイコン取り込みの途中失敗。どの段で止まったかをログに出すための戻り値パターン。
+public enum CompanyIconExtractFailure: Error, Sendable, Equatable, CustomStringConvertible {
+    case downloadFailed
+    case urlExtractFailed(method: String)
+    case faviconFetchFailed(origin: String)
+    case r2UploadFailed(detail: String)
+
+    public var description: String {
+        switch self {
+        case .downloadFailed:
+            return "download_failed"
+        case .urlExtractFailed(let method):
+            return "url_extract_failed(method=\(method))"
+        case .faviconFetchFailed(let origin):
+            return "favicon_fetch_failed(origin=\(origin))"
+        case .r2UploadFailed(let detail):
+            return "r2_upload_failed(\(detail))"
+        }
+    }
+}
+

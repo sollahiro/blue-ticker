@@ -97,11 +97,18 @@ enum R2Client {
         return URLSession(configuration: sessionConfig)
     }()
 
-    /// `data` を `key`（バケット内オブジェクトキー、先頭 `/` 無し）として PUT する。成功時 true。
-    static func upload(_ data: Data, key: String, contentType: String, config: R2Config) async -> Bool {
+    enum UploadResult: Sendable, Equatable {
+        case success
+        case invalidURL
+        case transportError(String)
+        case httpStatus(Int, bodySnippet: String)
+    }
+
+    /// `data` を `key`（バケット内オブジェクトキー、先頭 `/` 無し）として PUT する。
+    static func upload(_ data: Data, key: String, contentType: String, config: R2Config) async -> UploadResult {
         let path = "/\(config.bucket)/\(key)"
         guard let url = URL(string: "https://\(config.endpointHost)\(SigV4Signer.uriEncodePath(path))")
-        else { return false }
+        else { return .invalidURL }
 
         let signed = SigV4Signer.sign(
             method: "PUT", host: config.endpointHost, path: path, contentType: contentType, payload: data,
@@ -117,9 +124,19 @@ enum R2Client {
         request.setValue(signed.payloadHash, forHTTPHeaderField: "x-amz-content-sha256")
         request.setValue(signed.authorization, forHTTPHeaderField: "Authorization")
 
-        guard let (_, response) = try? await session.data(for: request),
-            let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode)
-        else { return false }
-        return true
+        do {
+            let (body, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .transportError("non-HTTP response")
+            }
+            guard (200...299).contains(http.statusCode) else {
+                let snippet = String(data: body.prefix(300), encoding: .utf8)?
+                    .replacingOccurrences(of: "\n", with: " ") ?? ""
+                return .httpStatus(http.statusCode, bodySnippet: snippet)
+            }
+            return .success
+        } catch {
+            return .transportError(String(describing: error))
+        }
     }
 }
