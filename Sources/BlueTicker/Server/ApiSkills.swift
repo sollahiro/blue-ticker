@@ -139,51 +139,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """
         ),
         ApiSkill(
-            id: "list-sectors",
-            name: "業種一覧",
-            description: "東証33業種の一覧と業種別銘柄数を返します。",
-            method: "GET",
-            path: "/v1/sectors",
-            mcpTool: nil,
-            feature: "discovery",
-            parameters: [],
-            instructions: """
-                業種名を知る・業種別件数を見るときに使う。業種で銘柄を絞る場合は search-by-sector を続ける。
-                MCP には対応ツールがない（REST 専用）。
-                例: GET /v1/sectors
-                """
-        ),
-        ApiSkill(
-            id: "search-by-sector",
-            name: "業種別銘柄検索",
-            description: "東証33業種で銘柄を検索します。業種名の部分一致で絞り込めます。",
-            method: "GET",
-            path: "/v1/sectors/{sector}/companies",
-            mcpTool: "search_by_sector",
-            feature: "discovery",
-            parameters: [
-                ApiSkillParameter(
-                    name: "sector",
-                    location: .path,
-                    type: .string,
-                    description: "業種名（部分一致）",
-                    required: true
-                ),
-                ApiSkillParameter(
-                    name: "limit",
-                    location: .query,
-                    type: .integer,
-                    description: "返却件数上限",
-                    required: false,
-                    defaultValue: .int(Api.sectorCompaniesLimitDefault)
-                ),
-            ],
-            instructions: """
-                業種から銘柄候補を集めるときに使う。業種名が不明なら先に list-sectors。
-                例: GET /v1/sectors/電気機器/companies?limit=20
-                """
-        ),
-        ApiSkill(
             id: "get-filings",
             name: "提出書類一覧",
             description: "銘柄コードに紐づく EDINET 書類一覧を取得します。",

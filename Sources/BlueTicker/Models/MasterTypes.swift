@@ -32,9 +32,3 @@ struct StockSearchResult: Codable {
     let market: String
     let location: String
 }
-
-struct SectorSummary: Codable {
-    let code: String
-    let name: String
-    let count: Int
-}

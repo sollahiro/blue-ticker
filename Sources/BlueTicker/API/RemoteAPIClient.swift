@@ -68,10 +68,6 @@ struct RemoteAPIClient: Sendable {
         await getDecoding("/v1/companies", query: ["q": q])
     }
 
-    func getSectors() async -> RemoteOutcome<[SectorSummary]> {
-        await getDecoding("/v1/sectors", query: [:])
-    }
-
     func getFilings(code: String, maxYears: Int) async -> RemoteOutcome<RemoteFilings> {
         await getDecoding("/v1/companies/\(escape(code))/filings", query: ["max_years": String(maxYears)])
     }
