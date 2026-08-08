@@ -17,7 +17,13 @@ enum PrivateNetworkGuard {
     static func isPublicHost(_ host: String) -> Bool {
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
+        // Glibc の SOCK_STREAM は __socket_type（enum 相当）で、ai_socktype（Int32）へ
+        // 直接代入できない（Darwin は Int32 のため直接代入可）。rawValue 経由で揃える。
+        #if canImport(Darwin)
         hints.ai_socktype = SOCK_STREAM
+        #else
+        hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
+        #endif
 
         var resultPointer: UnsafeMutablePointer<addrinfo>?
         let status = getaddrinfo(host, nil, &hints, &resultPointer)
