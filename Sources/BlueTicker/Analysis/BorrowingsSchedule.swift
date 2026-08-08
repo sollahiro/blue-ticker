@@ -37,7 +37,7 @@ enum BorrowingsSchedule {
     /// （直前の無関係な行を巻き込んで誤って除外しないための区別。詳細は呼び出し元コメント参照）。
     private struct RawRow {
         let label: String
-        let indent: Int
+        let indent: Double
         let current: Double?
         let prior: Double?
         let rate: Double?
@@ -64,22 +64,67 @@ enum BorrowingsSchedule {
             .replacingOccurrences(of: "　", with: "")
     }
 
-    /// ラベルセルの先頭 `<p>` からインデント深さを読む。実データ検証（2026-08-02）: 階層表現は
-    /// 会社により2通りある。① CSS `margin-left`（例: あおぞら銀行、pxをそのまま深さに使う）
-    /// ② 全角/半角スペース・nbsp をラベル文字列先頭に付けるだけ（例: コンコルディア「　　借入金」、
-    /// しずおかFG「　借入金」。`margin-left` が無い/0 の場合はこちらにフォールバックする）。
-    /// `<p>` が無い（インデント情報自体が無い）行は 0（トップレベル）として扱う。
-    private static func indentLevel(of p: Element?) -> Int {
+    /// 流動／非流動の切り口による参考内訳・区分内合計か。クボタ型（bare「計」の直後に同じ総額を
+    /// 「流動負債」「非流動負債」で並記）や HOYA 型（真の「有利子負債合計」の後に
+    /// 「流動合計」「非流動合計」が続く）で、これらを表全体の真の合計と誤認しないために使う。
+    /// 監査レビュー残リスク（2026-08-08）: bare「計」判定で「〜合計」を無条件に真の合計証拠と
+    /// すると、restatement が「流動負債合計」表記の会社で true になり bare「計」を読み飛ばして
+    /// 部分合計を真の合計として採用してしまう。
+    private static func isRestatementOrSectionTotalLabel(_ label: String) -> Bool {
+        let exact: Set<String> = [
+            "流動負債", "非流動負債",
+            "流動負債合計", "非流動負債合計",
+            "流動合計", "非流動合計",
+        ]
+        return exact.contains(label)
+    }
+
+    /// 表全体の真の合計行か（restatement／区分内合計を除外した `〜合計`）。
+    private static func isGrandTotalLabel(_ label: String) -> Bool {
+        if label == "合計" { return true }
+        return label.hasSuffix("合計") && !isRestatementOrSectionTotalLabel(label)
+    }
+
+    /// ラベルセルの先頭 `<p>` からインデント深さを読む。実データ検証（2026-08-02〜2026-08-08）:
+    /// 階層表現は会社により複数ある。① CSS `margin-left`（例: あおぞら銀行、pxをそのまま深さに使う）
+    /// ② CSS `padding-left`（例: 三菱UFJ・三井住友、`padding-left:13.6pt` のように小数pt単位。
+    /// 「借用金」（カテゴリ小計、padding-leftなし）に対し「借入金」「再割引手形」（内訳）が
+    /// padding-left付きで区別される。margin-leftのみを見ていた旧実装ではこのパターンを検出できず、
+    /// 小計と内訳が二重計上されていた）③ 全角/半角スペース・nbsp をラベル文字列先頭に付けるだけ
+    /// （例: コンコルディア「　　借入金」、しずおかFG「　借入金」。①②のインデントが検出できない
+    /// 場合はこちらにフォールバックする）。`<p>` が無い（インデント情報自体が無い）行は 0
+    /// （トップレベル）として扱う。単位混在（px/pt）はテーブル間で比較しないため問題にならない。
+    private static func indentLevel(of p: Element?) -> Double {
         guard let p else { return 0 }
         if let style = try? p.attr("style"),
-           let regex = try? NSRegularExpression(pattern: "margin-left:\\s*(\\d+)px"),
+           let regex = try? NSRegularExpression(
+               pattern: "(?:margin-left|padding-left):\\s*([\\d.]+)(?:px|pt)"),
            let match = regex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
            let numRange = Range(match.range(at: 1), in: style),
-           let px = Int(style[numRange]), px > 0 {
-            return px
+           let value = Double(style[numRange]), value > 0 {
+            return value
         }
         let raw = (try? p.text(trimAndNormaliseWhitespace: false)) ?? ""
-        return raw.prefix { $0 == " " || $0 == "\u{3000}" || $0 == "\u{00A0}" }.count
+        return Double(raw.prefix { $0 == " " || $0 == "\u{3000}" || $0 == "\u{00A0}" }.count)
+    }
+
+    /// `rawRows[parentIndex]` の部分木内に、除外根拠となる値あり子孫があるか。
+    /// 値なしの深い行は「空の実体行（親の子）」か「介入する別見出し（自身に子孫あり）」かを
+    /// さらに先読みして区別する。縦積み分解行に当たったら部分木探索を打ち切る。
+    private static func hasValuedDescendantInSubtree(_ rawRows: [RawRow], parentIndex: Int) -> Bool {
+        let parentIndent = rawRows[parentIndex].indent
+        var j = parentIndex + 1
+        while j < rawRows.count {
+            let row = rawRows[j]
+            if row.isVerticalStackItem { return false }
+            if row.indent <= parentIndent { return false }
+            if row.current != nil || row.prior != nil { return true }
+            // 値なしの深い行: 自身に値あり子孫がいれば介入見出し → 親の除外根拠にしない。
+            if hasValuedDescendantInSubtree(rawRows, parentIndex: j) { return false }
+            // 葉の空行（親の子）→ 同じ部分木内の次の兄弟を続ける。
+            j += 1
+        }
+        return false
     }
 
     /// 「区分 | 当期首残高 | 当期末残高 | 平均利率 | 返済期限」表を1行ずつ読む共通処理
@@ -104,8 +149,13 @@ enum BorrowingsSchedule {
     /// ペーパー(１年以内) 割賦未払金(１年以内) 割賦未払金(１年超)" のようにラベルが連結され数値も
     /// 混ざっていたバグの修正）。
     private static func parseJGaapScheduleTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        // 東邦レマック S100XRD8 実データ検証（2026-08-08）: 連結財務諸表を作成しない小規模企業は
+        // 連結版タグを持たず、単体版タグのみに明細表が入る。列構成・「合計」行判定は共通のため、
+        // 連結版が見つからない場合のみ単体版へフォールバックする。
         guard let html = XBRLUtils.extractTextblockHtml(
-                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag),
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+                ?? XBRLUtils.extractTextblockHtml(
+                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 
@@ -149,7 +199,7 @@ enum BorrowingsSchedule {
                     // 縦積みされた内訳行は常に末端（それ以上の階層を持たない）として扱う。直前の
                     // 無関係な行を「自分の子」と誤認させないよう `isVerticalStackItem` で区別する。
                     rawRows.append(RawRow(
-                        label: label, indent: Int.max, current: current, prior: prior, rate: rate,
+                        label: label, indent: .infinity, current: current, prior: prior, rate: rate,
                         isVerticalStackItem: true))
                 }
                 continue
@@ -160,8 +210,6 @@ enum BorrowingsSchedule {
 
             let prior = XBRLUtils.parseTextblockCellValue(try? cells[1].text())
             let current = XBRLUtils.parseTextblockCellValue(try? cells[2].text())
-            // 区分ヘッダ・「該当事項はありません」等の非数値行を除外する。
-            guard current != nil || prior != nil else { continue }
             let rate = cells.count >= 4 ? XBRLUtils.parseTextblockCellValue(try? cells[3].text()) : nil
 
             if label == "合計" || label == "計" {
@@ -172,20 +220,36 @@ enum BorrowingsSchedule {
             // 三菱地所 S100YBLA 実データ検証（2026-08-05）: `parseComparisonTable` と同様、区分内
             // 小計「小計」は除外する（真の合計は別行の「合計」）。除外しないと二重計上になる。
             if label == "小計" { continue }
+            // ニチレイ S100VYA0 実データ検証（2026-08-08）: 「その他有利子負債」のような値なしの
+            // 区分見出し行を、以前はここで即座に `continue`（RawRow化せず消える）していた。その結果
+            // 見出しの子（コマーシャル・ペーパー等）のインデントが、rawRows上で直前の無関係な実体行
+            // （リース債務（非流動）等）に付け違えられ、その行が「子を持つカテゴリ小計」と誤認されて
+            // 消えていた（値のある行が丸ごと欠落するバグ）。値なし行も indent 付きの RawRow として
+            // 残し、内訳を持つカテゴリ小計として除外されなかった場合のみ、後段（component化時）で
+            // 値なしとして最終的に落とす。
             rawRows.append(RawRow(
                 label: label, indent: indentLevel(of: labelPs.first), current: current, prior: prior, rate: rate,
                 isVerticalStackItem: false))
         }
 
-        // 次の行がより深いインデントを持つ行（＝内訳がぶら下がるカテゴリ小計）は除外し、二重計上を防ぐ。
-        // ただし次の行が縦積み分解由来（`isVerticalStackItem`）の場合は、同一セル内で完結した別カテゴリの
-        // 内訳であり直前の行とは無関係なため、除外の根拠にしない（東京電力 S100YIHR・ダイキン S100YFQL
-        // 実データ検証2026-08-05: これを区別しないと直前の無関係な行の値が消える）。
+        // カテゴリ小計（内訳がぶら下がる行）を除外し、二重計上を防ぐ。
+        //
+        // 判定は「直後1行」ではなく、同じ部分木内の値あり子孫を先読みする。
+        // - あおぞら銀行/MUFG: 「借用金」(値あり) → 「再割引手形」(値なし・深い) → 「借入金」(値あり・深い)
+        //   値なしの子を挟んでも、先の値あり子孫が見えれば親を除外する。
+        // - ニチレイ: 「リース」(値あり) → 「その他有利子負債」(値なし・同インデント) → 子
+        //   同インデントの値なし見出しは部分木を閉じるので、リースは除外されない。
+        // - 監査レビュー残リスク: 値なし見出しが直前行より深い場合、その見出し自身に値あり子孫が
+        //   いれば「介入する別見出し」とみなし、直前行は除外しない。
+        // 縦積み分解由来（`isVerticalStackItem`）は直前行と無関係なため除外根拠にしない
+        // （東京電力 S100YIHR・ダイキン S100YFQL 実データ検証2026-08-05）。
         var components: [Row] = []
         for i in rawRows.indices {
-            if i + 1 < rawRows.count, !rawRows[i + 1].isVerticalStackItem,
-               rawRows[i + 1].indent > rawRows[i].indent { continue }
+            if hasValuedDescendantInSubtree(rawRows, parentIndex: i) { continue }
             let r = rawRows[i]
+            // 区分ヘッダ・「該当事項はありません」等の非数値行（内訳を持つカテゴリ小計として上で
+            // 除外されなかったもの）は出力しない。
+            guard r.current != nil || r.prior != nil else { continue }
             components.append(Row(
                 label: displayLabel(for: r.label),
                 current: r.current.map { $0 * scale },
@@ -272,7 +336,8 @@ enum BorrowingsSchedule {
             for tr in trs {
                 guard let cells = (try? tr.select("td, th"))?.array(), let first = cells.first else { continue }
                 let label = normalizeLabel((try? first.text(trimAndNormaliseWhitespace: true)) ?? "")
-                if label.hasSuffix("合計") { return true }
+                // restatement の「流動負債合計」等は明示的な表合計とみなさない（クボタ型と区別）。
+                if isGrandTotalLabel(label) { return true }
             }
             return false
         }
@@ -406,6 +471,30 @@ enum BorrowingsSchedule {
         }
         guard headerRowIndex + 1 < trs.count else { return nil }
 
+        // クボタ S100XR0M 実データ検証（2026-08-08、smoke対象企業のΣ内訳vs合計チェックで発見）:
+        // 「短期借入金／社債及び長期借入金」の内訳表全体の真の合計が「合計」ではなく無印の「計」
+        // 1本のみで、その直後に同じ総額を「流動負債／非流動負債」という別の切り口で並記した参考
+        // 内訳が続く（末尾に「合計」行は無い）。三井物産型（区分内小計が無印「計」、表全体の真の
+        // 合計は別行の「合計」）と表記上は同形のため、その場では区別できない。表全体を先読みし、
+        // 真の合計行（「合計」または restatement を除く「〜合計」）があるかどうかで判定する:
+        // あれば三井物産型（無印「計」は区分内小計として読み飛ばす）、無ければクボタ型
+        // （無印「計」自体が表全体の真の合計）とみなす。
+        // 監査レビュー残リスク対応（2026-08-08）: 「流動負債合計」「非流動負債合計」等の
+        // restatement ラベルは真の合計証拠から除外する（これらがあると旧判定は true になり、
+        // bare「計」を読み飛ばして部分合計を採用してしまう）。
+        // 日東電工 S100VYH3 実データ検証（2026-08-03）: ラベル列の前に幅の狭いインデント専用の空セルが
+        // 挟まる会社がある。本読み込みループ（下）と同じ cells[0]→cells[1] フォールバックで抽出しない
+        // と、その種の会社では「合計」行がここで見えず `hasDistinctGrandTotalRow` が誤って false になる。
+        let hasDistinctGrandTotalRow = trs[(headerRowIndex + 1)...].contains { tr in
+            guard let cells = (try? tr.select("td, th"))?.array(),
+                  cells.count > max(priorIdx, currentIdx) else { return false }
+            var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if label.isEmpty, cells.count > 1 {
+                label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+            }
+            return isGrandTotalLabel(label)
+        }
+
         var components: [Row] = []
         var totalCurrent: Double?
         var totalPrior: Double?
@@ -431,12 +520,19 @@ enum BorrowingsSchedule {
 
             // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「担保付長期債務」「無担保長期債務」の
             // 各区分末尾に無印の「計」（区分内小計）が付き、表全体の真の合計は末尾の「合計」のみ。
-            // 「小計」と同様に区分内小計として読み飛ばす（"計"単独は真の合計として確定しない）。
-            if label == "小計" || label == "計" { continue }
-            if label.hasSuffix("合計") {
+            if label == "小計" { continue }
+            // 流動／非流動の参考内訳はコンポーネントにも合計にも使わない（クボタ型の二重計上防止）。
+            if isRestatementOrSectionTotalLabel(label) { continue }
+            if label == "計" {
+                if hasDistinctGrandTotalRow { continue }  // 三井物産型: 区分内小計として読み飛ばす
+                totalCurrent = current.map { $0 * scale }  // クボタ型: 「計」自体が表全体の真の合計
+                totalPrior = prior.map { $0 * scale }
+                break rowLoop
+            }
+            if isGrandTotalLabel(label) {
                 totalCurrent = current.map { $0 * scale }
                 totalPrior = prior.map { $0 * scale }
-                break rowLoop   // 真の合計に到達。以降の参考内訳（非流動負債合計等）は無視する
+                break rowLoop   // 真の合計に到達。以降の参考内訳は無視する
             }
             components.append(Row(
                 label: displayLabel(for: label),
