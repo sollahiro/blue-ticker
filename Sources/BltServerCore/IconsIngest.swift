@@ -23,9 +23,10 @@ public struct IconsIngestSummary: Sendable, Equatable {
     public let skipped: Int
 }
 
-/// docID・codeを受けて抽出・アップロード結果を返す関数（成功で結果、失敗で nil）。
+/// docID・codeを受けて抽出・アップロード結果を返す関数。
 /// 本番は `context.extractAndUploadCompanyIcon`、テストはフェイクを注入する。
-public typealias CompanyIconExtractor = @Sendable (String, String) async -> CompanyIconExtractResult?
+public typealias CompanyIconExtractor =
+    @Sendable (String, String) async -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure>
 
 /// 上場企業の直近有報1件ずつを走査し、未取得 or バージョン不一致の会社アイコンを取得・格納する。
 /// `limit` は新規取得件数の上限（favicon取得・R2アップロードのネットワークI/Oのためバッチ実行用）。
@@ -87,17 +88,20 @@ func runIconsIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        guard let result = await extract(cand.docID, cand.code) else {
+        switch await extract(cand.docID, cand.code) {
+        case .failure(let reason):
             failed += 1
-            logger?.warning("会社アイコン取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
+            logger?.warning(
+                "会社アイコン取り込み失敗: docID=\(cand.docID) code=\(cand.code) reason=\(reason)")
             continue
+        case .success(let result):
+            try await withDbRetry(
+                logger: logger, context: "code=\(cand.code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyIcon(existing: existing, code: cand.code, result: result, db: db)
+            }
+            stored += 1
         }
-        try await withDbRetry(
-            logger: logger, context: "code=\(cand.code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeCompanyIcon(existing: existing, code: cand.code, result: result, db: db)
-        }
-        stored += 1
     }
 
     return IconsIngestSummary(attempted: attempted, stored: stored, failed: failed, skipped: skipped)

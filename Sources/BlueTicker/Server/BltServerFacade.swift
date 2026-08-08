@@ -238,20 +238,38 @@ public extension BltServerContext {
 
     /// 会社アイコン取り込み: 書類1件分のXBRLから電子公告URLを抽出し、faviconを取得してR2へアップロードする。
     /// URL抽出（`CorporateWebsiteExtractor`）・favicon取得（`FaviconFetcher`）・R2アップロード
-    /// （`R2Client`）のいずれかが失敗すれば nil（戻り値パターン）。
+    /// （`R2Client`）のいずれかが失敗すれば `.failure`（戻り値パターン。段名をログ用に返す）。
     /// `r2Config` は呼び出し側（BltServerCore ingest）が環境変数から解決して渡す。
     func extractAndUploadCompanyIcon(docID: String, code: String, r2Config: R2Config) async
-        -> CompanyIconExtractResult?
+        -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure>
     {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
-        guard let origin = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir).url else { return nil }
-        guard let icon = await FaviconFetcher.fetch(origin: origin) else { return nil }
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else {
+            return .failure(.downloadFailed)
+        }
+        let extracted = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir)
+        guard let origin = extracted.url else {
+            return .failure(CompanyIconExtractFailure.urlExtractFailed(method: extracted.method))
+        }
+        guard let icon = await FaviconFetcher.fetch(origin: origin) else {
+            return .failure(CompanyIconExtractFailure.faviconFetchFailed(origin: origin))
+        }
 
         let key = "company-icons/\(code)\(companyIconFileExtension(forContentType: icon.contentType))"
-        guard await R2Client.upload(icon.data, key: key, contentType: icon.contentType, config: r2Config)
-        else { return nil }
-
-        return CompanyIconExtractResult(sourceURL: origin, r2ObjectKey: key, contentType: icon.contentType)
+        switch await R2Client.upload(
+            icon.data, key: key, contentType: icon.contentType, config: r2Config
+        ) {
+        case .success:
+            return .success(
+                CompanyIconExtractResult(
+                    sourceURL: origin, r2ObjectKey: key, contentType: icon.contentType))
+        case .invalidURL:
+            return .failure(CompanyIconExtractFailure.r2UploadFailed(detail: "invalid_url"))
+        case .transportError(let message):
+            return .failure(CompanyIconExtractFailure.r2UploadFailed(detail: "transport:\(message)"))
+        case .httpStatus(let status, let bodySnippet):
+            return .failure(
+                CompanyIconExtractFailure.r2UploadFailed(detail: "http_\(status):\(bodySnippet)"))
+        }
     }
 
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。

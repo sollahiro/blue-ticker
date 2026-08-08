@@ -57,7 +57,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203", "6758"], limit: nil
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -75,7 +75,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyIcon.find("9999", on: app.db) == nil)
@@ -89,7 +89,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203", "6758"], limit: nil, explicitCodes: ["7203"]
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyIcon.find("6758", on: app.db) == nil)
@@ -103,7 +103,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { docID, _ in fakeResult(docID) }
+            ) { docID, _ in .success(fakeResult(docID)) }
 
             #expect(summary.attempted == 1)
             let row = try #require(try await CompanyIcon.find("7203", on: app.db))
@@ -117,7 +117,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 0)
         }
@@ -135,7 +135,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 0)
             #expect(summary.skipped == 1)
@@ -154,7 +154,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in fakeResult("new") }
+            ) { _, _ in .success(fakeResult("new")) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
@@ -172,7 +172,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], limit: 2
-            ) { _, _ in fakeResult() }
+            ) { _, _ in .success(fakeResult()) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -187,7 +187,7 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
             let summary = try await runIconsIngest(
                 db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in nil }
+            ) { _, _ in .failure(.downloadFailed) }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
