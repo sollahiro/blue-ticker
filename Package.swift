@@ -25,6 +25,9 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
         // MCP プロトコル実装（公式 SDK）。BltMcpServerCore ターゲットのみが使用。
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
+        // R2（S3互換）アップロードの SigV4 署名用 HMAC-SHA256（Apple 公式）。
+        // Vapor 経由で既に推移的に解決済みだが、BlueTickerCore が直接使うため明示依存にする。
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
     ],
     targets: [
         // 共有ライブラリ（TickerDev・REST サーバー共通のコア機能）。NIO には依存しない。
@@ -34,6 +37,7 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "SwiftSoup",
                 "ZIPFoundation",
+                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/BlueTicker",
             swiftSettings: [
