@@ -47,7 +47,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
 
     @Flag(
         name: .customLong("debug-borrowings-schedule"),
-        help: "--debug-doc と併用。borrowings_schedule_cf_supplement note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+        help: "--debug-doc と併用。borrowings_schedule note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
     )
     var debugBorrowingsSchedule = false
 
@@ -95,7 +95,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
 
     @Option(
         name: .customLong("export-notes-review"),
-        help: "borrowings_schedule_cf_supplement/property_plant_equipment_schedule/goodwill_and_intangibles をキャッシュ全走査し、提出年度・会社名・結果をJSONで書き出す(ユーザーレビュー用)"
+        help: "borrowings_schedule/property_plant_equipment_schedule/goodwill_and_intangibles をキャッシュ全走査し、提出年度・会社名・結果をJSONで書き出す(ユーザーレビュー用)"
     )
     var exportNotesReviewPath: String?
 
@@ -152,7 +152,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
         if let debugDoc, debugBorrowingsSchedule {
             let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
-            switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: dir) {
+            switch StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: dir) {
             case .resolved(let payload, let source, let contentHash):
                 print("source=\(source) contentHash=\(contentHash)")
                 for c in payload.borrowingsComponents ?? [] {
@@ -176,7 +176,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             var notApplicableCount = 0
             for dir in dirs {
                 let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
-                switch StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: dir) {
+                switch StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: dir) {
                 case .resolved: resolvedCount += 1; print("resolved: \(docID)")
                 case .notApplicable: notApplicableCount += 1
                 case .failed: break
@@ -815,7 +815,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
     }
 
-    // MARK: - ユーザーレビュー用エクスポート(borrowings_schedule_cf_supplement / property_plant_equipment_schedule / goodwill_and_intangibles)
+    // MARK: - ユーザーレビュー用エクスポート(borrowings_schedule / property_plant_equipment_schedule / goodwill_and_intangibles)
 
     private struct NotesReviewRow: Encodable {
         var docID: String
@@ -886,13 +886,13 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
 
     static func exportNotesReview(dirs: [URL], to url: URL) throws {
         let borrowings = notesReviewRows(dirs: dirs) {
-            StatementNotesResolver.resolveBorrowingsScheduleCFSupplement(xbrlDir: $0)
+            StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: $0)
         }
         let ppe = notesReviewRows(dirs: dirs) { StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: $0) }
         let goodwill = notesReviewRows(dirs: dirs) { StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: $0) }
 
         let payload: [String: [NotesReviewRow]] = [
-            "borrowings_schedule_cf_supplement": borrowings,
+            "borrowings_schedule": borrowings,
             "property_plant_equipment_schedule": ppe,
             "goodwill_and_intangibles": goodwill,
         ]

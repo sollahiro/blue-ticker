@@ -825,7 +825,7 @@ enum BorrowingsSchedule {
         )
     }
 
-    /// 財務諸表注記取り込み `borrowings_schedule_cf_supplement` note_type 向け。`extract` と異なり
+    /// 財務諸表注記取り込み `borrowings_schedule` note_type 向け。`extract` と異なり
     /// 平均利率も保持したまま行を返す（IBD 合算には使わない生の明細表データ）。
     static func extractRows(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         parseTable(xbrlDir: xbrlDir)

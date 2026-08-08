@@ -356,7 +356,7 @@ public func runFactsIngestCommand(
             // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み
             // 計算済みの値をそのまま再公開するのは research_and_development のみ（passthrough）。
             // EPS/発行済株式数/設備投資概要/配当金は注記からXBRL直接抽出（決議・イベント単位のテーブル
-            // 等）へ再設計済み。加えて borrowings_schedule_cf_supplement / PPE・のれん明細（IFRS連結限定）/
+            // 等）へ再設計済み。加えて borrowings_schedule / PPE・のれん明細（IFRS連結限定）/
             // policy_holding_securities（EDINET標準タクソノミの銘柄別構造化タグ、決定論・LLM不要）を
             // 実装・配信中（9 note_type）。
             //
@@ -395,8 +395,8 @@ public func runFactsIngestCommand(
                         { docID, _ in await context.resolveDividendsNote(docID: docID) }
                     ),
                     (
-                        statementNoteTypeBorrowingsScheduleCFSupplement,
-                        { docID, _ in await context.resolveBorrowingsScheduleCFSupplementNote(docID: docID) }
+                        statementNoteTypeBorrowingsSchedule,
+                        { docID, _ in await context.resolveBorrowingsScheduleNote(docID: docID) }
                     ),
                     (
                         statementNoteTypePropertyPlantEquipmentSchedule,

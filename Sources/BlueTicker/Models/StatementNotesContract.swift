@@ -23,7 +23,7 @@ public let statementNoteTypeResearchAndDevelopment = "research_and_development"
 public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
 public let statementNoteTypeSGABreakdown = "sga_breakdown"
-public let statementNoteTypeBorrowingsScheduleCFSupplement = "borrowings_schedule_cf_supplement"
+public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 /// 決定論（EDINET標準タクソノミの銘柄別構造化タグ、`StatementNotesResolver.resolvePolicyHoldingSecurities`
 /// 参照）。当初「LLM必須」と見込んでいたが実データ検証で構造化タグの存在が判明し方針転換した。
 public let statementNoteTypePolicyHoldingSecurities = "policy_holding_securities"
@@ -41,7 +41,7 @@ public let dividendsNoteCacheVersion = "notes-dividends-v1"
 public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
-public let borrowingsScheduleCFSupplementNoteCacheVersion = "notes-borrowings-schedule-v2"
+public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v2"
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v1"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
@@ -55,7 +55,7 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
     case statementNoteTypeSGABreakdown: return sgaBreakdownNoteCacheVersion
-    case statementNoteTypeBorrowingsScheduleCFSupplement: return borrowingsScheduleCFSupplementNoteCacheVersion
+    case statementNoteTypeBorrowingsSchedule: return borrowingsScheduleNoteCacheVersion
     case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion
     case statementNoteTypePropertyPlantEquipmentSchedule: return propertyPlantEquipmentScheduleNoteCacheVersion
     case statementNoteTypeGoodwillAndIntangibles: return goodwillAndIntangiblesNoteCacheVersion
@@ -167,7 +167,7 @@ public struct StatementNotePayload: Codable, Sendable {
     }
 }
 
-/// 借入金等明細表1区分分（`borrowings_schedule_cf_supplement` note_type 専用）。
+/// 借入金等明細表1区分分（`borrowings_schedule` note_type 専用）。
 /// `averageInterestRatePercent` は明細表「平均利率（％）」列の生数値（例: 0.80 は年0.80%）。
 /// 開示されない行（一部のリース債務・合計行等）は「－」表記のため nil。
 public struct BorrowingsComponentPayload: Codable, Sendable {
