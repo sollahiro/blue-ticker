@@ -302,14 +302,15 @@ private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bo
     try await CompanyBreakdown.query(on: db).filter(\.$code == code).first() != nil
 }
 
-/// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_*` 環境変数未設定・
+/// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_PUBLIC_BASE_URL` 未設定・
 /// DB クエリ失敗時は空辞書（呼び出し側は該当 code を icon_url: null として扱う）。
+/// read 経路のためアップロード用秘密鍵（`R2Config`）は要求しない（`R2PublicURLConfig` のみ使用）。
 /// `environment` はテスト注入用（既定はプロセス環境。`resolveXaiEndpoint` と同型）。
 func iconURLs(
     for codes: [String], db: Database,
     environment: [String: String] = ProcessInfo.processInfo.environment
 ) async -> [String: String] {
-    guard !codes.isEmpty, let r2Config = R2Config.resolveFromEnvironment(environment) else {
+    guard !codes.isEmpty, let urlConfig = R2PublicURLConfig.resolveFromEnvironment(environment) else {
         return [:]
     }
     guard let rows = try? await CompanyIcon.query(on: db).filter(\.$id ~~ codes).all() else {
@@ -318,7 +319,7 @@ func iconURLs(
     var result: [String: String] = [:]
     for row in rows {
         guard let code = row.id else { continue }
-        result[code] = r2Config.publicURL(forKey: row.r2ObjectKey)
+        result[code] = urlConfig.publicURL(forKey: row.r2ObjectKey)
     }
     return result
 }

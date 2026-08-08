@@ -506,7 +506,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
 
     // MARK: - iconURLs（company_icons バッチ lookup）
 
-    @Test func iconURLsReturnsEmptyWhenR2ConfigMissing() async throws {
+    @Test func iconURLsReturnsEmptyWhenPublicBaseURLMissing() async throws {
         try await withApp(databases: true) { app in
             let icon = CompanyIcon(
                 code: "7203", sourceURL: "https://global.toyota",
@@ -519,7 +519,9 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
-    @Test func iconURLsBuildsPublicURLFromR2ConfigWhenStored() async throws {
+    @Test func iconURLsBuildsPublicURLFromOnlyPublicBaseURLWhenStored() async throws {
+        // read 経路は BLT_R2_PUBLIC_BASE_URL のみで組み立てる（アップロード用秘密鍵は不要・
+        // 最小権限。BLT_R2_ACCOUNT_ID 等を渡さなくても icon_url が組み立てられることを確認する）。
         try await withApp(databases: true) { app in
             let icon = CompanyIcon(
                 code: "7203", sourceURL: "https://global.toyota",
@@ -527,11 +529,7 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
                 cacheVersion: companyIconsCacheVersion)
             try await icon.create(on: app.db)
 
-            let env = [
-                "BLT_R2_ACCOUNT_ID": "acc", "BLT_R2_ACCESS_KEY_ID": "key",
-                "BLT_R2_SECRET_ACCESS_KEY": "secret", "BLT_R2_BUCKET": "bucket",
-                "BLT_R2_PUBLIC_BASE_URL": "https://icons.example.com",
-            ]
+            let env = ["BLT_R2_PUBLIC_BASE_URL": "https://icons.example.com"]
             let result = await iconURLs(for: ["7203", "6758"], db: app.db, environment: env)
             #expect(result["7203"] == "https://icons.example.com/company-icons/7203.png")
             #expect(result["6758"] == nil)

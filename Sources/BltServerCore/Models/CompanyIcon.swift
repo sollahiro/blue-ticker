@@ -18,7 +18,8 @@ final class CompanyIcon: Model, @unchecked Sendable {
     @Field(key: "source_url")
     var sourceURL: String
 
-    /// R2 バケット内のオブジェクトキー。公開URLは `R2Config.publicURL(forKey:)` で組み立てる。
+    /// R2 バケット内のオブジェクトキー。公開URLは `R2PublicURLConfig.publicURL(forKey:)`（read経路）
+    /// または `R2Config.publicURL(forKey:)`（アップロード経路）で組み立てる。
     @Field(key: "r2_object_key")
     var r2ObjectKey: String
 

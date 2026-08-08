@@ -48,8 +48,36 @@ public struct R2Config: Sendable {
 
     /// アップロード後にクライアントへ返す公開URL（カスタムドメイン等、実値は `publicBaseURL` に委ねる）。
     public func publicURL(forKey key: String) -> String {
-        "\(publicBaseURL)/\(key)"
+        buildR2PublicURL(baseURL: publicBaseURL, key: key)
     }
+}
+
+/// R2公開URLの組み立てのみを担う軽量設定（read経路専用）。`R2Config` と異なり、アップロードに
+/// 必要な秘密鍵（account_id・access_key_id・secret_access_key・bucket）を要求しない。
+/// アップロードを一切行わない配信プロセス（REST read）に秘密鍵を渡す最小権限違反を避けるため
+/// （監査レビューで指摘）。
+public struct R2PublicURLConfig: Sendable {
+    let publicBaseURL: String
+
+    public init(publicBaseURL: String) {
+        self.publicBaseURL = publicBaseURL
+    }
+
+    /// `BLT_R2_PUBLIC_BASE_URL` のみから解決する。未設定時は nil。
+    public static func resolveFromEnvironment(
+        _ environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> R2PublicURLConfig? {
+        guard let publicBaseURL = nonEmpty(environment["BLT_R2_PUBLIC_BASE_URL"]) else { return nil }
+        return R2PublicURLConfig(publicBaseURL: publicBaseURL)
+    }
+
+    public func publicURL(forKey key: String) -> String {
+        buildR2PublicURL(baseURL: publicBaseURL, key: key)
+    }
+}
+
+private func buildR2PublicURL(baseURL: String, key: String) -> String {
+    "\(baseURL)/\(key)"
 }
 
 private func nonEmpty(_ value: String?) -> String? {
