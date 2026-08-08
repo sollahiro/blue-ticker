@@ -286,8 +286,11 @@ smoke/
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
+| 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
+
+`RealXbrlBreakdownTests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
 
 CI では `swift-macos` ジョブの `Test` ステップに repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。
 

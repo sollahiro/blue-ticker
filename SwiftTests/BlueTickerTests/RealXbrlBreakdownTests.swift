@@ -1,9 +1,7 @@
-// 実 EDINET XBRL キャッシュ（analysis_cache）での 内訳取り込み business 抽出・解決の回帰テスト。
-//
-// 対象（2026-07-24 実データ検証）:
-// - 5108 ブリヂストン S100XRPR: 地域別報告セグメント → IFRS 売上収益の粗い事業区分（タイヤ/その他）
-// - 4506 住友ファーマ S100YH3M: 地域別 facts を維持し、製品別表を SegmentInfoLLM へ
-// - 6902 デンソー S100Y9T1: 地域別報告セグメント → IFRS 売上収益の事業区分（サーマル等）
+// 実 EDINET XBRL キャッシュ（analysis_cache）での内訳（business/geography breakdown）
+// 抽出・解決の回帰テスト。`smoke/` 配下のフィクスチャは使わず、対象企業は各 @Test 関数に
+// 個別ハードコードしている（4 @Suite: Extraction / EmployeesRD / Resolver / LiveLLM。
+// 一覧は本ファイルの @Test 関数名、または `swift test --filter RealXbrlBreakdown --list-tests`）。
 //
 // `BLT_EDINET_API_KEY`（CI の swift-macos/swift-linux ジョブは secrets 経由で設定済み）が
 // あれば `SmokeCacheSupport.ensureCached` で不足キャッシュを自動取得して実データのまま検証する。

@@ -2,6 +2,11 @@
 
 ロジック変更時のリグレッション検知を目的とした、XBRL解析レベルの期待値データセット。
 
+本ファイルが扱うのは `SmokeTests.swift`（財務諸表フィールド）のみです。内訳（business/geography
+breakdown）抽出・解決の実データ回帰テストは対象企業が別（`RealXbrlBreakdownTests.swift`）で、
+`smoke/` 配下のフィクスチャは使いません。テスト一式の全体像は
+`docs/xbrl-parsing.md`「6. スモークテスト」の一覧表を参照してください。
+
 ## ファイル構成
 
 ```
