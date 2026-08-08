@@ -287,6 +287,14 @@ smoke/
 | 年次スモーク | `SwiftTests/BlueTickerTests/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
+| 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
+
+**golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
+
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。ただし現状の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）のみで、**note_type(statement-notes)/breakdownの決定論ロジックはこの床に含まれていない**
+- **golden回帰**（年次スモーク以外の3種）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
+
+原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は未整備というギャップがある。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない場合がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床をnote_type/breakdownまで広げる。
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 

@@ -359,6 +359,10 @@ enum Xbrl {
     /// 連結附属明細表「借入金等明細表」TextBlock タグ。
     /// 連結BSに有利子負債の数値タグが無い企業（リース債務が明細表のみに記載される等）のフォールバック源。
     static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
+    /// 単体（非連結）附属明細表「借入金等明細表」TextBlock タグ。連結財務諸表を作成しない小規模企業
+    /// （東邦レマック S100XRD8 実データ検証、2026-08-08）はこちらのみ持つ。列構成・「合計」行の
+    /// 判定は連結版と同じ（`parseJGaapScheduleTable` を共有）。
+    static let borrowingsScheduleNonConsolidatedTextblockTag = "AnnexedDetailedScheduleOfBorrowingsFinancialStatementsTextBlock"
 
     /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記 TextBlock タグ。J-GAAP附属明細表タグが
     /// 存在しない、または財務諸表等規則の適用除外でクロスリファレンス文のみ（表なし）の場合に使う
