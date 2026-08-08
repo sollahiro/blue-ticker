@@ -151,8 +151,8 @@ let financialsIngestYears = 6
 /// 再開できる。財務取り込みの `computeFinancials` は自前で生 XBRL を DL するため、数値 fact 取り込みを
 /// 飛ばしても financials は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
 ///
-/// `targets` は実行する financials/filing-sections/breakdowns/statements の集合
-/// （CLI: `--stages filing-sections` 等）。既定は全対象。
+/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons の集合
+/// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// 数値 fact 取り込みは `targets` に含めず、従来どおり `includeFacts` で別制御する。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
@@ -426,6 +426,25 @@ public func runFactsIngestCommand(
                     stored: s8.stored, failed: s8.failed, skipped: s8.skipped,
                     servable: coverage?.servable, unservable: coverage?.unservable,
                     notApplicable: s8.notApplicable, purged: s8.purged)
+            }
+        }
+        if targets.contains(.icons) {
+            // 会社アイコン取り込み: R2クレデンシャル（`BLT_R2_*`）が無い環境（ローカル未設定・Cursor Cloud等）
+            // では対象に含めてもスキップし、他ステージの ingest を妨げない。
+            if let r2Config = R2Config.resolveFromEnvironment() {
+                let s9 = try await runIconsIngest(
+                    db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
+                    priorityCodes: priority, logger: app.logger
+                ) { docID, code in
+                    await context.extractAndUploadCompanyIcon(docID: docID, code: code, r2Config: r2Config)
+                }
+                logIngestSummary(
+                    app.logger, target: "icons", attempted: s9.attempted, stored: s9.stored,
+                    failed: s9.failed, skipped: s9.skipped)
+            } else {
+                app.logger.notice(
+                    "会社アイコン取り込み skipped (BLT_R2_* 環境変数未設定)",
+                    metadata: ["event": "ingest_skipped", "target": "icons", "reason": "r2_config_missing"])
             }
         }
     } catch {

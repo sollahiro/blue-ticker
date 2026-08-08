@@ -15,6 +15,9 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     case statements
     /// 財務諸表注記（company_statement_notes）。対象は statements と同じ日経225限定。
     case notes = "statement-notes"
+    /// 会社アイコン（company_icons、favicon の R2 格納先メタデータ）。`BLT_R2_*` 環境変数未設定時は
+    /// 対象に含めてもスキップされる（`runFactsIngestCommand` 参照）。
+    case icons
 }
 
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。
