@@ -58,6 +58,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyStatementNotes())
     // 半期分析機能の削除に伴い company_half_financials テーブルを削除（不可逆）。
     app.migrations.add(DropCompanyHalfFinancials())
+    // 会社アイコン取り込み: favicon の R2 格納先メタデータ（company_icons、会社単位）。
+    app.migrations.add(CreateCompanyIcons())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,
