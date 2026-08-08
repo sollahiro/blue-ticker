@@ -93,38 +93,6 @@ actor MasterDataManager {
         )
     }
 
-    func searchBySector(_ sector: String, limit: Int = 20) async -> [StockSearchResult] {
-        await loadIfNeeded()
-        let q = sector.lowercased()
-        if q.isEmpty { return [] }
-        var results: [StockSearchResult] = []
-        for stock in stocks {
-            if stock.s33nm.lowercased().contains(q) {
-                results.append(StockSearchResult(
-                    code: stock.code,
-                    name: stock.coName,
-                    sector: stock.s33nm,
-                    market: stock.mktNm,
-                    location: stock.location
-                ))
-                if results.count >= limit { break }
-            }
-        }
-        return results
-    }
-
-    func allSectors() async -> [SectorSummary] {
-        await loadIfNeeded()
-        var counts: [String: (name: String, count: Int)] = [:]
-        for stock in stocks {
-            let code = stock.s33
-            let existing = counts[code]
-            counts[code] = (stock.s33nm, (existing?.count ?? 0) + 1)
-        }
-        return counts.map { SectorSummary(code: $0.key, name: $0.value.name, count: $0.value.count) }
-            .sorted { $0.code < $1.code }
-    }
-
     // MARK: - Private
 
     private func loadCSV(from url: URL) async {

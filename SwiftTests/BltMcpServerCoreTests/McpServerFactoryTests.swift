@@ -10,7 +10,7 @@ import Testing
 @testable import BltMcpServerCore
 
 private let expectedToolNames: Set<String> = [
-    "search_companies", "search_by_sector", "get_filings",
+    "search_companies", "get_filings",
     "get_financial_summary",
     "get_waterfall", "get_filing_content",
     "get_breakdown", "get_statement", "get_statement_notes",
@@ -130,14 +130,6 @@ private func send(
             Set((searchSchema["required"]?.arrayValue ?? []).compactMap(\.stringValue)) == ["query"])
         #expect(searchSchema["properties"]?.objectValue?["query"]?.objectValue?["type"]?.stringValue == "string")
         #expect(searchSchema["properties"]?.objectValue?["q"] == nil)
-
-        let sector = try #require(byName["search_by_sector"])
-        let sectorSchema = try #require(sector.inputSchema.objectValue)
-        #expect(
-            Set((sectorSchema["required"]?.arrayValue ?? []).compactMap(\.stringValue)) == ["sector"])
-        let limit = try #require(sectorSchema["properties"]?.objectValue?["limit"]?.objectValue)
-        #expect(limit["type"]?.stringValue == "integer")
-        #expect(limit["default"]?.intValue == Api.sectorCompaniesLimitDefault)
 
         let financials = try #require(byName["get_financial_summary"])
         let financialsProps = try #require(financials.inputSchema.objectValue?["properties"]?.objectValue)

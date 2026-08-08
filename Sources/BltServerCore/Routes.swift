@@ -91,18 +91,6 @@ func registerRoutes(
         return jsonResponse(apiSkillDetailJSON(skill), status: .ok)
     }
 
-    // GET /v1/sectors/{sector}/companies?limit=20
-    v1.get("sectors", ":sector", "companies") { req async -> Response in
-        let sector = req.parameters.get("sector") ?? ""
-        let limit = req.query[Int.self, at: "limit"] ?? Api.sectorCompaniesLimitDefault
-        return makeResponse(await context.searchBySector(sector: sector, limit: limit))
-    }
-
-    // GET /v1/sectors: 東証33業種の一覧と業種別銘柄数（CLI `sector` コマンド用）。
-    v1.get("sectors") { _ async -> Response in
-        makeResponse(await context.allSectors())
-    }
-
     // GET /v1/companies/{code}/filings?max_years=5
     // DB（書類同期 `edinet_documents`）に同期済みの書類があればそれを読んで返す
     // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。

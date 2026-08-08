@@ -157,11 +157,6 @@ private func dispatchMcpTool(
         let q = args["query"]?.stringValue ?? ""
         return mapBltResponse(await context.searchCompanies(q: q))
 
-    case "search_by_sector":
-        let sector = args["sector"]?.stringValue ?? ""
-        let limit = args["limit"]?.intValue ?? Api.sectorCompaniesLimitDefault
-        return mapBltResponse(await context.searchBySector(sector: sector, limit: limit))
-
     case "get_filings":
         let code = args["code"]?.stringValue ?? ""
         let maxYears = args["max_years"]?.intValue ?? Api.filingsMaxYearsDefault

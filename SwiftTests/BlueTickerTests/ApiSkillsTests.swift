@@ -12,20 +12,17 @@ import Testing
         #expect(ids.contains("search-companies"))
         #expect(ids.contains("get-breakdown"))
         #expect(ids.contains("get-statement"))
-        #expect(ids.contains("list-sectors"))
     }
 
     @Test func mcpToolNamesMatchExpectedSet() {
         let names = Set(apiSkillsCatalog().compactMap(\.mcpTool))
         #expect(
             names == [
-                "search_companies", "search_by_sector", "get_filings",
+                "search_companies", "get_filings",
                 "get_financial_summary",
                 "get_waterfall", "get_filing_content",
                 "get_breakdown", "get_statement", "get_statement_notes",
             ])
-        // REST 専用（MCP なし）
-        #expect(apiSkill(id: "list-sectors")?.mcpTool == nil)
     }
 
     @Test func searchCompaniesMapsQueryAliasForMcp() throws {

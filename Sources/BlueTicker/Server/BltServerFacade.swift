@@ -142,19 +142,6 @@ public extension BltServerContext {
         return .ok(results.map(companyJSON))
     }
 
-    func searchBySector(sector: String, limit: Int) async -> BltServerResponse {
-        let results = await masterDataManager.searchBySector(sector, limit: limit)
-        let json = results.map(companyJSON)
-        return .ok(json)
-    }
-
-    /// 東証33業種の一覧と業種別銘柄数。CLI `sector` コマンドが使う（remote 専用化に伴い REST 化）。
-    func allSectors() async -> BltServerResponse {
-        let results = await masterDataManager.allSectors()
-        let json = results.map { ["code": $0.code, "name": $0.name, "count": $0.count] as [String: Any] }
-        return .ok(json)
-    }
-
     func getFilings(code: String, maxYears: Int) async -> BltServerResponse {
         let stock = await masterDataManager.getByCode(code)
         let service = FilingService(edinetClient: edinetClient)
@@ -675,7 +662,7 @@ private func xbrlFactRecord(from f: XbrlFact) -> XbrlFactRecord {
 // MARK: - Helpers
 
 private extension BltServerContext {
-    /// 企業検索結果の公開 JSON（companies / sectors エンドポイント共通）。
+    /// 企業検索結果の公開 JSON。
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
     }

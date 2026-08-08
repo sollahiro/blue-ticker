@@ -32,7 +32,6 @@ public enum Api {
 
     // REST API クエリの省略時デフォルト（BltServerCore から参照するため public）。
     // 値は既存の直書きと同一（挙動不変）。
-    public static let sectorCompaniesLimitDefault = 20
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
