@@ -64,17 +64,21 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 
 `blt-server` の Neon テーブルの staleness 判定は **`blueTickerVersion` と独立した専用定数**で行う。ローカル derived とコスト構造が逆（再生成に EDINET からの XBRL 再ダウンロード＋再パース／再計算が伴い高コスト）なため、月内 Micro バンプで毎回全件再 ingest が走らないよう、グローバルバージョンから切り離している。facts・financials で別定数を持つ。
 
-| テーブル | 定数 | 置き場所 | 現在値 |
-|---|---|---|---|
-| `edinet_xbrl_facts`（facts RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` | `"facts-v1"` |
-| `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` | `"fin-v5"`（`BorrowingsSchedule.extract`大幅改修、2026-08-05） |
-| （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 | `4`（`fin-v4` 以上を 200。2026-07-28、上場廃止47社のfin-v2/v3行をDELETEで消化した後に引き上げ） |
-| `company_filing_sections`（filing-sections 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` | `"sections-v5"`（geography: 地域報告セグメントの OperatingSegments フォールバック＋APAC、issue #163） |
-| （同上・read 床） | `filingSectionsMinServableVersion` | 同上 | `1`（`sections-v1` 以上を 200） |
-| `company_breakdowns`（breakdowns business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` | `"breakdown-business-v8"`（旧共通 `breakdown-v7` から軸分離、2026-07-27。business の決定的ロジック変更時のみバンプ。LLM 行はバンプ非連動。ingest は business→geography の2パス。REST/MCP は business / geography 両軸を公開（2026-07-27解禁）。詳細は `docs/breakdown-normalization-concept.md`。v8: xbrl_facts 経路の行に XBRL ラベルリンクベース由来の日本語 `label` フィールドを追加、2026-08-03） |
-| （同上・read 床。xbrl_facts / not_applicable 経由のみ） | `businessBreakdownMinServableVersion` | 同上 | `1`（`…-v1` 以上を 200。LLM 経由の行は cache_version でゲートしない） |
-| `company_breakdowns`（breakdowns geography 軸） | `geographyBreakdownCacheVersion` | 同上 | `"breakdown-geography-v9"`（電通型: 地域報告セグメント facts フォールバック、issue #163。決定的ロジック変更時のみバンプ。v9: business軸v8と同時、日本語 `label` フィールド追加、2026-08-03） |
-| （同上・read 床） | `geographyBreakdownMinServableVersion` | 同上 | `1` |
+現在値は各定数の定義箇所が正本（このテーブルは配線と読み方のインデックスのみ。値そのものの更新履歴はコミット履歴・`docs/breakdown-normalization-concept.md`側の「今後の検討事項」に譲る）。
+
+| テーブル | 定数 | 置き場所 |
+|---|---|---|
+| `edinet_xbrl_facts`（facts RAW） | `xbrlFactsCacheVersion` | `Models/XbrlFactRecord.swift` |
+| `company_financials`（financials derived） | `companyFinancialsCacheVersion` | `Models/FinancialsContract.swift` |
+| （同上・read 床） | `companyFinancialsMinServableVersion` | 同上 |
+| `company_filing_sections`（filing-sections 有報セクション本文） | `filingSectionsCacheVersion` | `Models/FilingSectionsContract.swift` |
+| （同上・read 床） | `filingSectionsMinServableVersion` | 同上 |
+| `company_breakdowns`（breakdowns business 軸） | `businessBreakdownCacheVersion` | `Models/BreakdownContract.swift` |
+| （同上・read 床。xbrl_facts / not_applicable 経由のみ） | `businessBreakdownMinServableVersion` | 同上 |
+| `company_breakdowns`（breakdowns geography 軸） | `geographyBreakdownCacheVersion` | 同上 |
+| （同上・read 床） | `geographyBreakdownMinServableVersion` | 同上 |
+
+business/geography 軸は cache_version が分離しており、片方のバンプがもう片方の行を stale にしない（ingest は軸パラメータごとに独立して staleness 判定する）。LLM 経由の行（`segment_info_llm`/`geography_llm` 等）は cache_version バンプに連動しない（`needs_review=true` のときのみ再試行）。詳細は `docs/breakdown-normalization-concept.md`。
 
 ### バンプ規則
 
@@ -96,12 +100,6 @@ if let c = cached, (c["_cache_version"] as? String) == _cacheVersion {
 
 financials / filing-sections read は現行版完全一致ではなく各 min servable 以上を返すため、現行版バンプ直後も床以上の旧行は 200 のまま（バンプの崖を避ける）。ingest は引き続き現行版へ収束する。
 
-### 軸分離後の移行（`breakdown-v7` → `breakdown-business-v7` / `breakdown-geography-v7`）
-
-2026-07-27 の軸別 cache_version 分離以前に `breakdown-v7`（共通）で格納されていた **決定的 source**（`xbrl_facts` / `not_applicable`）の行は、初回 ingest で各軸の現行版（`breakdown-business-v7` / `breakdown-geography-v7`）と文字列が一致しないため **一度だけ stale** となり再計算される（`breakdownCacheVersionNumber` は旧 `breakdown-vN` も受理するが、ingest の書き込み先は軸別現行版）。**LLM 経由**（`segment_info_llm` / `geography_llm` 等）は cache_version バンプ非連動のため、needs_review=false の行はこの移行でも据え置き。
-
-business 軸の `businessBreakdownCacheVersion` バンプは geography 軸の行を stale にせず、逆も同様（ingest は軸パラメータごとに独立して staleness 判定する）。
-
 ### filing-sections / extractor 修正と geography LLM 行の再計算
 
-`filingSectionsCacheVersion`（sections-v4 等）のバンプや `BreakdownExtractor` の geography 抽出修正だけでは、**既存の `geography_llm` 行（needs_review=false）は再計算されない**（LLM 行は content_hash + needs_review でのみ再試行。`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。抽出ロジック改善の恩恵を geography LLM 行に届けるには、該当軸の LLM 行を `needs_review=true` に更新するか削除してから `blt-server ingest --stages breakdowns` を実行する（business 軸の `segment_info_llm` も同型）。
+`filingSectionsCacheVersion` のバンプや `BreakdownExtractor` の geography 抽出修正だけでは、**既存の `geography_llm` 行（needs_review=false）は再計算されない**（LLM 行は content_hash + needs_review でのみ再試行。`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。抽出ロジック改善の恩恵を geography LLM 行に届けるには、該当軸の LLM 行を `needs_review=true` に更新するか削除してから `blt-server ingest --stages breakdowns` を実行する（business 軸の `segment_info_llm` も同型）。

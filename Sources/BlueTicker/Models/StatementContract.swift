@@ -1,9 +1,9 @@
-// Statement（BS/PL/CF 完全正規化、Statement 取り込み）API の公開契約の骨組み。
+// Statement（BS/PL/CF 完全正規化、Statement 取り込み）API の公開契約。
 // docs/statement-normalization-concept.md 参照。
 //
-// 現時点では型定義のみ（compute 関数・DB モデル・ingest・REST・MCP 配線は未実装）。
+// compute 関数・DB モデル・ingest・REST・MCP 配線は実装済み（日経225限定）。
 // FinancialsContract.swift のバージョニング四点セット（cache_version 文字列・
-// min_servable 整数・数値パーサー・servable 判定）と同型で用意しておく。
+// min_servable 整数・数値パーサー・servable 判定）と同型で用意している。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
@@ -17,7 +17,7 @@ public enum StatementComputeResult: Sendable {
     case failed
 }
 
-/// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`、未実装）の計算バージョン。
+/// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、抽出ロジックまたは本契約型の意味を変えたときのみバンプする
 /// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/project/versioning.md`）。
 /// 注記（注記取り込み）は別バージョン系統になる想定で、本定数には連動させない。
