@@ -49,8 +49,13 @@ enum CorporateWebsiteExtractor {
         return Result(url: nil, method: "not_found")
     }
 
+    /// URL本体はASCII印字可能文字（`!`〜`~`）のみを許可する（RFC3986のURI文字集合を包含する
+    /// ホワイトリスト）。除外方式（`[^\s<>"'　]+`）だと、開示文でURL直後に空白なく日本語が続く
+    /// 表記（例: テルモ「…https://www.terumo.co.jpです。」）を巻き込み、`URL(string:)`が
+    /// 末尾の日本語をIDNA punycode化して不正ホスト（`terumo.co.xn--jp-883a6b.`等）を生成する
+    /// 実データ不具合があった（監査レビューで発見、157件中1件）。
     private static func firstURL(in text: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: "https?[:：]//[^\\s<>\"'　]+"),
+        guard let regex = try? NSRegularExpression(pattern: "https?[:：]//[!-~]+"),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let range = Range(match.range, in: text) else { return nil }
         return String(text[range]).replacingOccurrences(of: "：", with: ":")

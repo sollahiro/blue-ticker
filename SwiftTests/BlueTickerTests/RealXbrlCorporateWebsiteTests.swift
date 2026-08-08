@@ -62,6 +62,16 @@ import Testing
         #expect(result.url == "https://www.lasertec.co.jp")
     }
 
+    // MARK: - テルモ S100R4TX（URL直後に空白なく日本語「です。」が続く。監査レビューで発見:
+    // 除外方式の正規表現だとIDNA punycode化された不正ホストを生成していた）
+
+    @Test(.enabled(if: cacheAvailable("S100R4TX"), "XBRL cache S100R4TX not available"))
+    func terumoStopsURLBeforeTrailingJapaneseText() {
+        let result = CorporateWebsiteExtractor.extract(xbrlDir: Self.xbrlDir("S100R4TX"))
+        #expect(result.method == "xbrl_url")
+        #expect(result.url == "https://www.terumo.co.jp")
+    }
+
     // MARK: - S100L0TZ（紙媒体（日本経済新聞）のみ、電子公告なし＝正当な not_applicable）
 
     @Test(.enabled(if: cacheAvailable("S100L0TZ"), "XBRL cache S100L0TZ not available"))
