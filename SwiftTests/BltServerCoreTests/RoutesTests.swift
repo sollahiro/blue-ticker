@@ -43,6 +43,7 @@ private func withApp(
             app.migrations.add(CreateCompanySegmentBreakdowns())
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
+            app.migrations.add(CreateCompanyIcons())
             try await app.autoMigrate()
         }
         try await registerRoutes(
@@ -417,6 +418,28 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
+    @Test func demoCompaniesIconUrlIsNullWhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = businessBreakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies?q=トヨタ")
+            #expect(status == .ok)
+            let companies = try #require(json?["companies"] as? [[String: Any]])
+            let toyota = try #require(companies.first { $0["code"] as? String == "7203" })
+            #expect(toyota["icon_url"] is NSNull)
+        }
+    }
+
     @Test func demoCompaniesIncludesCorsHeaderForAllowedOrigin() async throws {
         // sollahiro.com（静的サイト）から api.sollahiro.com への別オリジン fetch を
         // ブラウザに許可させるため、許可オリジンからのリクエストには
@@ -478,6 +501,40 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
                 app, "/v1/companies?q=7203", origin: Api.demoAllowedOrigin)
             #expect(status == .ok)
             #expect(headers[.accessControlAllowOrigin].isEmpty)
+        }
+    }
+
+    // MARK: - iconURLs（company_icons バッチ lookup）
+
+    @Test func iconURLsReturnsEmptyWhenR2ConfigMissing() async throws {
+        try await withApp(databases: true) { app in
+            let icon = CompanyIcon(
+                code: "7203", sourceURL: "https://global.toyota",
+                r2ObjectKey: "company-icons/7203.png", contentType: "image/png",
+                cacheVersion: companyIconsCacheVersion)
+            try await icon.create(on: app.db)
+
+            let result = await iconURLs(for: ["7203"], db: app.db, environment: [:])
+            #expect(result.isEmpty)
+        }
+    }
+
+    @Test func iconURLsBuildsPublicURLFromR2ConfigWhenStored() async throws {
+        try await withApp(databases: true) { app in
+            let icon = CompanyIcon(
+                code: "7203", sourceURL: "https://global.toyota",
+                r2ObjectKey: "company-icons/7203.png", contentType: "image/png",
+                cacheVersion: companyIconsCacheVersion)
+            try await icon.create(on: app.db)
+
+            let env = [
+                "BLT_R2_ACCOUNT_ID": "acc", "BLT_R2_ACCESS_KEY_ID": "key",
+                "BLT_R2_SECRET_ACCESS_KEY": "secret", "BLT_R2_BUCKET": "bucket",
+                "BLT_R2_PUBLIC_BASE_URL": "https://icons.example.com",
+            ]
+            let result = await iconURLs(for: ["7203", "6758"], db: app.db, environment: env)
+            #expect(result["7203"] == "https://icons.example.com/company-icons/7203.png")
+            #expect(result["6758"] == nil)
         }
     }
 }
