@@ -3,9 +3,10 @@
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-server ingest [--limit N] [--with-facts] [--stages financials,
-//                     filing-sections,breakdowns,statements,statement-notes] [--codes 7203,6758]
+//                     filing-sections,breakdowns,statements,statement-notes,icons] [--codes 7203,6758]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
 //                                                            breakdowns/statements/statement-notes は日経225構成銘柄限定。
+//                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
 //                                                            --with-facts で XBRL 数値 fact も取り込む。既定は停止。issue #22。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            breakdowns/statements/statement-notes では --codes を対象母集団にも使う
@@ -61,7 +62,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
-            printError("blt-server error: --stages は financials,filing-sections,breakdowns,statements,statement-notes のカンマ区切りで指定してください\n")
+            printError("blt-server error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

@@ -6,16 +6,29 @@ import Foundation
 import FoundationNetworking
 #endif
 
-struct R2Config: Sendable {
+/// `BltServerContext.extractAndUploadCompanyIcon`（Server ファサード）が公開シグネチャで受け取るため
+/// public（呼び出し元 BltServerCore ingest が環境変数から解決して渡す）。
+public struct R2Config: Sendable {
     let accountID: String
     let accessKeyID: String
     let secretAccessKey: String
     let bucket: String
     let publicBaseURL: String
 
+    public init(
+        accountID: String, accessKeyID: String, secretAccessKey: String, bucket: String,
+        publicBaseURL: String
+    ) {
+        self.accountID = accountID
+        self.accessKeyID = accessKeyID
+        self.secretAccessKey = secretAccessKey
+        self.bucket = bucket
+        self.publicBaseURL = publicBaseURL
+    }
+
     /// `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` /
     /// `BLT_R2_BUCKET` / `BLT_R2_PUBLIC_BASE_URL` から解決する。いずれか欠落時は nil。
-    static func resolveFromEnvironment(
+    public static func resolveFromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> R2Config? {
         guard let accountID = nonEmpty(environment["BLT_R2_ACCOUNT_ID"]),
@@ -34,7 +47,7 @@ struct R2Config: Sendable {
     var endpointHost: String { "\(accountID).r2.cloudflarestorage.com" }
 
     /// アップロード後にクライアントへ返す公開URL（カスタムドメイン等、実値は `publicBaseURL` に委ねる）。
-    func publicURL(forKey key: String) -> String {
+    public func publicURL(forKey key: String) -> String {
         "\(publicBaseURL)/\(key)"
     }
 }

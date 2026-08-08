@@ -236,6 +236,24 @@ public extension BltServerContext {
         return await analyzer.extract(docID: docID, statementTypes: statementTypes)
     }
 
+    /// 会社アイコン取り込み: 書類1件分のXBRLから電子公告URLを抽出し、faviconを取得してR2へアップロードする。
+    /// URL抽出（`CorporateWebsiteExtractor`）・favicon取得（`FaviconFetcher`）・R2アップロード
+    /// （`R2Client`）のいずれかが失敗すれば nil（戻り値パターン）。
+    /// `r2Config` は呼び出し側（BltServerCore ingest）が環境変数から解決して渡す。
+    func extractAndUploadCompanyIcon(docID: String, code: String, r2Config: R2Config) async
+        -> CompanyIconExtractResult?
+    {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+        guard let origin = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir).url else { return nil }
+        guard let icon = await FaviconFetcher.fetch(origin: origin) else { return nil }
+
+        let key = "company-icons/\(code)\(companyIconFileExtension(forContentType: icon.contentType))"
+        guard await R2Client.upload(icon.data, key: key, contentType: icon.contentType, config: r2Config)
+        else { return nil }
+
+        return CompanyIconExtractResult(sourceURL: origin, r2ObjectKey: key, contentType: icon.contentType)
+    }
+
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
     /// financials/filing-sections 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
     /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
@@ -665,5 +683,19 @@ private extension BltServerContext {
     /// 企業検索結果の公開 JSON。
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
+    }
+}
+
+/// R2オブジェクトキーの拡張子（`FaviconFetcher.sniffImageContentType` が返す値のみ受理）。
+/// 未知の content-type は拡張子なし（`R2Client` 側はキーそのものでアップロードでき、必須ではない）。
+private func companyIconFileExtension(forContentType contentType: String) -> String {
+    switch contentType {
+    case "image/png": return ".png"
+    case "image/x-icon": return ".ico"
+    case "image/jpeg": return ".jpg"
+    case "image/gif": return ".gif"
+    case "image/bmp": return ".bmp"
+    case "image/svg+xml": return ".svg"
+    default: return ""
     }
 }
