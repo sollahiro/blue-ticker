@@ -71,9 +71,23 @@ func registerRoutes(
     let dbAvailable = !app.databases.ids().isEmpty
 
     // GET /v1/companies?q={query}
+    // icon_url は company_icons（R2格納済み favicon）のバッチ lookup で合成する（未格納・R2未設定・
+    // DB未接続時は null）。searchCompanies 自体は DB 非依存のファサード（BlueTickerCore）のため、
+    // ここ（BltServerCore・DB 接続を持つ層）で合成する。
     v1.get("companies") { req async -> Response in
         let q = req.query[String.self, at: "q"] ?? ""
-        return makeResponse(await context.searchCompanies(q: q))
+        let response = await context.searchCompanies(q: q)
+        guard case .ok(let results as [[String: Any]]) = response else {
+            return makeResponse(response)
+        }
+        let codes = results.compactMap { $0["code"] as? String }
+        let icons = dbAvailable ? await iconURLs(for: codes, db: req.db) : [:]
+        let merged = results.map { row -> [String: Any] in
+            var r = row
+            r["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
+            return r
+        }
+        return jsonResponse(merged, status: .ok)
     }
 
     // GET /v1/skills: MCP tools/list に相当する「いつ使うか／どう呼ぶか」カタログ（一覧）。
@@ -229,11 +243,18 @@ func registerRoutes(
         do {
             let candidateCodes = candidates.compactMap { $0["code"] as? String }
             let eligible = try await demoEligibleCodes(among: candidateCodes, db: req.db)
-            let results =
+            let filtered =
                 candidates
                 .filter { eligible.contains($0["code"] as? String ?? "") }
                 .prefix(Api.demoSearchResultLimit)
-                .map { ["code": $0["code"] ?? "", "name": $0["name"] ?? ""] as [String: Any] }
+            let filteredCodes = filtered.compactMap { $0["code"] as? String }
+            let icons = await iconURLs(for: filteredCodes, db: req.db)
+            let results = filtered.map {
+                [
+                    "code": $0["code"] ?? "", "name": $0["name"] ?? "",
+                    "icon_url": icons[$0["code"] as? String ?? ""] ?? NSNull(),
+                ] as [String: Any]
+            }
             return jsonResponse(["companies": Array(results)], status: .ok)
         } catch {
             return errorResponse(.serviceUnavailable, message: "検索データベースに接続できません")
@@ -279,6 +300,28 @@ private func demoEligibleCodes(among candidates: [String], db: Database) async t
 /// 単一の銘柄コードが company_breakdowns に格納済みか判定する。
 private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bool {
     try await CompanyBreakdown.query(on: db).filter(\.$code == code).first() != nil
+}
+
+/// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_PUBLIC_BASE_URL` 未設定・
+/// DB クエリ失敗時は空辞書（呼び出し側は該当 code を icon_url: null として扱う）。
+/// read 経路のためアップロード用秘密鍵（`R2Config`）は要求しない（`R2PublicURLConfig` のみ使用）。
+/// `environment` はテスト注入用（既定はプロセス環境。`resolveXaiEndpoint` と同型）。
+func iconURLs(
+    for codes: [String], db: Database,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+) async -> [String: String] {
+    guard !codes.isEmpty, let urlConfig = R2PublicURLConfig.resolveFromEnvironment(environment) else {
+        return [:]
+    }
+    guard let rows = try? await CompanyIcon.query(on: db).filter(\.$id ~~ codes).all() else {
+        return [:]
+    }
+    var result: [String: String] = [:]
+    for row in rows {
+        guard let code = row.id else { continue }
+        result[code] = urlConfig.publicURL(forKey: row.r2ObjectKey)
+    }
+    return result
 }
 
 // MARK: - 格納済みデータ提供ロジック（REST ルートと MCP ツールディスパッチの共通処理）

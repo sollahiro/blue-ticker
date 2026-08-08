@@ -975,6 +975,11 @@ enum Xbrl {
     static let statementOperatingAncestorKeywords: [String] = ["Operat"]
     static let statementInvestingAncestorKeywords: [String] = ["Invest"]
     static let statementFinancingAncestorKeywords: [String] = ["Financ"]
+
+    /// 「第6 提出会社の株式事務の概要」TextBlock タグ。会社の公告方法（電子公告URL）を含む。
+    /// 四半期報告書（q2r等）にはこの節自体が存在しない（有報のみ）。
+    /// 実データ検証（2026-08-08）: 有報14社サンプルで「公告掲載方法」ラベルの行を確認。
+    static let overviewOfOperationalProceduresForSharesTextblockTag = "OverviewOfOperationalProceduresForSharesTextBlock"
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

@@ -24,7 +24,8 @@ struct IngestTargetTests {
     func multipleTargets() {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
-            parseIngestTargets("financials,filing-sections,breakdowns,statements,statement-notes")
+            parseIngestTargets(
+                "financials,filing-sections,breakdowns,statements,statement-notes,icons")
                 == Set(IngestTarget.allCases))
     }
 
