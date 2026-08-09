@@ -63,7 +63,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -80,7 +80,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyStatement.find("S2", on: app.db) == nil)
@@ -94,7 +94,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 1)
         }
@@ -109,7 +109,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 3)
             #expect(summary.stored == 3)
@@ -134,7 +134,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.purged == 1)
             #expect(try await CompanyStatement.find("S22", on: app.db) == nil)
@@ -156,7 +156,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in
                 Issue.record("extractor must not run for an up-to-date document")
-                return fakeYear()
+                return .resolved(fakeYear())
             }
 
             #expect(summary.skipped == 1)
@@ -177,7 +177,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { docID in fakeYear("fresh", docID: docID) }
+            ) { docID in .resolved(fakeYear("fresh", docID: docID)) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
@@ -195,7 +195,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: 2
-            ) { docID in fakeYear(docID: docID) }
+            ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -208,12 +208,30 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
 
             let summary = try await runStatementIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _ in nil }
+            ) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
             #expect(summary.stored == 0)
             #expect(try await CompanyStatement.query(on: app.db).count() == 0)
+        }
+    }
+
+    @Test func ingestStoresNotApplicablePlaceholderAndReadOmitsIt() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "49010", db: app.db)
+
+            let summary = try await runStatementIngest(
+                db: app.db, listedCodes: ["4901"], years: 3, limit: nil
+            ) { _ in .notApplicable(reason: statementNotApplicableUSGAAP) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            #expect(summary.stored == 0)
+            let row = try #require(try await CompanyStatement.find("S1", on: app.db))
+            #expect(isStatementNotApplicablePlaceholder(row.payload))
+            #expect(try await loadStoredStatement(code: "4901", docId: nil, years: 3, db: app.db) == nil)
+            #expect(try await loadStoredStatement(code: "4901", docId: "S1", years: 3, db: app.db) == nil)
         }
     }
 

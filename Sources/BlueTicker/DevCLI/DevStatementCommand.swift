@@ -55,20 +55,23 @@ struct DevStatementCommand: AsyncParsableCommand {
         printError("書類ID: \(targetDocID)\n")
 
         let analyzer = StatementAnalyzer(edinetClient: ctx.client)
-        guard let year = await analyzer.extract(docID: targetDocID, statementTypes: statementTypes)
-        else {
+        switch await analyzer.extract(docID: targetDocID, statementTypes: statementTypes) {
+        case .failed:
             printError("エラー: XBRLの取得または抽出に失敗しました。\n")
             throw ExitCode.failure
-        }
-
-        if statementTypes.contains(.balanceSheet) {
-            printSection(title: "貸借対照表 (BS)", items: year.balanceSheet)
-        }
-        if statementTypes.contains(.incomeStatement) {
-            printSection(title: "損益計算書 (PL)", items: year.incomeStatement)
-        }
-        if statementTypes.contains(.cashFlow) {
-            printSection(title: "キャッシュ・フロー計算書 (CF)", items: year.cashFlow)
+        case .notApplicable(let reason):
+            printError("対象外 (notApplicable/\(reason)): US-GAAP 等、Statement 正規化の対象外です。\n")
+            throw ExitCode.failure
+        case .resolved(let year):
+            if statementTypes.contains(.balanceSheet) {
+                printSection(title: "貸借対照表 (BS)", items: year.balanceSheet)
+            }
+            if statementTypes.contains(.incomeStatement) {
+                printSection(title: "損益計算書 (PL)", items: year.incomeStatement)
+            }
+            if statementTypes.contains(.cashFlow) {
+                printSection(title: "キャッシュ・フロー計算書 (CF)", items: year.cashFlow)
+            }
         }
     }
 

@@ -81,6 +81,13 @@ enum StatementNotesResolver {
     /// できないため）。返済期限（表の5列目）はユーザー判断で対象外（フリーテキストで構造化コストが
     /// 見合わない）。
     static func resolveBorrowingsSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
+        // US-GAAP 連結は附属明細表タグ経路が無く、Statement 本体と同様に明示対象外
+        // （タグ不在の not_found に頼らず会計基準で揃える。2026-08-09）。
+        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        if detectAccountingStandard(tagElements) == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+
         guard let result = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }

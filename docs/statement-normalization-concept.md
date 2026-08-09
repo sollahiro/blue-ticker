@@ -76,6 +76,11 @@ J-GAAP/IFRS 問わず以下のキーワード判定に収束することを確�
 崩れたわけではないため、Statement は「そのまま出す」設計上は影響を受けにくいと考えられるが、
 実際の日経225銀行株での検証は未実施）。
 
+**US-GAAP**: 連結財務諸表に `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できないため、
+会計基準検出で明示 `notApplicable(us_gaap_unsupported)` とする（2026-08-09 実装、`statement-v1` のまま）。
+個別 BS への silent fallback は廃止。`borrowings_schedule` も同 reason。financials/IBD の
+`USGAAPHtml` 経路は現行 summary 用として別。連結 HTML→Statement 行の配線は未着手。
+
 ## 公開面設計（free / paid 分離）
 
 `docs/feature-tiers.md` の既存ルール:

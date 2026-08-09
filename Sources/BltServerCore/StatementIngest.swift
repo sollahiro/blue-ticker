@@ -25,19 +25,21 @@ import Logging
 public struct StatementIngestSummary: Sendable, Equatable {
     /// 抽出を試みた書類数（skip を除く）。
     public let attempted: Int
-    /// 抽出・格納に成功した書類数。
+    /// 抽出・格納に成功した書類数（実データ行）。
     public let stored: Int
     /// 取得・抽出失敗でスキップした書類数。
     public let failed: Int
+    /// US-GAAP 等の設計上の対象外（プレースホルダ行を格納）。
+    public let notApplicable: Int
     /// 既に現行バージョンで抽出済みのためスキップした書類数。
     public let skipped: Int
     /// 保持窓（直近 years 件）を超えたため削除した既存行数。
     public let purged: Int
 }
 
-/// docID を受けて BS/PL/CF payload を返す抽出器（成功で payload、失敗で nil）。
+/// docID を受けて BS/PL/CF 抽出結果を返す（成功 / 対象外 / 失敗）。
 /// 本番は `context.extractStatement`、テストはフェイクを注入する。
-public typealias StatementExtractor = @Sendable (String) async -> StatementYear?
+public typealias StatementExtractor = @Sendable (String) async -> StatementDocResolveResult
 
 /// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定）の有報（直近 years 年ぶん）を走査し、
 /// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
@@ -54,6 +56,7 @@ func runStatementIngest(
     var attempted = 0
     var stored = 0
     var failed = 0
+    var notApplicable = 0
     var skipped = 0
     var unhealthyRetries = 0
     var missing: [(docID: String, code: String, submitDateTime: String)] = []
@@ -101,19 +104,32 @@ func runStatementIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        guard let payload = await extract(cand.docID) else {
+        switch await extract(cand.docID) {
+        case .resolved(let payload):
+            try await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyStatement(
+                    existing: existing, docID: cand.docID, code: cand.code,
+                    submitDateTime: cand.submitDateTime, payload: payload, db: db)
+            }
+            stored += 1
+        case .notApplicable:
+            // US-GAAP 等。空プレースホルダを保存し、現行 version では再試行しない
+            // （読み取りはプレースホルダを除外して 404 相当を維持）。
+            try await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeCompanyStatement(
+                    existing: existing, docID: cand.docID, code: cand.code,
+                    submitDateTime: cand.submitDateTime,
+                    payload: statementNotApplicablePlaceholderYear(docID: cand.docID), db: db)
+            }
+            notApplicable += 1
+        case .failed:
             failed += 1
             logger?.warning("Statement 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
-            continue
         }
-        try await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeCompanyStatement(
-                existing: existing, docID: cand.docID, code: cand.code,
-                submitDateTime: cand.submitDateTime, payload: payload, db: db)
-        }
-        stored += 1
     }
 
     // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
@@ -135,7 +151,8 @@ func runStatementIngest(
     }
 
     return StatementIngestSummary(
-        attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
+        attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
+        skipped: skipped, purged: purged)
 }
 
 /// 抽出済み BS/PL/CF を company_statements へ書き込む（既存行があれば更新、無ければ作成）。
@@ -198,7 +215,7 @@ func countServableStatements(db: Database) async throws -> (servable: Int, unser
 /// 格納済み Statement 取り込み 行を code で引き、公開契約 `StatementResponse` の JSON を返す。
 /// `docId` 指定時はその書類（当該 code のもの）1件のみ、省略時は当該 code の直近 `years` 件
 /// （提出日時降順・床以上）を束ねる。床は `statementMinServableVersion`（明示定数）。
-/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない。有報セクション取り込み と同型）。
+/// 無い・床未満・対象外プレースホルダのみなら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
 func loadStoredStatement(
     code: String, docId: String?, years: Int, db: Database
 ) async throws -> [String: Any]? {
@@ -211,17 +228,23 @@ func loadStoredStatement(
     if let docId, !docId.isEmpty {
         // 指定書類。取り違え防止に当該 code の書類であることを確認する。
         guard let found = try await CompanyStatement.find(docId, on: db), found.code == code4,
-            isServableStatementCacheVersion(found.cacheVersion)
+            isServableStatementCacheVersion(found.cacheVersion),
+            !isStatementNotApplicablePlaceholder(found.payload)
         else { return nil }
         rows = [found]
     } else {
-        // 直近 years 件（提出日時降順のうち、read 床以上）。
+        // 直近 years 件（提出日時降順のうち、read 床以上かつ実データ行）。
         let candidates = try await CompanyStatement.query(on: db)
             .filter(\.$code == code4)
             .sort(\.$submitDateTime, .descending)
             .all()
         rows = Array(
-            candidates.filter { isServableStatementCacheVersion($0.cacheVersion) }.prefix(years))
+            candidates
+                .filter {
+                    isServableStatementCacheVersion($0.cacheVersion)
+                        && !isStatementNotApplicablePlaceholder($0.payload)
+                }
+                .prefix(years))
     }
     guard !rows.isEmpty else { return nil }
 

@@ -9,12 +9,18 @@ struct StatementAnalyzer {
     let edinetClient: EdinetAPIClient
 
     /// 指定 docID の XBRL をダウンロードし、要求された statement type だけを抽出する。
-    /// ダウンロード失敗時は nil（戻り値パターン、error-handling.md）。
+    /// ダウンロード失敗は `.failed`。US-GAAP は連結に数値 fact が無いため `.notApplicable`
+    /// （個別 BS への silent fallback はしない。notes と同方針、2026-08-09）。
     func extract(
         docID: String, statementTypes: Set<StatementSectionType>
-    ) async -> StatementYear? {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+    ) async -> StatementDocResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
+        let tagElements = XBRLUtils.factIndexToNumericElements(facts)
+        if detectAccountingStandard(tagElements) == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+
         let parentTagsByRoleTag = XBRLUtils.loadPresentationParents(in: xbrlDir)
         let preferredLabelByRoleTag = XBRLUtils.loadPreferredLabelRoles(in: xbrlDir)
         let labelRoleVariantsByTag = XBRLUtils.loadLabelRoleVariants(in: xbrlDir)
@@ -46,8 +52,9 @@ struct StatementAnalyzer {
                 calculationComponentsByRoleTag: calculationComponentsByRoleTag)
         }
 
-        return StatementYear(
-            fyEnd: nil, financialPeriod: nil, docId: docID,
-            balanceSheet: balanceSheet, incomeStatement: incomeStatement, cashFlow: cashFlow)
+        return .resolved(
+            StatementYear(
+                fyEnd: nil, financialPeriod: nil, docId: docID,
+                balanceSheet: balanceSheet, incomeStatement: incomeStatement, cashFlow: cashFlow))
     }
 }
