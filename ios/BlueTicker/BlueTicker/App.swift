@@ -12,7 +12,9 @@ struct BlueTickerApp: App {
                             company: CompanySearchResult(
                                 code: code,
                                 name: ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_NAME"] ?? code,
-                                sector: "", market: "", location: ""),
+                                sector: "", market: "", location: "",
+                                iconURL: ProcessInfo.processInfo.environment["BLT_DEBUG_SEED_ICON_URL"]
+                                    .flatMap(URL.init(string:))),
                             client: .local)
                     } else {
                         SearchView()

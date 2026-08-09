@@ -18,11 +18,14 @@ struct SearchView: View {
             }
             ForEach(results) { company in
                 NavigationLink(value: company) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(company.name).font(.headline)
-                        Text("\(company.code) · \(company.sector) · \(company.market)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        CompanyIconView(url: company.iconURL, name: company.name)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(company.name).font(.headline)
+                            Text("\(company.code) · \(company.sector) · \(company.market)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -34,7 +37,7 @@ struct SearchView: View {
                 ContentUnavailableView.search(text: query)
             }
         }
-        .navigationTitle("Blue Ticker")
+        .navigationTitle("Prism")
         .navigationDestination(for: CompanySearchResult.self) { company in
             CubeView(company: company, client: client)
         }

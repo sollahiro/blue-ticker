@@ -51,11 +51,17 @@ Blue Ticker の強みは独自の分析ロジック（要因分解・正規化�
 
 機能群は「構造化 → 正規化 → 視覚化」の3層で再整理を検討中（詳細合意でき次第 `feature-tiers.md` に反映）。Cube は視覚化層のうち **Waterfall（financials の要因分解）の派生**と位置づける。Breakdown（事業別・地域別内訳）の立体化は Cube ではなく、Allocation（Sankey）側の iOS 拡張候補として別扱いにする方針。
 
-## 実装状況（検索＋Cube MVP）
+## 実装状況（Search＋Icon＋Cube MVP）
 
-`ios/BlueTicker/`（SwiftUI、iOS 17+）に検索画面と Cube 画面を実装済み。
+`ios/BlueTicker/`（SwiftUI、iOS 17+）。アプリ名は Prism（`CFBundleDisplayName`。App Store 表示名は
+「Prism」・サブタイトルは「Visual Financial Analysis」だが、後者は App Store Connect 側のメタデータで
+アプリ内 UI には出さない）。採用モジュールは Search・Icon・Cube（実装済み）と Sankey・Feed（未実装、
+Allocation＝Sankey は将来 Cube 画面内に無効化ボタンとして並記予定、Feed は現状 UI に出さない）。
 
 - **検索画面**: `GET /v1/companies?q=` を叩いて銘柄コード・社名で検索し、結果をタップで Cube 画面へ遷移する
+- **Icon**: `icon_url`（`company_icons`、R2格納済みfavicon）を検索結果行・Cube 画面ヘッダーに表示する
+  `CompanyIconView`。未格納・取得失敗時は社名の頭文字にフォールバックする。favicon には背景込みのもの・
+  透過マークのみのものが混在するため、表示は白背景で統一する（ダークモードでも白固定）
 - **Cube 画面**: `GET /v1/companies/{code}/waterfall?years=5` の応答（`FinancialsContract.swift` の `analysisJsonObject()`）から3面を構成する
   - 正面: 事業利益増減ウォーターフォール（前期事業利益 → 売上要因 → 利益率変化 → 販管費 → 当期事業利益。既存 CLI の `ticker waterfall`「① 事業利益増減分析」と同じフィールドを使用。税金・その他の枠は現状データに対応フィールドが無いため未実装）
   - 側面: 正面／上面で選択中の項目の5年推移（Swift Charts の LineMark）

@@ -18,6 +18,7 @@
 		B5742419CE5FD59E25A7E8D4 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C1445BE41B6065FAE78F83D /* SearchView.swift */; };
 		C9ADCC88B8CC41621F378868 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51FF6A4EE404568241A8B13 /* App.swift */; };
 		ED75921B03B8B2B72C4F376D /* TopFaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 198F0B10FF88395B7B478E5C /* TopFaceView.swift */; };
+		F5C58FD00828921D474E879A /* CompanyIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D5287C579E8AECD0182782 /* CompanyIconView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,7 @@
 		0D3631A3FB6E2DAB6972675A /* WaterfallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterfallModels.swift; sourceTree = "<group>"; };
 		198F0B10FF88395B7B478E5C /* TopFaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopFaceView.swift; sourceTree = "<group>"; };
 		292EA66F52823424896272ED /* BlueTicker.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BlueTicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		45D5287C579E8AECD0182782 /* CompanyIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyIconView.swift; sourceTree = "<group>"; };
 		540F17FFD48C46C06A8EF1DF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5C1445BE41B6065FAE78F83D /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		62C28D0D83C9C61D1AF3EF31 /* SideFaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideFaceView.swift; sourceTree = "<group>"; };
@@ -59,6 +61,7 @@
 		2891DCA07DDFE7C0BB35C869 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				45D5287C579E8AECD0182782 /* CompanyIconView.swift */,
 				B7F0C804B95EB1961BE66DD7 /* CubeView.swift */,
 				5C1445BE41B6065FAE78F83D /* SearchView.swift */,
 				B25DB4FB8CC9851257D05AFE /* CubeFaces */,
@@ -220,6 +223,7 @@
 			files = (
 				9A12969822E82C687AB313DD /* APIClient.swift in Sources */,
 				C9ADCC88B8CC41621F378868 /* App.swift in Sources */,
+				F5C58FD00828921D474E879A /* CompanyIconView.swift in Sources */,
 				42499A0EDB30E868D05CB478 /* CompanySearchResult.swift in Sources */,
 				B39B4DAB9E4C148C9B7CCE9B /* CubeView.swift in Sources */,
 				0F943C87141B9E61FB6F8041 /* FrontFaceView.swift in Sources */,
