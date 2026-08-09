@@ -8,6 +8,12 @@
 // また、あるドメインはfaviconの実体がICOファイルにもかかわらずサーバーが
 // `Content-Type: text/plain` を返した（マジックバイトでの検証を確認: `00 00 01 00`）。
 // Content-Typeヘッダーは信用せず、取得バイト列の先頭シグネチャで画像かどうかを判定する。
+//
+// User-Agent実データ検証（2026-08-09、日経225本番ingestの実失敗24件で確認）: 自己申告Bot UA
+// （`BlueTickerBot/1.0`）だとオムロン・NEC・パナソニックHD・パンパシフィックHD等、実在する
+// favicon取得を明確に403拒否するサイトが複数あった。実ブラウザ相当のUAへ変更したところ同サイトは
+// 200で取得できることをcurlで直接確認。ただしTDK・荏原等、TLSフィンガープリント等UA以外の
+// シグナルでBot判定する高度なWAFを使うサイトはUA変更だけでは救えない（既知の限界）。
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -24,6 +30,9 @@ enum FaviconFetcher {
 
     private static let requestTimeout: TimeInterval = 8
     private static let maxBytes = 2 * 1024 * 1024
+    /// 自己申告Bot UAは複数の実企業サイトで403拒否される（上記コメント参照）ため、実ブラウザ相当を送る。
+    private static let userAgent =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -81,7 +90,7 @@ enum FaviconFetcher {
     private static func safeGet(_ url: URL) async -> Data? {
         guard let host = url.host, PrivateNetworkGuard.isPublicHost(host) else { return nil }
         var request = URLRequest(url: url)
-        request.setValue("Mozilla/5.0 (compatible; BlueTickerBot/1.0)", forHTTPHeaderField: "User-Agent")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               data.count <= maxBytes
@@ -92,7 +101,7 @@ enum FaviconFetcher {
     private static func safeGetHTML(_ url: URL) async -> (html: String, finalURL: URL)? {
         guard let host = url.host, PrivateNetworkGuard.isPublicHost(host) else { return nil }
         var request = URLRequest(url: url)
-        request.setValue("Mozilla/5.0 (compatible; BlueTickerBot/1.0)", forHTTPHeaderField: "User-Agent")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               data.count <= maxBytes, let html = String(data: data, encoding: .utf8),

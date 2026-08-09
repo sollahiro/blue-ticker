@@ -3,7 +3,9 @@
 //
 // 「第6 提出会社の株式事務の概要」の「公告掲載方法」行から電子公告URLを抽出できることを、
 // URL直前の表記が異なる複数社（ラベル無し・「電子公告掲載ＵＲＬ：」・「公告掲載URL　」）で確認する。
-// 抽出結果はscheme+hostのみ（パス・クエリは破棄）。
+// 抽出結果はscheme+hostのみ（パス・クエリは破棄）。ラベル自体が「公告掲載方法」ではなく
+// 「公告掲載URL」「公告方法」に置き換わっている会社もある（三越伊勢丹HD・日立建機、
+// 2026-08-09実データ検証）。
 //
 // キャッシュが無い環境では `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
 
@@ -79,6 +81,24 @@ import Testing
         let result = CorporateWebsiteExtractor.extract(xbrlDir: Self.xbrlDir("S100L0TZ"))
         #expect(result.method == "not_applicable")
         #expect(result.url == nil)
+    }
+
+    // MARK: - 三越伊勢丹HD S100YD7C（ラベルが「公告掲載方法」ではなく「公告掲載URL」）
+
+    @Test(.enabled(if: cacheAvailable("S100YD7C"), "XBRL cache S100YD7C not available"))
+    func imhdsExtractsURLUnderAlternatePublicNoticeUrlLabel() {
+        let result = CorporateWebsiteExtractor.extract(xbrlDir: Self.xbrlDir("S100YD7C"))
+        #expect(result.method == "xbrl_url")
+        #expect(result.url == "https://www.imhds.co.jp")
+    }
+
+    // MARK: - 日立建機 S100YIBR（ラベルが「掲載」抜きの「公告方法」）
+
+    @Test(.enabled(if: cacheAvailable("S100YIBR"), "XBRL cache S100YIBR not available"))
+    func hitachiConstructionMachineryExtractsURLUnderShortLabel() {
+        let result = CorporateWebsiteExtractor.extract(xbrlDir: Self.xbrlDir("S100YIBR"))
+        #expect(result.method == "xbrl_url")
+        #expect(result.url == "https://www.hitachicm.com")
     }
 
     // MARK: - 該当節自体が無い場合（四半期報告書等）は not_found（正当な非対象、抽出失敗ではない）
