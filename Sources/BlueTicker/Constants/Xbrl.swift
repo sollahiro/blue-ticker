@@ -927,11 +927,11 @@ enum Xbrl {
     static let segmentSpecificGeographyLabelKeywordsJa: [String] =
         segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
 
-    // MARK: - Statement（BS/PL/CF 完全正規化, Statement 取り込み, docs/statement-normalization-concept.md）
+    // MARK: - Statement（BS/PL/CF/SS 完全正規化, Statement 取り込み, docs/statement-normalization-concept.md）
 
     /// role URI の末尾セクション名（`XBRLUtils.sectionNameFromRole`）が注記・補足表であることを示す
     /// 接頭辞。`NotesConsolidatedBalanceSheet` のように本表と同じキーワードを含むため、
-    /// BS/PL/CF 判定より先にこの接頭辞で除外する（実データ検証: 2026-07, smoke 158社）。
+    /// BS/PL/CF/SS 判定より先にこの接頭辞で除外する（実データ検証: 2026-07, smoke 158社）。
     static let statementNotesRolePrefix = "Notes"
 
     /// 貸借対照表（Instant）と判定する role セクション名の部分一致キーワード。
@@ -955,6 +955,14 @@ enum Xbrl {
     /// いずれも `StatementOfCashFlows` を含むため単一キーワードで両基準を吸収できる。
     static let cashFlowRoleKeywords: [String] = [
         "StatementOfCashFlows"
+    ]
+
+    /// 持分変動計算書 / 株主資本等変動計算書（SS）と判定する role セクション名の部分一致キーワード。
+    /// J-GAAP は `StatementOfChangesInEquity`/`ConsolidatedStatementOfChangesInEquity`、IFRS は
+    /// `ConsolidatedStatementOfChangesInEquityIFRS`（実データ検証: トヨタ7203 S100VWVY、2026-08-09）。
+    /// いずれも `StatementOfChangesInEquity` を含むため単一キーワードで両基準を吸収できる。
+    static let changesInEquityRoleKeywords: [String] = [
+        "StatementOfChangesInEquity"
     ]
 
     /// BS/CF 行の区分（`StatementLineItem.section`）判定に使う presentation 祖先タグの部分一致

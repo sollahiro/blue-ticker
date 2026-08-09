@@ -225,7 +225,7 @@ public extension BltServerContext {
         await masterDataManager.listedCodes()
     }
 
-    /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。決定論のみ（LLM不要）。
+    /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。決定論のみ（LLM不要）。
     /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
     /// ダウンロード失敗は `.failed`。

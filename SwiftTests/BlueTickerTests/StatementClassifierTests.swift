@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// Statement 取り込み（Statement 本体）の BS/PL/CF 判定・抽出の仕様を検証する。
+/// Statement 取り込み（Statement 本体）の BS/PL/CF/SS 判定・抽出の仕様を検証する。
 /// 実データ検証（キャッシュ済み実XBRL 158社）で確認した role 命名パターン
 /// （J-GAAP/IFRS）を fixture として再現する。
 @Suite struct StatementClassifierTests {
@@ -25,6 +25,12 @@ import Testing
         #expect(
             StatementClassifier.classify(role: role("ConsolidatedStatementOfCashFlows-indirect"))
                 == .cashFlow)
+        #expect(
+            StatementClassifier.classify(role: role("StatementOfChangesInEquity"))
+                == .changesInEquity)
+        #expect(
+            StatementClassifier.classify(role: role("ConsolidatedStatementOfChangesInEquity"))
+                == .changesInEquity)
     }
 
     @Test func classifiesIfrsRoleNames() {
@@ -37,12 +43,17 @@ import Testing
         #expect(
             StatementClassifier.classify(role: role("ConsolidatedStatementOfCashFlowsIFRS"))
                 == .cashFlow)
+        #expect(
+            StatementClassifier.classify(
+                role: role("ConsolidatedStatementOfChangesInEquityIFRS")) == .changesInEquity)
     }
 
     @Test func excludesNotesPrefixedRolesEvenWhenKeywordMatches() {
         // NotesConsolidatedBalanceSheet は "BalanceSheet" を含むが、注記なので対象外。
         #expect(StatementClassifier.classify(role: role("NotesConsolidatedBalanceSheet")) == nil)
         #expect(StatementClassifier.classify(role: role("NotesStatementOfIncome")) == nil)
+        #expect(
+            StatementClassifier.classify(role: role("NotesStatementOfChangesInEquity")) == nil)
     }
 
     @Test func returnsNilForUnrelatedRoles() {
@@ -113,6 +124,61 @@ import Testing
         ]
         let items = StatementClassifier.extractLineItems(from: facts, sectionType: .incomeStatement)
         #expect(items.map(\.value) == [100])
+    }
+
+    @Test func changesInEquityUsesTotalColumnAndExcludesEquityMemberDimensions() {
+        // SS は資本構成員次元（ShareCapitalIFRSMember 等）を持つが、v1 は合計列
+        // （次元なし CurrentYearDuration / Equity 合計）のみを採用する。
+        let ssRole = role("ConsolidatedStatementOfChangesInEquityIFRS")
+        let facts: XbrlFactIndex = [
+            "PurchaseOfTreasurySharesSSIFRS": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "PurchaseOfTreasurySharesSSIFRS", contextRef: "CurrentYearDuration",
+                    value: -1_179_043_000_000, consolidation: "", role: ssRole),
+                "CurrentYearDuration_TreasurySharesIFRSMember": XbrlFact(
+                    tag: "PurchaseOfTreasurySharesSSIFRS",
+                    contextRef: "CurrentYearDuration_TreasurySharesIFRSMember",
+                    value: -1_179_043_000_000, consolidation: "", role: ssRole),
+                "CurrentYearDuration_EquityAttributableToOwnersOfParentIFRSMember": XbrlFact(
+                    tag: "PurchaseOfTreasurySharesSSIFRS",
+                    contextRef: "CurrentYearDuration_EquityAttributableToOwnersOfParentIFRSMember",
+                    value: -1_179_043_000_000, consolidation: "", role: ssRole),
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .changesInEquity)
+        #expect(items.map(\.value) == [-1_179_043_000_000])
+        #expect(items.map(\.section) == [nil])
+    }
+
+    @Test func changesInEquityIncludesOpeningAndClosingEquityBalancesLikeCashFlow() {
+        // SS の純資産/資本の期首・期末残高は Instant（前期末=当期首 / 当期末）。CF と同型。
+        let ssRole = role("ConsolidatedStatementOfChangesInEquityIFRS")
+        let facts: XbrlFactIndex = [
+            "EquityIFRS": [
+                "Prior1YearInstant": XbrlFact(
+                    tag: "EquityIFRS", contextRef: "Prior1YearInstant", value: 35_239_338_000_000,
+                    consolidation: "", role: ssRole,
+                    orderByRole: [ssRole: 0]),
+                "CurrentYearInstant": XbrlFact(
+                    tag: "EquityIFRS", contextRef: "CurrentYearInstant", value: 36_878_913_000_000,
+                    consolidation: "", role: ssRole,
+                    orderByRole: [ssRole: 10]),
+                "CurrentYearInstant_ShareCapitalIFRSMember": XbrlFact(
+                    tag: "EquityIFRS", contextRef: "CurrentYearInstant_ShareCapitalIFRSMember",
+                    value: 397_050_000_000, consolidation: "", role: ssRole),
+            ],
+            "DividendsSSIFRS": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "DividendsSSIFRS", contextRef: "CurrentYearDuration",
+                    value: -1_200_000_000_000, consolidation: "", role: ssRole,
+                    orderByRole: [ssRole: 5]),
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .changesInEquity)
+        #expect(items.map(\.tag) == ["EquityIFRS", "DividendsSSIFRS", "EquityIFRS"])
+        #expect(
+            items.map(\.value)
+                == [35_239_338_000_000, -1_200_000_000_000, 36_878_913_000_000])
     }
 
     @Test func excludesFactsFromOtherStatementSections() {

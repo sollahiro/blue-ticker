@@ -1,6 +1,6 @@
 # 財務諸表完全正規化の構想（statements / statement-notes）
 
-有価証券報告書 XBRL の BS/PL/CF を、絞り込みなしで構造化して返す機能（Statement）の設計メモ。
+有価証券報告書 XBRL の BS/PL/CF/SS を、絞り込みなしで構造化して返す機能（Statement）の設計メモ。
 関連: Summary/Waterfall（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（breakdowns、
 `docs/breakdown-normalization-concept.md`）は事業別・地域別売上の意味正規化。Statement は
 どちらとも異なり「開示された全項目を、企業間の科目統一を試みず、忠実に構造化する」ことが本体。
@@ -11,7 +11,7 @@
 |---|---|---|
 | Summary / Waterfall | 絞り込んだ主要指標（売上・利益・ROE 等 ~20 項目） | `Extractors.swift` の**固定タグリスト** |
 | Breakdown | 事業別・地域別売上の**企業間比較用**正規化スナップショット | セグメント注記・地域注記のみ |
-| **Statement**（本構想） | 開示された BS/PL/CF の**全項目**をそのまま構造化 | XBRL 全 fact（標準タグ＋企業拡張タグ） |
+| **Statement**（本構想） | 開示された BS/PL/CF/SS の**全項目**をそのまま構造化 | XBRL 全 fact（標準タグ＋企業拡張タグ） |
 
 Statement は「その企業自身の財務諸表を漏れなく構造化して見せる」ことが目的であり、
 Breakdown のような「企業間で表記が不揃いな項目を共通スキーマへ意味的に写像する」問題ではない。
@@ -26,18 +26,18 @@ XBRL ディレクトリ内の**全数値 fact**を、以下のメタデータ付
   **企業拡張タグ（company extension）もラベル欠落なし**（拡張タグは企業の XBRL パッケージ自身が
   label linkbase を同梱するため）
 - **`role`/`roles`**: presentation linkbase（`loadRolesByTag`, 同ファイル 219 行目）由来の roleURI。
-  どのタグがどの財務諸表（BS/PL/CF）に属するかは、この roleURI から機械的に決まる
+  どのタグがどの財務諸表（BS/PL/CF/SS）に属するかは、この roleURI から機械的に決まる
 - **`filterFactIndexBySections`**（同ファイル 310 行目）で role/section を条件に fact index を
-  絞り込む既存関数があり、BS/PL/CF への振り分けにそのまま使える
+  絞り込む既存関数があり、BS/PL/CF/SS への振り分けにそのまま使える
 
-Duration（PL・CF）/Instant（BS）の判定、連結／非連結コンテキストの判定は
+Duration（PL・CF・SS）/Instant（BS）の判定、連結／非連結コンテキストの判定は
 `Analysis/FieldParser.swift`・`Analysis/ContextHelpers.swift` の既存ロジックを流用する
 （`.agents/rules/project/xbrl-analysis.md` の「コンテキスト判定は共通化しない」方針通り、
-新規に書き直さない）。
+新規に書き直さない）。CF/SS の期首/期末残高行は Instant も受理する（下記）。
 
 **Breakdown（breakdowns）で LLM が必要だった理由との対比**: Breakdown のセグメント注記・地域注記は
 「企業ごとに構成が不揃いな自由形式 HTML 表」を人間が読む前提で開示されており、軸判定・変則表の
-解釈に意味理解が要る。一方 BS/PL/CF は XBRL 標準タクソノミの presentation linkbase で構造
+解釈に意味理解が要る。一方 BS/PL/CF/SS は XBRL 標準タクソノミの presentation linkbase で構造
 （どの財務諸表のどこに属するか）が標準化されている。**タグ抽出＋linkbase メタデータの機械的な
 組み立てで完結し、LLM によるフォールバックは不要**と判断する。
 
@@ -51,10 +51,15 @@ role URI の末尾セクション名（`sectionNameFromRole`）の分布を確�
 J-GAAP/IFRS 問わず以下のキーワード判定に収束することを確認した（`Analysis/StatementClassifier.swift`
 として実装済み）。
 
-| 会計基準 | BS | PL | CF |
-|---|---|---|---|
-| J-GAAP | `BalanceSheet` / `ConsolidatedBalanceSheet` | `StatementOfIncome` / `ConsolidatedStatementOfIncome` | `StatementOfCashFlows-indirect` / `ConsolidatedStatementOfCashFlows-indirect` |
-| IFRS | `ConsolidatedStatementOfFinancialPositionIFRS` | `ConsolidatedStatementOfProfitOrLossIFRS` | `ConsolidatedStatementOfCashFlowsIFRS` |
+| 会計基準 | BS | PL | CF | SS |
+|---|---|---|---|---|
+| J-GAAP | `BalanceSheet` / `ConsolidatedBalanceSheet` | `StatementOfIncome` / `ConsolidatedStatementOfIncome` | `StatementOfCashFlows-indirect` / `ConsolidatedStatementOfCashFlows-indirect` | `StatementOfChangesInEquity` / `ConsolidatedStatementOfChangesInEquity` |
+| IFRS | `ConsolidatedStatementOfFinancialPositionIFRS` | `ConsolidatedStatementOfProfitOrLossIFRS` | `ConsolidatedStatementOfCashFlowsIFRS` | `ConsolidatedStatementOfChangesInEquityIFRS` |
+
+SS の role キーワードは `StatementOfChangesInEquity` の1語で J-GAAP/IFRS を吸収（2026-08-09、
+トヨタ7203 S100VWVY で確認）。SS は資本構成員軸（`ShareCapitalIFRSMember` 等）を持つが、v1 は
+**合計列のみ**（`Member` 接尾辞の無いコンテキスト。CF の Instant 混在と同型で期首/期末残高も受理）。
+構成員別の行列展開は非ゴール（将来拡張）。
 
 検証で分かった注意点（キーワードリストは `Constants/Xbrl.swift` に実装済み）:
 
@@ -104,7 +109,7 @@ breakdowns 同様 LLM フォールバックが必要になる可能性が高く�
 
 ## 抽出の実装（今回追加）
 
-- `Analysis/StatementClassifier.swift`: role → BS/PL/CF 判定（`classify(role:)`）と、
+- `Analysis/StatementClassifier.swift`: role → BS/PL/CF/SS 判定（`classify(role:)`）と、
   fact index から指定 section type の当期・連結優先／非連結フォールバック行を抽出する
   `extractLineItems(from:sectionType:)`。表示順は presentation linkbase の実際の並び順
   （`XBRLUtils.loadPresentationOrder` / `XbrlFact.orderByRole`）を使い、取得できないタグは
@@ -115,8 +120,8 @@ breakdowns 同様 LLM フォールバックが必要になる可能性が高く�
 - `Server/BltServerFacade.swift` の `extractStatement(docID:statementTypes:)`:
   filing-sections の `extractFilingSections(docID:)` と同型の facade メソッド。現時点では
   ingest からの呼び出しはなく、DevCLI からのみ呼ばれる
-- `DevCLI/DevStatementCommand.swift`（`ticker-dev statement <code> [docID] --bs --pl --cf`）:
-  目視確認用の開発コマンド。`--bs`/`--pl`/`--cf` は**少なくとも1つ必須**（未指定はエラー。
+- `DevCLI/DevStatementCommand.swift`（`ticker-dev statement <code> [docID] --bs --pl --cf --ss`）:
+  目視確認用の開発コマンド。`--bs`/`--pl`/`--cf`/`--ss` は**少なくとも1つ必須**（未指定はエラー。
   「指定なしで全部返す」という暗黙動作にしない）
 
 ## データモデル（今回追加した契約型の骨組み）
@@ -133,9 +138,10 @@ StatementResponse
 
 StatementYear
   fy_end, financial_period, doc_id
-  balance_sheet:     [StatementLineItem]
-  income_statement:  [StatementLineItem]
-  cash_flow:         [StatementLineItem]
+  balance_sheet:      [StatementLineItem]
+  income_statement:   [StatementLineItem]
+  cash_flow:          [StatementLineItem]
+  changes_in_equity:  [StatementLineItem]   # SS（合計列のみ。2026-08-09 追加）
 
 StatementLineItem
   tag, label, value, unit, order
@@ -150,10 +156,11 @@ StatementLineItem
 
 ## ロードマップ上の位置づけ
 
-- **statements（本体・BS/PL/CF）**: 抽出ロジック（`StatementClassifier`/`StatementAnalyzer`）と
+- **statements（本体・BS/PL/CF/SS）**: 抽出ロジック（`StatementClassifier`/`StatementAnalyzer`）と
   DevCLI での目視確認は実装済み（PR #153）。DB モデル・ingest・REST・MCP 配線も
   下記「実装方針」に沿って実装済み（2026-07-29、対象は日経225限定でスタート。使い捨て Neon
-  への実データ書き込み・読み出しまで検証済み）。日経225全社への本番ingestはこれから
+  への実データ書き込み・読み出しまで検証済み）。SS（持分変動計算書）は 2026-08-09 に追加
+  （合計列のみ、`statement-v1` のまま）。日経225全社への本番ingestはこれから
   （`assets/nikkei225.csv` を持つ本番/ローカル環境で `blt-server ingest --stages statements` を実行）。
 - **statement-notes（注記）**: DB モデル・ingest・REST（`GET /v1/companies/{code}/statement/notes`）・
   MCP（`get_statement_notes`）まで実装済み（2026-08-02、note_type 9種、対象は日経225限定）。

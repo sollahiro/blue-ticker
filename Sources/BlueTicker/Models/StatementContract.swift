@@ -1,4 +1,4 @@
-// Statement（BS/PL/CF 完全正規化、Statement 取り込み）API の公開契約。
+// Statement（BS/PL/CF/SS 完全正規化、Statement 取り込み）API の公開契約。
 // docs/statement-normalization-concept.md 参照。
 //
 // compute 関数・DB モデル・ingest・REST・MCP 配線は実装済み（日経225限定）。
@@ -28,16 +28,17 @@ public enum StatementDocResolveResult: Sendable {
 /// notes（`borrowings_schedule` 等）と同様に明示対象外とする（2026-08-09）。
 public let statementNotApplicableUSGAAP = "us_gaap_unsupported"
 
-/// ingest が US-GAAP 等の対象外を格納するときのプレースホルダ（BS/PL/CF 空）。
+/// ingest が US-GAAP 等の対象外を格納するときのプレースホルダ（BS/PL/CF/SS 空）。
 /// read 経路はこれを除外し、実データ行が無ければ 404 相当（nil）を返す。
 public func statementNotApplicablePlaceholderYear(docID: String) -> StatementYear {
     StatementYear(
         fyEnd: nil, financialPeriod: nil, docId: docID,
-        balanceSheet: [], incomeStatement: [], cashFlow: [])
+        balanceSheet: [], incomeStatement: [], cashFlow: [], changesInEquity: [])
 }
 
 public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
     year.balanceSheet.isEmpty && year.incomeStatement.isEmpty && year.cashFlow.isEmpty
+        && year.changesInEquity.isEmpty
 }
 
 /// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`）の計算バージョン。
@@ -45,6 +46,8 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/project/versioning.md`）。
 /// 注記（注記取り込み）は別バージョン系統になる想定で、本定数には連動させない。
 /// US-GAAP 明示 notApplicable（個別 BS silent fallback 廃止）は v1 のまま拡張（2026-08-09）。
+/// SS（持分変動計算書）追加も v1 のまま拡張（2026-08-09。本番 `company_statements` は 0 行のため
+/// 移行コスト実質ゼロ。旧 payload は `changes_in_equity` キー欠落を空配列として読む）。
 public let statementCacheVersion = "statement-v1"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。
@@ -100,7 +103,7 @@ public struct StatementLineComponent: Codable, Sendable {
     }
 }
 
-/// BS/PL/CF いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
+/// BS/PL/CF/SS いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
 /// 参照)。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
 /// `isTotal`/`components` は presentation ではなく計算リンクベース由来（`docs/statement-
 /// normalization-concept.md` 実装方針8）。presentation の親子関係は表示上のネストでしかなく
@@ -177,7 +180,7 @@ public struct StatementLineItem: Codable, Sendable {
     }
 }
 
-/// 1年度分の BS/PL/CF。
+/// 1年度分の BS/PL/CF/SS。
 public struct StatementYear: Codable, Sendable {
     public var fyEnd: String?
     public var financialPeriod: String?
@@ -185,6 +188,9 @@ public struct StatementYear: Codable, Sendable {
     public var balanceSheet: [StatementLineItem]
     public var incomeStatement: [StatementLineItem]
     public var cashFlow: [StatementLineItem]
+    /// 持分変動計算書（IFRS）／株主資本等変動計算書（J-GAAP）。資本構成員別の行列展開はせず、
+    /// 合計列（次元なしコンテキスト）の行のみ（`StatementClassifier` 参照）。
+    public var changesInEquity: [StatementLineItem]
 
     private enum CodingKeys: String, CodingKey {
         case fyEnd = "fy_end"
@@ -193,12 +199,13 @@ public struct StatementYear: Codable, Sendable {
         case balanceSheet = "balance_sheet"
         case incomeStatement = "income_statement"
         case cashFlow = "cash_flow"
+        case changesInEquity = "changes_in_equity"
     }
 
     public init(
         fyEnd: String?, financialPeriod: String?, docId: String?,
         balanceSheet: [StatementLineItem], incomeStatement: [StatementLineItem],
-        cashFlow: [StatementLineItem]
+        cashFlow: [StatementLineItem], changesInEquity: [StatementLineItem] = []
     ) {
         self.fyEnd = fyEnd
         self.financialPeriod = financialPeriod
@@ -206,6 +213,22 @@ public struct StatementYear: Codable, Sendable {
         self.balanceSheet = balanceSheet
         self.incomeStatement = incomeStatement
         self.cashFlow = cashFlow
+        self.changesInEquity = changesInEquity
+    }
+
+    /// 手書き実装: `changes_in_equity` 追加前の格納行（キー欠落）を空配列として読む。
+    /// `StatementLineItem.isTotal` と同型の後方互換（本番は未書き込みだが決定的に安全側へ倒す）。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fyEnd = try container.decodeIfPresent(String.self, forKey: .fyEnd)
+        financialPeriod = try container.decodeIfPresent(String.self, forKey: .financialPeriod)
+        docId = try container.decodeIfPresent(String.self, forKey: .docId)
+        balanceSheet = try container.decodeIfPresent([StatementLineItem].self, forKey: .balanceSheet) ?? []
+        incomeStatement =
+            try container.decodeIfPresent([StatementLineItem].self, forKey: .incomeStatement) ?? []
+        cashFlow = try container.decodeIfPresent([StatementLineItem].self, forKey: .cashFlow) ?? []
+        changesInEquity =
+            try container.decodeIfPresent([StatementLineItem].self, forKey: .changesInEquity) ?? []
     }
 
     /// REST/MCP 応答用 JSON オブジェクト。
@@ -217,6 +240,7 @@ public struct StatementYear: Codable, Sendable {
             "balance_sheet": balanceSheet.map { $0.jsonObject() },
             "income_statement": incomeStatement.map { $0.jsonObject() },
             "cash_flow": cashFlow.map { $0.jsonObject() },
+            "changes_in_equity": changesInEquity.map { $0.jsonObject() },
         ]
     }
 }

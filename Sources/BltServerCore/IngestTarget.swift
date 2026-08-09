@@ -11,7 +11,7 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 事業別・地域別内訳（company_breakdowns）。ingest は business→geography。
     /// REST/MCP read は business / geography の両軸。
     case breakdowns
-    /// BS/PL/CF 完全正規化（company_statements）。対象は日経225限定でスタート。
+    /// BS/PL/CF/SS 完全正規化（company_statements）。対象は日経225限定でスタート。
     case statements
     /// 財務諸表注記（company_statement_notes）。対象は statements と同じ日経225限定。
     case notes = "statement-notes"

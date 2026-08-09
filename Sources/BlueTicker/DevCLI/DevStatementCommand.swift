@@ -1,13 +1,13 @@
 import ArgumentParser
 import Foundation
 
-/// Statement 取り込み（Statement 本体）の BS/PL/CF 抽出を目視確認するための開発用コマンド。
-/// `--bs`/`--pl`/`--cf` は少なくとも1つ必須（未指定時はエラー。「とりあえず全部」を暗黙で
+/// Statement 取り込み（Statement 本体）の BS/PL/CF/SS 抽出を目視確認するための開発用コマンド。
+/// `--bs`/`--pl`/`--cf`/`--ss` は少なくとも1つ必須（未指定時はエラー。「とりあえず全部」を暗黙で
 /// 返さない）。EDINET から実際に XBRL を取得する（smoke fixture 経路は無い）。
 struct DevStatementCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "statement",
-        abstract: "Statement 取り込み の BS/PL/CF 抽出を実行し目視確認する（開発用）"
+        abstract: "Statement 取り込み の BS/PL/CF/SS 抽出を実行し目視確認する（開発用）"
     )
 
     @Argument(help: "銘柄コード")
@@ -25,14 +25,18 @@ struct DevStatementCommand: AsyncParsableCommand {
     @Flag(name: .customLong("cf"), help: "キャッシュ・フロー計算書を抽出する")
     var cf = false
 
+    @Flag(name: .customLong("ss"), help: "持分変動計算書（株主資本等変動計算書）を抽出する")
+    var ss = false
+
     func run() async throws {
         var statementTypes: Set<StatementSectionType> = []
         if bs { statementTypes.insert(.balanceSheet) }
         if pl { statementTypes.insert(.incomeStatement) }
         if cf { statementTypes.insert(.cashFlow) }
+        if ss { statementTypes.insert(.changesInEquity) }
 
         guard !statementTypes.isEmpty else {
-            printError("エラー: --bs / --pl / --cf のうち少なくとも1つを指定してください。\n")
+            printError("エラー: --bs / --pl / --cf / --ss のうち少なくとも1つを指定してください。\n")
             throw ExitCode.failure
         }
 
@@ -71,6 +75,9 @@ struct DevStatementCommand: AsyncParsableCommand {
             }
             if statementTypes.contains(.cashFlow) {
                 printSection(title: "キャッシュ・フロー計算書 (CF)", items: year.cashFlow)
+            }
+            if statementTypes.contains(.changesInEquity) {
+                printSection(title: "持分変動計算書 (SS)", items: year.changesInEquity)
             }
         }
     }

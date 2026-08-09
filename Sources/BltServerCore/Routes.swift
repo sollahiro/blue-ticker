@@ -176,7 +176,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/statement?years=5&doc_id=...
-    // DB（Statement 取り込み company_statements）の格納済み BS/PL/CF のみを返す。ライブ抽出へはフォールバック
+    // DB（Statement 取り込み company_statements）の格納済み BS/PL/CF/SS のみを返す。ライブ抽出へはフォールバック
     // しない（filing-sections/breakdowns と同型）。Statement 取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。
     // docs/statement-normalization-concept.md「実装方針」1）。
     v1.get("companies", ":code", "statement") { req async -> Response in

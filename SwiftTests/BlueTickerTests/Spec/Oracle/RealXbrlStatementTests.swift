@@ -148,6 +148,37 @@ import Foundation
         #expect(cashRows.map(\.value) == secondCashRows.map(\.value))
     }
 
+    @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
+    func toyotaChangesInEquityTotalsMatchPublicFiguresWithOpeningClosingBalances() async throws {
+        // 持分変動計算書（SS）: 合計列のみ。自己株式の取得・包括利益・資本の期首/期末残高。
+        // 実データ検証: トヨタ7203 S100VWVY（2026-08-09）。
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
+        #expect(!year.changesInEquity.isEmpty)
+
+        let byTag = Dictionary(
+            year.changesInEquity.map { ($0.tag, $0) },
+            uniquingKeysWith: { first, _ in first })
+        // Dictionary uniquing keeps first; EquityIFRS は期首/期末の2行あるので filter で取る。
+        let equityRows = year.changesInEquity.filter { $0.tag == "EquityIFRS" }
+        #expect(equityRows.count == 2)
+        #expect(Set(equityRows.map(\.value)) == [35_239_338_000_000, 36_878_913_000_000])
+        // 期首・期末で異なるラベル（taxonomy が無い環境では label が nil になりうるため値で担保）。
+        #expect(equityRows.map(\.section) == [nil, nil])
+
+        #expect(byTag["PurchaseOfTreasurySharesSSIFRS"]?.value == -1_179_043_000_000)
+        #expect(byTag["ComprehensiveIncomeIFRS"]?.value == 4_043_724_000_000)
+        // SS 行には section を付けない（PL と同型）。
+        #expect(byTag["PurchaseOfTreasurySharesSSIFRS"]?.section == nil)
+
+        // 出力順の決定性（同一タグの期首/期末）。
+        let second = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
+        #expect(
+            year.changesInEquity.map(\.value) == second.changesInEquity.map(\.value))
+        #expect(year.changesInEquity.map(\.tag) == second.changesInEquity.map(\.tag))
+    }
+
     @Test(
         .enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"),
         .enabled(if: taxonomyAvailable, "assets/taxonomy not available")
