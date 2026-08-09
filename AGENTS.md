@@ -9,7 +9,7 @@
 - **Git First**: Git が唯一の Source of Truth。永続判断は Git か memory、一時情報は残さない。履歴詳細は Git に委ねる。
 - **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
-- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule` note_type**（外出しオラクル、`StatementNotesOracleFormatTests`）。他 note_type / breakdown の決定論ロジックはまだ床に含めていない。ロジックが固まったら同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule` note_type**（外出しオラクル、`StatementNotesOracleFormatTests`）。`statement`（Statement 取り込み本体）は `SmokeTests.swift` 自体は通らないが、smoke 固定11社中 US-GAAP2社を除く9社全件の golden を `RealXbrlStatementTests.swift` に追加済み。他 note_type / breakdown の決定論ロジックはまだ床に含めていない。ロジックが固まったら同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
 
 ## ビルド・テスト
 
