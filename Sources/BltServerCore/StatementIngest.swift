@@ -1,4 +1,4 @@
-// Statement 取り込み: 日経225構成銘柄の有報について BS/PL/CF を抽出し company_statements へ upsert する。
+// Statement 取り込み: 日経225構成銘柄の有報について BS/PL/CF/SS を抽出し company_statements へ upsert する。
 // 抽出は BlueTickerCore のファサード（extractStatement）に委譲し、ここでは対象選定・staleness 判定・
 // DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
@@ -37,7 +37,7 @@ public struct StatementIngestSummary: Sendable, Equatable {
     public let purged: Int
 }
 
-/// docID を受けて BS/PL/CF 抽出結果を返す（成功 / 対象外 / 失敗）。
+/// docID を受けて BS/PL/CF/SS 抽出結果を返す（成功 / 対象外 / 失敗）。
 /// 本番は `context.extractStatement`、テストはフェイクを注入する。
 public typealias StatementExtractor = @Sendable (String) async -> StatementDocResolveResult
 
@@ -155,7 +155,7 @@ func runStatementIngest(
         skipped: skipped, purged: purged)
 }
 
-/// 抽出済み BS/PL/CF を company_statements へ書き込む（既存行があれば更新、無ければ作成）。
+/// 抽出済み BS/PL/CF/SS を company_statements へ書き込む（既存行があれば更新、無ければ作成）。
 func storeCompanyStatement(
     existing: CompanyStatement?, docID: String, code: String, submitDateTime: String,
     payload: StatementYear, db: Database

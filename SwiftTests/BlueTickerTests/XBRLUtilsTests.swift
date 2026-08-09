@@ -224,6 +224,41 @@ import Foundation
         }
     }
 
+    /// SS 実データで頻出: 親→`Foo_2`、子は `Foo` から出る別名 loc。別名を辿り、期首/期末で別 order。
+    @Test func loadPresentationOrderMergesAliasedLocsAndSplitsPeriodStartEndOrders() throws {
+        let ssRole =
+            "http://disclosure.edinet-fsa.go.jp/role/jppfs/rol_ConsolidatedStatementOfChangesInEquity"
+        let pre = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+              <link:presentationLink xlink:type="extended" xlink:role="\(ssRole)">
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_Heading" xlink:label="Heading"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LineItems" xlink:label="LineItems_2"/>
+                <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="Heading" xlink:to="LineItems_2" order="1"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_LineItems" xlink:label="LineItems"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetAssets" xlink:label="NetAssets_2"/>
+                <link:presentationArc xlink:type="arc" preferredLabel="http://www.xbrl.org/2003/role/periodStartLabel" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="LineItems" xlink:to="NetAssets_2" order="1"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_ChangesAbstract" xlink:label="ChangesAbstract_2"/>
+                <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="LineItems" xlink:to="ChangesAbstract_2" order="2"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_ChangesAbstract" xlink:label="ChangesAbstract"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_DividendsFromSurplus" xlink:label="DividendsFromSurplus"/>
+                <link:presentationArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="ChangesAbstract" xlink:to="DividendsFromSurplus" order="1"/>
+                <link:loc xlink:type="locator" xlink:href="jppfs_cor.xsd#jppfs_cor_NetAssets" xlink:label="NetAssets"/>
+                <link:presentationArc xlink:type="arc" preferredLabel="http://www.xbrl.org/2003/role/periodEndLabel" xlink:arcrole="http://www.xbrl.org/2003/arcrole/parent-child" xlink:from="LineItems" xlink:to="NetAssets" order="3"/>
+              </link:presentationLink>
+            </link:linkbase>
+            """
+        try XBRLTestSupport.withXbrlDir(nil, extraFiles: ["ss_pre.xml": pre]) { dir in
+            let order = try #require(XBRLUtils.loadPresentationOrder(in: dir)[ssRole])
+            let periodStart = try #require(XBRLUtils.loadPresentationPeriodStartOrder(in: dir)[ssRole])
+            let periodEnd = try #require(XBRLUtils.loadPresentationPeriodEndOrder(in: dir)[ssRole])
+            #expect(periodStart["NetAssets"] != nil)
+            #expect(periodEnd["NetAssets"] != nil)
+            #expect(periodStart["NetAssets"]! < order["DividendsFromSurplus"]!)
+            #expect(order["DividendsFromSurplus"]! < periodEnd["NetAssets"]!)
+        }
+    }
+
     /// 同一 dir への複数回の要求で常に同じ結果を返すこと（loadLabelsByTag と同型のキャッシュ挙動）。
     @Test func loadPresentationOrderReturnsSameResultOnRepeatedCalls() throws {
         try XBRLTestSupport.withXbrlDir(

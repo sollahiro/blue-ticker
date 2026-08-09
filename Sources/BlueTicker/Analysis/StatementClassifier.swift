@@ -1,19 +1,22 @@
-// Statement 取り込み（Statement 本体）の BS/PL/CF 判定・抽出。docs/statement-normalization-concept.md 参照。
+// Statement 取り込み（Statement 本体）の BS/PL/CF/SS 判定・抽出。docs/statement-normalization-concept.md 参照。
 //
 // XBRLUtils.collectAllNumericFacts が既に付与している role/label メタデータを使い、
-// タグを事前に決め打ちせず（企業拡張タグも含め）BS/PL/CF へ振り分ける。実データ検証
+// タグを事前に決め打ちせず（企業拡張タグも含め）BS/PL/CF/SS へ振り分ける。実データ検証
 // （キャッシュ済み実XBRL 158社、J-GAAP/IFRS 混在）で以下のキーワード判定に収束することを確認済み。
+// SS（持分変動計算書 / 株主資本等変動計算書）は 2026-08-09 に追加。
 
 /// Statement 本体が対象とする財務諸表の種類。
 public enum StatementSectionType: String, CaseIterable, Sendable {
     case balanceSheet
     case incomeStatement
     case cashFlow
+    /// 持分変動計算書（IFRS）／株主資本等変動計算書（J-GAAP）。通称 SS。
+    case changesInEquity
 }
 
 enum StatementClassifier {
-    /// role URI から BS/PL/CF のいずれかを判定する。注記・補足表（`Notes` 接頭辞）は対象外（nil）。
-    /// 複数キーワードに一致する事態は実データ上確認されていないため、判定順は固定（BS→PL→CF）。
+    /// role URI から BS/PL/CF/SS のいずれかを判定する。注記・補足表（`Notes` 接頭辞）は対象外（nil）。
+    /// 複数キーワードに一致する事態は実データ上確認されていないため、判定順は固定（BS→PL→CF→SS）。
     static func classify(role: String) -> StatementSectionType? {
         let name = XBRLUtils.sectionNameFromRole(role)
         guard !name.hasPrefix(Xbrl.statementNotesRolePrefix) else { return nil }
@@ -26,6 +29,9 @@ enum StatementClassifier {
         }
         if Xbrl.cashFlowRoleKeywords.contains(where: { name.contains($0) }) {
             return .cashFlow
+        }
+        if Xbrl.changesInEquityRoleKeywords.contains(where: { name.contains($0) }) {
+            return .changesInEquity
         }
         return nil
     }
@@ -72,16 +78,29 @@ enum StatementClassifier {
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
         let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
+        // 代表 role の presentation 木に載っていないタグは落とす。
+        // 実データ: J-GAAP 連結SSでは `ProfitLossAttributableToOwnersOfParent` が行項目なのに、
+        // 個別SS role（`StatementOfChangesInEquity`）側の `ProfitLoss` が連結
+        // `CurrentYearDuration` fact にも roles 経由で付き、開示に無い「当期純利益」行が混入する
+        // （ニチレイ2871・オークマ6103・三菱UFJ8306 等、2026-08-09）。個別のみの会社
+        // （東邦レマック7422）は primaryRole 自体が個別SSなので `ProfitLoss` は残る。
+        let inPrimaryTree: [(tag: String, fact: XbrlFact)]
+        if let primaryRole {
+            inPrimaryTree = chosen.filter { _, fact in
+                let roles = fact.roles ?? fact.role.map { [$0] } ?? []
+                return roles.contains(primaryRole)
+            }
+        } else {
+            inPrimaryTree = chosen
+        }
         let parentTagsByTag = primaryRole.flatMap { parentTagsByRoleTag[$0] }
         let preferredLabelRoleByTag = primaryRole.flatMap { preferredLabelByRoleTag[$0] }
         let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
 
-        // presentation linkbase の表示順・タグ名に加え、fact 自身の contextRef を最終的な
-        // タイブレークキーに使う（Opus 監査で発見・修正、2026-07-31）。CF の期首/期末残高調整行
-        // （`CashAndCashEquivalentsIFRS` 等）は同一タグ・同一 order のまま2行出るため、
-        // contextRef が無いと `chosen`（辞書由来でプロセスごとに走査順が変わりうる）の並びが
-        // そのまま出力順に漏れ、実行のたびに期首/期末の順序が入れ替わりかねなかった。
-        let ordered = chosen.sorted { lhs, rhs in
+        // presentation linkbase の表示順・タグ名・contextRef で決定的に並べる。
+        // CF/SS の期首/期末残高は同一タグでも periodStart/periodEnd で別 order を持ち得る。
+        // 同 order のときは PriorInstant（期首）を Instant（期末）より先にする。
+        let ordered = inPrimaryTree.sorted { lhs, rhs in
             let lOrder = primaryRole.flatMap { lhs.fact.orderByRole?[$0] }
             let rOrder = primaryRole.flatMap { rhs.fact.orderByRole?[$0] }
             switch (lOrder, rOrder) {
@@ -91,6 +110,9 @@ enum StatementClassifier {
             default: break
             }
             if lhs.tag != rhs.tag { return lhs.tag < rhs.tag }
+            let lPrior = isPriorInstantContext(lhs.fact.contextRef)
+            let rPrior = isPriorInstantContext(rhs.fact.contextRef)
+            if lPrior != rPrior { return lPrior && !rPrior }
             return lhs.fact.contextRef < rhs.fact.contextRef
         }
 
@@ -113,6 +135,11 @@ enum StatementClassifier {
         }
     }
 
+    private static func isPriorInstantContext(_ ctx: String) -> Bool {
+        ContextHelpers.isConsolidatedPriorInstant(ctx)
+            || ContextHelpers.isNonConsolidatedPriorInstant(ctx)
+    }
+
     /// `preferredLabel`（presentationArc 属性。合計行・期首/期末残高等でどのラベルロールを使うべきか
     /// の指示）が指すバリアントが見つかればそれを使い、無ければ通常のラベル（`fact.label`）へ
     /// フォールバックする。実データ検証: 任天堂7974 の `ValuationAndTranslationAdjustments`
@@ -125,18 +152,18 @@ enum StatementClassifier {
     /// context（前期末=当期首の instant か、当期末の instant か）から periodStartLabel/
     /// periodEndLabel ロールを直接選び直すことで区別する（実データ検証: トヨタ7203）。
     ///
-    /// **CF 限定**（Opus 監査で発見・修正、2026-07-31）: 当初この分岐は sectionType を問わず
-    /// 常に評価していたため、BS の合計行（`EquityIFRS`/`NetAssetsIFRS` 等、標準タクソノミが
-    /// periodEndLabel を定義している概念）が `preferredLabel=totalLabel` を無視して常に
-    /// 「期末残高」表示になっていた（キャッシュ済み実XBRL 140件中136件で発生）。期首/期末の
-    /// 区別が必要なのは CF の残高調整行だけなので、CF 以外では従来どおり `preferredLabelRole`
-    /// を優先する。
+    /// **CF/SS 限定**（Opus 監査で発見・修正、2026-07-31。SS は 2026-08-09 に同型で追加）:
+    /// 当初この分岐は sectionType を問わず常に評価していたため、BS の合計行（`EquityIFRS`/
+    /// `NetAssetsIFRS` 等、標準タクソノミが periodEndLabel を定義している概念）が
+    /// `preferredLabel=totalLabel` を無視して常に「期末残高」表示になっていた（キャッシュ済み実XBRL
+    /// 140件中136件で発生）。期首/期末の区別が必要なのは CF の現金残高調整行と SS の純資産/資本
+    /// 残高行だけなので、それ以外では従来どおり `preferredLabelRole` を優先する。
     private static func resolvedLabel(
         for tag: String, ctx: String, sectionType: StatementSectionType, plainLabel: String?,
         preferredLabelRole: String?, labelRoleVariantsByTag: [String: [String: String]]
     ) -> String? {
         let variants = labelRoleVariantsByTag[tag] ?? [:]
-        if sectionType == .cashFlow {
+        if sectionType == .cashFlow || sectionType == .changesInEquity {
             if ContextHelpers.isConsolidatedPriorInstant(ctx)
                 || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
                 let periodStart = standardLabelVariant(variants, suffix: "periodStartLabel") {
@@ -170,12 +197,13 @@ enum StatementClassifier {
 
     /// context がその sectionType で「連結の当期」「非連結の当期」のいずれに当たるかを判定する。
     ///
-    /// BS は常に Instant、PL は常に Duration だが、CF は両方が混在する: 大半の行は Duration
-    /// （フロー行）だが、現金及び現金同等物の期首/期末残高調整行は Instant 型 fact のまま CF の
-    /// presentation role に現れる（実データ検証: トヨタ7203 の `CashAndCashEquivalentsIFRS` が
-    /// `periodStartLabel`/`periodEndLabel` としてCF role内に2箇所出現）。CF を Duration のみで
-    /// 判定すると、この Instant fact が両判定に失敗し黙って欠落する（`isConsolidatedDuration` も
-    /// `isPureNonConsolidatedContext(durationContextPatterns)` も false になるため）。
+    /// BS は常に Instant、PL は常に Duration だが、CF/SS は両方が混在する: 大半の行は Duration
+    /// （フロー行）だが、現金及び現金同等物（CF）や純資産/資本（SS）の期首/期末残高調整行は Instant
+    /// 型 fact のまま各 presentation role に現れる（実データ検証: トヨタ7203 の
+    /// `CashAndCashEquivalentsIFRS` / `EquityIFRS`）。Duration のみで判定するとこの Instant fact
+    /// が両判定に失敗し黙って欠落する。
+    ///
+    /// SS は合計列のみ（`Member` 接尾辞の構成員列は `isConsolidatedDuration` 等が除外する）。
     private static func classifyContext(
         _ ctx: String, sectionType: StatementSectionType
     ) -> (isConsolidated: Bool, isNonConsolidated: Bool) {
@@ -190,10 +218,10 @@ enum StatementClassifier {
                 ContextHelpers.isConsolidatedDuration(ctx),
                 ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.durationContextPatterns)
             )
-        case .cashFlow:
+        case .cashFlow, .changesInEquity:
             // 期首残高（periodStartLabel）は「当期首」＝前期末の instant context
             // （Prior1YearInstant 相当）で報告されるため、当期の Instant に加えて
-            // 前期の Instant も CF に限り受理する。
+            // 前期の Instant も CF/SS に限り受理する。
             let isConsolidated =
                 ContextHelpers.isConsolidatedDuration(ctx)
                 || ContextHelpers.isConsolidatedInstant(ctx)
@@ -255,7 +283,7 @@ enum StatementClassifier {
     private static func lineSection(
         for tag: String, sectionType: StatementSectionType, parentTagsByTag: [String: Set<String>]
     ) -> StatementLineSection? {
-        guard sectionType != .incomeStatement else { return nil }
+        guard sectionType == .balanceSheet || sectionType == .cashFlow else { return nil }
 
         var frontier: Set<String> = [tag]
         var visited: Set<String> = []
@@ -318,7 +346,7 @@ enum StatementClassifier {
             ]
             let matches = candidates.filter { _, keywords in keywords.contains(where: { name.contains($0) }) }
             return matches.count == 1 ? matches[0].0 : nil
-        case .incomeStatement:
+        case .incomeStatement, .changesInEquity:
             return nil
         }
     }

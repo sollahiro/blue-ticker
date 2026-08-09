@@ -1,4 +1,4 @@
-// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。
+// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。
 // docs/statement-normalization-concept.md 参照。IndividualAnalyzer（財務取り込み）と異なり、
 // 複数年度の履歴集約（EdinetDiscovery 走査）は行わない。1書類＝1年度分の抽出のみ
 // （複数年対応は StatementIngest 実装時に追加）。
@@ -29,6 +29,7 @@ struct StatementAnalyzer {
         var balanceSheet: [StatementLineItem] = []
         var incomeStatement: [StatementLineItem] = []
         var cashFlow: [StatementLineItem] = []
+        var changesInEquity: [StatementLineItem] = []
 
         if statementTypes.contains(.balanceSheet) {
             balanceSheet = StatementClassifier.extractLineItems(
@@ -51,10 +52,18 @@ struct StatementAnalyzer {
                 labelRoleVariantsByTag: labelRoleVariantsByTag,
                 calculationComponentsByRoleTag: calculationComponentsByRoleTag)
         }
+        if statementTypes.contains(.changesInEquity) {
+            changesInEquity = StatementClassifier.extractLineItems(
+                from: facts, sectionType: .changesInEquity, parentTagsByRoleTag: parentTagsByRoleTag,
+                preferredLabelByRoleTag: preferredLabelByRoleTag,
+                labelRoleVariantsByTag: labelRoleVariantsByTag,
+                calculationComponentsByRoleTag: calculationComponentsByRoleTag)
+        }
 
         return .resolved(
             StatementYear(
                 fyEnd: nil, financialPeriod: nil, docId: docID,
-                balanceSheet: balanceSheet, incomeStatement: incomeStatement, cashFlow: cashFlow))
+                balanceSheet: balanceSheet, incomeStatement: incomeStatement, cashFlow: cashFlow,
+                changesInEquity: changesInEquity))
     }
 }

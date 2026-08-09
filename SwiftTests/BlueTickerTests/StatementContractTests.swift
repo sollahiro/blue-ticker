@@ -56,10 +56,25 @@ import Testing
         #expect(years.first?["doc_id"] as? String == "S100XXXX")
         let balanceSheet = try #require(years.first?["balance_sheet"] as? [[String: Any]])
         #expect(balanceSheet.first?["tag"] as? String == "CashAndDeposits")
+        let changesInEquity = try #require(years.first?["changes_in_equity"] as? [[String: Any]])
+        #expect(changesInEquity.isEmpty)
 
         let decoded = try JSONDecoder().decode(StatementResponse.self, from: json)
         #expect(decoded.code == "7203")
         #expect(decoded.years.first?.balanceSheet.first?.value == 1_000_000)
+        #expect(decoded.years.first?.changesInEquity.isEmpty == true)
+    }
+
+    @Test func decodesStatementYearJsonMissingChangesInEquityKeyAsEmpty() throws {
+        // 回帰: SS 追加前の格納行は `changes_in_equity` キーを持たない。
+        let json = Data(
+            """
+            {"fy_end": "2024-03", "financial_period": "FY", "doc_id": "S100XXXX",
+             "balance_sheet": [], "income_statement": [], "cash_flow": []}
+            """.utf8)
+        let year = try JSONDecoder().decode(StatementYear.self, from: json)
+        #expect(year.changesInEquity.isEmpty)
+        #expect(year.docId == "S100XXXX")
     }
 
     @Test func notApplicablePlaceholderHasEmptyYears() {

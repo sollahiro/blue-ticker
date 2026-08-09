@@ -30,6 +30,10 @@
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
 // ラベルの標準タクソノミ補完（`assets/taxonomy`、git 管理外）が無い環境でもここで検証する
 // 数値・区分・is_total/components は独立して成立する（ラベル解決率自体はここでは検証しない）。
+//
+// 2026-08-09、SS（`changes_in_equity`）も上記9社＋トヨタへ golden を追加（合計列のみ・
+// 期首/期末の別 order・連結での stray `ProfitLoss` 非混入。個別のみの東邦レマックは
+// `ProfitLoss` を正当な行として残す）。
 
 import Testing
 import Foundation
@@ -77,6 +81,19 @@ import Foundation
     /// （taxonomy 非依存）とは環境依存性を切り分ける。
     private static var taxonomyAvailable: Bool {
         resolveAssetFileURL(filename: "taxonomy") != nil
+    }
+
+    /// SS の期首/期末残高行: 値が一致し、期首 order < 期末 order（開示の読み順）。
+    private static func expectOpeningClosing(
+        _ items: [StatementLineItem], tag: String, opening: Double, closing: Double
+    ) {
+        let rows = items.filter { $0.tag == tag }
+        #expect(rows.count == 2)
+        #expect(rows.map(\.value) == [opening, closing])
+        let orders = rows.compactMap(\.order)
+        #expect(orders.count == 2)
+        #expect(orders[0] < orders[1])
+        #expect(items.allSatisfy { $0.order != nil })
     }
 
     // MARK: - トヨタ自動車 S100VWVY
@@ -136,6 +153,8 @@ import Foundation
 
         #expect(cashRows.count == 2)
         #expect(Set(cashRows.map(\.value)) == [8_982_404_000_000, 9_412_060_000_000])
+        // 期首（PriorInstant）→期末（Instant）の順（同一 order のタイブレーク）。
+        #expect(cashRows.map(\.value) == [9_412_060_000_000, 8_982_404_000_000])
         // 期首・期末で異なるラベルが選ばれ、同じラベルに収束していない。
         #expect(Set(cashRows.compactMap(\.label)).count == 2)
 
@@ -146,6 +165,34 @@ import Foundation
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.cashFlow]))
         let secondCashRows = secondRun.cashFlow.filter { $0.tag == "CashAndCashEquivalentsIFRS" }
         #expect(cashRows.map(\.value) == secondCashRows.map(\.value))
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
+    func toyotaChangesInEquityTotalsMatchPublicFiguresWithOpeningClosingBalances() async throws {
+        // 持分変動計算書（SS）: 合計列のみ。自己株式の取得・包括利益・資本の期首/期末残高。
+        // 実データ検証: トヨタ7203 S100VWVY（2026-08-09）。期首 order < 期末 order。
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
+        #expect(!year.changesInEquity.isEmpty)
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "EquityIFRS",
+            opening: 35_239_338_000_000, closing: 36_878_913_000_000)
+
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "PurchaseOfTreasurySharesSSIFRS" && $0.value == -1_179_043_000_000
+            })
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ComprehensiveIncomeIFRS" && $0.value == 4_043_724_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+
+        let second = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
+        #expect(year.changesInEquity.map(\.value) == second.changesInEquity.map(\.value))
+        #expect(year.changesInEquity.map(\.tag) == second.changesInEquity.map(\.tag))
+        #expect(year.changesInEquity.map(\.order) == second.changesInEquity.map(\.order))
     }
 
     @Test(
@@ -505,6 +552,149 @@ import Foundation
 
         #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == 4_848_464_000_000)
         #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -4_512_943_000_000)
+    }
+
+    // MARK: - smoke 9社 SS（changes_in_equity）golden
+    //
+    // 実データ検証: 2026-08-09。合計列のみ・期首/期末の別 order・連結での stray ProfitLoss 非混入。
+
+    @Test
+    func ajinomotoChangesInEquityMatchesSmokeTotalsWithOpeningClosingOrder() async throws {
+        guard await Self.ensureAvailable("S100VXJA") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VXJA", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "EquityIFRS",
+            opening: 884_448_000_000, closing: 813_273_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ComprehensiveIncomeIFRS" && $0.value == 72_537_000_000
+            })
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "PurchaseOfTreasurySharesSSIFRS" && $0.value == -90_695_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func nichireiChangesInEquityMatchesSmokeTotalsAndExcludesStrayProfitLoss() async throws {
+        guard await Self.ensureAvailable("S100VYA0") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VYA0", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 265_942_000_000, closing: 275_966_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 24_731_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func azPlanningChangesInEquityMatchesSmokeTotalsAndExcludesStrayProfitLoss() async throws {
+        guard await Self.ensureAvailable("S100VU4O") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VU4O", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 2_495_050_000, closing: 2_958_166_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 461_965_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func okumaChangesInEquityMatchesSmokeTotalsAndExcludesStrayProfitLoss() async throws {
+        guard await Self.ensureAvailable("S100W043") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100W043", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 237_846_000_000, closing: 238_065_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 9_590_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func kubotaChangesInEquityMatchesSmokeTotalsWithOpeningClosingOrder() async throws {
+        guard await Self.ensureAvailable("S100XR0M") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100XR0M", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "EquityIFRS",
+            opening: 2_739_766_000_000, closing: 2_873_024_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ComprehensiveIncomeIFRS" && $0.value == 252_670_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func suzukiChangesInEquityMatchesSmokeTotalsWithOpeningClosingOrder() async throws {
+        guard await Self.ensureAvailable("S100W4MT") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100W4MT", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "EquityIFRS",
+            opening: 3_384_427_000_000, closing: 3_688_070_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ComprehensiveIncomeIFRS" && $0.value == 416_753_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func tohoRemacChangesInEquityKeepsNonConsolidatedProfitLossRow() async throws {
+        // 東邦レマックは個別SSのため `ProfitLoss`（当期純利益）が正当な行。
+        guard await Self.ensureAvailable("S100XRD8") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100XRD8", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 4_669_512_000, closing: 4_521_695_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLoss" && $0.value == 17_478_000
+            })
+    }
+
+    @Test
+    func mufgChangesInEquityMatchesSmokeTotalsAndExcludesStrayProfitLoss() async throws {
+        guard await Self.ensureAvailable("S100W4FB") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100W4FB", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 20_746_978_000_000, closing: 21_728_132_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 1_862_946_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
+    @Test
+    func smfgChangesInEquityMatchesSmokeTotalsAndExcludesStrayProfitLoss() async throws {
+        guard await Self.ensureAvailable("S100W0S7") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100W0S7", statementTypes: [.changesInEquity]))
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 14_799_967_000_000, closing: 14_841_509_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 1_177_996_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
     }
 
     // MARK: - US-GAAP（明示 notApplicable）

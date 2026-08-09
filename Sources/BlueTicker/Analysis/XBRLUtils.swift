@@ -47,6 +47,14 @@ nonisolated(unsafe) private var _labelRoleVariantsCache = BoundedFIFOCache<URL, 
     capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _roleCache = BoundedFIFOCache<URL, [String: [String]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _presentationOrderCache = BoundedFIFOCache<URL, [String: [String: Int]]>(capacity: _labelRoleCacheCapacity)
+/// 期首残高（`periodStartLabel`）用の表示順。CF/SS の PriorInstant fact に使う。
+nonisolated(unsafe) private var _presentationPeriodStartOrderCache = BoundedFIFOCache<
+    URL, [String: [String: Int]]
+>(capacity: _labelRoleCacheCapacity)
+/// 期末残高（`periodEndLabel`）用の表示順。CF/SS の（当期）Instant fact に使う。
+nonisolated(unsafe) private var _presentationPeriodEndOrderCache = BoundedFIFOCache<
+    URL, [String: [String: Int]]
+>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _presentationParentsCache = BoundedFIFOCache<URL, [String: [String: Set<String>]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _preferredLabelRolesCache = BoundedFIFOCache<URL, [String: [String: String]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _calculationComponentsCache = BoundedFIFOCache<URL, [String: [String: [CalcComponent]]]>(
@@ -414,11 +422,37 @@ enum XBRLUtils {
     /// 同一ディレクトリはキャッシュを返す。role が複数ファイルに跨って定義されることは実データ上
     /// 想定していないため、同一 role が複数ファイルに現れた場合は最初に見つかったファイルの木を採用する。
     static func loadPresentationOrder(in dir: URL) -> [String: [String: Int]] {
+        loadPresentationOrders(in: dir).defaultOrder
+    }
+
+    /// 期首残高行（`preferredLabel=periodStartLabel`）の表示順。無いタグは空。
+    static func loadPresentationPeriodStartOrder(in dir: URL) -> [String: [String: Int]] {
+        loadPresentationOrders(in: dir).periodStartOrder
+    }
+
+    /// 期末残高行（`preferredLabel=periodEndLabel`）の表示順。無いタグは空。
+    static func loadPresentationPeriodEndOrder(in dir: URL) -> [String: [String: Int]] {
+        loadPresentationOrders(in: dir).periodEndOrder
+    }
+
+    private static func loadPresentationOrders(in dir: URL) -> (
+        defaultOrder: [String: [String: Int]],
+        periodStartOrder: [String: [String: Int]],
+        periodEndOrder: [String: [String: Int]]
+    ) {
         _cacheLock.lock()
-        if let cached = _presentationOrderCache[dir] { _cacheLock.unlock(); return cached }
+        if let cached = _presentationOrderCache[dir],
+            let periodStart = _presentationPeriodStartOrderCache[dir],
+            let periodEnd = _presentationPeriodEndOrderCache[dir]
+        {
+            _cacheLock.unlock()
+            return (cached, periodStart, periodEnd)
+        }
         _cacheLock.unlock()
 
         var orderByRoleTag: [String: [String: Int]] = [:]
+        var periodStartByRoleTag: [String: [String: Int]] = [:]
+        var periodEndByRoleTag: [String: [String: Int]] = [:]
         for xmlFile in linkbaseXmlFiles(in: dir, suffix: "_pre") {
             guard let data = try? Data(contentsOf: xmlFile) else { continue }
             let parser = PresentationLinkbaseParser()
@@ -428,12 +462,21 @@ enum XBRLUtils {
             for (role, tagOrder) in parser.orderByRoleTag where orderByRoleTag[role] == nil {
                 orderByRoleTag[role] = tagOrder
             }
+            for (role, tagOrder) in parser.periodStartOrderByRoleTag
+            where periodStartByRoleTag[role] == nil {
+                periodStartByRoleTag[role] = tagOrder
+            }
+            for (role, tagOrder) in parser.periodEndOrderByRoleTag where periodEndByRoleTag[role] == nil {
+                periodEndByRoleTag[role] = tagOrder
+            }
         }
 
         _cacheLock.lock()
         _presentationOrderCache.insert(orderByRoleTag, forKey: dir)
+        _presentationPeriodStartOrderCache.insert(periodStartByRoleTag, forKey: dir)
+        _presentationPeriodEndOrderCache.insert(periodEndByRoleTag, forKey: dir)
         _cacheLock.unlock()
-        return orderByRoleTag
+        return (orderByRoleTag, periodStartByRoleTag, periodEndByRoleTag)
     }
 
     /// プレゼンテーションリンクベースから {roleURI: {local_tag: 直接の親タグ集合}} を作る。
@@ -533,7 +576,9 @@ enum XBRLUtils {
         nilAsZero: Bool = false,
         labelsByTag: [String: String] = [:],
         rolesByTag: [String: [String]] = [:],
-        orderByRoleTag: [String: [String: Int]] = [:]
+        orderByRoleTag: [String: [String: Int]] = [:],
+        periodStartOrderByRoleTag: [String: [String: Int]] = [:],
+        periodEndOrderByRoleTag: [String: [String: Int]] = [:]
     ) -> XbrlFactIndex {
         guard let data = try? Data(contentsOf: file) else { return [:] }
         let delegate = XBRLNumericsParser(
@@ -542,6 +587,8 @@ enum XBRLUtils {
             labelsByTag: labelsByTag,
             rolesByTag: rolesByTag,
             orderByRoleTag: orderByRoleTag,
+            periodStartOrderByRoleTag: periodStartOrderByRoleTag,
+            periodEndOrderByRoleTag: periodEndOrderByRoleTag,
             sourceFile: file.lastPathComponent
         )
         let parser = XMLParser(data: data)
@@ -564,7 +611,7 @@ enum XBRLUtils {
         var allFacts: XbrlFactIndex = [:]
         let labelsByTag = loadLabelsByTag(in: dir)
         let rolesByTag = loadRolesByTag(in: dir)
-        let orderByRoleTag = loadPresentationOrder(in: dir)
+        let orders = loadPresentationOrders(in: dir)
         for file in findXbrlFiles(in: dir) {
             for (tag, ctxMap) in collectNumericFacts(
                 in: file,
@@ -572,7 +619,9 @@ enum XBRLUtils {
                 nilAsZero: nilAsZero,
                 labelsByTag: labelsByTag,
                 rolesByTag: rolesByTag,
-                orderByRoleTag: orderByRoleTag
+                orderByRoleTag: orders.defaultOrder,
+                periodStartOrderByRoleTag: orders.periodStartOrder,
+                periodEndOrderByRoleTag: orders.periodEndOrder
             ) {
                 for (ctx, fact) in ctxMap {
                     allFacts[tag, default: [:]][ctx] = fact
@@ -743,6 +792,8 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
     private let labelsByTag: [String: String]
     private let rolesByTag: [String: [String]]
     private let orderByRoleTag: [String: [String: Int]]
+    private let periodStartOrderByRoleTag: [String: [String: Int]]
+    private let periodEndOrderByRoleTag: [String: [String: Int]]
     private let sourceFile: String
 
     private var currentLocalTag = ""
@@ -757,6 +808,8 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         labelsByTag: [String: String],
         rolesByTag: [String: [String]],
         orderByRoleTag: [String: [String: Int]] = [:],
+        periodStartOrderByRoleTag: [String: [String: Int]] = [:],
+        periodEndOrderByRoleTag: [String: [String: Int]] = [:],
         sourceFile: String
     ) {
         self.allowedTags = allowedTags
@@ -764,6 +817,8 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         self.labelsByTag = labelsByTag
         self.rolesByTag = rolesByTag
         self.orderByRoleTag = orderByRoleTag
+        self.periodStartOrderByRoleTag = periodStartOrderByRoleTag
+        self.periodEndOrderByRoleTag = periodEndOrderByRoleTag
         self.sourceFile = sourceFile
     }
 
@@ -822,8 +877,26 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         fact.sourceFile = sourceFile
 
         var orderByRole: [String: Int] = [:]
+        let usePeriodStart =
+            ContextHelpers.isConsolidatedPriorInstant(currentCtx)
+            || ContextHelpers.isNonConsolidatedPriorInstant(currentCtx)
+        let usePeriodEnd =
+            ContextHelpers.isConsolidatedInstant(currentCtx)
+            || ContextHelpers.isNonConsolidatedInstant(currentCtx)
         for r in roles {
-            if let o = orderByRoleTag[r]?[currentLocalTag] { orderByRole[r] = o }
+            let resolved: Int?
+            if usePeriodStart {
+                resolved =
+                    periodStartOrderByRoleTag[r]?[currentLocalTag]
+                    ?? orderByRoleTag[r]?[currentLocalTag]
+            } else if usePeriodEnd {
+                resolved =
+                    periodEndOrderByRoleTag[r]?[currentLocalTag]
+                    ?? orderByRoleTag[r]?[currentLocalTag]
+            } else {
+                resolved = orderByRoleTag[r]?[currentLocalTag]
+            }
+            if let o = resolved { orderByRole[r] = o }
         }
         if !orderByRole.isEmpty { fact.orderByRole = orderByRole }
 
@@ -915,6 +988,10 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
     var roleSetsByTag: [String: Set<String>] = [:]
     /// {roleURI: {local_tag: 表示順}}。role（`<presentationLink>` 単位）ごとに深さ優先走査で確定する。
     var orderByRoleTag: [String: [String: Int]] = [:]
+    /// 期首残高（`periodStartLabel`）出現の表示順。
+    var periodStartOrderByRoleTag: [String: [String: Int]] = [:]
+    /// 期末残高（`periodEndLabel`）出現の表示順。同一タグの期首とは別番号になり得る（SS）。
+    var periodEndOrderByRoleTag: [String: [String: Int]] = [:]
     /// {roleURI: {local_tag: 直接の親タグ集合}}。`loadPresentationParents` 参照。
     var parentTagsByRoleTag: [String: [String: Set<String>]] = [:]
     /// {roleURI: {local_tag: preferredLabel のロールURI}}。presentationArc の `preferredLabel`
@@ -926,6 +1003,16 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
     /// role スコープ内でのみ有効な xlink:label → タグ名（`<loc>` はリンクごとにローカルスコープ）。
     private var locTagByLabel: [String: String] = [:]
     private var arcs: [(from: String, to: String, order: Double, preferredLabel: String?)] = []
+
+    private static func isPeriodStartLabelRole(_ role: String?) -> Bool {
+        guard let role else { return false }
+        return role.hasSuffix("/periodStartLabel")
+    }
+
+    private static func isPeriodEndLabelRole(_ role: String?) -> Bool {
+        guard let role else { return false }
+        return role.hasSuffix("/periodEndLabel")
+    }
 
     func parser(
         _ parser: XMLParser,
@@ -979,10 +1066,27 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
             childrenByFrom[label]?.sort { $0.order < $1.order }
         }
 
-        // ルート = どの arc の to にもならない label（複数ある場合は label 名で決定的にソート）。
-        let roots = locTagByLabel.keys.filter { !hasIncoming.contains($0) }.sorted()
+        // 同一概念への複数 loc（例: `Foo_2` と `Foo`）を別名として扱う。
+        // EDINET 提出書類では親からの arc が `Foo_2` を指し、子への arc が `Foo` から出るパターンが
+        // SS/CF で頻出する（実データ: ニチレイ2871・味の素2802 の持分変動計算書、2026-08-09）。
+        // 別名をマージしないと子ツリーが別 root 扱いになり、表示順が開示とずれる。
+        var labelsByTag: [String: [String]] = [:]
+        for (label, tag) in locTagByLabel {
+            labelsByTag[tag, default: []].append(label)
+        }
+        let tagsWithIncoming = Set(hasIncoming.compactMap { locTagByLabel[$0] })
+
+        // ルート = どの arc の to にもならない label。ただし同一タグの別 loc が子として参照されて
+        // いる場合は「見出し用の別名 loc」であり真の root ではないので除外する。
+        let roots = locTagByLabel.keys.filter { label in
+            guard !hasIncoming.contains(label) else { return false }
+            if let tag = locTagByLabel[label], tagsWithIncoming.contains(tag) { return false }
+            return true
+        }.sorted()
 
         var order: [String: Int] = [:]
+        var periodStartOrder: [String: Int] = [:]
+        var periodEndOrder: [String: Int] = [:]
         var preferredLabel: [String: String] = [:]
         var counter = 0
         var visiting: Set<String> = []
@@ -991,18 +1095,44 @@ private final class PresentationLinkbaseParser: NSObject, XMLParserDelegate {
             guard !visiting.contains(label) else { return }
             visiting.insert(label)
             defer { visiting.remove(label) }
-            if let tag = locTagByLabel[label], order[tag] == nil {
-                order[tag] = counter
-                counter += 1
-                if let preferredLabelRole { preferredLabel[tag] = preferredLabelRole }
+            if let tag = locTagByLabel[label] {
+                let isPeriodStart = Self.isPeriodStartLabelRole(preferredLabelRole)
+                let isPeriodEnd = Self.isPeriodEndLabelRole(preferredLabelRole)
+                if isPeriodEnd {
+                    // 期末残高は期首と同じタグでも別の通し番号を付ける（SS: 期首→変動→期末）。
+                    if periodEndOrder[tag] == nil {
+                        periodEndOrder[tag] = counter
+                        counter += 1
+                    }
+                } else if order[tag] == nil {
+                    order[tag] = counter
+                    if isPeriodStart { periodStartOrder[tag] = counter }
+                    counter += 1
+                    if let preferredLabelRole { preferredLabel[tag] = preferredLabelRole }
+                } else if isPeriodStart, periodStartOrder[tag] == nil {
+                    periodStartOrder[tag] = order[tag]!
+                }
             }
-            for child in childrenByFrom[label] ?? [] {
+
+            // この label の子に加え、同一タグの別名 loc から出る子も辿る。
+            var childArcs = childrenByFrom[label] ?? []
+            if let tag = locTagByLabel[label] {
+                for alias in labelsByTag[tag] ?? [] where alias != label {
+                    childArcs.append(contentsOf: childrenByFrom[alias] ?? [])
+                }
+            }
+            childArcs.sort { $0.order < $1.order }
+            var seenTo: Set<String> = []
+            for child in childArcs {
+                guard seenTo.insert(child.to).inserted else { continue }
                 visit(child.to, preferredLabelRole: child.preferredLabel)
             }
         }
         for root in roots { visit(root, preferredLabelRole: nil) }
 
         orderByRoleTag[currentRole] = order
+        periodStartOrderByRoleTag[currentRole] = periodStartOrder
+        periodEndOrderByRoleTag[currentRole] = periodEndOrder
         preferredLabelByRoleTag[currentRole] = preferredLabel
 
         var parentsByTag: [String: Set<String>] = [:]

@@ -1,4 +1,4 @@
-// Statement 取り込み: 有報1件分の抽出済み BS/PL/CF（StatementYear）= 1 行。
+// Statement 取り込み: 有報1件分の抽出済み BS/PL/CF/SS（StatementYear）= 1 行。
 // company_filing_sections（有報セクション取り込み）と同じ「1書類=1行」設計（docs/statement-normalization-concept.md
 // 「実装方針」2）。抽出は決定論のみ（LLM 不要）のため、company_breakdowns のような
 // needs_review/source/content_hash 列は持たない。
@@ -11,7 +11,7 @@ import BlueTickerCore
 import Fluent
 import Foundation
 
-/// 有報1件分の抽出済み BS/PL/CF。EDINET docID を主キー（user 生成）とする。
+/// 有報1件分の抽出済み BS/PL/CF/SS。EDINET docID を主キー（user 生成）とする。
 final class CompanyStatement: Model, @unchecked Sendable {
     static let schema = "company_statements"
 
@@ -27,7 +27,7 @@ final class CompanyStatement: Model, @unchecked Sendable {
     @Field(key: "submit_date_time")
     var submitDateTime: String
 
-    /// 抽出済み BS/PL/CF（StatementYear）。JSONB（SQLite では TEXT）。
+    /// 抽出済み BS/PL/CF/SS（StatementYear）。JSONB（SQLite では TEXT）。
     @Field(key: "payload")
     var payload: StatementYear
 

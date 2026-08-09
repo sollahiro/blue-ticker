@@ -341,13 +341,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ),
         ApiSkill(
             id: "get-statement",
-            name: "財務諸表（BS/PL/CF）完全正規化",
+            name: "財務諸表（BS/PL/CF/SS）完全正規化",
             description: """
-                有価証券報告書から貸借対照表・損益計算書・キャッシュ・フロー計算書を、企業間の科目統一を
-                試みずそのまま構造化して返します（格納済みデータのみ）。Summary/Waterfall の絞り込んだ
-                ~20指標とは異なり、開示された全項目（企業拡張タグ含む）を返します。
-                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
-                注記（statement-notes）は別ツール get-statement-notes の対象。
+                有価証券報告書から貸借対照表・損益計算書・キャッシュ・フロー計算書・持分変動計算書
+                （株主資本等変動計算書）を、企業間の科目統一を試みずそのまま構造化して返します
+                （格納済みデータのみ）。Summary/Waterfall の絞り込んだ ~20指標とは異なり、開示された
+                全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列のみ（資本構成員別の
+                行列展開はしない）。対象は日経225構成銘柄に限ります。doc_id を省略すると最新の
+                有価証券報告書を使用します。注記（statement-notes）は別ツール get-statement-notes の対象。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
@@ -378,14 +379,15 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Statement（BS/PL/CF の全項目正規化）。絞り込んだ主要指標だけなら get-financials。
+                Statement（BS/PL/CF/SS の全項目正規化）。絞り込んだ主要指標だけなら get-financials。
                 日経225構成銘柄のみ。格納済みデータのみ。未抽出は 404、DB 非接続は 503。
                 表示順（order）は有価証券報告書の presentation linkbase 通り（取得できないタグはタグ名
                 アルファベット順へフォールバック）。BS/CF の各行には区分（section: assets/liabilities/
                 net_assets、operating/investing/financing）が付く場合がある（複数区分にまたがる合計行は
-                null）。PL の行には section を付けない。各行の is_total は計算リンクベース由来で、true の
-                場合 components（構成タグと weight。+1=加算、-1=控除）から二重計上せず合計を検算・
-                再構成できる（複数区分にまたがるグランドトータル行も components は取得できる）。
+                null）。PL/SS の行には section を付けない。SS（changes_in_equity）は合計列のみ。
+                各行の is_total は計算リンクベース由来で、true の場合 components（構成タグと weight。
+                +1=加算、-1=控除）から二重計上せず合計を検算・再構成できる（複数区分にまたがる
+                グランドトータル行も components は取得できる）。
                 例: GET /v1/companies/7203/statement?years=3
                 """
         ),
