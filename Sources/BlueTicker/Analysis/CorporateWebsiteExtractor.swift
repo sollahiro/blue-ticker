@@ -14,6 +14,14 @@
 // 「電子公告（注）」のように別注記にURLを委譲する会社で、この行単体からは正当に抽出不能
 // （`not_applicable`）。花王（S100XT6G）はスキーム省略のベアドメイン表記（`www.kao.com/...`）を
 // 使っており未対応（既知の限界、影響は1/148のみのためスコープ外）。
+//
+// 三越伊勢丹HD（S100YD7C）実データ検証（2026-08-09）: ラベルが「公告掲載方法」ではなく
+// 「公告掲載URL」の会社があり、旧ラベル固定判定では該当行自体を見つけられず not_found に
+// 落ちていた（本来は xbrl_url で救えるケース）。ラベル判定を複数候補の部分一致に拡張。
+//
+// 日立建機（S100YIBR）実データ検証（2026-08-09）: ラベルが「掲載」抜きの「公告方法」の会社もあり、
+// 本文中に `https://www.hitachicm.com/global/ja/` という有効URLがあるにもかかわらず not_found に
+// 落ちていた。「公告方法」を候補へ追加（「公告掲載方法」はこの部分文字列を含まないため衝突しない）。
 
 import Foundation
 import SwiftSoup
@@ -26,7 +34,7 @@ enum CorporateWebsiteExtractor {
     }
 
     /// 「公告掲載方法」行のラベル文字列。表記揺れは実データで確認され次第ここに追加する。
-    private static let publicNoticeMethodLabel = "公告掲載方法"
+    private static let publicNoticeMethodLabels = ["公告掲載方法", "公告掲載URL", "公告方法"]
 
     static func extract(xbrlDir: URL) -> Result {
         guard let html = XBRLUtils.extractTextblockHtml(
@@ -38,7 +46,7 @@ enum CorporateWebsiteExtractor {
         for row in rows {
             guard let cells = try? row.select("td, th"), cells.count >= 2 else { continue }
             let label = (try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? ""
-            guard label.contains(publicNoticeMethodLabel) else { continue }
+            guard publicNoticeMethodLabels.contains(where: label.contains) else { continue }
 
             let content = (try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? ""
             guard let rawURL = firstURL(in: content), let origin = originOnly(rawURL) else {
