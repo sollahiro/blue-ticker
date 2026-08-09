@@ -78,15 +78,29 @@ enum StatementClassifier {
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
         let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
+        // 代表 role の presentation 木に載っていないタグは落とす。
+        // 実データ: J-GAAP 連結SSでは `ProfitLossAttributableToOwnersOfParent` が行項目なのに、
+        // 個別SS role（`StatementOfChangesInEquity`）側の `ProfitLoss` が連結
+        // `CurrentYearDuration` fact にも roles 経由で付き、開示に無い「当期純利益」行が混入する
+        // （ニチレイ2871・オークマ6103・三菱UFJ8306 等、2026-08-09）。個別のみの会社
+        // （東邦レマック7422）は primaryRole 自体が個別SSなので `ProfitLoss` は残る。
+        let inPrimaryTree: [(tag: String, fact: XbrlFact)]
+        if let primaryRole {
+            inPrimaryTree = chosen.filter { _, fact in
+                let roles = fact.roles ?? fact.role.map { [$0] } ?? []
+                return roles.contains(primaryRole)
+            }
+        } else {
+            inPrimaryTree = chosen
+        }
         let parentTagsByTag = primaryRole.flatMap { parentTagsByRoleTag[$0] }
         let preferredLabelRoleByTag = primaryRole.flatMap { preferredLabelByRoleTag[$0] }
         let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
 
         // presentation linkbase の表示順・タグ名・contextRef で決定的に並べる。
-        // CF/SS の期首/期末残高は同一タグ・同一 order のまま2行出るため、PriorInstant（期首）を
-        // Instant（期末）より先にする（アルファベット順だと CurrentYearInstant < Prior1YearInstant
-        // で期末が先になるため）。
-        let ordered = chosen.sorted { lhs, rhs in
+        // CF/SS の期首/期末残高は同一タグでも periodStart/periodEnd で別 order を持ち得る。
+        // 同 order のときは PriorInstant（期首）を Instant（期末）より先にする。
+        let ordered = inPrimaryTree.sorted { lhs, rhs in
             let lOrder = primaryRole.flatMap { lhs.fact.orderByRole?[$0] }
             let rOrder = primaryRole.flatMap { rhs.fact.orderByRole?[$0] }
             switch (lOrder, rOrder) {
