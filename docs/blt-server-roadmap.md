@@ -52,7 +52,7 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 ### ローカル CLI 廃止（完了）
 
-2026-07-16 実施。トリガーはユニバース全銘柄の `company_financials` が financials read 床以上（servable）。実測 servable 3,872 / 実質対象ユニバース 3,874 社 = **99.9%**（残り2社は新規上場で初回有報未提出のため一時的 failed、提出後に自然解消見込み）。EDINET 直叩きロジックは配布しない `TickerDev`（`Sources/BlueTicker/DevCLI/`）からのみ呼べる形へ移設済み（構成は `CLAUDE.md`「ターゲット構成」参照）。経緯・実施手順は Git 履歴参照。
+2026-07-16 実施。トリガーはユニバース全銘柄の `company_financials` が financials read 床以上（servable）。実測 servable 3,872 / 実質対象ユニバース 3,874 社 = **99.9%**（残り2社は新規上場で初回有報未提出のため一時的 failed、提出後に自然解消見込み）。EDINET 直叩きロジックは配布しない `TickerDev`（`Sources/BlueTicker/DevCLI/`）からのみ呼べる形へ移設済み（構成は `AGENTS.md`「ターゲット構成と依存ルール」参照）。経緯・実施手順は Git 履歴参照。
 
 ## デプロイモード
 

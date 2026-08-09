@@ -41,7 +41,7 @@ Blue Ticker の強みは独自の分析ロジック（要因分解・正規化�
 
 モノレポで問題ない。理由:
 
-- iOS は REST `/v1` を叩くだけのクライアントで、`BlueTickerCore` / `BltServerCore` の SwiftPM ターゲット境界ルール（`CLAUDE.md`）の対象外。Xcode プロジェクトとして独立させれば、既存のターゲット依存規約と衝突しない
+- iOS は REST `/v1` を叩くだけのクライアントで、`BlueTickerCore` / `BltServerCore` の SwiftPM ターゲット境界ルール（`AGENTS.md`）の対象外。Xcode プロジェクトとして独立させれば、既存のターゲット依存規約と衝突しない
 - API 契約（REST `/v1` が正）とクライアント実装を同じリポジトリに置くことで、エンドポイント変更時の追従漏れを防ぎやすい
 - 認証まわり（iOS SSO・OIDC+PKCE）は roadmap に未着手項目として既に記録済み（`blt-server-roadmap.md`）
 
