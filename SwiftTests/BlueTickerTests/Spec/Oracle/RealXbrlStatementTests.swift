@@ -152,34 +152,60 @@ import Foundation
 
     @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
     func toyotaChangesInEquityTotalsMatchPublicFiguresWithOpeningClosingBalances() async throws {
-        // 持分変動計算書（SS）: 合計列のみ。自己株式の取得・包括利益・資本の期首/期末残高。
+        // 持分変動計算書（SS）: 合計列＋Sankey 向け構成員列。
         // 実データ検証: トヨタ7203 S100VWVY（2026-08-09）。
         let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
         #expect(!year.changesInEquity.isEmpty)
 
-        let byTag = Dictionary(
-            year.changesInEquity.map { ($0.tag, $0) },
-            uniquingKeysWith: { first, _ in first })
-        // Dictionary uniquing keeps first; EquityIFRS は期首/期末の2行あるので filter で取る。
-        let equityRows = year.changesInEquity.filter { $0.tag == "EquityIFRS" }
+        let totals = year.changesInEquity.filter { $0.equityMember == nil }
+        let equityRows = totals.filter { $0.tag == "EquityIFRS" }
         #expect(equityRows.count == 2)
-        #expect(Set(equityRows.map(\.value)) == [35_239_338_000_000, 36_878_913_000_000])
-        // 同一 order のタイブレークで期首（PriorInstant）→期末（Instant）の順。
         #expect(equityRows.map(\.value) == [35_239_338_000_000, 36_878_913_000_000])
-        #expect(equityRows.map(\.section) == [nil, nil])
 
-        #expect(byTag["PurchaseOfTreasurySharesSSIFRS"]?.value == -1_179_043_000_000)
-        #expect(byTag["ComprehensiveIncomeIFRS"]?.value == 4_043_724_000_000)
-        // SS 行には section を付けない（PL と同型）。
-        #expect(byTag["PurchaseOfTreasurySharesSSIFRS"]?.section == nil)
+        #expect(
+            totals.contains {
+                $0.tag == "PurchaseOfTreasurySharesSSIFRS" && $0.value == -1_179_043_000_000
+            })
+        #expect(
+            totals.contains {
+                $0.tag == "ComprehensiveIncomeIFRS" && $0.value == 4_043_724_000_000
+            })
 
-        // 出力順の決定性（同一タグの期首/期末）。
+        // 包括利益の親会社/NCI 分割（Sankey）。
+        let ci = year.changesInEquity.filter { $0.tag == "ComprehensiveIncomeIFRS" }
+        let ciByMember = Dictionary(uniqueKeysWithValues: ci.map { ($0.equityMember, $0.value) })
+        #expect(ciByMember[nil] == 4_043_724_000_000)
+        #expect(ciByMember[.equityAttributableToOwnersOfParent] == 4_011_822_000_000)
+        #expect(ciByMember[.nonControllingInterests] == 31_903_000_000)
+        #expect(ciByMember[.retainedEarnings] == 4_765_086_000_000)
+        #expect(ciByMember[.otherComponentsOfEquity] == -753_264_000_000)
+
         let second = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.changesInEquity]))
-        #expect(
-            year.changesInEquity.map(\.value) == second.changesInEquity.map(\.value))
+        #expect(year.changesInEquity.map(\.value) == second.changesInEquity.map(\.value))
         #expect(year.changesInEquity.map(\.tag) == second.changesInEquity.map(\.tag))
+        #expect(year.changesInEquity.map(\.equityMember) == second.changesInEquity.map(\.equityMember))
+    }
+
+    @Test func ajinomotoChangesInEquitySplitsComprehensiveIncomeForSankey() async throws {
+        guard await Self.ensureAvailable("S100VXJA") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VXJA", statementTypes: [.changesInEquity]))
+        let ci = year.changesInEquity.filter { $0.tag == "ComprehensiveIncomeIFRS" }
+        let byMember = Dictionary(uniqueKeysWithValues: ci.map { ($0.equityMember, $0.value) })
+        #expect(byMember[nil] == 72_537_000_000)
+        #expect(byMember[.equityAttributableToOwnersOfParent] == 61_088_000_000)
+        #expect(byMember[.nonControllingInterests] == 11_449_000_000)
+
+        // OCE→RE 振替は合計列が 0 または欠落でも、構成員列で見える（Sankey の内部振替）。
+        let transfer = year.changesInEquity.filter {
+            $0.tag == "TransferFromOtherComponentsOfEquityToRetainedEarningsSSIFRS"
+        }
+        let transferByMember = Dictionary(uniqueKeysWithValues: transfer.map { ($0.equityMember, $0.value) })
+        #expect(transferByMember[nil] == nil || transferByMember[nil] == 0)
+        #expect(transferByMember[.retainedEarnings] == 8_084_000_000)
+        #expect(transferByMember[.otherComponentsOfEquity] == -8_084_000_000)
     }
 
     @Test(

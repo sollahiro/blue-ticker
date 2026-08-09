@@ -65,10 +65,16 @@ enum StatementClassifier {
                 let roles = fact.roles ?? fact.role.map { [$0] } ?? []
                 guard roles.contains(where: { classify(role: $0) == sectionType }) else { continue }
 
-                let (isConsolidated, isNonConsolidated) = classifyContext(ctx, sectionType: sectionType)
-                guard isConsolidated || isNonConsolidated else { continue }
+                let classified: (isConsolidated: Bool, isNonConsolidated: Bool)
+                if sectionType == .changesInEquity {
+                    guard let ss = classifyChangesInEquityContext(ctx) else { continue }
+                    classified = ss
+                } else {
+                    classified = classifyContext(ctx, sectionType: sectionType)
+                }
+                guard classified.isConsolidated || classified.isNonConsolidated else { continue }
 
-                if isConsolidated {
+                if classified.isConsolidated {
                     consolidated.append((tag, fact))
                 } else {
                     nonConsolidated.append((tag, fact))
@@ -82,13 +88,10 @@ enum StatementClassifier {
         let preferredLabelRoleByTag = primaryRole.flatMap { preferredLabelByRoleTag[$0] }
         let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
 
-        // presentation linkbase の表示順・タグ名に加え、fact 自身の contextRef を最終的な
-        // タイブレークキーに使う（Opus 監査で発見・修正、2026-07-31）。CF/SS の期首/期末残高
-        // （`CashAndCashEquivalentsIFRS` / `EquityIFRS` 等）は同一タグ・同一 order のまま2行出るため、
-        // contextRef が無いと `chosen`（辞書由来でプロセスごとに走査順が変わりうる）の並びが
-        // そのまま出力順に漏れ、実行のたびに期首/期末の順序が入れ替わりかねなかった。
-        // さらに同一タグ・同一 order では PriorInstant（期首）を Instant（期末）より先にする
-        // （アルファベット順だと CurrentYearInstant < Prior1YearInstant で期末が先になるため）。
+        // presentation linkbase の表示順・タグ名・equity_member・contextRef で決定的に並べる。
+        // CF/SS の期首/期末残高は同一タグ・同一 order のまま2行出るため、PriorInstant（期首）を
+        // Instant（期末）より先にする。SS の構成員列は合計列（equity_member=nil）の直後に、
+        // 正規化キーの辞書順で並べる（Sankey が同じ変動行の列を隣接して読めるようにする）。
         let ordered = chosen.sorted { lhs, rhs in
             let lOrder = primaryRole.flatMap { lhs.fact.orderByRole?[$0] }
             let rOrder = primaryRole.flatMap { rhs.fact.orderByRole?[$0] }
@@ -99,6 +102,14 @@ enum StatementClassifier {
             default: break
             }
             if lhs.tag != rhs.tag { return lhs.tag < rhs.tag }
+            let lMember = equityMember(from: lhs.fact.contextRef)
+            let rMember = equityMember(from: rhs.fact.contextRef)
+            switch (lMember, rMember) {
+            case (nil, .some): return true
+            case (.some, nil): return false
+            case let (l?, r?) where l.rawValue != r.rawValue: return l.rawValue < r.rawValue
+            default: break
+            }
             let lPrior = isPriorInstantContext(lhs.fact.contextRef)
             let rPrior = isPriorInstantContext(rhs.fact.contextRef)
             if lPrior != rPrior { return lPrior && !rPrior }
@@ -114,19 +125,69 @@ enum StatementClassifier {
                 for: tag, ctx: fact.contextRef, sectionType: sectionType, plainLabel: fact.label,
                 preferredLabelRole: preferredLabelRoleByTag?[tag],
                 labelRoleVariantsByTag: labelRoleVariantsByTag)
-            let calcComponents = componentsByTag?[tag]
+            let member = sectionType == .changesInEquity ? equityMember(from: fact.contextRef) : nil
+            // is_total/components は合計列のみ（構成員列は Sankey の値そのものを使う）。
+            let calcComponents = member == nil ? componentsByTag?[tag] : nil
             let components = calcComponents.map {
                 $0.map { StatementLineComponent(tag: $0.tag, weight: $0.weight) }
             }
             return StatementLineItem(
                 tag: tag, label: label, value: fact.value, unit: fact.unitRef, order: order,
-                section: section, isTotal: calcComponents != nil, components: components)
+                section: section, equityMember: member, isTotal: calcComponents != nil,
+                components: components)
         }
     }
 
+    /// contextRef 末尾の `…Member` が SS ホワイトリストなら (suffix, member) を返す。
+    private static func equityMemberMatch(
+        from ctx: String
+    ) -> (suffix: String, member: StatementEquityMember)? {
+        // 辞書順で決定的に走査（同長の曖昧一致は実データ上想定外だが安全側）。
+        for (suffix, member) in Xbrl.changesInEquityMemberWhitelist.sorted(by: { $0.key < $1.key }) {
+            if ctx.hasSuffix("_\(suffix)") || ctx == suffix { return (suffix, member) }
+        }
+        return nil
+    }
+
+    private static func equityMember(from ctx: String) -> StatementEquityMember? {
+        equityMemberMatch(from: ctx)?.member
+    }
+
+    private static func stripEquityMemberSuffix(_ ctx: String) -> String {
+        guard let (suffix, _) = equityMemberMatch(from: ctx), ctx.hasSuffix("_\(suffix)") else {
+            return ctx
+        }
+        return String(ctx.dropLast(suffix.count + 1))
+    }
+
+    /// SS 用: 合計列またはホワイトリスト構成員列だけを受理する。未知の Member（資本金等）は捨てる。
+    /// 戻り値の nil は「この context は SS 対象外」。
+    private static func classifyChangesInEquityContext(
+        _ ctx: String
+    ) -> (isConsolidated: Bool, isNonConsolidated: Bool)? {
+        let matched = equityMemberMatch(from: ctx)
+        if ctx.hasSuffix("Member"), matched == nil {
+            return nil
+        }
+        let base = stripEquityMemberSuffix(ctx)
+        let isConsolidated =
+            ContextHelpers.isConsolidatedDuration(base)
+            || ContextHelpers.isConsolidatedInstant(base)
+            || ContextHelpers.isConsolidatedPriorInstant(base)
+        let isNonConsolidated =
+            ContextHelpers.isPureNonConsolidatedContext(base, patterns: Xbrl.durationContextPatterns)
+            || ContextHelpers.isPureNonConsolidatedContext(base, patterns: Xbrl.instantContextPatterns)
+            || ContextHelpers.isPureNonConsolidatedContext(
+                base, patterns: Xbrl.priorInstantContextPatterns)
+        guard isConsolidated || isNonConsolidated else { return nil }
+        return (isConsolidated, isNonConsolidated)
+    }
+
     private static func isPriorInstantContext(_ ctx: String) -> Bool {
-        ContextHelpers.isConsolidatedPriorInstant(ctx)
-            || ContextHelpers.isNonConsolidatedPriorInstant(ctx)
+        // 構成員付き PriorInstant（例: Prior1YearInstant_RetainedEarningsIFRSMember）も期首扱い。
+        let base = stripEquityMemberSuffix(ctx)
+        return ContextHelpers.isConsolidatedPriorInstant(base)
+            || ContextHelpers.isNonConsolidatedPriorInstant(base)
     }
 
     /// `preferredLabel`（presentationArc 属性。合計行・期首/期末残高等でどのラベルロールを使うべきか
@@ -153,12 +214,14 @@ enum StatementClassifier {
     ) -> String? {
         let variants = labelRoleVariantsByTag[tag] ?? [:]
         if sectionType == .cashFlow || sectionType == .changesInEquity {
-            if ContextHelpers.isConsolidatedPriorInstant(ctx)
-                || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
+            let periodCtx = sectionType == .changesInEquity ? stripEquityMemberSuffix(ctx) : ctx
+            if ContextHelpers.isConsolidatedPriorInstant(periodCtx)
+                || ContextHelpers.isNonConsolidatedPriorInstant(periodCtx),
                 let periodStart = standardLabelVariant(variants, suffix: "periodStartLabel") {
                 return periodStart
             }
-            if ContextHelpers.isConsolidatedInstant(ctx) || ContextHelpers.isNonConsolidatedInstant(ctx),
+            if ContextHelpers.isConsolidatedInstant(periodCtx)
+                || ContextHelpers.isNonConsolidatedInstant(periodCtx),
                 let periodEnd = standardLabelVariant(variants, suffix: "periodEndLabel") {
                 return periodEnd
             }
@@ -192,9 +255,7 @@ enum StatementClassifier {
     /// `CashAndCashEquivalentsIFRS` / `EquityIFRS`）。Duration のみで判定するとこの Instant fact
     /// が両判定に失敗し黙って欠落する。
     ///
-    /// SS の資本構成員次元（`ShareCapitalIFRSMember` 等）は `isConsolidatedDuration` が
-    /// `Member` 接尾辞を除外するため、合計列（次元なし / Equity 合計）だけが採用される。
-    /// 構成員別の行列展開は v1 スコープ外（docs/statement-normalization-concept.md）。
+    /// SS の構成員列は `classifyChangesInEquityContext` 側で扱う（ここには来ない）。
     private static func classifyContext(
         _ ctx: String, sectionType: StatementSectionType
     ) -> (isConsolidated: Bool, isNonConsolidated: Bool) {
@@ -209,10 +270,7 @@ enum StatementClassifier {
                 ContextHelpers.isConsolidatedDuration(ctx),
                 ContextHelpers.isPureNonConsolidatedContext(ctx, patterns: Xbrl.durationContextPatterns)
             )
-        case .cashFlow, .changesInEquity:
-            // 期首残高（periodStartLabel）は「当期首」＝前期末の instant context
-            // （Prior1YearInstant 相当）で報告されるため、当期の Instant に加えて
-            // 前期の Instant も CF/SS に限り受理する。
+        case .cashFlow:
             let isConsolidated =
                 ContextHelpers.isConsolidatedDuration(ctx)
                 || ContextHelpers.isConsolidatedInstant(ctx)
@@ -223,6 +281,8 @@ enum StatementClassifier {
                 || ContextHelpers.isPureNonConsolidatedContext(
                     ctx, patterns: Xbrl.priorInstantContextPatterns)
             return (isConsolidated, isNonConsolidated)
+        case .changesInEquity:
+            return (false, false)
         }
     }
 

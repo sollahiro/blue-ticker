@@ -88,13 +88,14 @@ struct DevStatementCommand: AsyncParsableCommand {
             let label = item.label ?? "(ラベル不明)"
             let unit = item.unit ?? "-"
             let section = item.section.map { "<\($0.rawValue)>" } ?? ""
+            let member = item.equityMember.map { "[\($0.rawValue)]" } ?? ""
             let order = item.order.map { "order=\($0)" } ?? "order=nil"
             let total = item.isTotal ? "TOTAL" : ""
             let components =
                 item.components.map { comps in
                     " = " + comps.map { "\($0.weight > 0 ? "+" : "")\($0.weight)*\($0.tag)" }.joined(separator: " ")
                 } ?? ""
-            print("  \(item.tag): \(label) = \(item.value) [\(unit)] \(section) \(order) \(total)\(components)")
+            print("  \(item.tag): \(label) = \(item.value) [\(unit)] \(section)\(member) \(order) \(total)\(components)")
         }
     }
 }

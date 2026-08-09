@@ -126,9 +126,8 @@ import Testing
         #expect(items.map(\.value) == [100])
     }
 
-    @Test func changesInEquityUsesTotalColumnAndExcludesEquityMemberDimensions() {
-        // SS は資本構成員次元（ShareCapitalIFRSMember 等）を持つが、v1 は合計列
-        // （次元なし CurrentYearDuration / Equity 合計）のみを採用する。
+    @Test func changesInEquityKeepsWhitelistedMembersAndDropsOtherCapitalColumns() {
+        // Sankey 向け: 親会社/NCI/RE/OCE は残し、資本金など他構成員は捨てる。
         let ssRole = role("ConsolidatedStatementOfChangesInEquityIFRS")
         let facts: XbrlFactIndex = [
             "PurchaseOfTreasurySharesSSIFRS": [
@@ -146,8 +145,51 @@ import Testing
             ]
         ]
         let items = StatementClassifier.extractLineItems(from: facts, sectionType: .changesInEquity)
-        #expect(items.map(\.value) == [-1_179_043_000_000])
-        #expect(items.map(\.section) == [nil])
+        #expect(items.map(\.value) == [-1_179_043_000_000, -1_179_043_000_000])
+        #expect(items.map(\.equityMember) == [nil, .equityAttributableToOwnersOfParent])
+        #expect(items.map(\.section) == [nil, nil])
+    }
+
+    @Test func changesInEquitySplitsComprehensiveIncomeAcrossParentNciRetainedAndOce() {
+        let ssRole = role("ConsolidatedStatementOfChangesInEquityIFRS")
+        let facts: XbrlFactIndex = [
+            "ComprehensiveIncomeIFRS": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS", contextRef: "CurrentYearDuration",
+                    value: 72_537_000_000, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+                "CurrentYearDuration_EquityAttributableToOwnersOfParentIFRSMember": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS",
+                    contextRef: "CurrentYearDuration_EquityAttributableToOwnersOfParentIFRSMember",
+                    value: 61_088_000_000, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+                "CurrentYearDuration_NonControllingInterestsIFRSMember": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS",
+                    contextRef: "CurrentYearDuration_NonControllingInterestsIFRSMember",
+                    value: 11_449_000_000, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+                "CurrentYearDuration_RetainedEarningsIFRSMember": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS",
+                    contextRef: "CurrentYearDuration_RetainedEarningsIFRSMember",
+                    value: 70_272_000_000, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+                "CurrentYearDuration_OtherComponentsOfEquityIFRSMember": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS",
+                    contextRef: "CurrentYearDuration_OtherComponentsOfEquityIFRSMember",
+                    value: -9_183_000_000, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+                "CurrentYearDuration_ShareCapitalIFRSMember": XbrlFact(
+                    tag: "ComprehensiveIncomeIFRS",
+                    contextRef: "CurrentYearDuration_ShareCapitalIFRSMember",
+                    value: 0, consolidation: "", role: ssRole, orderByRole: [ssRole: 5]),
+            ]
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .changesInEquity)
+        #expect(items.count == 5)
+        #expect(items.map(\.equityMember) == [
+            nil,
+            .equityAttributableToOwnersOfParent,
+            .nonControllingInterests,
+            .otherComponentsOfEquity,
+            .retainedEarnings,
+        ])
+        // is_total は合計列のみ。
+        #expect(items.map(\.isTotal) == [false, false, false, false, false])
     }
 
     @Test func changesInEquityIncludesOpeningAndClosingEquityBalancesLikeCashFlow() {
