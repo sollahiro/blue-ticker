@@ -317,6 +317,7 @@ CI では `swift-macos` ジョブの `Test` ステップに repo secret `BLT_EDI
 | `8306` | 三菱UFJ | J-GAAP金融 | 銀行系。PL/BS抽出と会計基準判定を通しつつ、GP・有利子負債の未検出を許容する |
 | `8316` | 三井住友 | J-GAAP金融 | 銀行系。GP・IBD 未検出を許容する |
 | `6103` | オークマ | J-GAAP事業 | 標準的なJ-GAAP事業会社。PL/BS/GP/IBD が通ることを見る |
+| `2871` | ニチレイ | J-GAAP事業 | `borrowings_schedule` 抽出で、値なしの区分見出し行（「その他有利子負債」等）が同インデントの部分木を閉じるケースを検証する |
 | `6326` | クボタ | IFRS | IFRSタグ体系でPL/BS/GP/IBD抽出が通ることを見る |
 | `2802` | 味の素 | IFRS | `GrossProfitIFRS` の直接取得と、IFRS IBD で粒度別タグが一部不足するケースを検証する |
 | `7269` | スズキ | J-GAAP→IFRS移行境界 | 期末 `2024-03-31` 以前は J-GAAP、以降は IFRS を期待する |
