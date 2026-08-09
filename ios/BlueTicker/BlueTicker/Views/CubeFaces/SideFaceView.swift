@@ -10,6 +10,12 @@ struct SideFaceView: View {
         response.series(for: metric)
     }
 
+    /// 事業利益はアクセントカラーで統一(正面 FrontFaceView・上面 TopFaceView と同じ)。
+    /// 影響要因は符号が期によって変わりうる単一の線のため、緑/赤ではなく中立色にする。
+    private var seriesColor: Color {
+        metric == .businessProfit ? .accentColor : .secondary
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(metric.displayName) の推移")
@@ -33,6 +39,7 @@ struct SideFaceView: View {
                             }
                     }
                 }
+                .foregroundStyle(seriesColor)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 8)
             }

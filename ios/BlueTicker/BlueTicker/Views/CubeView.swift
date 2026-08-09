@@ -133,7 +133,7 @@ struct CubeView: View {
         case .side:
             SideFaceView(metric: selectedMetric, response: waterfall)
         case .top:
-            TopFaceView(year: year) { metric in
+            TopFaceView(response: waterfall) { metric in
                 selectedMetric = metric
                 rotate(to: .side, axis: (0, 1, 0))
             }

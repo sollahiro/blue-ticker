@@ -29,7 +29,7 @@ struct APIClient {
         return try await get(url)
     }
 
-    func waterfall(code: String, years: Int = 5) async throws -> WaterfallResponse {
+    func waterfall(code: String, years: Int = 6) async throws -> WaterfallResponse {
         var components = URLComponents(
             url: baseURL.appendingPathComponent("v1/companies/\(code)/waterfall"),
             resolvingAgainstBaseURL: false)
