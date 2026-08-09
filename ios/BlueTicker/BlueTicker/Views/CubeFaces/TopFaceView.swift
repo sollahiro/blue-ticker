@@ -3,8 +3,9 @@ import SwiftUI
 /// 上面: 直近の前年比較(トランジション)を年度分だけ列として並べた俯瞰(なぜその数字になったか、を年度をまたいで比較する)。
 /// 1列 = 1組の前年比較。列内は上から「前期事業利益(start)→売上要因→利益率変化→販管費(delta)→当期事業利益(end)」
 /// を縦に並べたもの(正面 FrontFaceView の水平バーと同じ `businessProfitWaterfallBars()` を再利用)。
-/// 円の大きさは金額の大きさ、色は符号(プラス=緑/マイナス=赤)を表す。タップすると `onSelectMetric` で
-/// その項目を選び、呼び出し側が側面へ切り替える。
+/// 円の大きさは金額の大きさを表す。色は事業利益(前期/当期)=アクセントカラー、影響要因(売上・利益率・
+/// 販管費)=符号(プラス緑/マイナス赤)。事業利益の色分けは正面 FrontFaceView と統一している。
+/// タップすると `onSelectMetric` でその項目を選び、呼び出し側が側面へ切り替える。
 struct TopFaceView: View {
     var response: WaterfallResponse
     var onSelectMetric: (WaterfallMetric) -> Void
@@ -44,7 +45,7 @@ struct TopFaceView: View {
                                     onSelectMetric(bar.metric)
                                 } label: {
                                     Circle()
-                                        .fill(bar.value >= 0 ? .green : .red)
+                                        .fill(color(for: bar))
                                         .frame(width: diameter(for: bar.value), height: diameter(for: bar.value))
                                 }
                                 .buttonStyle(.plain)
@@ -60,6 +61,14 @@ struct TopFaceView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
+        }
+    }
+
+    /// 事業利益(前期/当期)はアクセントカラー、影響要因は符号で緑/赤(正面 FrontFaceView.color(for:) と同じ規則)。
+    private func color(for bar: WaterfallBar) -> Color {
+        switch bar.kind {
+        case .start, .end: return .accentColor
+        case .delta: return bar.value >= 0 ? .green : .red
         }
     }
 
