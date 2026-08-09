@@ -45,7 +45,15 @@ struct CubeView: View {
             }
         }
         .padding()
-        .navigationTitle(company.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    CompanyIconView(url: company.iconURL, name: company.name, size: 22)
+                    Text(company.name).font(.headline).lineLimit(1)
+                }
+            }
+        }
         .task { await load() }
         .onAppear {
             #if DEBUG
