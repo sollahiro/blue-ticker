@@ -28,6 +28,8 @@ L2 Impl Coupling  … FW/内部型/配線への結合。捨ててよい・最小
 
 ラベルはコードへの機械的付与（次段 B）までは概念上の区分として使い、レビュー・新規テスト設計時の判断軸とする。
 
+全 `@Test` への仮ラベル機械付与スナップショットは [test-spec-inventory.md](test-spec-inventory.md)。
+
 ## 現状ギャップ
 
 1. smoke の床（[xbrl-parsing.md §6](xbrl-parsing.md#6-スモークテスト)）が note_type/breakdown の決定論ロジックを未カバー（golden のみ）
