@@ -62,6 +62,8 @@ import Testing
 
         let actualComponents = payload.borrowingsComponents?.map { $0.jsonObject() } ?? []
         let expectedComponents = expectedEntry["components"] as? [[String: Any]] ?? []
+        // 両者が偶然空配列同士で一致してしまう（比較が空振りする）ことを防ぐ。
+        #expect(!expectedComponents.isEmpty)
         let actualJSON = try Self.canonicalJSON(actualComponents)
         let expectedJSON = try Self.canonicalJSON(expectedComponents)
         #expect(actualJSON == expectedJSON)

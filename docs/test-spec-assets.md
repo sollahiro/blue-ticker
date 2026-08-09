@@ -37,15 +37,15 @@ L2 Impl Coupling  … FW/内部型/配線への結合。捨ててよい・最小
 3. geography 等の期待JSONが回帰に未接続
 4. 仮ラベルの62%が UNCLASSIFIED（[test-spec-inventory.md](test-spec-inventory.md)）。キーワードヒューリスティックの限界で、手動レビューが必要
 
-## 進捗（2026-08-09、A〜E 完了）
+## 進捗（2026-08-09、A〜D 完了・E 部分完了）
 
 | # | 内容 | 状態 |
 |---|---|---|
 | A | 本方針を docs/ へ固定（本ファイル） | 完了 |
-| B | 全 `@Test` へ仮ラベルを機械付与した棚卸し表を作る | 完了。[test-spec-inventory.md](test-spec-inventory.md)（1048件、UNCLASSIFIED 62%） |
+| B | 全 `@Test` へ仮ラベルを機械付与した棚卸し表を作る | 完了。[test-spec-inventory.md](test-spec-inventory.md)（1054件、UNCLASSIFIED 62%） |
 | C | golden 期待値の外出しフォーマットを1 note_type/statement で試作する | 完了。borrowings_schedule・3docIDのみ（`StatementNotesOracleFormatTests.swift`）。他 note_type への本移行は未着手 |
-| D | 横断 `SPEC_INVARIANT` を1本設計・追加する（例: IBD vs borrowings_schedule） | 完了（`CrossModuleInvariantTests.swift`） |
-| E | ラベルに応じたサブフォルダ移動 | 部分完了。単一ラベルが7割以上を占め、かつ非UNCLASSIFIEDな26+2ファイルのみ `Spec/{Oracle,Invariant,Contract,Policy}/` へ移動。ラベル混在ファイル（例: `StatementContractTests.swift`）とUNCLASSIFIED優勢ファイルは元の場所のまま |
+| D | 横断 `SPEC_INVARIANT` を1本設計・追加する（例: IBD vs borrowings_schedule） | 完了（`CrossModuleInvariantTests.swift`。IBDExtractor.extract を実際に呼び、method="borrowings_schedule" で解決した docID は明細表合計との一致を、method="field_parser" の docID（SOMPO S100R1LR）は一致しないこと自体を検証する） |
+| E | ラベルに応じたサブフォルダ移動 | 部分完了。単一ラベルが7割以上を占め、かつ非UNCLASSIFIEDなファイル25件を機械的基準で移動。加えて C・D で新規作成した2件（`StatementNotesOracleFormatTests.swift` は機械ラベルではUNCLASSIFIEDだが著者判断でOracleへ、`CrossModuleInvariantTests.swift` はSPEC_INVARIANTへ）を手動で追加し、計27件を `Spec/{Oracle,Invariant,Contract,Policy}/` へ移動。ラベル混在ファイル（例: `StatementContractTests.swift`）とUNCLASSIFIED優勢ファイルは元の場所のまま |
 
 ## 次の候補（未着手）
 

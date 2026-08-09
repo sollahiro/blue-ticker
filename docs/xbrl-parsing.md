@@ -289,7 +289,7 @@ smoke/
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
 | 注記(borrowings_schedule)外出しオラクル試作 | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（`docs/test-spec-assets.md` の C。期待値をSwiftコード外へ出した試作、3docIDのみ） |
-| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | ハードコードなし。`BorrowingsSchedule.extract` と `resolveBorrowingsSchedule` の合計一致を検証（`docs/test-spec-assets.md` の D） |
+| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | `IBDExtractor.extract` と `resolveBorrowingsSchedule` の関係を検証。method="borrowings_schedule" で解決した docID は合計一致を、method="field_parser"（SOMPO S100R1LR）は不一致自体を実データ値で固定（`docs/test-spec-assets.md` の D） |
 
 `SPEC_*` ラベルに基づくサブフォルダ移動（`docs/test-spec-assets.md` の E）を実施済み。`SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` に該当ファイルを移動し、ラベルが混在するファイル（`StatementContractTests.swift` 等）や UNCLASSIFIED が優勢なファイルは元の場所に残している（一覧は `docs/test-spec-inventory.md`）。SwiftPM のテストターゲットはサブフォルダを再帰的に含むため `Package.swift` の変更は不要。
 
