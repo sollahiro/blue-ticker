@@ -57,7 +57,7 @@ Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com
 
 - [`docs/architecture.md`](docs/architecture.md) — 構成
 - [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md) — 運用
-- [`CLAUDE.md`](CLAUDE.md) — ビルド・ターゲット構成
+- [`AGENTS.md`](AGENTS.md) — ビルド・ターゲット構成
 
 ## 免責事項
 

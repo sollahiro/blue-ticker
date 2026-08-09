@@ -1,15 +1,43 @@
 # AGENTS.md
 
-エージェント向けの作業合意。ビルド・ターゲット正本は `CLAUDE.md`、運用ルールは `.agents/rules/`、アーキテクチャは `docs/`。
+エージェント向けの作業合意。ビルド・ターゲット境界の正本は本ファイル、運用ルールは `.agents/rules/`、アーキテクチャは `docs/`。
 
 ## 原理原則
 
 - **コンテキスト**: 最も希少な資源。認知負荷と情報量を最小化し、指針・本ファイル自身も短く保つ。
 - **実データ・実測**: モックや推測より EDINET / Neon / 本番 read の実データと件数で判断する。ゲートは計測してから次へ。XBRL注記等の抽出ロジック実装時は、元のHTML（開示書類）と抽出結果を必ず照らし合わせて確認する。
 - **Git First**: Git が唯一の Source of Truth。永続判断は Git か memory、一時情報は残さない。履歴詳細は Git に委ねる。
-- **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は `CLAUDE.md`）。
+- **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
-- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。**原則としてはnote_type(statement-notes)/breakdownの決定論ロジックもこの床でカバーされるべきだが、現状smokeが対象とするのは基本財務諸表抽出器（BS/PL/CF/GP/IBD）のみで未整備**。ロジックが固まったらsmoke企業セットに対しても回帰対象へ加え、床を広げる。テストの重心を言語非依存の仕様資産へ移す長期方針は `docs/test-spec-assets.md`。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。**原則としてはnote_type(statement-notes)/breakdownの決定論ロジックもこの床でカバーされるべきだが、現状smokeが対象とするのは基本財務諸表抽出器（BS/PL/CF/GP/IBD）のみで未整備**。ロジックが固まったらsmoke企業セットに対しても回帰対象へ加え、床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
+
+## ビルド・テスト
+
+```bash
+swift build                          # blt-server / TickerDev バイナリを生成
+swift test                           # 全テスト（Swift Testing）
+.build/debug/blt-server --help       # ローカル実行（要 BLT_EDINET_API_KEY 等）
+swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
+```
+
+## ターゲット構成と依存ルール
+
+| ターゲット | 内容 |
+|---|---|
+| `BlueTickerCore`（`Sources/BlueTicker/`） | XBRL解析・サービス・REST ファサード（`Server/`）・開発用ローカル解析（`DevCLI/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
+| `BltMcpServerCore`（`Sources/BltMcpServerCore/`） | MCP プロトコル層（ツールカタログ・`MCP.Server` ファクトリ）。ビジネスロジック・DB は持たない。**Vapor/Fluent には依存しない** |
+| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。MCP はルートパス（`POST /`）として配線。Web/DB 依存をここに閉じ込める |
+| `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ（唯一の配布 executable product） |
+| `TickerDev`（`Sources/TickerDevMain/`） | 開発用ローカル解析 CLI のエントリポイントのみ。**`Package.swift` の `products` に含めない**（`swift run TickerDev` でのみ実行） |
+
+ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。
+
+`BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
+
+- `Services/` は `DevCLI/` のコマンド型を参照してはならない
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `Services/`・`Server/`・`DevCLI/` を参照してはならない
+- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`、breakdowns 取り込み結果を表す `BreakdownResolveResult` 等）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
+- `DevCLI/` は `TickerDev` ターゲット向けの **ファサード**。公開面は `DevCLIEntry` の1点のみ。ローカル解析コマンド実装は internal のまま置き、新たに public 化しない
 
 ## 機能の実装サイクル
 
