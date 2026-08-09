@@ -83,10 +83,12 @@ enum StatementClassifier {
         let componentsByTag = primaryRole.flatMap { calculationComponentsByRoleTag[$0] }
 
         // presentation linkbase の表示順・タグ名に加え、fact 自身の contextRef を最終的な
-        // タイブレークキーに使う（Opus 監査で発見・修正、2026-07-31）。CF の期首/期末残高調整行
-        // （`CashAndCashEquivalentsIFRS` 等）は同一タグ・同一 order のまま2行出るため、
+        // タイブレークキーに使う（Opus 監査で発見・修正、2026-07-31）。CF/SS の期首/期末残高
+        // （`CashAndCashEquivalentsIFRS` / `EquityIFRS` 等）は同一タグ・同一 order のまま2行出るため、
         // contextRef が無いと `chosen`（辞書由来でプロセスごとに走査順が変わりうる）の並びが
         // そのまま出力順に漏れ、実行のたびに期首/期末の順序が入れ替わりかねなかった。
+        // さらに同一タグ・同一 order では PriorInstant（期首）を Instant（期末）より先にする
+        // （アルファベット順だと CurrentYearInstant < Prior1YearInstant で期末が先になるため）。
         let ordered = chosen.sorted { lhs, rhs in
             let lOrder = primaryRole.flatMap { lhs.fact.orderByRole?[$0] }
             let rOrder = primaryRole.flatMap { rhs.fact.orderByRole?[$0] }
@@ -97,6 +99,9 @@ enum StatementClassifier {
             default: break
             }
             if lhs.tag != rhs.tag { return lhs.tag < rhs.tag }
+            let lPrior = isPriorInstantContext(lhs.fact.contextRef)
+            let rPrior = isPriorInstantContext(rhs.fact.contextRef)
+            if lPrior != rPrior { return lPrior && !rPrior }
             return lhs.fact.contextRef < rhs.fact.contextRef
         }
 
@@ -117,6 +122,11 @@ enum StatementClassifier {
                 tag: tag, label: label, value: fact.value, unit: fact.unitRef, order: order,
                 section: section, isTotal: calcComponents != nil, components: components)
         }
+    }
+
+    private static func isPriorInstantContext(_ ctx: String) -> Bool {
+        ContextHelpers.isConsolidatedPriorInstant(ctx)
+            || ContextHelpers.isNonConsolidatedPriorInstant(ctx)
     }
 
     /// `preferredLabel`（presentationArc 属性。合計行・期首/期末残高等でどのラベルロールを使うべきか

@@ -158,11 +158,11 @@ import Testing
                 "Prior1YearInstant": XbrlFact(
                     tag: "EquityIFRS", contextRef: "Prior1YearInstant", value: 35_239_338_000_000,
                     consolidation: "", role: ssRole,
-                    orderByRole: [ssRole: 0]),
+                    orderByRole: [ssRole: 14]),
                 "CurrentYearInstant": XbrlFact(
                     tag: "EquityIFRS", contextRef: "CurrentYearInstant", value: 36_878_913_000_000,
                     consolidation: "", role: ssRole,
-                    orderByRole: [ssRole: 10]),
+                    orderByRole: [ssRole: 14]),
                 "CurrentYearInstant_ShareCapitalIFRSMember": XbrlFact(
                     tag: "EquityIFRS", contextRef: "CurrentYearInstant_ShareCapitalIFRSMember",
                     value: 397_050_000_000, consolidation: "", role: ssRole),
@@ -171,14 +171,15 @@ import Testing
                 "CurrentYearDuration": XbrlFact(
                     tag: "DividendsSSIFRS", contextRef: "CurrentYearDuration",
                     value: -1_200_000_000_000, consolidation: "", role: ssRole,
-                    orderByRole: [ssRole: 5]),
+                    orderByRole: [ssRole: 20]),
             ],
         ]
         let items = StatementClassifier.extractLineItems(from: facts, sectionType: .changesInEquity)
-        #expect(items.map(\.tag) == ["EquityIFRS", "DividendsSSIFRS", "EquityIFRS"])
+        // 同一 order の EquityIFRS は期首→期末。配当はその後。
+        #expect(items.map(\.tag) == ["EquityIFRS", "EquityIFRS", "DividendsSSIFRS"])
         #expect(
             items.map(\.value)
-                == [35_239_338_000_000, -1_200_000_000_000, 36_878_913_000_000])
+                == [35_239_338_000_000, 36_878_913_000_000, -1_200_000_000_000])
     }
 
     @Test func excludesFactsFromOtherStatementSections() {

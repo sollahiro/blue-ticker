@@ -136,6 +136,8 @@ import Foundation
 
         #expect(cashRows.count == 2)
         #expect(Set(cashRows.map(\.value)) == [8_982_404_000_000, 9_412_060_000_000])
+        // 期首（PriorInstant）→期末（Instant）の順（同一 order のタイブレーク）。
+        #expect(cashRows.map(\.value) == [9_412_060_000_000, 8_982_404_000_000])
         // 期首・期末で異なるラベルが選ばれ、同じラベルに収束していない。
         #expect(Set(cashRows.compactMap(\.label)).count == 2)
 
@@ -163,7 +165,8 @@ import Foundation
         let equityRows = year.changesInEquity.filter { $0.tag == "EquityIFRS" }
         #expect(equityRows.count == 2)
         #expect(Set(equityRows.map(\.value)) == [35_239_338_000_000, 36_878_913_000_000])
-        // 期首・期末で異なるラベル（taxonomy が無い環境では label が nil になりうるため値で担保）。
+        // 同一 order のタイブレークで期首（PriorInstant）→期末（Instant）の順。
+        #expect(equityRows.map(\.value) == [35_239_338_000_000, 36_878_913_000_000])
         #expect(equityRows.map(\.section) == [nil, nil])
 
         #expect(byTag["PurchaseOfTreasurySharesSSIFRS"]?.value == -1_179_043_000_000)
