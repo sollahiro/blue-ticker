@@ -87,16 +87,6 @@ public enum StatementLineSection: String, Codable, Sendable {
     case financing
 }
 
-/// SS（持分変動計算書）行の資本構成員列。合計列は `nil`。
-/// Sankey の当期包括利益分割向けに、親会社持分 / NCI / 利益剰余金 / その他の資本の構成要素
-/// （J-GAAP の評価・換算差額等を含む）だけを正規化キーで公開する。全構成員の行列展開はしない。
-public enum StatementEquityMember: String, Codable, Sendable, CaseIterable {
-    case equityAttributableToOwnersOfParent = "equity_attributable_to_owners_of_parent"
-    case nonControllingInterests = "non_controlling_interests"
-    case retainedEarnings = "retained_earnings"
-    case otherComponentsOfEquity = "other_components_of_equity"
-}
-
 /// 合計行（`StatementLineItem.isTotal == true`）を構成する要素1件。計算リンクベース
 /// （`_cal.xml`、`summation-item` arc）由来。`weight` は加算=1・控除=−1（実データ上 ±1 のみ確認）。
 public struct StatementLineComponent: Codable, Sendable {
@@ -120,7 +110,7 @@ public struct StatementLineComponent: Codable, Sendable {
 /// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
 /// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
 /// 「未決事項」参照（v1では未対応）。
-/// `equityMember` は SS のみ。合計列は nil、ホワイトリスト構成員列だけ非 nil。
+/// SS は合計列のみ（資本構成員次元は含めない）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
     public var label: String?
@@ -128,25 +118,21 @@ public struct StatementLineItem: Codable, Sendable {
     public var unit: String?
     public var order: Int?
     public var section: StatementLineSection?
-    /// SS の資本構成員列。合計列・BS/PL/CF では nil。
-    public var equityMember: StatementEquityMember?
     /// この行が計算リンクベース上の合計行（`summation-item` の from 側）かどうか。
-    /// SS の構成員列では付けない（合計列の検算用）。
     public var isTotal: Bool
     /// `isTotal == true` かつ構成要素が解決できた場合のみ非 nil。
     public var components: [StatementLineComponent]?
 
     private enum CodingKeys: String, CodingKey {
         case tag, label, value, unit, order, section
-        case equityMember = "equity_member"
         case isTotal = "is_total"
         case components
     }
 
     public init(
         tag: String, label: String?, value: Double, unit: String?, order: Int?,
-        section: StatementLineSection? = nil, equityMember: StatementEquityMember? = nil,
-        isTotal: Bool = false, components: [StatementLineComponent]? = nil
+        section: StatementLineSection? = nil, isTotal: Bool = false,
+        components: [StatementLineComponent]? = nil
     ) {
         self.tag = tag
         self.label = label
@@ -154,7 +140,6 @@ public struct StatementLineItem: Codable, Sendable {
         self.unit = unit
         self.order = order
         self.section = section
-        self.equityMember = equityMember
         self.isTotal = isTotal
         self.components = components
     }
@@ -165,7 +150,6 @@ public struct StatementLineItem: Codable, Sendable {
     /// 無い）があると合成 `Decodable` では `keyNotFound` で読み取り自体が失敗し、REST 読み出しも
     /// `StatementIngest` の既存行チェックも共倒れする。現状 `company_statements` は本番・開発とも
     /// 未書き込みで実害は無いが、将来の取り違えを避けるため決定的に安全側へ倒す。
-    /// `equity_member` も同型（欠落時 nil）。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         tag = try container.decode(String.self, forKey: .tag)
@@ -174,7 +158,6 @@ public struct StatementLineItem: Codable, Sendable {
         unit = try container.decodeIfPresent(String.self, forKey: .unit)
         order = try container.decodeIfPresent(Int.self, forKey: .order)
         section = try container.decodeIfPresent(StatementLineSection.self, forKey: .section)
-        equityMember = try container.decodeIfPresent(StatementEquityMember.self, forKey: .equityMember)
         isTotal = try container.decodeIfPresent(Bool.self, forKey: .isTotal) ?? false
         components = try container.decodeIfPresent(
             [StatementLineComponent].self, forKey: .components)
@@ -182,8 +165,8 @@ public struct StatementLineItem: Codable, Sendable {
 
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
     /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
-    /// 該当する祖先が判定できた行のみ非 nil。`equity_member` は SS の構成員列のみ非 nil。
-    /// `components` は `is_total` が true かつ構成要素が解決できた場合のみ非 nil。
+    /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
+    /// 解決できた場合のみ非 nil。
     public func jsonObject() -> [String: Any] {
         [
             "tag": tag,
@@ -192,7 +175,6 @@ public struct StatementLineItem: Codable, Sendable {
             "unit": unit as Any? ?? NSNull(),
             "order": order as Any? ?? NSNull(),
             "section": section?.rawValue as Any? ?? NSNull(),
-            "equity_member": equityMember?.rawValue as Any? ?? NSNull(),
             "is_total": isTotal,
             "components": components.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
         ]
@@ -207,9 +189,7 @@ public struct StatementYear: Codable, Sendable {
     public var balanceSheet: [StatementLineItem]
     public var incomeStatement: [StatementLineItem]
     public var cashFlow: [StatementLineItem]
-    /// 持分変動計算書（IFRS）／株主資本等変動計算書（J-GAAP）。合計列に加え、Sankey 向けに
-    /// 親会社持分 / NCI / 利益剰余金 / その他の資本の構成要素列を `equity_member` 付きで持つ
-    /// （全構成員の行列展開はしない。`StatementClassifier` 参照）。
+    /// 持分変動計算書（IFRS）／株主資本等変動計算書（J-GAAP）。合計列のみ（資本構成員次元は含めない）。
     public var changesInEquity: [StatementLineItem]
 
     private enum CodingKeys: String, CodingKey {

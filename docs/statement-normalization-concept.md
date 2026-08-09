@@ -57,16 +57,8 @@ J-GAAP/IFRS 問わず以下のキーワード判定に収束することを確�
 | IFRS | `ConsolidatedStatementOfFinancialPositionIFRS` | `ConsolidatedStatementOfProfitOrLossIFRS` | `ConsolidatedStatementOfCashFlowsIFRS` | `ConsolidatedStatementOfChangesInEquityIFRS` |
 
 SS の role キーワードは `StatementOfChangesInEquity` の1語で J-GAAP/IFRS を吸収（2026-08-09、
-トヨタ7203 S100VWVY で確認）。SS は資本構成員軸を持つ。合計列に加え、Sankey の当期包括利益分割
-向けに次の構成員列だけを `equity_member` 付きで返す（資本金・自己株式など他列の行列展開はしない）:
-
-| `equity_member` | IFRS Member | J-GAAP Member |
-|---|---|---|
-| （nil = 合計列） | 次元なし | 次元なし |
-| `equity_attributable_to_owners_of_parent` | `EquityAttributableToOwnersOfParentIFRSMember` | `ShareholdersEquityMember` |
-| `non_controlling_interests` | `NonControllingInterestsIFRSMember` | `NonControllingInterestsMember` |
-| `retained_earnings` | `RetainedEarningsIFRSMember` | `RetainedEarningsMember` |
-| `other_components_of_equity` | `OtherComponentsOfEquityIFRSMember` | `ValuationAndTranslationAdjustmentsMember` |
+トヨタ7203 S100VWVY で確認）。SS は資本構成員軸を持つが、**合計列のみ**を返す（`Member` 接尾辞の
+コンテキストは除外。CF の Instant 混在と同型で期首/期末残高も受理）。構成員別の行列展開はしない。
 
 検証で分かった注意点（キーワードリストは `Constants/Xbrl.swift` に実装済み）:
 
@@ -148,10 +140,10 @@ StatementYear
   balance_sheet:      [StatementLineItem]
   income_statement:   [StatementLineItem]
   cash_flow:          [StatementLineItem]
-  changes_in_equity:  [StatementLineItem]   # SS（合計列 + Parent/NCI/RE/OCE。2026-08-09）
+  changes_in_equity:  [StatementLineItem]   # SS（合計列のみ。2026-08-09）
 
 StatementLineItem
-  tag, label, value, unit, order, equity_member?
+  tag, label, value, unit, order
 ```
 
 `StatementComputeResult`（`.success` / `.notApplicable` / `.failed`）は `FinancialsComputeResult`
@@ -167,7 +159,7 @@ StatementLineItem
   DevCLI での目視確認は実装済み（PR #153）。DB モデル・ingest・REST・MCP 配線も
   下記「実装方針」に沿って実装済み（2026-07-29、対象は日経225限定でスタート。使い捨て Neon
   への実データ書き込み・読み出しまで検証済み）。SS（持分変動計算書）は 2026-08-09 に追加
-  （合計列＋Parent/NCI/RE/OCE、`statement-v1` のまま）。日経225全社への本番ingestはこれから
+  （合計列のみ、`statement-v1` のまま）。日経225全社への本番ingestはこれから
   （`assets/nikkei225.csv` を持つ本番/ローカル環境で `blt-server ingest --stages statements` を実行）。
 - **statement-notes（注記）**: DB モデル・ingest・REST（`GET /v1/companies/{code}/statement/notes`）・
   MCP（`get_statement_notes`）まで実装済み（2026-08-02、note_type 9種、対象は日経225限定）。

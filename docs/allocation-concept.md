@@ -18,8 +18,8 @@
 |---|---|
 | 地域別 | 地域ごとの売上構成（geography breakdown軸を流用） |
 | 製品別・事業別 | 事業セグメントごとの売上構成（business breakdown軸を流用） |
-| 利益構造別 | P&L段階分解（売上高→…→当期純利益）に加え、**当期包括利益の分割**（親会社 vs NCI、利益剰余金 vs OCI着地。Statement SS の `equity_member` 列を材料にする） |
-| 投資構造別 | 資金配分（設備投資・研究開発・自己株式取得・配当金等）。親会社還元は SS 合計列ではなく financials の `dividend_ss` / 自己株（EquityAttributable 文脈）または SS の `equity_attributable_to_owners_of_parent` 列を使う |
+| 利益構造別 | P&L段階分解（売上高→売上原価→売上総利益→販管費[内訳]→営業利益→…→当期純利益）。当期包括利益の分割材料として Statement SS（`changes_in_equity` 合計列）を使う想定 |
+| 投資構造別 | 資金配分（設備投資・研究開発・自己株式取得・配当金等） |
 
 ## 今回整備したデータとの対応
 
@@ -27,8 +27,8 @@
 |---|---|
 | 地域別 | 内訳取り込み `geography` breakdown軸 |
 | 製品別・事業別 | 内訳取り込み `business` breakdown軸 |
-| 利益構造別 | Statement取り込み（PL本体）＋ 財務諸表注記取り込み `sga_breakdown` note_type（販管費内訳）＋ **Statement SS（`changes_in_equity` の合計列と Parent/NCI/RE/OCE）** |
-| 投資構造別 | 財務諸表注記取り込み `capital_expenditures_overview`／`research_and_development`／`dividends` note_type（親会社配当は `dividend_ss` / SS parent 列と併用可） |
+| 利益構造別 | Statement取り込み（PL本体）＋ 財務諸表注記取り込み `sga_breakdown` note_type（販管費内訳）＋ Statement SS（`changes_in_equity` 合計列） |
+| 投資構造別 | 財務諸表注記取り込み `capital_expenditures_overview`／`research_and_development`／`dividends` note_type |
 
 `employees`／`research_and_development` breakdown軸（内訳取り込み、今回追加）は「人員配分」観点として
 将来追加する余地があるが、上表には含めない（v1想定の4観点に絞る）。

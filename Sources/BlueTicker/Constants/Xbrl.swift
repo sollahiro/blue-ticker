@@ -965,25 +965,6 @@ enum Xbrl {
         "StatementOfChangesInEquity"
     ]
 
-    /// SS で採用する資本構成員（context 末尾 `…Member`）のホワイトリスト。
-    /// Sankey の当期包括利益分割（親会社 vs NCI、利益剰余金 vs OCI着地）に必要な列だけに絞る。
-    /// 資本金・自己株式・資本剰余金など全構成員の行列展開はしない（実データ検証: 味の素2802・
-    /// スズキ7269、2026-08-09）。
-    ///
-    /// キーは contextRef 末尾の Member ローカル名、値は公開契約の `equity_member`。
-    static let changesInEquityMemberWhitelist: [String: StatementEquityMember] = [
-        // IFRS
-        "EquityAttributableToOwnersOfParentIFRSMember": .equityAttributableToOwnersOfParent,
-        "NonControllingInterestsIFRSMember": .nonControllingInterests,
-        "RetainedEarningsIFRSMember": .retainedEarnings,
-        "OtherComponentsOfEquityIFRSMember": .otherComponentsOfEquity,
-        // J-GAAP
-        "ShareholdersEquityMember": .equityAttributableToOwnersOfParent,
-        "NonControllingInterestsMember": .nonControllingInterests,
-        "RetainedEarningsMember": .retainedEarnings,
-        "ValuationAndTranslationAdjustmentsMember": .otherComponentsOfEquity,
-    ]
-
     /// BS/CF 行の区分（`StatementLineItem.section`）判定に使う presentation 祖先タグの部分一致
     /// キーワード。`StatementClassifier` が presentation linkbase の親子関係を辿り、最初に一致した
     /// 祖先で確定する（実データ検証: トヨタ7203 J-GAAP・ソニー6758 IFRS のキャッシュ済み実XBRL）。

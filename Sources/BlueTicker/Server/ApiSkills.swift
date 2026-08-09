@@ -346,11 +346,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 有価証券報告書から貸借対照表・損益計算書・キャッシュ・フロー計算書・持分変動計算書
                 （株主資本等変動計算書）を、企業間の科目統一を試みずそのまま構造化して返します
                 （格納済みデータのみ）。Summary/Waterfall の絞り込んだ ~20指標とは異なり、開示された
-                全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列に加え、Sankey 向けに
-                親会社持分 / NCI / 利益剰余金 / その他の資本の構成要素列（`equity_member`）を持ちます
-                （資本金など全構成員の行列展開はしません）。対象は日経225構成銘柄に限ります。
-                doc_id を省略すると最新の有価証券報告書を使用します。注記（statement-notes）は別ツール
-                get-statement-notes の対象。
+                全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列のみ（資本構成員別の
+                行列展開はしない）。対象は日経225構成銘柄に限ります。doc_id を省略すると最新の
+                有価証券報告書を使用します。注記（statement-notes）は別ツール get-statement-notes の対象。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
@@ -386,12 +384,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 表示順（order）は有価証券報告書の presentation linkbase 通り（取得できないタグはタグ名
                 アルファベット順へフォールバック）。BS/CF の各行には区分（section: assets/liabilities/
                 net_assets、operating/investing/financing）が付く場合がある（複数区分にまたがる合計行は
-                null）。PL/SS の行には section を付けない。SS（changes_in_equity）は合計列に加え、
-                equity_member（equity_attributable_to_owners_of_parent / non_controlling_interests /
-                retained_earnings / other_components_of_equity）付きの構成員列を返す（当期包括利益の
-                親会社 vs NCI、利益剰余金 vs OCI着地の分割用）。
-                各行の is_total は計算リンクベース由来（SS では合計列のみ）で、true の場合 components
-                （構成タグと weight。+1=加算、-1=控除）から二重計上せず合計を検算・再構成できる。
+                null）。PL/SS の行には section を付けない。SS（changes_in_equity）は合計列のみ。
+                各行の is_total は計算リンクベース由来で、true の場合 components（構成タグと weight。
+                +1=加算、-1=控除）から二重計上せず合計を検算・再構成できる（複数区分にまたがる
+                グランドトータル行も components は取得できる）。
                 例: GET /v1/companies/7203/statement?years=3
                 """
         ),
