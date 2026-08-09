@@ -16,20 +16,20 @@
 
 新規テストを書く／既存テストを見直す際、どのラベルに該当するか意識する（機械的な付与は必須ではない）。
 
-| ラベル | 内容 | 例 |
-|---|---|---|
-| `SPEC_ORACLE` | 入力→出力の期待値（数値・行・docID） | `smoke/`, golden回帰の期待値 |
-| `SPEC_INVARIANT` | 常に真であるべき関係 | 貸借一致、内訳合計＝合計値、waterfall因子和＝Δ |
-| `SPEC_CONTRACT` | REST/MCP の JSON schema・エラー意味 | レスポンス型、エラーコード |
-| `SPEC_POLICY` | version/skip/floor/優先順位などの状態規則 | ingest の再計算トリガー表（`versioning.md`） |
-| `HARNESS_ONLY` | 上記を走らせるための装置 | テストヘルパー・fixture ローダー |
-| `IMPL_ONLY` | 今の実装内部都合のみを見ている | 呼び出し順・内部 mock の検証（廃棄候補） |
+| ラベル | 層 | 内容 | 例 |
+|---|---|---|---|
+| `SPEC_ORACLE` | L0 | 入力→出力の期待値（数値・行・docID） | `smoke/`, golden回帰の期待値 |
+| `SPEC_INVARIANT` | L0 | 常に真であるべき関係 | 貸借一致、内訳合計＝合計値、waterfall因子和＝Δ |
+| `SPEC_CONTRACT` | L0 | REST/MCP の JSON schema・エラー意味 | レスポンス型、エラーコード |
+| `SPEC_POLICY` | L0 | version/skip/floor/優先順位などの状態規則 | ingest の再計算トリガー表（`.agents/rules/project/versioning.md`） |
+| `HARNESS_ONLY` | L1 | 上記を走らせるための装置 | テストヘルパー・fixture ローダー |
+| `IMPL_ONLY` | L2 | 今の実装内部都合のみを見ている | 呼び出し順・内部 mock の検証（廃棄候補） |
 
 `SPEC_ORACLE` / `SPEC_INVARIANT` は smoke・golden 回帰（`xbrl-parsing.md` §6）の言語非依存版に相当する。`SPEC_INVARIANT` はモジュール間の一貫性（横断整合性）を、特定の実装配線ではなく述語として表現する点が従来の統合テストと異なる。
 
 ## 既知のギャップ
 
-- smoke の床（§6.2 固定企業セット）が note_type(statement-notes) / breakdown の決定論ロジックを未カバー（golden回帰のみ）
+- smoke の床が note_type(statement-notes) / breakdown の決定論ロジックを未カバー（詳細・経緯は `xbrl-parsing.md` §6）
 - financials ↔ statement ↔ notes ↔ breakdown を横断する `SPEC_INVARIANT` がスイートとして薄い
 - golden回帰の期待値は `RealXbrl*Tests.swift` にハードコードされており、データとして外出しされていない
 
