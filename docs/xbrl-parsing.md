@@ -296,6 +296,8 @@ smoke/
 
 原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は未整備というギャップがある。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない場合がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床をnote_type/breakdownまで広げる。
 
+golden/smoke をどう言語非依存の仕様資産として扱うかの長期方針は [test-spec-assets.md](test-spec-assets.md) を参照。
+
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
 `RealXbrlBreakdownTests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
