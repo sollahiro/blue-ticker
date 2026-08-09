@@ -6,7 +6,28 @@
 //   負債・純資産を束ねる `LiabilitiesAndEquityIFRSAbstract` であり、区分判定バグの回帰対象）
 // - 7974 任天堂 S100W73A（J-GAAP連結、2025-03期）
 //
-// キャッシュが無い環境では `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
+// 2026-08-09、smoke（`smoke/smoke_expected/*.json`、SmokeTests.swift）が対象とする固定11社
+// セットのうち US-GAAP2社を除く9社**全件**を、statement 側の床として追加（AGENTS.md「テスト」節・
+// docs/test-spec-assets.md「既知のギャップ」参照。SmokeTests.swift 自体は Extractors.swift 経由の
+// 抽出器のみを検証しており StatementAnalyzer は通らないため、床を広げるにはここへ追加する）。
+// 追加した9社は「同一区分内で他行の components からも参照されていない isTotal 行」（＝各区分の
+// 最上位合計）を構造的に特定した上で、smoke_expected の既存 golden 値（total_assets/net_assets/
+// sales/cfo/cfi）と突合して一致を確認済み（2026-08-09）:
+// - 2802 味の素 S100VXJA（IFRS連結、2025-03期）
+// - 2871 ニチレイ S100VYA0（J-GAAP連結、2025-03期）
+// - 3490 AZplanning S100VU4O（J-GAAP連結、2025-02期、小規模企業）
+// - 6103 オークマ S100W043（J-GAAP連結、2025-03期）
+// - 6326 クボタ S100XR0M（IFRS連結、2025-12期）
+// - 7269 スズキ S100W4MT（IFRS連結、2025-03期）
+// - 7422 東邦レマック S100XRD8（J-GAAP連結、2025-12-20期。小規模企業・決算期末が月中）
+// - 8306 三菱UFJフィナンシャル・グループ S100W4FB（J-GAAP連結・銀行、2025-03期。流動/非流動の
+//   区分を持たない銀行特有のBS構造の回帰対象）
+// - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
+// smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
+// 「US-GAAP（明示 notApplicable）」で別途カバー済み。
+//
+// smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
+// Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
 // ラベルの標準タクソノミ補完（`assets/taxonomy`、git 管理外）が無い環境でもここで検証する
 // 数値・区分・is_total/components は独立して成立する（ラベル解決率自体はここでは検証しない）。
 
@@ -22,6 +43,18 @@ import Foundation
 
     private static func cacheAvailable(_ docID: String) -> Bool {
         FileManager.default.fileExists(atPath: xbrlRoot.appendingPathComponent("\(docID)_xbrl").path)
+    }
+
+    /// `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、それでも無ければ SKIP する
+    /// （`RealXbrlBreakdownTests.swift` と同型。smoke 由来の企業セットで採用し、CI・新規
+    /// checkout でもキャッシュ未取得のまま無条件 SKIP にならないようにする）。
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard cacheAvailable(docID) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
     }
 
     private static func analyzer() -> StatementAnalyzer {
@@ -210,6 +243,268 @@ import Foundation
 
         #expect(byTag["NetSales"]?.value == 1_164_922_000_000)
         #expect(byTag["ProfitLossAttributableToOwnersOfParent"]?.value == 278_806_000_000)
+    }
+
+    // MARK: - smoke 企業セット（US-GAAP除く7社、床の拡張。2026-08-09）
+
+    /// 同一 section 内で他行の components からも参照されていない isTotal 行 = その区分の
+    /// 最上位合計（根）。参照元を同一 section 内に限定するのは、複数区分を跨ぐグランドトータル
+    /// （section=nil、例: LiabilitiesAndNetAssets）が Liabilities/NetAssets を参照することで
+    /// 区分内の本来の root が誤って「参照済み」判定されるのを防ぐため。
+    private static func rootTotal(_ items: [StatementLineItem], section: StatementLineSection) -> StatementLineItem? {
+        let inSection = items.filter { $0.section == section }
+        let referenced = Set(inSection.compactMap(\.components).flatMap { $0.map(\.tag) })
+        let roots = inSection.filter { $0.isTotal && !referenced.contains($0.tag) }
+        return roots.count == 1 ? roots.first : nil
+    }
+
+    /// 貸借対照表の会計等式（資産=負債+純資産）。上記 `rootTotal` で3行を抽出結果から
+    /// 実行時に構造的に特定して検証する（固定タグ名を再掲するだけの重複チェックにしない）。
+    /// 開示側の百万円/千円丸めにより厳密には一致しない場合があるため、絶対誤差2,000,000円まで
+    /// は許容する（実データ検証: 7社中の最大の乖離は1,000,000円）。
+    private static func expectBalanceSheetIdentity(_ balanceSheet: [StatementLineItem]) {
+        guard let assets = rootTotal(balanceSheet, section: .assets),
+            let liabilities = rootTotal(balanceSheet, section: .liabilities),
+            let netAssets = rootTotal(balanceSheet, section: .netAssets)
+        else {
+            Issue.record("could not structurally locate assets/liabilities/netAssets root totals")
+            return
+        }
+        #expect(abs(assets.value - (liabilities.value + netAssets.value)) <= 2_000_000)
+    }
+
+    // MARK: - 味の素 S100VXJA
+
+    @Test
+    func ajinomotoStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100VXJA") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100VXJA", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["AssetsIFRS"]?.value == 1_721_131_000_000)
+        #expect(bsByTag["LiabilitiesIFRS"]?.value == 907_858_000_000)
+        #expect(bsByTag["EquityIFRS"]?.value == 813_273_000_000)
+        #expect(bsByTag["AssetsIFRS"]?.section == .assets)
+        #expect(bsByTag["LiabilitiesIFRS"]?.section == .liabilities)
+        #expect(bsByTag["EquityIFRS"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSalesIFRS" }?.value == 1_530_556_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivitiesIFRS" })?.value == 209_898_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivitiesIFRS" })?.section == .operating)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestingActivitiesIFRS" })?.value == -77_382_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestingActivitiesIFRS" })?.section == .investing)
+    }
+
+    // MARK: - ニチレイ S100VYA0
+
+    @Test
+    func nichireiStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100VYA0") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100VYA0", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 499_221_000_000)
+        #expect(bsByTag["Liabilities"]?.value == 223_255_000_000)
+        #expect(bsByTag["NetAssets"]?.value == 275_966_000_000)
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSales" }?.value == 702_080_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == 53_194_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.section == .operating)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -32_403_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.section == .investing)
+    }
+
+    // MARK: - AZplanning S100VU4O（小規模企業。純資産合計の構成要素が株主資本のみの単純ケース）
+
+    @Test
+    func azPlanningStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100VU4O") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100VU4O", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 13_239_919_000)
+        #expect(bsByTag["Liabilities"]?.value == 10_281_752_000)
+        #expect(bsByTag["NetAssets"]?.value == 2_958_166_000)
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        #expect(Set(bsByTag["NetAssets"]?.components?.map(\.tag) ?? []) == ["ShareholdersEquity"])
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSales" }?.value == 12_430_301_000)
+
+        // 回帰対象: CFO がマイナスの小規模企業ケース。
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == -2_014_514_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.section == .operating)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -68_814_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.section == .investing)
+    }
+
+    // MARK: - オークマ S100W043
+
+    @Test
+    func okumaStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100W043") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100W043", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 298_168_000_000)
+        #expect(bsByTag["Liabilities"]?.value == 60_103_000_000)
+        #expect(bsByTag["NetAssets"]?.value == 238_065_000_000)
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSales" }?.value == 206_822_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == 17_802_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -15_257_000_000)
+    }
+
+    // MARK: - クボタ S100XR0M
+
+    @Test
+    func kubotaStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100XR0M") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100XR0M", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["AssetsIFRS"]?.value == 6_204_909_000_000)
+        #expect(bsByTag["LiabilitiesIFRS"]?.value == 3_331_885_000_000)
+        #expect(bsByTag["EquityIFRS"]?.value == 2_873_024_000_000)
+        #expect(bsByTag["AssetsIFRS"]?.section == .assets)
+        #expect(bsByTag["LiabilitiesIFRS"]?.section == .liabilities)
+        #expect(bsByTag["EquityIFRS"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSalesIFRS" }?.value == 3_018_891_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivitiesIFRS" })?.value == 327_901_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestingActivitiesIFRS" })?.value == -163_726_000_000)
+    }
+
+    // MARK: - スズキ S100W4MT
+
+    @Test
+    func suzukiStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100W4MT") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100W4MT", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["AssetsIFRS"]?.value == 5_993_657_000_000)
+        #expect(bsByTag["LiabilitiesIFRS"]?.value == 2_305_586_000_000)
+        #expect(bsByTag["EquityIFRS"]?.value == 3_688_070_000_000)
+        #expect(bsByTag["AssetsIFRS"]?.section == .assets)
+        #expect(bsByTag["LiabilitiesIFRS"]?.section == .liabilities)
+        #expect(bsByTag["EquityIFRS"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "RevenueIFRS" }?.value == 5_825_161_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivitiesIFRS" })?.value == 669_784_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestingActivitiesIFRS" })?.value == -475_605_000_000)
+    }
+
+    // MARK: - 東邦レマック S100XRD8（小規模企業・決算期末が月中）
+
+    @Test
+    func tohoRemacStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100XRD8") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100XRD8", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 6_705_070_000)
+        #expect(bsByTag["Liabilities"]?.value == 2_183_375_000)
+        #expect(bsByTag["NetAssets"]?.value == 4_521_695_000)
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "NetSales" }?.value == 4_547_599_000)
+
+        // 回帰対象: CFO/CFI ともにマイナスの小規模企業ケース。
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == -482_098_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -306_697_000)
+    }
+
+    // MARK: - 三菱UFJフィナンシャル・グループ S100W4FB（銀行。流動/非流動の区分を持たないBS構造）
+
+    @Test
+    func mufgStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100W4FB") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100W4FB", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 413_113_501_000_000)
+        #expect(bsByTag["Liabilities"]?.value == 391_385_368_000_000)
+        #expect(bsByTag["NetAssets"]?.value == 21_728_132_000_000)
+        // 回帰対象: 流動/非流動の区分を持たない銀行特有のBS構造でも section 判定が正しいこと。
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        #expect(
+            Set(bsByTag["NetAssets"]?.components?.map(\.tag) ?? [])
+                == ["ShareholdersEquity", "ValuationAndTranslationAdjustments", "SubscriptionRightsToShares", "NonControllingInterests"])
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        // 銀行は「売上高」の代わりに経常収益（OrdinaryIncomeBNK）が損益計算書内で最大値の行になる。
+        #expect(year.incomeStatement.first { $0.tag == "OrdinaryIncomeBNK" }?.value == 13_629_997_000_000)
+        #expect(year.incomeStatement.first { $0.tag == "OrdinaryIncomeBNK" }?.isTotal == true)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == 6_415_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -186_948_000_000)
+    }
+
+    // MARK: - 三井住友フィナンシャルグループ S100W0S7（銀行）
+
+    @Test
+    func smfgStatementMatchesSmokeFixture() async throws {
+        guard await Self.ensureAvailable("S100W0S7") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100W0S7", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+        let bsByTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
+
+        #expect(bsByTag["Assets"]?.value == 306_282_015_000_000)
+        #expect(bsByTag["Liabilities"]?.value == 291_440_506_000_000)
+        #expect(bsByTag["NetAssets"]?.value == 14_841_509_000_000)
+        #expect(bsByTag["Assets"]?.section == .assets)
+        #expect(bsByTag["Liabilities"]?.section == .liabilities)
+        #expect(bsByTag["NetAssets"]?.section == .netAssets)
+        #expect(
+            Set(bsByTag["NetAssets"]?.components?.map(\.tag) ?? [])
+                == ["ShareholdersEquity", "ValuationAndTranslationAdjustments", "SubscriptionRightsToShares", "NonControllingInterests"])
+        Self.expectBalanceSheetIdentity(year.balanceSheet)
+
+        #expect(year.incomeStatement.first { $0.tag == "OrdinaryIncomeBNK" }?.value == 10_174_894_000_000)
+
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInOperatingActivities" })?.value == 4_848_464_000_000)
+        #expect(year.cashFlow.first(where: { $0.tag == "NetCashProvidedByUsedInInvestmentActivities" })?.value == -4_512_943_000_000)
     }
 
     // MARK: - US-GAAP（明示 notApplicable）
