@@ -17,10 +17,34 @@ public enum StatementComputeResult: Sendable {
     case failed
 }
 
+/// 書類1件分の Statement 抽出結果。notes の `StatementNoteResolveResult` と同型の3値。
+public enum StatementDocResolveResult: Sendable {
+    case resolved(StatementYear)
+    case notApplicable(reason: String)
+    case failed
+}
+
+/// US-GAAP 連結は EDINET 上 `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できない。
+/// notes（`borrowings_schedule` 等）と同様に明示対象外とする（2026-08-09）。
+public let statementNotApplicableUSGAAP = "us_gaap_unsupported"
+
+/// ingest が US-GAAP 等の対象外を格納するときのプレースホルダ（BS/PL/CF 空）。
+/// read 経路はこれを除外し、実データ行が無ければ 404 相当（nil）を返す。
+public func statementNotApplicablePlaceholderYear(docID: String) -> StatementYear {
+    StatementYear(
+        fyEnd: nil, financialPeriod: nil, docId: docID,
+        balanceSheet: [], incomeStatement: [], cashFlow: [])
+}
+
+public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
+    year.balanceSheet.isEmpty && year.incomeStatement.isEmpty && year.cashFlow.isEmpty
+}
+
 /// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、抽出ロジックまたは本契約型の意味を変えたときのみバンプする
 /// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/project/versioning.md`）。
 /// 注記（注記取り込み）は別バージョン系統になる想定で、本定数には連動させない。
+/// US-GAAP 明示 notApplicable（個別 BS silent fallback 廃止）は v1 のまま拡張（2026-08-09）。
 public let statementCacheVersion = "statement-v1"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。

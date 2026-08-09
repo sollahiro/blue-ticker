@@ -222,6 +222,42 @@ import Testing
         #expect(componentSum == total.currentBalance)
     }
 
+    // MARK: - borrowings_schedule（三井住友フィナンシャルグループ S100W0S7、padding-left小計除外の同型）
+    //
+    // 実データ検証（2026-08-08〜09、smoke対象企業）: 三菱UFJと同型の「借用金」（カテゴリ小計）＋
+    // 「借入金」（内訳、`padding-left`）構造。修正後の抽出値はユーザー確認済み。
+
+    @Test(.enabled(if: cacheAvailable("S100W0S7"), "XBRL cache S100W0S7 not available"))
+    func goldenBorrowingsSMFGPaddingLeftIndentExcludesCategorySubtotal() throws {
+        let result = StatementNotesResolver.resolveBorrowingsSchedule(
+            xbrlDir: Self.xbrlDir("S100W0S7"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let components = try #require(payload.borrowingsComponents)
+
+        #expect(components.contains { $0.label == "借入金" })
+        #expect(!components.contains { $0.label == "借用金" })
+        #expect(components.filter { !$0.isTotal }.count == 2)
+
+        let borrowings = try #require(components.first { $0.label == "借入金" })
+        #expect(borrowings.priorBalance == 14_705_266_000_000)
+        #expect(borrowings.currentBalance == 11_355_209_000_000)
+        #expect(borrowings.averageInterestRatePercent == 1.66)
+
+        let lease = try #require(components.first { $0.label == "リース負債（非流動）" })
+        #expect(lease.priorBalance == 33_338_000_000)
+        #expect(lease.currentBalance == 32_207_000_000)
+        #expect(lease.averageInterestRatePercent == 4.94)
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 14_738_604_000_000)
+        #expect(total.currentBalance == 11_387_416_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
+    }
+
     // MARK: - borrowings_schedule（KDDI S100R0PR、IFRS注記・セクション小計の除外）
     //
     // 実データ検証（2026-08-03）: J-GAAP附属明細表タグが存在しないIFRS企業は

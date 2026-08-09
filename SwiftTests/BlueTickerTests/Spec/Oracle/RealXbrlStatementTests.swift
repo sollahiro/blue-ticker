@@ -29,6 +29,15 @@ import Foundation
         return StatementAnalyzer(edinetClient: EdinetAPIClient(cacheDir: cacheDir))
     }
 
+    private static func requireResolved(_ result: StatementDocResolveResult) throws -> StatementYear {
+        guard case .resolved(let year) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            struct ExpectationFailed: Error {}
+            throw ExpectationFailed()
+        }
+        return year
+    }
+
     /// `assets/taxonomy`（EDINET 公式タクソノミ、ユーザーが配置。git 管理外）が無い環境では
     /// 標準タグのラベルは解決できない（`XBRLUtils.loadStandardTaxonomyLabels` 参照）。
     /// ラベル文言に依存するテストはこれで追加ガードし、値・区分・is_total/components の検証
@@ -41,7 +50,7 @@ import Foundation
 
     @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
     func toyotaBalanceSheetTotalsMatchPublicFiguresWithCalculationComponents() async throws {
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
 
@@ -71,7 +80,7 @@ import Foundation
 
     @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
     func toyotaIncomeStatementMatchesPublicFigures() async throws {
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.incomeStatement]))
         let byTag = Dictionary(uniqueKeysWithValues: year.incomeStatement.map { ($0.tag, $0) })
 
@@ -88,7 +97,7 @@ import Foundation
         // 回帰テスト: CF の Instant/Duration 混在バグ修正（現金及び現金同等物の期首/期末残高が
         // 一時期 CF から欠落していた）と、期首/期末で異なる preferredLabel バリアントを
         // 選び直すロジックの両方を検証する。
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.cashFlow]))
         let cashRows = year.cashFlow.filter { $0.tag == "CashAndCashEquivalentsIFRS" }
 
@@ -100,7 +109,7 @@ import Foundation
         // 回帰テスト: 出力順が実行のたびに入れ替わらないこと（Opus 監査で発見・修正、
         // 2026-07-31。期首/期末残高は同一タグ・同一 order のため、fact の contextRef を
         // 決定的なタイブレークキーに使う前は入力の走査順に依存していた）。
-        let secondRun = try #require(
+        let secondRun = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.cashFlow]))
         let secondCashRows = secondRun.cashFlow.filter { $0.tag == "CashAndCashEquivalentsIFRS" }
         #expect(cashRows.map(\.value) == secondCashRows.map(\.value))
@@ -115,7 +124,7 @@ import Foundation
         // periodEndLabel を持つ場合（`EquityIFRS` 等）、期首/期末残高の区別ロジックが CF に
         // 限定されていなかったため `preferredLabel=totalLabel`（「資本合計」）が無視され
         // 常に「期末残高」になっていた（キャッシュ済み実XBRL 140件中136件で発生）。
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWVY", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
 
@@ -130,7 +139,7 @@ import Foundation
         // 回帰テスト: `LiabilitiesIFRS` の直接の親 `LiabilitiesAndEquityIFRSAbstract` は
         // 負債・純資産両方のキーワードに一致し曖昧なため、優先順位だけで確定させると
         // 誤って純資産に分類されていた（2026-07-30 発見・修正）。
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWHL", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
 
@@ -146,7 +155,7 @@ import Foundation
 
     @Test(.enabled(if: cacheAvailable("S100VWHL"), "XBRL cache S100VWHL not available"))
     func densoIncomeStatementMatchesPublicFigures() async throws {
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100VWHL", statementTypes: [.incomeStatement]))
         let byTag = Dictionary(uniqueKeysWithValues: year.incomeStatement.map { ($0.tag, $0) })
 
@@ -161,7 +170,7 @@ import Foundation
     func nintendoBalanceSheetTotalsChainThroughMultipleLevels() async throws {
         // 回帰テスト: 明細→小計→中計→総合計の多段階の積み上げが計算リンクベース経由で
         // 正しく連鎖することを確認する（J-GAAP、IFRS とはタグ体系が異なる）。
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100W73A", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
 
@@ -187,7 +196,7 @@ import Foundation
         // 回帰テスト: `preferredLabel=totalLabel` により通常ラベル「評価・換算差額等」ではなく
         // 合計ラベル（「…合計」）を使うべきケース。標準タグのラベル解決は `assets/taxonomy`
         // （git 管理外）が無い環境では成立しないため、値/区分/is_total とは別テストに分離する。
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100W73A", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })
         #expect(byTag["ValuationAndTranslationAdjustments"]?.label?.contains("合計") == true)
@@ -195,11 +204,35 @@ import Foundation
 
     @Test(.enabled(if: cacheAvailable("S100W73A"), "XBRL cache S100W73A not available"))
     func nintendoIncomeStatementMatchesPublicFigures() async throws {
-        let year = try #require(
+        let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100W73A", statementTypes: [.incomeStatement]))
         let byTag = Dictionary(uniqueKeysWithValues: year.incomeStatement.map { ($0.tag, $0) })
 
         #expect(byTag["NetSales"]?.value == 1_164_922_000_000)
         #expect(byTag["ProfitLossAttributableToOwnersOfParent"]?.value == 278_806_000_000)
+    }
+
+    // MARK: - US-GAAP（明示 notApplicable）
+
+    @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
+    func fujifilmUSGAAPStatementIsNotApplicable() async {
+        let result = await Self.analyzer().extract(
+            docID: "S100W3XJ", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow])
+        guard case .notApplicable(let reason) = result else {
+            Issue.record("expected .notApplicable(us_gaap_unsupported), got \(result)")
+            return
+        }
+        #expect(reason == statementNotApplicableUSGAAP)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100XTLJ"), "XBRL cache S100XTLJ not available"))
+    func canonUSGAAPStatementIsNotApplicable() async {
+        let result = await Self.analyzer().extract(
+            docID: "S100XTLJ", statementTypes: [.balanceSheet])
+        guard case .notApplicable(let reason) = result else {
+            Issue.record("expected .notApplicable(us_gaap_unsupported), got \(result)")
+            return
+        }
+        #expect(reason == statementNotApplicableUSGAAP)
     }
 }

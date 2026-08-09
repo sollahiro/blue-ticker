@@ -350,7 +350,8 @@ public func runFactsIngestCommand(
             logIngestSummary(
                 app.logger, target: "statements", attempted: s7.attempted, stored: s7.stored,
                 failed: s7.failed, skipped: s7.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable, purged: s7.purged)
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s7.notApplicable, purged: s7.purged)
         }
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み

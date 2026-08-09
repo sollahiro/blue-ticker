@@ -226,12 +226,12 @@ public extension BltServerContext {
     }
 
     /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF を抽出する。決定論のみ（LLM不要）。
-    /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約・
-    /// 「対象外」判定は行わない（StatementIngest 実装時に code+years 単位のラッパーを追加する想定。
-    /// docs/statement-normalization-concept.md）。ダウンロード失敗は nil（戻り値パターン）。
+    /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
+    /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
+    /// ダウンロード失敗は `.failed`。
     func extractStatement(
         docID: String, statementTypes: Set<StatementSectionType> = Set(StatementSectionType.allCases)
-    ) async -> StatementYear? {
+    ) async -> StatementDocResolveResult {
         let analyzer = StatementAnalyzer(edinetClient: edinetClient)
         return await analyzer.extract(docID: docID, statementTypes: statementTypes)
     }

@@ -288,17 +288,17 @@ smoke/
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
-| 注記(borrowings_schedule)外出しオラクル試作 | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（`docs/test-spec-assets.md` の C。期待値をSwiftコード外へ出した試作、3docIDのみ） |
+| 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は `status=not_applicable`。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | `IBDExtractor.extract` と `resolveBorrowingsSchedule` の関係を検証。method="borrowings_schedule" で解決した docID は合計一致を、method="field_parser"（SOMPO S100R1LR）は不一致自体を実データ値で固定（`docs/test-spec-assets.md` の D） |
 
 `SPEC_*` ラベルに基づくサブフォルダ移動（`docs/test-spec-assets.md` の E）を実施済み。`SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` に該当ファイルを移動し、ラベルが混在するファイル（`StatementContractTests.swift` 等）や UNCLASSIFIED が優勢なファイルは元の場所に残している（一覧は `docs/test-spec-inventory.md`）。SwiftPM のテストターゲットはサブフォルダを再帰的に含むため `Package.swift` の変更は不要。
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
-- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。ただし現状の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）のみで、**note_type(statement-notes)/breakdownの決定論ロジックはこの床に含まれていない**
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`borrowings_schedule` note_type**（`StatementNotesOracleFormatTests` + 外出しJSON）。他 note_type / breakdown の決定論ロジックはまだこの床に含まれていない
 - **golden回帰**（年次スモーク以外の3種）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
 
-原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は未整備というギャップがある。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない場合がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床をnote_type/breakdownまで広げる。
+原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は `borrowings_schedule` 以外は未整備というギャップがある。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない note_type / breakdown がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床を広げる。
 
 smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`）にあたる。テストを移行耐性の観点で層分けする指針は `test-spec-assets.md` を参照。
 
