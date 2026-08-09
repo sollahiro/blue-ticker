@@ -33,21 +33,26 @@ L2 Impl Coupling  … FW/内部型/配線への結合。捨ててよい・最小
 ## 現状ギャップ
 
 1. smoke の床（[xbrl-parsing.md §6](xbrl-parsing.md#6-スモークテスト)）が note_type/breakdown の決定論ロジックを未カバー（golden のみ）
-2. financials ↔ statement ↔ notes ↔ breakdown の横断 `SPEC_INVARIANT` がスイートとして薄い
+2. financials ↔ statement ↔ notes ↔ breakdown の横断 `SPEC_INVARIANT` がスイートとして薄い（D で borrowings_schedule の1本のみ追加。他の組み合わせは未着手）
 3. geography 等の期待JSONが回帰に未接続
-4. テスト分類がファイル名頼みで、SPEC ラベルが無い
+4. 仮ラベルの62%が UNCLASSIFIED（[test-spec-inventory.md](test-spec-inventory.md)）。キーワードヒューリスティックの限界で、手動レビューが必要
 
-## 次の候補（優先順、未着手）
+## 進捗（2026-08-09、A〜E 完了）
 
-| # | 内容 |
-|---|---|
-| A | 本方針を docs/ へ固定（本ファイル） |
-| B | 全 `@Test` へ仮ラベルを機械付与した棚卸し表を作る |
-| C | golden 期待値の外出しフォーマットを1 note_type/statement で試作する |
-| D | 横断 `SPEC_INVARIANT` を1本設計・追加する（例: IBD vs borrowings_schedule） |
-| E | ラベルに応じたサブフォルダ移動（A の後、急がない） |
+| # | 内容 | 状態 |
+|---|---|---|
+| A | 本方針を docs/ へ固定（本ファイル） | 完了 |
+| B | 全 `@Test` へ仮ラベルを機械付与した棚卸し表を作る | 完了。[test-spec-inventory.md](test-spec-inventory.md)（1048件、UNCLASSIFIED 62%） |
+| C | golden 期待値の外出しフォーマットを1 note_type/statement で試作する | 完了。borrowings_schedule・3docIDのみ（`StatementNotesOracleFormatTests.swift`）。他 note_type への本移行は未着手 |
+| D | 横断 `SPEC_INVARIANT` を1本設計・追加する（例: IBD vs borrowings_schedule） | 完了（`CrossModuleInvariantTests.swift`） |
+| E | ラベルに応じたサブフォルダ移動 | 部分完了。単一ラベルが7割以上を占め、かつ非UNCLASSIFIEDな26+2ファイルのみ `Spec/{Oracle,Invariant,Contract,Policy}/` へ移動。ラベル混在ファイル（例: `StatementContractTests.swift`）とUNCLASSIFIED優勢ファイルは元の場所のまま |
 
-推奨開始順は A → B or C/D。E は後回し。
+## 次の候補（未着手）
+
+- B の再実行によるラベル精度向上（UNCLASSIFIED 62%の低減、または手動レビューでの上書き）
+- C のフォーマットを他 note_type・他ロジックへ本移行するかの判断
+- D と同型の横断 `SPEC_INVARIANT` の追加（financials ↔ statement ↔ notes ↔ breakdown の他の組み合わせ）
+- E のラベル混在ファイルの扱い（分割するか、複数ラベル対応のまま残すか）
 
 ## 適用ガイド
 
