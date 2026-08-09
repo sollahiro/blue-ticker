@@ -1,4 +1,3 @@
-@/Users/shutosorahiro/.claude/CLAUDE.md
 @AGENTS.md
 
 # BLUE TICKER — Claude Code ガイド
