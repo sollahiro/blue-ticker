@@ -1,0 +1,150 @@
+{
+  "S100JRT9": {
+    "source": "xbrl_facts",
+    "components": [
+      {
+        "label": "リース負債（流動）",
+        "prior_balance": 712000,
+        "current_balance": 4341000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "リース負債（非流動）",
+        "prior_balance": 2732000,
+        "current_balance": 19861000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "合計",
+        "prior_balance": 3445000,
+        "current_balance": 24202000,
+        "average_interest_rate_percent": null,
+        "is_total": true
+      }
+    ]
+  },
+  "S100R1LR": {
+    "source": "xbrl_facts",
+    "components": [
+      {
+        "label": "短期借入金",
+        "prior_balance": 50000000,
+        "current_balance": 180000000,
+        "average_interest_rate_percent": 0.8,
+        "is_total": false
+      },
+      {
+        "label": "1年以内に返済予定の長期借入金",
+        "prior_balance": 15256000000,
+        "current_balance": 1294000000,
+        "average_interest_rate_percent": 0.5,
+        "is_total": false
+      },
+      {
+        "label": "リース負債（流動）",
+        "prior_balance": 9048000000,
+        "current_balance": 10868000000,
+        "average_interest_rate_percent": 4.33,
+        "is_total": false
+      },
+      {
+        "label": "長期借入金",
+        "prior_balance": 190000000,
+        "current_balance": 5080000000,
+        "average_interest_rate_percent": 0.46,
+        "is_total": false
+      },
+      {
+        "label": "リース負債（非流動）",
+        "prior_balance": 69216000000,
+        "current_balance": 69498000000,
+        "average_interest_rate_percent": 4.24,
+        "is_total": false
+      },
+      {
+        "label": "その他有利子負債",
+        "prior_balance": 385359000000,
+        "current_balance": 575531000000,
+        "average_interest_rate_percent": 0.01,
+        "is_total": false
+      },
+      {
+        "label": "合計",
+        "prior_balance": 479122000000,
+        "current_balance": 662453000000,
+        "average_interest_rate_percent": null,
+        "is_total": true
+      }
+    ]
+  },
+  "S100YHZG": {
+    "source": "xbrl_facts",
+    "components": [
+      {
+        "label": "社債（注）１",
+        "prior_balance": 225000000000,
+        "current_balance": 200000000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "短期借入金（注）２，３，４",
+        "prior_balance": 62307000000,
+        "current_balance": 14703000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "長期借入金（注）２，３",
+        "prior_balance": 305621000000,
+        "current_balance": 238429000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "ノンリコース借入金（注）２，３",
+        "prior_balance": 58458000000,
+        "current_balance": 62601000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "その他",
+        "prior_balance": 77653000000,
+        "current_balance": 93603000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "デリバティブ負債（注）５",
+        "prior_balance": 6331000000,
+        "current_balance": 12332000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "債権流動化等に伴う支払債務（注）６",
+        "prior_balance": 288041000000,
+        "current_balance": 174610000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "リース負債（非流動）",
+        "prior_balance": 107861000000,
+        "current_balance": 79960000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "合計",
+        "prior_balance": 1131274000000,
+        "current_balance": 876241000000,
+        "average_interest_rate_percent": null,
+        "is_total": true
+      }
+    ]
+  }
+}

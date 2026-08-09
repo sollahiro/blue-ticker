@@ -14,7 +14,7 @@
 
 ## ケースラベル
 
-新規テストを書く／既存テストを見直す際、どのラベルに該当するか意識する（機械的な付与は必須ではない）。
+新規テストを書く／既存テストを見直す際、どのラベルに該当するか意識する。
 
 | ラベル | 層 | 内容 | 例 |
 |---|---|---|---|
@@ -23,18 +23,39 @@
 | `SPEC_CONTRACT` | L0 | REST/MCP の JSON schema・エラー意味 | レスポンス型、エラーコード |
 | `SPEC_POLICY` | L0 | version/skip/floor/優先順位などの状態規則 | ingest の再計算トリガー表（`.agents/rules/project/versioning.md`） |
 | `HARNESS_ONLY` | L1 | 上記を走らせるための装置 | テストヘルパー・fixture ローダー |
-| `IMPL_ONLY` | L2 | 今の実装内部都合のみを見ている | 呼び出し順・内部 mock の検証（廃棄候補） |
+| `IMPL_ONLY` | L2 | 今の実装内部都合のみを見ている | 呼び出し順・内部 mock の検証（廃棄候補。新規に追加しない） |
 
 `SPEC_ORACLE` / `SPEC_INVARIANT` は smoke・golden 回帰（`xbrl-parsing.md` §6）の言語非依存版に相当する。`SPEC_INVARIANT` はモジュール間の一貫性（横断整合性）を、特定の実装配線ではなく述語として表現する点が従来の統合テストと異なる。
+
+全 `@Test` へキーワードヒューリスティックで仮ラベルを機械付与したスナップショットが [test-spec-inventory.md](test-spec-inventory.md) にある（下記「進捗」参照）。
 
 ## 既知のギャップ
 
 - smoke の床が note_type(statement-notes) / breakdown の決定論ロジックを未カバー（詳細・経緯は `xbrl-parsing.md` §6）
-- financials ↔ statement ↔ notes ↔ breakdown を横断する `SPEC_INVARIANT` がスイートとして薄い
-- golden回帰の期待値は `RealXbrl*Tests.swift` にハードコードされており、データとして外出しされていない
+- financials ↔ statement ↔ notes ↔ breakdown を横断する `SPEC_INVARIANT` がスイートとして薄い（borrowings_schedule の1本のみ追加済み。他の組み合わせは未着手）
+- golden回帰の期待値は大半が `RealXbrl*Tests.swift` にハードコードされたまま（borrowings_schedule の1 note_type・3docIDのみ外出し試作済み）
+- 機械付与ラベルの62%が UNCLASSIFIED（[test-spec-inventory.md](test-spec-inventory.md)）。キーワードヒューリスティックの限界で、手動レビューが必要
+
+## 進捗（2026-08-09）
+
+方針策定後、以下を実装・検証した。
+
+| 内容 | 状態 |
+|---|---|
+| 全 `@Test` への仮ラベル機械付与（棚卸し表） | 完了。[test-spec-inventory.md](test-spec-inventory.md)（1054件、UNCLASSIFIED 62%） |
+| golden 期待値の外出しフォーマット試作（1 note_type） | 完了。borrowings_schedule・3docIDのみ（`StatementNotesOracleFormatTests.swift`）。他 note_type への本移行は未着手 |
+| 横断 `SPEC_INVARIANT` の追加（例: IBD vs borrowings_schedule） | 完了（`CrossModuleInvariantTests.swift`）。`IBDExtractor.extract` を実際に呼び、method="borrowings_schedule" で解決した docID は明細表合計との一致を、method="field_parser" の docID（SOMPO S100R1LR）は一致しないこと自体を実データ値で検証する |
+| ラベルに応じたサブフォルダ移動 | 部分完了。単一ラベルが7割以上を占め、かつ非UNCLASSIFIEDなファイル25件を機械的基準で移動、加えて上記2件（試作・横断INVARIANT自体）を著者判断で追加し、計27件を `SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` へ移動。ラベル混在ファイル（例: `StatementContractTests.swift`）とUNCLASSIFIED優勢ファイルは元の場所のまま |
+
+## 次の候補（未着手）
+
+- 機械付与ラベルの精度向上（UNCLASSIFIED 62%の低減、または手動レビューでの上書き）
+- golden外出しフォーマットを他 note_type・他ロジックへ本移行するかの判断
+- 横断 `SPEC_INVARIANT` の追加（financials ↔ statement ↔ notes ↔ breakdown の他の組み合わせ）
+- ラベル混在ファイルの扱い（分割するか、複数ラベル対応のまま残すか）
 
 ## 方針
 
 - 新規テストは L0（`SPEC_ORACLE` / `SPEC_INVARIANT`）を厚くすることを優先し、L2 は最小限に留める
 - 横断的な一貫性チェックは、特定モジュールの結合テストではなく `SPEC_INVARIANT`（言語非依存の述語）として書く
-- golden期待値の外出し・棚卸し・フォルダ再編は本方針が固まった後の実務課題（優先度は都度判断）
+- golden期待値の外出し・棚卸し・フォルダ再編は実務課題として都度優先度判断する（現状は上記「進捗」の範囲のみ実施済み、全面移行はしていない）
