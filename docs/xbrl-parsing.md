@@ -288,6 +288,8 @@ smoke/
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
+| 注記(borrowings_schedule)外出しオラクル試作 | `SwiftTests/BlueTickerTests/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（`docs/test-spec-assets.md` の C。期待値をSwiftコード外へ出した試作、3docIDのみ） |
+| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/CrossModuleInvariantTests.swift` | ハードコードなし。`BorrowingsSchedule.extract` と `resolveBorrowingsSchedule` の合計一致を検証（`docs/test-spec-assets.md` の D） |
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
