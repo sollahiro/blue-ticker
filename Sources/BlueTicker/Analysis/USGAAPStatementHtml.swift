@@ -44,11 +44,14 @@ enum USGAAPStatementHtml {
             switch kind {
             case .bsAssets:
                 guard statementTypes.contains(.balanceSheet), !sawBSAssets else { continue }
-                balanceSheet.append(contentsOf: parseBSRows(rows, startingSection: .assets))
+                let parsed = parseBSRows(rows, startingSection: .assets, startingOrder: balanceSheet.count)
+                balanceSheet.append(contentsOf: parsed)
                 sawBSAssets = true
             case .bsLiabilitiesAndEquity:
                 guard statementTypes.contains(.balanceSheet), !sawBSLiabilities else { continue }
-                balanceSheet.append(contentsOf: parseBSRows(rows, startingSection: .liabilities))
+                let parsed = parseBSRows(
+                    rows, startingSection: .liabilities, startingOrder: balanceSheet.count)
+                balanceSheet.append(contentsOf: parsed)
                 sawBSLiabilities = true
             case .incomeStatement:
                 guard statementTypes.contains(.incomeStatement), !sawPL else { continue }
@@ -107,7 +110,7 @@ enum USGAAPStatementHtml {
     /// 「最初の一致のみ採用」する（呼び出し側）。ここでの分類は表のラベル集合のヒューリスティック。
     private static func classifyTable(_ rows: [[String]]) -> TableKind? {
         let labels = rows.map { rowLabel($0) }.filter { !$0.isEmpty }
-        let joined = labels.joined(separator: "\n")
+        let allCells = rows.flatMap { $0 }.joined(separator: "\n")
 
         if labels.contains(where: { $0.contains("営業活動によるキャッシュ・フロー") })
             && labels.contains(where: { $0.contains("投資活動によるキャッシュ・フロー") })
@@ -116,27 +119,29 @@ enum USGAAPStatementHtml {
         }
 
         // SS: 複数資本構成員列＋「現在残高」。合計列のみ使う。
+        // 「純資産」はヘッダ行の列名に出ることが多く、先頭ラベル列だけだと見えない。
         if labels.contains(where: { $0.contains("現在残高") })
-            && (joined.contains("純資産") || joined.contains("株主資本"))
+            && (allCells.contains("純資産") || allCells.contains("株主資本"))
             && labels.contains(where: { $0 == "区分" || $0.hasPrefix("区分") })
         {
-            // ヘッダに資本金・利益剰余金などが並ぶマトリクス
             let header = rows.first { rowLabel($0) == "区分" || rowLabel($0).hasPrefix("区分") }
                 ?? rows.first ?? []
             let headerJoined = header.joined()
             if headerJoined.contains("資本金") || headerJoined.contains("利益剰余金")
-                || headerJoined.contains("自己株式")
+                || headerJoined.contains("自己株式") || headerJoined.contains("純資産")
             {
                 return .changesInEquity
             }
         }
 
-        if (joined.contains("資産の部") || labels.contains(where: { $0.contains("資産の部") }))
-            && labels.contains(where: { $0.contains("資産合計") })
+        if labels.contains(where: { isAssetsSectionHeader($0) })
+            && labels.contains(where: {
+                $0 == "資産合計" || ($0.hasSuffix("資産合計") && !$0.contains("純資産") && !$0.contains("負債"))
+            })
         {
             return .bsAssets
         }
-        if (joined.contains("負債の部") || labels.contains(where: { $0.contains("負債の部") }))
+        if labels.contains(where: { isLiabilitiesSectionHeader($0) })
             && (labels.contains(where: { $0.contains("純資産合計") })
                 || labels.contains(where: { $0.contains("負債") && $0.contains("合計") }))
         {
@@ -180,10 +185,10 @@ enum USGAAPStatementHtml {
     }
 
     private static func parseBSRows(
-        _ rows: [[String]], startingSection: StatementLineSection
+        _ rows: [[String]], startingSection: StatementLineSection, startingOrder: Int = 0
     ) -> [StatementLineItem] {
         var section = startingSection
-        var order = 0
+        var order = startingOrder
         var items: [StatementLineItem] = []
 
         for row in rows {
@@ -259,14 +264,9 @@ enum USGAAPStatementHtml {
         return items
     }
 
-    /// SS は合計列（純資産合計）のみ。ヘッダ行で列 index を決め、各行のその列を読む。
+    /// SS は合計列（純資産合計）のみ。ヘッダが複行列＋colspan の会社（キヤノン）では
+    /// 列 index がずれるため、行末の財務金額を合計列とみなす（実データ: 純資産合計が最右）。
     private static func parseEquityStatementRows(_ rows: [[String]]) -> [StatementLineItem] {
-        guard let totalCol = equityTotalColumnIndex(in: rows) else {
-            // フォールバック: 行末の財務金額
-            return parseSimpleStatementRows(
-                rows, sectionType: .changesInEquity, sectionForRow: { _ in nil })
-        }
-
         var order = 0
         var items: [StatementLineItem] = []
         for row in rows {
@@ -274,18 +274,17 @@ enum USGAAPStatementHtml {
             let label = normalizeLabel(raw)
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
             if shouldSkipMetaRow(label) { continue }
-            guard totalCol < row.count else { continue }
-            guard let million = XBRLUtils.parseHtmlNumber(row[totalCol]) else { continue }
-            // 構成比や株数の混入を避ける（合計列は百万円）
-            let financial = XBRLUtils.filterFinancialTableAmounts([million])
-            guard let v = financial.last else { continue }
+
+            let nums = row.dropFirst().compactMap { XBRLUtils.parseHtmlNumber($0) }
+            let financial = XBRLUtils.filterFinancialTableAmounts(nums)
+            guard let million = financial.last else { continue }
 
             order += 1
             items.append(
                 StatementLineItem(
                     tag: syntheticTag(.changesInEquity, order: order),
                     label: label,
-                    value: v * Financial.millionYen,
+                    value: million * Financial.millionYen,
                     unit: "JPY",
                     order: order,
                     section: nil,
@@ -293,24 +292,6 @@ enum USGAAPStatementHtml {
                     components: nil))
         }
         return items
-    }
-
-    private static func equityTotalColumnIndex(in rows: [[String]]) -> Int? {
-        for row in rows.prefix(4) {
-            for (i, cell) in row.enumerated() {
-                let t = cell.replacingOccurrences(of: " ", with: "")
-                    .replacingOccurrences(of: "\n", with: "")
-                if t.contains("純資産") && t.contains("合計") { return i }
-            }
-        }
-        // キヤノン: ヘッダが「純資産 合計」で空白区切り
-        for row in rows.prefix(4) {
-            for (i, cell) in row.enumerated().reversed() {
-                let t = cell.replacingOccurrences(of: " ", with: "")
-                if t.contains("純資産") { return i }
-            }
-        }
-        return nil
     }
 
     private static func currentYenValue(_ row: [String]) -> Double? {
@@ -345,7 +326,8 @@ enum USGAAPStatementHtml {
             .replacingOccurrences(of: "）", with: "")
             .replacingOccurrences(of: "(", with: "")
             .replacingOccurrences(of: ")", with: "")
-        return t.contains("資産の部") && !t.contains("負債")
+        // 「純資産の部」は "資産の部" を部分文字列に持つため先に除外する
+        return t.contains("資産の部") && !t.contains("純資産") && !t.contains("負債")
     }
 
     private static func isLiabilitiesSectionHeader(_ label: String) -> Bool {

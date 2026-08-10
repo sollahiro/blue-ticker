@@ -86,6 +86,7 @@ import Foundation
 
         #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 })
         #expect(extracted.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
+        #expect(extracted.balanceSheet.contains { $0.label == "１ 資本金" && $0.section == .netAssets })
         #expect(extracted.incomeStatement.contains { $0.label?.contains("売上高") == true && $0.value == 1_200_000_000 })
         #expect(extracted.incomeStatement.contains { $0.label == "営業利益" && $0.value == 150_000_000 })
         #expect(
@@ -93,6 +94,7 @@ import Foundation
                 $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 130_000_000
                     && $0.section == .operating
             })
+        #expect(!extracted.changesInEquity.isEmpty)
         #expect(
             extracted.changesInEquity.contains {
                 ($0.label ?? "").contains("2025年３月31日現在残高") && $0.value == 540_000_000

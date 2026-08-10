@@ -705,6 +705,13 @@ import Foundation
         items.first { ($0.label ?? "").contains(containing) }?.value
     }
 
+    /// 部分一致で「流動資産合計」等が先に当たるのを避けるため、正規化ラベルの完全一致を優先する。
+    private static func exactLabelValue(
+        _ items: [StatementLineItem], _ label: String
+    ) -> Double? {
+        items.first { $0.label == label }?.value
+    }
+
     private static func labelValues(
         _ items: [StatementLineItem], containing: String
     ) -> [Double] {
@@ -722,30 +729,33 @@ import Foundation
                 docID: "S100W3XJ",
                 statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
 
-        #expect(Self.labelValue(year.balanceSheet, containing: "資産合計") == 5_249_908_000_000)
-        #expect(Self.labelValue(year.balanceSheet, containing: "純資産合計") == 3_352_682_000_000)
-        #expect(Self.labelValue(year.balanceSheet, containing: "流動資産合計") == 1_581_681_000_000)
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("資産合計") && $0.section == .assets })
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("負債合計") && $0.section == .liabilities })
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("純資産合計") && $0.section == .netAssets })
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 5_249_908_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_352_682_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "流動資産合計") == 1_581_681_000_000)
+        #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
+        #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
+        #expect(year.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
 
-        #expect(Self.labelValue(year.incomeStatement, containing: "Ⅰ 売上高") == 3_195_828_000_000
+        #expect(Self.exactLabelValue(year.incomeStatement, "Ⅰ 売上高") == 3_195_828_000_000
             || Self.labelValue(year.incomeStatement, containing: "売上高") == 3_195_828_000_000)
-        #expect(Self.labelValue(year.incomeStatement, containing: "営業利益") == 330_155_000_000)
-        #expect(Self.labelValue(year.incomeStatement, containing: "当社株主帰属当期純利益") == 260_951_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "営業利益") == 330_155_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "当社株主帰属当期純利益") == 260_951_000_000)
 
         #expect(
-            Self.labelValue(year.cashFlow, containing: "営業活動によるキャッシュ・フロー")
+            Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
                 == 428_162_000_000)
         #expect(
-            Self.labelValue(year.cashFlow, containing: "投資活動によるキャッシュ・フロー")
+            Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
                 == -541_953_000_000)
         #expect(year.cashFlow.contains {
-            ($0.label ?? "").contains("営業活動によるキャッシュ・フロー") && $0.section == .operating
+            $0.label == "営業活動によるキャッシュ・フロー" && $0.section == .operating
         })
 
         #expect(!year.changesInEquity.isEmpty)
         #expect(year.changesInEquity.contains { ($0.label ?? "").contains("現在残高") })
+        #expect(
+            Self.labelValues(year.changesInEquity, containing: "2025年３月31日")
+                .contains(3_352_682_000_000))
     }
 
     @Test
@@ -756,23 +766,23 @@ import Foundation
                 docID: "S100XTLJ",
                 statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
 
-        #expect(Self.labelValue(year.balanceSheet, containing: "資産合計") == 6_135_044_000_000)
-        #expect(Self.labelValue(year.balanceSheet, containing: "純資産合計") == 3_774_128_000_000)
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("資産合計") && $0.section == .assets })
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("負債合計") && $0.section == .liabilities })
-        #expect(year.balanceSheet.contains { ($0.label ?? "").contains("純資産合計") && $0.section == .netAssets })
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 6_135_044_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_774_128_000_000)
+        #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
+        #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
+        #expect(year.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
 
         // キヤノン PL は製品/サービス内訳のあと「合計」が売上高。営業利益は一意。
-        #expect(Self.labelValue(year.incomeStatement, containing: "営業利益") == 455_390_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "営業利益") == 455_390_000_000)
         #expect(
             Self.labelValue(year.incomeStatement, containing: "当社株主に帰属する")
                 == 332_053_000_000)
 
         #expect(
-            Self.labelValue(year.cashFlow, containing: "営業活動によるキャッシュ・フロー")
+            Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
                 == 475_903_000_000)
         #expect(
-            Self.labelValue(year.cashFlow, containing: "投資活動によるキャッシュ・フロー")
+            Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
                 == -237_450_000_000)
 
         #expect(!year.changesInEquity.isEmpty)
