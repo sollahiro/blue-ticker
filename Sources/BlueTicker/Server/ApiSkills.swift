@@ -387,7 +387,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 null）。PL/SS の行には section を付けない。SS（changes_in_equity）は合計列のみ。
                 各行の is_total は計算リンクベース由来で、true の場合 components（構成タグと weight。
                 +1=加算、-1=控除）から二重計上せず合計を検算・再構成できる（複数区分にまたがる
-                グランドトータル行も components は取得できる）。
+                グランドトータル行も components は取得できる）。US-GAAP 連結は HTML 経路のため
+                is_total はラベル規則、components はキヤノン型（合計直後の内訳が親と一致）のみ。
                 例: GET /v1/companies/7203/statement?years=3
                 """
         ),

@@ -32,7 +32,7 @@
 ## 既知のギャップ
 
 - smoke の床が **他 note_type**（`borrowings_schedule` 以外）/ breakdown の決定論ロジックを未カバー（詳細・経緯は `xbrl-parsing.md` §6。`borrowings_schedule` は 2026-08-09 に smoke 11社を外出しオラクルへ追加済み）
-- `statement`（Statement 取り込み本体、`StatementAnalyzer`/`StatementClassifier`）は smoke（`SmokeTests.swift`）を一切通らない（対象は `Extractors.swift` 経由の基本財務諸表抽出器のみ）。2026-08-09、smoke固定11社のうち US-GAAP2社を除く**9社全件**の golden を `RealXbrlStatementTests.swift` へ追加（BS/PL/CF の最上位合計＋**SS**の期首/期末・stray `ProfitLoss` 除外。既存の Toyota/Denso/Nintendo に足す形）。ただし `SmokeTests.swift` 本体には未統合（別ファイルの golden 追加に留まる）
+- `statement`（Statement 取り込み本体、`StatementAnalyzer`/`StatementClassifier`）は smoke（`SmokeTests.swift`）を一切通らない（対象は `Extractors.swift` 経由の基本財務諸表抽出器のみ）。2026-08-09、smoke固定11社のうち US-GAAP2社を除く**9社全件**の golden を `RealXbrlStatementTests.swift` へ追加（BS/PL/CF の最上位合計＋**SS**の期首/期末・stray `ProfitLoss` 除外。既存の Toyota/Denso/Nintendo に足す形）。2026-08-10、残る US-GAAP2社（富士フイルム/キヤノン）も同ファイルへ HTML 経路 golden を追加（当期優先・キヤノン型 `components`）。ただし `SmokeTests.swift` 本体には未統合（別ファイルの golden 追加に留まる）
 - financials ↔ statement ↔ notes ↔ breakdown を横断する `SPEC_INVARIANT` がスイートとして薄い（borrowings_schedule の1本のみ追加済み。他の組み合わせは未着手）
 - golden回帰の期待値は大半が `RealXbrl*Tests.swift` にハードコードされたまま（borrowings_schedule は外出しオラクルあり: 試作3docID + smoke 11社。ハードコード golden は深さ用に併存）
 - 機械付与ラベルの62%が UNCLASSIFIED（[test-spec-inventory.md](test-spec-inventory.md)）。キーワードヒューリスティックの限界で、手動レビューが必要
@@ -46,7 +46,7 @@
 | 全 `@Test` への仮ラベル機械付与（棚卸し表） | 完了。[test-spec-inventory.md](test-spec-inventory.md)（1054件、UNCLASSIFIED 62%） |
 | golden 期待値の外出しフォーマット（1 note_type） | 完了・拡張。borrowings_schedule（試作3docID + smoke固定11社、`StatementNotesOracleFormatTests.swift`）。他 note_type への本移行は未着手 |
 | smoke 床への note_type 追加 | 部分完了。`borrowings_schedule` のみ（US-GAAP 2社は `not_applicable`）。他 note_type / breakdown は未 |
-| statement 側 golden への smoke企業セット追加 | 完了。US-GAAP2社除く9社全件（味の素/ニチレイ/AZplanning/オークマ/クボタ/スズキ/東邦レマック/三菱UFJ/三井住友）を `RealXbrlStatementTests.swift` へ追加。BS/PL/CF は最上位合計と `smoke_expected` 突合＋`expectBalanceSheetIdentity`。SS は期首/期末値と order・連結 stray `ProfitLoss` 除外（東邦レマックは個別 `ProfitLoss` を正当行として保持） |
+| statement 側 golden への smoke企業セット追加 | 完了。US-GAAP2社除く9社全件（味の素/ニチレイ/AZplanning/オークマ/クボタ/スズキ/東邦レマック/三菱UFJ/三井住友）＋US-GAAP2社 HTML 経路（富士フイルム S100W3XJ / キヤノン S100XTLJ。当期優先・キヤノン型 `components`）を `RealXbrlStatementTests.swift` へ追加。BS/PL/CF は最上位合計と `smoke_expected` 突合＋`expectBalanceSheetIdentity`（HTML 経路は HTML 読み順 `order`）。SS は期首/期末値と order・連結 stray `ProfitLoss` 除外（東邦レマックは個別 `ProfitLoss` を正当行として保持） |
 | 横断 `SPEC_INVARIANT` の追加（例: IBD vs borrowings_schedule） | 完了（`CrossModuleInvariantTests.swift`）。`IBDExtractor.extract` を実際に呼び、method="borrowings_schedule" で解決した docID は明細表合計との一致を、method="field_parser" の docID（SOMPO S100R1LR）は一致しないこと自体を実データ値で検証する |
 | ラベルに応じたサブフォルダ移動 | 部分完了。単一ラベルが7割以上を占め、かつ非UNCLASSIFIEDなファイル25件を機械的基準で移動、加えて上記2件（試作・横断INVARIANT自体）を著者判断で追加し、計27件を `SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` へ移動。ラベル混在ファイル（例: `StatementContractTests.swift`）とUNCLASSIFIED優勢ファイルは元の場所のまま |
 

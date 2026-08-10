@@ -203,8 +203,14 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 このため US-GAAP 企業の BS / PL 数値は HTML をパースする必要があります。
 
 **Statement**: `USGAAPStatementHtml` が同じ 0105010 HTML 本表から全データ行を
-`StatementLineItem` 化する（summary の仮想タグ経路とは別。試作・要確認）。
+`StatementLineItem` 化する（summary の仮想タグ経路とは別）。
 `order` は presentation が無いため HTML 読み順の 0 始まり通し番号（CF/SS の期首→期末もこの順）。
+金額は当期半分を優先（富士フイルム入れ子は当期左＝当該科目、キヤノンは金額列／構成比列の左）。
+`－`/`-` は 0。`is_total` はラベル規則（「合計」等）。`components` は calculation linkbase が
+無いため、キヤノン型（「…合計」の直後内訳が親金額と一致）のときだけ合成 tag・weight=+1 で付与
+（例: キヤノン 7751 の短期借入合計→金融サービス／その他）。内訳が合計の前に来る型
+（富士フイルムの流動資産合計など）は対象外。golden: `RealXbrlStatementTests`
+（S100W3XJ / S100XTLJ）と `USGAAPStatementHtmlTests`。
 
 ### 5.2 仮想タグアーキテクチャ（`USGAAP_HTML_*`）
 

@@ -24,7 +24,9 @@
 //   区分を持たない銀行特有のBS構造の回帰対象）
 // - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
 // smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
-// 「US-GAAP（HTML 経路）」でカバー（XBRL fact ではなく 0105010 HTML→行。結果は要確認）。
+// 「US-GAAP（HTML 経路）」で golden 化（0105010 HTML→行。`USGAAPStatementHtml`）。
+// 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
+// 富士フイルムは内訳→合計型のため同規則では `components` なし。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -862,13 +864,13 @@ import Foundation
         #expect(stTotal.value == 511_139_000_000)
         let comps = try #require(stTotal.components)
         #expect(comps.map(\.weight) == [1, 1])
-        #expect(
-            Set(comps.map(\.tag))
-                == Set(
-                    year.balanceSheet.filter {
-                        ($0.label ?? "").contains("金融サービスに係る短")
-                            || ($0.label ?? "").contains("その他の短期借入金")
-                    }.map(\.tag)))
+        let childRows = year.balanceSheet.filter {
+            ($0.label ?? "").contains("金融サービスに係る短")
+                || ($0.label ?? "").contains("その他の短期借入金")
+        }
+        #expect(childRows.count == 2)
+        #expect(Set(comps.map(\.tag)) == Set(childRows.map(\.tag)))
+        #expect(childRows.map(\.value).reduce(0, +) == stTotal.value)
         #expect(
             year.balanceSheet.contains {
                 ($0.label ?? "").contains("金融サービスに係る短") && $0.value == 38_100_000_000
@@ -879,6 +881,11 @@ import Foundation
                 ($0.label ?? "").contains("その他の短期借入金") && $0.value == 473_039_000_000
                     && $0.order == (stTotal.order ?? -1) + 2
             })
+        // キヤノン本表でキヤノン型 components が付くのはこの1行のみ
+        #expect(year.balanceSheet.filter { $0.components != nil }.map(\.tag) == [stTotal.tag])
+        #expect(year.incomeStatement.allSatisfy { $0.components == nil })
+        #expect(year.cashFlow.allSatisfy { $0.components == nil })
+        #expect(year.changesInEquity.allSatisfy { $0.components == nil })
         // 内訳が前に来るセクション合計はキヤノン型対象外
         #expect(year.balanceSheet.first { $0.label == "流動資産合計" }?.components == nil)
     }

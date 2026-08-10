@@ -111,6 +111,8 @@ public struct StatementLineComponent: Codable, Sendable {
 /// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
 /// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
 /// 「未決事項」参照（v1では未対応）。
+/// US-GAAP HTML 経路（`USGAAPStatementHtml`）のみ例外: calculation linkbase が無いため
+/// `is_total` はラベル規則、`components` はキヤノン型（合計直後の内訳が親と一致）の推定。
 /// SS は合計列のみ（資本構成員次元は含めない）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
