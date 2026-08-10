@@ -48,6 +48,20 @@ private func send(
     return (response.statusCode, json)
 }
 
+private func outputSchemaRequiredKeys(_ tool: Tool) -> Set<String> {
+    let schema = tool.outputSchema?.objectValue
+    return Set((schema?["required"]?.arrayValue ?? []).compactMap(\.stringValue))
+}
+
+private func decodeJSONObject(from text: String?) -> [String: Any]? {
+    guard let text, let data = text.data(using: .utf8) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
+private func jsonObjectsEqual(_ lhs: [String: Any]?, _ rhs: [String: Any]?) -> Bool {
+    (lhs as NSDictionary?) == (rhs as NSDictionary?)
+}
+
 @Suite struct McpServerFactoryTests {
 
     @Test func toolsListReturnsAllExpectedTools() async throws {
@@ -148,5 +162,127 @@ private func send(
         #expect(axis["type"]?.stringValue == "string")
         // サーバー省略時 business と一致。旧 schema に無かった default を意図的に明示している。
         #expect(axis["default"]?.stringValue == "business")
+    }
+
+    /// ChatGPT plugin Phase 1: 全ツールに title / annotations / outputSchema が付与される。
+    @Test func allToolsCarryTitleAnnotationsAndOutputSchema() throws {
+        let skillsByTool = Dictionary(
+            uniqueKeysWithValues: apiSkillsCatalog().compactMap { skill -> (String, ApiSkill)? in
+                guard let tool = skill.mcpTool else { return nil }
+                return (tool, skill)
+            })
+
+        for tool in mcpToolCatalog() {
+            let skill = try #require(skillsByTool[tool.name])
+            #expect((tool.title ?? "").isEmpty == false)
+            #expect(tool.title == skill.name)
+            #expect((tool.description ?? "").isEmpty == false)
+
+            let annotations = tool.annotations
+            #expect(annotations.readOnlyHint == true)
+            #expect(annotations.destructiveHint == false)
+            #expect(annotations.openWorldHint == false)
+
+            let schema = try #require(tool.outputSchema?.objectValue)
+            #expect(schema["type"]?.stringValue == "object")
+            let required = schema["required"]?.arrayValue ?? []
+            #expect(required.isEmpty == false)
+        }
+    }
+
+    /// outputSchema の top-level required を固定し、意図しないスキーマ変更を検知する。
+    @Test func toolOutputSchemasPinRequiredKeySets() throws {
+        let byName = Dictionary(uniqueKeysWithValues: mcpToolCatalog().map { ($0.name, $0) })
+
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["search_companies"])) == ["results"])
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_filings"]))
+                == ["code", "name", "filings"])
+        let financialRequired: Set<String> = [
+            "schema_version", "code", "name", "sector", "market", "currency", "unit", "years",
+        ]
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_financial_summary"])) == financialRequired)
+        #expect(outputSchemaRequiredKeys(try #require(byName["get_waterfall"])) == financialRequired)
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_filing_content"]))
+                == ["code", "doc_id", "sections"])
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_breakdown"]))
+                == ["code", "doc_id", "axis", "breakdown"])
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_statement"]))
+                == ["schema_version", "code", "name", "sector", "market", "years"])
+        #expect(
+            outputSchemaRequiredKeys(try #require(byName["get_statement_notes"]))
+                == ["code", "doc_id", "note_type", "note"])
+    }
+
+    /// outputSchema 文字列は全ツールで MCP.Value へデコードできる（壊れた schema はツールを落とさない）。
+    @Test func allToolOutputSchemasDecodeSuccessfully() throws {
+        for tool in mcpToolCatalog() {
+            #expect(tool.outputSchema != nil)
+        }
+    }
+
+    @Test func callToolObjectPayloadSetsStructuredContentMatchingText() async throws {
+        let transport = try await makeTransport(callTool: { _ in
+            jsonToolResult(["code": "7203", "name": "トヨタ自動車"])
+        })
+        let (status, json) = try await send(
+            transport, [
+                "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                "params": ["name": "get_filings", "arguments": ["code": "7203"]],
+            ])
+
+        #expect(status == 200)
+        let result = json?["result"] as? [String: Any]
+        let content = result?["content"] as? [[String: Any]]
+        let textObj = decodeJSONObject(from: content?.first?["text"] as? String)
+        let structured = result?["structuredContent"] as? [String: Any]
+        #expect(jsonObjectsEqual(textObj, structured))
+        #expect(textObj?["code"] as? String == "7203")
+    }
+
+    @Test func callToolArrayPayloadWrapsResultsInStructuredContent() async throws {
+        let transport = try await makeTransport(callTool: { _ in
+            jsonToolResult([
+                ["code": "7203", "name": "トヨタ自動車", "sector": "", "market": "", "location": ""],
+            ])
+        })
+        let (status, json) = try await send(
+            transport, [
+                "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                "params": ["name": "search_companies", "arguments": ["query": "toyota"]],
+            ])
+
+        #expect(status == 200)
+        let result = json?["result"] as? [String: Any]
+        let content = result?["content"] as? [[String: Any]]
+        let textObj = decodeJSONObject(from: content?.first?["text"] as? String)
+        let structured = result?["structuredContent"] as? [String: Any]
+        #expect(jsonObjectsEqual(textObj, structured))
+        let results = textObj?["results"] as? [[String: Any]]
+        #expect(results?.first?["code"] as? String == "7203")
+    }
+
+    @Test func initializeReturnsTitleAndInstructions() async throws {
+        let transport = try await makeTransport()
+        let (status, json) = try await send(
+            transport, [
+                "jsonrpc": "2.0", "id": 8, "method": "initialize",
+                "params": [
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": [String: Any](),
+                    "clientInfo": ["name": "test-client", "version": "1.0"],
+                ],
+            ])
+
+        #expect(status == 200)
+        let result = json?["result"] as? [String: Any]
+        #expect(result?["instructions"] as? String == bltMcpServerInstructions)
+        let serverInfo = result?["serverInfo"] as? [String: Any]
+        #expect(serverInfo?["title"] as? String == bltMcpServerTitle)
     }
 }

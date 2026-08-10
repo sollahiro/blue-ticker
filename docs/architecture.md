@@ -118,7 +118,7 @@ Vapor のルーティングはホスト名では分岐しないため、`api.<do
 | `Sources/BltMcpServerCore/` | MCP プロトコル層。ツールカタログ（`Tools.swift`）と `MCP.Server` ファクトリ（`ServerFactory.swift`）のみ。Vapor/Fluent 非依存 |
 | `Sources/BltServerCore/MCPRoute.swift` | ルートパスへの MCP ルート登録・Vapor ↔ SDK アダプタ・ツールディスパッチ（`Routes.swift` の DB 読み取り共通関数 `serveStoredFinancials` 等を REST と共有し、ロジックを重複させない） |
 
-ツールは REST エンドポイントと対応する（正本は `Sources/BlueTicker/Server/ApiSkills.swift`。`search_companies` / `get_waterfall` / `get_breakdown` 等）。財務系ツールは REST 同様ライブ計算へフォールバックしない。MCP ツール説明は `apiSkillsCatalog()` から生成する。
+ツールは REST エンドポイントと対応する（正本は `Sources/BlueTicker/Server/ApiSkills.swift`。`search_companies` / `get_waterfall` / `get_breakdown` 等）。財務系ツールは REST 同様ライブ計算へフォールバックしない。MCP ツール説明は `apiSkillsCatalog()` から生成する。各ツールは `title`・read-only 向け `annotations`・`outputSchema` を持ち、`tools/call` 成功時は `structuredContent` でスキーマ準拠の JSON オブジェクトを返す。`initialize` はサーバー `title` と利用手順 `instructions` を返す（ChatGPT plugin 向け Phase 1 メタデータ）。
 
 Phase 1 は既存 `api.<domain>` の配下（`/v1` と同一の SSO ポリシー）で疎通する。Claude.ai / ChatGPT 等 OAuth 2.1 前提のリモートクライアント向けには、**Phase 2**（2026-07-12 完了）として新規サブドメイン `mcp.<domain>` を Cloudflare Tunnel に追加し、パスなしの専用 Access アプリケーションに **Managed OAuth for Access** を有効化した（Managed OAuth はパス指定のあるドメインには設定できないため、`api.<domain>/mcp` のようなパス限定アプリでは有効化できず、専用サブドメインが必須だった）。discovery・`/authorize`・`/token`・DCR は Cloudflare エッジ側で完結し、origin（Vapor）側のコード変更は不要 — OAuth 完了後に origin が受け取るリクエストは Phase 1 と同じエッジ信頼のまま。Claude Desktop での接続・ツール呼び出しまで実機確認済み。ダッシュボード手順は `deploy.md`「MCP（Managed OAuth）」を参照。
 
