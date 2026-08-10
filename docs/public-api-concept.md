@@ -25,10 +25,10 @@
 
 | 面 | 役割 |
 |---|---|
-| **REST `/v1`** | 契約の正。自社クライアント（将来の iOS 等）・段階 B の第三者向けの本線 |
+| **REST `/v1`** | 契約の正。自社クライアント・段階 B の第三者向けの本線 |
 | **MCP `POST /`** | REST を写す薄い追従面。プロトコル自体は一過性とみなす。新機能は REST 先・MCP は写経 |
 | **配布 `ticker`** | **廃止済み**（Homebrew / release / `CLI/` 削除）。`TickerDev` と `blt-server` 運用 CLI は残す |
-| **Cloudflare Access SSO** | ユーザー介在クライアント向け（ブラウザ・将来 iOS）。リモート MCP（Managed OAuth）もブラウザ経由は想定内 |
+| **Cloudflare Access SSO** | ユーザー介在クライアント向け（ブラウザ）。リモート MCP（Managed OAuth）もブラウザ経由は想定内 |
 | **Access Service Token** | 本番 `api.*` の機械向け programmatic（curl / CI）。手順は `docs/api-auth.md` / `deploy.md` |
 
 ## 現状の実態（認証・制御・契約）
