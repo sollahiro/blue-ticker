@@ -823,6 +823,8 @@ import Foundation
         #expect(
             Self.labelValue(year.incomeStatement, containing: "当社株主に帰属する")
                 == 332_053_000_000)
+        // 当期「-」→ 0（前期 165,100 百万円を拾わない）
+        #expect(Self.exactLabelValue(year.incomeStatement, "３ のれんの減損損失") == 0)
 
         #expect(
             Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
@@ -830,6 +832,7 @@ import Foundation
         #expect(
             Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
                 == -237_450_000_000)
+        #expect(Self.exactLabelValue(year.cashFlow, "のれんの減損損失") == 0)
         let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
         let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
         #expect(cfOpen?.order != nil && cfClose?.order != nil)
@@ -838,9 +841,29 @@ import Foundation
         #expect(!year.changesInEquity.isEmpty)
         let closings = Self.labelValues(year.changesInEquity, containing: "2025年12月31日現在残高")
         #expect(closings.contains(3_774_128_000_000))
+        // 純資産合計列は「-」→ 0（内訳の △494 を合計として拾わない）
+        #expect(Self.exactLabelValue(year.changesInEquity, "利益準備金への振替") == 0)
         let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2024年12月31日") }
         let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年12月31日") }
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
+
+        // 短期借入の内訳は order 隣接のみ（US-GAAP HTML 経路は calculation components なし）
+        let stTotal = year.balanceSheet.first {
+            ($0.label ?? "").contains("短期借入金及び１年以内に返済する長期債務合計")
+        }
+        #expect(stTotal?.isTotal == true)
+        #expect(stTotal?.components == nil)
+        #expect(stTotal?.value == 511_139_000_000)
+        #expect(
+            year.balanceSheet.contains {
+                ($0.label ?? "").contains("金融サービスに係る短") && $0.value == 38_100_000_000
+                    && $0.order == (stTotal?.order ?? -1) + 1
+            })
+        #expect(
+            year.balanceSheet.contains {
+                ($0.label ?? "").contains("その他の短期借入金") && $0.value == 473_039_000_000
+                    && $0.order == (stTotal?.order ?? -1) + 2
+            })
     }
 }

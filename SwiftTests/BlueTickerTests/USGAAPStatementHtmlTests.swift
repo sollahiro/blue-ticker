@@ -180,6 +180,67 @@ import Foundation
     }
 
     @Test
+    func canonStyleCurrentDashIsZeroNotPriorAmount() throws {
+        // キヤノン形式: 当期が「-」のとき前期金額を採用しない（PL 構成比列付き / CF 単純2列 / SS 合計列）。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額（百万円）</td><td>百分比（％）</td><td>金額（百万円）</td><td>百分比（％）</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>資産合計</td><td></td><td>100</td><td></td><td>200</td><td></td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額（百万円）</td><td></td><td>金額（百万円）</td><td></td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td></td><td>50</td><td></td><td>80</td><td></td></tr>
+          <tr><td>負債・純資産合計</td><td></td><td>100</td><td></td><td>200</td><td></td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額（百万円）</td><td>百分比（％）</td><td>金額（百万円）</td><td>百分比（％）</td></tr>
+          <tr><td>１ 製品売上高</td><td></td><td>1,000</td><td>100.0</td><td>1,200</td><td>100.0</td></tr>
+          <tr><td>３ のれんの減損損失</td><td></td><td>165,100</td><td>3.7</td><td>-</td><td>-</td></tr>
+          <tr><td>営業利益</td><td></td><td>100</td><td>10.0</td><td>150</td><td>12.5</td></tr>
+        </table>
+        <table>
+          <tr><td></td><td>注記番号</td><td>資本金</td><td>資本剰余金</td><td>利益剰余金</td><td>自己株式</td><td>株主資本</td><td>非支配持分</td><td>純資産合計</td></tr>
+          <tr><td>区分</td><td></td><td></td><td></td><td>利益準備金</td><td>その他の利益剰余金</td><td>利益剰余金合計</td><td></td><td></td></tr>
+          <tr><td>2024年12月31日現在残高</td><td></td><td>100</td><td>200</td><td>10</td><td>90</td><td>100</td><td>-5</td><td>395</td><td>5</td><td>400</td></tr>
+          <tr><td>利益準備金への振替</td><td></td><td></td><td></td><td>494</td><td>△494</td><td>-</td><td></td><td>-</td><td></td><td>-</td></tr>
+          <tr><td>2025年12月31日現在残高</td><td></td><td>100</td><td>200</td><td>504</td><td>-404</td><td>100</td><td>-5</td><td>395</td><td>5</td><td>400</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>Ⅰ 営業活動によるキャッシュ・フロー</td><td></td><td></td><td></td></tr>
+          <tr><td>のれんの減損損失</td><td></td><td>165,100</td><td>-</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td>120</td><td>130</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td></td><td>-50</td><td>-40</td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td></td><td>-10</td><td>-20</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-canon-dash-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir,
+                statementTypes: [
+                    .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
+                ]))
+
+        #expect(extracted.incomeStatement.contains { $0.label == "３ のれんの減損損失" && $0.value == 0 })
+        #expect(extracted.cashFlow.contains { $0.label == "のれんの減損損失" && $0.value == 0 })
+        #expect(extracted.changesInEquity.contains { $0.label == "利益準備金への振替" && $0.value == 0 })
+    }
+
+    @Test
     func returnsNilWhenStatementHtmlMissing() {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("usgaap-stmt-empty-\(UUID().uuidString)", isDirectory: true)
