@@ -10,6 +10,9 @@
 // `order`: presentation linkbase が無いため、HTML 本表の読み順（上から下）を
 // 0 始まりの通し番号で付与する（`XBRLUtils.loadPresentationOrder` の DFS 通し番号と同型）。
 // 金額の無い区分見出し行は行にしないため、番号は出力行だけで密になる。
+//
+// `components`: calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が
+// 親金額と一致）のときだけ合成 tag で付与する。内訳が合計の前に来る型は対象外。
 
 import Foundation
 import SwiftSoup
@@ -228,6 +231,7 @@ enum USGAAPStatementHtml {
                     isTotal: isTotalLabel(label, sectionType: .balanceSheet),
                     components: nil))
         }
+        attachCanonStyleFollowingComponents(&items)
         return items
     }
 
@@ -267,6 +271,7 @@ enum USGAAPStatementHtml {
                     isTotal: isTotalLabel(label, sectionType: sectionType),
                     components: nil))
         }
+        attachCanonStyleFollowingComponents(&items)
         return items
     }
 
@@ -296,7 +301,70 @@ enum USGAAPStatementHtml {
                     isTotal: isTotalLabel(label, sectionType: .changesInEquity),
                     components: nil))
         }
+        attachCanonStyleFollowingComponents(&items)
         return items
+    }
+
+    /// キヤノン型: 「…合計」行の直後に内訳が続き、その合計が親と一致するとき `components` を付与する。
+    ///
+    /// J-GAAP/IFRS の calculation linkbase 相当を HTML から推定する。親が番号付き
+    /// （`１` / `Ⅰ` 等）のときは次の同型番号行で打ち切る。内訳が合計の**前**に来る型
+    /// （富士フイルムの流動資産合計など、および多くのセクション合計）は対象外
+    /// （先行行合算は別ヒューリスティックになり誤結線しやすいため、ここでは足さない）。
+    private static func attachCanonStyleFollowingComponents(_ items: inout [StatementLineItem]) {
+        guard !items.isEmpty else { return }
+        for i in items.indices {
+            let label = items[i].label ?? ""
+            guard items[i].isTotal, label.contains("合計") else { continue }
+
+            var childIndices: [Int] = []
+            var j = i + 1
+            while j < items.count {
+                let childLabel = items[j].label ?? ""
+                if items[j].isTotal { break }
+                if leadingMajorMarker(label) != nil, leadingMajorMarker(childLabel) != nil {
+                    break
+                }
+                childIndices.append(j)
+                j += 1
+            }
+            guard !childIndices.isEmpty else { continue }
+
+            let childSum = childIndices.reduce(0.0) { $0 + items[$1].value }
+            guard abs(childSum - items[i].value) < 0.5 else { continue }
+
+            items[i].components = childIndices.map {
+                StatementLineComponent(tag: items[$0].tag, weight: 1)
+            }
+        }
+    }
+
+    /// 行頭の大区分番号（`１` / `1` / `Ⅰ` 等）。`(1)` や番号なし内訳は nil。
+    private static func leadingMajorMarker(_ label: String) -> String? {
+        let t = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = t.unicodeScalars.first else { return nil }
+
+        func isArab(_ u: Unicode.Scalar) -> Bool {
+            ("0"..."9").contains(u) || ("０"..."９").contains(u)
+        }
+        let roman: Set<Unicode.Scalar> = [
+            "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ",
+        ]
+
+        let scalars = Array(t.unicodeScalars)
+        if isArab(first) {
+            var i = 1
+            while i < scalars.count, isArab(scalars[i]) { i += 1 }
+            guard i < scalars.count, scalars[i] == " " || scalars[i] == "　" else { return nil }
+            return String(String.UnicodeScalarView(scalars[0..<i]))
+        }
+        if roman.contains(first) {
+            var i = 1
+            while i < scalars.count, roman.contains(scalars[i]) { i += 1 }
+            guard i < scalars.count, scalars[i] == " " || scalars[i] == "　" else { return nil }
+            return String(String.UnicodeScalarView(scalars[0..<i]))
+        }
+        return nil
     }
 
     /// BS/PL/CF 行の当期金額（円）。

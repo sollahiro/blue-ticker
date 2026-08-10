@@ -797,6 +797,11 @@ import Foundation
             Self.labelValue(year.changesInEquity, containing: "Ⅸ 利益剰余金から") == 0)
         #expect(
             Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
+
+        // 富士フイルムは内訳→合計型のため、キヤノン型（合計直後の内訳）components は付かない。
+        #expect(year.balanceSheet.allSatisfy { $0.components == nil })
+        #expect(year.incomeStatement.allSatisfy { $0.components == nil })
+        #expect(year.cashFlow.allSatisfy { $0.components == nil })
     }
 
     @Test
@@ -848,22 +853,33 @@ import Foundation
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
 
-        // 短期借入の内訳は order 隣接のみ（US-GAAP HTML 経路は calculation components なし）
-        let stTotal = year.balanceSheet.first {
-            ($0.label ?? "").contains("短期借入金及び１年以内に返済する長期債務合計")
-        }
-        #expect(stTotal?.isTotal == true)
-        #expect(stTotal?.components == nil)
-        #expect(stTotal?.value == 511_139_000_000)
+        // 短期借入の内訳はキヤノン型 components（直後2行・合計一致）
+        let stTotal = try #require(
+            year.balanceSheet.first {
+                ($0.label ?? "").contains("短期借入金及び１年以内に返済する長期債務合計")
+            })
+        #expect(stTotal.isTotal == true)
+        #expect(stTotal.value == 511_139_000_000)
+        let comps = try #require(stTotal.components)
+        #expect(comps.map(\.weight) == [1, 1])
+        #expect(
+            Set(comps.map(\.tag))
+                == Set(
+                    year.balanceSheet.filter {
+                        ($0.label ?? "").contains("金融サービスに係る短")
+                            || ($0.label ?? "").contains("その他の短期借入金")
+                    }.map(\.tag)))
         #expect(
             year.balanceSheet.contains {
                 ($0.label ?? "").contains("金融サービスに係る短") && $0.value == 38_100_000_000
-                    && $0.order == (stTotal?.order ?? -1) + 1
+                    && $0.order == (stTotal.order ?? -1) + 1
             })
         #expect(
             year.balanceSheet.contains {
                 ($0.label ?? "").contains("その他の短期借入金") && $0.value == 473_039_000_000
-                    && $0.order == (stTotal?.order ?? -1) + 2
+                    && $0.order == (stTotal.order ?? -1) + 2
             })
+        // 内訳が前に来るセクション合計はキヤノン型対象外
+        #expect(year.balanceSheet.first { $0.label == "流動資産合計" }?.components == nil)
     }
 }

@@ -180,6 +180,74 @@ import Foundation
     }
 
     @Test
+    func canonStyleFollowingDetailsBecomeComponents() throws {
+        // 合計行の直後に内訳が続き、合計一致 → components。次の番号付き行で打ち切り。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td></tr>
+          <tr><td>資産合計</td><td></td><td>100</td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td></tr>
+          <tr><td>１ 短期借入金及び１年以内に返済する長期債務合計</td><td></td><td>300</td><td>511</td></tr>
+          <tr><td>金融サービスに係る短期借入金</td><td></td><td>40</td><td>38</td></tr>
+          <tr><td>その他の短期借入金及び１年以内に返済する長期債務</td><td></td><td>260</td><td>473</td></tr>
+          <tr><td>２ 買入債務</td><td></td><td>100</td><td>120</td></tr>
+          <tr><td>流動負債合計</td><td></td><td>400</td><td>631</td></tr>
+          <tr><td>純資産の部</td><td></td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td></td><td>50</td><td>80</td></tr>
+          <tr><td>負債・純資産合計</td><td></td><td>100</td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>Ⅰ 売上高</td><td></td><td>1,000</td><td>1,200</td></tr>
+          <tr><td>営業利益</td><td></td><td>100</td><td>150</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>2025年３月31日現在残高</td><td></td><td>400</td><td>540</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td>120</td><td>130</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td></td><td>-50</td><td>-40</td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td></td><td>-10</td><td>-20</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-canon-comp-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir, statementTypes: [.balanceSheet, .incomeStatement, .cashFlow]))
+
+        let st = try #require(
+            extracted.balanceSheet.first {
+                ($0.label ?? "").contains("短期借入金及び１年以内に返済する長期債務合計")
+            })
+        #expect(st.isTotal)
+        #expect(st.value == 511_000_000)
+        let comps = try #require(st.components)
+        #expect(comps.map(\.weight) == [1, 1])
+        #expect(Set(comps.map(\.tag)) == ["USGAAP_HTML_BS_2", "USGAAP_HTML_BS_3"])
+
+        // 内訳が前に来る流動負債合計はキヤノン型ではない → components なし
+        let cl = try #require(extracted.balanceSheet.first { $0.label == "流動負債合計" })
+        #expect(cl.isTotal)
+        #expect(cl.components == nil)
+    }
+
+    @Test
     func canonStyleCurrentDashIsZeroNotPriorAmount() throws {
         // キヤノン形式: 当期が「-」のとき前期金額を採用しない（PL 構成比列付き / CF 単純2列 / SS 合計列）。
         let html = """

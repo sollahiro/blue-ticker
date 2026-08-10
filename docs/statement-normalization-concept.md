@@ -98,7 +98,9 @@ SS 固有の実装上の注意（2026-08-09）:
 `USGAAPStatementHtml` が 0105010 HTML 本表を決定論で読み `StatementLineItem` 化する
 （2026-08-10、富士フイルム / キヤノンで試作。結果は要確認。`statement-v1` のまま）。
 `order` は HTML 読み順の 0 始まり通し番号（presentation DFS と同型。CF/SS は期首→期末）。
-HTML からも取れないときだけ `notApplicable(us_gaap_unsupported)`。個別 BS への silent
+`components` は calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が親金額と
+一致）のときだけ合成 tag で付与。内訳が合計の前に来る型（富士フイルムの流動資産合計など）は
+対象外。HTML からも取れないときだけ `notApplicable(us_gaap_unsupported)`。個別 BS への silent
 fallback はしない。`borrowings_schedule` は同 reason で対象外のまま。financials/IBD の
 `USGAAPHtml`（選択フィールド→仮想タグ）は現行 summary 用として別経路。
 
