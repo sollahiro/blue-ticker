@@ -62,6 +62,17 @@ private func jsonObjectsEqual(_ lhs: [String: Any]?, _ rhs: [String: Any]?) -> B
     (lhs as NSDictionary?) == (rhs as NSDictionary?)
 }
 
+private func toolResultText(_ result: CallTool.Result) -> String? {
+    guard let first = result.content.first else { return nil }
+    guard case .text(let text, _, _) = first else { return nil }
+    return text
+}
+
+private func valueJSONObject(_ value: Value) -> [String: Any]? {
+    guard let data = try? JSONEncoder().encode(value) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
 @Suite struct McpServerFactoryTests {
 
     @Test func toolsListReturnsAllExpectedTools() async throws {
@@ -284,5 +295,55 @@ private func jsonObjectsEqual(_ lhs: [String: Any]?, _ rhs: [String: Any]?) -> B
         #expect(result?["instructions"] as? String == bltMcpServerInstructions)
         let serverInfo = result?["serverInfo"] as? [String: Any]
         #expect(serverInfo?["title"] as? String == bltMcpServerTitle)
+    }
+
+    /// 実 builder（StatementResponse.jsonObject）の NSNull 入り payload が outputSchema required と整合し、
+    /// structuredContent デコードを壊さないことを固定する。
+    @Test func getStatementOutputSchemaMatchesRealResponseBuilder() throws {
+        let payload = StatementResponse(
+            schemaVersion: statementSchemaVersion, code: "7203", name: nil, sector: nil, market: nil,
+            years: []
+        ).jsonObject()
+
+        let result = jsonToolResult(payload)
+        #expect(result.structuredContent != nil)
+
+        let statementTool = try #require(mcpToolCatalog().first { $0.name == "get_statement" })
+        let requiredKeys = outputSchemaRequiredKeys(statementTool)
+
+        let structured = try #require(result.structuredContent?.objectValue)
+        for key in requiredKeys {
+            #expect(structured[key] != nil)
+        }
+        #expect(structured["name"] == .null)
+
+        let textObj = decodeJSONObject(from: toolResultText(result))
+        for key in requiredKeys {
+            #expect(textObj?[key] != nil)
+        }
+        #expect(textObj?["name"] is NSNull)
+    }
+
+    /// financials 系の NSNull 入りネスト配列が jsonToolResult → Value デコードを通過する。
+    @Test func jsonToolResultDecodesNSNullHeavyPayload() throws {
+        let payload: [String: Any] = [
+            "schema_version": 1,
+            "code": "7203",
+            "name": "トヨタ自動車",
+            "sector": "自動車",
+            "market": "プライム",
+            "currency": "JPY",
+            "unit": "百万円",
+            "years": [["sales": NSNull(), "margin": 12.3]],
+        ]
+
+        let result = jsonToolResult(payload)
+        #expect(result.structuredContent != nil)
+
+        let textObj = decodeJSONObject(from: toolResultText(result))
+        let structuredObj = valueJSONObject(try #require(result.structuredContent))
+        #expect(jsonObjectsEqual(textObj, structuredObj))
+        let years = textObj?["years"] as? [[String: Any]]
+        #expect(years?.first?["sales"] is NSNull)
     }
 }
