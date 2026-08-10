@@ -28,7 +28,7 @@
 | 残す | Core（`Analysis/`＋`Services/`）・Unit Test・**開発用 CLI**（`TickerDev`）・**運用 CLI**（`blt-server` sync/ingest） | 維持 |
 | 切済み | **ユーザー向けローカル分析 CLI**（`backend=local`） | 2026-07-16 実施（下記ゲート） |
 | 切済み | **配布 `ticker`**（Homebrew / release / remote CLI） | 廃止済み。構想は `docs/public-api-concept.md` |
-| ユーザー接点 | **REST（契約の正）** / MCP（追従） / 将来 GUI・iOS | MCP は一過性のプロトコル面とみなす。新機能は REST 先 |
+| ユーザー接点 | **REST（契約の正）** / MCP（追従） / 将来 GUI | MCP は一過性のプロトコル面とみなす。新機能は REST 先 |
 
 - Core はサーバー専用にしない（Dev CLI・Unit Test と共有）。
 - MCP は `blt-server` のルートパス（`POST /`）に同居。ツールディスパッチは `Routes.swift` の DB 読み取り共通関数を REST と共有（`Sources/BltMcpServerCore/` + `Sources/BltServerCore/MCPRoute.swift`）。詳細は `docs/architecture.md`「MCP」節。
@@ -86,7 +86,6 @@ financials / filing-content の REST read は現行版との完全一致では�
 | REST `/v1` | しない | blt-server DB read | **契約の正・本線** |
 | MCP `POST /` | しない | REST と同じ serve 関数 | 追従面（一過性とみなす） |
 | ~~`ticker`（配布 CLI）~~ | — | — | **廃止済み** |
-| iOS（将来） | しない | REST | 予定 |
 | blt-server | **唯一の計算者** | ingest ＋ DB read | サーバー |
 
 公開契約は financials 等の REST レスポンス（`schema_version` 独立採番）。facts RAW は非公開。人間向け Access SSO は維持（CLI 廃止後もブラウザ・MCP OAuth 用）。
@@ -131,7 +130,6 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 - [ ] 生 XBRL 中央永続化（目標 A）＋ financials のデータ源見直し（タグ系→facts）
 - [ ] ストレージ強化の方式選定（#22 本丸）
 - [ ] REST API の第三者公開（段階 B）— 段階 A のあと。レート制限・外部ドキュメント等。`docs/public-api-concept.md`
-- [ ] iOS SSO（OIDC + PKCE・アプリ側プロジェクト）
 - [ ] Cloudflare Monetize Gateway 連携検討（機能の無料/有料は `docs/feature-tiers.md`。面別メーター（REST / MCP）を理想とする。origin APIキー要否もここで再判断。情報未公開のため詳細設計は保留）
 - [ ] filing-sections 拡張: 半期報告書(160)のセクション本文抽出（有報と同等のフルセクション抽出を想定。新規セクションキー設計・`filingSectionsCacheVersion` バンプ要否の検討が必要・未着手）
 - [~] breakdowns: 事業別・地域別売上の正規化（企業間比較用）。日経225は business/geography 両軸ともNeon ingest・REST/MCP公開済み（2026-07-27）。残課題は電通型 geography `not_found`（issue #163）。構想は `docs/breakdown-normalization-concept.md`「今後の検討事項」

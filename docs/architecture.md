@@ -72,11 +72,11 @@ graph TD
 
 ## リクエストフロー（REST / TickerDev）
 
-クライアント（curl / MCP / 将来 iOS）は blt-server の REST（または MCP）を叩く。**財務系（financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
+クライアント（curl / MCP）は blt-server の REST（または MCP）を叩く。**財務系（financials）の計算は ingest（`blt-server ingest`）時に Core ロジックが実行して DB へ格納し、serving は格納済み結果を読むだけ（read-only。未格納は 404・ライブ計算へフォールバックしない）**。EDINET を直接叩く経路は `TickerDev`（配布しない開発用 CLI）のみが持ち、`DevCLIEntry`（`BlueTickerCore` 内の唯一の public facade）経由で同じ Core ロジックを in-process 実行する。
 
 ```mermaid
 flowchart LR
-    user(["ユーザー / iOS / curl"]) -->|"HTTPS /v1/* または MCP POST /"| server["blt-server (Vapor)"]
+    user(["ユーザー / curl"]) -->|"HTTPS /v1/* または MCP POST /"| server["blt-server (Vapor)"]
     dev(["開発者"]) --> devcli["TickerDev（配布しない）"]
     devcli --> facade0["DevCLIEntry<br/>(唯一の public facade)"]
     facade0 --> svc["Services / Analysis<br/>(インプロセス)"]
@@ -169,7 +169,7 @@ graph LR
     app --> vol
     app --> edinet
     app -.->|将来| r2
-    clients(["remote CLI / iOS app"]) -->|HTTPS| app
+    clients(["remote CLI / MCP clients"]) -->|HTTPS| app
 ```
 
 - compute / TLS / secrets / scheduler: **Fly.io**（self-host も同一 Docker イメージ）

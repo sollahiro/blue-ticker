@@ -99,7 +99,7 @@ docker exec blt-server /app/blt-server ingest --limit 50
 1. **前提**: ドメイン（zone）が Cloudflare 管理下にあること（未移管なら zone 追加が先）。
 2. **Tunnel 作成**（Networks → Tunnels → Cloudflared）→ **トークン**を取得。Public hostname を1本追加: `api.<domain>` → サービス `http://localhost:8080`（コンテナ内 blt-server）。token モードのためルーティングはダッシュボードが保持し、コンテナ内に config/credentials ファイルは不要。
 3. **Access アプリ作成**（Access → Applications → Self-hosted）= `api.<domain>`。
-4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*）を1本以上作成。`api.<domain>` の実運用では2ポリシーを併存させている（OR条件）— ①本人メール限定・長期セッション（ユーザー介在クライアント / 将来 iOS 用）、②One-Time PIN 経由なら誰でも許可・短期セッション（不特定多数への公開用、2026-07-12〜）。
+4. **Access ポリシー**（Access → Applications → 当該アプリ → Policies）: **SSO / IdP**（decision = *Allow*）を1本以上作成。`api.<domain>` の実運用では2ポリシーを併存させている（OR条件）— ①本人メール限定・長期セッション（ユーザー介在クライアント用）、②One-Time PIN 経由なら誰でも許可・短期セッション（不特定多数への公開用、2026-07-12〜）。
 5. **IdP 接続**（Settings → Authentication）: 現状は **One-Time PIN**（メールにコード送信、外部設定不要）と、Cloudflare アカウントメンバー限定の組み込み IdP（`type: cloudflare`）の2つ。Google/Apple 等の外部 IdP は未接続（Googleは要 Google Cloud Console 側OAuthクライアント作成、Appleは汎用OIDCで代替可だがClient SecretがJWTで最長6ヶ月ごとの再生成が必要、といった追加コストがあり今回は見送り）。
 
 ### B. origin（Fly）側 secrets

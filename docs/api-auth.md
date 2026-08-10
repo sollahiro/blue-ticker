@@ -18,7 +18,6 @@
 | curl / 自社スクリプト / CI | `api.*` | **Service Token** | 段階 A で開く主用途 |
 | ~~配布 `ticker`~~ | — | **廃止済み** | Homebrew / remote CLI 削除。代替は curl + Service Token または MCP |
 | ブラウザで api を直接 | `api.*` | SSO / OTP | 既存 |
-| 将来 iOS | `api.*` | ユーザー SSO 系（OIDC+PKCE 想定） | アプリに Service Token を焼かない |
 | Claude Desktop / ChatGPT（MCP） | `mcp.*` | Managed OAuth | 変更なし |
 | Claude Code 等 api 上の remote MCP | `api.*` | 当面 SSO | 任意で後から Token も可だが必須ではない |
 | 第三者 REST アプリ | `api.*` | 段階 B / Gateway 後 | 案2または Gateway |
