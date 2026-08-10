@@ -475,20 +475,33 @@ enum StatementNotesResolver {
     }
 
     /// `OverviewOfCapitalExpendituresEtcTextBlock` 内のセグメント別テーブルをパースする。
-    /// 表が無ければ nil。金額の単位はヘッダーの「（億円）」「（百万円）」表記から判定する
-    /// （未検出時は円のまま）。
+    /// セグメント表が無ければ nil。金額の単位は表内の「億円」「百万円」「千円」表記から判定する
+    /// （未検出時は円のまま）。「（単位：百万円）」だけの注記表がデータ表の前に置かれる会社
+    /// （ニチレイ S100VYA0）があるため、単位は前の表から継承する。
     ///
-    /// 実データ検証（2026-08-02）: 列数・ヘッダー文言・`rowspan` の使われ方が会社ごとに揺れる。
+    /// 実データ検証（2026-08-02 初回、2026-08-10 smoke 11社で拡張）。列数・ヘッダー文言・
+    /// `rowspan`/`colspan` の使われ方が会社ごとに揺れる:
     /// - 日立: 4列（セグメント名/設備投資金額（億円）/前年度比（％）/主な内容・目的）、rowspanなし
-    /// - ソフトバンクグループ: 2列（セグメントの名称/設備投資額（百万円））、先頭行に「報告セグメント」
-    ///   を1文字ずつ縦書き表示する区分見出しセルが `rowspan` で複数行にまたがる（実データではない）
+    /// - ソフトバンクグループ: 2列（セグメントの名称/設備投資額（百万円））。ヘッダーの
+    ///   「セグメントの名称」とデータの「その他」「合計」が colspan=2。先頭行に「報告セグメント」
+    ///   を縦書き表示する区分見出しセルが `rowspan` で複数行にまたがる（実データではない）
     /// - コニカミノルタ: 3列、`rowspan` が金額・目的セルに付き2つのセグメント名で1つの金額を共有
     ///   （デジタルワークプレイス事業/プロフェッショナルプリント事業が22,148百万円を共有）
+    /// - ニチレイ: 単位表記が別テーブルに分離。ヘッダーの「前/当連結会計年度」「前期比」が
+    ///   colspan=2 で空白の整形列をまたぐ。「前期比」列は差額（百万円）で％ではないため
+    ///   yoyPercent には入れない
+    /// - クボタ: 2段見出し（「前年度/当年度/前年度比（％）」＋「金額（百万円)」）。金額は当期列を選ぶ
+    ///   （旧実装は最初の数値セル=金額のため前期値を誤取得していた）
+    /// - 富士フイルム: セグメント表の直後に「主要な設備の状況」と同型の個別設備一覧が同じ
+    ///   TextBlock に混入する（個別設備一覧は除外対象）
+    /// - オークマ: 表が個別設備一覧（会社名・事業所名/所在地/セグメントの名称/設備の内容/金額）
+    ///   のみ。「主な設備投資」の抜粋で総額の内訳ではないため除外し、総額タグへフォールバックする
     ///
-    /// 固定の列位置に依存すると上記いずれかで欠落・ズレが起きるため、`gridRows` で `rowspan` を
-    /// 展開した仮想グリッドを作り、「セグメント名の直後に来る最初の数値セル＝金額、その次の数値
-    /// セルがあればYoY%、さらに残りの非空文字セルは説明」という内容ベースの列判定にする
-    /// （列インデックス固定にしない）。
+    /// 固定の列位置に依存すると上記いずれかで欠落・ズレが起きるため、`gridRows` で `rowspan`/
+    /// `colspan` を展開した仮想グリッドを作り、ヘッダー行の文言（当/前/％/金額/名称/内容）で列を
+    /// 分類する内容ベースの列判定にする（列インデックス固定にしない）。ヘッダーから列を分類
+    /// できない表だけ旧来のフォールバック（セグメント名の直後の最初の数値=金額、その次の数値
+    /// があればYoY%）を使う。
     private static func parseCapexTable(xbrlDir: URL) -> [CapexSegmentPayload]? {
         guard let html = XBRLUtils.extractTextblockHtml(
             in: xbrlDir, textblockTag: "OverviewOfCapitalExpendituresEtcTextBlock"),
@@ -496,33 +509,121 @@ enum StatementNotesResolver {
             let tables = (try? soup.select("table"))?.array()
         else { return nil }
 
+        var inheritedScale: Double?
         for table in tables {
             let rows = gridRows(from: table)
-            var scale: Double?
-            var segments: [CapexSegmentPayload] = []
-            for cols in rows {
-                guard !cols.isEmpty else { continue }
-                if cols.contains(where: { $0.contains("設備投資") }) {
-                    if cols.contains(where: { $0.contains("億円") }) { scale = 100_000_000 }
-                    else if cols.contains(where: { $0.contains("百万円") }) { scale = 1_000_000 }
-                    continue
+            if let scale = capexTableScale(rows) { inheritedScale = scale }
+            guard let scale = inheritedScale else { continue }
+
+            let headerRowCount = rows.prefix(while: { isCapexHeaderRow($0) }).count
+            let headerRows = rows.prefix(headerRowCount)
+            // 「会社名・事業所名／所在地」列を持つ表はセグメント別内訳ではなく個別設備一覧
+            // （オークマ S100W043、富士フイルム S100W3XJ の後続表）。主な設備の抜粋であり総額の
+            // 内訳ではないため除外する
+            let headerCells = headerRows.flatMap { $0 }
+            if headerCells.contains(where: {
+                $0.contains("会社名") || $0.contains("事業所名") || $0.contains("所在地")
+            }) { continue }
+
+            // ヘッダー文言から列を分類する（複数段見出しは同じ列の文言を連結して判定）
+            var colHeader: [Int: String] = [:]
+            for row in headerRows {
+                for (i, cell) in row.enumerated() where !cell.isEmpty {
+                    colHeader[i, default: ""] += " " + cell
                 }
-                guard let scale else { continue }
-                guard let amountIdx = cols.firstIndex(where: { XBRLUtils.parseTextblockCellValue($0) != nil }),
-                      amountIdx > 0
-                else { continue }
-                let amount = XBRLUtils.parseTextblockCellValue(cols[amountIdx])!
-                let name = cols[amountIdx - 1]
-                let after = Array(cols[(amountIdx + 1)...])
+            }
+            var nameCols: [Int] = []
+            var currentCols: [Int] = []
+            var amountCols: [Int] = []
+            var yoyCols: [Int] = []
+            var descCols: [Int] = []
+            for (i, h) in colHeader {
+                if h.contains("％") || h.contains("%") {
+                    yoyCols.append(i)
+                } else if h.contains("比") {
+                    // 「前期比」が差額（百万円）の会社（ニチレイ）があるため、％表記でない
+                    // 比較列は yoyPercent に入れない
+                    continue
+                } else if h.contains("前"), h.contains("期") || h.contains("年度") {
+                    continue  // 前期列は payload にフィールドがなく、金額列候補からも外す
+                } else if h.contains("当"), h.contains("期") || h.contains("年度") {
+                    currentCols.append(i)
+                } else if h.contains("設備投資") || h.contains("投資額") || h.contains("金額") {
+                    amountCols.append(i)
+                } else if h.contains("名称") || h.contains("セグメント") {
+                    nameCols.append(i)
+                } else if h.contains("内容") || h.contains("目的") {
+                    descCols.append(i)
+                }
+            }
+            // 当期列が特定できたらそこだけを使う。なければ汎用の金額列。どちらも無ければ
+            // 旧フォールバック（行内の最初の数値=金額）
+            let primaryAmountCols = (currentCols.isEmpty ? amountCols : currentCols).sorted()
+
+            var segments: [CapexSegmentPayload] = []
+            for cols in rows.dropFirst(headerRowCount) {
+                guard !cols.isEmpty else { continue }
+                let amount: Double
+                let amountIdx: Int
                 var yoy: Double?
                 var description: String?
-                if let first = after.first, let v = XBRLUtils.parseTextblockCellValue(first) {
-                    yoy = v
-                    description = after.count > 1 ? after[1] : nil
+                if !primaryAmountCols.isEmpty {
+                    var found: (idx: Int, value: Double)?
+                    for i in primaryAmountCols where i < cols.count {
+                        if let v = XBRLUtils.parseTextblockCellValue(cols[i]) {
+                            found = (i, v)
+                            break
+                        }
+                    }
+                    guard let f = found else { continue }  // 金額欄が「―」等の行は飛ばす
+                    amount = f.value
+                    amountIdx = f.idx
+                    for i in yoyCols where i < cols.count {
+                        if let v = XBRLUtils.parseTextblockCellValue(cols[i]) { yoy = v; break }
+                    }
+                    if !descCols.isEmpty {
+                        description = descCols.lazy.filter { $0 < cols.count }.map { cols[$0] }
+                            .first { !$0.isEmpty && XBRLUtils.parseTextblockCellValue($0) == nil }
+                    }
                 } else {
-                    description = after.first
+                    guard let idx = cols.firstIndex(where: {
+                        XBRLUtils.parseTextblockCellValue($0) != nil
+                    }), idx > 0
+                    else { continue }
+                    amountIdx = idx
+                    amount = XBRLUtils.parseTextblockCellValue(cols[idx])!
+                    let after = Array(cols[(idx + 1)...])
+                    if let first = after.first, let v = XBRLUtils.parseTextblockCellValue(first) {
+                        yoy = v
+                        description = after.count > 1 ? after[1] : nil
+                    } else {
+                        description = after.first
+                    }
                 }
-                if let d = description, d.isEmpty || d == "－" { description = nil }
+                // セグメント名: 名称列が分類できていればその末尾側を優先する（ソフトバンクGは
+                // 「報告セグメント」区分見出しが名称列の手前に rowspan で入るため、先頭を取ると
+                // 区分見出しをセグメント名と誤認する）。分類できなければ金額列より左の最初の
+                // 非数値セルを使う
+                var name: String?
+                if !nameCols.isEmpty {
+                    name = nameCols.sorted().reversed().lazy.filter { $0 < cols.count }
+                        .map { cols[$0] }
+                        .first { !$0.isEmpty && XBRLUtils.parseTextblockCellValue($0) == nil }
+                }
+                if name == nil, amountIdx > 0 {
+                    name = cols[..<amountIdx]
+                        .first { !$0.isEmpty && XBRLUtils.parseTextblockCellValue($0) == nil }
+                }
+                guard let name else { continue }
+                if description == nil, descCols.isEmpty, !primaryAmountCols.isEmpty {
+                    // 説明列が分類できなかった表向けの従来互換フォールバック（金額列より右の
+                    // 最初の非数値セル）。YoY列は数値なのでここには来ない
+                    description = cols[(amountIdx + 1)...]
+                        .first { !$0.isEmpty && XBRLUtils.parseTextblockCellValue($0) == nil }
+                }
+                if let d = description, d.isEmpty || ["－", "-", "—", "―"].contains(d) {
+                    description = nil
+                }
                 let normalizedName = name.replacingOccurrences(of: "　", with: "").replacingOccurrences(
                     of: " ", with: "")
                 // 「計」で終わる行（合計・小計・報告セグメント計等）は他行の集約であり、
@@ -538,6 +639,30 @@ enum StatementNotesResolver {
             if !segments.isEmpty { return segments }
         }
         return nil
+    }
+
+    /// 設備投資表の金額単位。表内のいずれかのセルの単位表記から判定する（億円→百万円→千円の
+    /// 優先順。ヘッダー行の「設備投資金額（億円）」のような表記を含む行がデータ行とは限らない
+    /// ため、行ではなくセル単位で走査する）。
+    private static func capexTableScale(_ rows: [[String]]) -> Double? {
+        let cells = rows.flatMap { $0 }
+        if cells.contains(where: { $0.contains("億円") }) { return 100_000_000 }
+        if cells.contains(where: { $0.contains("百万円") }) { return 1_000_000 }
+        if cells.contains(where: { $0.contains("千円") }) { return 1_000 }
+        return nil
+    }
+
+    /// 設備投資表の見出し行判定。数値セルを含まず見出し語を含む行を見出しとみなす。
+    /// 2段見出し（クボタ S100XR0M の「前年度/当年度」＋「金額（百万円)」）や単位だけの行
+    /// （富士フイルム S100W3XJ の「（百万円）」）に対応するため、先頭から連続する限り
+    /// すべて見出し行として列分類の材料にする。
+    private static func isCapexHeaderRow(_ cols: [String]) -> Bool {
+        if cols.contains(where: { XBRLUtils.parseTextblockCellValue($0) != nil }) { return false }
+        let joined = cols.joined(separator: " ")
+        return [
+            "名称", "年度", "会計年度", "金額", "投資額", "設備投資", "内容", "目的",
+            "億円", "百万円", "千円", "％", "比",
+        ].contains { joined.contains($0) }
     }
 
     /// 発行済株式総数・資本金等の推移（`issued_shares` note_type）。
@@ -637,8 +762,10 @@ enum StatementNotesResolver {
         return nil
     }
 
-    /// `<table>` の各 `<tr>` を `rowspan` を展開した仮想グリッド（列固定・欠損セルなし）へ変換する。
-    /// `colspan` は非対応（本note_typeで観測されていない。必要になれば拡張する）。
+    /// `<table>` の各 `<tr>` を `rowspan`/`colspan` を展開した仮想グリッド（列固定・欠損セルなし）
+    /// へ変換する。`colspan` は結合された各列へ同じテキストを複製する（実データ検証: ニチレイ
+    /// S100VYA0 の設備投資表はヘッダーの「前/当連結会計年度」が colspan=2 で空白の整形列を
+    /// またぐため、展開しないとヘッダー文言とデータ列の位置が対応しない）。
     private static func gridRows(from table: Element) -> [[String]] {
         guard let trs = (try? table.select("tr"))?.array() else { return [] }
         var pending: [Int: (text: String, remaining: Int)] = [:]
@@ -659,10 +786,13 @@ enum StatementNotesResolver {
                 let td = tds[cellIdx]
                 let text = (try? td.text(trimAndNormaliseWhitespace: true)) ?? ""
                 let rowspan = Int((try? td.attr("rowspan")) ?? "") ?? 1
-                cols.append(text)
-                if rowspan > 1 { pending[col] = (text, rowspan - 1) }
+                let colspan = Int((try? td.attr("colspan")) ?? "") ?? 1
+                for _ in 0..<colspan {
+                    cols.append(text)
+                    if rowspan > 1 { pending[col] = (text, rowspan - 1) }
+                    col += 1
+                }
                 cellIdx += 1
-                col += 1
             }
             result.append(cols)
         }

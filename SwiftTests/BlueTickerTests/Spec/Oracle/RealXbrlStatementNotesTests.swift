@@ -1691,6 +1691,229 @@ import Testing
         #expect(abs(sum - grandTotal.investmentAmount!) <= 3_000_000)
     }
 
+    // MARK: capital_expenditures_overview smoke 追加分（2026-08-10 ユーザー実データ確認済み）
+    //
+    // smoke 固定11社の目視確認で見つかった表形式の揺れを固定する。ニチレイ/アズ企画設計/
+    // 富士フイルム/クボタは旧実装では「設備投資」文字列を含む行でしか単位検出できず
+    // テーブル全体を見逃して単一値タグへフォールバックしていた（オークマは逆に個別設備
+    // 一覧を誤読していた）。残り6社（味の素・スズキ・キヤノン・東邦レマック・三菱UFJ・
+    // 三井住友）もユーザー全件目視確認のうえ golden 化し、smoke 11社すべてを回帰対象に
+    // している。金融2社は子会社別開示のため総額タグ単一値が契約。
+
+    @Test(.enabled(if: cacheAvailable("S100VYA0"), "XBRL cache S100VYA0 not available"))
+    func goldenCapexNichireiSplitUnitTableAndColspanHeader() throws {
+        // 「（単位：百万円）」だけの注記表がデータ表の前に分離し、ヘッダーの
+        // 「前/当連結会計年度」「前期比」が colspan=2 で空白の整形列をまたぐ。
+        // 金額は当期列を取る（加工食品は前期6,304→当期9,260）。「前期比」列は差額
+        // （百万円）で％ではないため yoyPercent は nil のまま。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100VYA0"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 8)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["加工食品"]?.investmentAmount == 9_260_000_000)
+        #expect(byName["低温物流"]?.investmentAmount == 22_748_000_000)
+        #expect(byName["調整額"]?.investmentAmount == 681_000_000)
+        #expect(segments.allSatisfy { $0.yoyPercent == nil })
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.segmentName == "合計")
+        #expect(total.investmentAmount == 34_504_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100VU4O"), "XBRL cache S100VU4O not available"))
+    func goldenCapexAZplanningThousandYenScale() throws {
+        // 「投資額(千円)」ヘッダーの千円単位表。「―」の不動産販売事業・不動産管理事業は
+        // 金額を持たないため行ごと省く（他 note_type と同じく実数のある行だけ構造化する）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100VU4O"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 3)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["不動産賃貸事業"]?.investmentAmount == 528_000)
+        #expect(byName["全社(共通)"]?.investmentAmount == 1_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.segmentName == "合計")
+        #expect(total.investmentAmount == 1_528_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
+    func goldenCapexFujifilmSkipsEmbeddedFacilityList() throws {
+        // セグメント表（「当連結会計年度」「(百万円)」の2段見出し）の直後に「主要な設備の
+        // 状況」と同型の個別設備一覧（事業所名・所在地列を持つ）が同じ TextBlock に混入する。
+        // 先に現れるセグメント表だけを採用し、個別設備一覧は読まない。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100W3XJ"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 7)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["ヘルスケア"]?.investmentAmount == 448_362_000_000)
+        #expect(byName["イメージング"]?.investmentAmount == 15_447_000_000)
+        #expect(byName["小計"]?.isTotal == true)
+        #expect(byName["全社"]?.investmentAmount == 2_605_000_000)
+        #expect(byName["合計"]?.investmentAmount == 532_138_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100XR0M"), "XBRL cache S100XR0M not available"))
+    func goldenCapexKubotaTwoTierHeaderPicksCurrentYearColumn() throws {
+        // 「前年度/当年度/前年度比（％）」＋「金額(百万円)」の2段見出し。金額は当期列
+        // （機械は前期191,208→当期153,708。旧実装の「最初の数値セル=金額」だと前期値を
+        // 誤取得する）。前年度比（％）は yoyPercent に入る。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100XR0M"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 5)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["機械"]?.investmentAmount == 153_708_000_000)
+        #expect(byName["機械"]?.yoyPercent == 80.4)
+        #expect(byName["水・環境"]?.investmentAmount == 17_799_000_000)
+        #expect(byName["全社"]?.investmentAmount == 8_067_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.segmentName == "合計")
+        #expect(total.investmentAmount == 179_831_000_000)
+        #expect(total.yoyPercent == 83.5)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W043"), "XBRL cache S100W043 not available"))
+    func goldenCapexOkumaFacilityListFallsBackToTotalTag() throws {
+        // 表は「会社名・事業所名/所在地/セグメントの名称/設備の内容/設備投資額」の個別設備
+        // 一覧で、本文の「全体で7,287百万円」の抜粋（表内計1,071百万円）にすぎない。
+        // セグメント別内訳ではないため表を除外し、総額タグへフォールバックする。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100W043"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 1)
+        #expect(segments[0].segmentName == nil)
+        #expect(segments[0].investmentAmount == 7_287_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100VXJA"), "XBRL cache S100VXJA not available"))
+    func goldenCapexAjinomotoSubtotalAndCorporateRows() throws {
+        // 「小計＋全社＋合計」構成。個別セグメントの合計は丸め誤差で合計行と
+        // 2,000,000円ずれる（実データ確認済み・許容範囲内）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100VXJA"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 7)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["調味料・食品"]?.investmentAmount == 48_760_000_000)
+        #expect(byName["調味料・食品"]?.description == "食品生産設備の建設及び増強等")
+        #expect(byName["ヘルスケア等"]?.investmentAmount == 32_267_000_000)
+        #expect(byName["全社"]?.investmentAmount == 3_672_000_000)
+        #expect(byName["全社"]?.isTotal == false)
+        #expect(segments.filter { $0.isTotal }.count == 2)
+        let grandTotal = try #require(segments.last { $0.isTotal })
+        #expect(grandTotal.investmentAmount == 96_439_000_000)
+        let sum = segments.filter { !$0.isTotal }.reduce(0.0) { $0 + ($1.investmentAmount ?? 0) }
+        #expect(abs(sum - grandTotal.investmentAmount!) <= 3_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W4MT"), "XBRL cache S100W4MT not available"))
+    func goldenCapexSuzukiFourSegmentsWithFundingColumnIgnored() throws {
+        // 「セグメントの名称/設備投資額(百万円)/設備内容/資金調達方法」の4列。
+        // 資金調達方法列（自己資金及び外部調達等）は payload にフィールドがなく取り込まない。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100W4MT"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 5)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["四輪事業"]?.investmentAmount == 343_238_000_000)
+        #expect(byName["四輪事業"]?.description == "生産設備・研究開発設備・販売設備等")
+        #expect(byName["二輪事業"]?.investmentAmount == 13_898_000_000)
+        #expect(byName["マリン事業"]?.investmentAmount == 4_188_000_000)
+        #expect(byName["その他事業"]?.investmentAmount == 517_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.segmentName == "合計")
+        #expect(total.investmentAmount == 361_843_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100XTLJ"), "XBRL cache S100XTLJ not available"))
+    func goldenCapexCanonBusinessUnits() throws {
+        // US-GAAP 期末（移行境界前）の書類でもセグメント表が取れることを固定する。
+        // 個別セグメントの合計は合計行と完全一致する。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100XTLJ"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 6)
+        let byName = Dictionary(uniqueKeysWithValues: segments.map { ($0.segmentName ?? "", $0) })
+        #expect(byName["プリンティングビジネスユニット"]?.investmentAmount == 66_669_000_000)
+        #expect(byName["メディカルビジネスユニット"]?.investmentAmount == 11_803_000_000)
+        #expect(byName["イメージングビジネスユニット"]?.investmentAmount == 39_022_000_000)
+        #expect(byName["インダストリアルビジネスユニット"]?.investmentAmount == 14_137_000_000)
+        #expect(byName["その他及び全社"]?.investmentAmount == 80_042_000_000)
+        let total = try #require(segments.first { $0.isTotal })
+        #expect(total.investmentAmount == 211_673_000_000)
+        let sum = segments.filter { !$0.isTotal }.reduce(0.0) { $0 + ($1.investmentAmount ?? 0) }
+        #expect(sum == total.investmentAmount)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100XRD8"), "XBRL cache S100XRD8 not available"))
+    func goldenCapexTohoRemacTextOnlyFallsBackToTotalTag() throws {
+        // 非連結。設備投資の記載は本文テキストのみで表を持たないため総額タグ1本になる
+        // （ユーザー実データ確認済み 2026-08-10）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100XRD8"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 1)
+        #expect(segments[0].segmentName == nil)
+        #expect(segments[0].investmentAmount == 474_711_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W4FB"), "XBRL cache S100W4FB not available"))
+    func goldenCapexMUFGSubsidiaryBreakdownFallsBackToTotalTag() throws {
+        // 銀行。開示は子会社別の一覧でセグメント表ではないため、現行契約では
+        // 総額タグの単一値にフォールバックする（ユーザー判断 2026-08-10）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100W4FB"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 1)
+        #expect(segments[0].segmentName == nil)
+        #expect(segments[0].investmentAmount == 417_438_000_000)
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W0S7"), "XBRL cache S100W0S7 not available"))
+    func goldenCapexSMFGSubsidiaryBreakdownFallsBackToTotalTag() throws {
+        // 三菱UFJと同じく子会社別開示のため総額タグの単一値（ユーザー判断 2026-08-10）。
+        let result = StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: Self.xbrlDir("S100W0S7"))
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        let segments = try #require(payload.capexSegments)
+        #expect(segments.count == 1)
+        #expect(segments[0].segmentName == nil)
+        #expect(segments[0].investmentAmount == 3_705_000_000)
+    }
+
     // MARK: - issued_shares golden（ユーザー実データ確認済み 2026-08-02）
     //
     // `ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock` 内の決議・イベント単位テーブルを
