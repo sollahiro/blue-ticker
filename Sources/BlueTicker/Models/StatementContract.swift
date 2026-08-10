@@ -24,8 +24,9 @@ public enum StatementDocResolveResult: Sendable {
     case failed
 }
 
-/// US-GAAP 連結は EDINET 上 `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できない。
-/// notes（`borrowings_schedule` 等）と同様に明示対象外とする（2026-08-09）。
+/// US-GAAP 連結に HTML 本表が無く Statement を組み立てられないときの reason。
+/// 通常は `USGAAPStatementHtml` 経路で解決する。notes（`borrowings_schedule` 等）は
+/// 引き続きこの reason で明示対象外（2026-08-09 / HTML Statement 配線後も notes は別）。
 public let statementNotApplicableUSGAAP = "us_gaap_unsupported"
 
 /// ingest が US-GAAP 等の対象外を格納するときのプレースホルダ（BS/PL/CF/SS 空）。

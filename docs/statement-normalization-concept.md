@@ -94,10 +94,12 @@ SS 固有の実装上の注意（2026-08-09）:
 （三菱UFJ8306・三井住友8316）の SS は smoke/golden で合計列抽出を確認済み（2026-08-09）。
 日経225の他銀行・保険での網羅検証と母集団拡大は未実施。
 
-**US-GAAP**: 連結財務諸表に `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できないため、
-会計基準検出で明示 `notApplicable(us_gaap_unsupported)` とする（2026-08-09 実装、`statement-v1` のまま）。
-個別 BS への silent fallback は廃止。`borrowings_schedule` も同 reason。financials/IBD の
-`USGAAPHtml` 経路は現行 summary 用として別。連結 HTML→Statement 行の配線は未着手。
+**US-GAAP**: 連結財務諸表に `ix:nonFraction` が無いため XBRL fact 経路は使えない。
+`USGAAPStatementHtml` が 0105010 HTML 本表を決定論で読み `StatementLineItem` 化する
+（2026-08-10、富士フイルム / キヤノンで試作。結果は要確認。`statement-v1` のまま）。
+HTML からも取れないときだけ `notApplicable(us_gaap_unsupported)`。個別 BS への silent
+fallback はしない。`borrowings_schedule` は同 reason で対象外のまま。financials/IBD の
+`USGAAPHtml`（選択フィールド→仮想タグ）は現行 summary 用として別経路。
 
 ## 公開面設計（free / paid 分離）
 
@@ -171,7 +173,7 @@ StatementLineItem
 
 | 層 | 状態 |
 |---|---|
-| 抽出（BS/PL/CF/SS） | 実装済み。SS は合計列のみ・`order` 付き・US-GAAP は `notApplicable` |
+| 抽出（BS/PL/CF/SS） | 実装済み。SS は合計列のみ・`order` 付き。US-GAAP は HTML 経路（試作） |
 | DevCLI | `TickerDev statement … --bs/--pl/--cf/--ss` |
 | DB / ingest / REST / MCP | 実装済み（日経225限定スタート）。契約 `statement-v1`（`changes_in_equity` 欠落は `[]`） |
 | 回帰 | BS/PL/CF: トヨタ/デンソー/任天堂＋smoke 9社 golden。SS: トヨタ＋smoke 9社 golden（2026-08-09） |

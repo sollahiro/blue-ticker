@@ -202,6 +202,9 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 
 このため US-GAAP 企業の BS / PL 数値は HTML をパースする必要があります。
 
+**Statement**: `USGAAPStatementHtml` が同じ 0105010 HTML 本表から全データ行を
+`StatementLineItem` 化する（summary の仮想タグ経路とは別。試作・要確認）。
+
 ### 5.2 仮想タグアーキテクチャ（`USGAAP_HTML_*`）
 
 US-GAAP HTML パースの結果は **仮想タグ** として `FieldSet` に注入されます。仮想タグを受け取る各エクストラクターは、仮想タグを通常の XBRL タグと同列に扱うだけでよく、US-GAAP 固有の処理を意識しません。
