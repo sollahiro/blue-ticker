@@ -781,6 +781,22 @@ import Foundation
         let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年３月31日") }
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
+
+        // 2026-08-10 レビュー指摘: 入れ子行は当該科目（左）を取り、親小計（右）を取らない。
+        // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。
+        #expect(Self.exactLabelValue(year.balanceSheet, "(4)信用損失引当金") == -15_841_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "２ 法人税等調整額") == -4_214_000_000)
+        #expect(Self.exactLabelValue(year.cashFlow, "(6) その他") == -21_377_000_000)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "関連会社投融資") == -42_000_000)
+        #expect(Self.labelValue(year.cashFlow, containing: "９ 事業の売却") == 0)
+        #expect(
+            Self.labelValue(year.changesInEquity, containing: "Ⅸ 利益剰余金から") == 0)
+        #expect(
+            Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
     }
 
     @Test

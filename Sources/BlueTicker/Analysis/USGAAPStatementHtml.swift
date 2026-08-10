@@ -270,8 +270,8 @@ enum USGAAPStatementHtml {
         return items
     }
 
-    /// SS は合計列（純資産合計）のみ。ヘッダが複行列＋colspan の会社（キヤノン）では
-    /// 列 index がずれるため、行末の財務金額を合計列とみなす（実データ: 純資産合計が最右）。
+    /// SS は合計列（純資産合計＝各行の最右セル）のみ。`－`/`-` は 0。
+    /// 複行列ヘッダ＋colspan（キヤノン）で列 index がずれるためヘッダ照合はせず最右を使う。
     /// `order` は表の読み順（期首→変動→期末）で 0 始まり。
     private static func parseEquityStatementRows(_ rows: [[String]]) -> [StatementLineItem] {
         var order = 0
@@ -281,10 +281,7 @@ enum USGAAPStatementHtml {
             let label = normalizeLabel(raw)
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
             if shouldSkipMetaRow(label) { continue }
-
-            let nums = row.dropFirst().compactMap { XBRLUtils.parseHtmlNumber($0) }
-            let financial = XBRLUtils.filterFinancialTableAmounts(nums)
-            guard let million = financial.last else { continue }
+            guard let last = row.last, let million = parseAmountSlot(last) else { continue }
 
             let itemOrder = order
             order += 1
@@ -302,12 +299,50 @@ enum USGAAPStatementHtml {
         return items
     }
 
+    /// BS/PL/CF 行の当期金額（円）。
+    ///
+    /// 富士フイルム形式は「前期左・前期右・当期左・当期右」の4スロットで、明細行は左が当該科目、
+    /// 右が親の小計/累計になる（例: 信用損失引当金 △15,841 / 受取債権合計 699,986）。
+    /// 単純行は右だけに金額が入る。キヤノン形式の構成比列も「左=金額・右=%」のため同じ優先で良い。
+    /// `－` は 0。空欄はスキップ。`filterFinancialTableAmounts` は使わない（小さい当期額が落ちるため）。
     private static func currentYenValue(_ row: [String]) -> Double? {
-        let nums = row.dropFirst().compactMap { XBRLUtils.parseHtmlNumber($0) }
-        guard !nums.isEmpty else { return nil }
-        let financial = XBRLUtils.filterFinancialTableAmounts(Array(nums))
-        guard let million = financial.last else { return nil }
+        guard let million = currentMillionYen(from: row) else { return nil }
         return million * Financial.millionYen
+    }
+
+    private static func currentMillionYen(from row: [String]) -> Double? {
+        guard let labelIdx = row.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        else { return nil }
+        var rest = Array(row[(labelIdx + 1)...])
+        if let first = rest.first, isNoteOrNonAmountCell(first) {
+            rest.removeFirst()
+        }
+        let slots = rest.map { parseAmountSlot($0) }
+        guard !slots.isEmpty else { return nil }
+
+        // 前期半分 | 当期半分。奇数個のときは末尾側を厚くする。
+        let mid = slots.count / 2
+        let currentHalf = Array(slots[mid...])
+        for slot in currentHalf {
+            if let v = slot { return v }
+        }
+        return nil
+    }
+
+    /// セルを金額スロットにする。`－` 類は 0、空・注記・非数値は nil。
+    private static func parseAmountSlot(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return nil }
+        if ["－", "-", "―", "—", "─"].contains(t) { return 0 }
+        return XBRLUtils.parseHtmlNumber(t)
+    }
+
+    private static func isNoteOrNonAmountCell(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return true }
+        if t.contains("注") { return true }
+        if parseAmountSlot(t) != nil { return false }
+        return true
     }
 
     // MARK: - Label / section helpers
