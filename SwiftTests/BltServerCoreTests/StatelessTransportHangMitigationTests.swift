@@ -115,8 +115,11 @@ import MCP
         // 同じハング状況でも、withOperationTimeout でラップすると
         // 60秒(ハンドラのスリープ)ではなく約1秒(テスト用の短い timeout)で打ち切られる。
         // 境界は 60 秒ハングとの弁別だけが目的で正確な秒数は問わないため、CI ランナー混雑時の
-        // スケジューリング遅延を吸収できるよう余裕を持たせる（issue #99: 3秒境界で2回連続 flake）。
+        // スケジューリング遅延を吸収できるよう余裕を持たせる（issue #99: 3秒境界で2回連続 flake
+        // → 10秒に緩和。その後も macOS CI で 13.5〜38.3秒の elapsed を観測し再度 flake したため
+        // 45秒へ再緩和。並列実行される重いスイート（SmokeTests・SegmentParityTests）との
+        // 協調スレッドプール競合が原因で、Linux では未発生）。
         #expect(response == nil)
-        #expect(elapsed < 10)
+        #expect(elapsed < 45)
     }
 }
