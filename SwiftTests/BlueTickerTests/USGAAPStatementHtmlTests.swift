@@ -99,6 +99,18 @@ import Foundation
             extracted.changesInEquity.contains {
                 ($0.label ?? "").contains("2025年３月31日現在残高") && $0.value == 540_000_000
             })
+
+        // order: 0 始まり・密・単調（presentation DFS 通し番号と同型）
+        for items in [
+            extracted.balanceSheet, extracted.incomeStatement, extracted.cashFlow,
+            extracted.changesInEquity,
+        ] {
+            #expect(items.allSatisfy { $0.order != nil })
+            let orders = items.compactMap(\.order)
+            #expect(orders.first == 0)
+            #expect(zip(orders, orders.dropFirst()).allSatisfy { $0 < $1 })
+            #expect(orders == Array(0..<items.count))
+        }
     }
 
     @Test

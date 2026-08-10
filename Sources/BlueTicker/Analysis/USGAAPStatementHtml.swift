@@ -6,6 +6,10 @@
 //
 // 現行 summary 用の USGAAPHtml（選択ラベル→仮想タグ）とは別経路。こちらは全データ行を
 // 開示ラベルのまま出す（企業間の科目統一はしない）。
+//
+// `order`: presentation linkbase が無いため、HTML 本表の読み順（上から下）を
+// 0 始まりの通し番号で付与する（`XBRLUtils.loadPresentationOrder` の DFS 通し番号と同型）。
+// 金額の無い区分見出し行は行にしないため、番号は出力行だけで密になる。
 
 import Foundation
 import SwiftSoup
@@ -211,14 +215,15 @@ enum USGAAPStatementHtml {
             if shouldSkipMetaRow(label) { continue }
 
             guard let yen = currentYenValue(row) else { continue }
+            let itemOrder = order
             order += 1
             items.append(
                 StatementLineItem(
-                    tag: syntheticTag(.balanceSheet, order: order),
+                    tag: syntheticTag(.balanceSheet, order: itemOrder),
                     label: label,
                     value: yen,
                     unit: "JPY",
-                    order: order,
+                    order: itemOrder,
                     section: section,
                     isTotal: isTotalLabel(label, sectionType: .balanceSheet),
                     components: nil))
@@ -247,16 +252,17 @@ enum USGAAPStatementHtml {
             }
 
             guard let yen = currentYenValue(row) else { continue }
+            let itemOrder = order
             order += 1
             let section: StatementLineSection? =
                 sectionType == .cashFlow ? currentCFSection : nil
             items.append(
                 StatementLineItem(
-                    tag: syntheticTag(sectionType, order: order),
+                    tag: syntheticTag(sectionType, order: itemOrder),
                     label: label,
                     value: yen,
                     unit: "JPY",
-                    order: order,
+                    order: itemOrder,
                     section: section,
                     isTotal: isTotalLabel(label, sectionType: sectionType),
                     components: nil))
@@ -266,6 +272,7 @@ enum USGAAPStatementHtml {
 
     /// SS は合計列（純資産合計）のみ。ヘッダが複行列＋colspan の会社（キヤノン）では
     /// 列 index がずれるため、行末の財務金額を合計列とみなす（実データ: 純資産合計が最右）。
+    /// `order` は表の読み順（期首→変動→期末）で 0 始まり。
     private static func parseEquityStatementRows(_ rows: [[String]]) -> [StatementLineItem] {
         var order = 0
         var items: [StatementLineItem] = []
@@ -279,14 +286,15 @@ enum USGAAPStatementHtml {
             let financial = XBRLUtils.filterFinancialTableAmounts(nums)
             guard let million = financial.last else { continue }
 
+            let itemOrder = order
             order += 1
             items.append(
                 StatementLineItem(
-                    tag: syntheticTag(.changesInEquity, order: order),
+                    tag: syntheticTag(.changesInEquity, order: itemOrder),
                     label: label,
                     value: million * Financial.millionYen,
                     unit: "JPY",
-                    order: order,
+                    order: itemOrder,
                     section: nil,
                     isTotal: isTotalLabel(label, sectionType: .changesInEquity),
                     components: nil))

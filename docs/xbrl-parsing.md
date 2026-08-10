@@ -204,6 +204,7 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 
 **Statement**: `USGAAPStatementHtml` が同じ 0105010 HTML 本表から全データ行を
 `StatementLineItem` 化する（summary の仮想タグ経路とは別。試作・要確認）。
+`order` は presentation が無いため HTML 読み順の 0 始まり通し番号（CF/SS の期首→期末もこの順）。
 
 ### 5.2 仮想タグアーキテクチャ（`USGAAP_HTML_*`）
 

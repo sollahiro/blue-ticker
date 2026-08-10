@@ -721,6 +721,16 @@ import Foundation
         }
     }
 
+    /// HTML 経路の `order`: 全行非 nil・セクション内で厳密単調増加・0 始まり。
+    private static func expectHTMLReadingOrder(_ items: [StatementLineItem]) {
+        #expect(!items.isEmpty)
+        #expect(items.allSatisfy { $0.order != nil })
+        let orders = items.compactMap(\.order)
+        #expect(orders.count == items.count)
+        #expect(orders.first == 0)
+        #expect(zip(orders, orders.dropFirst()).allSatisfy { $0 < $1 })
+    }
+
     @Test
     func fujifilmUSGAAPStatementMatchesSmokeTotals() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
@@ -728,6 +738,11 @@ import Foundation
             await Self.analyzer().extract(
                 docID: "S100W3XJ",
                 statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
 
         #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 5_249_908_000_000)
         #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_352_682_000_000)
@@ -750,12 +765,22 @@ import Foundation
         #expect(year.cashFlow.contains {
             $0.label == "営業活動によるキャッシュ・フロー" && $0.section == .operating
         })
+        // CF 現金: 期首 order < 期末 order（HTML 読み順）
+        let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(cfOpen?.order != nil && cfClose?.order != nil)
+        #expect(cfOpen!.order! < cfClose!.order!)
 
         #expect(!year.changesInEquity.isEmpty)
         #expect(year.changesInEquity.contains { ($0.label ?? "").contains("現在残高") })
         #expect(
             Self.labelValues(year.changesInEquity, containing: "2025年３月31日")
                 .contains(3_352_682_000_000))
+        // SS: 当期期首（2024年３月31日）order < 当期期末（2025年３月31日）
+        let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2024年３月31日") }
+        let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年３月31日") }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
     }
 
     @Test
@@ -765,6 +790,11 @@ import Foundation
             await Self.analyzer().extract(
                 docID: "S100XTLJ",
                 statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
 
         #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 6_135_044_000_000)
         #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_774_128_000_000)
@@ -784,9 +814,17 @@ import Foundation
         #expect(
             Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
                 == -237_450_000_000)
+        let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(cfOpen?.order != nil && cfClose?.order != nil)
+        #expect(cfOpen!.order! < cfClose!.order!)
 
         #expect(!year.changesInEquity.isEmpty)
         let closings = Self.labelValues(year.changesInEquity, containing: "2025年12月31日現在残高")
         #expect(closings.contains(3_774_128_000_000))
+        let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2024年12月31日") }
+        let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年12月31日") }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
     }
 }
