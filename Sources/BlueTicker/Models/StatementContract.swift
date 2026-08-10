@@ -24,8 +24,9 @@ public enum StatementDocResolveResult: Sendable {
     case failed
 }
 
-/// US-GAAP 連結は EDINET 上 `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できない。
-/// notes（`borrowings_schedule` 等）と同様に明示対象外とする（2026-08-09）。
+/// US-GAAP 連結に HTML 本表が無く Statement を組み立てられないときの reason。
+/// 通常は `USGAAPStatementHtml` 経路で解決する。notes（`borrowings_schedule` 等）は
+/// 引き続きこの reason で明示対象外（2026-08-09 / HTML Statement 配線後も notes は別）。
 public let statementNotApplicableUSGAAP = "us_gaap_unsupported"
 
 /// ingest が US-GAAP 等の対象外を格納するときのプレースホルダ（BS/PL/CF/SS 空）。
@@ -110,6 +111,8 @@ public struct StatementLineComponent: Codable, Sendable {
 /// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
 /// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
 /// 「未決事項」参照（v1では未対応）。
+/// US-GAAP HTML 経路（`USGAAPStatementHtml`）のみ例外: calculation linkbase が無いため
+/// `is_total` はラベル規則、`components` はキヤノン型（合計直後の内訳が親と一致）の推定。
 /// SS は合計列のみ（資本構成員次元は含めない）。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String

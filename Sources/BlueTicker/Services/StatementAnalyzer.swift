@@ -9,8 +9,9 @@ struct StatementAnalyzer {
     let edinetClient: EdinetAPIClient
 
     /// 指定 docID の XBRL をダウンロードし、要求された statement type だけを抽出する。
-    /// ダウンロード失敗は `.failed`。US-GAAP は連結に数値 fact が無いため `.notApplicable`
-    /// （個別 BS への silent fallback はしない。notes と同方針、2026-08-09）。
+    /// ダウンロード失敗は `.failed`。US-GAAP は連結に数値 fact が無いため HTML 経路
+    /// （`USGAAPStatementHtml`）で抽出する。HTML からも取れなければ `.notApplicable`
+    /// （個別 BS への silent fallback はしない。notes の borrowings は別途対象外のまま）。
     func extract(
         docID: String, statementTypes: Set<StatementSectionType>
     ) async -> StatementDocResolveResult {
@@ -18,7 +19,18 @@ struct StatementAnalyzer {
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
         let tagElements = XBRLUtils.factIndexToNumericElements(facts)
         if detectAccountingStandard(tagElements) == "US-GAAP" {
-            return .notApplicable(reason: statementNotApplicableUSGAAP)
+            guard let extracted = USGAAPStatementHtml.extractLineItems(
+                in: xbrlDir, statementTypes: statementTypes)
+            else {
+                return .notApplicable(reason: statementNotApplicableUSGAAP)
+            }
+            return .resolved(
+                StatementYear(
+                    fyEnd: nil, financialPeriod: nil, docId: docID,
+                    balanceSheet: extracted.balanceSheet,
+                    incomeStatement: extracted.incomeStatement,
+                    cashFlow: extracted.cashFlow,
+                    changesInEquity: extracted.changesInEquity))
         }
 
         let parentTagsByRoleTag = XBRLUtils.loadPresentationParents(in: xbrlDir)

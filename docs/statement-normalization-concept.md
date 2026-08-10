@@ -94,10 +94,16 @@ SS 固有の実装上の注意（2026-08-09）:
 （三菱UFJ8306・三井住友8316）の SS は smoke/golden で合計列抽出を確認済み（2026-08-09）。
 日経225の他銀行・保険での網羅検証と母集団拡大は未実施。
 
-**US-GAAP**: 連結財務諸表に `ix:nonFraction` が無く Statement（XBRL fact 経路）では正規化できないため、
-会計基準検出で明示 `notApplicable(us_gaap_unsupported)` とする（2026-08-09 実装、`statement-v1` のまま）。
-個別 BS への silent fallback は廃止。`borrowings_schedule` も同 reason。financials/IBD の
-`USGAAPHtml` 経路は現行 summary 用として別。連結 HTML→Statement 行の配線は未着手。
+**US-GAAP**: 連結財務諸表に `ix:nonFraction` が無いため XBRL fact 経路は使えない。
+`USGAAPStatementHtml` が 0105010 HTML 本表を決定論で読み `StatementLineItem` 化する
+（2026-08-10、富士フイルム S100W3XJ / キヤノン S100XTLJ。`statement-v1` のまま）。
+`order` は HTML 読み順の 0 始まり通し番号（presentation DFS と同型。CF/SS は期首→期末）。
+金額は当期優先（入れ子行は左＝当該科目、構成比列付きは金額列）。`－`/`-` は 0。
+`is_total` はラベル規則。`components` はキヤノン型（「…合計」直後の内訳が親と一致）のみ
+合成 tag で付与（富士フイルムの内訳→合計型は対象外）。HTML からも取れないときだけ
+`notApplicable(us_gaap_unsupported)`。個別 BS への silent fallback はしない。
+`borrowings_schedule` は同 reason で対象外のまま。financials/IBD の `USGAAPHtml`
+（選択フィールド→仮想タグ）は現行 summary 用として別経路。
 
 ## 公開面設計（free / paid 分離）
 
@@ -171,10 +177,10 @@ StatementLineItem
 
 | 層 | 状態 |
 |---|---|
-| 抽出（BS/PL/CF/SS） | 実装済み。SS は合計列のみ・`order` 付き・US-GAAP は `notApplicable` |
+| 抽出（BS/PL/CF/SS） | 実装済み。SS は合計列のみ・`order` 付き。US-GAAP は HTML 経路（`USGAAPStatementHtml`。金額は当期優先、キヤノン型 `components`） |
 | DevCLI | `TickerDev statement … --bs/--pl/--cf/--ss` |
 | DB / ingest / REST / MCP | 実装済み（日経225限定スタート）。契約 `statement-v1`（`changes_in_equity` 欠落は `[]`） |
-| 回帰 | BS/PL/CF: トヨタ/デンソー/任天堂＋smoke 9社 golden。SS: トヨタ＋smoke 9社 golden（2026-08-09） |
+| 回帰 | BS/PL/CF: トヨタ/デンソー/任天堂＋smoke 9社 golden。SS: トヨタ＋smoke 9社 golden（2026-08-09）。US-GAAP2社（富士フイルム/キヤノン）HTML 経路 golden（2026-08-10） |
 | 本番 Neon | `company_statements` は **0行**（日経225全社 ingest 未実施） |
 
 - **残**: 本番への日経225全社 statements ingest（`blt-server ingest --stages statements`）、
@@ -348,6 +354,11 @@ PR #153 時点の「未決事項」を次のとおり確定した。DB モデル
     明細に展開）も正しく連鎖することを確認。複数区分にまたがるグランドトータル行（`section=nil`）
     も `is_total`/`components` は正しく取得できる（presentation の区分判定と計算リンクベースの
     構成要素判定は独立した情報源のため）。
+
+    **US-GAAP HTML 経路（2026-08-10）**: calculation linkbase が無いため、キヤノン型のみ
+    推定で `components` を付与する（「…合計」直後の非合計行が親金額と一致、親が番号付きなら
+    次の同型番号行で打ち切り、合成 tag・weight=+1）。内訳が合計の前に来る型（富士フイルム等）
+    は対象外。`is_total` 自体はラベル規則（「合計」等）で独立に付く。
 
 ## 関連ドキュメント
 

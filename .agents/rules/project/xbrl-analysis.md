@@ -30,7 +30,8 @@ XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以
 | `ContextHelpers.swift` | XBRL コンテキスト判定ユーティリティ（連結当期損益判定等） |
 | `XBRLTypes.swift` | XBRL 抽出結果の型定義（`XbrlFact` / `XbrlFactIndex`） |
 | `Extractors.swift` | 12 エクストラクター（IS/CF/GP/OP/BS/IBD/従業員/税金/支払利息/PPE/Capex/RD）＋銀行固有 |
-| `USGAAPHtmlFields.swift` | US-GAAP 連結 P/L・BS の iXBRL HTML テーブル抽出 |
+| `USGAAPHtmlFields.swift` | US-GAAP 連結 P/L・BS の iXBRL HTML テーブル抽出（summary 用仮想タグ） |
+| `USGAAPStatementHtml.swift` | US-GAAP 連結 BS/PL/CF/SS の HTML→`StatementLineItem`（Statement 用・決定論。当期優先・キヤノン型 `components`） |
 | `IFRSLease.swift` | IFRS リース負債（XBRL タグ → 注記 TextBlock → BS HTML の優先順） |
 | `BorrowingsSchedule.swift` | 借入金等明細表からの有利子負債フォールバック抽出 |
 | `BreakdownExtractor.swift` | セグメント・地域別情報（TextBlock HTML表 → dimension 付き fact） |

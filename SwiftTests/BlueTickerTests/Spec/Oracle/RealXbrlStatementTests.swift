@@ -24,7 +24,9 @@
 //   区分を持たない銀行特有のBS構造の回帰対象）
 // - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
 // smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
-// 「US-GAAP（明示 notApplicable）」で別途カバー済み。
+// 「US-GAAP（HTML 経路）」で golden 化（0105010 HTML→行。`USGAAPStatementHtml`）。
+// 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
+// 富士フイルムは内訳→合計型のため同規則では `components` なし。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -697,27 +699,194 @@ import Foundation
         #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
     }
 
-    // MARK: - US-GAAP（明示 notApplicable）
+    // MARK: - US-GAAP（HTML 経路。結果は要確認）
 
-    @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
-    func fujifilmUSGAAPStatementIsNotApplicable() async {
-        let result = await Self.analyzer().extract(
-            docID: "S100W3XJ", statementTypes: [.balanceSheet, .incomeStatement, .cashFlow])
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable(us_gaap_unsupported), got \(result)")
-            return
-        }
-        #expect(reason == statementNotApplicableUSGAAP)
+    private static func labelValue(
+        _ items: [StatementLineItem], containing: String
+    ) -> Double? {
+        items.first { ($0.label ?? "").contains(containing) }?.value
     }
 
-    @Test(.enabled(if: cacheAvailable("S100XTLJ"), "XBRL cache S100XTLJ not available"))
-    func canonUSGAAPStatementIsNotApplicable() async {
-        let result = await Self.analyzer().extract(
-            docID: "S100XTLJ", statementTypes: [.balanceSheet])
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable(us_gaap_unsupported), got \(result)")
-            return
+    /// 部分一致で「流動資産合計」等が先に当たるのを避けるため、正規化ラベルの完全一致を優先する。
+    private static func exactLabelValue(
+        _ items: [StatementLineItem], _ label: String
+    ) -> Double? {
+        items.first { $0.label == label }?.value
+    }
+
+    private static func labelValues(
+        _ items: [StatementLineItem], containing: String
+    ) -> [Double] {
+        items.compactMap { item in
+            guard (item.label ?? "").contains(containing) else { return nil }
+            return item.value
         }
-        #expect(reason == statementNotApplicableUSGAAP)
+    }
+
+    /// HTML 経路の `order`: 全行非 nil・セクション内で厳密単調増加・0 始まり。
+    private static func expectHTMLReadingOrder(_ items: [StatementLineItem]) {
+        #expect(!items.isEmpty)
+        #expect(items.allSatisfy { $0.order != nil })
+        let orders = items.compactMap(\.order)
+        #expect(orders.count == items.count)
+        #expect(orders.first == 0)
+        #expect(zip(orders, orders.dropFirst()).allSatisfy { $0 < $1 })
+    }
+
+    @Test
+    func fujifilmUSGAAPStatementMatchesSmokeTotals() async throws {
+        guard await Self.ensureAvailable("S100W3XJ") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100W3XJ",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 5_249_908_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_352_682_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "流動資産合計") == 1_581_681_000_000)
+        #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
+        #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
+        #expect(year.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
+
+        #expect(Self.exactLabelValue(year.incomeStatement, "Ⅰ 売上高") == 3_195_828_000_000
+            || Self.labelValue(year.incomeStatement, containing: "売上高") == 3_195_828_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "営業利益") == 330_155_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "当社株主帰属当期純利益") == 260_951_000_000)
+
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
+                == 428_162_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
+                == -541_953_000_000)
+        #expect(year.cashFlow.contains {
+            $0.label == "営業活動によるキャッシュ・フロー" && $0.section == .operating
+        })
+        // CF 現金: 期首 order < 期末 order（HTML 読み順）
+        let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(cfOpen?.order != nil && cfClose?.order != nil)
+        #expect(cfOpen!.order! < cfClose!.order!)
+
+        #expect(!year.changesInEquity.isEmpty)
+        #expect(year.changesInEquity.contains { ($0.label ?? "").contains("現在残高") })
+        #expect(
+            Self.labelValues(year.changesInEquity, containing: "2025年３月31日")
+                .contains(3_352_682_000_000))
+        // SS: 当期期首（2024年３月31日）order < 当期期末（2025年３月31日）
+        let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2024年３月31日") }
+        let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年３月31日") }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
+
+        // 2026-08-10 レビュー指摘: 入れ子行は当該科目（左）を取り、親小計（右）を取らない。
+        // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。
+        #expect(Self.exactLabelValue(year.balanceSheet, "(4)信用損失引当金") == -15_841_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "２ 法人税等調整額") == -4_214_000_000)
+        #expect(Self.exactLabelValue(year.cashFlow, "(6) その他") == -21_377_000_000)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "関連会社投融資") == -42_000_000)
+        #expect(Self.labelValue(year.cashFlow, containing: "９ 事業の売却") == 0)
+        #expect(
+            Self.labelValue(year.changesInEquity, containing: "Ⅸ 利益剰余金から") == 0)
+        #expect(
+            Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
+
+        // 富士フイルムは内訳→合計型のため、キヤノン型（合計直後の内訳）components は付かない。
+        #expect(year.balanceSheet.allSatisfy { $0.components == nil })
+        #expect(year.incomeStatement.allSatisfy { $0.components == nil })
+        #expect(year.cashFlow.allSatisfy { $0.components == nil })
+    }
+
+    @Test
+    func canonUSGAAPStatementMatchesSmokeTotals() async throws {
+        guard await Self.ensureAvailable("S100XTLJ") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100XTLJ",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 6_135_044_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "純資産合計") == 3_774_128_000_000)
+        #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
+        #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
+        #expect(year.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
+
+        // キヤノン PL は製品/サービス内訳のあと「合計」が売上高。営業利益は一意。
+        #expect(Self.exactLabelValue(year.incomeStatement, "営業利益") == 455_390_000_000)
+        #expect(
+            Self.labelValue(year.incomeStatement, containing: "当社株主に帰属する")
+                == 332_053_000_000)
+        // 当期「-」→ 0（前期 165,100 百万円を拾わない）
+        #expect(Self.exactLabelValue(year.incomeStatement, "３ のれんの減損損失") == 0)
+
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
+                == 475_903_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "投資活動によるキャッシュ・フロー")
+                == -237_450_000_000)
+        #expect(Self.exactLabelValue(year.cashFlow, "のれんの減損損失") == 0)
+        let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(cfOpen?.order != nil && cfClose?.order != nil)
+        #expect(cfOpen!.order! < cfClose!.order!)
+
+        #expect(!year.changesInEquity.isEmpty)
+        let closings = Self.labelValues(year.changesInEquity, containing: "2025年12月31日現在残高")
+        #expect(closings.contains(3_774_128_000_000))
+        // 純資産合計列は「-」→ 0（内訳の △494 を合計として拾わない）
+        #expect(Self.exactLabelValue(year.changesInEquity, "利益準備金への振替") == 0)
+        let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2024年12月31日") }
+        let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年12月31日") }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
+
+        // 短期借入の内訳はキヤノン型 components（直後2行・合計一致）
+        let stTotal = try #require(
+            year.balanceSheet.first {
+                ($0.label ?? "").contains("短期借入金及び１年以内に返済する長期債務合計")
+            })
+        #expect(stTotal.isTotal == true)
+        #expect(stTotal.value == 511_139_000_000)
+        let comps = try #require(stTotal.components)
+        #expect(comps.map(\.weight) == [1, 1])
+        let childRows = year.balanceSheet.filter {
+            ($0.label ?? "").contains("金融サービスに係る短")
+                || ($0.label ?? "").contains("その他の短期借入金")
+        }
+        #expect(childRows.count == 2)
+        #expect(Set(comps.map(\.tag)) == Set(childRows.map(\.tag)))
+        #expect(childRows.map(\.value).reduce(0, +) == stTotal.value)
+        #expect(
+            year.balanceSheet.contains {
+                ($0.label ?? "").contains("金融サービスに係る短") && $0.value == 38_100_000_000
+                    && $0.order == (stTotal.order ?? -1) + 1
+            })
+        #expect(
+            year.balanceSheet.contains {
+                ($0.label ?? "").contains("その他の短期借入金") && $0.value == 473_039_000_000
+                    && $0.order == (stTotal.order ?? -1) + 2
+            })
+        // キヤノン本表でキヤノン型 components が付くのはこの1行のみ
+        #expect(year.balanceSheet.filter { $0.components != nil }.map(\.tag) == [stTotal.tag])
+        #expect(year.incomeStatement.allSatisfy { $0.components == nil })
+        #expect(year.cashFlow.allSatisfy { $0.components == nil })
+        #expect(year.changesInEquity.allSatisfy { $0.components == nil })
+        // 内訳が前に来るセクション合計はキヤノン型対象外
+        #expect(year.balanceSheet.first { $0.label == "流動資産合計" }?.components == nil)
     }
 }
