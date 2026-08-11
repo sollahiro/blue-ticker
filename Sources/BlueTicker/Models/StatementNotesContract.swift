@@ -341,18 +341,24 @@ public struct IssuedSharesEventPayload: Codable, Sendable {
 }
 
 /// 政策保有株式1銘柄分（決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。
-/// `policy_holding_securities` note_type 専用。
+/// `policy_holding_securities` note_type 専用。`isDeemedHolding` は「みなし保有株式」（退職給付信託等、
+/// 議決権行使を指図する権限のみ保有するケース）か「特定投資株式」（提出会社・子会社が直接保有）かの区別。
 public struct PolicyHoldingSecurityPayload: Codable, Sendable {
     public var issuerName: String
     public var numberOfShares: Double?
     public var carryingAmount: Double?
     public var purpose: String?
+    public var isDeemedHolding: Bool
 
-    public init(issuerName: String, numberOfShares: Double?, carryingAmount: Double?, purpose: String?) {
+    public init(
+        issuerName: String, numberOfShares: Double?, carryingAmount: Double?, purpose: String?,
+        isDeemedHolding: Bool = false
+    ) {
         self.issuerName = issuerName
         self.numberOfShares = numberOfShares
         self.carryingAmount = carryingAmount
         self.purpose = purpose
+        self.isDeemedHolding = isDeemedHolding
     }
 
     public func jsonObject() -> [String: Any] {
@@ -361,6 +367,7 @@ public struct PolicyHoldingSecurityPayload: Codable, Sendable {
             "number_of_shares": numberOfShares as Any? ?? NSNull(),
             "carrying_amount": carryingAmount as Any? ?? NSNull(),
             "purpose": purpose as Any? ?? NSNull(),
+            "is_deemed_holding": isDeemedHolding,
         ]
     }
 }

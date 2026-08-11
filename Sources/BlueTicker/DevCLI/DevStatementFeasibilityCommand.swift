@@ -704,7 +704,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             let securities = payload.securities ?? []
             print("source=\(source) contentHash=\(contentHash.prefix(40))... count=\(securities.count)")
             for s in securities {
-                print("  issuer=\(s.issuerName) shares=\(s.numberOfShares.map { String($0) } ?? "-") carryingAmount=\(s.carryingAmount.map { String($0) } ?? "-") purpose=\((s.purpose ?? "-").prefix(40))")
+                print("  issuer=\(s.issuerName) shares=\(s.numberOfShares.map { String($0) } ?? "-") carryingAmount=\(s.carryingAmount.map { String($0) } ?? "-") deemed=\(s.isDeemedHolding) purpose=\((s.purpose ?? "-").prefix(40))")
             }
         case .notApplicable(let reason):
             print("notApplicable(\(reason))")

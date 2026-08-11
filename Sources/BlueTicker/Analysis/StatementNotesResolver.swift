@@ -229,11 +229,18 @@ enum StatementNotesResolver {
     /// 規則的な連番になっており、銘柄名・保有株式数・貸借対照表計上額・保有目的が行番号で紐付く
     /// （法定開示様式であり、geography/business breakdown 注記のような会社ごとに自由な表ではない）。
     ///
+    /// 「みなし保有株式」（退職給付信託等、議決権行使を指図する権限のみ保有するケース）も同一開示
+    /// セクション内に別のタグ体系（`DeemedHoldingsOfEquitySecurities...`、変体構造は特定投資株式と同型）
+    /// で開示されるため、`isDeemedHolding` フラグを立てて特定投資株式の後に連結する（実データ検証
+    /// 2026-08-11: smoke固定11社中4社・トヨタ含む既存golden3社で確認、開示上も特定投資株式セクションの
+    /// 直後に別表として並ぶ）。
+    ///
     /// 提出会社自身が保有する場合は `...ReportingCompany` サフィックス、純粋持株会社で子会社が
     /// 保有する場合は `...LargestHoldingCompany`/`...SecondLargestHoldingCompany`
     /// （最大保有会社／第二位保有会社）サフィックスになる。3変体は排他的に出現し contextRef の
     /// Row番号は変体ごとに独立した連番のため、変体をまたいで突き合わせてはならない
-    /// （変体ごとに個別に行を組み立てて連結する）。
+    /// （変体ごとに個別に行を組み立てて連結する）。特定投資株式とみなし保有株式も互いに独立した
+    /// Row連番を持つ（同じ会社でも両方が変体・Row番号を共有しない）。
     ///
     /// 20社サンプルで 19/20 が本ロジックで解決（1社は個別銘柄非開示・金額集計のみのため
     /// 正当な `.notApplicable(not_found)`）。したがって LLM 正規化は不要と判断した。
@@ -245,43 +252,55 @@ enum StatementNotesResolver {
     /// 41銘柄中14銘柄がこのケース）。`nil`（未開示）のまま返すのが正しい。本ファイルの他の
     /// resolver（`resolveSGABreakdown`/`resolveIFRSCategorySchedule`）も同じ理由で値取得には
     /// `nilAsZero: false` を使っており、本関数もそれに揃える。
+    ///
+    /// **既知の限界**: ごく稀に提出会社側のXBRLタグ付け自体が開示本文（HTMLテーブル）に対して
+    /// 大幅に不完全な書類が存在する（実データ検証2026-08-11: 三井住友FGの2025年3月期有価証券報告書
+    /// 原本S100W0S7は本文70銘柄のうち構造化タグは13銘柄のみ。同社の訂正報告書S100WRZHでは70銘柄
+    /// 全件が正しくタグ付けされており、前後の期（2024年3月期・2026年3月期）の原本も問題なし。
+    /// 本関数はXBRLの構造化タグのみを読むため、この種の提出者側タグ付け不備は検出できない）。
     static func resolvePolicyHoldingSecurities(xbrlDir: URL) -> StatementNoteResolveResult {
         let numericElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let textFacts = collectPolicyHoldingTextFacts(in: xbrlDir)
 
         var securities: [PolicyHoldingSecurityPayload] = []
-        for variant in policyHoldingHolderVariants {
-            let nameTag = policyHoldingNamePrefix + variant
-            guard let names = textFacts[nameTag], !names.isEmpty else { continue }
+        for category in policyHoldingCategories {
+            for variant in policyHoldingHolderVariants {
+                let nameTag = category.namePrefix + variant
+                guard let names = textFacts[nameTag], !names.isEmpty else { continue }
 
-            let sharesTag = policyHoldingSharesPrefix + variant
-            let bookValueTag = policyHoldingBookValuePrefix + variant
-            let sharesByCtx = numericElements[sharesTag] ?? [:]
-            let bookValueByCtx = numericElements[bookValueTag] ?? [:]
-            let purposeTag = textFacts.keys.first { isPolicyHoldingPurposeTag($0, variant: variant) }
-            let purposeByCtx = purposeTag.flatMap { textFacts[$0] } ?? [:]
+                let sharesTag = category.sharesPrefix + variant
+                let bookValueTag = category.bookValuePrefix + variant
+                let sharesByCtx = numericElements[sharesTag] ?? [:]
+                let bookValueByCtx = numericElements[bookValueTag] ?? [:]
+                let purposeTag = textFacts.keys.first {
+                    isPolicyHoldingPurposeTag($0, purposeKeyword: category.purposeKeyword, variant: variant)
+                }
+                let purposeByCtx = purposeTag.flatMap { textFacts[$0] } ?? [:]
 
-            var variantRows: [(row: Int, security: PolicyHoldingSecurityPayload)] = []
-            for (ctx, name) in names {
-                guard let row = policyHoldingCurrentYearRowNumber(ctx) else { continue }
-                variantRows.append((
-                    row,
-                    PolicyHoldingSecurityPayload(
-                        issuerName: name,
-                        numberOfShares: sharesByCtx[ctx],
-                        carryingAmount: bookValueByCtx[ctx],
-                        purpose: purposeByCtx[ctx])
-                ))
+                var variantRows: [(row: Int, security: PolicyHoldingSecurityPayload)] = []
+                for (ctx, name) in names {
+                    guard let row = policyHoldingCurrentYearRowNumber(ctx) else { continue }
+                    variantRows.append((
+                        row,
+                        PolicyHoldingSecurityPayload(
+                            issuerName: name,
+                            numberOfShares: sharesByCtx[ctx],
+                            carryingAmount: bookValueByCtx[ctx],
+                            purpose: purposeByCtx[ctx],
+                            isDeemedHolding: category.isDeemedHolding)
+                    ))
+                }
+                securities.append(contentsOf: variantRows.sorted { $0.row < $1.row }.map(\.security))
             }
-            securities.append(contentsOf: variantRows.sorted { $0.row < $1.row }.map(\.security))
         }
 
         guard !securities.isEmpty else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
 
-        let hash = securities.map { "\($0.issuerName)=\($0.numberOfShares ?? -1),\($0.carryingAmount ?? -1)" }
-            .joined(separator: ";")
+        let hash = securities.map {
+            "\($0.issuerName)=\($0.numberOfShares ?? -1),\($0.carryingAmount ?? -1),\($0.isDeemedHolding)"
+        }.joined(separator: ";")
         return .resolved(
             payload: StatementNotePayload(securities: securities), source: statementNoteSourceXbrlFacts,
             contentHash: hash)
@@ -293,20 +312,38 @@ enum StatementNotesResolver {
         "ReportingCompany", "LargestHoldingCompany", "SecondLargestHoldingCompany",
     ]
 
-    private static let policyHoldingNamePrefix =
-        "NameOfSecuritiesDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment"
-    private static let policyHoldingSharesPrefix =
-        "NumberOfSharesHeldDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment"
-    private static let policyHoldingBookValuePrefix =
-        "BookValueDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment"
+    private struct PolicyHoldingCategory {
+        let namePrefix: String
+        let sharesPrefix: String
+        let bookValuePrefix: String
+        /// 保有目的タグ判定用のキーワード（`isPolicyHoldingPurposeTag` 参照）。
+        let purposeKeyword: String
+        let isDeemedHolding: Bool
+    }
+
+    /// 特定投資株式を先、みなし保有株式を後に連結する（開示本文の表の並び順と一致させる）。
+    private static let policyHoldingCategories: [PolicyHoldingCategory] = [
+        PolicyHoldingCategory(
+            namePrefix: "NameOfSecuritiesDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            sharesPrefix: "NumberOfSharesHeldDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            bookValuePrefix: "BookValueDetailsOfSpecifiedInvestmentEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            purposeKeyword: "DetailsOfSpecifiedInvestmentSharesHeldForPurposesOtherThanPureInvestment",
+            isDeemedHolding: false),
+        PolicyHoldingCategory(
+            namePrefix: "NameOfSecuritiesDetailsOfDeemedHoldingsOfEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            sharesPrefix: "NumberOfSharesHeldDetailsOfDeemedHoldingsOfEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            bookValuePrefix: "BookValueDetailsOfDeemedHoldingsOfEquitySecuritiesHeldForPurposesOtherThanPureInvestment",
+            purposeKeyword: "DetailsOfDeemedHoldingsOfSharesHeldForPurposesOtherThanPureInvestment",
+            isDeemedHolding: true),
+    ]
 
     /// 保有目的タグは実データ上、`ReportingCompany` 変体と `Largest`/`SecondLargest` 変体で中間の
     /// 語句が異なる（後者は「事業上の関係の概要」が挿入される）ため、固定タグ名ではなく
     /// プレフィックス＋サフィックスで判定する。`LargestHoldingCompany` は `SecondLargestHoldingCompany`
     /// の末尾一致でもあるため、`variant` が前者のときは後者を明示的に除外する。
-    private static func isPolicyHoldingPurposeTag(_ tag: String, variant: String) -> Bool {
+    private static func isPolicyHoldingPurposeTag(_ tag: String, purposeKeyword: String, variant: String) -> Bool {
         guard tag.hasPrefix("PurposeOfShareholding"),
-              tag.contains("DetailsOfSpecifiedInvestmentSharesHeldForPurposesOtherThanPureInvestment"),
+              tag.contains(purposeKeyword),
               tag.hasSuffix(variant)
         else { return false }
         if variant == "LargestHoldingCompany" && tag.hasSuffix("SecondLargestHoldingCompany") { return false }
@@ -327,10 +364,12 @@ enum StatementNotesResolver {
         return Int(contextRef[numRange])
     }
 
-    /// 政策保有株式の銘柄名・保有目的テキストを {tag: {contextRef: text}} で集める。
+    /// 政策保有株式（特定投資株式・みなし保有株式）の銘柄名・保有目的テキストを
+    /// {tag: {contextRef: text}} で集める。
     private static func collectPolicyHoldingTextFacts(in xbrlDir: URL) -> [String: [String: String]] {
         collectTextFacts(in: xbrlDir) {
             $0.hasPrefix("NameOfSecuritiesDetailsOfSpecifiedInvestment")
+                || $0.hasPrefix("NameOfSecuritiesDetailsOfDeemedHoldings")
                 || $0.hasPrefix("PurposeOfShareholding")
         }
     }
