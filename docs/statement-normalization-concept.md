@@ -185,7 +185,7 @@ StatementLineItem
 
 - **残**: 本番への日経225全社 statements ingest（`blt-server ingest --stages statements`）、
   銀行・保険を含む母集団での追加実データ確認後の全銘柄拡大（`docs/blt-server-roadmap.md`）
-- **statement-notes（注記）**: DB/ingest/REST/MCP まで実装済み（note_type 9種、決定論のみ）。
+- **statement-notes（注記）**: DB/ingest/REST/MCP まで実装済み（note_type 8種、決定論のみ。`research_and_development` は 2026-08-11 に breakdown 軸へ集約し note から廃止）。
   詳細は `docs/blt-server-roadmap.md`「statement-notes」行参照。
 
 ## 今回（PR #153）のスコープ外（非ゴール）
@@ -194,7 +194,7 @@ PR #153（抽出ロジック・DevCLI）時点の切り分け。~~取り消し�
 
 - ~~DB モデル・マイグレーション・`StatementIngest.swift`・REST ルート・MCP ツール配線~~ → 実装済み（下記「実装方針」参照）
 - ~~複数年度の履歴集約~~ → `StatementIngest` が `filingSectionCandidates` の docID 反復で対応済み（下記「実装方針」2）
-- ~~注記（statement-notes）の抽出方式・対象注記の確定・LLM 要否判断~~ → note_type 9種を決定論のみ
+- ~~注記（statement-notes）の抽出方式・対象注記の確定・LLM 要否判断~~ → note_type は決定論のみ（R&D は breakdown 軸）
   （LLM不要）で実装済み（2026-08-02、`docs/blt-server-roadmap.md`参照）
 - 企業拡張タグの正規化ポリシー（そのまま出すか、正規化するか）の確定
 - 企業間の科目名統一（Breakdown 的な意味正規化）

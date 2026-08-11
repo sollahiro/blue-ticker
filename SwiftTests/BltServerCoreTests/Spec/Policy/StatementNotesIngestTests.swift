@@ -1,15 +1,8 @@
-// 財務諸表注記取り込みのうち、財務取り込み（company_financials）が既に計算済みの値をそのまま再公開する
-// 決定論 note_type（研究開発費）を検証する。
-// dividends・per_share_information・capital_expenditures_overview・issued_shares は実データレビュー
-// （2026-08-02）でXBRL直接抽出（`StatementNotesResolver` の各 resolve メソッド）へ置き換え済みのため
-// 対象外（`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照）。
-// 自前で XBRL を再抽出しないため、フェイク抽出器ではなく `CompanyFinancials` の実データ構造を
-// シードし、`StatementNotesFinancialsPassthroughResolvers` が正しい値・単位で再公開するかを見る。
+// 財務諸表注記取り込みの汎用機構（対象選定・staleness・upsert・skip・read 床）を検証する。
+// 各 note_type 固有の XBRL 抽出は `RealXbrlStatementNotesTests` / 外出しオラクル側。
 //
-// 汎用機構（対象選定・staleness 判定・upsert・skip・purge）は `runStatementNotesIngest` に一本化されて
-// おり 内訳取り込み・Statement 取り込み と同型のため、その挙動は代表として research_and_development
-// resolver 1つで検証する（同じ機構テストを繰り返さない）。各 note_type 固有の検証は「正しい値・単位で
-// 再公開されるか」「財務取り込み未計算時は failed」「値が nil のときは not_applicable(not_found)」の3点。
+// research_and_development note_type は 2026-08-11 に廃止し内訳取り込み breakdown 軸へ集約したため、
+// financials passthrough は使わず、固定結果を返すフェイクリゾルバで機構のみを見る。
 
 import Fluent
 import FluentSQLiteDriver
@@ -51,84 +44,48 @@ private func seedDoc(
     try await model.create(on: db)
 }
 
-/// 財務取り込み（company_financials）へ、指定 docID の1年度分をシードする。単位は `RawData`/
-/// `CalculatedData` の生の意味（EPS=円、RD/Buyback=百万円）のまま渡す
-/// （`FinancialsYear` 変換時に 内訳取り込み の `salesForDoc` と同じ百万円→円変換が起きる）。
-private func seedFinancials(
-    code: String, docID: String,
-    eps: Double? = nil, rdMillionYen: Double? = nil, db: Database
-) async throws {
-    var fields: [String: Any] = ["fy_end": "2025-03-31", "FinancialPeriod": "通期"]
-    var raw: [String: Any] = [:]
-    if let eps { raw["EPS"] = eps }
-    if let rdMillionYen { raw["RD"] = rdMillionYen }
-    fields["RawData"] = raw
-    let calc: [String: Any] = ["DocID": docID]
-    fields["CalculatedData"] = calc
-
-    let data = try JSONSerialization.data(withJSONObject: fields)
-    let newYear = try JSONDecoder().decode(YearEntry.self, from: data)
-
-    if let existing = try await CompanyFinancials.find(code, on: db) {
-        var result = existing.response.toMetricsResult()
-        var years = result.years ?? []
-        years.removeAll { $0.calculatedData.docID == docID }
-        years.append(newYear)
-        result.years = years
-        existing.response = FinancialsResponse(
-            code: code, name: existing.response.name, sector: existing.response.sector,
-            market: existing.response.market, result: result)
-        try await existing.update(on: db)
-        return
+/// 機構テスト用: 常に同じ resolved を返す。
+private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolveFn {
+    { _, _ in
+        .resolved(
+            payload: StatementNotePayload(value: value, unit: "yen_per_share"),
+            source: statementNoteSourceXbrlFacts, contentHash: String(value))
     }
-
-    var result = MetricsResult.blank
-    result.code = code
-    result.years = [newYear]
-    let response = FinancialsResponse(code: code, name: "テスト", sector: "", market: "", result: result)
-    let row = CompanyFinancials()
-    row.id = code
-    row.response = response
-    row.cacheVersion = companyFinancialsCacheVersion
-    row.requestedYears = 6
-    try await row.create(on: db)
 }
 
 @Suite struct StatementNotesIngestTests {
 
-    // MARK: - note_type 別: 正しい値・単位の再公開
+    // MARK: - 解決結果の格納
 
-    @Test func researchAndDevelopmentConvertsMillionYenToYen() async throws {
+    @Test func ingestStoresResolvedPayloadFromResolver() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", rdMillionYen: 500, db: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeResearchAndDevelopment,
-                resolve: StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db))
+                noteType: statementNoteTypePerShareInformation,
+                resolve: fixedResolvedResolve(value: 99.0))
 
             #expect(summary.stored == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.payload.value == 500 * Financial.millionYen)
-            #expect(row.payload.unit == "yen")
+            #expect(row.payload.value == 99.0)
+            #expect(row.payload.unit == "yen_per_share")
+            #expect(row.source == statementNoteSourceXbrlFacts)
         }
     }
 
+    // MARK: - 異常系
 
-    // MARK: - 異常系: 財務取り込み 未計算 / 値なし
-
-    @Test func ingestFailsWithoutStoringWhenFinancialsHasNotComputedDocYet() async throws {
+    @Test func ingestFailsWithoutStoringWhenResolverReturnsFailed() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            // company_financials 行を一切シードしない（財務取り込み 未計算）。
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeResearchAndDevelopment,
-                resolve: StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db))
+                noteType: statementNoteTypePerShareInformation
+            ) { _, _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -137,20 +94,18 @@ private func seedFinancials(
         }
     }
 
-    @Test func ingestWritesNotApplicableWhenFinancialsHasDocButValueIsNil() async throws {
+    @Test func ingestWritesNotApplicableWhenResolverSaysNotFound() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            // 財務取り込み は当該 docID を計算済みだが研究開発費なし（rdMillionYen 省略）。
-            try await seedFinancials(code: "7203", docID: "S1", eps: 100, db: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeResearchAndDevelopment,
-                resolve: StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db))
+                noteType: statementNoteTypePerShareInformation
+            ) { _, _ in .notApplicable(reason: statementNoteNotApplicableNotFound) }
 
             #expect(summary.notApplicable == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
             #expect(row.source == statementNoteSourceNotApplicable)
             #expect(row.notApplicableReason == statementNoteNotApplicableNotFound)
@@ -158,29 +113,24 @@ private func seedFinancials(
         }
     }
 
-    // MARK: - 汎用機構（代表として research_and_development resolver で検証、内訳取り込み・Statement取り込み と同型）
-    //
-    // per_share_information はXBRL直接抽出（`StatementNotesResolver.resolvePerShareInformation`）へ
-    // 置き換え済みのため、財務取り込み単一値passthroughのままの research_and_development を代表に使う
-    // （2026-08-02、`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` にgolden回帰あり）。
+    // MARK: - 汎用機構（staleness / skip）
 
     @Test func ingestSkipsWhenStoredAtCurrentVersion() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", rdMillionYen: 100, db: app.db)
-            let pre = CompanyStatementNote(docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
+            let pre = CompanyStatementNote(docID: "S1", noteType: statementNoteTypePerShareInformation)
             pre.code = "7203"
             pre.submitDateTime = "2025-06-20 09:00"
-            pre.payload = StatementNotePayload(value: 100 * Financial.millionYen, unit: "yen")
+            pre.payload = StatementNotePayload(value: 100, unit: "yen_per_share")
             pre.needsReview = false
             pre.source = statementNoteSourceXbrlFacts
-            pre.contentHash = "\(100 * Financial.millionYen)"
-            pre.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypeResearchAndDevelopment)
+            pre.contentHash = "100.0"
+            pre.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypePerShareInformation)
             try await pre.create(on: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeResearchAndDevelopment
+                noteType: statementNoteTypePerShareInformation
             ) { _, _ in
                 Issue.record("resolver must not run for an up-to-date document")
                 return .failed
@@ -194,30 +144,29 @@ private func seedFinancials(
     @Test func ingestReattemptsXbrlFactsRowWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
-            try await seedFinancials(code: "7203", docID: "S1", rdMillionYen: 200, db: app.db)
-            let stale = CompanyStatementNote(docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
+            let stale = CompanyStatementNote(docID: "S1", noteType: statementNoteTypePerShareInformation)
             stale.code = "7203"
             stale.submitDateTime = "2025-06-20 09:00"
-            stale.payload = StatementNotePayload(value: 100 * Financial.millionYen, unit: "yen")
+            stale.payload = StatementNotePayload(value: 100, unit: "yen_per_share")
             stale.needsReview = false
             stale.source = statementNoteSourceXbrlFacts
-            stale.contentHash = "\(100 * Financial.millionYen)"
-            stale.cacheVersion = "notes-rd-v0"
+            stale.contentHash = "100.0"
+            stale.cacheVersion = "notes-eps-v0"
             try await stale.create(on: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                noteType: statementNoteTypeResearchAndDevelopment,
-                resolve: StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db))
+                noteType: statementNoteTypePerShareInformation,
+                resolve: fixedResolvedResolve(value: 200.0))
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypeResearchAndDevelopment)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.payload.value == 200 * Financial.millionYen)
+            #expect(row.payload.value == 200.0)
             #expect(
-                row.cacheVersion == statementNoteCacheVersion(forType: statementNoteTypeResearchAndDevelopment))
+                row.cacheVersion == statementNoteCacheVersion(forType: statementNoteTypePerShareInformation))
         }
     }
 

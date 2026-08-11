@@ -492,8 +492,8 @@ extension FinancialsResponse {
         years.first { $0.docId == docID }?.employees.map(Double.init)
     }
 
-    /// 指定 docID の研究開発費（円、連結・全社合計）。内訳取り込み の research_and_development 軸の
-    /// 分母（全社合計）、および 財務諸表注記取り込み の `research_and_development` note_type の両方が再利用する。
+    /// 指定 docID の研究開発費（円、連結・全社合計）。内訳取り込み research_and_development 軸の
+    /// 分母（全社合計＝当該軸の正本の合計側）として再利用する。
     /// `years[].rd` は百万円建てのため円へ変換する。
     public func rdForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.rd.map { $0 * Financial.millionYen }

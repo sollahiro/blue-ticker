@@ -336,13 +336,12 @@ public extension BltServerContext {
         return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `issued_shares` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveIssuedShares` に委譲する（発行済株式総数・資本金等の推移を
-    /// 決議・イベント単位のテーブルとしてXBRL直接抽出、LLM不要）。財務取り込み の期末単一値 passthrough
-    /// を置き換える（実データレビューで推移テーブルの構造が判明したため、2026-08-02）。
-    func resolveIssuedSharesNote(docID: String) async -> StatementNoteResolveResult {
+    /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveIssuedSharesAndCapital` に委譲する。期末スナップショット（離散タグ:
+    /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
+    func resolveIssuedSharesAndCapitalNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir)
+        return StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
@@ -464,9 +463,14 @@ public extension BltServerContext {
             contentHash: hash, audit: nil)
     }
 
-    /// 内訳取り込み: 書類1件分の research_and_development 軸内訳を解決する（2026-08-01追加）。
-    /// `resolveEmployeesBreakdown` と同型（決定論のみ、LLM フォールバックなし。`total` は
-    /// 財務取り込み 計算済みの研究開発費全社合計を呼び出し側が渡す）。
+    /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加、
+    /// 2026-08-11 に statement-notes note_type から集約）。決定論のみ、LLM なし。
+    /// `total` は財務取り込み計算済みの全社 R&D（分母）。セグメント dimension が無くても
+    /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
+    /// denominatorTag には `total` を生んだ実タグ名を載せる（`RDExtractor` を同一書類のXBRLへ
+    /// 再適用して解決。company_financials は数値のみ保持しタグ provenance を持たないため、
+    /// ここで独立に再解決する。財務取り込みと同じ `fieldSetFromDuration`/`detectAccountingStandard`
+    /// を使うため値は一致する前提）。
     func resolveResearchAndDevelopmentBreakdown(
         docID: String, total: Double?
     ) async -> BreakdownResolveResult {
@@ -476,15 +480,20 @@ public extension BltServerContext {
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let totalTag = RDExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTagElements),
+            accountingStandard: detectAccountingStandard(allTagElements)
+        ).tag
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment,
+                facts: facts, total: total, totalTag: totalTag, axis: breakdownAxisResearchAndDevelopment,
                 labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: total)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)

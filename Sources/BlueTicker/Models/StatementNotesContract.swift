@@ -18,8 +18,9 @@ import Foundation
 /// company_statement_notes.note_type の公開定数（BltServerCore / REST / MCP / ingest で共用）。
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
-public let statementNoteTypeIssuedShares = "issued_shares"
-public let statementNoteTypeResearchAndDevelopment = "research_and_development"
+public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
+// research_and_development は note_type から廃止（2026-08-11）。事業別 R&D は内訳取り込み
+// breakdown 軸 `research_and_development` に集約（全社合計は同軸の denominator）。
 public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
 public let statementNoteTypeSGABreakdown = "sga_breakdown"
@@ -33,9 +34,8 @@ public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
 /// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
-public let perShareInformationNoteCacheVersion = "notes-eps-v1"
-public let issuedSharesNoteCacheVersion = "notes-issued-shares-v1"
-public let researchAndDevelopmentNoteCacheVersion = "notes-rd-v1"
+public let perShareInformationNoteCacheVersion = "notes-eps-v2"
+public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
 public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
@@ -50,8 +50,7 @@ public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 public func statementNoteCacheVersion(forType noteType: String) -> String {
     switch noteType {
     case statementNoteTypePerShareInformation: return perShareInformationNoteCacheVersion
-    case statementNoteTypeIssuedShares: return issuedSharesNoteCacheVersion
-    case statementNoteTypeResearchAndDevelopment: return researchAndDevelopmentNoteCacheVersion
+    case statementNoteTypeIssuedSharesAndCapital: return issuedSharesAndCapitalNoteCacheVersion
     case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
     case statementNoteTypeSGABreakdown: return sgaBreakdownNoteCacheVersion
@@ -113,8 +112,9 @@ public enum StatementNoteResolveResult: Sendable {
 /// - スカラー値の note（研究開発費合計）は `value`/`unit` を使う
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
-/// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式数の推移は
-///   `issuedSharesEvents`（いずれも決議・イベント単位のXBRL直接抽出、2026-08-02再設計）
+/// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式・資本金等は
+///   `issuedSharesEvents`（textblock表のイベント列）と `issuedSharesAsOf`（期末の離散タグ
+///   スナップショット。summary 移行時はこちらを正とする）
 /// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
 ///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
 /// - 政策保有株式（決定論、銘柄別 XBRL タグ抽出）は `securities` を使う
@@ -126,6 +126,8 @@ public struct StatementNotePayload: Codable, Sendable {
     public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
     public var issuedSharesEvents: [IssuedSharesEventPayload]?
+    /// 期末スナップショット（離散XBRLタグ）。`issued_shares_and_capital` note_type 専用。
+    public var issuedSharesAsOf: IssuedSharesAsOfPayload?
     public var borrowingsComponents: [BorrowingsComponentPayload]?
     public var needsReview: Bool
     public var warnings: [String]
@@ -135,6 +137,7 @@ public struct StatementNotePayload: Codable, Sendable {
         securities: [PolicyHoldingSecurityPayload]? = nil,
         dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
         issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
+        issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
         borrowingsComponents: [BorrowingsComponentPayload]? = nil,
         needsReview: Bool = false, warnings: [String] = []
     ) {
@@ -145,6 +148,7 @@ public struct StatementNotePayload: Codable, Sendable {
         self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
         self.issuedSharesEvents = issuedSharesEvents
+        self.issuedSharesAsOf = issuedSharesAsOf
         self.borrowingsComponents = borrowingsComponents
         self.needsReview = needsReview
         self.warnings = warnings
@@ -161,6 +165,7 @@ public struct StatementNotePayload: Codable, Sendable {
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "as_of_period_end": issuedSharesAsOf?.jsonObject() as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
         ]
@@ -262,7 +267,33 @@ public struct DividendEventPayload: Codable, Sendable {
     }
 }
 
-/// 発行済株式総数・資本金等の推移1行分（`issued_shares` note_type 専用）。表の「年月日」欄は
+/// 発行済株式・資本金等の期末スナップショット（`issued_shares_and_capital` note_type 専用）。
+/// textblock 表（`issuedSharesEvents`）とは別経路の離散XBRLタグ。表が千株丸めの会社でも
+/// financials / 将来の summary←notes 移行で使う期末値はこちらを正とする。
+/// - `issuedShares`: `PerShareExtractor` と同じタグ解決（生株）
+/// - `capitalStock`: 資本金（円）
+/// - `capitalReserve`: 資本準備金（`LegalCapitalSurplus`。資本剰余金全体ではない）
+public struct IssuedSharesAsOfPayload: Codable, Sendable {
+    public var issuedShares: Double?
+    public var capitalStock: Double?
+    public var capitalReserve: Double?
+
+    public init(issuedShares: Double?, capitalStock: Double?, capitalReserve: Double?) {
+        self.issuedShares = issuedShares
+        self.capitalStock = capitalStock
+        self.capitalReserve = capitalReserve
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "issued_shares": issuedShares as Any? ?? NSNull(),
+            "capital_stock": capitalStock as Any? ?? NSNull(),
+            "capital_reserve": capitalReserve as Any? ?? NSNull(),
+        ]
+    }
+}
+
+/// 発行済株式総数・資本金等の推移1行分（`issued_shares_and_capital` note_type 専用）。表の「年月日」欄は
 /// 単発日付（例:「2019年５月31日」）と期間表記（例:「自2018年４月１日 至2019年３月31日」）が
 /// 会社によって混在するため、`date` はセルのテキストをそのまま保持し加工しない。株数・金額は
 /// ヘッダーの単位表記（株/千株、千円/百万円）を判定して常に「株」「円」の生値へ正規化する。

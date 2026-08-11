@@ -278,7 +278,7 @@
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadReturnsNilForUnknownCompany` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadReturnsNilForNonPositiveYears` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadJsonIncludesBalanceSheetLineItems` | SPEC_POLICY | file-name |
-| `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `researchAndDevelopmentConvertsMillionYenToYen` | SPEC_POLICY | file-name |
+| `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestStoresResolvedPayloadFromResolver` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestFailsWithoutStoringWhenFinancialsHasNotComputedDocYet` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestWritesNotApplicableWhenFinancialsHasDocButValueIsNil` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestSkipsWhenStoredAtCurrentVersion` | SPEC_POLICY | test-name |
@@ -919,11 +919,14 @@
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenCapexHitachiFourColumnTable` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenCapexSoftBankGroupTwoColumnTableWithRowspanLabel` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenCapexKobeSteelExcludesSubtotalFromSum` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesLaserTecStockSplitsOnly` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesHitachiExcludesFiscalYearPlaceholderRows` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesSoftBankGroupThousandShareUnit` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesKobeSteelStockExchangeIssuance` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesJTShareCountUnchangedOnlyCapitalReserveMoved` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalLaserTecStockSplitsOnly` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalFujifilmAsOfAndSplitEvent` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalAjinomotoAsOfNotRoundedTableBalance` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalHitachiExcludesFiscalYearPlaceholderRows` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalSoftBankGroupThousandShareUnit` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalKobeSteelStockExchangeIssuance` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenIssuedSharesAndCapitalJTShareCountUnchangedOnlyCapitalReserveMoved` | SPEC_ORACLE | file-name |
+| `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesAndCapitalOracleFormatTests.swift` | `smokeIssuedSharesAndCapital*MatchesOracle` (11) | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | `toyotaBalanceSheetTotalsMatchPublicFiguresWithCalculationComponents` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | `toyotaIncomeStatementMatchesPublicFigures` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | `toyotaCashFlowIncludesDistinctPeriodStartAndEndCashReconciliation` | SPEC_ORACLE | file-name |
