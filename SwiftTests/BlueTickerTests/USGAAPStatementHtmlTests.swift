@@ -309,6 +309,286 @@ import Foundation
     }
 
     @Test
+    func perShareRowsUseYenPerShareUnitAndAreNotTotals() throws {
+        // 実データ確認（キヤノン）: 「１株当たり...」見出し行自体には金額が無く、直後の
+        // 「基本的」「希薄化後」行だけが値を持つ。見出しでフラグを立てて円建てのまま
+        // （百万円換算しない）扱う。isTotal は「当期純利益」を部分文字列に含んでも false。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>Ⅰ 売上高</td><td></td><td>1,000</td><td>1,200</td></tr>
+          <tr><td>営業利益</td><td></td><td>100</td><td>150</td></tr>
+          <tr><td>当社株主帰属当期純利益</td><td></td><td>80</td><td>90</td></tr>
+          <tr><td>１株当たり当社株主帰属当期純利益</td><td>注17</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>基本的</td><td></td><td>165.53円</td><td></td><td>216.67円</td><td></td></tr>
+          <tr><td>希薄化後</td><td></td><td>165.44円</td><td></td><td>216.46円</td><td></td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-eps-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.incomeStatement]))
+
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "基本的" && $0.unit == "JPYPerShares" && $0.value == 216.67
+                    && $0.isTotal == false
+            })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "希薄化後" && $0.unit == "JPYPerShares" && $0.value == 216.46
+                    && $0.isTotal == false
+            })
+        // 通常の金額行は従来どおり JPY・百万円換算のまま。
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "当社株主帰属当期純利益" && $0.unit == "JPY" && $0.value == 90_000_000
+                    && $0.isTotal == true
+            })
+    }
+
+    @Test
+    func perShareFlagDoesNotTriggerOnDividendDescriptionMidLabel() throws {
+        // 実データ確認（キヤノン）: 「当社株主への配当金 （１株当たり160.00円）」のような
+        // 説明文中の「１株当たり」に反応すると、以降の行が誤って円建て・非合計スケールに
+        // なってしまう。見出しラベルの先頭が「１株当たり」のときだけ発火させる。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>Ⅰ 売上高</td><td></td><td>1,000</td><td>1,200</td></tr>
+          <tr><td>営業利益</td><td></td><td>100</td><td>150</td></tr>
+          <tr><td>当社株主への配当金 （１株当たり160.00円）</td><td></td><td>50</td><td>60</td></tr>
+          <tr><td>当社株主帰属当期純利益</td><td></td><td>80</td><td>90</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-eps-nofalsepos-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.incomeStatement]))
+
+        #expect(
+            extracted.incomeStatement.contains {
+                ($0.label ?? "").contains("配当金") && $0.unit == "JPY" && $0.value == 60_000_000
+            })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "当社株主帰属当期純利益" && $0.unit == "JPY" && $0.value == 90_000_000
+            })
+    }
+
+    @Test
+    func cashFlowTailRowsAfterFinancingHaveNoSection() throws {
+        // 実データ確認（富士フイルム・キヤノン）: 為替影響・純増減・期首/期末残高は
+        // いずれも「現金及び現金同等物」を含み、営業/投資/財務のどの区分にも属さない
+        // （J-GAAP の XBRL fact 経路と同じ扱い）。財務区分を引きずらない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>Ⅰ 営業活動によるキャッシュ・フロー</td><td></td><td></td><td></td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td>120</td><td>130</td></tr>
+          <tr><td>Ⅱ 投資活動によるキャッシュ・フロー</td><td></td><td></td><td></td></tr>
+          <tr><td>８　事業の買収 (買収資産に含まれる現金及び現金同等物控除後)</td><td></td><td>-5</td><td>-8</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td></td><td>-50</td><td>-40</td></tr>
+          <tr><td>Ⅲ 財務活動によるキャッシュ・フロー</td><td></td><td></td><td></td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td></td><td>-10</td><td>-20</td></tr>
+          <tr><td>Ⅳ 為替変動による現金及び現金同等物への影響</td><td></td><td>1</td><td>2</td></tr>
+          <tr><td>Ⅴ 現金及び現金同等物の純増減額</td><td></td><td>50</td><td>72</td></tr>
+          <tr><td>Ⅵ 現金及び現金同等物の期首残高</td><td></td><td>100</td><td>150</td></tr>
+          <tr><td>Ⅶ 現金及び現金同等物の期末残高</td><td></td><td>150</td><td>222</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-cf-tail-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.cashFlow]))
+
+        #expect(
+            extracted.cashFlow.contains {
+                $0.label == "財務活動によるキャッシュ・フロー" && $0.section == .financing
+            })
+        // 「現金及び現金同等物」を含むが投資区分の明細行（実データ: 富士フイルム
+        // 「事業の買収」）は section == .investing のまま維持されなければならない
+        // （期首/期末残高等の tail 行と誤って同一視しない）。
+        #expect(
+            extracted.cashFlow.contains {
+                ($0.label ?? "").contains("事業の買収") && $0.section == .investing
+            })
+        for keyword in ["為替変動", "純増減額", "期首残高", "期末残高"] {
+            #expect(
+                extracted.cashFlow.contains { ($0.label ?? "").contains(keyword) && $0.section == nil },
+                "\(keyword) 行は section == nil のはず")
+        }
+    }
+
+    @Test
+    func changesInEquitySingleTableWithTwoYearsKeepsOnlyLatestYear() throws {
+        // 実データ確認（富士フイルム）: 前期・当期が同一表に連続する場合、「現在残高」行が
+        // 3回以上現れる（前期首→前期末=当期首→当期末）。最後から2番目（＝当期首）より
+        // 前の前期分は切り捨てて当期のみを返す。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>Ⅰ 2023年４月１日現在残高</td><td></td><td>400</td><td>450</td></tr>
+          <tr><td>前期純利益</td><td></td><td></td><td>50</td></tr>
+          <tr><td>ⅩⅠ 2024年３月31日現在残高</td><td></td><td>400</td><td>500</td></tr>
+          <tr><td>当期純利益</td><td></td><td></td><td>40</td></tr>
+          <tr><td>ⅩⅩ 2025年３月31日現在残高</td><td></td><td>400</td><td>540</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-ss-2yr-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.changesInEquity]))
+
+        #expect(!extracted.changesInEquity.contains { ($0.label ?? "").contains("2023年４月１日") })
+        #expect(!extracted.changesInEquity.contains { ($0.label ?? "").contains("前期純利益") })
+        #expect(extracted.changesInEquity.count == 3)
+        #expect(extracted.changesInEquity.first?.order == 0)
+        #expect(extracted.changesInEquity.first?.label?.contains("2024年３月31日") == true)
+        #expect(
+            extracted.changesInEquity.contains {
+                ($0.label ?? "").contains("2025年３月31日") && $0.value == 540_000_000
+            })
+    }
+
+    @Test
+    func zeroTotalDoesNotAttachSpuriousZeroComponents() throws {
+        // 「－」（未開示）多用行が偶然0=0で一致しても components を付けない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td></tr>
+          <tr><td>資産合計</td><td></td><td>50</td><td>80</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td></tr>
+          <tr><td>負債合計</td><td></td><td>0</td><td>-</td></tr>
+          <tr><td>未払金</td><td></td><td>0</td><td>-</td></tr>
+          <tr><td>その他</td><td></td><td>0</td><td>-</td></tr>
+          <tr><td>純資産の部</td><td></td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td></td><td>50</td><td>80</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-zero-comp-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.balanceSheet]))
+
+        let liabilitiesTotal = try #require(extracted.balanceSheet.first { $0.label == "負債合計" })
+        #expect(liabilitiesTotal.value == 0)
+        #expect(liabilitiesTotal.components == nil)
+    }
+
+    @Test
+    func leadingSpacerPlusNoteCellBothStripToRecoverCurrentValue() throws {
+        // 実データ確認（富士フイルム「５ 短期オペレーティング・リース負債」）: ラベル直後に
+        // 空スペーサ列＋「注５」列が連続する行がある。空セル1個だけ剥がすと5スロット
+        // （奇数）になり行ごと落ちてしまうため、「注」を含むセルはもう1個追加で剥がす。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td></tr>
+          <tr><td>５ 短期オペレーティング・リース負債</td><td></td><td>注５</td><td></td><td>32,589</td><td></td><td>31,582</td></tr>
+          <tr><td>負債合計</td><td></td><td>100</td><td>200</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-note-plus-spacer-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.balanceSheet]))
+
+        #expect(
+            extracted.balanceSheet.contains {
+                ($0.label ?? "").contains("短期オペレーティング・リース負債") && $0.value == 31_582_000_000
+            })
+    }
+
+    @Test
+    func rowWithUnbalancedSlotCountIsDroppedRatherThanGuessed() throws {
+        // 前期/当期のスロット数が偶数に揃わない（想定外の列構成）行は、誤った期の値を
+        // 静かに返すより行ごと落とす（他の行の抽出は継続する）。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td></tr>
+          <tr><td>現金及び預金</td><td></td><td>10</td><td>20</td></tr>
+          <tr><td>資産合計</td><td></td><td>100</td><td>abc</td><td>200</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-unbalanced-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: [.balanceSheet]))
+
+        #expect(extracted.balanceSheet.contains { $0.label == "現金及び預金" && $0.value == 20_000_000 })
+        #expect(!extracted.balanceSheet.contains { $0.label == "資産合計" })
+    }
+
+    @Test
     func returnsNilWhenStatementHtmlMissing() {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("usgaap-stmt-empty-\(UUID().uuidString)", isDirectory: true)

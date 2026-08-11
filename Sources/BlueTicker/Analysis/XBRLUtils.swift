@@ -185,6 +185,13 @@ enum XBRLUtils {
         return nil
     }
 
+    /// US-GAAP連結の財務諸表本表 HTML。年次(asr)は 0105010＝第５経理の状況、
+    /// 半期(q2r)は 0104010＝第４経理の状況（`USGAAPHtmlFields`・`USGAAPStatementHtml` 共用）。
+    static func findUSGAAPStatementHtml(in xbrlDir: URL) -> URL? {
+        findHtmlByPrefix(in: xbrlDir, prefix: "0105010")
+            ?? findHtmlByPrefix(in: xbrlDir, prefix: "0104010")
+    }
+
     /// XBRL ディレクトリからインスタンス文書（.xml / .xbrl）を返す。
     /// ラベル・プレゼンテーション・計算・定義リンクベースは除外する。
     static func findXbrlFiles(in dir: URL) -> [URL] {

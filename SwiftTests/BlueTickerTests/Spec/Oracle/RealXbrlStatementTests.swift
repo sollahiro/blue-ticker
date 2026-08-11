@@ -795,8 +795,24 @@ import Foundation
         #expect(
             Self.labelValue(year.cashFlow, containing: "関連会社投融資") == -42_000_000)
         #expect(Self.labelValue(year.cashFlow, containing: "９ 事業の売却") == 0)
+        // 2026-08-10 監査指摘: 「現金及び現金同等物」を含む投資区分の明細行が誤って
+        // section=nil（期首/期末残高等の tail 扱い）にならないことを実データで固定する。
+        #expect(Self.labelValue(year.cashFlow, containing: "事業の買収") == -3_873_000_000)
         #expect(
-            Self.labelValue(year.changesInEquity, containing: "Ⅸ 利益剰余金から") == 0)
+            year.cashFlow.contains {
+                ($0.label ?? "").contains("事業の買収") && $0.section == .investing
+            })
+        #expect(
+            year.cashFlow.contains {
+                ($0.label ?? "").contains("事業の売却") && $0.section == .investing
+            })
+        // 2026-08-10 監査指摘: 空セル+「注」セルの2連続を剥がして正しい当期値を回復できる
+        // ことを実データで固定する（前は行ごと消失していた）。
+        #expect(
+            Self.labelValue(year.balanceSheet, containing: "短期オペレーティング・リース負債")
+                == 31_582_000_000)
+        // 「Ⅸ 利益剰余金から...」は前期(2023/4→2024/3)分の行のため、SS年度分離修正
+        // （2026-08-10）後は year.changesInEquity（当期のみ）に含まれない。
         #expect(
             Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
 
@@ -832,6 +848,18 @@ import Foundation
                 == 332_053_000_000)
         // 当期「-」→ 0（前期 165,100 百万円を拾わない）
         #expect(Self.exactLabelValue(year.incomeStatement, "３ のれんの減損損失") == 0)
+        // 2026-08-10 監査指摘: EPS 行（実データ確認: 367.48円/367.25円）が円建てのまま
+        // （百万円換算されず）unit=JPYPerShares・isTotal=false で出ることを実データで固定する。
+        #expect(
+            year.incomeStatement.contains {
+                $0.label == "基本的" && $0.value == 367.48 && $0.unit == "JPYPerShares"
+                    && $0.isTotal == false
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.label == "希薄化後" && $0.value == 367.25 && $0.unit == "JPYPerShares"
+                    && $0.isTotal == false
+            })
 
         #expect(
             Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
