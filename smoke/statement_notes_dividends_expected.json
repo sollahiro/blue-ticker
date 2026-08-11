@@ -23,5 +23,228 @@
   "S100RX8V": {
     "reason": "not_found",
     "status": "not_applicable"
+  },
+  "S100VU4O": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 30.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2025-04-10",
+        "total_amount": 36232000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100VXJA": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 40.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-11-07",
+        "total_amount": 20170000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 40.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議（予定）",
+        "resolution_date": "2025-06-20",
+        "total_amount": 19904000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100VYA0": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 41.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-11-05",
+        "total_amount": 5237000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 51.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議（予定）",
+        "resolution_date": "2025-06-25",
+        "total_amount": 6389000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W043": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 100.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-10-31",
+        "total_amount": 3025000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 50.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議（予定）",
+        "resolution_date": "2025-06-24",
+        "total_amount": 3025000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W0S7": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 180.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会",
+        "resolution_date": "2024-11-14",
+        "total_amount": 234858000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 62.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会",
+        "resolution_date": "2025-06-27",
+        "total_amount": 240202000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W3XJ": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 30.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-11-07",
+        "total_amount": 36164000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 35.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議",
+        "resolution_date": "2025-06-27",
+        "total_amount": 42193000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W4FB": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 25.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-11-14",
+        "total_amount": 292259322075.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 39.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議",
+        "resolution_date": "2025-06-27",
+        "total_amount": 449732758176.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W4MT": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 20.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2024-11-08",
+        "total_amount": 38592000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 21.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議",
+        "resolution_date": "2025-06-27",
+        "total_amount": 40522000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XR0M": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 25.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2025-08-05",
+        "total_amount": 28460000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 25.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2026-02-12",
+        "total_amount": 28460000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XRD8": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 5.7,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2025-07-25",
+        "total_amount": 29002000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 5.7,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議",
+        "resolution_date": "2026-03-16",
+        "total_amount": 29002000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XTLJ": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 80.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2025-07-24",
+        "total_amount": 72124000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      },
+      {
+        "dividend_per_share": 80.0,
+        "dividend_per_share_tag": "DividendPerShareDividendsOfSurplus",
+        "resolution_body": "定時株主総会決議（予定）",
+        "resolution_date": "2026-03-27",
+        "total_amount": 70290000000.0,
+        "total_amount_tag": "TotalAmountOfDividendsDividendsOfSurplus"
+      }
+    ],
+    "source": "xbrl_facts"
   }
 }
