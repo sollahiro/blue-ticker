@@ -36,13 +36,14 @@ func registerMcpRoute(
     group.post { req async -> Vapor.Response in
         let requestBody = bodyData(from: req)
 
-        // ChatGPT のコネクタ追加フローは、実ハンドシェイク（initialize）の前に空ボディの POST を
-        // 1回送ってくる（実測 2026-08-11: 本番ログで 400→200→200 のパターンを確認。空ボディ以外は
-        // 同一クライアントの initialize/tools_list で成功）。swift-sdk は空ボディを JSON-RPC
-        // パースエラー（400）として扱うが、ChatGPT はこの1件が失敗すると後続が成功してもコネクタ
-        // 全体を「接続に問題が発生しました」として失敗表示する。空ボディは副作用のない疎通確認
-        // とみなし、JSON-RPC パイプラインへは渡さず 200 を返す。
-        guard let requestBody, !requestBody.isEmpty else {
+        // ChatGPT のコネクタ追加・ツール一覧再取得フローは、実ハンドシェイク（initialize）の前に
+        // method を持たない JSON の POST を送ってくる（実測 2026-08-11: 本番で空ボディに加えて `{}`
+        // を確認。ChatGPT UI 上は tools/list 取得が 424/-32603「データの形式が正しくありません」として
+        // 失敗表示された）。swift-sdk はこれを JSON-RPC パースエラー（400）として扱うが、ChatGPT は
+        // この1件が失敗すると後続の initialize/tools_list が成功してもコネクタ全体を失敗表示する。
+        // method を持たない JSON（空ボディ・`{}`・`[]` を含む）は副作用のない疎通確認とみなし、
+        // JSON-RPC パイプラインへは渡さず 200 を返す。
+        guard let requestBody, !requestBody.isEmpty, !isConnectivityProbeBody(requestBody) else {
             return Vapor.Response(status: .ok)
         }
 
@@ -67,6 +68,16 @@ func registerMcpRoute(
             return mcpTimeoutResponse(requestBody: requestBody)
         }
     }
+}
+
+/// JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして成立しない）ボディを
+/// 疎通確認とみなす。`{}` はオブジェクトとして method 欠落、`[]` は要素なしのバッチとして判定する。
+/// JSON として解釈できないボディ（真に壊れたリクエスト）は対象外とし、従来どおり JSON-RPC パースエラーを返す。
+private func isConnectivityProbeBody(_ data: Data) -> Bool {
+    guard let json = try? JSONSerialization.jsonObject(with: data) else { return false }
+    if let object = json as? [String: Any] { return object["method"] == nil }
+    if let array = json as? [Any] { return array.isEmpty }
+    return false
 }
 
 /// MCP ルートの応答待ちが `Api.mcpRequestTimeoutSeconds` を超えたときの JSON-RPC エラーレスポンス。

@@ -251,7 +251,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
-    // MARK: - 空ボディ POST（ChatGPT コネクタ追加フローの疎通確認。issue: ChatGPT接続時の400混入）
+    // MARK: - method を持たない疎通確認 POST（ChatGPT コネクタフローの疎通確認。issue: ChatGPT接続時の400混入）
 
     /// ChatGPT のコネクタ追加フローが initialize 前に送る空ボディ POST は、JSON-RPC パースエラー
     /// （400）にせず 200 を返す（実測 2026-08-11: 本番ログで 400→200→200 のパターンを確認し、
@@ -267,6 +267,47 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 collectedBody: nil, on: app.eventLoopGroup.next())
             let response = try await app.responder.respond(to: request).get()
             #expect(response.status == .ok)
+        }
+    }
+
+    /// ChatGPT のツール一覧再取得（refresh_actions）フローは、疎通確認として method を持たない
+    /// 空オブジェクト `{}` を送ってくる（実測 2026-08-11: 本番で 400→200→200 継続を確認し、ChatGPT
+    /// 側で tools/list 取得が 424/-32603「データの形式が正しくありません」として失敗表示されていた。
+    /// 空ボディのみを 200 化した従来実装では `{}` を捕捉できていなかった）。空ボディと同様に
+    /// 副作用のない疎通確認とみなし 200 を返す。
+    @Test func emptyObjectBodyPostReturnsOkInsteadOfParseError() async throws {
+        try await withMcpApp { app in
+            let (status, _) = try await postMcp(app, [:])
+            #expect(status == .ok)
+        }
+    }
+
+    /// 空配列 `[]`（要素なしの JSON-RPC バッチ）も同様に疎通確認とみなし 200 を返す。
+    @Test func emptyArrayBodyPostReturnsOkInsteadOfParseError() async throws {
+        try await withMcpApp { app in
+            var headers = HTTPHeaders()
+            headers.contentType = .json
+            headers.add(name: "Accept", value: "application/json, text/event-stream")
+            let request = Request(
+                application: app, method: .POST, url: URI(string: "/"), headers: headers,
+                collectedBody: ByteBuffer(string: "[]"), on: app.eventLoopGroup.next())
+            let response = try await app.responder.respond(to: request).get()
+            #expect(response.status == .ok)
+        }
+    }
+
+    /// method を持たない JSON はスルーする一方、JSON として解釈できない真に壊れたボディは
+    /// 従来どおり JSON-RPC パースエラー（400）を維持する（疎通確認の誤判定でエラー隠蔽をしない）。
+    @Test func malformedJsonBodyStillReturnsParseError() async throws {
+        try await withMcpApp { app in
+            var headers = HTTPHeaders()
+            headers.contentType = .json
+            headers.add(name: "Accept", value: "application/json, text/event-stream")
+            let request = Request(
+                application: app, method: .POST, url: URI(string: "/"), headers: headers,
+                collectedBody: ByteBuffer(string: "{not json"), on: app.eventLoopGroup.next())
+            let response = try await app.responder.respond(to: request).get()
+            #expect(response.status == .badRequest)
         }
     }
 
