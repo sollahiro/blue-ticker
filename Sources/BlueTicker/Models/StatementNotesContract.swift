@@ -42,7 +42,10 @@ public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v2"
-public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v1"
+/// v2（2026-08-11）: みなし保有株式（`isDeemedHolding`）・`policyHoldingSummary`（銘柄数及び貸借対照表
+/// 計上額の合計額）を追加する payload 構造変更。本番は v1 時点で0件ingest済みのため実害はないが、
+/// 将来の再発防止として抽出ロジック変更に揃えてバンプする。
+public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 
@@ -123,6 +126,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public var unit: String?
     public var items: [StatementLineItem]?
     public var securities: [PolicyHoldingSecurityPayload]?
+    public var policyHoldingSummary: PolicyHoldingAggregateSummaryPayload?
     public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
     public var issuedSharesEvents: [IssuedSharesEventPayload]?
@@ -135,6 +139,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         securities: [PolicyHoldingSecurityPayload]? = nil,
+        policyHoldingSummary: PolicyHoldingAggregateSummaryPayload? = nil,
         dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
         issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
@@ -145,6 +150,7 @@ public struct StatementNotePayload: Codable, Sendable {
         self.unit = unit
         self.items = items
         self.securities = securities
+        self.policyHoldingSummary = policyHoldingSummary
         self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
         self.issuedSharesEvents = issuedSharesEvents
@@ -161,6 +167,7 @@ public struct StatementNotePayload: Codable, Sendable {
             "unit": unit as Any? ?? NSNull(),
             "items": items.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "policy_holding_summary": policyHoldingSummary?.jsonObject() as Any? ?? NSNull(),
             "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
@@ -341,18 +348,35 @@ public struct IssuedSharesEventPayload: Codable, Sendable {
 }
 
 /// 政策保有株式1銘柄分（決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。
-/// `policy_holding_securities` note_type 専用。
+/// `policy_holding_securities` note_type 専用。`isDeemedHolding` は「みなし保有株式」（退職給付信託等、
+/// 議決権行使を指図する権限のみ保有するケース）か「特定投資株式」（提出会社・子会社が直接保有）かの区別。
 public struct PolicyHoldingSecurityPayload: Codable, Sendable {
     public var issuerName: String
     public var numberOfShares: Double?
     public var carryingAmount: Double?
     public var purpose: String?
+    public var isDeemedHolding: Bool
 
-    public init(issuerName: String, numberOfShares: Double?, carryingAmount: Double?, purpose: String?) {
+    public init(
+        issuerName: String, numberOfShares: Double?, carryingAmount: Double?, purpose: String?,
+        isDeemedHolding: Bool = false
+    ) {
         self.issuerName = issuerName
         self.numberOfShares = numberOfShares
         self.carryingAmount = carryingAmount
         self.purpose = purpose
+        self.isDeemedHolding = isDeemedHolding
+    }
+
+    /// `isDeemedHolding` 追加（2026-08-11）前に格納された行にも対応するため、欠落時は
+    /// `false`（特定投資株式扱い）にフォールバックする。合成 Decodable のデフォルト値非対応を回避。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        issuerName = try container.decode(String.self, forKey: .issuerName)
+        numberOfShares = try container.decodeIfPresent(Double.self, forKey: .numberOfShares)
+        carryingAmount = try container.decodeIfPresent(Double.self, forKey: .carryingAmount)
+        purpose = try container.decodeIfPresent(String.self, forKey: .purpose)
+        isDeemedHolding = try container.decodeIfPresent(Bool.self, forKey: .isDeemedHolding) ?? false
     }
 
     public func jsonObject() -> [String: Any] {
@@ -361,6 +385,38 @@ public struct PolicyHoldingSecurityPayload: Codable, Sendable {
             "number_of_shares": numberOfShares as Any? ?? NSNull(),
             "carrying_amount": carryingAmount as Any? ?? NSNull(),
             "purpose": purpose as Any? ?? NSNull(),
+            "is_deemed_holding": isDeemedHolding,
+        ]
+    }
+}
+
+/// 政策保有株式（保有目的が純投資目的以外の目的である投資株式）の銘柄数及び貸借対照表計上額の合計額
+/// （決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。`policy_holding_securities`
+/// note_type 専用。`securities`（個別開示される上位銘柄のみ）とは異なり、非開示の銘柄も含めた全銘柄の
+/// 総数・総額を表す（提出会社・子会社の各variantを合算した値）。特定投資株式・みなし保有株式を区別
+/// しない単一の合計（開示上もこの区分での合算しか存在しない）。
+public struct PolicyHoldingAggregateSummaryPayload: Codable, Sendable {
+    public var unlistedIssueCount: Int?
+    public var unlistedCarryingAmount: Double?
+    public var listedIssueCount: Int?
+    public var listedCarryingAmount: Double?
+
+    public init(
+        unlistedIssueCount: Int?, unlistedCarryingAmount: Double?,
+        listedIssueCount: Int?, listedCarryingAmount: Double?
+    ) {
+        self.unlistedIssueCount = unlistedIssueCount
+        self.unlistedCarryingAmount = unlistedCarryingAmount
+        self.listedIssueCount = listedIssueCount
+        self.listedCarryingAmount = listedCarryingAmount
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "unlisted_issue_count": unlistedIssueCount as Any? ?? NSNull(),
+            "unlisted_carrying_amount": unlistedCarryingAmount as Any? ?? NSNull(),
+            "listed_issue_count": listedIssueCount as Any? ?? NSNull(),
+            "listed_carrying_amount": listedCarryingAmount as Any? ?? NSNull(),
         ]
     }
 }

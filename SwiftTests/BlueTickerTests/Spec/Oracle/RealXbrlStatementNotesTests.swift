@@ -1126,7 +1126,7 @@ import Testing
         #expect(reason == statementNoteNotApplicableNotFound)
     }
 
-    // MARK: - policy_holding_securities（S100L0TZ、ReportingCompany変体・60銘柄）
+    // MARK: - policy_holding_securities（S100L0TZ、ReportingCompany変体・特定投資60銘柄＋みなし保有10銘柄）
 
     @Test(.enabled(if: cacheAvailable("S100L0TZ"), "XBRL cache S100L0TZ not available"))
     func reportingCompanyVariantExtractsSecuritiesOrderedByDisclosureRow() throws {
@@ -1137,14 +1137,25 @@ import Testing
         }
         #expect(source == statementNoteSourceXbrlFacts)
         let securities = try #require(payload.securities)
-        #expect(securities.count == 60)
+        // 特定投資株式60件（Row数と一致）＋みなし保有株式10件（実データ検証2026-08-11、DeemedHoldings
+        // タグ対応追加。10件は当年 fact が xsi:nil のみ＝全数売却済みで数値は取れないが銘柄名は残る）。
+        #expect(securities.count == 70)
+        #expect(securities.filter(\.isDeemedHolding).count == 10)
 
         // 実データ検証済みの値（2026-08-02）: 開示順(Row1)先頭銘柄。
         let first = try #require(securities.first)
         #expect(first.issuerName == "㈱リクルートホールディングス")
         #expect(first.numberOfShares == 3_550_000)
         #expect(first.carryingAmount == 15_339_000_000)
+        #expect(first.isDeemedHolding == false)
         // 前期(Prior1YearInstant)の行は混入しない（当期のみ、60件 = Row数と一致）。
+
+        // 銘柄数及び貸借対照表計上額の合計額（実データ検証2026-08-11、個別開示されない銘柄も含む全数）。
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 216)
+        #expect(summary.unlistedCarryingAmount == 76_926_000_000)
+        #expect(summary.listedIssueCount == 97)
+        #expect(summary.listedCarryingAmount == 83_665_000_000)
     }
 
     // MARK: - policy_holding_securities（S100VW4E、LargestHoldingCompany変体・保有目的テキストあり）
@@ -1165,6 +1176,13 @@ import Testing
         #expect(first.numberOfShares == 46_402_892)
         #expect(first.carryingAmount == 83_989_000_000)
         #expect(try #require(first.purpose).contains("保有目的"))
+
+        // 銘柄数及び貸借対照表計上額の合計額（実データ検証2026-08-11）。
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 134)
+        #expect(summary.unlistedCarryingAmount == 7_008_000_000)
+        #expect(summary.listedIssueCount == 112)
+        #expect(summary.listedCarryingAmount == 394_725_000_000)
     }
 
     // MARK: - policy_holding_securities（S100QXRZ、LargestHoldingCompany + SecondLargestHoldingCompany が
@@ -1205,6 +1223,16 @@ import Testing
         #expect(second.numberOfShares == 5_138_092)
         #expect(second.carryingAmount == 18_856_000_000)
         #expect(try #require(second.purpose).contains("中小企業"))
+
+        // 銘柄数及び貸借対照表計上額の合計額（実データ検証2026-08-11）。ReportingCompany変体は
+        // タグ自体が存在せず、LargestHoldingCompany（非上場7件/2,897百万円、上場9件/53,993百万円）と
+        // SecondLargestHoldingCompany（非上場95件/11,607百万円、上場44件/162,350百万円）を単純合算
+        // した値になる。
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 102)
+        #expect(summary.unlistedCarryingAmount == 14_504_000_000)
+        #expect(summary.listedIssueCount == 53)
+        #expect(summary.listedCarryingAmount == 216_343_000_000)
     }
 
     // MARK: - policy_holding_securities（S100QXRZ、年度中に全数売却した銘柄の当年値は nil）
@@ -1237,19 +1265,33 @@ import Testing
         #expect(strike.carryingAmount == nil)
     }
 
-    // MARK: - policy_holding_securities（S100R218、個別銘柄非開示・集計のみ、正当な not_applicable）
+    // MARK: - policy_holding_securities（S100R218、個別銘柄非開示・銘柄数及び貸借対照表計上額の
+    // 合計額タグのみ）
+    //
+    // 個別銘柄名は開示されないが、`NumberOfIssuesShares.../CarryingAmountShares...`（銘柄数及び
+    // 貸借対照表計上額の合計額、非上場株式／非上場株式以外の株式の2区分）タグは存在する
+    // （実データ確認2026-08-11、DeemedHoldings対応と同時に追加した集計取り込み）。以前は
+    // `securities` が空のため `.notApplicable` としていたが、この集計タグ自体は有効なデータのため
+    // `.resolved`（`securities: nil`、`policyHoldingSummary` のみ）に変更した。
 
     @Test(.enabled(if: cacheAvailable("S100R218"), "XBRL cache S100R218 not available"))
-    func aggregateOnlyDisclosureWithoutNamedSecuritiesIsNotApplicableNotAFailure() {
+    func aggregateOnlyDisclosureWithoutNamedSecuritiesResolvesToSummaryOnly() throws {
         let result = StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: Self.xbrlDir("S100R218"))
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable, got \(result)")
+        guard case .resolved(let payload, _, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
             return
         }
-        #expect(reason == statementNoteNotApplicableNotFound)
+        #expect(payload.securities == nil)
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 6)
+        #expect(summary.unlistedCarryingAmount == 332_000_000)
+        // 実データ上、非上場株式以外の株式（上場株式）は xsi:nil（この会社は保有していない）。
+        #expect(summary.listedIssueCount == nil)
+        #expect(summary.listedCarryingAmount == nil)
     }
 
-    // MARK: - policy_holding_securities golden（全銘柄リスト、ユーザー実データ確認済み 2026-08-02）
+    // MARK: - policy_holding_securities golden（全銘柄リスト、ユーザー実データ確認済み 2026-08-02、
+    // みなし保有株式(DeemedHoldings)対応追加分は2026-08-11に追加確認）
     //
     // 年度中に保有株式を全数売却した銘柄（当年の保有株式数・計上額が nil になる）を含む4社について、
     // 開示順（保有額の大きい順）での全銘柄・全値をユーザーが目視確認した結果を golden として固定する
@@ -1413,6 +1455,18 @@ import Testing
                 ("清水建設㈱", nil, nil),
                 ("㈱スクロール", nil, nil),
                 ("㈱クレディセゾン", nil, nil),
+                // みなし保有株式11件（実データ検証2026-08-11、DeemedHoldingsタグ対応追加）。
+                ("三菱電機㈱", 5_837_053.0, 15_876_000_000.0),
+                ("東京海上ホールディングス㈱", 2_461_644.0, 14_119_000_000.0),
+                ("東京海上ホールディングス㈱", 2_460_900.0, 14_115_000_000.0),
+                ("㈱三菱ＵＦＪフィナンシャル・グループ", 5_506_880.0, 11_074_000_000.0),
+                ("住友商事㈱", 1_335_485.0, 4_503_000_000.0),
+                ("ＭＳ＆ＡＤインシュアランスグループホールディングス㈱", 780_408.0, 2_516_000_000.0),
+                ("清水建設㈱", 1_773_907.0, 2_347_000_000.0),
+                ("日本電気㈱", 557_120.0, 1_752_000_000.0),
+                ("㈱クレディセゾン", 300_000.0, 1_057_000_000.0),
+                ("古河機械金属㈱", 100_047.0, 209_000_000.0),
+                ("三菱倉庫㈱", 25.0, 0.0),
             ])
     }
 
@@ -1470,7 +1524,33 @@ import Testing
                 ("福山通運㈱", nil, nil),
                 ("中日本興業㈱", nil, nil),
                 ("Getaround,Inc.", nil, nil),
+                // みなし保有株式18件（実データ検証2026-08-11、DeemedHoldingsタグ対応追加）。
+                ("㈱ブリヂストン", 3_988_674.0, 23_912_000_000.0),
+                ("住友ゴム工業㈱", 1_378_700.0, 2_596_000_000.0),
+                ("岡谷鋼機㈱", 76_000.0, 530_000_000.0),
+                ("㈱御園座", 5_000.0, 9_000_000.0),
+                ("大豊工業㈱", 12_279.0, 7_000_000.0),
+                ("三井物産㈱", nil, nil),
+                ("パナソニック ホールディングス㈱", nil, nil),
+                ("㈱三井住友フィナンシャルグループ", nil, nil),
+                ("住友商事㈱", nil, nil),
+                ("㈱三菱ＵＦＪフィナンシャル・グループ", nil, nil),
+                ("ＡＧＣ㈱", nil, nil),
+                ("日本発条㈱", nil, nil),
+                ("㈱百五銀行", nil, nil),
+                ("東海東京フィナンシャル・ホールディングス㈱", nil, nil),
+                ("㈱名古屋銀行", nil, nil),
+                ("㈱十六フィナンシャルグループ", nil, nil),
+                ("㈱大垣共立銀行", nil, nil),
+                ("㈱神戸製鋼所", nil, nil),
             ])
+
+        // 銘柄数及び貸借対照表計上額の合計額（実データ検証2026-08-11）。
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 81)
+        #expect(summary.unlistedCarryingAmount == 69_893_000_000)
+        #expect(summary.listedIssueCount == 34)
+        #expect(summary.listedCarryingAmount == 2_951_382_000_000)
     }
 
     @Test(.enabled(if: cacheAvailable("S100VGBM"), "XBRL cache S100VGBM not available"))
@@ -1514,6 +1594,13 @@ import Testing
                 ("㈱エスライングループ本社", nil, nil),
                 ("オリックス㈱", nil, nil),
             ])
+
+        // 銘柄数及び貸借対照表計上額の合計額（実データ検証2026-08-11）。
+        let summary = try #require(payload.policyHoldingSummary)
+        #expect(summary.unlistedIssueCount == 36)
+        #expect(summary.unlistedCarryingAmount == 1_441_000_000)
+        #expect(summary.listedIssueCount == 25)
+        #expect(summary.listedCarryingAmount == 47_384_000_000)
     }
 
     // MARK: - dividends golden（決議単位、ユーザー実データ確認済み 2026-08-02）
