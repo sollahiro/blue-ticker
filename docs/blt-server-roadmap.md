@@ -123,6 +123,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 - [~] **REST 本線化（段階 A）** — 互換・Service Token 疎通・配布 `ticker` 廃止まで完了。任意で OpenAPI 下書き。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
+- [ ] **financials（Summary）と正本の分離** — EPS/発行済株式を notes 正本からのパススルー化。breakdown の financials 依存解消は将来ステップ。構想は `docs/financials-summary-separation-concept.md`
 
 ### 将来
 
