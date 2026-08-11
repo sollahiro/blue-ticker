@@ -365,6 +365,17 @@ public struct PolicyHoldingSecurityPayload: Codable, Sendable {
         self.isDeemedHolding = isDeemedHolding
     }
 
+    /// `isDeemedHolding` 追加（2026-08-11）前に格納された行にも対応するため、欠落時は
+    /// `false`（特定投資株式扱い）にフォールバックする。合成 Decodable のデフォルト値非対応を回避。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        issuerName = try container.decode(String.self, forKey: .issuerName)
+        numberOfShares = try container.decodeIfPresent(Double.self, forKey: .numberOfShares)
+        carryingAmount = try container.decodeIfPresent(Double.self, forKey: .carryingAmount)
+        purpose = try container.decodeIfPresent(String.self, forKey: .purpose)
+        isDeemedHolding = try container.decodeIfPresent(Bool.self, forKey: .isDeemedHolding) ?? false
+    }
+
     public func jsonObject() -> [String: Any] {
         [
             "issuer_name": issuerName,
