@@ -302,7 +302,7 @@ smoke/
 | 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は `status=not_applicable`。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(capital_expenditures_overview)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/CapitalExpendituresOverviewOracleFormatTests.swift` | `smoke/statement_notes_capital_expenditures_overview_expected.json`（smoke固定11社。US-GAAP 2社も通常解決。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(per_share_information)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PerShareInformationOracleFormatTests.swift` | `smoke/statement_notes_per_share_information_expected.json`（試作2docID + smoke固定11社。US-GAAP BPS含む。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
-| 注記(issued_shares)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesOracleFormatTests.swift` | `smoke/statement_notes_issued_shares_expected.json`（smoke固定11社。`as_of_period_end`＝離散タグ＋`issued_shares_events`＝textblock表。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
+| 注記(issued_shares_and_capital)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesAndCapitalOracleFormatTests.swift` | `smoke/statement_notes_issued_shares_and_capital_expected.json`（smoke固定11社。`as_of_period_end`＝離散タグ＋`issued_shares_events`＝textblock表。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(他note_type)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/{Dividends,PolicyHoldingSecurities,GoodwillAndIntangibles}OracleFormatTests.swift` | `smoke/statement_notes_{dividends,policy_holding_securities,goodwill_and_intangibles}_expected.json`（試作1〜2docID のみ。smoke 床には未追加） |
 | IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | `IBDExtractor.extract` と `resolveBorrowingsSchedule` の関係を検証。method="borrowings_schedule" で解決した docID は合計一致を、method="field_parser"（SOMPO S100R1LR）は不一致自体を実データ値で固定（`docs/test-spec-assets.md` の D） |
 
@@ -310,10 +310,10 @@ smoke/
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
-- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares` note_type**（各 `*OracleFormatTests` + 外出しJSON）。他 note_type / breakdown の決定論ロジックはまだこの床に含まれていない。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital` note_type**（各 `*OracleFormatTests` + 外出しJSON）。他 note_type / breakdown の決定論ロジックはまだこの床に含まれていない。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
 - **golden回帰**（年次スモーク以外）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
 
-原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は `borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares` 以外は未整備というギャップがある（dividends・policy_holding_securities・goodwill_and_intangibles は外出しオラクル形式へ横展開済みだが試作1〜2docID のみで smoke 床には未追加）。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない note_type / breakdown がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床を広げる。
+原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は `borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital` 以外は未整備というギャップがある（dividends・policy_holding_securities・goodwill_and_intangibles は外出しオラクル形式へ横展開済みだが試作1〜2docID のみで smoke 床には未追加）。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない note_type / breakdown がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床を広げる。
 
 smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`）にあたる。テストを移行耐性の観点で層分けする指針は `test-spec-assets.md` を参照。
 

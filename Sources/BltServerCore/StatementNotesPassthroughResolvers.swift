@@ -5,7 +5,7 @@
 // `consolidatedSalesForDoc` と同型の設計判断）。
 //
 // dividends（決議単位のテーブル）・per_share_information（EPS/BPS/潜在株式調整後EPSの3指標）・
-// capital_expenditures_overview（セグメント別テーブル）・issued_shares（発行済株式総数・資本金等の
+// capital_expenditures_overview（セグメント別テーブル）・issued_shares_and_capital（発行済株式総数・資本金等の
 // 推移テーブル）は当初この passthrough 経路で実装したが、実データレビュー（2026-08-02）で注記側が
 // より豊富な情報を持つと判明したため `StatementNotesResolver`（BlueTickerCore側、XBRL直接抽出）へ
 // 置き換えた。treasury_stock_acquisition は note_type ごと廃止（自己株式の取得は Statement 側で

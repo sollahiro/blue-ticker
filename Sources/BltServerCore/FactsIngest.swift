@@ -380,8 +380,8 @@ public func runFactsIngestCommand(
                         { docID, _ in await context.resolvePerShareInformationNote(docID: docID) }
                     ),
                     (
-                        statementNoteTypeIssuedShares,
-                        { docID, _ in await context.resolveIssuedSharesNote(docID: docID) }
+                        statementNoteTypeIssuedSharesAndCapital,
+                        { docID, _ in await context.resolveIssuedSharesAndCapitalNote(docID: docID) }
                     ),
                     (
                         statementNoteTypeResearchAndDevelopment,

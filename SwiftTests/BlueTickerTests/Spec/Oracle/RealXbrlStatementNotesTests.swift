@@ -1978,7 +1978,7 @@ import Testing
         #expect(segments[0].investmentAmount == 3_705_000_000)
     }
 
-    // MARK: - issued_shares golden（ユーザー実データ確認済み 2026-08-02、as_of 2026-08-11）
+    // MARK: - issued_shares_and_capital golden（ユーザー実データ確認済み 2026-08-02、as_of 2026-08-11）
     //
     // 2経路: (1) `as_of_period_end` = 離散タグの期末スナップショット（発行済は PerShareExtractor と
     // 同値、資本金/資本準備金は CapitalStock*/LegalCapitalSurplus）。(2) `issued_shares_events` =
@@ -1987,8 +1987,8 @@ import Testing
     // 実数」で判定する。日立の「自◯至◯」期間ラベル行（3増減欄すべて「－」）だけを除外する。
 
     @Test(.enabled(if: cacheAvailable("S100JRT9"), "XBRL cache S100JRT9 not available"))
-    func goldenIssuedSharesLaserTecStockSplitsOnly() throws {
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100JRT9"))
+    func goldenIssuedSharesAndCapitalLaserTecStockSplitsOnly() throws {
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100JRT9"))
         guard case .resolved(let payload, let source, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2005,8 +2005,8 @@ import Testing
 
     /// smoke 富士フイルム: as_of 発行済が smoke_expected と一致、分割イベント1件、資本金/準備金タグ。
     @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
-    func goldenIssuedSharesFujifilmAsOfAndSplitEvent() throws {
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100W3XJ"))
+    func goldenIssuedSharesAndCapitalFujifilmAsOfAndSplitEvent() throws {
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100W3XJ"))
         guard case .resolved(let payload, let source, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2025,8 +2025,8 @@ import Testing
 
     /// smoke 味の素: 表の期末残高は千株丸め、as_of はタグ生株（smoke_expected と一致）。
     @Test(.enabled(if: cacheAvailable("S100VXJA"), "XBRL cache S100VXJA not available"))
-    func goldenIssuedSharesAjinomotoAsOfNotRoundedTableBalance() throws {
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100VXJA"))
+    func goldenIssuedSharesAndCapitalAjinomotoAsOfNotRoundedTableBalance() throws {
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100VXJA"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2041,11 +2041,11 @@ import Testing
     }
 
     @Test(.enabled(if: cacheAvailable("S100QZT0"), "XBRL cache S100QZT0 not available"))
-    func goldenIssuedSharesHitachiExcludesFiscalYearPlaceholderRows() throws {
+    func goldenIssuedSharesAndCapitalHitachiExcludesFiscalYearPlaceholderRows() throws {
         // 「自2018年４月１日 至2019年３月31日」等の期間ラベル行（変動なし確認用、増減欄が
         // すべて「－」）を挟むが、実イベント行（単発日付、5件）だけが残ることを確認する。
         // 2022/12/14は自己株式消却（△表記）で資本金・資本準備金の増減欄は「－」のまま。
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100QZT0"))
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QZT0"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2064,9 +2064,9 @@ import Testing
     }
 
     @Test(.enabled(if: cacheAvailable("S100QZOM"), "XBRL cache S100QZOM not available"))
-    func goldenIssuedSharesSoftBankGroupThousandShareUnit() throws {
+    func goldenIssuedSharesAndCapitalSoftBankGroupThousandShareUnit() throws {
         // ヘッダーが「（千株）」表記のため、生値の1000倍が正しい株数（消却・分割イベント5件）。
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100QZOM"))
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QZOM"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2081,10 +2081,10 @@ import Testing
     }
 
     @Test(.enabled(if: cacheAvailable("S100QYHM"), "XBRL cache S100QYHM not available"))
-    func goldenIssuedSharesKobeSteelStockExchangeIssuance() throws {
+    func goldenIssuedSharesAndCapitalKobeSteelStockExchangeIssuance() throws {
         // 株式交換による新株発行1件のみ。資本金増減欄は「－」だが資本準備金は実額で増加
         // （株式交換型の新株発行が資本準備金側に計上された珍しいケース）。
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100QYHM"))
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QYHM"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
@@ -2098,11 +2098,11 @@ import Testing
     }
 
     @Test(.enabled(if: cacheAvailable("S100VH9B"), "XBRL cache S100VH9B not available"))
-    func goldenIssuedSharesJTShareCountUnchangedOnlyCapitalReserveMoved() throws {
+    func goldenIssuedSharesAndCapitalJTShareCountUnchangedOnlyCapitalReserveMoved() throws {
         // 会社法448条に基づく資本準備金→その他資本剰余金への振替。株数・資本金は不変
         // （増減欄が「－」）で資本準備金だけ実額で減少する行。株数増減欄だけで採否判定すると
         // この行自体が消えてしまうバグを実データで発見・修正した回帰。
-        let result = StatementNotesResolver.resolveIssuedShares(xbrlDir: Self.xbrlDir("S100VH9B"))
+        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100VH9B"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return

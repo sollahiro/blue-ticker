@@ -76,10 +76,10 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     var debugCapex = false
 
     @Flag(
-        name: .customLong("debug-issued-shares"),
-        help: "--debug-doc と併用。issued_shares note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+        name: .customLong("debug-issued-shares-and-capital"),
+        help: "--debug-doc と併用。issued_shares_and_capital note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
     )
-    var debugIssuedShares = false
+    var debugIssuedSharesAndCapital = false
 
     @Flag(
         name: .customLong("debug-ppe-schedule"),
@@ -305,12 +305,12 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             )
             return
         }
-        if let debugDoc, debugIssuedShares {
+        if let debugDoc, debugIssuedSharesAndCapital {
             let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
-            Self.debugIssuedShares(docID: debugDoc, xbrlDir: dir)
+            Self.debugIssuedSharesAndCapital(docID: debugDoc, xbrlDir: dir)
             return
         }
-        if debugDoc == nil, debugIssuedShares {
+        if debugDoc == nil, debugIssuedSharesAndCapital {
             guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
             else { return }
             let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
@@ -319,7 +319,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             var notApplicableCount = 0
             for dir in dirs {
                 let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
-                switch StatementNotesResolver.resolveIssuedShares(xbrlDir: dir) {
+                switch StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: dir) {
                 case .resolved:
                     resolvedCount += 1
                 case .notApplicable:
@@ -764,10 +764,10 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
     }
 
-    // MARK: - デバッグ(財務諸表注記取り込み issued_shares note_type)
+    // MARK: - デバッグ(財務諸表注記取り込み issued_shares_and_capital note_type)
 
-    static func debugIssuedShares(docID: String, xbrlDir: URL) {
-        switch StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir) {
+    static func debugIssuedSharesAndCapital(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir) {
         case .resolved(let payload, let source, let contentHash):
             let events = payload.issuedSharesEvents ?? []
             print("source=\(source) contentHash=\(contentHash) events=\(events.count)")

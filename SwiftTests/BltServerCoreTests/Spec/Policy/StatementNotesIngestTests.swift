@@ -1,6 +1,6 @@
 // 財務諸表注記取り込みのうち、財務取り込み（company_financials）が既に計算済みの値をそのまま再公開する
 // 決定論 note_type（研究開発費）を検証する。
-// dividends・per_share_information・capital_expenditures_overview・issued_shares は実データレビュー
+// dividends・per_share_information・capital_expenditures_overview・issued_shares_and_capital は実データレビュー
 // （2026-08-02）でXBRL直接抽出（`StatementNotesResolver` の各 resolve メソッド）へ置き換え済みのため
 // 対象外（`SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照）。
 // 自前で XBRL を再抽出しないため、フェイク抽出器ではなく `CompanyFinancials` の実データ構造を

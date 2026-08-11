@@ -673,7 +673,7 @@ enum StatementNotesResolver {
         ].contains { joined.contains($0) }
     }
 
-    /// 発行済株式総数・資本金等（`issued_shares` note_type）。
+    /// 発行済株式総数・資本金等（`issued_shares_and_capital` note_type）。
     ///
     /// 2経路を併記する（2026-08-11）:
     /// 1. **`as_of_period_end`（離散XBRLタグ）**: 期末の発行済株式・資本金・資本準備金。
@@ -703,7 +703,7 @@ enum StatementNotesResolver {
     ///   自由記述にしかなく構造化抽出の対象外（決議日/表記載基準のみ、他note_typeと同様の割り切り）
     ///
     /// 表が無くてもタグ期末が取れれば resolved（summary 床用）。両方無ければ notApplicable。
-    static func resolveIssuedShares(xbrlDir: URL) -> StatementNoteResolveResult {
+    static func resolveIssuedSharesAndCapital(xbrlDir: URL) -> StatementNoteResolveResult {
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let durationFS = fieldSetFromDuration(allTagElements)
         let issuedShares = PerShareExtractor.extract(

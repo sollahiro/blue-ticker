@@ -336,12 +336,12 @@ public extension BltServerContext {
         return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `issued_shares` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveIssuedShares` に委譲する。期末スナップショット（離散タグ:
+    /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
+    /// `StatementNotesResolver.resolveIssuedSharesAndCapital` に委譲する。期末スナップショット（離散タグ:
     /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
-    func resolveIssuedSharesNote(docID: String) async -> StatementNoteResolveResult {
+    func resolveIssuedSharesAndCapitalNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir)
+        return StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは

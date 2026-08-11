@@ -131,7 +131,7 @@ enum Xbrl {
     static let currentYearInstantContext = "CurrentYearInstant"
     static let filingDateInstantContext = "FilingDateInstant"
 
-    /// 資本金（期末・円）。`issued_shares` note の `as_of_period_end.capital_stock` 用。
+    /// 資本金（期末・円）。`issued_shares_and_capital` note の `as_of_period_end.capital_stock` 用。
     /// IFRS連結は `ShareCapitalIFRS`（CurrentYearInstant）、JGAAP/US-GAAP 親会社は
     /// Summary / `CapitalStock`（多くが NonConsolidatedMember）。優先順は連結→Summary→単体。
     static let capitalStockTags: [String] = [
