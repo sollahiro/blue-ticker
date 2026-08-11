@@ -1,0 +1,553 @@
+{
+  "S100VU4O": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 1208000.0,
+      "capital_stock": 385120000.0,
+      "capital_reserve": 365120000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2021年３月１日～ 2022年２月28日(注)１．",
+        "shares_delta": 6500.0,
+        "shares_balance": 957500.0,
+        "capital_delta": 624000.0,
+        "capital_balance": 171232000.0,
+        "capital_reserve_delta": 624000.0,
+        "capital_reserve_balance": 151232000.0
+      },
+      {
+        "date": "2023年３月１日～ 2023年９月４日(注)２．",
+        "shares_delta": 157500.0,
+        "shares_balance": 1115000.0,
+        "capital_delta": 130454000.0,
+        "capital_balance": 301687000.0,
+        "capital_reserve_delta": 130454000.0,
+        "capital_reserve_balance": 281687000.0
+      },
+      {
+        "date": "2023年９月５日～ 2023年12月11日(注)３．",
+        "shares_delta": 77500.0,
+        "shares_balance": 1192500.0,
+        "capital_delta": 70399000.0,
+        "capital_balance": 372087000.0,
+        "capital_reserve_delta": 70399000.0,
+        "capital_reserve_balance": 352087000.0
+      },
+      {
+        "date": "2023年12月11日～ 2024年２月29日(注)４．",
+        "shares_delta": 4500.0,
+        "shares_balance": 1197000.0,
+        "capital_delta": 432000.0,
+        "capital_balance": 372519000.0,
+        "capital_reserve_delta": 432000.0,
+        "capital_reserve_balance": 352519000.0
+      },
+      {
+        "date": "2024年７月12日 (注)５．",
+        "shares_delta": 10000.0,
+        "shares_balance": 1207000.0,
+        "capital_delta": 12505000.0,
+        "capital_balance": 385024000.0,
+        "capital_reserve_delta": 12505000.0,
+        "capital_reserve_balance": 365024000.0
+      },
+      {
+        "date": "2024年７月12日～ 2025年２月28日(注)６．",
+        "shares_delta": 1000.0,
+        "shares_balance": 1208000.0,
+        "capital_delta": 96000.0,
+        "capital_balance": 385120000.0,
+        "capital_reserve_delta": 96000.0,
+        "capital_reserve_balance": 365120000.0
+      }
+    ]
+  },
+  "S100VXJA": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 502818808.0,
+      "capital_stock": 79863000000.0,
+      "capital_reserve": 4274000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2022年3月7日",
+        "shares_delta": -12167000.0,
+        "shares_balance": 536996000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      },
+      {
+        "date": "2023年3月27日",
+        "shares_delta": -7198000.0,
+        "shares_balance": 529798000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      },
+      {
+        "date": "2023年9月25日",
+        "shares_delta": -8367000.0,
+        "shares_balance": 521430000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      },
+      {
+        "date": "2024年5月27日",
+        "shares_delta": -5699000.0,
+        "shares_balance": 515731000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      },
+      {
+        "date": "2024年10月28日",
+        "shares_delta": -7416000.0,
+        "shares_balance": 508314000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      },
+      {
+        "date": "2025年3月27日",
+        "shares_delta": -5495000.0,
+        "shares_balance": 502818000.0,
+        "capital_delta": null,
+        "capital_balance": 79863000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 4274000000.0
+      }
+    ]
+  },
+  "S100VYA0": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 128464869.0,
+      "capital_stock": 30608000000.0,
+      "capital_reserve": 7905000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2020年７月22日 （注）１",
+        "shares_delta": 38290.0,
+        "shares_balance": 140003877.0,
+        "capital_delta": 59000000.0,
+        "capital_balance": 30418000000.0,
+        "capital_reserve_delta": 59000000.0,
+        "capital_reserve_balance": 7715000000.0
+      },
+      {
+        "date": "2021年７月21日 （注）２",
+        "shares_delta": 37518.0,
+        "shares_balance": 140041395.0,
+        "capital_delta": 53000000.0,
+        "capital_balance": 30472000000.0,
+        "capital_reserve_delta": 53000000.0,
+        "capital_reserve_balance": 7769000000.0
+      },
+      {
+        "date": "2021年11月10日 （注）３",
+        "shares_delta": -6033600.0,
+        "shares_balance": 134007795.0,
+        "capital_delta": null,
+        "capital_balance": 30472000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 7769000000.0
+      },
+      {
+        "date": "2022年７月22日 （注）４",
+        "shares_delta": 34804.0,
+        "shares_balance": 134042599.0,
+        "capital_delta": 39000000.0,
+        "capital_balance": 30512000000.0,
+        "capital_reserve_delta": 39000000.0,
+        "capital_reserve_balance": 7808000000.0
+      },
+      {
+        "date": "2023年７月26日 （注）５",
+        "shares_delta": 33053.0,
+        "shares_balance": 134075652.0,
+        "capital_delta": 51000000.0,
+        "capital_balance": 30563000000.0,
+        "capital_reserve_delta": 51000000.0,
+        "capital_reserve_balance": 7860000000.0
+      },
+      {
+        "date": "2024年７月24日 （注）６",
+        "shares_delta": 25617.0,
+        "shares_balance": 134101269.0,
+        "capital_delta": 45000000.0,
+        "capital_balance": 30608000000.0,
+        "capital_reserve_delta": 45000000.0,
+        "capital_reserve_balance": 7905000000.0
+      },
+      {
+        "date": "2024年11月13日 （注）７",
+        "shares_delta": -5636400.0,
+        "shares_balance": 128464869.0,
+        "capital_delta": null,
+        "capital_balance": 30608000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 7905000000.0
+      }
+    ]
+  },
+  "S100W043": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 67510308.0,
+      "capital_stock": 18000000000.0,
+      "capital_reserve": null
+    },
+    "issued_shares_events": [
+      {
+        "date": "2024年６月21日 (注)１",
+        "shares_delta": null,
+        "shares_balance": 33755000.0,
+        "capital_delta": null,
+        "capital_balance": 18000000000.0,
+        "capital_reserve_delta": -14951000000.0,
+        "capital_reserve_balance": null
+      },
+      {
+        "date": "2024年10月１日 (注)２",
+        "shares_delta": 33755000.0,
+        "shares_balance": 67510000.0,
+        "capital_delta": null,
+        "capital_balance": 18000000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": null
+      }
+    ]
+  },
+  "S100W0S7": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 3884445458.0,
+      "capital_stock": 2345960000000.0,
+      "capital_reserve": 1567436000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2020年７月27日",
+        "shares_delta": 868505.0,
+        "shares_balance": 1374040061.0,
+        "capital_delta": 1309705000.0,
+        "capital_balance": 2341274358000.0,
+        "capital_reserve_delta": 1308837000.0,
+        "capital_reserve_balance": 1562751533000.0
+      },
+      {
+        "date": "2021年７月26日",
+        "shares_delta": 322041.0,
+        "shares_balance": 1374362102.0,
+        "capital_delta": 603826000.0,
+        "capital_balance": 2341878185000.0,
+        "capital_reserve_delta": 603504000.0,
+        "capital_reserve_balance": 1563355038000.0
+      },
+      {
+        "date": "2022年７月26日",
+        "shares_delta": 329092.0,
+        "shares_balance": 1374691194.0,
+        "capital_delta": 658842000.0,
+        "capital_balance": 2342537027000.0,
+        "capital_reserve_delta": 658842000.0,
+        "capital_reserve_balance": 1564013880000.0
+      },
+      {
+        "date": "2023年６月20日",
+        "shares_delta": -37640000.0,
+        "shares_balance": 1337051194.0,
+        "capital_delta": null,
+        "capital_balance": 2342537027000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 1564013880000.0
+      },
+      {
+        "date": "2023年７月25日",
+        "shares_delta": 477890.0,
+        "shares_balance": 1337529084.0,
+        "capital_delta": 1501052000.0,
+        "capital_balance": 2344038079000.0,
+        "capital_reserve_delta": 1500574000.0,
+        "capital_reserve_balance": 1565514455000.0
+      },
+      {
+        "date": "2024年４月15日",
+        "shares_delta": -20132000.0,
+        "shares_balance": 1317397084.0,
+        "capital_delta": null,
+        "capital_balance": 2344038079000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 1565514455000.0
+      },
+      {
+        "date": "2024年７月25日",
+        "shares_delta": 341902.0,
+        "shares_balance": 1317738986.0,
+        "capital_delta": 1922514000.0,
+        "capital_balance": 2345960594000.0,
+        "capital_reserve_delta": 1922173000.0,
+        "capital_reserve_balance": 1567436628000.0
+      },
+      {
+        "date": "2024年８月20日",
+        "shares_delta": -9561800.0,
+        "shares_balance": 1308177186.0,
+        "capital_delta": null,
+        "capital_balance": 2345960594000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 1567436628000.0
+      },
+      {
+        "date": "2024年10月１日",
+        "shares_delta": 2616354372.0,
+        "shares_balance": 3924531558.0,
+        "capital_delta": null,
+        "capital_balance": 2345960594000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 1567436628000.0
+      },
+      {
+        "date": "2025年２月20日",
+        "shares_delta": -40086100.0,
+        "shares_balance": 3884445458.0,
+        "capital_delta": null,
+        "capital_balance": 2345960594000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 1567436628000.0
+      }
+    ]
+  },
+  "S100W3XJ": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 1243877184.0,
+      "capital_stock": 40363000000.0,
+      "capital_reserve": 63636000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2024年４月１日(注)",
+        "shares_delta": 829251456.0,
+        "shares_balance": 1243877184.0,
+        "capital_delta": null,
+        "capital_balance": 40363000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 63636000000.0
+      }
+    ]
+  },
+  "S100W4FB": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 12067710920.0,
+      "capital_stock": 2141513000000.0,
+      "capital_reserve": 2141524000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2021年11月30日 (注)",
+        "shares_delta": -300000000.0,
+        "shares_balance": 13281995120.0,
+        "capital_delta": null,
+        "capital_balance": 2141513000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 2141524000000.0
+      },
+      {
+        "date": "2022年11月30日 (注)",
+        "shares_delta": -418926300.0,
+        "shares_balance": 12863068820.0,
+        "capital_delta": null,
+        "capital_balance": 2141513000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 2141524000000.0
+      },
+      {
+        "date": "2023年 2月28日 (注)",
+        "shares_delta": -175357900.0,
+        "shares_balance": 12687710920.0,
+        "capital_delta": null,
+        "capital_balance": 2141513000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 2141524000000.0
+      },
+      {
+        "date": "2023年11月30日 (注)",
+        "shares_delta": -350000000.0,
+        "shares_balance": 12337710920.0,
+        "capital_delta": null,
+        "capital_balance": 2141513000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 2141524000000.0
+      },
+      {
+        "date": "2024年11月29日 (注)",
+        "shares_delta": -270000000.0,
+        "shares_balance": 12067710920.0,
+        "capital_delta": null,
+        "capital_balance": 2141513000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 2141524000000.0
+      }
+    ]
+  },
+  "S100W4MT": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 1964586400.0,
+      "capital_stock": 138370000000.0,
+      "capital_reserve": 144720000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2020年８月７日 (注)１",
+        "shares_delta": 30500.0,
+        "shares_balance": 491098300.0,
+        "capital_delta": 60000000.0,
+        "capital_balance": 138262000000.0,
+        "capital_reserve_delta": 60000000.0,
+        "capital_reserve_balance": 144612000000.0
+      },
+      {
+        "date": "2021年８月３日 (注)２",
+        "shares_delta": 24000.0,
+        "shares_balance": 491122300.0,
+        "capital_delta": 55000000.0,
+        "capital_balance": 138318000000.0,
+        "capital_reserve_delta": 55000000.0,
+        "capital_reserve_balance": 144668000000.0
+      },
+      {
+        "date": "2022年８月２日 (注)３",
+        "shares_delta": 24300.0,
+        "shares_balance": 491146600.0,
+        "capital_delta": 52000000.0,
+        "capital_balance": 138370000000.0,
+        "capital_reserve_delta": 52000000.0,
+        "capital_reserve_balance": 144720000000.0
+      },
+      {
+        "date": "2024年４月１日 (注)４",
+        "shares_delta": 1473439800.0,
+        "shares_balance": 1964586400.0,
+        "capital_delta": null,
+        "capital_balance": 138370000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 144720000000.0
+      }
+    ]
+  },
+  "S100XR0M": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 1138716846.0,
+      "capital_stock": 84130000000.0,
+      "capital_reserve": 73117000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2021年12月30日 (注)",
+        "shares_delta": -8330000.0,
+        "shares_balance": 1200246000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      },
+      {
+        "date": "2022年９月30日 (注)",
+        "shares_delta": -9240000.0,
+        "shares_balance": 1191006000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      },
+      {
+        "date": "2023年７月31日 (注)",
+        "shares_delta": -9930000.0,
+        "shares_balance": 1181076000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      },
+      {
+        "date": "2023年12月28日 (注)",
+        "shares_delta": -4410000.0,
+        "shares_balance": 1176666000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      },
+      {
+        "date": "2024年12月27日 (注)",
+        "shares_delta": -25770000.0,
+        "shares_balance": 1150896000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      },
+      {
+        "date": "2025年12月26日 (注)",
+        "shares_delta": -12180000.0,
+        "shares_balance": 1138716000.0,
+        "capital_delta": null,
+        "capital_balance": 84130000000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 73117000000.0
+      }
+    ]
+  },
+  "S100XRD8": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 5120700.0,
+      "capital_stock": 961720000.0,
+      "capital_reserve": 838440000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2024年12月21日",
+        "shares_delta": 4608630.0,
+        "shares_balance": 5120700.0,
+        "capital_delta": null,
+        "capital_balance": 961720000.0,
+        "capital_reserve_delta": null,
+        "capital_reserve_balance": 838440000.0
+      }
+    ]
+  },
+  "S100XTLJ": {
+    "source": "xbrl_facts",
+    "as_of_period_end": {
+      "issued_shares": 1333763464.0,
+      "capital_stock": 174762000000.0,
+      "capital_reserve": 306288000000.0
+    },
+    "issued_shares_events": [
+      {
+        "date": "2008年１月１日 ～12月31日",
+        "shares_delta": 127254.0,
+        "shares_balance": 1333763464.0,
+        "capital_delta": 64000000.0,
+        "capital_balance": 174762000000.0,
+        "capital_reserve_delta": 63000000.0,
+        "capital_reserve_balance": 306288000000.0
+      }
+    ]
+  }
+}

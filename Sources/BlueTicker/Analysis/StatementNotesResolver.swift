@@ -673,11 +673,19 @@ enum StatementNotesResolver {
         ].contains { joined.contains($0) }
     }
 
-    /// 発行済株式総数・資本金等の推移（`issued_shares` note_type）。
+    /// 発行済株式総数・資本金等（`issued_shares` note_type）。
     ///
-    /// 実データ検証（2026-08-02）: `ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock` 内の
-    /// HTML表は「年月日／発行済株式総数増減数／総数残高／資本金増減額／資本金残高／資本準備金
-    /// 増減額／資本準備金残高」の決議・イベント単位テーブル。以下の揺れを実データで確認済み:
+    /// 2経路を併記する（2026-08-11）:
+    /// 1. **`as_of_period_end`（離散XBRLタグ）**: 期末の発行済株式・資本金・資本準備金。
+    ///    発行済は `PerShareExtractor` と同じ解決（financials / smoke の `per_share.issued_shares`
+    ///    と一致）。資本金は `ShareCapitalIFRS`→Summary→`CapitalStock`、資本準備金は
+    ///    `LegalCapitalSurplus`（その他資本剰余金を含む `CapitalSurplus*` は使わない）。
+    ///    将来 summary を notes から読む場合も期末値の正はこちら。
+    /// 2. **`issued_shares_events`（textblock HTML表）**: 分割・消却・増資などのイベント列。
+    ///    表が千株丸めの会社では最終行残高がタグ期末と数百株ずれることがある（味の素・クボタ等）。
+    ///    履歴用途であり期末の正には使わない。
+    ///
+    /// 表パースの揺れ（2026-08-02 実データ検証）:
     /// - 単位が会社ごとに揺れる（株数=株/千株、金額=千円/百万円）。ヘッダー文言から都度判定し、
     ///   常に「株」「円」の生値へ正規化する（列固定にしない）
     /// - 「自◯年◯月◯日 至◯年◯月◯日」という期間表記の行が挟まる会社がある。日立は変動なし
@@ -693,15 +701,64 @@ enum StatementNotesResolver {
     /// - 自己株式消却による減少は「△」表記（例: 日立・ソフトバンクG）
     /// - 表に現れない期末後の増減（例: 日立の注記6「2023年５月31日付で新株発行」）は脚注の
     ///   自由記述にしかなく構造化抽出の対象外（決議日/表記載基準のみ、他note_typeと同様の割り切り）
+    ///
+    /// 表が無くてもタグ期末が取れれば resolved（summary 床用）。両方無ければ notApplicable。
     static func resolveIssuedShares(xbrlDir: URL) -> StatementNoteResolveResult {
-        guard let events = parseIssuedSharesTable(xbrlDir: xbrlDir), !events.isEmpty else {
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let durationFS = fieldSetFromDuration(allTagElements)
+        let issuedShares = PerShareExtractor.extract(
+            durationFS: durationFS, tagElements: allTagElements).issuedShares
+        let capitalStock = resolveCurrentInstantFact(allTagElements, tags: Xbrl.capitalStockTags)
+        let capitalReserve = resolveCurrentInstantFact(allTagElements, tags: Xbrl.capitalReserveTags)
+        let asOf: IssuedSharesAsOfPayload?
+        if issuedShares != nil || capitalStock != nil || capitalReserve != nil {
+            asOf = IssuedSharesAsOfPayload(
+                issuedShares: issuedShares, capitalStock: capitalStock, capitalReserve: capitalReserve)
+        } else {
+            asOf = nil
+        }
+        let events = parseIssuedSharesTable(xbrlDir: xbrlDir)
+
+        guard asOf != nil || !(events ?? []).isEmpty else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
-        let hash = events.map { "\($0.date):\($0.sharesDelta ?? -1):\($0.sharesBalance ?? -1)" }
-            .joined(separator: ";")
+        let eventHash = (events ?? []).map {
+            "\($0.date):\($0.sharesDelta ?? -1):\($0.sharesBalance ?? -1)"
+        }.joined(separator: ";")
+        let asOfHash = [
+            "s=\(issuedShares.map { String($0) } ?? "-")",
+            "c=\(capitalStock.map { String($0) } ?? "-")",
+            "r=\(capitalReserve.map { String($0) } ?? "-")",
+        ].joined(separator: ",")
         return .resolved(
-            payload: StatementNotePayload(issuedSharesEvents: events),
-            source: statementNoteSourceXbrlFacts, contentHash: hash)
+            payload: StatementNotePayload(
+                issuedSharesEvents: events.flatMap { $0.isEmpty ? nil : $0 },
+                issuedSharesAsOf: asOf),
+            source: statementNoteSourceXbrlFacts,
+            contentHash: "asOf{\(asOfHash)}|events{\(eventHash)}")
+    }
+
+    /// 期末 Instant の離散 fact。連結 `CurrentYearInstant` を優先し、無ければ
+    /// `CurrentYearInstant_NonConsolidatedMember`（資本金・資本準備金は親会社科目が多い）、
+    /// さらに `CurrentYearInstant*` を辞書順で拾う。
+    private static func resolveCurrentInstantFact(
+        _ tagElements: XbrlTagElements, tags: [String]
+    ) -> Double? {
+        let preferred = [
+            Xbrl.currentYearInstantContext,
+            "\(Xbrl.currentYearInstantContext)_NonConsolidatedMember",
+            Xbrl.filingDateInstantContext,
+        ]
+        for tag in tags {
+            guard let ctxs = tagElements[tag] else { continue }
+            for key in preferred {
+                if let v = ctxs[key] { return v }
+            }
+            for key in ctxs.keys.sorted() where key.contains(Xbrl.currentYearInstantContext) {
+                return ctxs[key]
+            }
+        }
+        return nil
     }
 
     /// セルのテキストが金額欄（数値または「－」）として解釈できるか。ラベル文字列（日付・

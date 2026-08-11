@@ -337,9 +337,8 @@ public extension BltServerContext {
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `issued_shares` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveIssuedShares` に委譲する（発行済株式総数・資本金等の推移を
-    /// 決議・イベント単位のテーブルとしてXBRL直接抽出、LLM不要）。財務取り込み の期末単一値 passthrough
-    /// を置き換える（実データレビューで推移テーブルの構造が判明したため、2026-08-02）。
+    /// `StatementNotesResolver.resolveIssuedShares` に委譲する。期末スナップショット（離散タグ:
+    /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
     func resolveIssuedSharesNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         return StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir)

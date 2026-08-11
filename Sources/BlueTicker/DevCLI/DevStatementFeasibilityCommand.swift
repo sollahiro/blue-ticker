@@ -770,7 +770,14 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         switch StatementNotesResolver.resolveIssuedShares(xbrlDir: xbrlDir) {
         case .resolved(let payload, let source, let contentHash):
             let events = payload.issuedSharesEvents ?? []
-            print("source=\(source) contentHash=\(contentHash) count=\(events.count)")
+            print("source=\(source) contentHash=\(contentHash) events=\(events.count)")
+            if let asOf = payload.issuedSharesAsOf {
+                print(
+                    "  as_of issued=\(asOf.issuedShares.map { String($0) } ?? "-") capital=\(asOf.capitalStock.map { String($0) } ?? "-") reserve=\(asOf.capitalReserve.map { String($0) } ?? "-")"
+                )
+            } else {
+                print("  as_of=-")
+            }
             for e in events {
                 print(
                     "  date=\(e.date) sharesDelta=\(e.sharesDelta.map { String($0) } ?? "-") sharesBalance=\(e.sharesBalance.map { String($0) } ?? "-") capitalDelta=\(e.capitalDelta.map { String($0) } ?? "-") capitalBalance=\(e.capitalBalance.map { String($0) } ?? "-") reserveDelta=\(e.capitalReserveDelta.map { String($0) } ?? "-") reserveBalance=\(e.capitalReserveBalance.map { String($0) } ?? "-")"
