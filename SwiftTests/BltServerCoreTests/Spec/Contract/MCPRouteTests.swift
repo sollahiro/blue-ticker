@@ -51,12 +51,16 @@ private func withMcpApp(
 }
 
 /// ルートパス（`/`）へ JSON-RPC ボディを POST し、ステータスとデコード済み JSON を返す。
+/// `extraHeaders` は `MCP-Protocol-Version` 等、クライアント固有ヘッダーの挙動を検証する場合に使う。
 private func postMcp(
-    _ app: Application, _ bodyObject: [String: Any]
+    _ app: Application, _ bodyObject: [String: Any], extraHeaders: [String: String] = [:]
 ) async throws -> (status: HTTPResponseStatus, json: [String: Any]?) {
     var headers = HTTPHeaders()
     headers.contentType = .json
     headers.add(name: "Accept", value: "application/json, text/event-stream")
+    for (name, value) in extraHeaders {
+        headers.add(name: name, value: value)
+    }
     let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
     let request = Request(
         application: app, method: .POST, url: URI(string: "/"), headers: headers,
@@ -315,11 +319,14 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
 
     /// ChatGPT（OpenAI 製 MCP クライアント）は initialize 前に MCP 仕様にない `server/discover` を
     /// 送ってくる（実測 2026-08-11: 本番の診断ログで `id: "openai-mcp-discover"` を確認）。
-    /// swift-sdk は未知のメソッドとして 400 を返す。空の成功レスポンスに差し替えるだけでは ChatGPT が
-    /// ツールなしとみなして後続の initialize/tools_list を送らなくなる（実測: 本番で `result: {}` を
-    /// 返した際に後続リクエストが来なくなることを確認）ため、method 名のみ `tools/list` に差し替えて
-    /// 実際のツール一覧を返す。id はそのまま引き継ぐ。
-    @Test func serverDiscoverMethodReturnsToolsListResultWithEchoedId() async throws {
+    /// swift-sdk は未知のメソッドとして拒否する。これは意図的にそのまま素通しする（書き換えない）。
+    /// discover を `tools/list` として書き換えて 200 + 実ツール一覧を返す実装を試した際、ChatGPT は
+    /// その結果を discover 専用スキーマとして検証しているらしく、期待形と一致しないと判断して以降の
+    /// initialize/tools_list を送らず、コネクタ追加が `refresh_actions` 424 で打ち切られることを実測
+    /// （2026-08-11: ローカル + cloudflared トンネル経由での実機検証）。一方、discover が素の
+    /// エラーで失敗した回は ChatGPT が標準ハンドシェイク（initialize→tools/list）へフォールバックし、
+    /// コネクタのアクション一覧（8ツール）が正しく表示されることを同じ実機検証で確認済み。
+    @Test func serverDiscoverMethodReturnsErrorWithEchoedId() async throws {
         try await withMcpApp { app in
             let (status, json) = try await postMcp(
                 app,
@@ -329,8 +336,54 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 ])
             #expect(status == .ok)
             #expect(json?["id"] as? String == "openai-mcp-discover")
+            #expect(json?["error"] != nil)
+            #expect(json?["result"] == nil)
+        }
+    }
+
+    // MARK: - MCP-Protocol-Version ヘッダーの未サポート値（issue: ChatGPT接続時の400混入）
+
+    /// ChatGPT は initialize 以外の全リクエストに `MCP-Protocol-Version` ヘッダーを付与するが、値には
+    /// initialize でネゴシエーション前の希望バージョン（実測 2026-08-11: "2026-07-28"）をそのまま
+    /// 使うことがある。swift-sdk の `ProtocolVersionValidator` はこれを既知バージョン集合と照合し、
+    /// 未知の値だと一律 400 にする。ヘッダー自体が無ければデフォルトを仮定して通す仕様のため、
+    /// 未サポート値のときはヘッダーごと落として通す。
+    @Test func unsupportedProtocolVersionHeaderIsStrippedInsteadOfRejected() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app,
+                ["jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": [String: Any]()],
+                extraHeaders: ["MCP-Protocol-Version": "2026-07-28"])
+            #expect(status == .ok)
             let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
             #expect((tools ?? []).count == mcpToolCatalog().count)
+        }
+    }
+
+    // MARK: - initialize の非標準 capabilities.experimental（issue: ChatGPT接続時の400混入）
+
+    /// ChatGPT は initialize の `params.capabilities.experimental` に値がオブジェクトの非標準な
+    /// 形（実測 2026-08-11: `{"openai/visibility":{"enabled":true}}`）を送ってくる。swift-sdk の
+    /// `Client.Capabilities.experimental` は `[String: String]?` に固定されており、このデコードに
+    /// 失敗すると initialize 全体が `-32603 Internal error` になる。本サーバーはクライアント
+    /// capabilities を利用しないため、デコードできない形の experimental はキーごと落として通す。
+    @Test func initializeWithNonStringExperimentalCapabilitiesSucceeds() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app,
+                [
+                    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": [
+                        "protocolVersion": "2025-11-25",
+                        "clientInfo": ["name": "openai-mcp", "version": "1.0.0"],
+                        "capabilities": [
+                            "experimental": ["openai/visibility": ["enabled": true]]
+                        ],
+                    ],
+                ])
+            #expect(status == .ok)
+            #expect(json?["error"] == nil)
+            #expect((json?["result"] as? [String: Any])?["protocolVersion"] != nil)
         }
     }
 

@@ -21,6 +21,8 @@ swift test                           # 全テスト（Swift Testing）
 swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
 ```
 
+**サーバー動作確認はローカル優先**: 外部クライアント（ChatGPT 等）の実接続確認を含め、挙動を1回ごとに見て試行錯誤する段階は `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server`（`127.0.0.1:3000`）で行う。外部から到達させる必要がある場合は `cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate` 等の一時トンネルを使う。PR → CI → デプロイの待ちは1周が数分かかり、本番へも影響しうる。ローカルは秒単位で再現でき、失敗させても本番に影響しない。ロジックが固まってから通常のブランチ運用（PR・CI・レビュー・マージ）に進む。
+
 ## ターゲット構成と依存ルール
 
 | ターゲット | 内容 |

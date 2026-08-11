@@ -48,18 +48,31 @@ func registerMcpRoute(
         // ChatGPT（OpenAI 製 MCP クライアント）は initialize の前に非標準の `server/discover`
         // （MCP 仕様にないメソッド）を送ってくる（実測 2026-08-11: 診断ログで
         // `{"jsonrpc":"2.0","id":"openai-mcp-discover","method":"server/discover",...}` を確認）。
-        // swift-sdk はこのメソッドを認識せず 400 を返す。空の成功レスポンスに差し替えるだけでは
-        // ChatGPT はツールなしとみなして後続の initialize/tools_list を送らず、コネクタのアクション
-        // 一覧が空のままになる（実測: `result: {}` を返すと本番で initialize/tools_list への追加
-        // リクエストが来なくなることを確認）。`server/discover` は「サーバーが提供する
-        // ツール・リソース・プロンプトを問い合わせる」事前ハンドシェイクのため、method 名のみ
-        // `tools/list` に差し替えて同じ JSON-RPC パイプラインへ渡し、実際のツール一覧を返す。
-        let dispatchedBody = rewriteServerDiscoverAsToolsList(requestBody) ?? requestBody
+        // swift-sdk はこのメソッドを認識せず JSON-RPC エラー封筒（-32601 methodNotFound、HTTP
+        // ステータスは 200）を返す。これは意図的にそのまま返す（書き換えない）。実測 2026-08-11:
+        // discover を `tools/list` として書き換えて 200 + 実ツール一覧を返しても、ChatGPT は
+        // その結果を discover 専用のスキーマとして検証しているらしく、期待形と一致しないと判断して
+        // 以降の initialize/tools_list を送らず `refresh_actions` が 424 で打ち切る（本番の生ログで
+        // discover 失敗時に標準ハンドシェイクへフォールバックする挙動を確認済み。当時観測していた
+        // 400 は discover 自体ではなく併発していた MCP-Protocol-Version ヘッダーの未サポート値が
+        // 原因で、下記の別修正で解消済み）。したがって discover はエラーのまま素通しし、
+        // フォールバックさせるのが正しい。
+        //
+        // ChatGPT は initialize リクエストの `params.capabilities.experimental` に非標準の値
+        // （キーの値がオブジェクト。例: `{"openai/visibility":{"enabled":true}}`）を送ってくる。
+        // swift-sdk の `Client.Capabilities.experimental` は `[String: String]?` に固定されており、
+        // このデコードに失敗すると initialize 全体が `-32603 Internal error` になる
+        // （実測 2026-08-11）。本サーバーはクライアント capabilities を利用しないため対象外。
+        let dispatchedBody = sanitizeInitializeCapabilities(requestBody) ?? requestBody
 
+        // dispatchedBody が元の requestBody と異なる長さになる場合（initialize の
+        // capabilities.experimental 除去等）、元リクエストの Content-Length ヘッダーをそのまま
+        // 引き継ぐと実際に送るボディの長さと食い違う。この呼び出し自体は Data を直接渡す
+        // インプロセス呼び出しであり swift-sdk は Content-Length を読まないため実害はないが、
+        // ヘッダーの整合性を保つため実際の長さへ補正する。
         let httpRequest = MCP.HTTPRequest(
             method: req.method.rawValue,
-            headers: Dictionary(
-                req.headers.map { ($0.name, $0.value) }, uniquingKeysWith: { first, _ in first }),
+            headers: dispatchedHeaders(from: req.headers, bodyByteCount: dispatchedBody.count),
             body: dispatchedBody,
             path: req.url.path
         )
@@ -79,15 +92,50 @@ func registerMcpRoute(
     }
 }
 
-/// `method: "server/discover"`（OpenAI 製クライアント固有の非標準メソッド）のボディを、id・jsonrpc は
-/// そのままに `method` だけ標準の `tools/list` へ書き換える。対象外のボディには nil を返す
+/// Vapor の元ヘッダーを SDK へ引き継ぐ辞書へ変換する。`Content-Length` は大文字小文字の異表記が
+/// 残ると下流が古い値を読む恐れがあるため、既存の表記ゆれをすべて除去したうえで
+/// `bodyByteCount`（実際に送るボディの長さ）で上書きする。
+private func dispatchedHeaders(from headers: HTTPHeaders, bodyByteCount: Int) -> [String: String] {
+    var result = Dictionary(
+        headers.filter { $0.name.lowercased() != "content-length" }.map { ($0.name, $0.value) },
+        uniquingKeysWith: { first, _ in first }
+    )
+    result["Content-Length"] = String(bodyByteCount)
+
+    // ChatGPT は initialize 以外の全リクエスト（server/discover 由来の再送を含む）に
+    // `MCP-Protocol-Version` ヘッダーを付与するが、値には initialize でネゴシエーション前に
+    // 希望するバージョン（実測 2026-08-11: "2026-07-28"）をそのまま使うことがある。swift-sdk の
+    // `ProtocolVersionValidator` はこの値を `MCP.Version.supported`（ハードコード済み既知集合）と
+    // 突き合わせ、未知の値だと initialize 以外のリクエストを一律 400 Bad Request にする。ヘッダー
+    // 自体が無ければ「デフォルトバージョンを仮定」して素通しする仕様のため、未サポート値のときは
+    // ヘッダーごと落とす（値の付け替えはネゴシエーション結果を偽ることになるため行わない）。
+    if let headerName = result.keys.first(where: {
+        $0.caseInsensitiveCompare(HTTPHeaderName.protocolVersion) == .orderedSame
+    }), let value = result[headerName], !MCP.Version.supported.contains(value) {
+        result.removeValue(forKey: headerName)
+    }
+    return result
+}
+
+/// initialize リクエストの `params.capabilities.experimental` を、swift-sdk がデコード可能な形
+/// （`[String: String]`）に整える。ChatGPT は値がオブジェクトの experimental を送ってくることが
+/// あり（実測 2026-08-11: `{"openai/visibility":{"enabled":true}}`）、swift-sdk の
+/// `Client.Capabilities.experimental: [String: String]?` はこれをデコードできず initialize
+/// 全体が失敗する。本サーバーはクライアント capabilities を利用しないため、デコードできない
+/// 形のときは experimental キーごと落として転送する。整形不要（対象外・既に妥当）なら nil を返す
 /// （呼び出し側で元のボディへフォールバックする）。
-private func rewriteServerDiscoverAsToolsList(_ data: Data) -> Data? {
+private func sanitizeInitializeCapabilities(_ data: Data) -> Data? {
     guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-        json["method"] as? String == "server/discover"
+        json["method"] as? String == Initialize.name,
+        var params = json["params"] as? [String: Any],
+        var capabilities = params["capabilities"] as? [String: Any],
+        let experimental = capabilities["experimental"] as? [String: Any],
+        !experimental.values.allSatisfy({ $0 is String })
     else { return nil }
-    json["method"] = "tools/list"
-    json["params"] = [String: Any]()
+
+    capabilities.removeValue(forKey: "experimental")
+    params["capabilities"] = capabilities
+    json["params"] = params
     return try? JSONSerialization.data(withJSONObject: json)
 }
 
