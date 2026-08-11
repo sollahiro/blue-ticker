@@ -82,7 +82,7 @@ import Testing
         try assertMatchesOracle(docID: "S100VWVY", xbrlDir: StatementNotesOracleSupport.analysisXbrlDir("S100VWVY"))
     }
 
-    // MARK: - smoke 床11社（tmp_cache / SmokeCacheSupport）。SMFG(8316)はS100WRZH（訂正・完全版）。
+    // MARK: - smoke 床10社（tmp_cache / SmokeCacheSupport）。SMFG(8316)は対象外（ファイル冒頭コメント参照）。
 
     @Test
     func smokePolicyHoldingAZplanningMatchesOracle() async throws {
