@@ -1,0 +1,372 @@
+{
+  "S100VU4O": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 528000,
+        "is_total": false,
+        "segment_name": "不動産賃貸事業",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 1000000,
+        "is_total": false,
+        "segment_name": "全社(共通)",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 1528000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100VXJA": {
+    "capex_segments": [
+      {
+        "description": "食品生産設備の建設及び増強等",
+        "investment_amount": 48760000000,
+        "is_total": false,
+        "segment_name": "調味料・食品",
+        "yoy_percent": null
+      },
+      {
+        "description": "食品生産設備の建設及び増強等",
+        "investment_amount": 10487000000,
+        "is_total": false,
+        "segment_name": "冷凍食品",
+        "yoy_percent": null
+      },
+      {
+        "description": "医薬品生産設備の増強等",
+        "investment_amount": 32267000000,
+        "is_total": false,
+        "segment_name": "ヘルスケア等",
+        "yoy_percent": null
+      },
+      {
+        "description": "情報設備の更新等",
+        "investment_amount": 1251000000,
+        "is_total": false,
+        "segment_name": "その他",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 92766000000,
+        "is_total": true,
+        "segment_name": "小　計",
+        "yoy_percent": null
+      },
+      {
+        "description": "情報設備の更新等",
+        "investment_amount": 3672000000,
+        "is_total": false,
+        "segment_name": "全社",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 96439000000,
+        "is_total": true,
+        "segment_name": "合　計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100VYA0": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 9260000000,
+        "is_total": false,
+        "segment_name": "加工食品",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 345000000,
+        "is_total": false,
+        "segment_name": "水産",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 275000000,
+        "is_total": false,
+        "segment_name": "畜産",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 22748000000,
+        "is_total": false,
+        "segment_name": "低温物流",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 1105000000,
+        "is_total": false,
+        "segment_name": "不動産",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 88000000,
+        "is_total": false,
+        "segment_name": "その他",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 681000000,
+        "is_total": false,
+        "segment_name": "調整額",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 34504000000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W043": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 7287000000,
+        "is_total": false,
+        "segment_name": null,
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W0S7": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 3705000000,
+        "is_total": false,
+        "segment_name": null,
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W3XJ": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 448362000000,
+        "is_total": false,
+        "segment_name": "ヘルスケア",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 39812000000,
+        "is_total": false,
+        "segment_name": "エレクトロニクス",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 25912000000,
+        "is_total": false,
+        "segment_name": "ビジネスイノベーション",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 15447000000,
+        "is_total": false,
+        "segment_name": "イメージング",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 529533000000,
+        "is_total": true,
+        "segment_name": "小計",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 2605000000,
+        "is_total": false,
+        "segment_name": "全社",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 532138000000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W4FB": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 417438000000,
+        "is_total": false,
+        "segment_name": null,
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100W4MT": {
+    "capex_segments": [
+      {
+        "description": "生産設備・研究開発設備・販売設備等",
+        "investment_amount": 343238000000,
+        "is_total": false,
+        "segment_name": "四輪事業",
+        "yoy_percent": null
+      },
+      {
+        "description": "同上",
+        "investment_amount": 13898000000,
+        "is_total": false,
+        "segment_name": "二輪事業",
+        "yoy_percent": null
+      },
+      {
+        "description": "同上",
+        "investment_amount": 4188000000,
+        "is_total": false,
+        "segment_name": "マリン事業",
+        "yoy_percent": null
+      },
+      {
+        "description": "事業用設備",
+        "investment_amount": 517000000,
+        "is_total": false,
+        "segment_name": "その他事業",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 361843000000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XR0M": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 153708000000,
+        "is_total": false,
+        "segment_name": "機械",
+        "yoy_percent": 80.4
+      },
+      {
+        "description": null,
+        "investment_amount": 17799000000,
+        "is_total": false,
+        "segment_name": "水・環境",
+        "yoy_percent": 100.9
+      },
+      {
+        "description": null,
+        "investment_amount": 257000000,
+        "is_total": false,
+        "segment_name": "その他",
+        "yoy_percent": 82.4
+      },
+      {
+        "description": null,
+        "investment_amount": 8067000000,
+        "is_total": false,
+        "segment_name": "全社",
+        "yoy_percent": 128.4
+      },
+      {
+        "description": null,
+        "investment_amount": 179831000000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": 83.5
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XRD8": {
+    "capex_segments": [
+      {
+        "description": null,
+        "investment_amount": 474711000,
+        "is_total": false,
+        "segment_name": null,
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100XTLJ": {
+    "capex_segments": [
+      {
+        "description": "生産設備の拡充",
+        "investment_amount": 66669000000,
+        "is_total": false,
+        "segment_name": "プリンティングビジネスユニット",
+        "yoy_percent": null
+      },
+      {
+        "description": "生産設備の拡充",
+        "investment_amount": 11803000000,
+        "is_total": false,
+        "segment_name": "メディカルビジネスユニット",
+        "yoy_percent": null
+      },
+      {
+        "description": "生産設備の拡充",
+        "investment_amount": 39022000000,
+        "is_total": false,
+        "segment_name": "イメージングビジネスユニット",
+        "yoy_percent": null
+      },
+      {
+        "description": "生産設備の拡充",
+        "investment_amount": 14137000000,
+        "is_total": false,
+        "segment_name": "インダストリアルビジネスユニット",
+        "yoy_percent": null
+      },
+      {
+        "description": "研究開発拠点整備及び管理業務用 設備の合理化並びに拡充",
+        "investment_amount": 80042000000,
+        "is_total": false,
+        "segment_name": "その他及び全社",
+        "yoy_percent": null
+      },
+      {
+        "description": null,
+        "investment_amount": 211673000000,
+        "is_total": true,
+        "segment_name": "合計",
+        "yoy_percent": null
+      }
+    ],
+    "source": "xbrl_facts"
+  }
+}

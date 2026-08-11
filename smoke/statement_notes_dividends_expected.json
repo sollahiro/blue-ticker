@@ -1,0 +1,23 @@
+{
+  "S100JRT9": {
+    "dividend_events": [
+      {
+        "dividend_per_share": 31.0,
+        "resolution_body": "取締役会決議",
+        "resolution_date": "2020-02-03",
+        "total_amount": 1397757000.0
+      },
+      {
+        "dividend_per_share": 27.0,
+        "resolution_body": "定時株主総会決議",
+        "resolution_date": "2020-09-28",
+        "total_amount": 2434803000.0
+      }
+    ],
+    "source": "xbrl_facts"
+  },
+  "S100RX8V": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  }
+}

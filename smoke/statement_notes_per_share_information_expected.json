@@ -1,0 +1,72 @@
+{
+  "S100JRT9": {
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "eps",
+        "label": "１株当たり当期純利益",
+        "value": 120.02,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "diluted_eps",
+        "label": "潜在株式調整後１株当たり当期純利益",
+        "value": 119.92,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "bps",
+        "label": "１株当たり純資産額",
+        "value": 434.19,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100QZT0": {
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "eps",
+        "label": "１株当たり当期純利益",
+        "value": 684.55,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "diluted_eps",
+        "label": "潜在株式調整後１株当たり当期純利益",
+        "value": 683.89,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "bps",
+        "label": "１株当たり親会社株主持分",
+        "value": 5271.97,
+        "unit": "yen_per_share",
+        "order": null,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  }
+}
