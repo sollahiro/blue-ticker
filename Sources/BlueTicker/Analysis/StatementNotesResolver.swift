@@ -294,17 +294,78 @@ enum StatementNotesResolver {
             }
         }
 
-        guard !securities.isEmpty else {
+        let summary = resolvePolicyHoldingAggregateSummary(numericElements: numericElements)
+
+        guard !securities.isEmpty || summary != nil else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
 
-        let hash = securities.map {
+        let securitiesHash = securities.map {
             "\($0.issuerName)=\($0.numberOfShares ?? -1),\($0.carryingAmount ?? -1),\($0.isDeemedHolding)"
         }.joined(separator: ";")
+        let summaryHash = summary.map {
+            "summary=\($0.unlistedIssueCount ?? -1),\($0.unlistedCarryingAmount ?? -1)," +
+            "\($0.listedIssueCount ?? -1),\($0.listedCarryingAmount ?? -1)"
+        } ?? ""
         return .resolved(
-            payload: StatementNotePayload(securities: securities), source: statementNoteSourceXbrlFacts,
-            contentHash: hash)
+            payload: StatementNotePayload(
+                securities: securities.isEmpty ? nil : securities, policyHoldingSummary: summary),
+            source: statementNoteSourceXbrlFacts,
+            contentHash: securitiesHash + ";" + summaryHash)
     }
+
+    /// 政策保有株式（保有目的が純投資目的以外の目的である投資株式）の銘柄数及び貸借対照表計上額の
+    /// 合計額。個別開示される`securities`とは別の集計タグ（`NumberOfIssuesShares...`/
+    /// `CarryingAmountShares...`、非上場株式／非上場株式以外の株式の2区分）で、開示される全銘柄
+    /// （個別開示されない銘柄も含む）を対象とする。提出会社・子会社の各variantの値を合算する
+    /// （実データ確認2026-08-11: 富士フイルムは提出会社=上場株式のみ・第二位保有会社=両区分ありと
+    /// variantごとに片方しか無いケースがあるため、単純合算が必要）。
+    private static func resolvePolicyHoldingAggregateSummary(
+        numericElements: XbrlTagElements
+    ) -> PolicyHoldingAggregateSummaryPayload? {
+        var unlistedCount: Double?
+        var unlistedAmount: Double?
+        var listedCount: Double?
+        var listedAmount: Double?
+
+        for variant in policyHoldingHolderVariants {
+            unlistedCount = sumOptional(
+                unlistedCount, numericElements[policyHoldingUnlistedIssueCountPrefix + variant]?["CurrentYearInstant"])
+            unlistedAmount = sumOptional(
+                unlistedAmount, numericElements[policyHoldingUnlistedAmountPrefix + variant]?["CurrentYearInstant"])
+            listedCount = sumOptional(
+                listedCount, numericElements[policyHoldingListedIssueCountPrefix + variant]?["CurrentYearInstant"])
+            listedAmount = sumOptional(
+                listedAmount, numericElements[policyHoldingListedAmountPrefix + variant]?["CurrentYearInstant"])
+        }
+
+        guard unlistedCount != nil || unlistedAmount != nil || listedCount != nil || listedAmount != nil else {
+            return nil
+        }
+        return PolicyHoldingAggregateSummaryPayload(
+            unlistedIssueCount: unlistedCount.map { Int($0) }, unlistedCarryingAmount: unlistedAmount,
+            listedIssueCount: listedCount.map { Int($0) }, listedCarryingAmount: listedAmount)
+    }
+
+    /// `a`・`b`のうち存在する方を足す（両方nilならnil）。`nilAsZero: false`で読んだ値を跨いで
+    /// 合算するため、単純な`(a ?? 0) + (b ?? 0)`だと「両方未開示」を`0`として返してしまう。
+    private static func sumOptional(_ a: Double?, _ b: Double?) -> Double? {
+        switch (a, b) {
+        case (nil, nil): return nil
+        case (let a?, nil): return a
+        case (nil, let b?): return b
+        case (let a?, let b?): return a + b
+        }
+    }
+
+    private static let policyHoldingUnlistedIssueCountPrefix =
+        "NumberOfIssuesSharesNotListedInvestmentSharesHeldForPurposesOtherThanPureInvestment"
+    private static let policyHoldingUnlistedAmountPrefix =
+        "CarryingAmountSharesNotListedInvestmentSharesHeldForPurposesOtherThanPureInvestment"
+    private static let policyHoldingListedIssueCountPrefix =
+        "NumberOfIssuesSharesOtherThanThoseNotListedInvestmentSharesHeldForPurposesOtherThanPureInvestment"
+    private static let policyHoldingListedAmountPrefix =
+        "CarryingAmountSharesOtherThanThoseNotListedInvestmentSharesHeldForPurposesOtherThanPureInvestment"
 
     /// `ReportingCompany`/`LargestHoldingCompany`/`SecondLargestHoldingCompany` の順（実データ確認済み、
     /// 3変体は排他的に出現するため順序自体に意味はないが、出力順を安定させるため固定する）。

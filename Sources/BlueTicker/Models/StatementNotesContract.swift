@@ -123,6 +123,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public var unit: String?
     public var items: [StatementLineItem]?
     public var securities: [PolicyHoldingSecurityPayload]?
+    public var policyHoldingSummary: PolicyHoldingAggregateSummaryPayload?
     public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
     public var issuedSharesEvents: [IssuedSharesEventPayload]?
@@ -135,6 +136,7 @@ public struct StatementNotePayload: Codable, Sendable {
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         securities: [PolicyHoldingSecurityPayload]? = nil,
+        policyHoldingSummary: PolicyHoldingAggregateSummaryPayload? = nil,
         dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
         issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
@@ -145,6 +147,7 @@ public struct StatementNotePayload: Codable, Sendable {
         self.unit = unit
         self.items = items
         self.securities = securities
+        self.policyHoldingSummary = policyHoldingSummary
         self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
         self.issuedSharesEvents = issuedSharesEvents
@@ -161,6 +164,7 @@ public struct StatementNotePayload: Codable, Sendable {
             "unit": unit as Any? ?? NSNull(),
             "items": items.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "policy_holding_summary": policyHoldingSummary?.jsonObject() as Any? ?? NSNull(),
             "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
@@ -368,6 +372,37 @@ public struct PolicyHoldingSecurityPayload: Codable, Sendable {
             "carrying_amount": carryingAmount as Any? ?? NSNull(),
             "purpose": purpose as Any? ?? NSNull(),
             "is_deemed_holding": isDeemedHolding,
+        ]
+    }
+}
+
+/// 政策保有株式（保有目的が純投資目的以外の目的である投資株式）の銘柄数及び貸借対照表計上額の合計額
+/// （決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。`policy_holding_securities`
+/// note_type 専用。`securities`（個別開示される上位銘柄のみ）とは異なり、非開示の銘柄も含めた全銘柄の
+/// 総数・総額を表す（提出会社・子会社の各variantを合算した値）。特定投資株式・みなし保有株式を区別
+/// しない単一の合計（開示上もこの区分での合算しか存在しない）。
+public struct PolicyHoldingAggregateSummaryPayload: Codable, Sendable {
+    public var unlistedIssueCount: Int?
+    public var unlistedCarryingAmount: Double?
+    public var listedIssueCount: Int?
+    public var listedCarryingAmount: Double?
+
+    public init(
+        unlistedIssueCount: Int?, unlistedCarryingAmount: Double?,
+        listedIssueCount: Int?, listedCarryingAmount: Double?
+    ) {
+        self.unlistedIssueCount = unlistedIssueCount
+        self.unlistedCarryingAmount = unlistedCarryingAmount
+        self.listedIssueCount = listedIssueCount
+        self.listedCarryingAmount = listedCarryingAmount
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "unlisted_issue_count": unlistedIssueCount as Any? ?? NSNull(),
+            "unlisted_carrying_amount": unlistedCarryingAmount as Any? ?? NSNull(),
+            "listed_issue_count": listedIssueCount as Any? ?? NSNull(),
+            "listed_carrying_amount": listedCarryingAmount as Any? ?? NSNull(),
         ]
     }
 }
