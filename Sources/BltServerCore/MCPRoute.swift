@@ -36,16 +36,8 @@ func registerMcpRoute(
     group.post { req async -> Vapor.Response in
         let requestBody = bodyData(from: req)
 
-        // TEMP DIAGNOSTIC (revert before merge): 実際に ChatGPT が送るボディの実体を特定するための
-        // 一時ログ。Content-Type と先頭 200 バイトを base64 で記録する。
-        logger.notice(
-            "mcp_route_diag",
-            metadata: [
-                "content-type": .string(req.headers.contentType?.description ?? "nil"),
-                "content-length": .string(req.headers.first(name: .contentLength) ?? "nil"),
-                "body-bytes": .string(String(requestBody?.count ?? -1)),
-                "body-b64": .string((requestBody?.prefix(200)).map { Data($0).base64EncodedString() } ?? "nil"),
-            ])
+        // TEMP DIAGNOSTIC (revert before merge): 実際に ChatGPT が送るボディの実体を特定するための一時ログ。
+        logDiagnosticRequestBody(req, requestBody, logger: logger)
 
         // ChatGPT のコネクタ追加・ツール一覧再取得フローは、実ハンドシェイク（initialize）の前に
         // method を持たない JSON の POST を送ってくる（実測 2026-08-11: 本番で空ボディに加えて `{}`
@@ -79,6 +71,21 @@ func registerMcpRoute(
             return mcpTimeoutResponse(requestBody: requestBody)
         }
     }
+}
+
+/// TEMP DIAGNOSTIC (revert before merge): Content-Type・長さ・先頭 200 バイト(base64) をログ出力する。
+private func logDiagnosticRequestBody(_ req: Vapor.Request, _ body: Data?, logger: Logger) {
+    let contentType: String = req.headers.contentType?.description ?? "nil"
+    let contentLength: String = req.headers.first(name: .contentLength) ?? "nil"
+    let bodyBytes: String = String(body?.count ?? -1)
+    let bodyB64: String = body.map { Data($0.prefix(200)).base64EncodedString() } ?? "nil"
+    let metadata: Logger.Metadata = [
+        "content-type": .string(contentType),
+        "content-length": .string(contentLength),
+        "body-bytes": .string(bodyBytes),
+        "body-b64": .string(bodyB64),
+    ]
+    logger.notice("mcp_route_diag", metadata: metadata)
 }
 
 /// JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして成立しない）ボディを
