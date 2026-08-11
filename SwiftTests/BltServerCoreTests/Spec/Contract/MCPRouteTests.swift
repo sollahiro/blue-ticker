@@ -315,10 +315,11 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
 
     /// ChatGPT（OpenAI 製 MCP クライアント）は initialize 前に MCP 仕様にない `server/discover` を
     /// 送ってくる（実測 2026-08-11: 本番の診断ログで `id: "openai-mcp-discover"` を確認）。
-    /// swift-sdk は未知のメソッドとして 400 を返すが、ChatGPT はこの1件の失敗で後続の
-    /// initialize/tools_list が成功してもコネクタ全体を失敗表示する。id を引き継いだ空の
-    /// JSON-RPC 成功レスポンスを返す。
-    @Test func serverDiscoverMethodReturnsOkWithEchoedId() async throws {
+    /// swift-sdk は未知のメソッドとして 400 を返す。空の成功レスポンスに差し替えるだけでは ChatGPT が
+    /// ツールなしとみなして後続の initialize/tools_list を送らなくなる（実測: 本番で `result: {}` を
+    /// 返した際に後続リクエストが来なくなることを確認）ため、method 名のみ `tools/list` に差し替えて
+    /// 実際のツール一覧を返す。id はそのまま引き継ぐ。
+    @Test func serverDiscoverMethodReturnsToolsListResultWithEchoedId() async throws {
         try await withMcpApp { app in
             let (status, json) = try await postMcp(
                 app,
@@ -328,7 +329,8 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 ])
             #expect(status == .ok)
             #expect(json?["id"] as? String == "openai-mcp-discover")
-            #expect(json?["result"] != nil)
+            let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
+            #expect((tools ?? []).count == mcpToolCatalog().count)
         }
     }
 
