@@ -42,7 +42,10 @@ public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v2"
-public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v1"
+/// v2（2026-08-11）: みなし保有株式（`isDeemedHolding`）・`policyHoldingSummary`（銘柄数及び貸借対照表
+/// 計上額の合計額）を追加する payload 構造変更。本番は v1 時点で0件ingest済みのため実害はないが、
+/// 将来の再発防止として抽出ロジック変更に揃えてバンプする。
+public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 
