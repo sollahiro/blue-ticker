@@ -85,8 +85,8 @@ func mcpTimeoutResponse(requestBody: Data?) -> Vapor.Response {
 /// 一度きりのフラグとして扱うため、2 回目以降の `initialize` は毎回
 /// `-32600 Server is already initialized` で失敗する（`tools/list` / `tools/call` 自体は
 /// `strict: false` のためこのフラグの影響を受けず成功する）。initialize の結果は
-/// capabilities/serverInfo が固定・protocolVersion もネゴシエーションのみで決定的なため、
-/// このケースに限り成功レスポンスへ差し替える。
+/// capabilities/serverInfo/title/instructions が固定・protocolVersion もネゴシエーションのみで
+/// 決定的なため、このケースに限り成功レスポンスへ差し替える。
 private func reinitializeShimResponse(
     requestBody: Data?, response: MCP.HTTPResponse, version: String
 ) -> MCP.HTTPResponse? {
@@ -108,12 +108,13 @@ private func reinitializeShimResponse(
         requestedVersion.map { MCP.Version.supported.contains($0) ? $0 : MCP.Version.latest }
         ?? MCP.Version.latest
 
-    // capabilities/serverInfo は ServerFactory.swift の makeBltMcpTransport と同じ固定値を使う
-    // （BltMcpServerCore が公開する定数を再利用し、二重管理を避ける）。
+    // capabilities/serverInfo/title/instructions は ServerFactory.swift の makeBltMcpTransport と
+    // 同じ固定値を使う（BltMcpServerCore が公開する定数を再利用し、二重管理を避ける）。
     let initResult = Initialize.Result(
         protocolVersion: negotiatedVersion,
         capabilities: bltMcpServerCapabilities,
-        serverInfo: Server.Info(name: bltMcpServerName, version: version)
+        serverInfo: Server.Info(name: bltMcpServerName, version: version, title: bltMcpServerTitle),
+        instructions: bltMcpServerInstructions
     )
     guard let resultData = try? JSONEncoder().encode(initResult),
         let resultJSON = try? JSONSerialization.jsonObject(with: resultData)

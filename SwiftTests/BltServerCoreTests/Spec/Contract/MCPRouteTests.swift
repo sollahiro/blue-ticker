@@ -275,6 +275,36 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             #expect(result?["protocolVersion"] as? String == "2025-06-18")
             let serverInfo = result?["serverInfo"] as? [String: Any]
             #expect(serverInfo?["name"] as? String == "blt-mcp-server")
+            #expect(serverInfo?["title"] as? String == bltMcpServerTitle)
+            #expect(result?["instructions"] as? String == bltMcpServerInstructions)
+        }
+    }
+
+    @Test func bothInitializeResponsesReturnSameTitleAndInstructions() async throws {
+        try await withMcpApp { app in
+            let initBody: [String: Any] = [
+                "jsonrpc": "2.0", "id": 0, "method": "initialize",
+                "params": [
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": [String: Any](),
+                    "clientInfo": ["name": "test-client", "version": "1.0"],
+                ],
+            ]
+
+            let first = try await postMcp(app, initBody)
+            #expect(first.status == .ok)
+            let firstResult = first.json?["result"] as? [String: Any]
+            let firstServerInfo = firstResult?["serverInfo"] as? [String: Any]
+
+            let second = try await postMcp(app, initBody)
+            #expect(second.status == .ok)
+            let secondResult = second.json?["result"] as? [String: Any]
+            let secondServerInfo = secondResult?["serverInfo"] as? [String: Any]
+
+            #expect(firstResult?["instructions"] as? String == bltMcpServerInstructions)
+            #expect(secondResult?["instructions"] as? String == bltMcpServerInstructions)
+            #expect(firstServerInfo?["title"] as? String == bltMcpServerTitle)
+            #expect(secondServerInfo?["title"] as? String == bltMcpServerTitle)
         }
     }
 

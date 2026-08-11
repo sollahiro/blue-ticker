@@ -2,6 +2,7 @@
 // 各ツールの実処理（ディスパッチ）は BltServerCore が持つ。ここはビジネスロジック・DB を持たない。
 
 import BlueTickerCore
+import Foundation
 import MCP
 
 /// blt-mcp が公開するツール一覧。REST `/v1/` の各エンドポイントに対応する
@@ -34,11 +35,26 @@ private func mcpTool(from skill: ApiSkill) -> Tool? {
         schema["required"] = .array(required)
     }
 
+    // 全ツールは格納済み DB / 固定 EDINET ソースへの read-only serve。副作用・破壊的操作はない。
+    let annotations = Tool.Annotations(
+        readOnlyHint: true, destructiveHint: false, openWorldHint: false)
+
     return Tool(
         name: name,
+        title: skill.name,
         description: skill.description,
-        inputSchema: .object(schema)
+        inputSchema: .object(schema),
+        annotations: annotations,
+        outputSchema: decodeMcpOutputSchema(skill.mcpOutputSchema)
     )
+}
+
+private func decodeMcpOutputSchema(_ schemaText: String?) -> Value? {
+    guard let schemaText,
+        let data = schemaText.data(using: .utf8),
+        let decoded = try? JSONDecoder().decode(Value.self, from: data)
+    else { return nil }
+    return decoded
 }
 
 private func mcpPropertySchema(_ parameter: ApiSkillParameter) -> Value {

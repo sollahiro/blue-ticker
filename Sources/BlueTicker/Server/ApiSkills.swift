@@ -105,9 +105,20 @@ public struct ApiSkill: Sendable {
     public let parameters: [ApiSkillParameter]
     /// 使い方の詳細（エラー意味・関連エンドポイント・単位など）。
     public let instructions: String
+    /// MCP `tools/list` の outputSchema 用 JSON Schema 文字列。REST `/v1/skills` には出さない。
+    public let mcpOutputSchema: String?
 }
 
 // MARK: - カタログ
+
+/// get_financial_summary / get_waterfall の MCP outputSchema（同一 envelope）。
+private let mcpOutputSchemaFinancialEnvelope =
+    """
+    {"type":"object","required":["schema_version","code","name","sector","market","currency","unit","years"],\
+    "properties":{"schema_version":{"type":"integer"},"code":{"type":"string"},"name":{"type":"string"},\
+    "sector":{"type":"string"},"market":{"type":"string"},"currency":{"type":"string"},"unit":{"type":"string"},\
+    "years":{"type":"array","items":{"type":"object"}}}}
+    """
 
 /// 公開能力の完全一覧（順序はクライアント向けの推奨探索順）。
 public func apiSkillsCatalog() -> [ApiSkill] {
@@ -136,6 +147,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 銘柄コードが未知のときに最初に使う。ヒットした `code` を以降の financials / filings 等に渡す。
                 REST の `q` 省略は空検索になる（必須ではない）。実質的な検索には `q` を付ける。
                 例: GET /v1/companies?q=トヨタ
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["results"],"properties":{"results":{"type":"array","items":\
+                {"type":"object","required":["code","name"],"properties":{"code":{"type":"string"},\
+                "name":{"type":"string"},"sector":{"type":"string"},"market":{"type":"string"},\
+                "location":{"type":"string"}}}}}}
                 """
         ),
         ApiSkill(
@@ -167,6 +185,15 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 有報・半期などの doc_id を知るときに使う。filing-content / breakdown の doc_id 指定の前段。
                 DB 同期済みなら DB から返し、未同期銘柄のみライブ EDINET 探索へフォールバックする。
                 例: GET /v1/companies/6103/filings?max_years=5
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["code","name","filings"],"properties":{"code":{"type":"string"},\
+                "name":{"type":"string"},"filings":{"type":"array","items":{"type":"object",\
+                "required":["doc_id","doc_type","doc_type_label","fy_end","submitted_at"],\
+                "properties":{"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
+                "doc_type_label":{"type":"string"},"fy_end":{"type":"string"},\
+                "submitted_at":{"type":"string"}}}}}}
                 """
         ),
         ApiSkill(
@@ -206,7 +233,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
                 例: GET /v1/companies/6103/financials?years=5
-                """
+                """,
+            mcpOutputSchema: mcpOutputSchemaFinancialEnvelope
         ),
         ApiSkill(
             id: "get-waterfall",
@@ -245,7 +273,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。
                 MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
                 例: GET /v1/companies/6103/waterfall?years=5
-                """
+                """,
+            mcpOutputSchema: mcpOutputSchemaFinancialEnvelope
         ),
         ApiSkill(
             id: "get-filing-content",
@@ -290,6 +319,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 格納済みデータのみ。未抽出は 404、DB 非接続は 503。
                 REST: ?sections=mda,business_risks（カンマ区切り文字列）。MCP: 文字列配列。
                 例: GET /v1/companies/6103/filing-content?sections=mda,business_risks
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["code","doc_id","sections"],"properties":{"code":{"type":"string"},\
+                "doc_id":{"type":"string"},"sections":{"type":"object"}}}
                 """
         ),
         ApiSkill(
@@ -337,6 +371,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=business
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["code","doc_id","axis","breakdown"],"properties":{"code":\
+                {"type":"string"},"doc_id":{"type":"string"},"axis":{"type":"string"},\
+                "breakdown":{"type":"object"},"llm_audit":{"type":"object"}}}
                 """
         ),
         ApiSkill(
@@ -390,6 +430,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 グランドトータル行も components は取得できる）。US-GAAP 連結は HTML 経路のため
                 is_total はラベル規則、components はキヤノン型（合計直後の内訳が親と一致）のみ。
                 例: GET /v1/companies/7203/statement?years=3
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","code","name","sector","market","years"],\
+                "properties":{"schema_version":{"type":"integer"},"code":{"type":"string"},\
+                "name":{"type":["string","null"]},"sector":{"type":["string","null"]},\
+                "market":{"type":["string","null"]},"years":{"type":"array","items":{"type":"object"}}}}
                 """
         ),
         ApiSkill(
@@ -440,6 +487,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 property_plant_equipment_schedule / goodwill_and_intangibles は IFRS連結企業限定
                 （J-GAAP単体の附属明細表は未対応）。
                 例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["code","doc_id","note_type","note"],"properties":{"code":\
+                {"type":"string"},"doc_id":{"type":"string"},"note_type":{"type":"string"},\
+                "note":{"type":"object"}}}
                 """
         ),
     ]
