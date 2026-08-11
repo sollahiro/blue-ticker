@@ -1,5 +1,11 @@
 {
   "S100VU4O" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 150000,
+      "listed_issue_count" : 1,
+      "unlisted_carrying_amount" : 29995000,
+      "unlisted_issue_count" : 1
+    },
     "securities" : [
       {
         "carrying_amount" : 150000,
@@ -19,6 +25,12 @@
     "source" : "xbrl_facts"
   },
   "S100VWVY" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 2951382000000,
+      "listed_issue_count" : 34,
+      "unlisted_carrying_amount" : 69893000000,
+      "unlisted_issue_count" : 81
+    },
     "securities" : [
       {
         "carrying_amount" : 959347000000,
@@ -451,6 +463,12 @@
     "source" : "xbrl_facts"
   },
   "S100VXJA" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 18977000000,
+      "listed_issue_count" : 18,
+      "unlisted_carrying_amount" : 4983000000,
+      "unlisted_issue_count" : 60
+    },
     "securities" : [
       {
         "carrying_amount" : 6451000000,
@@ -666,6 +684,12 @@
     "source" : "xbrl_facts"
   },
   "S100VYA0" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 27419000000,
+      "listed_issue_count" : 15,
+      "unlisted_carrying_amount" : 523000000,
+      "unlisted_issue_count" : 5
+    },
     "securities" : [
       {
         "carrying_amount" : 5988000000,
@@ -776,6 +800,12 @@
     "source" : "xbrl_facts"
   },
   "S100W3XJ" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 51528000000,
+      "listed_issue_count" : 44,
+      "unlisted_carrying_amount" : 14080000000,
+      "unlisted_issue_count" : 41
+    },
     "securities" : [
       {
         "carrying_amount" : 10887000000,
@@ -1187,6 +1217,12 @@
     "source" : "xbrl_facts"
   },
   "S100W4FB" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 3459446000000,
+      "listed_issue_count" : 899,
+      "unlisted_carrying_amount" : 313825000000,
+      "unlisted_issue_count" : 1008
+    },
     "securities" : [
       {
         "carrying_amount" : 410267000000,
@@ -1745,6 +1781,12 @@
     "source" : "xbrl_facts"
   },
   "S100W4MT" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 159761000000,
+      "listed_issue_count" : 45,
+      "unlisted_carrying_amount" : 26257000000,
+      "unlisted_issue_count" : 47
+    },
     "securities" : [
       {
         "carrying_amount" : 80960000000,
@@ -2163,6 +2205,12 @@
     "source" : "xbrl_facts"
   },
   "S100W043" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 29444000000,
+      "listed_issue_count" : 37,
+      "unlisted_carrying_amount" : 438000000,
+      "unlisted_issue_count" : 11
+    },
     "securities" : [
       {
         "carrying_amount" : 4446000000,
@@ -2434,6 +2482,12 @@
     "source" : "xbrl_facts"
   },
   "S100XR0M" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 69343000000,
+      "listed_issue_count" : 21,
+      "unlisted_carrying_amount" : 10545000000,
+      "unlisted_issue_count" : 44
+    },
     "securities" : [
       {
         "carrying_amount" : 16973000000,
@@ -2670,6 +2724,12 @@
     "source" : "xbrl_facts"
   },
   "S100XRD8" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 367120000,
+      "listed_issue_count" : 2,
+      "unlisted_carrying_amount" : 17213000,
+      "unlisted_issue_count" : 1
+    },
     "securities" : [
       {
         "carrying_amount" : 277115000,
@@ -2703,6 +2763,12 @@
     "source" : "xbrl_facts"
   },
   "S100XTLJ" : {
+    "policy_holding_summary" : {
+      "listed_carrying_amount" : 9759000000,
+      "listed_issue_count" : 11,
+      "unlisted_carrying_amount" : 1751000000,
+      "unlisted_issue_count" : 20
+    },
     "securities" : [
       {
         "carrying_amount" : 8917000000,

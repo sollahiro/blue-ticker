@@ -42,14 +42,33 @@ import Testing
     private func assertMatchesOracle(docID: String, xbrlDir: URL) throws {
         let result = StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir)
         let items: [[String: Any]]?
+        var summary: [String: Any]?
         if case .resolved(let payload, _, _) = result {
             items = payload.securities?.map { $0.jsonObject() }
+            summary = payload.policyHoldingSummary?.jsonObject()
         } else {
             items = nil
+            summary = nil
         }
         try StatementNotesOracleSupport.assertMatchesOracle(
             docID: docID, expectedFileURL: Self.expectedFileURL, result: result,
             itemsKey: "securities", items: items)
+
+        // 銘柄数及び貸借対照表計上額の合計額（`securities`とは別の集計、`assertMatchesOracle`の
+        // itemsKey比較の対象外なのでここで個別に比較する）。
+        let expectedEntry = try StatementNotesOracleSupport.loadExpectedEntry(
+            fileURL: Self.expectedFileURL, docID: docID)
+        let expectedSummary = expectedEntry["policy_holding_summary"] as? [String: Any]
+        switch (summary, expectedSummary) {
+        case (nil, nil):
+            break
+        case (let actual?, let expected?):
+            let actualJSON = try StatementNotesOracleSupport.canonicalJSON(actual)
+            let expectedJSON = try StatementNotesOracleSupport.canonicalJSON(expected)
+            #expect(actualJSON == expectedJSON)
+        default:
+            Issue.record("policy_holding_summary mismatch: actual=\(String(describing: summary)) expected=\(String(describing: expectedSummary))")
+        }
     }
 
     private func withSmokeCache(_ docID: String, _ body: (URL) throws -> Void) async throws {
