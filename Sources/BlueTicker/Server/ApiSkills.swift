@@ -335,6 +335,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 axis は business（既定）/ geography / employees / research_and_development に対応。
                 employees・research_and_development は決定論のみ（LLMフォールバックなし）で、
                 報告セグメント別の内訳が開示されている企業のみ値が入ります。
+                内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
+                axis=business: geography_only（報告セグメントが地域別のみで事業別への変換不可）、
+                single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
+                unknown（原因未特定・要再調査）。
+                axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
+                axis=employees / research_and_development: not_found（セグメント別内訳が非開示）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
