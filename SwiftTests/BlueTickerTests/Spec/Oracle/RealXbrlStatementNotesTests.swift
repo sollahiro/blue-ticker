@@ -1126,7 +1126,7 @@ import Testing
         #expect(reason == statementNoteNotApplicableNotFound)
     }
 
-    // MARK: - policy_holding_securities（S100L0TZ、ReportingCompany変体・60銘柄）
+    // MARK: - policy_holding_securities（S100L0TZ、ReportingCompany変体・特定投資60銘柄＋みなし保有10銘柄）
 
     @Test(.enabled(if: cacheAvailable("S100L0TZ"), "XBRL cache S100L0TZ not available"))
     func reportingCompanyVariantExtractsSecuritiesOrderedByDisclosureRow() throws {
@@ -1137,13 +1137,17 @@ import Testing
         }
         #expect(source == statementNoteSourceXbrlFacts)
         let securities = try #require(payload.securities)
-        #expect(securities.count == 60)
+        // 特定投資株式60件（Row数と一致）＋みなし保有株式10件（実データ検証2026-08-11、DeemedHoldings
+        // タグ対応追加。10件は当年 fact が xsi:nil のみ＝全数売却済みで数値は取れないが銘柄名は残る）。
+        #expect(securities.count == 70)
+        #expect(securities.filter(\.isDeemedHolding).count == 10)
 
         // 実データ検証済みの値（2026-08-02）: 開示順(Row1)先頭銘柄。
         let first = try #require(securities.first)
         #expect(first.issuerName == "㈱リクルートホールディングス")
         #expect(first.numberOfShares == 3_550_000)
         #expect(first.carryingAmount == 15_339_000_000)
+        #expect(first.isDeemedHolding == false)
         // 前期(Prior1YearInstant)の行は混入しない（当期のみ、60件 = Row数と一致）。
     }
 
@@ -1249,7 +1253,8 @@ import Testing
         #expect(reason == statementNoteNotApplicableNotFound)
     }
 
-    // MARK: - policy_holding_securities golden（全銘柄リスト、ユーザー実データ確認済み 2026-08-02）
+    // MARK: - policy_holding_securities golden（全銘柄リスト、ユーザー実データ確認済み 2026-08-02、
+    // みなし保有株式(DeemedHoldings)対応追加分は2026-08-11に追加確認）
     //
     // 年度中に保有株式を全数売却した銘柄（当年の保有株式数・計上額が nil になる）を含む4社について、
     // 開示順（保有額の大きい順）での全銘柄・全値をユーザーが目視確認した結果を golden として固定する
@@ -1413,6 +1418,18 @@ import Testing
                 ("清水建設㈱", nil, nil),
                 ("㈱スクロール", nil, nil),
                 ("㈱クレディセゾン", nil, nil),
+                // みなし保有株式11件（実データ検証2026-08-11、DeemedHoldingsタグ対応追加）。
+                ("三菱電機㈱", 5_837_053.0, 15_876_000_000.0),
+                ("東京海上ホールディングス㈱", 2_461_644.0, 14_119_000_000.0),
+                ("東京海上ホールディングス㈱", 2_460_900.0, 14_115_000_000.0),
+                ("㈱三菱ＵＦＪフィナンシャル・グループ", 5_506_880.0, 11_074_000_000.0),
+                ("住友商事㈱", 1_335_485.0, 4_503_000_000.0),
+                ("ＭＳ＆ＡＤインシュアランスグループホールディングス㈱", 780_408.0, 2_516_000_000.0),
+                ("清水建設㈱", 1_773_907.0, 2_347_000_000.0),
+                ("日本電気㈱", 557_120.0, 1_752_000_000.0),
+                ("㈱クレディセゾン", 300_000.0, 1_057_000_000.0),
+                ("古河機械金属㈱", 100_047.0, 209_000_000.0),
+                ("三菱倉庫㈱", 25.0, 0.0),
             ])
     }
 
@@ -1470,6 +1487,25 @@ import Testing
                 ("福山通運㈱", nil, nil),
                 ("中日本興業㈱", nil, nil),
                 ("Getaround,Inc.", nil, nil),
+                // みなし保有株式18件（実データ検証2026-08-11、DeemedHoldingsタグ対応追加）。
+                ("㈱ブリヂストン", 3_988_674.0, 23_912_000_000.0),
+                ("住友ゴム工業㈱", 1_378_700.0, 2_596_000_000.0),
+                ("岡谷鋼機㈱", 76_000.0, 530_000_000.0),
+                ("㈱御園座", 5_000.0, 9_000_000.0),
+                ("大豊工業㈱", 12_279.0, 7_000_000.0),
+                ("三井物産㈱", nil, nil),
+                ("パナソニック ホールディングス㈱", nil, nil),
+                ("㈱三井住友フィナンシャルグループ", nil, nil),
+                ("住友商事㈱", nil, nil),
+                ("㈱三菱ＵＦＪフィナンシャル・グループ", nil, nil),
+                ("ＡＧＣ㈱", nil, nil),
+                ("日本発条㈱", nil, nil),
+                ("㈱百五銀行", nil, nil),
+                ("東海東京フィナンシャル・ホールディングス㈱", nil, nil),
+                ("㈱名古屋銀行", nil, nil),
+                ("㈱十六フィナンシャルグループ", nil, nil),
+                ("㈱大垣共立銀行", nil, nil),
+                ("㈱神戸製鋼所", nil, nil),
             ])
     }
 
