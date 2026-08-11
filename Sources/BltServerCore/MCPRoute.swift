@@ -36,18 +36,25 @@ func registerMcpRoute(
     group.post { req async -> Vapor.Response in
         let requestBody = bodyData(from: req)
 
-        // TEMP DIAGNOSTIC (revert before merge): 実際に ChatGPT が送るボディの実体を特定するための一時ログ。
-        logDiagnosticRequestBody(req, requestBody, logger: logger)
-
         // ChatGPT のコネクタ追加・ツール一覧再取得フローは、実ハンドシェイク（initialize）の前に
-        // method を持たない JSON の POST を送ってくる（実測 2026-08-11: 本番で空ボディに加えて `{}`
-        // を確認。ChatGPT UI 上は tools/list 取得が 424/-32603「データの形式が正しくありません」として
-        // 失敗表示された）。swift-sdk はこれを JSON-RPC パースエラー（400）として扱うが、ChatGPT は
-        // この1件が失敗すると後続の initialize/tools_list が成功してもコネクタ全体を失敗表示する。
-        // method を持たない JSON（空ボディ・`{}`・`[]` を含む）は副作用のない疎通確認とみなし、
+        // method を持たない JSON の POST（空ボディ・`{}`・`[]`）を送ってくる場合がある。swift-sdk は
+        // これを JSON-RPC パースエラー（400）として扱うが、ChatGPT はこの1件が失敗すると後続の
+        // initialize/tools_list が成功してもコネクタ全体を失敗表示する。副作用のない疎通確認とみなし、
         // JSON-RPC パイプラインへは渡さず 200 を返す。
         guard let requestBody, !requestBody.isEmpty, !isConnectivityProbeBody(requestBody) else {
             return Vapor.Response(status: .ok)
+        }
+
+        // ChatGPT（OpenAI 製 MCP クライアント）は initialize の前に非標準の `server/discover`
+        // （MCP 仕様にないメソッド）を送ってくる（実測 2026-08-11: 診断ログで
+        // `{"jsonrpc":"2.0","id":"openai-mcp-discover","method":"server/discover",...}` を確認。
+        // 本番ログで 400→200→200 のパターンが継続し、ChatGPT UI 上は tools/list 取得が
+        // 424/-32603「データの形式が正しくありません」として失敗表示されていた）。swift-sdk は
+        // このメソッドを認識せず 400 を返すが、ChatGPT はこの1件の失敗で後続の initialize/tools_list
+        // が成功してもコネクタ全体を失敗表示する。JSON-RPC パイプラインへは渡さず、id を引き継いだ
+        // 空の成功レスポンスを返す。
+        if let discoverResponse = serverDiscoverResponse(requestBody) {
+            return discoverResponse
         }
 
         let httpRequest = MCP.HTTPRequest(
@@ -73,19 +80,20 @@ func registerMcpRoute(
     }
 }
 
-/// TEMP DIAGNOSTIC (revert before merge): Content-Type・長さ・先頭 200 バイト(base64) をログ出力する。
-private func logDiagnosticRequestBody(_ req: Vapor.Request, _ body: Data?, logger: Logger) {
-    let contentType: String = req.headers.contentType?.description ?? "nil"
-    let contentLength: String = req.headers.first(name: .contentLength) ?? "nil"
-    let bodyBytes: String = String(body?.count ?? -1)
-    let bodyB64: String = body.map { Data($0.prefix(200)).base64EncodedString() } ?? "nil"
-    let metadata: Logger.Metadata = [
-        "content-type": .string(contentType),
-        "content-length": .string(contentLength),
-        "body-bytes": .string(bodyBytes),
-        "body-b64": .string(bodyB64),
-    ]
-    logger.notice("mcp_route_diag", metadata: metadata)
+/// `method: "server/discover"`（OpenAI 製クライアント固有の非標準メソッド）を、id を引き継いだ
+/// 空の JSON-RPC 成功レスポンスへ差し替える。対象外のボディには nil を返す。
+private func serverDiscoverResponse(_ data: Data) -> Vapor.Response? {
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        json["method"] as? String == "server/discover",
+        let id = json["id"]
+    else { return nil }
+
+    let envelope: [String: Any] = ["jsonrpc": "2.0", "id": id, "result": [String: Any]()]
+    guard let body = try? JSONSerialization.data(withJSONObject: envelope) else { return nil }
+    let response = Vapor.Response(status: .ok)
+    response.headers.contentType = .json
+    response.body = .init(data: body)
+    return response
 }
 
 /// JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして成立しない）ボディを
