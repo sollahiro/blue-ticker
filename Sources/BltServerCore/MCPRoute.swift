@@ -35,6 +35,17 @@ func registerMcpRoute(
 
     group.post { req async -> Vapor.Response in
         let requestBody = bodyData(from: req)
+
+        // ChatGPT のコネクタ追加フローは、実ハンドシェイク（initialize）の前に空ボディの POST を
+        // 1回送ってくる（実測 2026-08-11: 本番ログで 400→200→200 のパターンを確認。空ボディ以外は
+        // 同一クライアントの initialize/tools_list で成功）。swift-sdk は空ボディを JSON-RPC
+        // パースエラー（400）として扱うが、ChatGPT はこの1件が失敗すると後続が成功してもコネクタ
+        // 全体を「接続に問題が発生しました」として失敗表示する。空ボディは副作用のない疎通確認
+        // とみなし、JSON-RPC パイプラインへは渡さず 200 を返す。
+        guard let requestBody, !requestBody.isEmpty else {
+            return Vapor.Response(status: .ok)
+        }
+
         let httpRequest = MCP.HTTPRequest(
             method: req.method.rawValue,
             headers: Dictionary(

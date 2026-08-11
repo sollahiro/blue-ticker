@@ -251,6 +251,25 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
+    // MARK: - 空ボディ POST（ChatGPT コネクタ追加フローの疎通確認。issue: ChatGPT接続時の400混入）
+
+    /// ChatGPT のコネクタ追加フローが initialize 前に送る空ボディ POST は、JSON-RPC パースエラー
+    /// （400）にせず 200 を返す（実測 2026-08-11: 本番ログで 400→200→200 のパターンを確認し、
+    /// 空ボディ1件の失敗が後続 initialize/tools_list 成功に関わらずコネクタ全体の失敗表示に
+    /// つながっていた）。
+    @Test func emptyBodyPostReturnsOkInsteadOfParseError() async throws {
+        try await withMcpApp { app in
+            var headers = HTTPHeaders()
+            headers.contentType = .json
+            headers.add(name: "Accept", value: "application/json, text/event-stream")
+            let request = Request(
+                application: app, method: .POST, url: URI(string: "/"), headers: headers,
+                collectedBody: nil, on: app.eventLoopGroup.next())
+            let response = try await app.responder.respond(to: request).get()
+            #expect(response.status == .ok)
+        }
+    }
+
     // MARK: - initialize 再送（Grok 等、ツール呼び出しのたびに initialize を再送するクライアント対応）
 
     @Test func secondInitializeRequestSucceedsInsteadOfAlreadyInitializedError() async throws {
