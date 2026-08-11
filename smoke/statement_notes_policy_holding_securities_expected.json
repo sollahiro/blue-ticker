@@ -1,265 +1,3380 @@
 {
-  "S100VWVY": {
-    "securities": [
+  "S100VU4O" : {
+    "securities" : [
       {
-        "carrying_amount": 959347000000,
-        "issuer_name": "ＫＤＤＩ㈱",
-        "number_of_shares": 203294600,
-        "purpose": "自動車関連（情報）取引の維持・発展"
+        "carrying_amount" : 150000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社フロンティアハウス",
+        "number_of_shares" : 100,
+        "purpose" : "互いの業務推進及び業務向上を図ることを目的として、取引関係の強化のため保有しております。定量的な保有効果は記載が困難であるため記載しておりません。保有の合理性はａ．で記載の方法により検証しております。"
       },
       {
-        "carrying_amount": 340405000000,
-        "issuer_name": "ＭＳ＆ＡＤインシュアランスグループホールディングス㈱",
-        "number_of_shares": 105551899,
-        "purpose": "自動車関連（金融）取引の維持・発展[株式数が変動した理由]一部売却、株式分割のため"
-      },
-      {
-        "carrying_amount": 292205000000,
-        "issuer_name": "日本電信電話㈱",
-        "number_of_shares": 2019385000,
-        "purpose": "自動車関連（情報）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 206288000000,
-        "issuer_name": "㈱三菱ＵＦＪフィナンシャル・グループ",
-        "number_of_shares": 102580000,
-        "purpose": "金融取引の維持・発展"
-      },
-      {
-        "carrying_amount": 173760000000,
-        "issuer_name": "スズキ㈱",
-        "number_of_shares": 96000000,
-        "purpose": "業務提携（商品補完、共同開発、生産領域での協業等）の維持・発展[株式数が増加した理由]株式分割のため"
-      },
-      {
-        "carrying_amount": 150980000000,
-        "issuer_name": "GRABHOLDINGS LIMITED",
-        "number_of_shares": 222906079,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 149094000000,
-        "issuer_name": "ルネサス エレクトロニクス㈱",
-        "number_of_shares": 75015900,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 124609000000,
-        "issuer_name": "HO TAIMOTOR CO.,LTD.",
-        "number_of_shares": 45294234,
-        "purpose": "自動車関連（業務提携）の維持・発展"
-      },
-      {
-        "carrying_amount": 85962000000,
-        "issuer_name": "PT ASTRAINTERNATIONAL Tbk",
-        "number_of_shares": 1920000000,
-        "purpose": "自動車関連（業務提携）の維持・発展"
-      },
-      {
-        "carrying_amount": 78644000000,
-        "issuer_name": "いすゞ自動車㈱",
-        "number_of_shares": 39000000,
-        "purpose": "商用事業でのCASE普及に向けた業務提携の維持・発展"
-      },
-      {
-        "carrying_amount": 65593000000,
-        "issuer_name": "Joby Aviation, Inc.",
-        "number_of_shares": 72871831,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 55987000000,
-        "issuer_name": "Pony AI Inc.",
-        "number_of_shares": 42453831,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 55841000000,
-        "issuer_name": "UBERTECHNOLOGIES,INC.",
-        "number_of_shares": 5125868,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 47610000000,
-        "issuer_name": "Aurora Innovation, Inc.",
-        "number_of_shares": 47348178,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 35883000000,
-        "issuer_name": "住友金属鉱山㈱",
-        "number_of_shares": 11058000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 30083000000,
-        "issuer_name": "マツダ㈱",
-        "number_of_shares": 31928500,
-        "purpose": "業務提携（米国での合弁会社（完成車生産）の設立・運営、共同開発、技術連携、商品補完）の維持・発展"
-      },
-      {
-        "carrying_amount": 22350000000,
-        "issuer_name": "ヤマハ発動機㈱",
-        "number_of_shares": 18750000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 14576000000,
-        "issuer_name": "パナソニック ホールディングス㈱",
-        "number_of_shares": 8227800,
-        "purpose": "自動車関連（調達）取引および、合弁会社（車載用角形電池、街づくり）を通じた協業の維持・発展"
-      },
-      {
-        "carrying_amount": 11275000000,
-        "issuer_name": "ヤマトホールディングス㈱",
-        "number_of_shares": 5748133,
-        "purpose": "自動車関連（販売）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 8657000000,
-        "issuer_name": "INCHCAPE PLC",
-        "number_of_shares": 6666327,
-        "purpose": "自動車関連（販売）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 8637000000,
-        "issuer_name": "カヤバ㈱",
-        "number_of_shares": 2938834,
-        "purpose": "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
-      },
-      {
-        "carrying_amount": 5968000000,
-        "issuer_name": "住友電気工業㈱",
-        "number_of_shares": 2420000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 5327000000,
-        "issuer_name": "㈱ジーエス・ユアサコーポレーション",
-        "number_of_shares": 2236080,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 5171000000,
-        "issuer_name": "大同特殊鋼㈱",
-        "number_of_shares": 4345000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 4533000000,
-        "issuer_name": "㈱ゼンリン",
-        "number_of_shares": 4272000,
-        "purpose": "自動車関連（情報）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 3237000000,
-        "issuer_name": "㈱三井ハイテック",
-        "number_of_shares": 4677500,
-        "purpose": "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
-      },
-      {
-        "carrying_amount": 3152000000,
-        "issuer_name": "信越化学工業㈱",
-        "number_of_shares": 744000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 2251000000,
-        "issuer_name": "㈱ＰＫＳＨＡＴｅｃｈｎｏｌｏｇｙ",
-        "number_of_shares": 766600,
-        "purpose": "自動車関連（技術）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 1658000000,
-        "issuer_name": "曙ブレーキ工業㈱",
-        "number_of_shares": 15495175,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 955000000,
-        "issuer_name": "Electreon Wireless Ltd.",
-        "number_of_shares": 291911,
-        "purpose": "自動車関連（技術）取引の維持・発展[株式数が増加した理由]中長期的な観点より、企業価値の向上に資すると判断し取得"
-      },
-      {
-        "carrying_amount": 825000000,
-        "issuer_name": "第一交通産業㈱",
-        "number_of_shares": 1078000,
-        "purpose": "自動車関連（MaaS）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 371000000,
-        "issuer_name": "中央可鍛工業㈱",
-        "number_of_shares": 792000,
-        "purpose": "自動車関連（調達）取引の維持・発展"
-      },
-      {
-        "carrying_amount": 136000000,
-        "issuer_name": "㈱御園座",
-        "number_of_shares": 80000,
-        "purpose": "地域経済との関係維持・発展"
-      },
-      {
-        "carrying_amount": 15000000,
-        "issuer_name": "ダイナミックマッププラットフォーム㈱",
-        "number_of_shares": 10000,
-        "purpose": "自動車関連（情報）取引の維持・発展"
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "㈱三井住友フィナンシャルグループ",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "浜松ホトニクス㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "東京海上ホールディングス㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "東海旅客鉄道㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "ＴＯＹＯ ＴＩＲＥ㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "セイノーホールディングス㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "福山通運㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "中日本興業㈱",
-        "number_of_shares": null,
-        "purpose": null
-      },
-      {
-        "carrying_amount": null,
-        "issuer_name": "Getaround,Inc.",
-        "number_of_shares": null,
-        "purpose": null
+        "carrying_amount" : 29995000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "matsuri technologies株式会社",
+        "number_of_shares" : 4285,
+        "purpose" : "民泊運営会社であるmatsuri technologies株式会社と当社保有物件の民泊への転用検討等の業務提携を締結し、取引関係の強化のため保有しております。定量的な保有効果は記載が困難であるため記載しておりません。保有の合理性はａ．で記載の方法により検証しております。"
       }
     ],
-    "source": "xbrl_facts"
+    "source" : "xbrl_facts"
+  },
+  "S100VWVY" : {
+    "securities" : [
+      {
+        "carrying_amount" : 959347000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＫＤＤＩ㈱",
+        "number_of_shares" : 203294600,
+        "purpose" : "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 340405000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＭＳ＆ＡＤインシュアランスグループホールディングス㈱",
+        "number_of_shares" : 105551899,
+        "purpose" : "自動車関連（金融）取引の維持・発展[株式数が変動した理由]一部売却、株式分割のため"
+      },
+      {
+        "carrying_amount" : 292205000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本電信電話㈱",
+        "number_of_shares" : 2019385000,
+        "purpose" : "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 206288000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱ＵＦＪフィナンシャル・グループ",
+        "number_of_shares" : 102580000,
+        "purpose" : "金融取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 173760000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "スズキ㈱",
+        "number_of_shares" : 96000000,
+        "purpose" : "業務提携（商品補完、共同開発、生産領域での協業等）の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount" : 150980000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "GRABHOLDINGS LIMITED",
+        "number_of_shares" : 222906079,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 149094000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ルネサス エレクトロニクス㈱",
+        "number_of_shares" : 75015900,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 124609000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "HO TAIMOTOR CO.,LTD.",
+        "number_of_shares" : 45294234,
+        "purpose" : "自動車関連（業務提携）の維持・発展"
+      },
+      {
+        "carrying_amount" : 85962000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "PT ASTRAINTERNATIONAL Tbk",
+        "number_of_shares" : 1920000000,
+        "purpose" : "自動車関連（業務提携）の維持・発展"
+      },
+      {
+        "carrying_amount" : 78644000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "いすゞ自動車㈱",
+        "number_of_shares" : 39000000,
+        "purpose" : "商用事業でのCASE普及に向けた業務提携の維持・発展"
+      },
+      {
+        "carrying_amount" : 65593000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Joby Aviation, Inc.",
+        "number_of_shares" : 72871831,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 55987000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Pony AI Inc.",
+        "number_of_shares" : 42453831,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 55841000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "UBERTECHNOLOGIES,INC.",
+        "number_of_shares" : 5125868,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 47610000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Aurora Innovation, Inc.",
+        "number_of_shares" : 47348178,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 35883000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友金属鉱山㈱",
+        "number_of_shares" : 11058000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 30083000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "マツダ㈱",
+        "number_of_shares" : 31928500,
+        "purpose" : "業務提携（米国での合弁会社（完成車生産）の設立・運営、共同開発、技術連携、商品補完）の維持・発展"
+      },
+      {
+        "carrying_amount" : 22350000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ヤマハ発動機㈱",
+        "number_of_shares" : 18750000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 14576000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "パナソニック ホールディングス㈱",
+        "number_of_shares" : 8227800,
+        "purpose" : "自動車関連（調達）取引および、合弁会社（車載用角形電池、街づくり）を通じた協業の維持・発展"
+      },
+      {
+        "carrying_amount" : 11275000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ヤマトホールディングス㈱",
+        "number_of_shares" : 5748133,
+        "purpose" : "自動車関連（販売）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 8657000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "INCHCAPE PLC",
+        "number_of_shares" : 6666327,
+        "purpose" : "自動車関連（販売）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 8637000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "カヤバ㈱",
+        "number_of_shares" : 2938834,
+        "purpose" : "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount" : 5968000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友電気工業㈱",
+        "number_of_shares" : 2420000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 5327000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ジーエス・ユアサコーポレーション",
+        "number_of_shares" : 2236080,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 5171000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大同特殊鋼㈱",
+        "number_of_shares" : 4345000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 4533000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ゼンリン",
+        "number_of_shares" : 4272000,
+        "purpose" : "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 3237000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井ハイテック",
+        "number_of_shares" : 4677500,
+        "purpose" : "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount" : 3152000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "信越化学工業㈱",
+        "number_of_shares" : 744000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 2251000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ＰＫＳＨＡＴｅｃｈｎｏｌｏｇｙ",
+        "number_of_shares" : 766600,
+        "purpose" : "自動車関連（技術）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 1658000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "曙ブレーキ工業㈱",
+        "number_of_shares" : 15495175,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 955000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Electreon Wireless Ltd.",
+        "number_of_shares" : 291911,
+        "purpose" : "自動車関連（技術）取引の維持・発展[株式数が増加した理由]中長期的な観点より、企業価値の向上に資すると判断し取得"
+      },
+      {
+        "carrying_amount" : 825000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "第一交通産業㈱",
+        "number_of_shares" : 1078000,
+        "purpose" : "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 371000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "中央可鍛工業㈱",
+        "number_of_shares" : 792000,
+        "purpose" : "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : 136000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱御園座",
+        "number_of_shares" : 80000,
+        "purpose" : "地域経済との関係維持・発展"
+      },
+      {
+        "carrying_amount" : 15000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ダイナミックマッププラットフォーム㈱",
+        "number_of_shares" : 10000,
+        "purpose" : "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "浜松ホトニクス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東京海上ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東海旅客鉄道㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＴＯＹＯ ＴＩＲＥ㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "セイノーホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "福山通運㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "中日本興業㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Getaround,Inc.",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : 23912000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱ブリヂストン",
+        "number_of_shares" : 3988674,
+        "purpose" : "退職給付信託に拠出、議決権行使の指図権は留保"
+      },
+      {
+        "carrying_amount" : 2596000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "住友ゴム工業㈱",
+        "number_of_shares" : 1378700,
+        "purpose" : "退職給付信託に拠出、議決権行使の指図権は留保"
+      },
+      {
+        "carrying_amount" : 530000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "岡谷鋼機㈱",
+        "number_of_shares" : 76000,
+        "purpose" : "退職給付信託に拠出、議決権行使の指図権は留保"
+      },
+      {
+        "carrying_amount" : 9000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱御園座",
+        "number_of_shares" : 5000,
+        "purpose" : "退職給付信託に拠出、議決権行使の指図権は留保"
+      },
+      {
+        "carrying_amount" : 7000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "大豊工業㈱",
+        "number_of_shares" : 12279,
+        "purpose" : "当社の関連会社に該当退職給付信託に拠出、議決権行使の指図権は留保"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "三井物産㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "パナソニック ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "住友商事㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱三菱ＵＦＪフィナンシャル・グループ",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ＡＧＣ㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "日本発条㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱百五銀行",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "東海東京フィナンシャル・ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱名古屋銀行",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱十六フィナンシャルグループ",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱大垣共立銀行",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱神戸製鋼所",
+        "number_of_shares" : null,
+        "purpose" : null
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100VXJA" : {
+    "securities" : [
+      {
+        "carrying_amount" : 6451000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱セブン＆アイ・\nホールディングス",
+        "number_of_shares" : 2982849,
+        "purpose" : "調味料事業、栄養・加工食品事業、ソリューション＆イングリディエンツ事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 3063000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ハウス食品グループ本社㈱",
+        "number_of_shares" : 1124843,
+        "purpose" : "ソリューション＆イングリディエンツ事業における主要顧客であり、また、食品物流を担うF-LINE㈱に共同出資しております。\n同社株式は、上記事業における円滑な取引の推進及び食品物流での関係維持と情報共有のため保有しております。"
+      },
+      {
+        "carrying_amount" : 2550000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "伊藤忠食品㈱",
+        "number_of_shares" : 339129,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 2532000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "長谷川香料㈱",
+        "number_of_shares" : 900000,
+        "purpose" : "バイオ・発酵技術を活用したナチュラルフレーバーの研究開発・事業化等に関する業務提携契約を締結しております。\n同社株式は、業務提携の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 1630000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "イオン㈱",
+        "number_of_shares" : 434861,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。\n事業関係のより一層の強化のため取引先持株会に加入しており、当事業年度において保有株数が4,087株増加しております。"
+      },
+      {
+        "carrying_amount" : 1567000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "加藤産業㈱",
+        "number_of_shares" : 318017,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 377000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Ｈｅａｒｔｓｅｅｄ㈱",
+        "number_of_shares" : 172400,
+        "purpose" : "再生医療用培地事業の重要顧客、かつ共同開発パートナーであります。\n同社株式は上記事業の成長、及び再生医療分野に関連する情報収集のため新規に取得しました。"
+      },
+      {
+        "carrying_amount" : 327000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "セントラルフォレストグループ㈱",
+        "number_of_shares" : 106000,
+        "purpose" : "調味料事業、栄養・加工食品事業、ソリューション＆イングリディエンツ事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 163000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ダスキン",
+        "number_of_shares" : 45000,
+        "purpose" : "油脂製品における主要顧客であります。\n同社株式は、上記製品における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 81000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱アークス",
+        "number_of_shares" : 27870,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 75000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "丸大食品㈱",
+        "number_of_shares" : 44657,
+        "purpose" : "ソリューション＆イングリディエンツ事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 74000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "尾家産業㈱",
+        "number_of_shares" : 37950,
+        "purpose" : "ソリューション＆イングリディエンツ事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 37000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱バローホールディングス",
+        "number_of_shares" : 15840,
+        "purpose" : "調味料事業、栄養・加工食品事業、ソリューション＆イングリディエンツ事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 28000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱マルイチ産商",
+        "number_of_shares" : 25808,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 8000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ヤマナカ",
+        "number_of_shares" : 15040,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 4000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱リテールパートナーズ",
+        "number_of_shares" : 3000,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。"
+      },
+      {
+        "carrying_amount" : 1000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱平和堂",
+        "number_of_shares" : 546,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、上記事業における円滑な取引の推進のため保有しております。\n事業関係のより一層の強化のため取引先持株会に加入しており、当事業年度において保有株数が58株増加しています。"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "エイチ・ツー・オー　リテイリング㈱",
+        "number_of_shares" : 100,
+        "purpose" : "調味料事業、栄養・加工食品事業及び冷凍食品事業における主要顧客であります。\n同社株式は、株主総会への参加等を通じ事業戦略に有用な情報の収集及び上記事業における円滑な取引の維持のため保有しております。\n株式交換により、当事業年度において㈱関西フードマーケットの普通株式1株につき、同社株式1株で割り当てを受けています。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "第一生命ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東京海上ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＳＯＭＰＯホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "伊藤ハム米久ホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ローソン",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱オークワ",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ヤオコー",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ベルク",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱マミーマート",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "アクシアル リテイリング㈱",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ライフコーポレーション",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱トーホー",
+        "number_of_shares" : null,
+        "purpose" : "同社株式は、2025年3月31日時点で保有しておりません。"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100VYA0" : {
+    "securities" : [
+      {
+        "carrying_amount" : 5988000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱日清製粉グループ本社",
+        "number_of_shares" : 3460457,
+        "purpose" : "加工食品事業等における原材料の安定供給による事業基盤の強化と合弁会社を通じた品質保証での連携の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 4822000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "芙蓉総合リース㈱",
+        "number_of_shares" : 416600,
+        "purpose" : "当社グループにおけるリース取引・協業関係の維持・強化のために保有しております。"
+      },
+      {
+        "carrying_amount" : 4540000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "キユーピー㈱",
+        "number_of_shares" : 1555007,
+        "purpose" : "加工食品事業等における原材料の安定供給による事業基盤の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 3433000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱食品㈱",
+        "number_of_shares" : 700000,
+        "purpose" : "加工食品事業及び低温物流事業等における取引や原材料の安定供給による事業基盤の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 1862000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱ＵＦＪ\nフィナンシャル・グループ",
+        "number_of_shares" : 926160,
+        "purpose" : "当社グループにおける安定的な資金調達と資金管理オペレーションを通じた財務基盤の強化、市場動向・規制等に関する有益な情報提供及びアドバイザリー機能の提供による事業支援の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 1650000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＳＯＭＰＯ\nホールディングス㈱",
+        "number_of_shares" : 365055,
+        "purpose" : "当社グループにおける資産保全・危機管理に関する継続的な支援による経営基盤強化のため保有しております。（注）４"
+      },
+      {
+        "carrying_amount" : 1423000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱京都ホテル",
+        "number_of_shares" : 2008178,
+        "purpose" : "当社グループにおける取引・協業関係の維持・強化のために保有しております。"
+      },
+      {
+        "carrying_amount" : 793000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱みずほ\nフィナンシャルグループ",
+        "number_of_shares" : 195756,
+        "purpose" : "当社グループにおける安定的な資金調達と資金管理オペレーションを通じた財務基盤の強化、市場動向・規制等に関する有益な情報提供及びアドバイザリー機能の提供による事業支援の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 773000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱千葉銀行",
+        "number_of_shares" : 553000,
+        "purpose" : "当社グループにおける安定的な資金調達と資金管理オペレーションを通じた財務基盤の強化、市場動向・規制等に関する有益な情報提供及びアドバイザリー機能の提供による事業支援の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 622000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱帝国ホテル",
+        "number_of_shares" : 696048,
+        "purpose" : "加工食品事業等における合弁会社を通じた協業関係の維持強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 505000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "安田倉庫㈱",
+        "number_of_shares" : 301000,
+        "purpose" : "低温物流事業等における取引・協業関係の維持・強化のために保有しております。"
+      },
+      {
+        "carrying_amount" : 325000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "地主㈱",
+        "number_of_shares" : 156000,
+        "purpose" : "不動産事業等における賃貸取引・協業関係の維持・強化のために保有しております。"
+      },
+      {
+        "carrying_amount" : 296000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井住友トラスト・ホールディングス㈱",
+        "number_of_shares" : 79680,
+        "purpose" : "当社グループにおける安定的な資金調達と資金管理オペレーションを通じた財務基盤の強化、市場動向・規制等に関する有益な情報提供及びアドバイザリー機能の提供による事業支援の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 247000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東洋製罐グループホールディングス㈱",
+        "number_of_shares" : 101200,
+        "purpose" : "加工食品事業等における原材料の安定供給による事業基盤の強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 133000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "戸田建設㈱",
+        "number_of_shares" : 151000,
+        "purpose" : "低温物流事業及び不動産事業等における建物の維持保全に関する支援を通じた事業基盤の強化のため保有しております。"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100W3XJ" : {
+    "securities" : [
+      {
+        "carrying_amount" : 10887000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ダイセル",
+        "number_of_shares" : 8390740,
+        "purpose" : "・購入取引を行っており、全てのセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 7634000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井不動産㈱",
+        "number_of_shares" : 5737800,
+        "purpose" : "・製品販売取引を行っており、全てのセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・保有先の株式分割により株式数が増加しています。"
+      },
+      {
+        "carrying_amount" : 6750000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友不動産㈱",
+        "number_of_shares" : 1206800,
+        "purpose" : "・製品販売取引を行っており、全てのセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 4369000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＴＯＰＰＡＮホールディングス㈱",
+        "number_of_shares" : 1077609,
+        "purpose" : "・購入取引及び製品販売取引を行っており、全てのセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : 4218000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : 1111594,
+        "purpose" : "・主要金融機関として総合的な金融取引を行っており、金融取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・保有先の株式分割等により株式数が増加しています。"
+      },
+      {
+        "carrying_amount" : 3852000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＭＳ＆ＡＤインシュアランス グループ ホールディングス㈱",
+        "number_of_shares" : 1194286,
+        "purpose" : "・主要金融機関として総合的な金融取引を行っており、金融取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・保有先の株式分割等により株式数が増加しています。"
+      },
+      {
+        "carrying_amount" : 1721000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井住友トラストグループ㈱",
+        "number_of_shares" : 462748,
+        "purpose" : "・主要金融機関として総合的な金融取引を行っており、金融取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : 1326000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大日本印刷㈱",
+        "number_of_shares" : 625740,
+        "purpose" : "・購入取引及び製品販売取引を行っており、イメージングセグメント、エレクトロニクスセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 939000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "EIZO㈱",
+        "number_of_shares" : 450600,
+        "purpose" : "・購入取引を行っており、ヘルスケアセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・保有先の株式分割により株式数が増加しています。"
+      },
+      {
+        "carrying_amount" : 698000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱ＵＦＪフィナンシャル・グループ",
+        "number_of_shares" : 347200,
+        "purpose" : "・主要金融機関として総合的な金融取引を行っており、金融取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : 683000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱セブン＆アイ・ホールディングス",
+        "number_of_shares" : 315900,
+        "purpose" : "・協業関係にあり、イメージングセグメント、エレクトロニクスセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 400000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東海旅客鉄道㈱",
+        "number_of_shares" : 140000,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 383000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱オプティム",
+        "number_of_shares" : 589280,
+        "purpose" : "・協業関係にあり、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 370000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱製紙㈱",
+        "number_of_shares" : 567000,
+        "purpose" : "・購入取引及び製品販売取引を行っており、イメージングセグメント、エレクトロニクスセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : 269000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "イオン㈱",
+        "number_of_shares" : 71800,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 195000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ビックカメラ",
+        "number_of_shares" : 124500,
+        "purpose" : "・製品販売取引を行っており、イメージングセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 91000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ダスキン",
+        "number_of_shares" : 25000,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 72000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本BS放送㈱",
+        "number_of_shares" : 80000,
+        "purpose" : "・イメージングセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 69000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "上新電機㈱",
+        "number_of_shares" : 32500,
+        "purpose" : "・製品販売取引を行っており、イメージングセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 66000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱オンワードホールディングス",
+        "number_of_shares" : 121720,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 43000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱西日本フィナンシャルホールディングス",
+        "number_of_shares" : 20389,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 42000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "池上通信機㈱",
+        "number_of_shares" : 66964,
+        "purpose" : "・製品販売取引を行っており、イメージングセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 38000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱オートバックスセブン",
+        "number_of_shares" : 25362,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 38000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱村田製作所",
+        "number_of_shares" : 16335,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 34000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ワコールホールディングス",
+        "number_of_shares" : 6600,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 27000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱電機㈱",
+        "number_of_shares" : 10000,
+        "purpose" : "・製品販売取引を行っており、エレクトロニクスセグメント、イメージングセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 14000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "宮地エンジニアリング㈱",
+        "number_of_shares" : 8000,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・保有先の株式分割により株式数が増加しています。"
+      },
+      {
+        "carrying_amount" : 12000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "立川ブラインド工業㈱",
+        "number_of_shares" : 7986,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 9000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱神戸製鋼所",
+        "number_of_shares" : 5000,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 9000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱Misumi",
+        "number_of_shares" : 5000,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 7000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日東工業㈱",
+        "number_of_shares" : 2107,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 5000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本トランスシティ㈱",
+        "number_of_shares" : 5787,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 5000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱レンゴー",
+        "number_of_shares" : 6000,
+        "purpose" : "・購入取引及び製品販売取引を行っており、全てのセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 3000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "橋本総業ホールディングス㈱",
+        "number_of_shares" : 2420,
+        "purpose" : "・製品販売取引を行っており、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "松竹㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ウシオ電機㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱NTTデータ イントラマート",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "西日本鉄道㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本新薬㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱キッツ",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱広済堂ホールディングス",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "小野薬品工業㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱カプコン",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱エイジス",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ドウシシャ",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : 2689000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Lunit Inc",
+        "number_of_shares" : 536300,
+        "purpose" : "・購入取引を行っており、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 849000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "DRGEM Corporation",
+        "number_of_shares" : 1613800,
+        "purpose" : "・購入取引を行っており、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 831000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "クオリプス㈱",
+        "number_of_shares" : 100000,
+        "purpose" : "・ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 802000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱プラザホールディングス",
+        "number_of_shares" : 451800,
+        "purpose" : "・協業関係にあり、イメージングセグメント、エレクトロニクスセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 451000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Yestar Healthcare Holdings Company Limited",
+        "number_of_shares" : 230000000,
+        "purpose" : "・購入取引及び製品販売取引を行っており、イメージングセグメント、エレクトロニクスセグメント、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 174000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ペルセウスプロテオミクス",
+        "number_of_shares" : 236610,
+        "purpose" : "・協業関係にあり、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : 169000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Pulsenmore Ltd.",
+        "number_of_shares" : 1275000,
+        "purpose" : "・ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 141000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Cynata Therapeutics Ltd",
+        "number_of_shares" : 8088403,
+        "purpose" : "・製品販売取引を行っており、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 119000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ムサシ",
+        "number_of_shares" : 70000,
+        "purpose" : "・製品販売取引を行っており、ヘルスケアセグメント、エレクトロニクスセグメント、ビジネスイノベーションセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は増加していません。"
+      },
+      {
+        "carrying_amount" : 27000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大木ヘルスケアホールディングス㈱",
+        "number_of_shares" : 34300,
+        "purpose" : "・製品販売取引を行っており、ヘルスケアセグメントの事業関係及び取引関係の維持・強化を目的として、保有しています。\n・定量的保有効果については、具体的検証内容は、事業活動における機密保持を考慮し記載しませんが、②の方法に基づいた検証の結果、十分な定量的保有効果があると判断しています。\n・前事業年度から株式数は減少しています。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ダイトーケミックス㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Innocare Optoelectronics Corporation",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大日精化工業㈱",
+        "number_of_shares" : null,
+        "purpose" : "・当事業年度において売却しました。"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100W4FB" : {
+    "securities" : [
+      {
+        "carrying_amount" : 410267000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "トヨタ自動車株式会社",
+        "number_of_shares" : 156830000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 280122000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "U.S. Bancorp",
+        "number_of_shares" : 44374155,
+        "purpose" : "発行会社は米国最大規模の地銀であるU.S. Bankの持株会社。デジタル領域、法人取引、日系のお客さま向けサービス、市場取引等、ＭＵＦＧとU.S. Bank双方の強みを活かせる分野での業務提携関係の維持及び拡大を目指すために保有。"
+      },
+      {
+        "carrying_amount" : 135063000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東京海上ホールディングス株式会社",
+        "number_of_shares" : 23546700,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 115846000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "スズキ株式会社",
+        "number_of_shares" : 64003432,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 96798000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Grab Holdings Limited",
+        "number_of_shares" : 142913428,
+        "purpose" : "発行会社は東南アジアで配車、フードデリバリー、デジタル決済・融資等のサービスをスマートフォンアプリを通じて提供するスーパーアプリ事業者の大手。ＭＵＦＧの金融知見・ノウハウと同社の先進的テクノロジーを掛け合わせることで、新たな次世代金融サービスの提供及びMUFGのビジネスモデルの進化を目的として事業協働契約を締結。2020年に同社とBank of Ayudhya Public Company Limitedによるドライバー・フード加盟店向け共同ローンを開始。今後も事業協働の継続及び東南アジア地域の金融包摂に貢献するために保有"
+      },
+      {
+        "carrying_amount" : 74021000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ニデック株式会社",
+        "number_of_shares" : 29703608,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有しており、株式分割により株式数が増加"
+      },
+      {
+        "carrying_amount" : 65906000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ダイキン工業株式会社",
+        "number_of_shares" : 4083400,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 60569000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "豊田通商株式会社",
+        "number_of_shares" : 24295905,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有しており、株式分割により株式数が増加"
+      },
+      {
+        "carrying_amount" : 58677000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社キーエンス",
+        "number_of_shares" : 1003384,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 50726000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱ＨＣキャピタル株式会社",
+        "number_of_shares" : 50348620,
+        "purpose" : "発行会社は国内大手総合リース会社。同社の国内外におけるアセットファイナンスサービスをＭＵＦＧのお客さまに対して提供するほか、ファイナンスビジネス等で協働することで、ＭＵＦＧの金融サービスを補完・拡充することを目的に保有"
+      },
+      {
+        "carrying_amount" : 49632000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東海旅客鉄道株式会社",
+        "number_of_shares" : 17390500,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 46905000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "BANK OF CHINA LIMITED",
+        "number_of_shares" : 520357200,
+        "purpose" : "発行会社は中国の四大国有銀行の一角。中国における業務のサポートを目的として資本業務提携を締結。中国において、新たな業務資格取得等を進める際には、アドバイス及びサポートを享受。今後も業務提携関係を維持することでＭＵＦＧの非日系企業ビジネスの更なる拡大のために保有"
+      },
+      {
+        "carrying_amount" : 41500000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社マキタ",
+        "number_of_shares" : 8426446,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 41180000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東日本旅客鉄道株式会社",
+        "number_of_shares" : 13950000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 40448000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "信越化学工業株式会社",
+        "number_of_shares" : 9548745,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 34566000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大和ハウス工業株式会社",
+        "number_of_shares" : 7000192,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 31117000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "伊藤忠商事株式会社",
+        "number_of_shares" : 4509200,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 31042000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＳＧホールディングス株式会社",
+        "number_of_shares" : 20750000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 30808000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "京セラ株式会社",
+        "number_of_shares" : 18387640,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 28618000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社島津製作所",
+        "number_of_shares" : 7672477,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 28389000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大阪瓦斯株式会社",
+        "number_of_shares" : 8391680,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 27872000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "キヤノン株式会社",
+        "number_of_shares" : 6000564,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 26746000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社クボタ",
+        "number_of_shares" : 14607629,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 25806000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本製鉄株式会社",
+        "number_of_shares" : 8077181,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 25723000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "西日本旅客鉄道株式会社",
+        "number_of_shares" : 8820000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 25510000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井物産株式会社",
+        "number_of_shares" : 9112500,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有しており、株式分割により株式数が増加"
+      },
+      {
+        "carrying_amount" : 23086000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社日本取引所グループ",
+        "number_of_shares" : 15114000,
+        "purpose" : "発行会社は東京証券取引所、大阪取引所、証券保管振替機構等を傘下に有する持株会社。取引所金融商品市場の運営から売買の執行や、清算、決済に至るまで、市場参加者に対して総合的なサービスを提供。同社は本邦金融市場における公共インフラとしての位置付けであり、その安定的な運営に寄与することで、本邦金融市場の発展に資するべく保有しており、株式分割により株式数が増加"
+      },
+      {
+        "carrying_amount" : 22379000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社シマノ",
+        "number_of_shares" : 1066459,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 22130000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ミネベアミツミ株式会社",
+        "number_of_shares" : 10181739,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 21661000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "オムロン株式会社",
+        "number_of_shares" : 5142695,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 20293000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "イオン株式会社",
+        "number_of_shares" : 5411676,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 19757000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "BANCO BRADESCO S.A.",
+        "number_of_shares" : 67080985,
+        "purpose" : "発行会社はブラジルの地場大手総合金融機関。ブラジルにおけるＭＵＦＧの事業を補完し、当地ビジネスを発展させる目的で資本業務提携を締結。日伯投資家の資産運用に係る事業領域では、2008年から同社投信の本邦投資家向け販売を開始。今後も業務提携関係に基づく幅広い事業領域での協働を通じて、顧客・社会の発展に寄与するために保有"
+      },
+      {
+        "carrying_amount" : 19599000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱電機株式会社",
+        "number_of_shares" : 7205585,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 19070000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "レーザーテック株式会社",
+        "number_of_shares" : 1504000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 18202000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "積水ハウス株式会社",
+        "number_of_shares" : 5449815,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 17010000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社リコー",
+        "number_of_shares" : 10786712,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 16999000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ロート製薬株式会社",
+        "number_of_shares" : 7601140,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 16788000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "関西電力株式会社",
+        "number_of_shares" : 9471829,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 16262000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "セコム株式会社",
+        "number_of_shares" : 3196876,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有しており、株式分割により株式数が増加"
+      },
+      {
+        "carrying_amount" : 15709000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ダイフク",
+        "number_of_shares" : 4313490,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 15058000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ＳＣＲＥＥＮホールディングス",
+        "number_of_shares" : 1569428,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 14864000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社千葉銀行",
+        "number_of_shares" : 10624873,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 13846000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "小野薬品工業株式会社",
+        "number_of_shares" : 8640740,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 13773000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ワコールホールディングス",
+        "number_of_shares" : 2704414,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 13588000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日清食品ホールディングス株式会社",
+        "number_of_shares" : 4450794,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 13223000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本碍子株式会社",
+        "number_of_shares" : 7204443,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 12978000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社セブン＆アイ・ホールディングス",
+        "number_of_shares" : 6000000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 12615000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本空港ビルデング株式会社",
+        "number_of_shares" : 3068000,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 12020000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＴＯＴＯ株式会社",
+        "number_of_shares" : 3087699,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 11882000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東邦瓦斯株式会社",
+        "number_of_shares" : 2872954,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 11217000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東京応化工業株式会社",
+        "number_of_shares" : 3622020,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 10403000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本郵船株式会社",
+        "number_of_shares" : 2114103,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 10387000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ニコン",
+        "number_of_shares" : 7009357,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 8541000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東急株式会社",
+        "number_of_shares" : 5069353,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 8321000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社バンダイナムコホールディングス",
+        "number_of_shares" : 1662960,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 7278000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱地所株式会社",
+        "number_of_shares" : 2992780,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 4614000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "スタンレー電気株式会社",
+        "number_of_shares" : 1644785,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社サンリオ",
+        "number_of_shares" : null,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社村田製作所",
+        "number_of_shares" : null,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社小糸製作所",
+        "number_of_shares" : null,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "中部電力株式会社",
+        "number_of_shares" : null,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "京成電鉄株式会社",
+        "number_of_shares" : null,
+        "purpose" : "発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "本田技研工業株式会社",
+        "number_of_shares" : null,
+        "purpose" : "前事業年度末は、発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社アシックス",
+        "number_of_shares" : null,
+        "purpose" : "前事業年度末は、発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "テルモ株式会社",
+        "number_of_shares" : null,
+        "purpose" : "前事業年度末は、発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "久光製薬株式会社",
+        "number_of_shares" : null,
+        "purpose" : "前事業年度末は、発行会社グループとの、主に金融取引（預金・貸出・為替等）における総合的な取引関係維持・拡大のために保有"
+      },
+      {
+        "carrying_amount" : 425721000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "任天堂株式会社",
+        "number_of_shares" : 42109000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 101673000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "東海旅客鉄道株式会社",
+        "number_of_shares" : 35625000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 96775000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "三菱重工業株式会社",
+        "number_of_shares" : 38311600,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 68846000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "株式会社バンダイナムコホールディングス",
+        "number_of_shares" : 13758300,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 33092000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "トヨタ自動車株式会社",
+        "number_of_shares" : 12650000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 26752000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "三菱地所株式会社",
+        "number_of_shares" : 11000000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 15261000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "スタンレー電気株式会社",
+        "number_of_shares" : 5440000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 14024000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "日本郵船株式会社",
+        "number_of_shares" : 2850000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 13972000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "久光製薬株式会社",
+        "number_of_shares" : 3452600,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 12022000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "東急株式会社",
+        "number_of_shares" : 7135000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 10880000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "三菱電機株式会社",
+        "number_of_shares" : 4000000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : 2223000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "株式会社ニコン",
+        "number_of_shares" : 1500000,
+        "purpose" : "退職給付信託として保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : true,
+        "issuer_name" : "株式会社ユー・エス・エス",
+        "number_of_shares" : null,
+        "purpose" : "前事業年度末は、退職給付信託として保有"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100W4MT" : {
+    "securities" : [
+      {
+        "carrying_amount" : 80960000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "トヨタ自動車㈱",
+        "number_of_shares" : 30948300,
+        "purpose" : "業務提携の維持・発展のために保有。社会課題の解決及び自動車社会の健全で持続的な発展に貢献していくことを念頭に、両社で2016年に業務提携に向けた検討を開始して協業に取り組み、2019年に、従来どおり競争者であり続けつつも新たなフィールドでの協力を進めていくために、長期的なパートナー関係の構築・推進を目指すべく資本提携。"
+      },
+      {
+        "carrying_amount" : 19972000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱ＵＦＪフィナンシャル・グループ",
+        "number_of_shares" : 9931630,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 11362000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱しずおかフィナンシャルグループ",
+        "number_of_shares" : 7000800,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 7693000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Subros Ltd.",
+        "number_of_shares" : 7800000,
+        "purpose" : "主にインドにおける自動車関連部品の取引関係の維持・強化のため。1985年に合弁会社として設立された際に出資。"
+      },
+      {
+        "carrying_amount" : 7617000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友不動産㈱",
+        "number_of_shares" : 1362000,
+        "purpose" : "主にイベント施設の賃借や拠点用地の仲介取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 4487000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱みずほフィナンシャルグループ",
+        "number_of_shares" : 1107701,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 2977000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱りそなホールディングス",
+        "number_of_shares" : 2313450,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 2216000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＮＯＫ㈱",
+        "number_of_shares" : 1012300,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1910000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱大気社",
+        "number_of_shares" : 417900,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1816000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : 478656,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。(株式数の増加は株式分割によるもの)"
+      },
+      {
+        "carrying_amount" : 1587000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "カヤバ㈱",
+        "number_of_shares" : 540040,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。(株式数の増加は株式分割によるもの)"
+      },
+      {
+        "carrying_amount" : 1540000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "イビデン㈱",
+        "number_of_shares" : 386100,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1454000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "スタンレー電気㈱",
+        "number_of_shares" : 518364,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1397000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱マキタ",
+        "number_of_shares" : 283800,
+        "purpose" : "主に作業用工具に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1088000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井住友トラスト・ホールディングス㈱",
+        "number_of_shares" : 292500,
+        "purpose" : "主に資金調達等の取引関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 1086000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本精工㈱",
+        "number_of_shares" : 1702650,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1057000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ユシロ化学工業㈱",
+        "number_of_shares" : 549000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 1056000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三櫻工業㈱",
+        "number_of_shares" : 1600000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 808000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ヨロズ",
+        "number_of_shares" : 800000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 738000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ユニバンス",
+        "number_of_shares" : 1937200,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 712000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＳＯＭＰＯホールディングス㈱",
+        "number_of_shares" : 157500,
+        "purpose" : "主に保険の取引関係の維持・強化のために保有。(株式数の増加は株式分割によるもの)"
+      },
+      {
+        "carrying_amount" : 682000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ヤマトホールディングス㈱",
+        "number_of_shares" : 348080,
+        "purpose" : "主に物流業務に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 659000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ispace",
+        "number_of_shares" : 873960,
+        "purpose" : "自動車開発で培ってきた技術で同社の挑戦に貢献すること及び当社の技術向上に資することから保有。"
+      },
+      {
+        "carrying_amount" : 557000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱エクセディ",
+        "number_of_shares" : 127050,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 541000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東海東京フィナンシャル・ホールディングス㈱",
+        "number_of_shares" : 1118090,
+        "purpose" : "主に金融取引等における関係の維持・強化のために保有。"
+      },
+      {
+        "carrying_amount" : 486000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱アイシン",
+        "number_of_shares" : 300000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。(株式数の増加は株式分割によるもの)"
+      },
+      {
+        "carrying_amount" : 367000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱小糸製作所",
+        "number_of_shares" : 200000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 366000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱アーレスティ",
+        "number_of_shares" : 565767,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 357000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "フタバ産業㈱",
+        "number_of_shares" : 459000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 306000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ミクニ",
+        "number_of_shares" : 1007365,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 299000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "リケンＮＰＲ㈱",
+        "number_of_shares" : 120000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 242000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ハイレックスコーポレーション",
+        "number_of_shares" : 154187,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 233000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "トピー工業㈱",
+        "number_of_shares" : 109621,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 187000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "曙ブレーキ工業㈱",
+        "number_of_shares" : 1751000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 150000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "西川ゴム工業㈱",
+        "number_of_shares" : 30750,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 134000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱河合楽器製作所",
+        "number_of_shares" : 47000,
+        "purpose" : "地域経済との関係を維持・強化するために保有。"
+      },
+      {
+        "carrying_amount" : 111000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱東海理化電機製作所",
+        "number_of_shares" : 50000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 109000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "戸田建設㈱",
+        "number_of_shares" : 124185,
+        "purpose" : "主に施設・拠点の建築に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 103000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "豊田合成㈱",
+        "number_of_shares" : 38573,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 100000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "岡谷鋼機㈱",
+        "number_of_shares" : 14400,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。(株式数の増加は株式分割によるもの)"
+      },
+      {
+        "carrying_amount" : 98000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "リョービ㈱",
+        "number_of_shares" : 44000,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 64000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "中央発條㈱",
+        "number_of_shares" : 38484,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 27000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ニチアス㈱",
+        "number_of_shares" : 6050,
+        "purpose" : "主に自動車関連部品・材料に関する取引関係の維持・強化・機会創出のために保有。"
+      },
+      {
+        "carrying_amount" : 16000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱清水銀行",
+        "number_of_shares" : 11248,
+        "purpose" : "地域経済との関係を維持・強化するために保有。"
+      },
+      {
+        "carrying_amount" : 14000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ダイナミックマッププラットフォーム㈱",
+        "number_of_shares" : 10000,
+        "purpose" : "主に自動運転技術の開発に関する取引関係の維持・強化・機会創出のために保有。(上場により非上場株式から区分変更)"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱電機㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "信越化学工業㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱デンソー",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＡＧＣ㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本製鉄㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大同特殊鋼㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井化学㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＮＴＮ㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "豊田通商㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "帝人㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "横浜ゴム㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本ペイントホールディングス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "浜松ホトニクス㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "愛知製鋼㈱",
+        "number_of_shares" : null,
+        "purpose" : null
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100W043" : {
+    "securities" : [
+      {
+        "carrying_amount" : 4446000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱UFJフィナン  シャル・グループ",
+        "number_of_shares" : 2211270,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 2534000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱HCキャピタル㈱",
+        "number_of_shares" : 2516000,
+        "purpose" : "当社の金融取引に関する主要な取引先であり、良好な関係を維持し情報交換等を円滑に行い安定した金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 2281000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ユアサ商事㈱",
+        "number_of_shares" : 503735,
+        "purpose" : "当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有取引先持株会を通じた株式の継続的取得により、株数が増加"
+      },
+      {
+        "carrying_amount" : 2278000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "岡谷鋼機㈱",
+        "number_of_shares" : 326400,
+        "purpose" : "当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有"
+      },
+      {
+        "carrying_amount" : 2241000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "オーエスジー㈱",
+        "number_of_shares" : 1374500,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の維持・強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 2185000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱安川電機",
+        "number_of_shares" : 586000,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 1864000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "CKD㈱",
+        "number_of_shares" : 922800,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 1517000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱山善",
+        "number_of_shares" : 1152020,
+        "purpose" : "当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有取引先持株会を通じた株式の継続的取得により、株数が増加"
+      },
+      {
+        "carrying_amount" : 1422000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日機装㈱",
+        "number_of_shares" : 1116000,
+        "purpose" : "当社製品のユーザであり、お客様のニーズにあった商品・サービスを提供できるよう情報交換を行う等、良好な取引関係の維持を目的として保有"
+      },
+      {
+        "carrying_amount" : 1328000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井住友トラストグループ㈱",
+        "number_of_shares" : 357248,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 670000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ふくおかフィナンシャルグループ",
+        "number_of_shares" : 170460,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 604000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱あいちフィナンシャルグループ",
+        "number_of_shares" : 211788,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 595000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "THK㈱",
+        "number_of_shares" : 164000,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の維持・強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 519000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本精工㈱",
+        "number_of_shares" : 814000,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 452000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東邦瓦斯㈱",
+        "number_of_shares" : 109400,
+        "purpose" : "当社所在地域社会のインフラ基盤の安定のため保有"
+      },
+      {
+        "carrying_amount" : 424000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "サンワテクノス㈱",
+        "number_of_shares" : 200000,
+        "purpose" : "当社製品の部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 411000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ブラザー工業㈱",
+        "number_of_shares" : 152700,
+        "purpose" : "当社製品のユーザであり、お客様のニーズにあった商品・サービスを提供できるよう情報交換を行う等、良好な取引関係の維持を目的として保有"
+      },
+      {
+        "carrying_amount" : 399000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱トミタ",
+        "number_of_shares" : 294725,
+        "purpose" : "当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有取引先持株会を通じた株式の継続的取得により、株数が増加"
+      },
+      {
+        "carrying_amount" : 349000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : 91992,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 347000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱八十二銀行",
+        "number_of_shares" : 329000,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 347000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱名古屋銀行",
+        "number_of_shares" : 44100,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 328000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "NTN㈱",
+        "number_of_shares" : 1354015,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 300000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ヴィッツ",
+        "number_of_shares" : 300000,
+        "purpose" : "当社製品に使用するソフトウエアの調達先として良好な関係を維持し、安定した取引の維持・強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 297000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱いよぎんホール ディングス",
+        "number_of_shares" : 169000,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 268000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "アイダエンジニア リング㈱",
+        "number_of_shares" : 300000,
+        "purpose" : "当社製品のユーザであり、お客様のニーズにあった商品・サービスを提供できるよう情報交換を行う等、良好な取引関係の維持を目的として保有"
+      },
+      {
+        "carrying_amount" : 243000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "旭精機工業㈱",
+        "number_of_shares" : 120000,
+        "purpose" : "当社製品のユーザであり、お客様のニーズにあった商品・サービスを提供できるよう情報交換を行う等、良好な取引関係の維持を目的として保有"
+      },
+      {
+        "carrying_amount" : 223000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "佐藤商事㈱",
+        "number_of_shares" : 150364,
+        "purpose" : "当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有取引先持株会を通じた株式の継続的取得により、株数が増加"
+      },
+      {
+        "carrying_amount" : 108000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱北川鉄工所",
+        "number_of_shares" : 90000,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 95000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱十六フィナンシャルグループ",
+        "number_of_shares" : 19790,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 90000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "フルサト・マルカ ホールディングス㈱",
+        "number_of_shares" : 38110,
+        "purpose" : "同社子会社が当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有"
+      },
+      {
+        "carrying_amount" : 88000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "愛知時計電機㈱",
+        "number_of_shares" : 45000,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : 80000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱マキタ",
+        "number_of_shares" : 16400,
+        "purpose" : "当社製品のユーザであり、お客様のニーズにあった商品・サービスを提供できるよう情報交換を行う等、良好な取引関係の維持を目的として保有"
+      },
+      {
+        "carrying_amount" : 60000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱百十四銀行",
+        "number_of_shares" : 17500,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 13000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱御園座",
+        "number_of_shares" : 8000,
+        "purpose" : "当社所在地域社会の伝統文化発展への貢献のため保有"
+      },
+      {
+        "carrying_amount" : 13000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "第一生命ホールディングス(株)",
+        "number_of_shares" : 3000,
+        "purpose" : "当社の資金調達及び金融取引に関する主要な取引先であり、良好な関係を維持し情報交換を円滑に行い、安定した資金調達・金融取引を目的として保有"
+      },
+      {
+        "carrying_amount" : 3000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "兼松㈱",
+        "number_of_shares" : 1273,
+        "purpose" : "同社子会社が当社製品の販売代理店であり、取引関係を維持し、営業機会の創出を目的として保有"
+      },
+      {
+        "carrying_amount" : 2000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "津田駒工業㈱",
+        "number_of_shares" : 6310,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大和重工㈱（注14）",
+        "number_of_shares" : null,
+        "purpose" : "当社製品のユーザであり、且つ部品の調達先であるため、相互情報連携により安定した取引の強化を目的として保有"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100WRZH" : {
+    "securities" : [
+      {
+        "carrying_amount" : 107541000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "SBIホールディングス株式会社",
+        "number_of_shares" : 27000000,
+        "purpose" : "当社は同社による第三者割当増資を引受け、同社グループとの間で、包括的な資本業務提携に関する基本合意書を締結しております。また、本資本業務提携の一環として、個人向けデジタル金融サービスに関する業務提携を開始し、個人顧客向け総合金融サービス「Olive」を提供しております。 当社は、上記の個人向けデジタル金融分野のみならず、様々な領域での戦略的関係の維持・強化を目的として、同社株式を保有しております。"
+      },
+      {
+        "carrying_amount" : 381946000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "トヨタ自動車株式会社",
+        "number_of_shares" : 146004000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 292989000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Ares ManagementCorporation",
+        "number_of_shares" : 13364740,
+        "purpose" : "同社はクレジット、プライベートエクイティ、不動産などのオルタナティブ資産に強みを持つ、米国を本拠とする資産運用会社であります。当社は同社との間で、業務提携契約を締結しており、資産運用事業における多面的な業務協業推進のため、同社株式を保有しております。"
+      },
+      {
+        "carrying_amount" : 124626000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Kotak Mahindra BankLimited",
+        "number_of_shares" : 32800000,
+        "purpose" : "同社はインドの民間大手金融機関であり、インドのリテールバンキング、コーポレートバンキングを含む幅広い金融サービスを展開しております。当社は同社と業務提携契約を締結しており、インドにおけるビジネス獲得の観点から、同社株式を保有しております。"
+      },
+      {
+        "carrying_amount" : 121050000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ダイキン工業株式会社",
+        "number_of_shares" : 7500000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 74072000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "JefferiesFinancial Group Inc.",
+        "number_of_shares" : 9247081,
+        "purpose" : "同社は米国最大手の独立系投資銀行の一つであり、インベストメントバンキングからキャピタルマーケッツ、リサーチ、アセットマネジメント並びにウェルスメントマネジメントまで総合的なサービスを提供しております。当社は同社との間で、戦略的資本・業務提携契約を結んでおり、コーポレート＆インベストメント分野での協業体制の拡充を目的に、同社普通株式を取得しております。"
+      },
+      {
+        "carrying_amount" : 69010000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "伊藤忠商事株式会社",
+        "number_of_shares" : 10000000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 63757000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社セブン＆アイ・ホールディングス",
+        "number_of_shares" : 29476428,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 59689000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大和ハウス工業株式会社",
+        "number_of_shares" : 12087842,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 55930000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友不動産株式会社",
+        "number_of_shares" : 10000000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 53890000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井物産株式会社",
+        "number_of_shares" : 19250200,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 53040000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社クボタ",
+        "number_of_shares" : 28967800,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 51751000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三和ホールディングス株式会社",
+        "number_of_shares" : 10851718,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 48495000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東日本旅客鉄道株式会社",
+        "number_of_shares" : 16428000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 48230000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ESR Group Limited",
+        "number_of_shares" : 205014113,
+        "purpose" : "同社は、香港証券取引所の上場企業であり、アジア・大洋州地域を中心に物流不動産の投資・開発・アセットマネジメント事業を展開しております。当社は、アジアの不動産・インフラ市場の成長を取り込み、アセットマネジメントビジネスの更なる強化を図るため、同社子会社のARA Asset Management Limitedも含めた戦略的関係の維持・強化を目的として、同社株式を保有しております。"
+      },
+      {
+        "carrying_amount" : 37786000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社フジクラ",
+        "number_of_shares" : 7000000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 34240000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社商船三井",
+        "number_of_shares" : 6600000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 32758000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本製鉄株式会社",
+        "number_of_shares" : 10252967,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 32082000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井不動産株式会社",
+        "number_of_shares" : 24113124,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 31782000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "豊田通商株式会社",
+        "number_of_shares" : 12748767,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 31042000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＳＧホールディングス株式会社",
+        "number_of_shares" : 20750000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 29958000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ニデック株式会社",
+        "number_of_shares" : 12021784,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 28567000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社マキタ",
+        "number_of_shares" : 5800458,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 28540000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東海旅客鉄道株式会社",
+        "number_of_shares" : 10000000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 26131000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "西日本旅客鉄道株式会社",
+        "number_of_shares" : 8960000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 24406000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東レ株式会社",
+        "number_of_shares" : 24022000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 22292000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ダイフク",
+        "number_of_shares" : 6121062,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 22220000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ミネベアミツミ株式会社",
+        "number_of_shares" : 10223597,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 21678000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "塩野義製薬株式会社",
+        "number_of_shares" : 9651864,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 20809000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "スタンレー電気株式会社",
+        "number_of_shares" : 7417511,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 19822000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ＧＭＯペイメントゲートウェイ株式会社",
+        "number_of_shares" : 2501600,
+        "purpose" : "同社は決済代行ビジネスを運営する国内上場会社であります。当社は、同社との間で、決済代行ビジネスにおける合弁会社の設立等を主とした資本業務提携契約を締結しており、決済ビジネスでの協業の観点から、同社株式を保有しております。"
+      },
+      {
+        "carrying_amount" : 19267000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "鹿島建設株式会社",
+        "number_of_shares" : 6321331,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 18717000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "CME GROUP INC.CLASS A",
+        "number_of_shares" : 471846,
+        "purpose" : "当社を通じた円滑な金融商品等の取引のために保有しております。"
+      },
+      {
+        "carrying_amount" : 18524000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社村田製作所",
+        "number_of_shares" : 8035032,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 18222000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "旭化成株式会社",
+        "number_of_shares" : 17404956,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 16492000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "第一三共株式会社",
+        "number_of_shares" : 4697300,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 16480000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社バンダイナムコホールディングス",
+        "number_of_shares" : 3293532,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 15488000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東洋水産株式会社",
+        "number_of_shares" : 1761211,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 14544000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ブラザー工業株式会社",
+        "number_of_shares" : 5398681,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 14414000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "積水ハウス株式会社",
+        "number_of_shares" : 4315706,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 13807000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "関西電力株式会社",
+        "number_of_shares" : 7789985,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 13666000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東邦瓦斯株式会社",
+        "number_of_shares" : 3304233,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 12980000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "丸一鋼管株式会社",
+        "number_of_shares" : 3900310,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 12523000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "丸紅株式会社",
+        "number_of_shares" : 5263000,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 12035000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "富士フイルムホールディングス株式会社",
+        "number_of_shares" : 4231178,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 11975000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "川崎重工業株式会社",
+        "number_of_shares" : 1341333,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 11877000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ヤオコー",
+        "number_of_shares" : 1292544,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 11773000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社カネカ",
+        "number_of_shares" : 3091683,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 11578000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東京電力ホールディングス株式会社",
+        "number_of_shares" : 26945688,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 11403000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "住友林業株式会社",
+        "number_of_shares" : 2529099,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : 11365000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "山崎製パン株式会社",
+        "number_of_shares" : 3946419,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しております。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社アシックス",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社サンリオ",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社ブリヂストン",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "中部電力株式会社",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社小糸製作所",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "マツダ株式会社",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "株式会社シマノ",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "出光興産株式会社",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "イビデン株式会社",
+        "number_of_shares" : null,
+        "purpose" : "主に預金・融資・為替等の金融関連の取引関係の維持・強化のため保有しておりました。"
+      },
+      {
+        "carrying_amount" : 76944000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "オリンパス株式会社",
+        "number_of_shares" : 39509300,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 63909000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "塩野義製薬株式会社",
+        "number_of_shares" : 28455000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。株式分割により株式数が増加しております。"
+      },
+      {
+        "carrying_amount" : 48830000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "第一三共株式会社",
+        "number_of_shares" : 13908000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 27697000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "株式会社バンダイナムコホールディングス",
+        "number_of_shares" : 5535000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 22434000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "大和工業株式会社",
+        "number_of_shares" : 2837000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 21915000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "イオン株式会社",
+        "number_of_shares" : 5844200,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 21208000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "日本製鉄株式会社",
+        "number_of_shares" : 6638152,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 21060000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "富士フイルムホールディングス株式会社",
+        "number_of_shares" : 7404000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 18822000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ＭＳ＆ＡＤインシュアランスグループホールディングス株式会社",
+        "number_of_shares" : 5836500,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      },
+      {
+        "carrying_amount" : 17362000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "シスメックス株式会社",
+        "number_of_shares" : 6120000,
+        "purpose" : "退職給付信託運用のうち、議決権の行使を指図する権限のあるものになります。"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100XR0M" : {
+    "securities" : [
+      {
+        "carrying_amount" : 16973000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大阪瓦斯㈱",
+        "number_of_shares" : 3125000,
+        "purpose" : "パイプシステムにおける販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 13512000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三井住友トラストグループ㈱",
+        "number_of_shares" : 2828000,
+        "purpose" : "安定的な資金調達の維持"
+      },
+      {
+        "carrying_amount" : 8777000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : 1741000,
+        "purpose" : "安定的な資金調達の維持"
+      },
+      {
+        "carrying_amount" : 6711000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "東邦瓦斯㈱",
+        "number_of_shares" : 1439000,
+        "purpose" : "パイプシステムにおける販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 6023000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱三菱UFJフィナンシャル・グループ",
+        "number_of_shares" : 2416000,
+        "purpose" : "安定的な資金調達の維持"
+      },
+      {
+        "carrying_amount" : 5818000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱日水コン",
+        "number_of_shares" : 2370000,
+        "purpose" : "水環境事業の拡大に向けた関係構築"
+      },
+      {
+        "carrying_amount" : 4019000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "三菱地所㈱",
+        "number_of_shares" : 1052000,
+        "purpose" : "パイプシステムにおける販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 1795000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "デンヨー㈱",
+        "number_of_shares" : 500000,
+        "purpose" : "農業機械及びエンジンにおける販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 1322000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "西部ガスホールディングス㈱",
+        "number_of_shares" : 586000,
+        "purpose" : "パイプシステムにおける販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 1088000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "南海電気鉄道㈱",
+        "number_of_shares" : 366000,
+        "purpose" : "地域経済との関係維持・発展"
+      },
+      {
+        "carrying_amount" : 1043000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱山善",
+        "number_of_shares" : 703000,
+        "purpose" : "パイプシステムにおける販売先としての取引関係及び安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 578000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ワキタ",
+        "number_of_shares" : 300000,
+        "purpose" : "建設機械における販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 527000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "新東工業㈱",
+        "number_of_shares" : 485000,
+        "purpose" : "農業機械及びエンジンにおける安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 265000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱タカキタ",
+        "number_of_shares" : 660000,
+        "purpose" : "農業機械及びエンジンにおける安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 251000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ヨロズ",
+        "number_of_shares" : 250000,
+        "purpose" : "農業機械及びエンジンにおける安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 219000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱丸山製作所",
+        "number_of_shares" : 95000,
+        "purpose" : "農業機械及びエンジンにおける安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 126000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱ニッカトー",
+        "number_of_shares" : 200000,
+        "purpose" : "環境における安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 117000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "大同メタル工業㈱",
+        "number_of_shares" : 120000,
+        "purpose" : "機械事業における安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 77000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "アジアパイルホールディングス㈱",
+        "number_of_shares" : 55000,
+        "purpose" : "産業機材における販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 75000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "岡谷鋼機㈱",
+        "number_of_shares" : 8000,
+        "purpose" : "環境における販売先としての取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : 19000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱北川鉄工所",
+        "number_of_shares" : 11000,
+        "purpose" : "機械事業における安定的な調達取引関係の維持・発展"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "信越化学工業㈱",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "京阪神ビルディング㈱",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱カネカ",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "清水建設㈱",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ユアサ商事㈱",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱AIRMAN",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "戸田建設㈱",
+        "number_of_shares" : null,
+        "purpose" : "検証の結果、売却済み"
+      },
+      {
+        "carrying_amount" : 15106000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "信越化学工業㈱",
+        "number_of_shares" : 3100000,
+        "purpose" : "議決権行使の指図権限"
+      },
+      {
+        "carrying_amount" : 9804000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱みずほフィナンシャルグループ",
+        "number_of_shares" : 1720000,
+        "purpose" : "議決権行使の指図権限"
+      },
+      {
+        "carrying_amount" : 9707000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱三井住友フィナンシャルグループ",
+        "number_of_shares" : 1925000,
+        "purpose" : "議決権行使の指図権限"
+      },
+      {
+        "carrying_amount" : 8337000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱三菱UFJフィナンシャル・グループ",
+        "number_of_shares" : 3344000,
+        "purpose" : "議決権行使の指図権限"
+      },
+      {
+        "carrying_amount" : 913000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "㈱カネカ",
+        "number_of_shares" : 207000,
+        "purpose" : "議決権行使の指図権限"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100XRD8" : {
+    "securities" : [
+      {
+        "carrying_amount" : 277115000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱チヨダ",
+        "number_of_shares" : 259958,
+        "purpose" : "（保有目的）取引関係の維持・強化（定量的な保有効果）（注）２（株式数が増加した理由）取引先持株会を通じた株式の取得"
+      },
+      {
+        "carrying_amount" : 90005000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱しまむら",
+        "number_of_shares" : 8395,
+        "purpose" : "（保有目的）取引関係の維持・強化（定量的な保有効果）（注）２（株式数が増加した理由）取引先持株会を通じた株式の取得"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ヤーマン㈱",
+        "number_of_shares" : null,
+        "purpose" : "（保有目的）取引関係の維持・強化（定量的な保有効果）（注）２"
+      },
+      {
+        "carrying_amount" : null,
+        "is_deemed_holding" : false,
+        "issuer_name" : "㈱リーガルコーポレーション",
+        "number_of_shares" : null,
+        "purpose" : "（保有目的）取引関係の維持・強化（定量的な保有効果）（注）２"
+      }
+    ],
+    "source" : "xbrl_facts"
+  },
+  "S100XTLJ" : {
+    "securities" : [
+      {
+        "carrying_amount" : 8917000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ルネサスエレクトロニクス(株)",
+        "number_of_shares" : 4166600,
+        "purpose" : "半導体露光装置の大口顧客、ならびに半導体サプライヤーとして取引関係の維持・強化等のため"
+      },
+      {
+        "carrying_amount" : 839000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "Median Technologies S.A.",
+        "number_of_shares" : 961826,
+        "purpose" : "メディカル事業における診断\/診療ソリューションの販売・提供に係る取引関係の維持・強化等のため"
+      },
+      {
+        "carrying_amount" : 1000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "トヨタ自動車(株)",
+        "number_of_shares" : 195,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 1000000,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本電気（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "丸紅（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "ソニーグループ（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "パナソニックホールディングス（株）",
+        "number_of_shares" : 155,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本航空（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "（株）LIXIL",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日本製鉄（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 0,
+        "is_deemed_holding" : false,
+        "issuer_name" : "日産自動車（株）",
+        "number_of_shares" : 100,
+        "purpose" : "株主への情報開示、株主総会運営に関する情報収集のため"
+      },
+      {
+        "carrying_amount" : 32848000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "第一生命ホールディングス(株)(注)３",
+        "number_of_shares" : 25200000,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 28073000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)みずほフィナンシャルグループ",
+        "number_of_shares" : 4925023,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 25066000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "SOMPOホールディングス(株)",
+        "number_of_shares" : 4697583,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 19827000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ダイキン工業(株)",
+        "number_of_shares" : 987400,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 7759000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)三菱UFJフィナンシャル・グループ",
+        "number_of_shares" : 3112170,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 6727000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "東京海上ホールディングス(株)",
+        "number_of_shares" : 1156500,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 5308000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ニデック(株)",
+        "number_of_shares" : 2489648,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 5176000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ヒューリック(株)",
+        "number_of_shares" : 3018708,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 4580000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)三井住友フィナンシャルグループ",
+        "number_of_shares" : 908481,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 1767000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)大林組",
+        "number_of_shares" : 540500,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 1404000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "ウシオ電機(株)",
+        "number_of_shares" : 560557,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 946000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)テレビ東京ホールディングス",
+        "number_of_shares" : 206500,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 388000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "(株)大塚商会",
+        "number_of_shares" : 120000,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      },
+      {
+        "carrying_amount" : 207000000,
+        "is_deemed_holding" : true,
+        "issuer_name" : "NIPPON EXPRESSホールディングス(株)",
+        "number_of_shares" : 61800,
+        "purpose" : "退職給付信託に拠出しており、当社が議決権行使の指図権を有している"
+      }
+    ],
+    "source" : "xbrl_facts"
   }
 }
