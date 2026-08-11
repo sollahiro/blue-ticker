@@ -283,7 +283,7 @@ enum StatementNotesResolver {
                     variantRows.append((
                         row,
                         PolicyHoldingSecurityPayload(
-                            issuerName: name,
+                            issuerName: normalizePolicyHoldingIssuerName(name),
                             numberOfShares: sharesByCtx[ctx],
                             carryingAmount: bookValueByCtx[ctx],
                             purpose: purposeByCtx[ctx],
@@ -362,6 +362,15 @@ enum StatementNotesResolver {
               let numRange = Range(match.range(at: 1), in: contextRef)
         else { return nil }
         return Int(contextRef[numRange])
+    }
+
+    /// 銘柄名のfact自体に改行が混入しているケースがある（実データ確認: 味の素「㈱セブン＆アイ・\n
+    /// ホールディングス」、ニチレイ「㈱三菱ＵＦＪ\nフィナンシャル・グループ」等）。開示HTML側で
+    /// 長い社名がセル内で折り返されており、その改行がXBRLのテキストfactにそのまま残ったもの
+    /// （保有目的テキストの箇条書き改行とは異なり、社名は本来1行のテキストであるため除去する）。
+    private static func normalizePolicyHoldingIssuerName(_ name: String) -> String {
+        name.replacingOccurrences(of: "\r\n", with: "")
+            .replacingOccurrences(of: "\n", with: "")
     }
 
     /// 政策保有株式（特定投資株式・みなし保有株式）の銘柄名・保有目的テキストを
