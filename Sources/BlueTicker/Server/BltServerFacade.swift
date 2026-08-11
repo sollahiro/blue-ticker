@@ -463,9 +463,10 @@ public extension BltServerContext {
             contentHash: hash, audit: nil)
     }
 
-    /// 内訳取り込み: 書類1件分の research_and_development 軸内訳を解決する（2026-08-01追加）。
-    /// `resolveEmployeesBreakdown` と同型（決定論のみ、LLM フォールバックなし。`total` は
-    /// 財務取り込み 計算済みの研究開発費全社合計を呼び出し側が渡す）。
+    /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加、
+    /// 2026-08-11 に statement-notes note_type から集約）。決定論のみ、LLM なし。
+    /// `total` は財務取り込み計算済みの全社 R&D（分母）。セグメント dimension が無くても
+    /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
     func resolveResearchAndDevelopmentBreakdown(
         docID: String, total: Double?
     ) async -> BreakdownResolveResult {
@@ -483,7 +484,7 @@ public extension BltServerContext {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: total)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)

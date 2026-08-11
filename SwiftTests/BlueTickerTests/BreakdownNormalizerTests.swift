@@ -1108,4 +1108,17 @@ import Foundation
             }
         }
     }
+
+    /// statement-notes の RD note 廃止後、セグメント dimension が無くても全社合計だけで
+    /// breakdown RD 軸が成立する（オークマ型）。
+    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFacts() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: [], total: 4_409_000_000, axis: breakdownAxisResearchAndDevelopment))
+        #expect(snap.axis == breakdownAxisResearchAndDevelopment)
+        #expect(snap.denominator == 4_409_000_000)
+        #expect(snap.denominatorTag == "company_financials")
+        #expect(snap.rows.isEmpty)
+        #expect(snap.needsReview == false)
+    }
 }

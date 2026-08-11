@@ -354,12 +354,11 @@ public func runFactsIngestCommand(
                 notApplicable: s7.notApplicable, purged: s7.purged)
         }
         if targets.contains(.notes) {
-            // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。財務取り込み
-            // 計算済みの値をそのまま再公開するのは research_and_development のみ（passthrough）。
-            // EPS/発行済株式数/設備投資概要/配当金は注記からXBRL直接抽出（決議・イベント単位のテーブル
-            // 等）へ再設計済み。加えて borrowings_schedule / PPE・のれん明細（IFRS連結限定）/
-            // policy_holding_securities（EDINET標準タクソノミの銘柄別構造化タグ、決定論・LLM不要）を
-            // 実装・配信中（9 note_type）。
+            // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。
+            // EPS/発行済株式・資本金/設備投資概要/配当金/borrowings_schedule/PPE・のれん/
+            // policy_holding_securities は注記からXBRL直接抽出（決定論）。
+            // research_and_development は note_type から廃止し内訳取り込み breakdown 軸へ集約
+            // （2026-08-11。全社合計は financials→breakdown denominator、セグメント行は dimension タグ）。
             //
             // sga_breakdown は実装済みだが配信を見送り中（2026-08-02、実データレビューで判明:
             // XBRLタグとして開示されるのは常に非連結（`NonConsolidatedMember`）のみで、連結内訳は
@@ -382,10 +381,6 @@ public func runFactsIngestCommand(
                     (
                         statementNoteTypeIssuedSharesAndCapital,
                         { docID, _ in await context.resolveIssuedSharesAndCapitalNote(docID: docID) }
-                    ),
-                    (
-                        statementNoteTypeResearchAndDevelopment,
-                        StatementNotesFinancialsPassthroughResolvers.researchAndDevelopment(db: app.db)
                     ),
                     (
                         statementNoteTypeCapitalExpendituresOverview,

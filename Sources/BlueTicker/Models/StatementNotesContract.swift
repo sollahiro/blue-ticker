@@ -19,7 +19,8 @@ import Foundation
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
 public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
-public let statementNoteTypeResearchAndDevelopment = "research_and_development"
+// research_and_development は note_type から廃止（2026-08-11）。事業別 R&D は内訳取り込み
+// breakdown 軸 `research_and_development` に集約（全社合計は同軸の denominator）。
 public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
 public let statementNoteTypeSGABreakdown = "sga_breakdown"
@@ -35,7 +36,6 @@ public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v2"
 public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
-public let researchAndDevelopmentNoteCacheVersion = "notes-rd-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
 public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
@@ -51,7 +51,6 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     switch noteType {
     case statementNoteTypePerShareInformation: return perShareInformationNoteCacheVersion
     case statementNoteTypeIssuedSharesAndCapital: return issuedSharesAndCapitalNoteCacheVersion
-    case statementNoteTypeResearchAndDevelopment: return researchAndDevelopmentNoteCacheVersion
     case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
     case statementNoteTypeSGABreakdown: return sgaBreakdownNoteCacheVersion

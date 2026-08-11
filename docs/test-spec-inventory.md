@@ -278,7 +278,7 @@
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadReturnsNilForUnknownCompany` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadReturnsNilForNonPositiveYears` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementIngestTests.swift` | `loadJsonIncludesBalanceSheetLineItems` | SPEC_POLICY | file-name |
-| `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `researchAndDevelopmentConvertsMillionYenToYen` | SPEC_POLICY | file-name |
+| `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestStoresResolvedPayloadFromResolver` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestFailsWithoutStoringWhenFinancialsHasNotComputedDocYet` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestWritesNotApplicableWhenFinancialsHasDocButValueIsNil` | SPEC_POLICY | file-name |
 | `SwiftTests/BltServerCoreTests/Spec/Policy/StatementNotesIngestTests.swift` | `ingestSkipsWhenStoredAtCurrentVersion` | SPEC_POLICY | test-name |

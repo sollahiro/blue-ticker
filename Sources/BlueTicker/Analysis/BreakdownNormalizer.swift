@@ -291,15 +291,27 @@ enum BreakdownNormalizer {
             warningPrefix: "employees", labelsByTag: labelsByTag)
     }
 
-    /// 研究開発費（全社合計）のセグメント別内訳（内訳取り込み research_and_development 軸）。
+    /// 研究開発費の事業セグメント別内訳（内訳取り込み research_and_development 軸）。
     /// `normalizeCountBasis` 参照。金額（人数ではない）だが計算の形は同一のため共用する。
+    ///
+    /// セグメント dimension 付き fact が無くても、呼び出し側が渡す全社合計 `total` があれば
+    /// `rows=[]`・denominator のみの snapshot を返す（2026-08-11: statement-notes の
+    /// `research_and_development` note_type を廃止し本軸へ集約したため、合計のみ開示の会社
+    /// （実データ: オークマ等）でも breakdown が正本として成立する必要がある）。
     static func normalizeResearchAndDevelopment(
         facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         let amountTags = Xbrl.rdExpenseCommonTags + Xbrl.rdExpenseJGAAPTags + Xbrl.rdExpenseIFRSTags
-        return normalizeCountBasis(
+        if let snapshot = normalizeCountBasis(
             facts: facts, amountTags: amountTags, total: total, axis: axis,
             warningPrefix: "research_and_development", labelsByTag: labelsByTag)
+        {
+            return snapshot
+        }
+        guard let total, total > 0 else { return nil }
+        return BreakdownSnapshot(
+            axis: axis, denominator: total, denominatorTag: "company_financials",
+            rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
     }
 
     /// 従業員数・研究開発費など「セグメント dimension 付き fact ＋ 別途取得済みの全社合計値」から
