@@ -36,6 +36,9 @@ func registerMcpRoute(
     group.post { req async -> Vapor.Response in
         let requestBody = bodyData(from: req)
 
+        // TEMP DIAGNOSTIC (revert before merge): 新たな 400 の実体を特定するための一時ログ。
+        logDiagnosticRequestBody(req, requestBody, logger: logger)
+
         // ChatGPT のコネクタ追加・ツール一覧再取得フローは、実ハンドシェイク（initialize）の前に
         // method を持たない JSON の POST（空ボディ・`{}`・`[]`）を送ってくる場合がある。swift-sdk は
         // これを JSON-RPC パースエラー（400）として扱うが、ChatGPT はこの1件が失敗すると後続の
@@ -77,6 +80,19 @@ func registerMcpRoute(
             return mcpTimeoutResponse(requestBody: dispatchedBody)
         }
     }
+}
+
+/// TEMP DIAGNOSTIC (revert before merge): Content-Type・長さ・先頭 300 バイト(base64) をログ出力する。
+private func logDiagnosticRequestBody(_ req: Vapor.Request, _ body: Data?, logger: Logger) {
+    let contentType: String = req.headers.contentType?.description ?? "nil"
+    let bodyBytes: String = String(body?.count ?? -1)
+    let bodyB64: String = body.map { Data($0.prefix(300)).base64EncodedString() } ?? "nil"
+    let metadata: Logger.Metadata = [
+        "content-type": .string(contentType),
+        "body-bytes": .string(bodyBytes),
+        "body-b64": .string(bodyB64),
+    ]
+    logger.notice("mcp_route_diag2", metadata: metadata)
 }
 
 /// `method: "server/discover"`（OpenAI 製クライアント固有の非標準メソッド）のボディを、id・jsonrpc は
