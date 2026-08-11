@@ -843,22 +843,47 @@ import Testing
         #expect(componentSum == total.currentBalance)
     }
 
-    // MARK: - borrowings_schedule（第一三共 S100QYCY、明細表自体が無い）
+    // MARK: - borrowings_schedule（第一三共 S100QYCY、流動性リスク注記の期日別残高表から集計）
     //
-    // 実データ検証（2026-08-03）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記タグの
-    // いずれも存在しない。借入金等の残高は「金融商品に関する注記」内の流動性リスク（期日別
-    // キャッシュ・フロー）表にのみ現れるが、これは残高を期間比較する表ではなく満期バケット別の
-    // 表のため、本 note_type の契約（当期首/当期末残高・平均利率）には対応できない
-    // （S100TSIJ・村田製作所は2026-08-03のIFRS注記対応で解決するようになったため差し替え）。
+    // 実データ検証（2026-08-03、当時）: J-GAAP附属明細表タグ・IFRS社債及び借入金/有利子負債注記
+    // タグのいずれも存在せず、当時のロジックでは notApplicable だった。
+    //
+    // 実データ再検証（2026-08-11）: `parseMaturityBucketPairTables`（日立/ソニーグループ向けに
+    // 2026-08-04 追加）が、「主な金融負債の期日別残高」注記（前連結会計年度2022年３月31日／
+    // 当連結会計年度2023年３月31日の2つの単年度表、各行「帳簿価額」列）からも解決できるように
+    // なっていた。本表は営業債務・デリバティブ負債も含む全金融負債の期日別残高表だが、resolver は
+    // 社債・借入金・リースのみをラベルで絞り込み、絞り込んだ行の帳簿価額を自前で合算する
+    // （表自体の「合計」行 446,880/512,260 は使わない）。開示 HTML と突き合わせて全行一致を確認
+    // 済み（無担保社債 119,649→119,670、無担保銀行借入金 41,000→21,000、その他の借入金
+    // 2,812→2,418、リース負債 50,154→49,768、絞り込み合計 213,615→192,856）。
     @Test(.enabled(if: cacheAvailable("S100QYCY"), "XBRL cache S100QYCY not available"))
-    func borrowingsScheduleNotApplicableWhenScheduleAbsent() {
+    func goldenBorrowingsDaiichiSankyoFromLiquidityRiskMaturityByDateNote() throws {
         let result = StatementNotesResolver.resolveBorrowingsSchedule(
             xbrlDir: Self.xbrlDir("S100QYCY"))
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable, got \(result)")
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
             return
         }
-        #expect(reason == statementNoteNotApplicableNotFound)
+        #expect(source == statementNoteSourceXbrlFacts)
+        let components = try #require(payload.borrowingsComponents)
+
+        let expected: [(label: String, prior: Double, current: Double)] = [
+            ("無担保社債", 119_649_000_000, 119_670_000_000),
+            ("無担保銀行借入金", 41_000_000_000, 21_000_000_000),
+            ("その他の借入金", 2_812_000_000, 2_418_000_000),
+            ("リース負債", 50_154_000_000, 49_768_000_000),
+        ]
+        for (label, prior, current) in expected {
+            let row = try #require(components.first { $0.label == label })
+            #expect(row.priorBalance == prior)
+            #expect(row.currentBalance == current)
+        }
+
+        let total = try #require(components.first { $0.isTotal })
+        #expect(total.priorBalance == 213_615_000_000)
+        #expect(total.currentBalance == 192_856_000_000)
+        let componentSum = components.filter { !$0.isTotal }.map { $0.currentBalance ?? 0 }.reduce(0, +)
+        #expect(componentSum == total.currentBalance)
     }
 
     // MARK: - borrowings_schedule（味の素 S100VXJA、当期に完済した項目はcurrentがnilのまま残る）

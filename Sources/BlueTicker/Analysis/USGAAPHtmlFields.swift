@@ -156,10 +156,8 @@ enum USGAAPHtml {
 
     // MARK: ファイル探索・パース
 
-    /// 年次(asr)は 0105010＝第５経理の状況、半期(q2r)は 0104010＝第４経理の状況
     private static func findStatementHtml(in xbrlDir: URL) -> URL? {
-        XBRLUtils.findHtmlByPrefix(in: xbrlDir, prefix: "0105010")
-            ?? XBRLUtils.findHtmlByPrefix(in: xbrlDir, prefix: "0104010")
+        XBRLUtils.findUSGAAPStatementHtml(in: xbrlDir)
     }
 
     private static func readText(_ url: URL) -> String? {

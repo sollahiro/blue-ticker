@@ -49,6 +49,9 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// US-GAAP 明示 notApplicable（個別 BS silent fallback 廃止）は v1 のまま拡張（2026-08-09）。
 /// SS（持分変動計算書）追加も v1 のまま拡張（2026-08-09。本番 `company_statements` は 0 行のため
 /// 移行コスト実質ゼロ。旧 payload は `changes_in_equity` キー欠落を空配列として読む）。
+/// US-GAAP HTML 経路（`USGAAPStatementHtml`、2026-08-10）も v1 のまま拡張。本番
+/// `company_statements` はこの時点でも 0 行のため、旧 `.notApplicable(us_gaap_unsupported)`
+/// プレースホルダが残っていても実害はない（意図的にバンプしない。要バンプならユーザー指示）。
 public let statementCacheVersion = "statement-v1"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。

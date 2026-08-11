@@ -99,8 +99,7 @@ enum USGAAPStatementHtml {
     // MARK: - File discovery
 
     private static func findStatementHtml(in xbrlDir: URL) -> URL? {
-        XBRLUtils.findHtmlByPrefix(in: xbrlDir, prefix: "0105010")
-            ?? XBRLUtils.findHtmlByPrefix(in: xbrlDir, prefix: "0104010")
+        XBRLUtils.findUSGAAPStatementHtml(in: xbrlDir)
     }
 
     // MARK: - Table classification
@@ -244,18 +243,44 @@ enum USGAAPStatementHtml {
         var items: [StatementLineItem] = []
         var currentCFSection: StatementLineSection? =
             sectionType == .cashFlow ? .operating : nil
+        // PL の「１株当たり情報」節（基本的/希薄化後EPS等）は見出し行自体に金額が無く、
+        // 直後の値行のラベルは「基本的」等 見出しを参照しないと分からない場合がある
+        // （キヤノン実データ確認済み）。一度立てたら表の残りに適用する（EPS 節は本表末尾）。
+        // `hasPrefix`（`contains` ではない）: 「当社株主への配当金 （１株当たり160.00円）」
+        // のような金額行の説明文中の「１株当たり」に誤反応しない（キヤノン実データ確認済み）。
+        // `stripSectionPrefix` で先頭のローマ数字節番号（「Ⅷ　」等）を落としてから判定する
+        // ことで、区分番号付きの見出し（未確認だが実データ上あり得る形）も拾う。
+        var inPerShareSection = false
 
         for row in rows {
             let raw = rowLabel(row)
             let label = normalizeLabel(raw)
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
             if shouldSkipMetaRow(label) { continue }
+            if USGAAPHtml.stripSectionPrefix(label).hasPrefix("１株当たり") { inPerShareSection = true }
 
-            if sectionType == .cashFlow, let s = sectionForRow(label) {
-                currentCFSection = s
+            if sectionType == .cashFlow {
+                if isCashAndEquivalentsTailRow(label) {
+                    // 「現金及び現金同等物」を含む期首/期末残高・為替影響・純増減行は
+                    // 営業/投資/財務いずれの区分にも属さない（J-GAAPのXBRL fact経路と同じ扱い）。
+                    currentCFSection = nil
+                } else if let s = sectionForRow(label) {
+                    currentCFSection = s
+                }
             }
 
-            guard let yen = currentYenValue(row) else { continue }
+            let value: Double?
+            let unit: String
+            if inPerShareSection {
+                value = currentMillionYen(from: row)
+                // XBRL fact 経路（`StatementClassifier`）の unitRef 慣例に揃える
+                // （実データ確認: S100VXJA の基本的EPS fact は unitRef="JPYPerShares"）。
+                unit = "JPYPerShares"
+            } else {
+                value = currentYenValue(row)
+                unit = "JPY"
+            }
+            guard let value else { continue }
             let itemOrder = order
             order += 1
             let section: StatementLineSection? =
@@ -264,11 +289,11 @@ enum USGAAPStatementHtml {
                 StatementLineItem(
                     tag: syntheticTag(sectionType, order: itemOrder),
                     label: label,
-                    value: yen,
-                    unit: "JPY",
+                    value: value,
+                    unit: unit,
                     order: itemOrder,
                     section: section,
-                    isTotal: isTotalLabel(label, sectionType: sectionType),
+                    isTotal: inPerShareSection ? false : isTotalLabel(label, sectionType: sectionType),
                     components: nil))
         }
         attachCanonStyleFollowingComponents(&items)
@@ -278,27 +303,41 @@ enum USGAAPStatementHtml {
     /// SS は合計列（純資産合計＝各行の最右セル）のみ。`－`/`-` は 0。
     /// 複行列ヘッダ＋colspan（キヤノン）で列 index がずれるためヘッダ照合はせず最右を使う。
     /// `order` は表の読み順（期首→変動→期末）で 0 始まり。
+    ///
+    /// 会社によっては1つの表に前期・当期2年分が連続する（実データ確認: 富士フイルム。
+    /// キヤノンは表自体が年度ごとに分かれ、呼び出し側が最後の表のみ渡す）。
+    /// 「現在残高」行（期首/期末残高）は前期首→前期末=当期首→当期末の順で最低2回、
+    /// 2年分が1表に混在する場合は3回以上現れるため、最後から2番目の「現在残高」行
+    /// （＝当期の期首残高）より前（前期分）を切り捨てて当期のみを返す。1年度のみの表
+    /// （現在残高2回）では最後から2番目＝期首残高そのものなので何も切り捨てない。
     private static func parseEquityStatementRows(_ rows: [[String]]) -> [StatementLineItem] {
-        var order = 0
-        var items: [StatementLineItem] = []
+        var raw: [(label: String, value: Double)] = []
         for row in rows {
-            let raw = rowLabel(row)
-            let label = normalizeLabel(raw)
+            let rawLabel = rowLabel(row)
+            let label = normalizeLabel(rawLabel)
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
             if shouldSkipMetaRow(label) { continue }
             guard let last = row.last, let million = parseAmountSlot(last) else { continue }
+            raw.append((label, million * Financial.millionYen))
+        }
 
+        let balanceIndices = raw.indices.filter { raw[$0].label.contains("現在残高") }
+        let startIndex = balanceIndices.count >= 2 ? balanceIndices[balanceIndices.count - 2] : 0
+
+        var order = 0
+        var items: [StatementLineItem] = []
+        for entry in raw[startIndex...] {
             let itemOrder = order
             order += 1
             items.append(
                 StatementLineItem(
                     tag: syntheticTag(.changesInEquity, order: itemOrder),
-                    label: label,
-                    value: million * Financial.millionYen,
+                    label: entry.label,
+                    value: entry.value,
                     unit: "JPY",
                     order: itemOrder,
                     section: nil,
-                    isTotal: isTotalLabel(label, sectionType: .changesInEquity),
+                    isTotal: isTotalLabel(entry.label, sectionType: .changesInEquity),
                     components: nil))
         }
         attachCanonStyleFollowingComponents(&items)
@@ -322,6 +361,7 @@ enum USGAAPStatementHtml {
             while j < items.count {
                 let childLabel = items[j].label ?? ""
                 if items[j].isTotal { break }
+                if items[j].unit != items[i].unit { break }
                 if leadingMajorMarker(label) != nil, leadingMajorMarker(childLabel) != nil {
                     break
                 }
@@ -331,7 +371,9 @@ enum USGAAPStatementHtml {
             guard !childIndices.isEmpty else { continue }
 
             let childSum = childIndices.reduce(0.0) { $0 + items[$1].value }
-            guard abs(childSum - items[i].value) < 0.5 else { continue }
+            // childSum == 0 は「－」（未開示・非該当）多用行が偶然一致しただけの誤結線が
+            // 起きやすいため対象外にする（親も0のケースは実データ上ここでは確認されていない）。
+            guard childSum != 0, abs(childSum - items[i].value) < 0.5 else { continue }
 
             items[i].components = childIndices.map {
                 StatementLineComponent(tag: items[$0].tag, weight: 1)
@@ -382,13 +424,26 @@ enum USGAAPStatementHtml {
         guard let labelIdx = row.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
         else { return nil }
         var rest = Array(row[(labelIdx + 1)...])
+        // ラベル直後の空スペーサ列を1個剥がす。空スペーサの直後に注記番号セル
+        // （「注５」等、「注」を含む）が続くことがあるため、その場合だけ追加でもう1個
+        // 剥がす（実データ確認: 富士フイルム「５ 短期オペレーティング・リース負債」＝
+        // 空セル+「注５」セルの2連続）。ただし2個目以降が「空」なだけなら前期/当期
+        // グリッド内の正当な空スロット（値なしを表す）の可能性があるため剥がさない
+        // （実データ確認: 富士フイルム「流動資産合計」＝空セルが2連続し、2個目は
+        // 前期側の値なしスロット）。「注」を含むかどうかだけが曖昧さのない判定基準。
         if let first = rest.first, isNoteOrNonAmountCell(first) {
             rest.removeFirst()
+            if let second = rest.first, second.contains("注") {
+                rest.removeFirst()
+            }
         }
         let slots = rest.map { parseAmountSlot($0) }
         guard !slots.isEmpty else { return nil }
+        // 前期/当期のスロット数が揃わない（想定外の列構成）場合は前期/当期の
+        // 折り返し位置を保証できないため、誤った値を返すより nil で失敗させる。
+        guard slots.count % 2 == 0 else { return nil }
 
-        // 前期半分 | 当期半分。奇数個のときは末尾側を厚くする。
+        // 前期半分 | 当期半分。
         let mid = slots.count / 2
         let currentHalf = Array(slots[mid...])
         for slot in currentHalf {
@@ -475,6 +530,19 @@ enum USGAAPStatementHtml {
         if label.contains("投資活動によるキャッシュ・フロー") { return .investing }
         if label.contains("財務活動によるキャッシュ・フロー") { return .financing }
         return nil
+    }
+
+    /// 財務活動の後に続く「現金及び現金同等物」関連行（為替影響・純増減・期首/期末残高）。
+    /// 営業/投資/財務いずれにも属さない（実データ確認: 富士フイルム・キヤノン共通）。
+    ///
+    /// 「現金及び現金同等物」を含むだけでは判定しない: 投資活動区分の明細行
+    /// （例: 富士フイルム「事業の買収 (買収資産に含まれる現金及び現金同等物控除後)」）も
+    /// この語句を含むため、期首/期末残高・純増減・為替変動を表す語（`isTotalLabel` の
+    /// CF 語彙と同型）を併せて要求する（実データ確認済み）。
+    private static func isCashAndEquivalentsTailRow(_ label: String) -> Bool {
+        guard label.contains("現金及び現金同等物") else { return false }
+        return label.contains("期首残高") || label.contains("期末残高")
+            || label.contains("純増減") || label.contains("純減少") || label.contains("為替")
     }
 
     private static func isTotalLabel(_ label: String, sectionType: StatementSectionType) -> Bool {
