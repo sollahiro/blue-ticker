@@ -661,14 +661,14 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         }
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(allTagElements)
-        let total = RDExtractor.extract(
-            fieldSet: fieldSetFromDuration(allTagElements), accountingStandard: accountingStandard
-        ).current
-        print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil")")
+        let rdResult = RDExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTagElements), accountingStandard: accountingStandard)
+        let total = rdResult.current
+        print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil") tag=\(rdResult.tag ?? "nil")")
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment,
+                facts: facts, total: total, totalTag: rdResult.tag, axis: breakdownAxisResearchAndDevelopment,
                 labelsByTag: labelsByTag)
         else {
             print("normalizeResearchAndDevelopment: nil")

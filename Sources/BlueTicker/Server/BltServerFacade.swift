@@ -467,6 +467,10 @@ public extension BltServerContext {
     /// 2026-08-11 に statement-notes note_type から集約）。決定論のみ、LLM なし。
     /// `total` は財務取り込み計算済みの全社 R&D（分母）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
+    /// denominatorTag には `total` を生んだ実タグ名を載せる（`RDExtractor` を同一書類のXBRLへ
+    /// 再適用して解決。company_financials は数値のみ保持しタグ provenance を持たないため、
+    /// ここで独立に再解決する。財務取り込みと同じ `fieldSetFromDuration`/`detectAccountingStandard`
+    /// を使うため値は一致する前提）。
     func resolveResearchAndDevelopmentBreakdown(
         docID: String, total: Double?
     ) async -> BreakdownResolveResult {
@@ -476,9 +480,14 @@ public extension BltServerContext {
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let totalTag = RDExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTagElements),
+            accountingStandard: detectAccountingStandard(allTagElements)
+        ).tag
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, axis: breakdownAxisResearchAndDevelopment,
+                facts: facts, total: total, totalTag: totalTag, axis: breakdownAxisResearchAndDevelopment,
                 labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)

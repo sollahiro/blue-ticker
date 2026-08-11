@@ -297,9 +297,12 @@ enum BreakdownNormalizer {
     /// セグメント dimension 付き fact が無くても、呼び出し側が渡す全社合計 `total` があれば
     /// `rows=[]`・denominator のみの snapshot を返す（2026-08-11: statement-notes の
     /// `research_and_development` note_type を廃止し本軸へ集約したため、合計のみ開示の会社
-    /// （実データ: オークマ等）でも breakdown が正本として成立する必要がある）。
+    /// （実データ: オークマ等）でも breakdown が正本として成立する必要がある）。`totalTag` は
+    /// `total` を算出した実タグ名（呼び出し側が同一書類の非dimension factから解決して渡す。
+    /// 未解決なら `"company_financials"` にフォールバックする）。
     static func normalizeResearchAndDevelopment(
-        facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:]
+        facts: [BreakdownFact], total: Double?, totalTag: String? = nil, axis: String,
+        labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         let amountTags = Xbrl.rdExpenseCommonTags + Xbrl.rdExpenseJGAAPTags + Xbrl.rdExpenseIFRSTags
         if let snapshot = normalizeCountBasis(
@@ -310,7 +313,7 @@ enum BreakdownNormalizer {
         }
         guard let total, total > 0 else { return nil }
         return BreakdownSnapshot(
-            axis: axis, denominator: total, denominatorTag: "company_financials",
+            axis: axis, denominator: total, denominatorTag: totalTag ?? "company_financials",
             rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
     }
 

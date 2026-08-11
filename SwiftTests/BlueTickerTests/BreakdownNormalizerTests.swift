@@ -1110,15 +1110,28 @@ import Foundation
     }
 
     /// statement-notes の RD note 廃止後、セグメント dimension が無くても全社合計だけで
-    /// breakdown RD 軸が成立する（オークマ型）。
-    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFacts() throws {
+    /// breakdown RD 軸が成立する（オークマ型）。呼び出し側が実タグ名（`totalTag`）を渡せば
+    /// denominatorTag に反映される（実データ: S100W043 で
+    /// `ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities` を確認済み）。
+    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFactsUsesCallerProvidedTag() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: [], total: 4_409_000_000,
+                totalTag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+                axis: breakdownAxisResearchAndDevelopment))
+        #expect(snap.axis == breakdownAxisResearchAndDevelopment)
+        #expect(snap.denominator == 4_409_000_000)
+        #expect(snap.denominatorTag == "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities")
+        #expect(snap.rows.isEmpty)
+        #expect(snap.needsReview == false)
+    }
+
+    /// `totalTag` が解決できない場合（呼び出し側が渡せなかった等）は従来通り
+    /// `"company_financials"` にフォールバックする。
+    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFactsFallsBackWhenTagUnresolved() throws {
         let snap = try #require(
             BreakdownNormalizer.normalizeResearchAndDevelopment(
                 facts: [], total: 4_409_000_000, axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.axis == breakdownAxisResearchAndDevelopment)
-        #expect(snap.denominator == 4_409_000_000)
         #expect(snap.denominatorTag == "company_financials")
-        #expect(snap.rows.isEmpty)
-        #expect(snap.needsReview == false)
     }
 }
