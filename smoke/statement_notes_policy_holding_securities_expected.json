@@ -1,0 +1,265 @@
+{
+  "S100VWVY": {
+    "securities": [
+      {
+        "carrying_amount": 959347000000,
+        "issuer_name": "ＫＤＤＩ㈱",
+        "number_of_shares": 203294600,
+        "purpose": "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 340405000000,
+        "issuer_name": "ＭＳ＆ＡＤインシュアランスグループホールディングス㈱",
+        "number_of_shares": 105551899,
+        "purpose": "自動車関連（金融）取引の維持・発展[株式数が変動した理由]一部売却、株式分割のため"
+      },
+      {
+        "carrying_amount": 292205000000,
+        "issuer_name": "日本電信電話㈱",
+        "number_of_shares": 2019385000,
+        "purpose": "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 206288000000,
+        "issuer_name": "㈱三菱ＵＦＪフィナンシャル・グループ",
+        "number_of_shares": 102580000,
+        "purpose": "金融取引の維持・発展"
+      },
+      {
+        "carrying_amount": 173760000000,
+        "issuer_name": "スズキ㈱",
+        "number_of_shares": 96000000,
+        "purpose": "業務提携（商品補完、共同開発、生産領域での協業等）の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount": 150980000000,
+        "issuer_name": "GRABHOLDINGS LIMITED",
+        "number_of_shares": 222906079,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 149094000000,
+        "issuer_name": "ルネサス エレクトロニクス㈱",
+        "number_of_shares": 75015900,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 124609000000,
+        "issuer_name": "HO TAIMOTOR CO.,LTD.",
+        "number_of_shares": 45294234,
+        "purpose": "自動車関連（業務提携）の維持・発展"
+      },
+      {
+        "carrying_amount": 85962000000,
+        "issuer_name": "PT ASTRAINTERNATIONAL Tbk",
+        "number_of_shares": 1920000000,
+        "purpose": "自動車関連（業務提携）の維持・発展"
+      },
+      {
+        "carrying_amount": 78644000000,
+        "issuer_name": "いすゞ自動車㈱",
+        "number_of_shares": 39000000,
+        "purpose": "商用事業でのCASE普及に向けた業務提携の維持・発展"
+      },
+      {
+        "carrying_amount": 65593000000,
+        "issuer_name": "Joby Aviation, Inc.",
+        "number_of_shares": 72871831,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 55987000000,
+        "issuer_name": "Pony AI Inc.",
+        "number_of_shares": 42453831,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 55841000000,
+        "issuer_name": "UBERTECHNOLOGIES,INC.",
+        "number_of_shares": 5125868,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 47610000000,
+        "issuer_name": "Aurora Innovation, Inc.",
+        "number_of_shares": 47348178,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 35883000000,
+        "issuer_name": "住友金属鉱山㈱",
+        "number_of_shares": 11058000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 30083000000,
+        "issuer_name": "マツダ㈱",
+        "number_of_shares": 31928500,
+        "purpose": "業務提携（米国での合弁会社（完成車生産）の設立・運営、共同開発、技術連携、商品補完）の維持・発展"
+      },
+      {
+        "carrying_amount": 22350000000,
+        "issuer_name": "ヤマハ発動機㈱",
+        "number_of_shares": 18750000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 14576000000,
+        "issuer_name": "パナソニック ホールディングス㈱",
+        "number_of_shares": 8227800,
+        "purpose": "自動車関連（調達）取引および、合弁会社（車載用角形電池、街づくり）を通じた協業の維持・発展"
+      },
+      {
+        "carrying_amount": 11275000000,
+        "issuer_name": "ヤマトホールディングス㈱",
+        "number_of_shares": 5748133,
+        "purpose": "自動車関連（販売）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 8657000000,
+        "issuer_name": "INCHCAPE PLC",
+        "number_of_shares": 6666327,
+        "purpose": "自動車関連（販売）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 8637000000,
+        "issuer_name": "カヤバ㈱",
+        "number_of_shares": 2938834,
+        "purpose": "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount": 5968000000,
+        "issuer_name": "住友電気工業㈱",
+        "number_of_shares": 2420000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 5327000000,
+        "issuer_name": "㈱ジーエス・ユアサコーポレーション",
+        "number_of_shares": 2236080,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 5171000000,
+        "issuer_name": "大同特殊鋼㈱",
+        "number_of_shares": 4345000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 4533000000,
+        "issuer_name": "㈱ゼンリン",
+        "number_of_shares": 4272000,
+        "purpose": "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 3237000000,
+        "issuer_name": "㈱三井ハイテック",
+        "number_of_shares": 4677500,
+        "purpose": "自動車関連（調達）取引の維持・発展[株式数が増加した理由]株式分割のため"
+      },
+      {
+        "carrying_amount": 3152000000,
+        "issuer_name": "信越化学工業㈱",
+        "number_of_shares": 744000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 2251000000,
+        "issuer_name": "㈱ＰＫＳＨＡＴｅｃｈｎｏｌｏｇｙ",
+        "number_of_shares": 766600,
+        "purpose": "自動車関連（技術）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 1658000000,
+        "issuer_name": "曙ブレーキ工業㈱",
+        "number_of_shares": 15495175,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 955000000,
+        "issuer_name": "Electreon Wireless Ltd.",
+        "number_of_shares": 291911,
+        "purpose": "自動車関連（技術）取引の維持・発展[株式数が増加した理由]中長期的な観点より、企業価値の向上に資すると判断し取得"
+      },
+      {
+        "carrying_amount": 825000000,
+        "issuer_name": "第一交通産業㈱",
+        "number_of_shares": 1078000,
+        "purpose": "自動車関連（MaaS）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 371000000,
+        "issuer_name": "中央可鍛工業㈱",
+        "number_of_shares": 792000,
+        "purpose": "自動車関連（調達）取引の維持・発展"
+      },
+      {
+        "carrying_amount": 136000000,
+        "issuer_name": "㈱御園座",
+        "number_of_shares": 80000,
+        "purpose": "地域経済との関係維持・発展"
+      },
+      {
+        "carrying_amount": 15000000,
+        "issuer_name": "ダイナミックマッププラットフォーム㈱",
+        "number_of_shares": 10000,
+        "purpose": "自動車関連（情報）取引の維持・発展"
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "㈱三井住友フィナンシャルグループ",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "浜松ホトニクス㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "東京海上ホールディングス㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "東海旅客鉄道㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "ＴＯＹＯ ＴＩＲＥ㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "セイノーホールディングス㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "福山通運㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "中日本興業㈱",
+        "number_of_shares": null,
+        "purpose": null
+      },
+      {
+        "carrying_amount": null,
+        "issuer_name": "Getaround,Inc.",
+        "number_of_shares": null,
+        "purpose": null
+      }
+    ],
+    "source": "xbrl_facts"
+  }
+}

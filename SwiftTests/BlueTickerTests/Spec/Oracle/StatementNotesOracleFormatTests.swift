@@ -26,77 +26,33 @@ import Testing
 @testable import BlueTickerCore
 
 @Suite struct StatementNotesOracleFormatTests {
-    private static let analysisXbrlRoot: URL = {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
-    }()
-
     private static func analysisXbrlDir(_ docID: String) -> URL {
-        analysisXbrlRoot.appendingPathComponent("\(docID)_xbrl")
-    }
-
-    private static func smokeXbrlDir(_ docID: String) -> URL {
-        SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+        StatementNotesOracleSupport.analysisXbrlDir(docID)
     }
 
     private static func analysisCacheAvailable(_ docID: String) -> Bool {
-        FileManager.default.fileExists(atPath: analysisXbrlDir(docID).path)
-    }
-
-    private static func smokeCacheAvailable(_ docID: String) -> Bool {
-        FileManager.default.fileExists(atPath: smokeXbrlDir(docID).path)
+        StatementNotesOracleSupport.analysisCacheAvailable(docID)
     }
 
     private static let expectedFileURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent("smoke/statement_notes_borrowings_schedule_expected.json")
 
-    private static func loadExpectedEntry(docID: String) throws -> [String: Any] {
-        let data = try Data(contentsOf: expectedFileURL)
-        let raw = try JSONSerialization.jsonObject(with: data)
-        let all = try #require(raw as? [String: [String: Any]])
-        return try #require(all[docID])
-    }
-
-    private static func canonicalJSON(_ obj: Any) throws -> Data {
-        try JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])
-    }
-
     private func assertMatchesOracle(docID: String, xbrlDir: URL) throws {
-        let expectedEntry = try Self.loadExpectedEntry(docID: docID)
         let result = StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
-
-        let status = expectedEntry["status"] as? String
-        if status == "not_applicable" {
-            let expectedReason = try #require(expectedEntry["reason"] as? String)
-            guard case .notApplicable(let reason) = result else {
-                Issue.record("docID=\(docID): expected .notApplicable(\(expectedReason)), got \(result)")
-                return
-            }
-            #expect(reason == expectedReason)
-            return
+        let items: [[String: Any]]?
+        if case .resolved(let payload, _, _) = result {
+            items = payload.borrowingsComponents?.map { $0.jsonObject() }
+        } else {
+            items = nil
         }
-
-        guard case .resolved(let payload, let source, _) = result else {
-            Issue.record("docID=\(docID): expected .resolved, got \(result)")
-            return
-        }
-
-        #expect(source == (expectedEntry["source"] as? String))
-
-        let actualComponents = payload.borrowingsComponents?.map { $0.jsonObject() } ?? []
-        let expectedComponents = expectedEntry["components"] as? [[String: Any]] ?? []
-        // 両者が偶然空配列同士で一致してしまう（比較が空振りする）ことを防ぐ。
-        #expect(!expectedComponents.isEmpty)
-        let actualJSON = try Self.canonicalJSON(actualComponents)
-        let expectedJSON = try Self.canonicalJSON(expectedComponents)
-        #expect(actualJSON == expectedJSON)
+        try StatementNotesOracleSupport.assertMatchesOracle(
+            docID: docID, expectedFileURL: Self.expectedFileURL, result: result,
+            itemsKey: "components", items: items)
     }
 
     /// smoke 床: 鍵があれば不足分を取得し、それでも無ければ静かに SKIP（SmokeTests と同型）。
     private func withSmokeCache(_ docID: String, _ body: (URL) throws -> Void) async throws {
-        await SmokeCacheSupport.ensureCached([docID])
-        guard Self.smokeCacheAvailable(docID) else { return }
-        try body(Self.smokeXbrlDir(docID))
+        try await StatementNotesOracleSupport.withSmokeCache(docID, body)
     }
 
     // MARK: - 試作3件（analysis_cache）
