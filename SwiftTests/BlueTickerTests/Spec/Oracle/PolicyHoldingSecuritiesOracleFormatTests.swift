@@ -15,15 +15,21 @@
 // `is_deemed_holding` フラグ付きで連結するようになった。トヨタは43->61件（みなし保有18件追加）に
 // 期待値が変化している（`RealXbrlStatementNotesTests.goldenSecuritiesToyota` も同時に更新済み）。
 //
-// **smoke固定11社でのSMFG(8316)のdocID選定について**: 三井住友FGの2025年3月期有価証券報告書には
-// 提出履歴上3つのdocIDが存在する: 原本S100W0S7（2025-06-20、構造化タグ13/70件のみで大幅に不完全）、
-// 訂正報告書①S100WRZH（2025-09-30、70/70件で完全）、訂正報告書②S100X7DX（2025-11-28、EDINET上
-// 「最新」だが13/70件に後退・再発）。前々期(S100TPKY)・最新期(S100YERK)の原本はいずれも完全なため、
-// この不完全タグ付けは三井住友FG固有の恒常的な問題ではなく、この2文書（S100W0S7・S100X7DX）に限定
-// された欠損と判断した。**本ファイルのsmokeテストはS100WRZHを使用し、S100X7DX（EDINET上の最新訂正）
-// は既知の欠損として特例的にsmoke対象から明示的に除外する**（`SmokeTests.swift`のBS/PL/CF等の
-// docIDマッピングは`8316_2025-03-31`→S100W0S7のままだが、これは他note_typeでは問題が確認されておらず
-// 本note_type固有の対応としてこのファイル内でのみdocIDを差し替える）。
+// **smoke固定11社のうちSMFG(8316)は本note_typeでは除外（10社のみ）**: 三井住友FGの2025年3月期
+// 有価証券報告書には提出履歴上3つのdocIDが存在する: 原本S100W0S7（2025-06-20、構造化タグ13/70件のみで
+// 大幅に不完全）、訂正報告書①S100WRZH（2025-09-30、70/70件で完全）、訂正報告書②S100X7DX
+// （2025-11-28、EDINET上「最新」だが13/70件に後退・再発）。`SmokeTests.swift`のBS/PL/CF等のdocID
+// マッピングは`8316_2025-03-31`→S100W0S7（本note_type以外では問題なし）だが、実際のingest（本番
+// パイプライン）がこの3docIDのうちどれを最終的に採用するかは`EdinetDiscovery`側のロジックに依存し、
+// 本PRでは調査・変更していない。S100WRZHは実データとして完全ではあるが、smoke固定11社の趣旨
+// （実際にingestされる文書に対する回帰ガード）とは無関係に人為的に選んだ「都合の良いdocID」に
+// なってしまうため、smoke床には含めない（S100WRZH・S100X7DXいずれもsmoke対象外。本note_typeの
+// resolverロジック自体はどのdocIDのXBRLを渡されても同一であり、本PRはこのロジックとテストファイル
+// のみを変更する。ingestの実際のdocID選定ロジックには一切手を入れていない）。前々期(S100TPKY)・
+// 最新期(S100YERK)の原本はいずれも完全なため、三井住友FG固有の恒常的な問題ではなくS100W0S7・
+// S100X7DXの2文書に限定された欠損と判断している。将来的にsmokeへ追加する場合は、ingestが実際に
+// 採用するdocIDを確認したうえで、その文書の実データ（欠損があればそれを含めた形）で追加する必要が
+// ある。
 
 import Foundation
 import Testing
@@ -87,14 +93,7 @@ import Testing
         }
     }
 
-    @Test
-    func smokePolicyHoldingSMFGMatchesOracle() async throws {
-        // 原本S100W0S7・最新訂正S100X7DXは構造化タグが大幅に不完全な既知の欠損（ファイル冒頭コメント
-        // 参照）のため、完全版の訂正報告書S100WRZHを使用する。
-        try await withSmokeCache("S100WRZH") {
-            try assertMatchesOracle(docID: "S100WRZH", xbrlDir: $0)
-        }
-    }
+    // SMFG(8316)はsmoke対象外（ファイル冒頭コメント参照）。
 
     @Test
     func smokePolicyHoldingFujifilmMatchesOracle() async throws {
