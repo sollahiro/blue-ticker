@@ -48,6 +48,13 @@ XBRL解析モジュール（`Sources/BlueTicker/Analysis/` 配下）では、以
 | `SegmentInfoLLMNormalizer.swift` | `segments` キー自体が html_table を返すケースを LLM で `BreakdownSnapshot`（axis: business）へ正規化 |
 | `RevenueRecognitionLLMNormalizer.swift` | オークマ型（segments が実は地域別）の収益認識関係注記を LLM で事業別 `BreakdownSnapshot` へ正規化 |
 
+## 配信契約のタグ透明性
+
+statement・notes・breakdown の配信契約（`denominatorTag`・`amountTag` 等のタグ系フィールド）には、値の由来を示す実際の XBRL タグ名を可能な限り載せる。`"company_financials"` のような固定文字列プレースホルダーは、実タグが解決できない場合のみのフォールバックとする（`AGENTS.md`「タグ透明性」）。
+
+- 分母・合計値が別ステージ（`company_financials` 等）から渡ってくる場合でも、同一書類の XBRL から独立にタグを再解決できるならそちらを優先する（値の再計算はしない。タグ名の解決だけを行う）
+- 実例: `BreakdownNormalizer.normalizeResearchAndDevelopment` のセグメント dimension 無し・全社合計のみのフォールバック（オークマ型）。`RDExtractor.extract` の `RDResult.tag` を呼び出し側（`BltServerFacade.resolveResearchAndDevelopmentBreakdown`）が同一 XBRL から再解決し `totalTag` として渡す。渡せない場合のみ `denominatorTag = "company_financials"` に落ちる
+
 ## 詳細リファレンス
 
 タグ体系・コンテキスト命名規則・会計基準判定ロジック・US-GAAP HTMLパースの仕様は `docs/xbrl-parsing.md` を参照してください。
