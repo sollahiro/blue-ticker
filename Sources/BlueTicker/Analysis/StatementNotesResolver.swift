@@ -344,6 +344,10 @@ enum StatementNotesResolver {
     /// で決議（中間・期末等）ごとに行番号付けされている（政策保有株式の `CurrentYearInstant_Row{N}Member`
     /// とプレフィックスが異なる点に注意）。中間/期末の区分ラベルは実データから直接読み取れないため
     /// 持たない（`DividendEventPayload` のコメント参照）。
+    ///
+    /// タグ透明性（2026-08-11、smoke固定11社で生タグ再確認）: `dividendPerShare`/`totalAmount` は
+    /// スモーク11社すべてで上記2タグ固定（フォールバック候補なし）のため、値が取れた行にのみ
+    /// タグ名をそのまま `dividendPerShareTag`/`totalAmountTag` として付与する。
     static func resolveDividends(xbrlDir: URL) -> StatementNoteResolveResult {
         let numericElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let textFacts = collectTextFacts(in: xbrlDir) {
@@ -367,7 +371,9 @@ enum StatementNotesResolver {
                 row,
                 DividendEventPayload(
                     resolutionDate: dateByCtx[ctx], resolutionBody: bodyByCtx[ctx],
-                    dividendPerShare: perShareByCtx[ctx], totalAmount: totalByCtx[ctx])
+                    dividendPerShare: perShareByCtx[ctx], totalAmount: totalByCtx[ctx],
+                    dividendPerShareTag: perShareByCtx[ctx] != nil ? "DividendPerShareDividendsOfSurplus" : nil,
+                    totalAmountTag: totalByCtx[ctx] != nil ? "TotalAmountOfDividendsDividendsOfSurplus" : nil)
             ))
         }
         guard !rows.isEmpty else {

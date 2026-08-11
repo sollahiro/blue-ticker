@@ -246,15 +246,21 @@ public struct DividendEventPayload: Codable, Sendable {
     public var resolutionBody: String?
     public var dividendPerShare: Double?
     public var totalAmount: Double?
+    /// `dividendPerShare` の由来タグ名（`jpcrp_cor:` 接頭辞なし）。値が取れた場合のみ非 nil。
+    public var dividendPerShareTag: String?
+    /// `totalAmount` の由来タグ名。値が取れた場合のみ非 nil。
+    public var totalAmountTag: String?
 
     public init(
         resolutionDate: String?, resolutionBody: String?, dividendPerShare: Double?,
-        totalAmount: Double?
+        totalAmount: Double?, dividendPerShareTag: String? = nil, totalAmountTag: String? = nil
     ) {
         self.resolutionDate = resolutionDate
         self.resolutionBody = resolutionBody
         self.dividendPerShare = dividendPerShare
         self.totalAmount = totalAmount
+        self.dividendPerShareTag = dividendPerShareTag
+        self.totalAmountTag = totalAmountTag
     }
 
     public func jsonObject() -> [String: Any] {
@@ -263,6 +269,8 @@ public struct DividendEventPayload: Codable, Sendable {
             "resolution_body": resolutionBody as Any? ?? NSNull(),
             "dividend_per_share": dividendPerShare as Any? ?? NSNull(),
             "total_amount": totalAmount as Any? ?? NSNull(),
+            "dividend_per_share_tag": dividendPerShareTag as Any? ?? NSNull(),
+            "total_amount_tag": totalAmountTag as Any? ?? NSNull(),
         ]
     }
 }
