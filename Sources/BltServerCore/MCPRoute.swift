@@ -47,21 +47,20 @@ func registerMcpRoute(
 
         // ChatGPT（OpenAI 製 MCP クライアント）は initialize の前に非標準の `server/discover`
         // （MCP 仕様にないメソッド）を送ってくる（実測 2026-08-11: 診断ログで
-        // `{"jsonrpc":"2.0","id":"openai-mcp-discover","method":"server/discover",...}` を確認。
-        // 本番ログで 400→200→200 のパターンが継続し、ChatGPT UI 上は tools/list 取得が
-        // 424/-32603「データの形式が正しくありません」として失敗表示されていた）。swift-sdk は
-        // このメソッドを認識せず 400 を返すが、ChatGPT はこの1件の失敗で後続の initialize/tools_list
-        // が成功してもコネクタ全体を失敗表示する。JSON-RPC パイプラインへは渡さず、id を引き継いだ
-        // 空の成功レスポンスを返す。
-        if let discoverResponse = serverDiscoverResponse(requestBody) {
-            return discoverResponse
-        }
+        // `{"jsonrpc":"2.0","id":"openai-mcp-discover","method":"server/discover",...}` を確認）。
+        // swift-sdk はこのメソッドを認識せず 400 を返す。空の成功レスポンスに差し替えるだけでは
+        // ChatGPT はツールなしとみなして後続の initialize/tools_list を送らず、コネクタのアクション
+        // 一覧が空のままになる（実測: `result: {}` を返すと本番で initialize/tools_list への追加
+        // リクエストが来なくなることを確認）。`server/discover` は「サーバーが提供する
+        // ツール・リソース・プロンプトを問い合わせる」事前ハンドシェイクのため、method 名のみ
+        // `tools/list` に差し替えて同じ JSON-RPC パイプラインへ渡し、実際のツール一覧を返す。
+        let dispatchedBody = rewriteServerDiscoverAsToolsList(requestBody) ?? requestBody
 
         let httpRequest = MCP.HTTPRequest(
             method: req.method.rawValue,
             headers: Dictionary(
                 req.headers.map { ($0.name, $0.value) }, uniquingKeysWith: { first, _ in first }),
-            body: requestBody,
+            body: dispatchedBody,
             path: req.url.path
         )
         do {
@@ -71,29 +70,25 @@ func registerMcpRoute(
                 await transport.handleRequest(httpRequest)
             }
             let response =
-                reinitializeShimResponse(requestBody: requestBody, response: httpResponse, version: blueTickerVersion)
+                reinitializeShimResponse(requestBody: dispatchedBody, response: httpResponse, version: blueTickerVersion)
                 ?? httpResponse
             return vaporResponse(from: response)
         } catch {
-            return mcpTimeoutResponse(requestBody: requestBody)
+            return mcpTimeoutResponse(requestBody: dispatchedBody)
         }
     }
 }
 
-/// `method: "server/discover"`（OpenAI 製クライアント固有の非標準メソッド）を、id を引き継いだ
-/// 空の JSON-RPC 成功レスポンスへ差し替える。対象外のボディには nil を返す。
-private func serverDiscoverResponse(_ data: Data) -> Vapor.Response? {
-    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-        json["method"] as? String == "server/discover",
-        let id = json["id"]
+/// `method: "server/discover"`（OpenAI 製クライアント固有の非標準メソッド）のボディを、id・jsonrpc は
+/// そのままに `method` だけ標準の `tools/list` へ書き換える。対象外のボディには nil を返す
+/// （呼び出し側で元のボディへフォールバックする）。
+private func rewriteServerDiscoverAsToolsList(_ data: Data) -> Data? {
+    guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        json["method"] as? String == "server/discover"
     else { return nil }
-
-    let envelope: [String: Any] = ["jsonrpc": "2.0", "id": id, "result": [String: Any]()]
-    guard let body = try? JSONSerialization.data(withJSONObject: envelope) else { return nil }
-    let response = Vapor.Response(status: .ok)
-    response.headers.contentType = .json
-    response.body = .init(data: body)
-    return response
+    json["method"] = "tools/list"
+    json["params"] = [String: Any]()
+    return try? JSONSerialization.data(withJSONObject: json)
 }
 
 /// JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして成立しない）ボディを
