@@ -33,7 +33,7 @@ public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
 /// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
-public let perShareInformationNoteCacheVersion = "notes-eps-v1"
+public let perShareInformationNoteCacheVersion = "notes-eps-v2"
 public let issuedSharesNoteCacheVersion = "notes-issued-shares-v1"
 public let researchAndDevelopmentNoteCacheVersion = "notes-rd-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"

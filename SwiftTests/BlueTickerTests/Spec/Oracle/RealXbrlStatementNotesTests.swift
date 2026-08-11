@@ -1581,16 +1581,18 @@ import Testing
         #expect(reason == statementNoteNotApplicableNotFound)
     }
 
-    // MARK: - per_share_information golden（ユーザー実データ確認済み 2026-08-02）
+    // MARK: - per_share_information golden（ユーザー実データ確認済み 2026-08-02、US-GAAP BPS 2026-08-11）
     //
     // EPS・潜在株式調整後EPS・BPSはいずれも「業績等の概要（SummaryOfBusinessResults）」の離散数値
     // タグから決定論で取得する（注記本体のHTMLテーブルはパースしない）。BPSはJGAAPが
-    // `NetAssetsPerShareSummaryOfBusinessResults`、IFRSは`EquityToAssetRatioIFRSSummaryOfBusinessResults`
-    // （タグ名は「自己資本比率」の意味だが誤り。`unitRef=JPYPerShares`の場合のみ実体は
-    // 「１株当たり親会社株主持分」。日立 S100QZT0の実データでHTML本文ラベルと完全一致を確認済み。
-    // US-GAAP企業では同名タグが真の比率(`unitRef=pure`)として使われるため`unitRef`を見ずタグ名だけ
-    // で判定してはならない、小松製作所 S100QYNI で確認済み）。カバレッジ実測（144件）:
-    // EPS 144/144、BPS 142/144、潜在株式調整後EPS 88/144。
+    // `NetAssetsPerShareSummaryOfBusinessResults`、US-GAAPが
+    // `EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`（HTMLラベル
+    // 「１株当たり株主資本」、富士フイルム/キヤノンでユーザー確認済み）、IFRSは
+    // `EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名は「自己資本比率」の意味だが誤り。
+    // `unitRef=JPYPerShares`の場合のみ実体は「１株当たり親会社株主持分」。日立 S100QZT0の実データ
+    // でHTML本文ラベルと完全一致を確認済み。US-GAAP企業では同名タグが真の比率(`unitRef=pure`)
+    // として使われるため`unitRef`を見ずタグ名だけで判定してはならない、小松製作所 S100QYNI で
+    // 確認済み）。希薄化後EPSの欠落は希薄化証券が無い企業では正当（2026-08-11 ユーザー確認）。
     //
     // IFRS企業のEPS/潜在株式調整後EPSはStatement取り込み（Statement、損益計算書）とタグ・値が完全一致する
     // （`jpigp_cor:BasicEarningsLossPerShareIFRS`はrole=ConsolidatedStatementOfProfitOrLossIFRSで
@@ -1628,6 +1630,43 @@ import Testing
         #expect(byTag["diluted_eps"] == 683.89)
         #expect(byTag["bps"] == 5271.97)
         #expect(items.first { $0.tag == "bps" }?.label == "１株当たり親会社株主持分")
+        #expect(items.allSatisfy { $0.unit == "yen_per_share" })
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
+    func goldenPerShareFujifilmUSGAAP() throws {
+        // US-GAAP BPSタグ EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults。
+        // HTMLラベル「１株当たり株主資本」=2779.50 をユーザー確認済み（2026-08-11）。
+        let result = StatementNotesResolver.resolvePerShareInformation(xbrlDir: Self.xbrlDir("S100W3XJ"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let items = try #require(payload.items)
+        let byTag = Dictionary(uniqueKeysWithValues: items.map { ($0.tag, $0.value) })
+        #expect(byTag["eps"] == 216.67)
+        #expect(byTag["diluted_eps"] == 216.46)
+        #expect(byTag["bps"] == 2779.50)
+        #expect(items.first { $0.tag == "bps" }?.label == "１株当たり株主資本")
+        #expect(items.allSatisfy { $0.unit == "yen_per_share" })
+    }
+
+    @Test(.enabled(if: cacheAvailable("S100XTLJ"), "XBRL cache S100XTLJ not available"))
+    func goldenPerShareCanonUSGAAP() throws {
+        // 同上 US-GAAP BPS。HTMLラベル「１株当たり株主資本」=3974.81 をユーザー確認済み（2026-08-11）。
+        let result = StatementNotesResolver.resolvePerShareInformation(xbrlDir: Self.xbrlDir("S100XTLJ"))
+        guard case .resolved(let payload, let source, _) = result else {
+            Issue.record("expected .resolved, got \(result)")
+            return
+        }
+        #expect(source == statementNoteSourceXbrlFacts)
+        let items = try #require(payload.items)
+        let byTag = Dictionary(uniqueKeysWithValues: items.map { ($0.tag, $0.value) })
+        #expect(byTag["eps"] == 367.48)
+        #expect(byTag["diluted_eps"] == 367.25)
+        #expect(byTag["bps"] == 3974.81)
+        #expect(items.first { $0.tag == "bps" }?.label == "１株当たり株主資本")
         #expect(items.allSatisfy { $0.unit == "yen_per_share" })
     }
 

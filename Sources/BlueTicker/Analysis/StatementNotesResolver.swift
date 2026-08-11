@@ -388,10 +388,14 @@ enum StatementNotesResolver {
     /// （SummaryOfBusinessResults）」の離散数値タグから決定論で取得できる（注記本体のHTML
     /// テーブルはパースしない）。EPSは既存 `PerShareExtractor.extract`（`Xbrl.basicEpsTags`）を
     /// そのまま再利用する（重複ロジック回避）。BPSはJGAAPが`NetAssetsPerShareSummaryOfBusinessResults`、
-    /// IFRSは`EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名誤り、`unitRef=JPYPerShares`で
-    /// 判別、日立 S100QZT0「１株当たり親会社株主持分」ラベルと完全一致を確認済み）。
-    /// カバレッジ実測（キャッシュ144件）: EPS 144/144、BPS 142/144、潜在株式調整後EPS 65/144
-    /// （IFRS企業の一部は希薄化効果のある証券が無く注記自体に希薄化後EPSを持たない）。
+    /// US-GAAPが`EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`
+    /// （2026-08-11 smoke確認: 富士フイルム S100W3XJ=2779.50・キヤノン S100XTLJ=3974.81、
+    /// HTMLラベル「１株当たり株主資本」）、IFRSは`EquityToAssetRatioIFRSSummaryOfBusinessResults`
+    /// （タグ名誤り、`unitRef=JPYPerShares`で判別、日立 S100QZT0「１株当たり親会社株主持分」
+    /// ラベルと完全一致を確認済み）。
+    /// カバレッジ実測（キャッシュ144件）: EPS 144/144、BPS 142/144（US-GAAP連結BPSタグ未対応時）、
+    /// 潜在株式調整後EPS 65/144（希薄化効果のある証券が無く注記自体に希薄化後EPSを持たない企業は欠落OK、
+    /// 2026-08-11 ユーザー確認）。
     ///
     /// 前期比較値は持たない。`company_statement_notes` はdocID（＝1事業年度）単位でingestされる
     /// ため、前期値は前期docIDの`value`で取得できる（財務取り込み `years[]` と同型、ユーザー判断
@@ -416,6 +420,10 @@ enum StatementNotesResolver {
         if let bps = resolveItem(instantFS, tags: Xbrl.netAssetsPerShareTags).current {
             items.append(
                 StatementLineItem(tag: "bps", label: "１株当たり純資産額", value: bps, unit: "yen_per_share", order: nil))
+        } else if let bps = resolveItem(instantFS, tags: Xbrl.equityPerShareUSGAAPTags).current {
+            items.append(
+                StatementLineItem(
+                    tag: "bps", label: "１株当たり株主資本", value: bps, unit: "yen_per_share", order: nil))
         } else if let bps = resolveEquityPerShareIFRSMislabeled(xbrlDir: xbrlDir) {
             items.append(
                 StatementLineItem(

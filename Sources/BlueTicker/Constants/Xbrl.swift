@@ -104,12 +104,20 @@ enum Xbrl {
         "DilutedEarningsPerShareSummaryOfBusinessResults",           // JGAAP Summary（"Loss"なし）
     ]
 
-    /// 1株当たり純資産額（JGAAP・連結）。IFRS企業の「1株当たり親会社株主持分」相当値は
+    /// 1株当たり純資産額（JGAAP・連結）。US-GAAP はタグ名が別
+    /// （`EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`、
+    /// 実データ確認済み: 富士フイルム S100W3XJ=2779.50・キヤノン S100XTLJ=3974.81、
+    /// HTML ラベルは「１株当たり株主資本」）。IFRS企業の「1株当たり親会社株主持分」相当値は
     /// `EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名は誤りだが `unitRef=JPYPerShares`
     /// で実体が判別できる、実データ確認済み: 日立 S100QZT0「１株当たり親会社株主持分」ラベルと
     /// 完全一致）に格納されており、別途 `unitRef` を見て判定する（`resolveEquityPerShareIFRS`）。
     static let netAssetsPerShareTags: [String] = [
         "NetAssetsPerShareSummaryOfBusinessResults",
+    ]
+
+    /// 1株当たり株主資本（US-GAAP・連結 Summary）。
+    static let equityPerShareUSGAAPTags: [String] = [
+        "EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults",
     ]
 
     // MARK: - 発行済普通株式数（期末残高）
