@@ -30,6 +30,10 @@ public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 public let statementNoteTypePolicyHoldingSecurities = "policy_holding_securities"
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
+/// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
+/// BS 構造化タグ（`LeaseObligations*` / `LeaseLiabilities*IFRS`）や BS HTML は `statement` 側
+/// （`available_via_statement`）。使用権資産の増減表は対象外。
+public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
@@ -48,6 +52,11 @@ public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v2"
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
+/// v2（2026-08-12）: スズキ・クボタ型 TextBlock の満期バケット（割引前契約CF）を表単位で追加。
+/// v3（2026-08-12）: BS 構造化タグ経路を廃止（`statement` と同一値のため `available_via_statement`）。
+/// v4（2026-08-12）: クボタ型「割引前のリース負債総額」/ スズキ型「契約上のキャッシュ・フロー」を追加。
+/// v5（2026-08-12）: クボタ型「控除：利息相当額」を追加。
+public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v5"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {
@@ -61,6 +70,7 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion
     case statementNoteTypePropertyPlantEquipmentSchedule: return propertyPlantEquipmentScheduleNoteCacheVersion
     case statementNoteTypeGoodwillAndIntangibles: return goodwillAndIntangiblesNoteCacheVersion
+    case statementNoteTypeLeaseLiabilities: return leaseLiabilitiesNoteCacheVersion
     default: return ""
     }
 }

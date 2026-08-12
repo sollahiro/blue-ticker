@@ -365,6 +365,13 @@ enum Xbrl {
         ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"],
     ]
 
+    /// 連結 BS のリース負債 構造化タグ（存在判定用。`lease_liabilities` note_type の
+    /// `available_via_statement` 判定で使う。値の積み上げは `ibdCurrentComponents` 等側）。
+    static let leaseLiabilitiesBSTags: [String] = [
+        "LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS",
+        "LeaseObligationsCL", "LeaseObligationsNCL",
+    ]
+
     static let ibdIFRSCLTags: [String] = [
         "InterestBearingLiabilitiesCLIFRS",
         "BondsAndBorrowingsCLIFRS",

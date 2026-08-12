@@ -93,6 +93,12 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     )
     var debugGoodwill = false
 
+    @Flag(
+        name: .customLong("debug-lease-liabilities"),
+        help: "--debug-doc と併用。lease_liabilities note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
+    )
+    var debugLeaseLiabilities = false
+
     @Option(
         name: .customLong("export-notes-review"),
         help: "borrowings_schedule/property_plant_equipment_schedule/goodwill_and_intangibles をキャッシュ全走査し、提出年度・会社名・結果をJSONで書き出す(ユーザーレビュー用)"
@@ -371,6 +377,31 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             for dir in dirs {
                 let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
                 switch StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: dir) {
+                case .resolved(let payload, _, _):
+                    resolvedCount += 1
+                    print("resolved: \(docID) items=\(payload.items?.count ?? 0)")
+                case .notApplicable: notApplicableCount += 1
+                case .failed: break
+                }
+            }
+            print("resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count)")
+            return
+        }
+        if let debugDoc, debugLeaseLiabilities {
+            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
+            Self.debugLeaseLiabilities(docID: debugDoc, xbrlDir: dir)
+            return
+        }
+        if debugDoc == nil, debugLeaseLiabilities {
+            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+            else { return }
+            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var resolvedCount = 0
+            var notApplicableCount = 0
+            for dir in dirs {
+                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+                switch StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: dir) {
                 case .resolved(let payload, _, _):
                     resolvedCount += 1
                     print("resolved: \(docID) items=\(payload.items?.count ?? 0)")
@@ -815,6 +846,22 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
 
     static func debugGoodwill(docID: String, xbrlDir: URL) {
         switch StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir) {
+        case .resolved(let payload, let source, let contentHash):
+            print("source=\(source) contentHash=\(contentHash)")
+            for item in payload.items ?? [] {
+                print("  tag=\(item.tag) label=\(item.label ?? "?") value=\(item.value) unit=\(item.unit ?? "-")")
+            }
+        case .notApplicable(let reason):
+            print("notApplicable(\(reason))")
+        case .failed:
+            print("failed")
+        }
+    }
+
+    // MARK: - デバッグ(財務諸表注記取り込み lease_liabilities note_type)
+
+    static func debugLeaseLiabilities(docID: String, xbrlDir: URL) {
+        switch StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
         case .resolved(let payload, let source, let contentHash):
             print("source=\(source) contentHash=\(contentHash)")
             for item in payload.items ?? [] {
