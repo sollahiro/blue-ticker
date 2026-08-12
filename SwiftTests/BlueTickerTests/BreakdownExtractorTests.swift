@@ -221,6 +221,43 @@ import Foundation
         }
     }
 
+    @Test func geographyDedicatedDualContextBlocksGetPriorThenCurrent() {
+        // ニチレイ／三菱UFJ／三井住友／オークマ型: 専用地域売上 TextBlock が
+        // Prior1YearDuration / CurrentYearDuration の2要素に分かれ、各 HTML に期間見出しが無い。
+        // contextRef から period を付けないと、ブロック単位 applyPeriodOrdering で両方「前期」になる。
+        let priorHtml =
+            "&lt;p&gt;(1)売上高&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;20&lt;/td&gt;&lt;td&gt;120&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let currentHtml =
+            "&lt;p&gt;(1)売上高&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;30&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="Prior1YearDuration">\(priorHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(currentHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+            #expect(result.tables[0].markdown.contains("| 100 | 20 | 120 |"))
+            #expect(result.tables[1].markdown.contains("| 110 | 30 | 140 |"))
+        }
+    }
+
+    @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearInstant") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearInstant") == "当期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: nil) == nil)
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "SomethingElse") == nil)
+    }
+
     @Test func segmentInfoFromUSGAAPNoteMixedBlock() {
         // キヤノン型の回帰: 事業別セグメントがUS-GAAP巨大注記(NotesToConsolidatedFinancialStatementsUSGAAPTextBlock)
         // に内包されている場合でも見出しキーワードで発見できる。
