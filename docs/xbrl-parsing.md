@@ -289,6 +289,8 @@ US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計
 smoke/
   smoke_expected/         # 年次期待値 JSON（{code}_{fy_end}.json）
   breakdown_extraction_expected.json   # セグメント・地域別抽出の期待値（書類ID別）
+  breakdown_business_oracle_expected.json   # business 軸 smoke 床（xbrl_facts 行 / llm_input 表）
+  breakdown_geography_oracle_expected.json  # geography 軸 smoke 床（llm_input 表 / not_found）
   smoke-field-values.md   # フィールド一覧とスモークテストの仕様説明
 ```
 
@@ -296,6 +298,7 @@ smoke/
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
+| 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 | Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外（詳細は `docs/statement-normalization-concept.md` / `docs/test-spec-assets.md`） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
@@ -311,10 +314,10 @@ smoke/
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
-- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities` note_type**（各 `*OracleFormatTests` + 外出しJSON。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社）。他 note_type / breakdown の決定論ロジックはまだこの床に含まれていない。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§6.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities` note_type**、および **breakdown の `business` / `geography` 軸**（各 `*OracleFormatTests` + 外出しJSON。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合し、正規化後金額は床に含めない）。他 note_type の決定論ロジックはまだこの床に含まれていない。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
 - **golden回帰**（年次スモーク以外）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
 
-原則としては note_type/breakdown の決定論ロジックもこの床でカバーされるべきだが、現状は `borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities` 以外は未整備というギャップがある（dividends・goodwill_and_intangibles は外出しオラクル形式へ横展開済みだが試作1〜2docID のみで smoke 床には未追加）。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない note_type / breakdown がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床を広げる。
+原則としては note_type の決定論ロジックもこの床でカバーされるべきだが、現状は上記5種以外は未整備というギャップがある（dividends・goodwill_and_intangibles は外出しオラクル形式へ横展開済みだが試作1〜2docID のみで smoke 床には未追加）。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認がまだ済んでいない note_type がある。ロジックが安定してきた段階で、smoke企業セットに対しても回帰対象へ加え、床を広げる。
 
 smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`）にあたる。テストを移行耐性の観点で層分けする指針は `test-spec-assets.md` を参照。
 
