@@ -78,24 +78,12 @@
     ]
   },
   "S100W3XJ": {
-    "status": "resolved",
-    "source": "xbrl_facts",
-    "items": [
-      {
-        "tag": "company_financials",
-        "label": "リース負債",
-        "value": 31582000000.0,
-        "unit": "yen",
-        "order": 0,
-        "section": null,
-        "is_total": false,
-        "components": null
-      }
-    ]
+    "reason": "us_gaap_unsupported",
+    "status": "not_applicable"
   },
   "S100W043": {
-    "status": "not_applicable",
-    "reason": "not_found"
+    "reason": "not_found",
+    "status": "not_applicable"
   },
   "S100XR0M": {
     "status": "resolved",
@@ -130,31 +118,19 @@
     ]
   },
   "S100XRD8": {
-    "status": "not_applicable",
-    "reason": "not_found"
+    "reason": "not_found",
+    "status": "not_applicable"
   },
   "S100XTLJ": {
-    "status": "resolved",
-    "source": "xbrl_facts",
-    "items": [
-      {
-        "tag": "company_financials",
-        "label": "リース負債",
-        "value": 43096000000.0,
-        "unit": "yen",
-        "order": 0,
-        "section": null,
-        "is_total": false,
-        "components": null
-      }
-    ]
+    "reason": "us_gaap_unsupported",
+    "status": "not_applicable"
   },
   "S100W4FB": {
-    "status": "not_applicable",
-    "reason": "not_found"
+    "reason": "not_found",
+    "status": "not_applicable"
   },
   "S100W0S7": {
-    "status": "not_applicable",
-    "reason": "not_found"
+    "reason": "not_found",
+    "status": "not_applicable"
   }
 }

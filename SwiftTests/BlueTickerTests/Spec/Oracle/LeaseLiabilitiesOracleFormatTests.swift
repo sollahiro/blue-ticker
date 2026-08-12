@@ -1,11 +1,12 @@
 // 外出し SPEC_ORACLE フォーマット（`StatementNotesOracleFormatTests.swift`=borrowings_schedule と同型）。
 //
 // smoke 固定11社の実データ検証（2026-08-12）:
-// - IFRS TextBlock: 味の素（支払期日別 CL+NCL、合計セル40,707に対し成分合算40,706＝開示丸め）、
-//   クボタ（リース負債の現在価値 83,336。使用権資産合計87,946は別表で対象外）、スズキ（帳簿価額）
+// - IFRS TextBlock: 味の素（支払期日別 CL+NCL）、クボタ（現在価値 83,336。ROU 87,946は対象外）、
+//   スズキ（帳簿価額。満期別内訳は注記にあるが複数表ラベル衝突のため未抽出）
 // - J-GAAP BS タグ: ニチレイ・AZplanning（`LeaseObligationsCL`/`NCL`）
-// - US-GAAP BS HTML: 富士フイルム・キヤノン（実タグ無しのため `company_financials` フォールバック）
-// - not_found: オークマ（オフバランス未経過リース料のみ）、東邦レマック、銀行2社（連結オンバランス無し）
+// - not_found: オークマ（リース債務は借入金等明細表＝`borrowings_schedule`側。PPE不可）、
+//   東邦レマック、銀行2社
+// - US-GAAP: 富士フイルム・キヤノン → us_gaap_unsupported（BS HTML 経路は statements と責務重複のため廃止）
 
 import Foundation
 import Testing
@@ -54,7 +55,7 @@ import Testing
     }
 
     @Test
-    func smokeLeaseFujifilmMatchesOracle() async throws {
+    func smokeLeaseFujifilmNotApplicableUSGAAP() async throws {
         try await withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", xbrlDir: $0)
         }
@@ -89,7 +90,7 @@ import Testing
     }
 
     @Test
-    func smokeLeaseCanonMatchesOracle() async throws {
+    func smokeLeaseCanonNotApplicableUSGAAP() async throws {
         try await withSmokeCache("S100XTLJ") {
             try assertMatchesOracle(docID: "S100XTLJ", xbrlDir: $0)
         }

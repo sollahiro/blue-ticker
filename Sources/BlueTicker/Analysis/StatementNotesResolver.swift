@@ -189,16 +189,21 @@ enum StatementNotesResolver {
     /// 1. 連結 BS の構造化タグ（`LeaseLiabilitiesCLIFRS`/`NCLIFRS`、`LeaseObligationsCL`/`NCL`）。
     ///    `fieldSetFromInstant` が連結コンテキストを優先するため、非連結のみのタグ（味の素単体・
     ///    三菱UFJ単体等）はここでは拾わない。
-    /// 2. IFRS リース注記 TextBlock / BS HTML（`IFRSLease.extractLeaseLiabilities`）。
-    ///    味の素 S100VXJA は支払期日別表合計 40,707百万円、クボタ S100XR0M は
-    ///    「リース負債の現在価値」83,336百万円。クボタ注記の使用権資産合計 87,946百万円は
-    ///    別表であり本 note_type の対象外（資産側・PPE/ROU）。
+    /// 2. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路のみ。**BS HTML は使わない** —
+    ///    `get_statement` と責務が被り、US-GAAP では短期のみ拾う漏れも起きた）。
+    ///    味の素は支払期日別 CL+NCL（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）、
+    ///    クボタは現在価値 83,336百万円、スズキは帳簿価額。使用権資産合計（クボタ 87,946）は別表で対象外。
+    /// 3. US-GAAP → `.notApplicable(us_gaap_unsupported)`（`borrowings_schedule` と同方針）。
     ///
-    /// J-GAAP の「オペレーティング・リース取引のうち解約不能のものに係る未経過リース料」
-    /// （オフバランスの将来支払額。実データ: オークマ S100W043）はオンバランスのリース負債ではない
-    /// ため対象外（タグも TextBlock オンバランス残高も無ければ `.notApplicable(not_found)`）。
+    /// J-GAAP で BS タグも IFRS TextBlock も無い会社（オークマ等）のリース債務は借入金等明細表
+    /// （`borrowings_schedule`）側。PPE 明細は資産側のためリース債務は取れない。本 note への
+    /// 明細表フォールバックはしない（責務分離）。
+    ///
+    /// 満期別内訳（１年以内…）: スズキ・クボタ注記には表があるが、TextBlock 内の複数表が
+    /// 「１年以内」等を共有し貸手側と混線するため、現状は合計行のみ（拡充は別途）。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(tagElements)
         let fieldSet = fieldSetFromInstant(tagElements)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
 
@@ -219,29 +224,35 @@ enum StatementNotesResolver {
             return resolvedLeaseLiabilities(items: structuredItems)
         }
 
-        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fieldSet, xbrlDir: xbrlDir)
-        let hasTextblock =
+        // TextBlock があるときだけ IFRSLease を呼ぶ（空 TextBlock → BS HTML フォールバックを避ける）。
+        let hasIFRSTextblock =
             XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag)
             != nil
-        let sourceTag =
-            hasTextblock ? Xbrl.ifrsLeasesTextblockTag : "company_financials"
-        var textblockItems: [StatementLineItem] = []
-        for (order, component) in lease.components.enumerated() {
-            guard let current = component.current else { continue }
-            textblockItems.append(
-                StatementLineItem(
-                    tag: sourceTag, label: component.label, value: current, unit: "yen",
-                    order: order))
+        if hasIFRSTextblock {
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fieldSet, xbrlDir: xbrlDir)
+            var textblockItems: [StatementLineItem] = []
+            for (order, component) in lease.components.enumerated() {
+                guard let current = component.current else { continue }
+                textblockItems.append(
+                    StatementLineItem(
+                        tag: Xbrl.ifrsLeasesTextblockTag, label: component.label, value: current,
+                        unit: "yen", order: order))
+            }
+            if textblockItems.isEmpty, let current = lease.current {
+                textblockItems.append(
+                    StatementLineItem(
+                        tag: Xbrl.ifrsLeasesTextblockTag, label: "リース負債", value: current,
+                        unit: "yen", order: 0))
+            }
+            if !textblockItems.isEmpty {
+                return resolvedLeaseLiabilities(items: textblockItems)
+            }
         }
-        if textblockItems.isEmpty, let current = lease.current {
-            textblockItems.append(
-                StatementLineItem(
-                    tag: sourceTag, label: "リース負債", value: current, unit: "yen", order: 0))
+
+        if accountingStandard == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
         }
-        guard !textblockItems.isEmpty else {
-            return .notApplicable(reason: statementNoteNotApplicableNotFound)
-        }
-        return resolvedLeaseLiabilities(items: textblockItems)
+        return .notApplicable(reason: statementNoteNotApplicableNotFound)
     }
 
     private static func resolvedLeaseLiabilities(items: [StatementLineItem]) -> StatementNoteResolveResult {
