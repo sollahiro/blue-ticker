@@ -254,9 +254,6 @@ import Foundation
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearInstant") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearInstant") == "当期")
-        // 半期報の dedicated 地域売上（S100UV81 / S100UV9L）
-        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1InterimDuration") == "前期")
-        #expect(BreakdownExtractor.periodLabel(fromContextRef: "InterimDuration") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: nil) == nil)
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "SomethingElse") == nil)
     }
@@ -2112,6 +2109,7 @@ import Foundation
 
 /// smoke/breakdown_extraction_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
 /// キャッシュ済み XBRL から Swift 実装の出力を突き合わせる。
+/// 対象は有報（通期）のみ。半期/四半期（q2r 等）は含めない。
 /// BLT_EDINET_API_KEY が設定されていれば不足分を自動ダウンロードする（SmokeCacheSupport）。
 /// 未設定かつキャッシュも無い docID は個別に SKIP する。
 @Suite struct SegmentParityTests {

@@ -288,7 +288,7 @@ US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計
 ```
 smoke/
   smoke_expected/         # 年次期待値 JSON（{code}_{fy_end}.json）
-  breakdown_extraction_expected.json   # セグメント・地域別抽出の期待値（書類ID別）
+  breakdown_extraction_expected.json   # セグメント・地域別抽出の期待値（有報=通期のみ、書類ID別）
   breakdown_business_oracle_expected.json   # business 軸 smoke 床（xbrl_facts 行 / llm_input 表）
   breakdown_geography_oracle_expected.json  # geography 軸 smoke 床（llm_input 表 / not_found）
   smoke-field-values.md   # フィールド一覧とスモークテストの仕様説明
@@ -297,7 +297,7 @@ smoke/
 | テスト | 実装 | 照合対象 |
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
-| セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json` |
+| セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
 | 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
 | Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外（詳細は `docs/statement-normalization-concept.md` / `docs/test-spec-assets.md`） |
