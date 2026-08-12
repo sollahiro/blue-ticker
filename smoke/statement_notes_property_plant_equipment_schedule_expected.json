@@ -1,0 +1,218 @@
+{
+  "S100VXJA": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "BuildingsAndStructuresIFRS",
+        "label": null,
+        "value": 244337000000.0,
+        "unit": "yen",
+        "order": 6,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "MachineryAndVehiclesIFRS",
+        "label": null,
+        "value": 212696000000.0,
+        "unit": "yen",
+        "order": 7,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "ToolsFurnitureAndFixturesIFRS",
+        "label": "工具器具及び備品",
+        "value": 23870000000.0,
+        "unit": "yen",
+        "order": 8,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "LandIFRS",
+        "label": null,
+        "value": 46252000000.0,
+        "unit": "yen",
+        "order": 9,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "ConstructionInProgressIFRS",
+        "label": null,
+        "value": 54172000000.0,
+        "unit": "yen",
+        "order": 10,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "PropertyPlantAndEquipmentIFRS",
+        "label": null,
+        "value": 581330000000.0,
+        "unit": "yen",
+        "order": 11,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100XR0M": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "LandIFRS",
+        "label": null,
+        "value": 157172000000.0,
+        "unit": "yen",
+        "order": 18,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "BuildingsAndStructuresIFRS",
+        "label": null,
+        "value": 416417000000.0,
+        "unit": "yen",
+        "order": 19,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "MachineryAndEquipmentAndOthersIFRS",
+        "label": "機械装置及びその他",
+        "value": 292115000000.0,
+        "unit": "yen",
+        "order": 20,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "ConstructionInProgressIFRS",
+        "label": null,
+        "value": 74678000000.0,
+        "unit": "yen",
+        "order": 21,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "PropertyPlantAndEquipmentIFRS",
+        "label": null,
+        "value": 940382000000.0,
+        "unit": "yen",
+        "order": 22,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W4MT": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "BuildingsAndStructuresIFRS",
+        "label": null,
+        "value": 374598000000.0,
+        "unit": "yen",
+        "order": 20,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "MachineryAndVehiclesIFRS",
+        "label": null,
+        "value": 537374000000.0,
+        "unit": "yen",
+        "order": 21,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "ToolsFurnitureAndFixturesIFRS",
+        "label": "工具器具及び備品",
+        "value": 127716000000.0,
+        "unit": "yen",
+        "order": 22,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "LandIFRS",
+        "label": null,
+        "value": 410723000000.0,
+        "unit": "yen",
+        "order": 23,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "ConstructionInProgressIFRS",
+        "label": null,
+        "value": 223058000000.0,
+        "unit": "yen",
+        "order": 24,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "PropertyPlantAndEquipmentIFRS",
+        "label": null,
+        "value": 1673471000000.0,
+        "unit": "yen",
+        "order": 25,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100VYA0": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  },
+  "S100VU4O": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  },
+  "S100W3XJ": {
+    "status": "not_applicable",
+    "reason": "us_gaap_unsupported"
+  },
+  "S100XRD8": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  },
+  "S100XTLJ": {
+    "status": "not_applicable",
+    "reason": "us_gaap_unsupported"
+  },
+  "S100W4FB": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  },
+  "S100W0S7": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  }
+}

@@ -89,6 +89,11 @@ public let statementNoteSourceNotApplicable = "not_applicable"
 /// `.notApplicable` の理由（決定論経路で開示自体が無かった/タグが見つからなかった）。
 public let statementNoteNotApplicableNotFound = "not_found"
 
+/// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は `statement`（Statement本体のBS）から
+/// 取得できる）。`property_plant_equipment_schedule` がIFRS連結企業限定である理由の案内に使う
+/// （`StatementNotesResolver.resolvePropertyPlantEquipmentSchedule` 参照）。
+public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
+
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を
 /// 判定すべき source かどうか。LLM 経由はここに含めない。
 public func isVersionGatedStatementNoteSource(_ source: String) -> Bool {
