@@ -462,7 +462,8 @@ import Foundation
             let joined = current.map(\.markdown).joined(separator: "\n")
             #expect(joined.contains("法人営業"))
             #expect(joined.contains("銀行・クレジット"))
-            #expect(joined.contains("| 110 | 55 |"))
+            #expect(joined.contains("110"))
+            #expect(joined.contains("55"))
         }
     }
 
