@@ -1,0 +1,160 @@
+{
+  "S100VXJA": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "リース負債（流動）",
+        "value": 6823000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "リース負債（非流動）",
+        "value": 33883000000.0,
+        "unit": "yen",
+        "order": 1,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100VYA0": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "LeaseObligationsCL",
+        "label": "リース負債（流動）",
+        "value": 3568000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "LeaseObligationsNCL",
+        "label": "リース負債（非流動）",
+        "value": 9955000000.0,
+        "unit": "yen",
+        "order": 1,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100VU4O": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "LeaseObligationsCL",
+        "label": "リース負債（流動）",
+        "value": 1092000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "LeaseObligationsNCL",
+        "label": "リース負債（非流動）",
+        "value": 302000.0,
+        "unit": "yen",
+        "order": 1,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W3XJ": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "company_financials",
+        "label": "リース負債",
+        "value": 31582000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W043": {
+    "status": "not_applicable",
+    "reason": "not_found"
+  },
+  "S100XR0M": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "リース負債",
+        "value": 83336000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W4MT": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "リース負債",
+        "value": 32539000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100XRD8": {
+    "status": "not_applicable",
+    "reason": "not_found"
+  },
+  "S100XTLJ": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "company_financials",
+        "label": "リース負債",
+        "value": 43096000000.0,
+        "unit": "yen",
+        "order": 0,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W4FB": {
+    "status": "not_applicable",
+    "reason": "not_found"
+  },
+  "S100W0S7": {
+    "status": "not_applicable",
+    "reason": "not_found"
+  }
+}

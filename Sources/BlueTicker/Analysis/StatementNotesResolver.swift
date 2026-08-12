@@ -1,5 +1,5 @@
 // 財務諸表注記取り込み: 財務取り込み・内訳取り込み・Statement取り込み が対象外の財務諸表注記（Statement Notes）を note_type ごとに解決する。
-// note_type ごとの決定論ロジックをこの1ファイルに集約する（11種×別ファイルは過剰。
+// note_type ごとの決定論ロジックをこの1ファイルに集約する（種別×別ファイルは過剰。
 // plan「Resolver: StatementNotesResolver.swift」参照）。
 //
 // 政策保有株式（policy_holding_securities）は当初計画で「LLM必須」と見込んでいたが、実データ検証
@@ -181,6 +181,74 @@ enum StatementNotesResolver {
         resolveIFRSCategorySchedule(
             xbrlDir: xbrlDir,
             roleName: "NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS")
+    }
+
+    /// リース負債（`lease_liabilities` note_type）。
+    ///
+    /// 優先順（実データ検証 2026-08-12、smoke 固定11社）:
+    /// 1. 連結 BS の構造化タグ（`LeaseLiabilitiesCLIFRS`/`NCLIFRS`、`LeaseObligationsCL`/`NCL`）。
+    ///    `fieldSetFromInstant` が連結コンテキストを優先するため、非連結のみのタグ（味の素単体・
+    ///    三菱UFJ単体等）はここでは拾わない。
+    /// 2. IFRS リース注記 TextBlock / BS HTML（`IFRSLease.extractLeaseLiabilities`）。
+    ///    味の素 S100VXJA は支払期日別表合計 40,707百万円、クボタ S100XR0M は
+    ///    「リース負債の現在価値」83,336百万円。クボタ注記の使用権資産合計 87,946百万円は
+    ///    別表であり本 note_type の対象外（資産側・PPE/ROU）。
+    ///
+    /// J-GAAP の「オペレーティング・リース取引のうち解約不能のものに係る未経過リース料」
+    /// （オフバランスの将来支払額。実データ: オークマ S100W043）はオンバランスのリース負債ではない
+    /// ため対象外（タグも TextBlock オンバランス残高も無ければ `.notApplicable(not_found)`）。
+    static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
+        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let fieldSet = fieldSetFromInstant(tagElements)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+
+        let structuredPairs: [(tags: [String], fallbackLabel: String)] = [
+            (["LeaseLiabilitiesCLIFRS", "LeaseObligationsCL"], "リース負債（流動）"),
+            (["LeaseLiabilitiesNCLIFRS", "LeaseObligationsNCL"], "リース負債（非流動）"),
+        ]
+        var structuredItems: [StatementLineItem] = []
+        for (order, pair) in structuredPairs.enumerated() {
+            let resolved = resolveItem(fieldSet, tags: pair.tags)
+            guard let tag = resolved.tag, let current = resolved.current else { continue }
+            structuredItems.append(
+                StatementLineItem(
+                    tag: tag, label: labelsByTag[tag] ?? pair.fallbackLabel, value: current,
+                    unit: "yen", order: order))
+        }
+        if !structuredItems.isEmpty {
+            return resolvedLeaseLiabilities(items: structuredItems)
+        }
+
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fieldSet, xbrlDir: xbrlDir)
+        let hasTextblock =
+            XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag)
+            != nil
+        let sourceTag =
+            hasTextblock ? Xbrl.ifrsLeasesTextblockTag : "company_financials"
+        var textblockItems: [StatementLineItem] = []
+        for (order, component) in lease.components.enumerated() {
+            guard let current = component.current else { continue }
+            textblockItems.append(
+                StatementLineItem(
+                    tag: sourceTag, label: component.label, value: current, unit: "yen",
+                    order: order))
+        }
+        if textblockItems.isEmpty, let current = lease.current {
+            textblockItems.append(
+                StatementLineItem(
+                    tag: sourceTag, label: "リース負債", value: current, unit: "yen", order: 0))
+        }
+        guard !textblockItems.isEmpty else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+        return resolvedLeaseLiabilities(items: textblockItems)
+    }
+
+    private static func resolvedLeaseLiabilities(items: [StatementLineItem]) -> StatementNoteResolveResult {
+        let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
+        return .resolved(
+            payload: StatementNotePayload(items: items), source: statementNoteSourceXbrlFacts,
+            contentHash: hash)
     }
 
     /// IFRS注記に共通の「資産区分ごとに正味帳簿価額・取得原価・累計償却/減損の3タグが揃う」構造から

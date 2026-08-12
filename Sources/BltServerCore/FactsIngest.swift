@@ -403,6 +403,10 @@ public func runFactsIngestCommand(
                         { docID, _ in await context.resolveGoodwillAndIntangiblesNote(docID: docID) }
                     ),
                     (
+                        statementNoteTypeLeaseLiabilities,
+                        { docID, _ in await context.resolveLeaseLiabilitiesNote(docID: docID) }
+                    ),
+                    (
                         statementNoteTypePolicyHoldingSecurities,
                         { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
                     ),

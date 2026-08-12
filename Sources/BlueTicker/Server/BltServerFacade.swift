@@ -308,6 +308,13 @@ public extension BltServerContext {
         return StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir)
     }
 
+    /// 財務諸表注記取り込み: 書類1件分の `lease_liabilities` note_type を解決する。
+    /// 連結 BS タグまたは IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
+    func resolveLeaseLiabilitiesNote(docID: String) async -> StatementNoteResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+    }
+
     /// 財務諸表注記取り込み: 書類1件分の `per_share_information` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePerShareInformation` に委譲する（「業績等の概要」の
     /// 離散数値タグから決定論で抽出、LLM 不要）。財務取り込み の単一値（EPSのみ）passthrough を
