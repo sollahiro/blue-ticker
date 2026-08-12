@@ -1,118 +1,241 @@
 # financials（Summary）と正本の分離構想
 
-`company_financials`（公開面の呼称は Summary、`docs/feature-tiers.md`）が担ってきた「XBRL 抽出の
-なんでも屋」を、正本（statement / notes / breakdown）とそこから組み立てるビュー（Summary）に
-分離する構想。実装決定・コード変更は未着手（本ドキュメントは設計合意のみ）。
+`company_financials`（公開面の呼称は Summary、`docs/feature-tiers.md`）が担ってきた
+「XBRL 抽出のなんでも屋」を、正本（statement / notes / breakdown）とそこから組み立てる
+ビュー（Summary / Waterfall / 将来 Sankey）に分離する構想。
 
 ## 用語
 
-- **financials**: 実装名（`FinancialsResponse` / `company_financials` / `companyFinancialsCacheVersion`
-  / REST パス `.../financials`）。リネームされていない。
-- **Summary**: 公開面の呼称（MCP ツール名 `get_financial_summary`、PR #171 でリネーム）。
-- 本ドキュメントでは同じものとして `financials（Summary）` と併記する。
-
-## 現状の実態（2026-08-11 時点、コード確認済み）
-
-### financials（Summary）の中身
-
-`FinancialsYear`（`Sources/BlueTicker/Models/FinancialsContract.swift`）は1構造体に約70フィールド。
-
-| 分類 | 例 |
+| 呼び名 | 意味 |
 |---|---|
-| FS 水準値 | `sales` / `operatingProfit` / `totalAssets` / `cfo` など |
-| note 相当値 | `eps` / `issuedShares` / `employees` / `rd` |
-| Waterfall 専用（分析） | `roicDelta` / `ccc` / `dso`/`dio`/`dpo` / `businessProfitChange` 等 |
+| **financials** | 実装・Neon 名（`FinancialsResponse` / テーブル `company_financials` /
+  `companyFinancialsCacheVersion` / REST `.../financials`）。リネームしていない |
+| **Summary** | 公開面の呼称（MCP `get_financial_summary`）。水準値の投影 |
+| **Waterfall** | 同じ `company_financials` 行の分析投影（MCP `get_waterfall`） |
 
-配信は既に投影レベルで分離済み: `summaryJsonObject()` が `analysisOnlyKeys`（22フィールド）を除いて
-返し、`analysisJsonObject()`（Waterfall 応答）が全フィールド＋前年差を返す。**格納（`fin-vN` 1本）は
-同居、配信は分離**というのが正確な現状。
+Neon に Summary 専用テーブルはない。**1行 JSONB（`response`）に水準値と分析用フィールドが
+同居**し、Summary / Waterfall は read 時投影で分かれる（`summaryJsonObject` /
+`analysisJsonObject`）。
 
-### notes は既に正本化済み
+## データフロー（合意）
 
-`StatementNotesContract.swift` の9 note_type は全件、financials を読まず XBRL から自己完結で
-決定論抽出している（grep 確認済み、参照箇所なし）。`research_and_development` は
-**本日（2026-08-11）** note_type から廃止し breakdown 軸へ統合された（`bcfcf61` / `4f6a6c0` /
-`d5363cf`）。つまり「notes が financials の passthrough」という問題は、この草案が書かれた時点の
-問題意識としては正しかったが、**現時点では解消済み**。
+**いま**
 
-### breakdown は逆方向に financials へ依存している
+```
+XBRL →（IndividualAnalyzer / Extractors）→ company_financials → Summary / Waterfall
+```
 
-`BreakdownIngest.swift` の `employeesForDocFromFinancials` / `rdForDocFromFinancials` /
-（`salesForDoc` 経由の）business・geography 軸は、分母（全社合計）を `company_financials` から
-取得する。目指す形（notes/breakdown が正本、Summary はそれを写すビュー）とは**逆方向の依存**が
-現行実装。
+**目指す形**
 
-例外は research_and_development 軸のみ: 値は financials 由来のままだが、タグ名は同一 XBRL から
-独立再解決している（`resolveResearchAndDevelopmentBreakdown` の `totalTag`、本日実装）。
-`AGENTS.md`「タグ透明性」原則の先行適用例。
+```
+XBRL → statement / notes / breakdown（正本・並列抽出）
+         ↓
+      company_financials（組立・派生の materialized view）
+         ↓
+      Summary / Waterfall（＋将来 Allocation/Sankey）
+```
 
-### 二重計算: EPS・発行済株式
+- 正本は **直列1本ではなく並列**（いずれも XBRL から自己完結抽出）。クライアントは正本 API
+  （`get_statement` / `get_statement_notes` / `get_breakdown`）も直接見られる
+- `company_financials` は正本ではなく **ビュー用スナップショット**（Fly read-only・多年次・
+  低レイテンシのため、read 時 join は採らない）
+- 生値の優先: **statement で足りる → 足りない分を notes / breakdown**
+- 派生指標（マージン・NOPAT・ROE/ROIC・ネットキャッシュ等）と Waterfall / 将来 Sankey の組立は
+  **`company_financials`（Summary 組立層）経由**に載せる
 
-`per_share_information` note（`StatementNotesResolver.resolvePerShareInformation`）と
-financials 本体（`IndividualAnalyzer.swift`）は、**どちらも独立に `PerShareExtractor.extract` を
-呼んでいる**。ロジックは共有関数なので実装の重複ではないが、
+## 現状の実態（2026-08-12、smoke 11社実測込み）
 
-- XBRL 解析・計算が2回走る（ingest コスト2倍）
-- cache_version のライフサイクルが別（`fin-v5` と `notes-eps-v2`）。抽出ロジック修正時に片方だけ
-  バンプし忘れるドリフトリスクがある
-- 値が一致することを保証するテストが無い
+### financials の中身
 
-`issued_shares_and_capital` note も同型（`financials.issuedShares` と `IssuedSharesAsOfPayload.issuedShares`）。
+`FinancialsYear` は約70フィールド。Summary 配信は水準値、Waterfall は `analysisOnlyKeys` 込み。
 
-**EPS は PL 本表には基本的に載らない**（`Xbrl.swift:86-96` のコメントで実データ確認済み: J-GAAP・
-US-GAAP は本表に離散数値タグが無く「業績等の概要（SummaryOfBusinessResults）」が唯一の数値源。
-IFRS のみ本表に直接タグを持つ）。`per_share_information` note は EPS・潜在株式調整後 EPS・BPS の
-3値をカバレッジ実測済み（EPS 144/144、BPS 142/144、潜在株式調整後EPS 65/144）で、financials の
-`eps` 1値より完全。→ **正本は「PL」ではなく「`per_share_information` note」**。
+### notes
+
+financials 非依存で自己完結抽出済み。smoke では per_share / issued_shares / capex /
+policy_holding / dividends が 11/11、borrowings は 9/11（US-GAAP 2社は意図的対象外）など。
+
+### breakdown
+
+分母（売上・employees・rd）を `company_financials` から読む **逆依存**が残る。
+R&D 軸の `totalTag` だけ同一 XBRL から独立再解決（タグ透明性の先行例）。
+
+### 二重計算
+
+`eps` / `issued_shares` は notes resolver と `IndividualAnalyzer` が同じ Extractor を別々に呼ぶ。
+正本は notes（`per_share_information` / `issued_shares_and_capital`）。
+
+### Summary に無いもの（置換対象外）
+
+| 項目 | 扱い |
+|---|---|
+| goodwill / 無形明細 | Summary 非搭載。正本は **statement 行**。note は本表に構造が無い会社のフォールバック |
+| PPE 区分明細 | Summary は `ppe_total`（合計）のみ。明細は **statement 行**（PPE note は IFRS 等の補完） |
+
+### smoke: statement だけで Summary 水準値を再現できる割合
+
+`TickerDev statement-feasibility`（同一書類。非 US-GAAP）: 売上・利益・BS 合計・PPE 合計・
+売掛/棚卸/買掛・現金などは概ね 100%。`employees` / `issued_shares` / `dividend_ss` は 0%、
+`capex` ~11%、`eps` ~33%、`rd` ~40%、IBD/CFO/CFI/支払利息/自社株買いは 50–67%。
+US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USGAAPHtml`）が
+別経路で、feasibility 工具は前者未接続（HTML Statement golden 自体は成立）。
 
 ## 設計方針（確定）
 
 | 項目 | 方針 |
 |---|---|
-| Summary の格納 | `company_financials` は維持（materialized snapshot）。Fly read-only・Waterfall
-  多年次・低レイテンシのため、read 時 join 方式（案B）は採らない |
-| `fin-vN` | 存続。意味は「組立＋未分離抽出」に限定していく。床・`blueTickerVersion` 非連動は現状踏襲 |
-| 新規指標 | financials に足さず、まず notes / breakdown / statement 正本へ置く |
-| 二重物の解消 | 見つかり次第、正本を1つに決めて financials 側をパススルー化する（下記が最初の2件） |
+| 格納 | `company_financials` 維持（materialized view）。案B（read 時 join）は採らない |
+| `fin-vN` | 存続。意味を「組立＋未分離抽出」→徐々に「組立＋派生」へ寄せる。床・`blueTickerVersion` 非連動 |
+| 新規生値 | financials に足さず、まず statement / notes / breakdown 正本へ |
+| 派生・視覚化 | Summary 組立層（`company_financials`）経由（Waterfall / 将来 Sankey 含む） |
+| 二重物 | 正本を1つに決め、financials 側はパススルーまたは再計算のみに |
 
-## アクション（今回合意・優先度順）
+## 正本抽出の原則（XBRL タグ優先、2026-08-12）
 
-### 1. EPS: `per_share_information` note を正本にする
+statement / notes / breakdown の **3 正本レイヤ共通**。`AGENTS.md`「タグ透明性」と同型。
 
-- 正本: `StatementNotesResolver.resolvePerShareInformation`（変更なし、既に検証済み）
-- financials 側: `IndividualAnalyzer` が独自に `PerShareExtractor` を呼ぶのをやめ、
-  `per_share_information` note の `items`（`tag == "eps"`）から値を読むパススルーに変更
-- **実装時の未決事項（要検討、今回は決めない）**: 既定 `--stages` 実行順は
-  `financials → filing-sections → breakdowns → statements → notes`（`FactsIngest.swift`）。
-  **notes は financials より後に走る**ため、単純に「DB に格納済みの notes 行を読む」実装だと
-  初回 ingest で値が引けない。選択肢は (a) financials 用にだけ notes を先出しする順序変更、
-  (b) ストレージ越しの参照ではなく同一 ingest パス内で resolver 関数を直接呼び共有する
-  （2テーブル間の read 依存を作らない）。どちらを採るかは実装着手時に確認する
-- 公開契約: Summary の `eps` フィールドの形は変えない（BPS・潜在株式調整後EPSを Summary に
-  追加するかは別途・非スコープ）
+| レイヤ | 正本の本体 | 補助（タグで足りないときのみ） |
+|---|---|---|
+| **statement** | BS/PL/CF/SS の構造化 XBRL タグ（`StatementClassifier` が拾う行） | US-GAAP は HTML Statement 経路 |
+| **notes** | note_type ごとの XBRL 数値タグ（例: `CapitalExpendituresOverviewOfCapitalExpendituresEtc`） | TextBlock HTML 表は **明細**（セグメント行・イベント列）。総額の正はタグ |
+| **breakdown** | 軸ごとの XBRL タグ（`totalTag` 等） | LLM 正規化はラベル揺れの補助 |
 
-### 2. 発行済株式: `issued_shares_and_capital` note を正本にする
+**financials 組立**: 上記正本の **XBRL タグ解決結果** をパススルーする（#10b: 同一 XBRL パスで resolver 直接呼び）。
+表パース行（例: capex の「小計」行）を Summary 水準値の正本にしない。総額タグと一致するのは表の「合計」行だが、
+組立は **タグを読む**（`CapexExtractor` / notes の overview タグと同型）。
 
-- 同型のパターン。`financials.issuedShares` を `IssuedSharesAsOfPayload.issuedShares` からの
-  パススルーに変更
-- 実装時の未決事項はアクション1と同じ（ingest 順序 or 関数共有）
+**capex（#6 方針）**: notes 正本の overview XBRL タグ → 無ければ statement CF タグ（`PurchaseOfPropertyPlantAndEquipmentInvCF` 等）。
+HTML 表の `capex_segments` は note API 用の明細。smoke 11 社では overview タグ経路が現行 financials と 11/11 一致。
 
-## 将来ステップ（今回のスコープ外・非ゴール）
+## ingest / 組立の依存解消（タスク #10 決定、2026-08-12）
 
-- **breakdown の financials 依存解消**: employees / research_and_development / business /
-  geography 軸の分母を、financials 経由ではなく正本（notes 拡張または独立抽出）から取るように
-  設計を変える。方針としては合意済み（ゆくゆくは financials 経路を外す）が、
-  - employees に対応する note_type が現状存在しない（新設が必要か、他の正本を充てるかは未決）
-  - business/geography の連結売上分母をどの正本に寄せるかも未決
-  正本側の設計が固まってから着手する。今回のロードマップには実装ステップを含めない
-- Summary 固有計算（CCC・ROIC 部品等）の格納単位分離（`source_versions` 方式等）
-- Summary REST/MCP の削除、notes/breakdown エンドポイント統合
-- 公開応答への `fin-vN` 露出
+financials 組立が statement / notes / breakdown 正本に依存するとき、**ingest 順序変更は採らない**。
+`FactsIngest.swift` の既定順（`financials → filing-sections → breakdowns → statements → notes`）のまま、
+**同一 XBRL パス内で正本 resolver を直接呼ぶ（#10b）**。
+
+| 選択肢 | 採否 | 理由 |
+|---|---|---|
+| (a) financials 用に notes を先出し | 不採用 | ingest パイプライン全体の順序変更。breakdown 分母が financials 先行を前提にしている |
+| (b) ストレージ越し参照ではなく resolver 直接呼び | **採用** | ingest 順不変。`company_statement_notes` 0 行でも組立可能。DB 間 read 依存を作らない |
+| DB 参照パススルー（notes 行を read） | 将来オプション | live API（`get_statement_notes`）向け。#12 notes 本番 ingest 後に必要なら追加検討 |
+
+**実装パターン（#1–2 完了例）**: `IndividualAnalyzer.processDocument` 内で
+`StatementNotesResolver.financialsCanonicalEps` / `financialsCanonicalIssuedShares` を呼ぶ。
+以降の notes パススルーも同型（`financialsCanonical*` ヘルパー + smoke 値一致回帰）。
+
+**#12（notes 本番 ingest）**: 組立が #10b なら後回し可。`get_statement_notes` API 公開・
+DB 参照組立を選ぶ場合のみ必須。
+
+## フィールド別の置き換え見立て（Summary 水準値）
+
+| 帯 | 例 | 置き換え先 |
+|---|---|---|
+| statement 正本化しやすい | sales / OP / 純利益 / BS 合計類 / ppe_total / AR·在庫·AP / 現金 / dividend_paid_cf 等 | statement 行 |
+| notes パススルー本命 | eps / issued_shares / capex / dividend_ss | 各 note_type の **XBRL タグ**（表明細は補助） |
+| breakdown 正本 | employees / rd | 各軸（分母の逆依存解消が前提） |
+| 定義突合が要る | IBD / 支払利息 / buyback / cfo·cfi | statement ± notes。ルール整備後 |
+| 派生 | 各種マージン / nopat / roe·roic / net_cash / cfc 等 | 入力付け替え後に financials で再計算 |
+| Summary 外 | goodwill 明細・PPE 明細・借入明細・政策保有 | 正本 API のみ（組立に必須ではない） |
+
+## 着手可能なタスク（棚卸）
+
+追跡の正本は GitHub issue（作成は都度確認）。ここでは着手順の索引のみ。
+
+### すぐ着手できる（小〜中、依存が少ない）
+
+| # | タスク | 内容 | 状態 |
+|---|---|---|---|
+| 1 | **EPS パススルー** | `resolvePerShareInformation` の `eps` を正本に | 完了（PR #217） |
+| 2 | **issued_shares パススルー** | `issued_shares_and_capital` の as_of を正本に | 完了（PR #217） |
+| 3 | **値一致回帰** | smoke で financials と notes 正本の一致テスト | 完了（PR #217） |
+| 4 | **フィールド source 表の固定** | `FinancialsContract` 近傍に正本索引を置く | 完了（本 PR） |
+
+### 次（正本→組立の本線）
+
+| # | タスク | 内容 | 未決・注意 |
+|---|---|---|---|
+| 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total 等を statement 行から組立 | US-GAAP は HTML Statement を組立に配線（`USGAAPHtml` との一本化） |
+| 6 | **capex を notes 正本に** | overview XBRL タグ（`CapitalExpendituresOverviewOfCapitalExpendituresEtc`）→ CF タグ。表 `capex_segments` は明細のみ | 方針確定。実装は #217 同型のパススルー |
+| 7 | **dividend_ss** | SS 合計列だけでは不足 → notes `dividends` または SS 行規則のどちらを正本にするか決定して実装 | 正本選択が先 |
+| 8 | **IBD / 利息 / buyback / CFO·CFI** | statement マッチ率 50–67% の定義を突合し、ルール＋golden | 機械マッチだけでは不足 |
+
+### 逆依存・基盤
+
+| # | タスク | 内容 | 未決・注意 |
+|---|---|---|---|
+| 9 | **breakdown 分母の正本化** | sales / employees / rd 分母を financials 経由から外す | employees の正本（breakdown 自身 vs 別 note）・銀行分母は既存 bank 経路と整合 |
+| 10 | **ingest 順序または共有呼び出し** | financials が正本に依存できる形に | **完了（#10b 決定、上記セクション参照）** |
+| 11 | **再組立トリガ** | statement/notes/breakdown の cache_version 更新時に financials を再計算 | high_water との役割分担 |
+| 12 | **notes 本番 ingest** | 正本を組立に使う前提で Neon `company_statement_notes` を埋める | 現状 0 行。組立が DB 参照なら必須、関数共有なら後回し可 |
+
+### 後回し（正本レイヤの拡張・視覚化）
+
+| # | タスク | 内容 |
+|---|---|---|
+| 13 | goodwill / PPE **明細**の statement 正本化と note フォールバック整理 | Summary 置換ではない |
+| 14 | Allocation（Sankey） | breakdown + financials 組立層の上に載せる（`docs/allocation-concept.md`） |
+| 15 | `fin-vN` 公開露出・Summary REST 削除など | 非ゴール寄り。契約安定後 |
+
+## セッション引き継ぎ（2026-08-12）
+
+次セッション向けの合意・実測・着手順。タスク棚卸の正本は上記「着手可能なタスク」。
+
+### 実装順序（合意）
+
+**ingest 先行ではなく wiring（組立の配線）を先に進める。**
+
+| 理由 | 内容 |
+|---|---|
+| statements は本番に既にある | `company_statements` 558 行 / 227 社（2026-08-11） |
+| breakdown も 225 投入済み | 分母の逆依存は **コード変更** で解消可能 |
+| notes 本番 ingest は未着手 | `company_statement_notes` **0 行**。`get_statement_notes` API 用 |
+| 現 ingest 順 | `financials → filing-sections → breakdowns → statements → notes`（`FactsIngest.swift`）。financials が notes 行を DB 参照するパススルーは **現順序では初回 ingest で使えない** |
+
+**推奨: タスク #10 の (b) 同一パスで `StatementNotesResolver` を直接呼ぶ**（ingest 順変更なし）。
+notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合に後からでよい。
+
+**最初の PR 候補: タスク #1–3**（EPS / issued_shares パススルー + smoke 値一致回帰）。
+
+### smoke 11 社実測サマリ（2026-08-12、ローカル）
+
+| レイヤ | 結果 |
+|---|---|
+| Summary extractors（`SmokeTests`） | 11/11 OK |
+| Statement golden（`RealXbrlStatementTests`） | smoke 関連すべて pass |
+| Notes oracle | per_share / issued_shares / capex / policy_holding / borrowings(9/11) / PPE schedule: pass |
+| Breakdown | segments 11/11; geography 9 html_table + 2 正当 `not_found`（3490, 7422） |
+| statement-feasibility（非 US-GAAP） | 全体 ~62%; J-GAAP ~81%, IFRS ~71%; US-GAAP 0%（工具が HTML Statement 未接続） |
+
+**feasibility で statement 単独では 0%**: `employees`, `issued_shares`, `dividend_ss`。
+**低**: `capex` ~11%, `eps` ~33%, `rd` ~40%。**中**: IBD/CFO/CFI/利息/buyback ~50–67%。
+
+### 落とし穴
+
+- **analysis_cache の symlink**: `~/.config/blue-ticker/analysis_cache/.../xbrl` を `tmp_cache/edinet` へ symlink すると statement 抽出が **0 facts** になる。テスト前は **`cp -a` で実コピー** を使う。
+- **US-GAAP**: Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USGAAPHtml`）は別経路。Statement golden は成立、feasibility 工具は前者未接続。
+- **goodwill**: Summary に goodwill フィールドはない（`ppe_total` のみ）。goodwill note は Summary 置換候補ではない。
+
+### 主要コード参照
+
+| 用途 | パス |
+|---|---|
+| Summary 契約・正本索引 | `Sources/BlueTicker/Models/FinancialsContract.swift`（`// MARK: - フィールド正本`） |
+| Neon 格納 | `Sources/BltServerCore/Models/CompanyFinancials.swift` |
+| 現行組立 | `Sources/BlueTicker/Services/IndividualAnalyzer.swift` |
+| notes 正本 | `Sources/BlueTicker/Analysis/StatementNotesResolver.swift` |
+| breakdown 分母（逆依存） | `Sources/BltServerCore/BreakdownIngest.swift` |
+| feasibility 工具 | `Sources/BlueTicker/DevCLI/DevStatementFeasibilityCommand.swift` |
+| smoke 固定 11 社 | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` |
+
+### 関連 PR
+
+- **#216**（本ドキュメント更新）— クローズ
+- **#217**（タスク #1–3: EPS / issued_shares パススルー）— open
 
 ## 関連ドキュメント
 
-- `docs/breakdown-normalization-concept.md` — breakdowns 正規化構想（今後の検討事項に
-  breakdown の financials 依存解消を追記予定）
-- `docs/statement-normalization-concept.md` — statements / statement-notes 設計
-- `.agents/rules/project/versioning.md` — cache_version バンプ規則
-- `AGENTS.md`「タグ透明性」— R&D breakdown の `totalTag` 独立再解決が先行実装例
+- `docs/feature-tiers.md` — Summary / Waterfall / Statement / Note / Breakdown / Allocation
+- `docs/statement-normalization-concept.md` — statements / notes
+- `docs/breakdown-normalization-concept.md` — breakdown（分母の financials 依存は今後解消）
+- `docs/allocation-concept.md` — Sankey 構想
+- `.agents/rules/project/versioning.md` — cache_version
+- `docs/blt-server-roadmap.md` — 現在地索引

@@ -32,6 +32,8 @@
 - Summary（`GET /v1/companies/{code}/financials`、MCP `get_financial_summary`）は水準値のみ。
 - Waterfall（`GET /v1/companies/{code}/waterfall`、MCP `get_waterfall`）は Summary と同じ水準値に加え、前年差・要因分解（事業利益ウォーターフォール・ROIC/ROE分解・ネットキャッシュ/運転資本/CCC前年差）を含む。
 - 実装詳細は `FinancialsYear.analysisOnlyKeys`（`Sources/BlueTicker/Models/FinancialsContract.swift`）。DBスキーマ・cache_versionは変更していない（read時の投影のみ）。
+- Neon に Summary 専用テーブルはない。格納は実装名 `company_financials`（JSONB 1本）。Summary / Waterfall は同じ行の投影。
+- **データフロー構想**（正本分離）: `XBRL → statement / notes / breakdown（正本・直接閲覧可）→ company_financials（組立・派生）→ Summary / Waterfall（＋将来 Sankey）`。詳細・着手タスクは `docs/financials-summary-separation-concept.md`。
 
 ## Breakdown の境界
 
