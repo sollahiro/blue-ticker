@@ -60,4 +60,15 @@ import Testing
         #expect(detail["instructions"] is String)
         #expect(detail["parameters"] is [[String: Any]])
     }
+
+    /// MCP tools/list と REST /v1/skills が共有する description に、未取り込みと非開示の
+    /// 区別（reason 有無とコード意味）が載っていること（チャットボットが読み方を知る契約）。
+    @Test func statementNotesDescriptionDocumentsReasonSemantics() throws {
+        let skill = try #require(apiSkill(id: "get-statement-notes"))
+        #expect(skill.description.contains("reason"))
+        #expect(skill.description.contains("未取り込み"))
+        #expect(skill.description.contains("not_found"))
+        #expect(skill.description.contains("available_via_statement"))
+        #expect(skill.description.contains("isError"))
+    }
 }
