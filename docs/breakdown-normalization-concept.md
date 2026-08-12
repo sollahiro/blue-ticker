@@ -156,6 +156,8 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 
 優先度は未確定。実装前に決めること:
 
+0. **分母の financials 依存解消**（正本分離）— business/geography の売上分母、employees / rd 軸の全社合計を `company_financials` 経由から外す。目指す流れは `XBRL → statement/notes/breakdown → company_financials`。棚卸は `docs/financials-summary-separation-concept.md`
+
 1. ~~**比較用コモンモデルの確定**~~（2026-07-18 確定・実装済み。`Sources/BlueTicker/Analysis/BreakdownNormalizer.swift` + 定数は `Xbrl.swift`、テストは smoke 実データ照合で5件パス）
 2. ~~**軸判定ルール**~~（2026-07-18 確定・実装済み。同上 `BreakdownNormalizer.classifyAxis`）。~~混在ケース（ルール4）~~（2026-07-20 実データ検証・偽陽性を修正済み。学び11参照）
 3. ~~**追加ソースの採用範囲**~~（2026-07-19 確定・実装済み）: オークマ型（`segments` の axis が geography 判定）は `BreakdownExtractor.extractSegmentInfo` 自体が axis-aware に収益認識関係注記（`extractRevenueRecognitionInfo`）へ swap する（PR #89）。見つからない場合は元の xbrl_facts（geography）へフォールバックし、表示が消える regression を避ける。キヤノン（US-GAAP企業）は `segments` が実は `method == "html_table"` で注23の事業別セグメント表（外部顧客向け行）を既に正しく抽出できていた（07-19前処理修正の副産物）
@@ -191,7 +193,7 @@ LLM は「構造化の本体」ではなく **契約に沿った写像の補助�
 9. ~~**ingest/CLI/REST/MCP 配線**~~（2026-07-19 business 確定。2026-07-26 geography ingest 配線・2026-07-27 **REST/MCP 公開済み**） — `Sources/BltServerCore/BreakdownIngest.swift`（`runBreakdownIngest`）が軸パラメータ付きで対象選定（`filingSectionCandidates`を再利用）・staleness 判定・upsert・purgeを担う。CLI は `blt-server ingest --stages breakdowns`（`IngestTarget.breakdowns`）で business → geography の順に2回呼ぶ（`limit` は各パス独立）。REST は `GET /v1/companies/{code}/breakdown?axis=business|geography&doc_id=...`、MCP は `get_breakdown`（いずれも`serveStoredBreakdown`/`loadStoredBreakdown`を共有し、**business / geography 両軸**を返す）。E/F/unknown reasonのREST/MCP反映はissue #132（下記）。geography 公開ゲート（最新有報の`needs_review=true`とあいまい失敗が0。正当欠測`not_found`は別カウント）は使い捨てNeon（breakdowns-devブランチ）で224/224社の最新有報を確認し2026-07-27に通過（`geography_llm`170件・`not_found`54件、いずれもneeds_review=falseかつunknown reason 0件）
    - **対象は日経225構成銘柄限定**（東証上場全体ではない。LLM呼び出し費用抑制のため）。`priorityIngestCodes()`（`assets/nikkei225.csv`）を対象母集団として渡す（financials/filing-sectionsの「優先度のみ」用途とは異なる使い方）。年数はfiling-sectionsと共通の`filingSectionsIngestYears`を使う（breakdowns専用の別定数は持たない）
    - staleness判定はfiling-sectionsと非対称: xbrl_facts経由（決定的）は`cache_version`不一致で再試行してよいが、LLM経由（source≠xbrl_facts）は`needs_review=true`のときのみ再試行する（`cache_version`バンプだけでは触らない）。read側の servable 判定も同型の非対称性を持つ（`isServableBreakdown`: xbrl_factsはバージョン床、LLM経由は存在すれば常にservable）
-   - 分母（連結外部売上）はbreakdowns独自に再抽出せず、financials（`company_financials`）の計算済み結果を`FinancialsResponse.salesForDoc(_:)`経由で再利用する（重複ロジック回避）
+   - 分母（連結外部売上）は現状、financials（`company_financials`）の計算済み結果を`FinancialsResponse.salesForDoc(_:)`経由で再利用する（重複ロジック回避）。**正本分離構想では逆依存を解消し、statement（または同等の正本抽出）から分母を取る**（employees / rd 分母も同型）。詳細・着手順は `docs/financials-summary-separation-concept.md`
    - `content_hash`はFNV-1a（非暗号学的・決定的）。CryptoKitはLinux（Fly.io配信ターゲット）で使えないため採用しなかった
    - LLMクライアントは軸別: business は `XAI_BUSINESS_*`（未設定時は旧 `XAI_*` フォールバック）、geography は `XAI_GEOGRAPHY_*` のみ。Server 側は `BltServerFacade.resolveXaiEndpoint(axis:)`、DevCLI は `LLMClientLoader`（意図的に別実装）。未設定時は`UnavailableChatClient`が即座に失敗し、html_table経路のみ`notApplicable`/`unknown`になる（xbrl_facts経路は影響を受けない）
    - geography 解決は `GeographyBreakdownResolver` + `resolveGeographyBreakdown`。正当欠測は `not_applicable`/`not_found`（`needs_review=false`）、正規化・LLM失敗は `unknown`（`needs_review=true`）で business と同型の再分析キューに載せる
