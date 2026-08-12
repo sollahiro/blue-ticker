@@ -67,10 +67,20 @@
       },
       {
         "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "控除：利息相当額",
+        "value": -4332000000.0,
+        "unit": "yen",
+        "order": 2,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
         "label": "１年以内",
         "value": 24587000000.0,
         "unit": "yen",
-        "order": 2,
+        "order": 3,
         "section": null,
         "is_total": false,
         "components": null
@@ -80,7 +90,7 @@
         "label": "１年超５年以内",
         "value": 49186000000.0,
         "unit": "yen",
-        "order": 3,
+        "order": 4,
         "section": null,
         "is_total": false,
         "components": null
@@ -90,7 +100,7 @@
         "label": "５年超",
         "value": 13895000000.0,
         "unit": "yen",
-        "order": 4,
+        "order": 5,
         "section": null,
         "is_total": false,
         "components": null

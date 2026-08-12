@@ -245,6 +245,26 @@ import Foundation
         }
     }
 
+    @Test func testLeasePatternCKubotaInterestDeduction() {
+        let lessee =
+            "&lt;tr&gt;&lt;td&gt;１年以内&lt;/td&gt;&lt;td&gt;23,479&lt;/td&gt;&lt;td&gt;24,587&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;割引前のリース負債総額&lt;/td&gt;&lt;td&gt;66,436&lt;/td&gt;&lt;td&gt;87,669&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;控除：利息相当額&lt;/td&gt;&lt;td&gt;△1,711&lt;/td&gt;&lt;td&gt;△4,332&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;リース負債の現在価値&lt;/td&gt;&lt;td&gt;64,725&lt;/td&gt;&lt;td&gt;83,336&lt;/td&gt;&lt;/tr&gt;"
+        let leaseHtml = "&lt;table&gt;" + lessee + "&lt;/table&gt;"
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: leaseHtml)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 83_336 * Financial.millionYen)
+            let labels = lease.maturityBuckets.map(\.label)
+            #expect(labels.contains("割引前のリース負債総額"))
+            #expect(labels.contains("控除：利息相当額"))
+            let interest = lease.maturityBuckets.first { $0.label == "控除：利息相当額" }
+            #expect(interest?.current == -4_332 * Financial.millionYen)
+        }
+    }
+
     @Test func testLeaseNoMatchingRowsReturnsNil() {
         let rows = "&lt;tr&gt;&lt;td&gt;減価償却費&lt;/td&gt;&lt;td&gt;1,000&lt;/td&gt;&lt;td&gt;1,200&lt;/td&gt;&lt;/tr&gt;"
         let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)

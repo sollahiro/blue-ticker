@@ -164,6 +164,15 @@ enum IFRSLease {
                 ))
             }
             for row in rows {
+                guard isInterestDeductionRow(row.label) else { continue }
+                guard row.current != nil || row.prior != nil else { continue }
+                details.append((
+                    label: row.label,
+                    current: row.current.map { $0 * Financial.millionYen },
+                    prior: row.prior.map { $0 * Financial.millionYen }
+                ))
+            }
+            for row in rows {
                 guard isMaturityBucketLabel(row.label) else { continue }
                 guard row.current != nil || row.prior != nil else { continue }
                 details.append((
@@ -227,6 +236,11 @@ enum IFRSLease {
         let hasBook = labels.contains(where: { $0 == "帳簿価額" })
         let hasContractual = labels.contains(where: { $0.contains("契約上のキャッシュ") })
         return hasBook && hasContractual
+    }
+
+    /// 借手表の利息控除行（クボタ型「控除：利息相当額」。貸手の未稼得金融収益は対象外）。
+    private static func isInterestDeductionRow(_ label: String) -> Bool {
+        label.contains("控除") && label.contains("利息")
     }
 
     /// 借手表の割引前合計行（満期バケットの合計と一致する開示行）。
