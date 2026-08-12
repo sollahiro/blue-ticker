@@ -2,5 +2,141 @@
   "S100VWVY": {
     "reason": "not_found",
     "status": "not_applicable"
+  },
+  "S100VXJA": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "GoodwillIFRS",
+        "label": null,
+        "value": 117940000000,
+        "unit": "yen",
+        "order": 6,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "TrademarksIFRS",
+        "label": null,
+        "value": 31341000000,
+        "unit": "yen",
+        "order": 8,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "SoftwareIFRS",
+        "label": "ソフトウェア",
+        "value": 21882000000,
+        "unit": "yen",
+        "order": 9,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "CustomerRelatedAssetsIFRS",
+        "label": "顧客関係資産",
+        "value": 17652000000,
+        "unit": "yen",
+        "order": 10,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "OtherComponentsOfIntangibleAssetsIFRS",
+        "label": null,
+        "value": 21292000000,
+        "unit": "yen",
+        "order": 11,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "IntangibleAssetsIFRS",
+        "label": null,
+        "value": 92168000000,
+        "unit": "yen",
+        "order": 12,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100XR0M": {
+    "status": "resolved",
+    "source": "xbrl_facts",
+    "items": [
+      {
+        "tag": "GoodwillIFRS",
+        "label": null,
+        "value": 139868000000,
+        "unit": "yen",
+        "order": 20,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "SoftwareIFRS",
+        "label": "ソフトウェア",
+        "value": 103787000000,
+        "unit": "yen",
+        "order": 21,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "IntangibleAssetsRecognizedThroughBusinessCombinationIFRS",
+        "label": "企業結合で認識した無形資産",
+        "value": 79747000000,
+        "unit": "yen",
+        "order": 22,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "CapitalizedDevelopmentCostsIFRS",
+        "label": null,
+        "value": 19514000000,
+        "unit": "yen",
+        "order": 23,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "OtherComponentsOfIntangibleAssetsIFRS",
+        "label": null,
+        "value": 5028000000,
+        "unit": "yen",
+        "order": 24,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "IntangibleAssetsIFRS",
+        "label": null,
+        "value": 208076000000,
+        "unit": "yen",
+        "order": 25,
+        "section": null,
+        "is_total": false,
+        "components": null
+      }
+    ]
+  },
+  "S100W4MT": {
+    "reason": "not_found",
+    "status": "not_applicable"
   }
 }

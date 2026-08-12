@@ -168,6 +168,15 @@ enum StatementNotesResolver {
     /// 附属明細表一覧に含まれない）。したがって J-GAAP 単体開示のみの企業は正当に
     /// `.notApplicable(not_found)` になる（IFRS企業限定という制約は PPE 明細と異なり
     /// 開示制度自体の差であり、実装上の未対応ではない）。
+    ///
+    /// smoke 固定11社の実データ検証・目視確認（2026-08-12）: IFRS連結3社中、味の素(S100VXJA)・
+    /// クボタ(S100XR0M)は開示HTML（のれん・無形資産の帳簿価額増減表）の実数値と完全一致
+    /// （ユーザー確認済みgolden、`GoodwillAndIntangiblesOracleFormatTests`参照）。スズキ(S100W4MT)は
+    /// `.notApplicable(not_found)` だが実装ギャップではない——スズキの開示に`GoodwillIFRS`タグ自体が
+    /// 一切存在せず（のれんの重要性なし）、注記見出しも標準タクソノミの別ロール
+    /// `NotesIntangibleAssetsConsolidatedFinancialStatementsIFRS`（「のれん」を含まない無形資産のみの
+    /// 注記）になっている。役割名バリアントの追加対応は行わない（ユーザー判断: goodwill行ゼロの
+    /// payloadは`goodwill_and_intangibles`の名として不適切）。
     static func resolveGoodwillAndIntangibles(xbrlDir: URL) -> StatementNoteResolveResult {
         resolveIFRSCategorySchedule(
             xbrlDir: xbrlDir,
