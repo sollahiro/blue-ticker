@@ -139,6 +139,61 @@ US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USG
 | 14 | Allocation（Sankey） | breakdown + financials 組立層の上に載せる（`docs/allocation-concept.md`） |
 | 15 | `fin-vN` 公開露出・Summary REST 削除など | 非ゴール寄り。契約安定後 |
 
+## セッション引き継ぎ（2026-08-12）
+
+次セッション向けの合意・実測・着手順。タスク棚卸の正本は上記「着手可能なタスク」。
+
+### 実装順序（合意）
+
+**ingest 先行ではなく wiring（組立の配線）を先に進める。**
+
+| 理由 | 内容 |
+|---|---|
+| statements は本番に既にある | `company_statements` 558 行 / 227 社（2026-08-11） |
+| breakdown も 225 投入済み | 分母の逆依存は **コード変更** で解消可能 |
+| notes 本番 ingest は未着手 | `company_statement_notes` **0 行**。`get_statement_notes` API 用 |
+| 現 ingest 順 | `financials → filing-sections → breakdowns → statements → notes`（`FactsIngest.swift`）。financials が notes 行を DB 参照するパススルーは **現順序では初回 ingest で使えない** |
+
+**推奨: タスク #10 の (b) 同一パスで `StatementNotesResolver` を直接呼ぶ**（ingest 順変更なし）。
+notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合に後からでよい。
+
+**最初の PR 候補: タスク #1–3**（EPS / issued_shares パススルー + smoke 値一致回帰）。
+
+### smoke 11 社実測サマリ（2026-08-12、ローカル）
+
+| レイヤ | 結果 |
+|---|---|
+| Summary extractors（`SmokeTests`） | 11/11 OK |
+| Statement golden（`RealXbrlStatementTests`） | smoke 関連すべて pass |
+| Notes oracle | per_share / issued_shares / capex / policy_holding / borrowings(9/11) / PPE schedule: pass |
+| Breakdown | segments 11/11; geography 9 html_table + 2 正当 `not_found`（3490, 7422） |
+| statement-feasibility（非 US-GAAP） | 全体 ~62%; J-GAAP ~81%, IFRS ~71%; US-GAAP 0%（工具が HTML Statement 未接続） |
+
+**feasibility で statement 単独では 0%**: `employees`, `issued_shares`, `dividend_ss`。
+**低**: `capex` ~11%, `eps` ~33%, `rd` ~40%。**中**: IBD/CFO/CFI/利息/buyback ~50–67%。
+
+### 落とし穴
+
+- **analysis_cache の symlink**: `~/.config/blue-ticker/analysis_cache/.../xbrl` を `tmp_cache/edinet` へ symlink すると statement 抽出が **0 facts** になる。テスト前は **`cp -a` で実コピー** を使う。
+- **US-GAAP**: Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USGAAPHtml`）は別経路。Statement golden は成立、feasibility 工具は前者未接続。
+- **goodwill**: Summary に goodwill フィールドはない（`ppe_total` のみ）。goodwill note は Summary 置換候補ではない。
+
+### 主要コード参照
+
+| 用途 | パス |
+|---|---|
+| Summary 契約 | `Sources/BlueTicker/Models/FinancialsContract.swift` |
+| Neon 格納 | `Sources/BltServerCore/Models/CompanyFinancials.swift` |
+| 現行組立 | `Sources/BlueTicker/Services/IndividualAnalyzer.swift` |
+| notes 正本 | `Sources/BlueTicker/Analysis/StatementNotesResolver.swift` |
+| breakdown 分母（逆依存） | `Sources/BltServerCore/BreakdownIngest.swift` |
+| feasibility 工具 | `Sources/BlueTicker/DevCLI/DevStatementFeasibilityCommand.swift` |
+| smoke 固定 11 社 | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` |
+
+### 関連 PR
+
+- **#216**（本ドキュメント更新）— draft。マージ後に #1–3 実装ブランチを切る。
+
 ## 関連ドキュメント
 
 - `docs/feature-tiers.md` — Summary / Waterfall / Statement / Note / Breakdown / Allocation

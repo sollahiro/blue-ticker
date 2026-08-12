@@ -1,11 +1,10 @@
 # 財務諸表完全正規化の構想（statements / statement-notes）
 
 有価証券報告書 XBRL の BS/PL/CF/SS を、絞り込みなしで構造化して返す機能（Statement）の設計メモ。
-関連: Summary/Waterfall（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（breakdowns、
-`docs/breakdown-normalization-concept.md`）は内訳。正本→組立の分離構想は
+関連: Summary/Waterfall（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（
+`docs/breakdown-normalization-concept.md`）は事業別・地域別売上の意味正規化。正本→組立の分離構想は
 `docs/financials-summary-separation-concept.md`（`XBRL → statement/notes/breakdown → company_financials → Summary/Waterfall`）。
-`docs/breakdown-normalization-concept.md`）は事業別・地域別売上の意味正規化。Statement は
-どちらとも異なり「開示された全項目を、企業間の科目統一を試みず、忠実に構造化する」ことが本体。
+Statement はどちらとも異なり「開示された全項目を、企業間の科目統一を試みず、忠実に構造化する」ことが本体。
 
 ## 目的
 
