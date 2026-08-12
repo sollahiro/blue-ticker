@@ -232,11 +232,7 @@ enum StatementNotesResolver {
             }
         }
 
-        let bsLeaseTags = [
-            "LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS",
-            "LeaseObligationsCL", "LeaseObligationsNCL",
-        ]
-        let hasBSLeaseTag = bsLeaseTags.contains {
+        let hasBSLeaseTag = Xbrl.leaseLiabilitiesBSTags.contains {
             resolveItem(fieldSet, tags: [$0]).current != nil
         }
         if hasBSLeaseTag || accountingStandard == "US-GAAP" {
