@@ -84,8 +84,8 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | cash_equivalents | statement | `Xbrl.cashEquivalentsTags` | extractor |
 // | cfo, cfi | statement（cash_flow 行） | CashFlowExtractor | extractor |
 // | dividend_paid_cf | statement | DividendPaidExtractor | extractor |
-// | eps | notes `per_share_information`（tag=eps） | PerShareExtractor（#217 で resolver パススルー） | pending (#217) |
-// | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | PerShareExtractor（#217 で resolver パススルー） | pending (#217) |
+// | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
+// | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes `capital_expenditures_overview`（XBRL: `CapitalExpendituresOverviewOfCapitalExpendituresEtc` → CF タグ） | CapexExtractor（overview→CF） | extractor |
 // | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
 // | employees | breakdown `employees` 軸（分母の逆依存解消が前提） | EmployeesExtractor | extractor |

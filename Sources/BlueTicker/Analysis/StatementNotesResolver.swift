@@ -950,6 +950,26 @@ enum StatementNotesResolver {
             contentHash: "asOf{\(asOfHash)}|events{\(eventHash)}")
     }
 
+    // MARK: - financials 組立向けパススルー（タスク #1–2、`docs/financials-summary-separation-concept.md`）
+
+    /// `company_financials` 組立が読む EPS。正本は `per_share_information` note（`tag == "eps"`）。
+    /// ingest 順序に依存せず、同一 XBRL パス内で `resolvePerShareInformation` を直接呼ぶ（#10b）。
+    static func financialsCanonicalEps(xbrlDir: URL) -> Double? {
+        guard case .resolved(let payload, _, _) = resolvePerShareInformation(xbrlDir: xbrlDir) else {
+            return nil
+        }
+        return payload.items?.first(where: { $0.tag == "eps" })?.value
+    }
+
+    /// `company_financials` 組立が読む発行済株式数。正本は `issued_shares_and_capital` note の
+    /// `as_of_period_end.issued_shares`（イベント表の期末残高ではない）。
+    static func financialsCanonicalIssuedShares(xbrlDir: URL) -> Double? {
+        guard case .resolved(let payload, _, _) = resolveIssuedSharesAndCapital(xbrlDir: xbrlDir) else {
+            return nil
+        }
+        return payload.issuedSharesAsOf?.issuedShares
+    }
+
     /// 期末 Instant の離散 fact。連結 `CurrentYearInstant` を優先し、無ければ
     /// `CurrentYearInstant_NonConsolidatedMember`（資本金・資本準備金は親会社科目が多い）、
     /// さらに `CurrentYearInstant*` を辞書順で拾う。

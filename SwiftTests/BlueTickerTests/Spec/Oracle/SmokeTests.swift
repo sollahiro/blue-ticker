@@ -173,7 +173,6 @@ import Foundation
         let ar  = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let ap  = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-        let ps  = PerShareExtractor.extract(durationFS: durationFS, tagElements: allTags)
 
         let opProfit = op.operatingProfit ?? is_.operatingProfit
 
@@ -208,9 +207,58 @@ import Foundation
             accountsReceivable:     ar.current,
             inventory:              inv.current,
             accountsPayable:        ap.current,
-            eps:                    ps.eps,
-            issuedShares:           ps.issuedShares
+            eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
+            issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
         )
+    }
+
+    /// financials 組立の EPS / 発行済株式が notes 正本（`per_share_information` /
+    /// `issued_shares_and_capital`）と一致することを smoke 11 社で回帰する（タスク #3）。
+    @Test func testFinancialsPassthroughMatchesNotesCanonical() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        var failures: [String] = []
+
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path) else { continue }
+
+            let financialsEps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
+            let financialsShares = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
+
+            let notesEps: Double?
+            switch StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir) {
+            case .resolved(let payload, _, _):
+                notesEps = payload.items?.first(where: { $0.tag == "eps" })?.value
+            default:
+                notesEps = nil
+            }
+
+            let notesShares: Double?
+            switch StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir) {
+            case .resolved(let payload, _, _):
+                notesShares = payload.issuedSharesAsOf?.issuedShares
+            default:
+                notesShares = nil
+            }
+
+            if financialsEps != notesEps {
+                failures.append("\(fixtureID) eps: financials=\(financialsEps.map { String($0) } ?? "nil"), notes=\(notesEps.map { String($0) } ?? "nil")")
+            }
+            if financialsShares != notesShares {
+                failures.append("\(fixtureID) issuedShares: financials=\(financialsShares.map { String($0) } ?? "nil"), notes=\(notesShares.map { String($0) } ?? "nil")")
+            }
+        }
+
+        #expect(failures.isEmpty, Comment(rawValue: "financials↔notes 正本不一致:\n" + failures.joined(separator: "\n")))
     }
 
     // MARK: - 比較

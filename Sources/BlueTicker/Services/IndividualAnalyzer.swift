@@ -153,7 +153,6 @@ struct IndividualAnalyzer {
         let ar = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let ap = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
-        let ps = PerShareExtractor.extract(durationFS: durationFS, tagElements: allTagElements)
 
         // 現金及び現金同等物
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
@@ -175,9 +174,9 @@ struct IndividualAnalyzer {
         raw.buyback = bb.current.map { $0 / millionYen }
         raw.salesLabel = is_.salesLabel
         raw.cashEq = cashItem.current.map { $0 / millionYen }
-        // 基本EPS（円・連結当期）と発行済普通株式数（期末残高・株）
-        raw.eps = ps.eps
-        raw.shOutFY = ps.issuedShares
+        // 基本EPS（円・連結当期）と発行済普通株式数（期末残高・株）は notes 正本からパススルー
+        raw.eps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
+        raw.shOutFY = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
 
         // CalculatedData 組み立て
         var calc = CalculatedData()
