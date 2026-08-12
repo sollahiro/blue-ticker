@@ -57,10 +57,20 @@
       },
       {
         "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "割引前のリース負債総額",
+        "value": 87669000000.0,
+        "unit": "yen",
+        "order": 1,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
         "label": "１年以内",
         "value": 24587000000.0,
         "unit": "yen",
-        "order": 1,
+        "order": 2,
         "section": null,
         "is_total": false,
         "components": null
@@ -70,7 +80,7 @@
         "label": "１年超５年以内",
         "value": 49186000000.0,
         "unit": "yen",
-        "order": 2,
+        "order": 3,
         "section": null,
         "is_total": false,
         "components": null
@@ -80,7 +90,7 @@
         "label": "５年超",
         "value": 13895000000.0,
         "unit": "yen",
-        "order": 3,
+        "order": 4,
         "section": null,
         "is_total": false,
         "components": null
@@ -103,10 +113,20 @@
       },
       {
         "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
+        "label": "契約上のキャッシュ・フロー",
+        "value": 39940000000.0,
+        "unit": "yen",
+        "order": 1,
+        "section": null,
+        "is_total": false,
+        "components": null
+      },
+      {
+        "tag": "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock",
         "label": "１年以内",
         "value": 11190000000.0,
         "unit": "yen",
-        "order": 1,
+        "order": 2,
         "section": null,
         "is_total": false,
         "components": null
@@ -116,7 +136,7 @@
         "label": "１年超２年以内",
         "value": 5184000000.0,
         "unit": "yen",
-        "order": 2,
+        "order": 3,
         "section": null,
         "is_total": false,
         "components": null
@@ -126,7 +146,7 @@
         "label": "２年超３年以内",
         "value": 2643000000.0,
         "unit": "yen",
-        "order": 3,
+        "order": 4,
         "section": null,
         "is_total": false,
         "components": null
@@ -136,7 +156,7 @@
         "label": "３年超４年以内",
         "value": 1870000000.0,
         "unit": "yen",
-        "order": 4,
+        "order": 5,
         "section": null,
         "is_total": false,
         "components": null
@@ -146,7 +166,7 @@
         "label": "４年超５年以内",
         "value": 1660000000.0,
         "unit": "yen",
-        "order": 5,
+        "order": 6,
         "section": null,
         "is_total": false,
         "components": null
@@ -156,7 +176,7 @@
         "label": "５年超",
         "value": 17390000000.0,
         "unit": "yen",
-        "order": 6,
+        "order": 7,
         "section": null,
         "is_total": false,
         "components": null

@@ -235,11 +235,13 @@ import Foundation
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
             #expect(lease.current == 32_539 * Financial.millionYen)
             #expect(lease.components.count == 1)
-            #expect(lease.maturityBuckets.count == 3)
-            #expect(lease.maturityBuckets[0].label == "１年以内")
-            #expect(lease.maturityBuckets[0].current == 11_190 * Financial.millionYen)
-            #expect(lease.maturityBuckets[1].current == 5_184 * Financial.millionYen)
-            #expect(lease.maturityBuckets[2].current == 17_390 * Financial.millionYen)
+            #expect(lease.maturityBuckets.count == 4)
+            #expect(lease.maturityBuckets[0].label == "契約上のキャッシュ・フロー")
+            #expect(lease.maturityBuckets[0].current == 39_940 * Financial.millionYen)
+            #expect(lease.maturityBuckets[1].label == "１年以内")
+            #expect(lease.maturityBuckets[1].current == 11_190 * Financial.millionYen)
+            #expect(lease.maturityBuckets[2].current == 5_184 * Financial.millionYen)
+            #expect(lease.maturityBuckets[3].current == 17_390 * Financial.millionYen)
         }
     }
 

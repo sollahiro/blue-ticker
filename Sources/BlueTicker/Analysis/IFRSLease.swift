@@ -71,10 +71,10 @@ enum IFRSLease {
     ///
     /// パターンA（XBRLタグ直接）: LeaseLiabilitiesCLIFRS / LeaseLiabilitiesNCLIFRS
     /// パターンB（TextBlock 支払期日が1年以内 / 1年超）: 流動・非流動の**帳簿価額**。
-    /// パターンC（TextBlock 帳簿価額 / リース負債の現在価値）: 合計＋同表の満期バケット
-    ///   （割引前契約CF。「１年以内」等。貸手表とラベルが衝突するため**表単位**で判定）。
+    /// パターンC（TextBlock 帳簿価額 / リース負債の現在価値）: 合計＋同表の割引前合計行
+    ///   （クボタ型「割引前のリース負債総額」/ スズキ型「契約上のキャッシュ・フロー」）＋満期バケット。
     ///
-    /// `components` は帳簿価額（IBD加算用）。`maturityBuckets` は割引前満期内訳（notes用。
+    /// `components` は帳簿価額（IBD加算用）。`maturityBuckets` は notes 用の内訳（割引前合計＋満期。
     /// IBD には載せない）。
     static func extractLeaseLiabilities(
         fieldSet: FieldSet,
@@ -153,16 +153,26 @@ enum IFRSLease {
             let c = total.current.map { $0 * Financial.millionYen }
             let p = total.prior.map { $0 * Financial.millionYen }
             let components: [IBDComponentEntry] = [(label: "リース負債", current: c, prior: p)]
-            let buckets: [IBDComponentEntry] = rows.compactMap { row in
-                guard isMaturityBucketLabel(row.label) else { return nil }
-                guard row.current != nil || row.prior != nil else { return nil }
-                return (
+            var details: [IBDComponentEntry] = []
+            for row in rows {
+                guard isSupplementaryLesseeRow(row.label) else { continue }
+                guard row.current != nil || row.prior != nil else { continue }
+                details.append((
                     label: row.label,
                     current: row.current.map { $0 * Financial.millionYen },
                     prior: row.prior.map { $0 * Financial.millionYen }
-                )
+                ))
             }
-            return (c, p, components, buckets)
+            for row in rows {
+                guard isMaturityBucketLabel(row.label) else { continue }
+                guard row.current != nil || row.prior != nil else { continue }
+                details.append((
+                    label: row.label,
+                    current: row.current.map { $0 * Financial.millionYen },
+                    prior: row.prior.map { $0 * Financial.millionYen }
+                ))
+            }
+            return (c, p, components, details)
         }
 
         // フラット辞書フォールバック（表境界が取れない TextBlock 等）
@@ -217,6 +227,11 @@ enum IFRSLease {
         let hasBook = labels.contains(where: { $0 == "帳簿価額" })
         let hasContractual = labels.contains(where: { $0.contains("契約上のキャッシュ") })
         return hasBook && hasContractual
+    }
+
+    /// 借手表の割引前合計行（満期バケットの合計と一致する開示行）。
+    private static func isSupplementaryLesseeRow(_ label: String) -> Bool {
+        label.contains("割引前のリース負債") || label.contains("契約上のキャッシュ")
     }
 
     /// 満期バケット行（割引前CF）。「支払期日が1年以内」等の帳簿価額区分は除外。
