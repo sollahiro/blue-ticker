@@ -157,8 +157,9 @@ enum BreakdownExtractor {
             mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
             mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords,
             // US-GAAP 巨大注記内のクロスリファレンス文・基準書名引用（「…」内）や句点付き
-            // 散文を見出しと誤認しない（富士フイルム S100W3XJ）。geography は散文見出しに
-            // 依存するため opt-in は business のみ。
+            // 散文を見出しと誤認しない（富士フイルム S100W3XJ）。「〜は以下のとおりです。」等の
+            // 表導入文は残す（オリックス S100YG5L）。geography は散文見出しに依存するため
+            // opt-in は business のみ。
             mixedHeadingLikeOnly: true
         )
         let productOrServiceTables = extractFromTextBlocks(
@@ -978,6 +979,7 @@ enum BreakdownExtractor {
     /// （例: 事業別セグメント用の検索で「地域別セグメント情報」という地域注記の見出しを誤って拾わないようにする）。
     /// headingLikeOnly: true のとき、句点を含む散文と「…」引用内のキーワード一致を見出し候補から外す
     /// （business の mixed 経路専用。geography の散文見出し回帰を壊さないため既定は false）。
+    /// 「〜は以下のとおりです。」等の表導入文は句点があっても残す。
     static func keywordTablesFromHtml(
         _ html: String,
         keywords: [String],
@@ -992,8 +994,9 @@ enum BreakdownExtractor {
             for elem in elems {
                 let text = bs4Text(elem, strip: false)
                 guard text.unicodeScalars.count <= 300 else { continue }
-                // 散文（句点を含む）は見出しではない
-                if headingLikeOnly, text.contains("。") { continue }
+                // 句点付き散文は原則見出しではないが、「〜は以下のとおりです。」等の表導入文は残す
+                // （オリックス S100YG5L: 注記番号見出しの直後は定義表で、本表は導入文の直後）。
+                if headingLikeOnly, text.contains("。"), !isTableIntroCaption(text) { continue }
                 // 「…」内は他注記・基準書名の引用なので除いてから判定（【…】は見出し自体に使う）
                 let matchText = headingLikeOnly ? stripQuotedSpans(text) : text
                 guard matchText.contains(keyword) else { continue }
@@ -1107,6 +1110,12 @@ enum BreakdownExtractor {
     /// 【…】は見出し自体に使われる（実データ: 【事業別セグメント情報】）ため対象外。
     private static func stripQuotedSpans(_ text: String) -> String {
         text.replacingOccurrences(of: "「[^」]*」", with: "", options: .regularExpression)
+    }
+
+    /// 句点付きでも表の直前キャプションとして使う定型導入文か。
+    /// 「前連結会計年度および当連結会計年度のセグメント情報は以下のとおりです。」等。
+    private static func isTableIntroCaption(_ text: String) -> Bool {
+        text.contains("以下のとおり") || text.contains("次のとおり") || text.contains("下記のとおり")
     }
 
     // MARK: - dimension 付き fact 抽出（フォールバック）

@@ -254,6 +254,9 @@ import Foundation
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearInstant") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearInstant") == "当期")
+        // 半期報の dedicated 地域売上（S100UV81 / S100UV9L）
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1InterimDuration") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "InterimDuration") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: nil) == nil)
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "SomethingElse") == nil)
     }
@@ -429,6 +432,37 @@ import Foundation
             #expect(result.method == "html_table")
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoKeepsTableIntroCaptionEndingWithPeriod() {
+        // オリックス型（S100YG5L）: 注記番号見出しの直後はセグメント定義表で、
+        // 本表は「〜は以下のとおりです。」導入文の直後。句点だけで導入文を落とすと当期表を取りこぼす。
+        let escaped =
+            "&lt;p&gt;34 セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;法人営業&lt;/td&gt;&lt;td&gt;：&lt;/td&gt;" +
+            "&lt;td&gt;リース等&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;前連結会計年度および当連結会計年度のセグメント情報は以下のとおりです。&lt;/p&gt;" +
+            "&lt;p&gt;前連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;法人営業&lt;/td&gt;" +
+            "&lt;td&gt;銀行・クレジット&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;50&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;" +
+            "&lt;p&gt;当連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;法人営業&lt;/td&gt;" +
+            "&lt;td&gt;銀行・クレジット&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;55&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let current = result.tables.filter { $0.period == "当期" }
+            #expect(!current.isEmpty)
+            let joined = current.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("法人営業"))
+            #expect(joined.contains("銀行・クレジット"))
+            #expect(joined.contains("| 110 | 55 |"))
         }
     }
 
