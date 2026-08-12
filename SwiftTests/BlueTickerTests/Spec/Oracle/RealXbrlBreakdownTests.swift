@@ -1142,4 +1142,18 @@ private actor RealXbrlMockChat: ChatCompleting {
                 == 369_353_000_000)
         #expect(snapshot.rows.first { $0.labelRaw == "TotalMember" }?.rowKind == "subtotal")
     }
+
+    @Test func nichireiGoodwillSplitsAcrossLogisticsAndProcessedFoods() async throws {
+        guard await Self.ensureAvailable("S100VYA0") else { return }
+        let snapshot = try #require(resolve(docID: "S100VYA0"))
+
+        #expect(snapshot.denominator == 7_356_000_000)
+        #expect(snapshot.denominatorTag == "Goodwill")
+        #expect(snapshot.needsReview == false)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "LogisticsReportableSegmentsMember" }?.amount == 6_604_000_000)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "ProcessedFoodsReportableSegmentsMember" }?.amount
+                == 751_000_000)
+    }
 }
