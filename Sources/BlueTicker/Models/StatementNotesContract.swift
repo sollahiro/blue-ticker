@@ -52,7 +52,8 @@ public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v2"
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
-public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v1"
+/// v2（2026-08-12）: スズキ・クボタ型 TextBlock の満期バケット（割引前契約CF）を表単位で追加。
+public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v2"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {

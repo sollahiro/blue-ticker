@@ -1,8 +1,8 @@
 // 外出し SPEC_ORACLE フォーマット（`StatementNotesOracleFormatTests.swift`=borrowings_schedule と同型）。
 //
 // smoke 固定11社の実データ検証（2026-08-12）:
-// - IFRS TextBlock: 味の素（支払期日別 CL+NCL）、クボタ（現在価値 83,336。ROU 87,946は対象外）、
-//   スズキ（帳簿価額。満期別内訳は注記にあるが複数表ラベル衝突のため未抽出）
+// - IFRS TextBlock: 味の素（支払期日別 CL+NCL＝帳簿価額）、クボタ（現在価値＋満期バケット＝割引前CF。
+//   ROU 87,946は対象外）、スズキ（帳簿価額＋満期バケット。貸手表と表単位で分離）
 // - J-GAAP BS タグ: ニチレイ・AZplanning（`LeaseObligationsCL`/`NCL`）
 // - not_found: オークマ（リース債務は借入金等明細表＝`borrowings_schedule`側。PPE不可）、
 //   東邦レマック、銀行2社

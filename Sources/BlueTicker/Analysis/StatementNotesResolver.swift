@@ -191,17 +191,15 @@ enum StatementNotesResolver {
     ///    三菱UFJ単体等）はここでは拾わない。
     /// 2. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路のみ。**BS HTML は使わない** —
     ///    `get_statement` と責務が被る）。味の素は「支払期日が1年以内／1年超」＝流動・非流動の
-    ///    帳簿価額（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）。クボタは現在価値合計
-    ///    83,336百万円、スズキは帳簿価額合計のみ。使用権資産合計（クボタ 87,946）は別表で対象外。
+    ///    帳簿価額（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）。スズキは帳簿価額合計
+    ///    ＋同表の満期バケット（割引前契約CF）、クボタは現在価値合計＋同表の満期バケット。
+    ///    使用権資産合計（クボタ 87,946）は別表で対象外。貸手表の「１年以内」とは表単位で分離。
     /// 3. US-GAAP → `.notApplicable(available_via_statement)`。連結BSのオペレーティング・リース
     ///    負債は `statement`（`USGAAPHtmlFields`）側の責務。同じ値を本 note に引っ張らない。
     ///
     /// J-GAAP で BS タグも IFRS TextBlock も無い会社（オークマ等）のリース債務は借入金等明細表
     /// （`borrowings_schedule`）側。PPE 明細は資産側のためリース債務は取れない。本 note への
     /// 明細表フォールバックはしない（責務分離）。
-    ///
-    /// スズキ・クボタの満期表（「１年以内」等）は割引前契約CFであり、味の素型の流動／非流動
-    /// 帳簿価額とは別物。貸手表とラベルが衝突するため、現状は合計行のみ。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -244,6 +242,15 @@ enum StatementNotesResolver {
                     StatementLineItem(
                         tag: Xbrl.ifrsLeasesTextblockTag, label: "リース負債", value: current,
                         unit: "yen", order: 0))
+            }
+            // 満期バケット（割引前CF）は notes のみ。IBD の components には含めない。
+            let baseOrder = textblockItems.count
+            for (offset, bucket) in lease.maturityBuckets.enumerated() {
+                guard let current = bucket.current else { continue }
+                textblockItems.append(
+                    StatementLineItem(
+                        tag: Xbrl.ifrsLeasesTextblockTag, label: bucket.label, value: current,
+                        unit: "yen", order: baseOrder + offset))
             }
             if !textblockItems.isEmpty {
                 return resolvedLeaseLiabilities(items: textblockItems)

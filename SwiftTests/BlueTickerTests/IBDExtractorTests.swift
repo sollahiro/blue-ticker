@@ -14,7 +14,10 @@ import Foundation
 
     /// リース注記 TextBlock を含む XBRL を生成する。
     private func makeXbrlWithLeaseTextblock(_ baseElementsXml: String, leaseHtmlRows: String) -> String {
-        let leaseHtml = "&lt;table&gt;\(leaseHtmlRows)&lt;/table&gt;"
+        // 呼び出し側が既に <table> を含む場合はそのまま（複数表テスト用）
+        let leaseHtml = leaseHtmlRows.contains("&lt;table")
+            ? leaseHtmlRows
+            : "&lt;table&gt;\(leaseHtmlRows)&lt;/table&gt;"
         return XBRLTestSupport.makeXbrlInstant(baseElementsXml + """
 
             <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock
@@ -199,7 +202,7 @@ import Foundation
     }
 
     @Test func testLeasePatternBBookValue() {
-        // パターンB: 「帳簿価額」行のみある場合
+        // パターンC相当: 「帳簿価額」行のみある場合（満期バケットなし）
         let rows = "&lt;tr&gt;&lt;td&gt;帳簿価額&lt;/td&gt;&lt;td&gt;28,500&lt;/td&gt;&lt;td&gt;32,539&lt;/td&gt;&lt;/tr&gt;"
         let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
         XBRLTestSupport.withXbrlDir(xml) { dir in
@@ -209,6 +212,34 @@ import Foundation
             #expect(lease.prior == 28_500 * Financial.millionYen)
             #expect(lease.components.count == 1)
             #expect(lease.components.first?.label == "リース負債")
+            #expect(lease.maturityBuckets.isEmpty)
+        }
+    }
+
+    @Test func testLeasePatternCMaturityBucketsIgnoresLessorTable() {
+        // 借手表（帳簿価額＋契約上CF＋満期）と貸手表（正味投資＋１年以内）が同居しても借手側を取る
+        let lessee =
+            "&lt;tr&gt;&lt;td&gt;帳簿価額&lt;/td&gt;&lt;td&gt;41,738&lt;/td&gt;&lt;td&gt;32,539&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;契約上のキャッシュ・フロー&lt;/td&gt;&lt;td&gt;55,874&lt;/td&gt;&lt;td&gt;39,940&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;１年以内&lt;/td&gt;&lt;td&gt;12,787&lt;/td&gt;&lt;td&gt;11,190&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;１年超２年以内&lt;/td&gt;&lt;td&gt;6,938&lt;/td&gt;&lt;td&gt;5,184&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;５年超&lt;/td&gt;&lt;td&gt;28,838&lt;/td&gt;&lt;td&gt;17,390&lt;/td&gt;&lt;/tr&gt;"
+        let lessor =
+            "&lt;tr&gt;&lt;td&gt;１年以内&lt;/td&gt;&lt;td&gt;1,636&lt;/td&gt;&lt;td&gt;1,635&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;正味リース投資未回収額&lt;/td&gt;&lt;td&gt;5,125&lt;/td&gt;&lt;td&gt;5,397&lt;/td&gt;&lt;/tr&gt;"
+        let leaseHtml =
+            "&lt;table&gt;" + lessee + "&lt;/table&gt;&lt;table&gt;" + lessor + "&lt;/table&gt;"
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: leaseHtml)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 32_539 * Financial.millionYen)
+            #expect(lease.components.count == 1)
+            #expect(lease.maturityBuckets.count == 3)
+            #expect(lease.maturityBuckets[0].label == "１年以内")
+            #expect(lease.maturityBuckets[0].current == 11_190 * Financial.millionYen)
+            #expect(lease.maturityBuckets[1].current == 5_184 * Financial.millionYen)
+            #expect(lease.maturityBuckets[2].current == 17_390 * Financial.millionYen)
         }
     }
 
