@@ -2,6 +2,8 @@
 
 有価証券報告書 XBRL の BS/PL/CF/SS を、絞り込みなしで構造化して返す機能（Statement）の設計メモ。
 関連: Summary/Waterfall（`docs/feature-tiers.md`）は絞り込み指標、Breakdown（breakdowns、
+`docs/breakdown-normalization-concept.md`）は内訳。正本→組立の分離構想は
+`docs/financials-summary-separation-concept.md`（`XBRL → statement/notes/breakdown → company_financials → Summary/Waterfall`）。
 `docs/breakdown-normalization-concept.md`）は事業別・地域別売上の意味正規化。Statement は
 どちらとも異なり「開示された全項目を、企業間の科目統一を試みず、忠実に構造化する」ことが本体。
 
@@ -181,12 +183,12 @@ StatementLineItem
 | DevCLI | `TickerDev statement … --bs/--pl/--cf/--ss` |
 | DB / ingest / REST / MCP | 実装済み（日経225限定スタート）。契約 `statement-v1`（`changes_in_equity` 欠落は `[]`） |
 | 回帰 | BS/PL/CF: トヨタ/デンソー/任天堂＋smoke 9社 golden。SS: トヨタ＋smoke 9社 golden（2026-08-09）。US-GAAP2社（富士フイルム/キヤノン）HTML 経路 golden（2026-08-10） |
-| 本番 Neon | `company_statements` は **0行**（日経225全社 ingest 未実施） |
+| 本番 Neon | `company_statements` は **558 行 / 227 社**（全件 `statement-v1`、2026-08-11 ingest 完了。roadmap 同期） |
 
-- **残**: 本番への日経225全社 statements ingest（`blt-server ingest --stages statements`）、
-  銀行・保険を含む母集団での追加実データ確認後の全銘柄拡大（`docs/blt-server-roadmap.md`）
+- **残**: 銀行・保険を含む母集団での追加実データ確認後の全銘柄拡大（`docs/blt-server-roadmap.md`）。
+  Statement を Summary 組立の正本に寄せる作業は `docs/financials-summary-separation-concept.md`
 - **statement-notes（注記）**: DB/ingest/REST/MCP まで実装済み（note_type 8種、決定論のみ。`research_and_development` は 2026-08-11 に breakdown 軸へ集約し note から廃止）。
-  詳細は `docs/blt-server-roadmap.md`「statement-notes」行参照。
+  **本番 Neon の `company_statement_notes` は依然 0 行**（ingest 未実施）。詳細は roadmap「statement-notes」行参照。
 
 ## 今回（PR #153）のスコープ外（非ゴール）
 
