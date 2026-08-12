@@ -492,6 +492,18 @@ enum Xbrl {
         "ResearchAndDevelopmentCostsIFRS",
     ]
 
+    // MARK: - のれんタグ（J-GAAP、breakdown軸 goodwill 専用）
+    //
+    // 実データ検証（2026-08-12、オークマ S100W043・三井住友 S100W0S7・三菱UFJ S100W4FB）:
+    // 会社により使うタグが異なる。`Goodwill`（標準タクソノミ jppfs_cor、全社合計と同一タグをそのまま
+    // セグメント dimension 付きでも使う会社=オークマ）と `GoodwillBeforeOffsetting`（銀行が使う
+    // セグメント情報注記専用タグ、相殺消去前の各セグメント計上額。全社合計行は
+    // `ReportableSegmentsMember`単体dimensionまたは無dimensionの`Goodwill`と一致）が両方存在する。
+    static let goodwillSegmentTags: [String] = [
+        "Goodwill",
+        "GoodwillBeforeOffsetting",
+    ]
+
     // MARK: - 設備投資タグ
 
     static let capexOverviewTags: [String] = [

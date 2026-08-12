@@ -1066,3 +1066,94 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))
     }
 }
+
+// MARK: - goodwill 軸（2026-08-12追加、実装中・未配線）
+
+/// `BreakdownNormalizer.normalizeGoodwill` の実データ検証（決定論のみ、LLM不使用）。
+/// smoke固定11社中のJ-GAAP3社（オークマ・三井住友・三菱UFJ）で実施——のれんがBS/セグメント注記に
+/// 開示され、ユーザーが実額（1,053/230,070/530,386百万円）を確認済み。IFRS企業側は
+/// `goodwill_and_intangibles` note_type（`GoodwillAndIntangiblesOracleFormatTests`）が別途カバーする。
+@Suite struct RealXbrlGoodwillBreakdownTests {
+    private static let xbrlRoot: URL = {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+    }()
+
+    private static func xbrlDir(_ docID: String) -> URL {
+        xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+    }
+
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard FileManager.default.fileExists(atPath: xbrlDir(docID).path) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
+    private func resolve(docID: String) -> BreakdownSnapshot? {
+        let dir = Self.xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords, contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: dir)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+        let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        return BreakdownNormalizer.normalizeGoodwill(
+            facts: facts, total: totalItem.current, totalTag: totalItem.tag, axis: breakdownAxisGoodwill,
+            labelsByTag: labelsByTag)
+    }
+
+    @Test func okumaGoodwillAllInEuropeSegment() async throws {
+        guard await Self.ensureAvailable("S100W043") else { return }
+        let snapshot = try #require(resolve(docID: "S100W043"))
+
+        #expect(snapshot.denominator == 1_053_000_000)
+        #expect(snapshot.denominatorTag == "Goodwill")
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.rows.first { $0.labelRaw == "EuropeReportableSegmentsMember" }?.amount == 1_053_000_000)
+    }
+
+    @Test func smfgGoodwillMatchesBalanceSheetTotal() async throws {
+        guard await Self.ensureAvailable("S100W0S7") else { return }
+        let snapshot = try #require(resolve(docID: "S100W0S7"))
+
+        #expect(snapshot.denominator == 230_070_000_000)
+        #expect(snapshot.denominatorTag == "Goodwill")
+        #expect(snapshot.needsReview == false)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "GlobalBusinessUnitReportableSegmentMember" }?.amount
+                == 161_611_000_000)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" }?.rowKind
+                == "reconciling")
+    }
+
+    @Test func mufgGoodwillMatchesBalanceSheetTotal() async throws {
+        guard await Self.ensureAvailable("S100W4FB") else { return }
+        let snapshot = try #require(resolve(docID: "S100W4FB"))
+
+        #expect(snapshot.denominator == 530_386_000_000)
+        #expect(snapshot.denominatorTag == "Goodwill")
+        #expect(snapshot.needsReview == false)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "AssetManagementAndInvestorServicesBusinessGroupMember" }?.amount
+                == 369_353_000_000)
+        #expect(snapshot.rows.first { $0.labelRaw == "TotalMember" }?.rowKind == "subtotal")
+    }
+
+    @Test func nichireiGoodwillSplitsAcrossLogisticsAndProcessedFoods() async throws {
+        guard await Self.ensureAvailable("S100VYA0") else { return }
+        let snapshot = try #require(resolve(docID: "S100VYA0"))
+
+        #expect(snapshot.denominator == 7_356_000_000)
+        #expect(snapshot.denominatorTag == "Goodwill")
+        #expect(snapshot.needsReview == false)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "LogisticsReportableSegmentsMember" }?.amount == 6_604_000_000)
+        #expect(
+            snapshot.rows.first { $0.labelRaw == "ProcessedFoodsReportableSegmentsMember" }?.amount
+                == 751_000_000)
+    }
+}

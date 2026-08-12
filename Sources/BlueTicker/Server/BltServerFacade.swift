@@ -498,6 +498,36 @@ public extension BltServerContext {
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)
     }
+
+    /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加、実装中・未配線。
+    /// smoke固定11社中のIFRS3社では未検証——J-GAAP企業実データ（オークマ・三井住友・三菱UFJ）のみで
+    /// 動作確認済み）。決定論のみ、LLMなし。
+    ///
+    /// R&D/employees軸と異なり全社合計（denominator）を渡してくれる既存の計算パイプラインが無いため
+    /// （`goodwill_and_intangibles` note_typeはIFRS限定でJ-GAAPの値を持たない）、`Xbrl.goodwillSegmentTags`
+    /// の無dimension fact から本関数が独立に解決する（`resolveItem`、RDの`totalTag`独自解決と同型）。
+    func resolveGoodwillBreakdown(docID: String) async -> BreakdownResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        guard
+            let snapshot = BreakdownNormalizer.normalizeGoodwill(
+                facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+                axis: breakdownAxisGoodwill, labelsByTag: labelsByTag)
+        else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: totalItem.current)
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+            contentHash: hash, audit: nil)
+    }
 }
 
 /// 内部型 BreakdownSnapshot を公開格納用 BreakdownSnapshotPayload へ写経する。

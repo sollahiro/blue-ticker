@@ -15,6 +15,11 @@ public let breakdownAxisGeography = "geography"
 public let breakdownAxisEmployees = "employees"
 /// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisResearchAndDevelopment = "research_and_development"
+/// のれん（全社合計）のセグメント別内訳軸（2026-08-12追加、実装中・未配線）。決定論のみ
+/// （LLMフォールバックなし）。`goodwill_and_intangibles` note_type（IFRS連結限定の種類別明細）とは別物
+/// ——本軸はJ-GAAP企業がBS/注記に持つ「のれん」単一タグをセグメントdimensionで内訳化する
+/// （実データ検証: オークマ・三井住友・三菱UFJ）。
+public let breakdownAxisGoodwill = "goodwill"
 
 /// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
@@ -27,6 +32,7 @@ public let businessBreakdownCacheVersion = "breakdown-business-v8"
 public let geographyBreakdownCacheVersion = "breakdown-geography-v9"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
+public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -34,6 +40,7 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisGeography: return geographyBreakdownCacheVersion
     case breakdownAxisEmployees: return employeesBreakdownCacheVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
+    case breakdownAxisGoodwill: return goodwillBreakdownCacheVersion
     default: return businessBreakdownCacheVersion
     }
 }
@@ -89,6 +96,7 @@ public let businessBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
+public let goodwillBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -96,6 +104,7 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisGeography: return geographyBreakdownMinServableVersion
     case breakdownAxisEmployees: return employeesBreakdownMinServableVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
+    case breakdownAxisGoodwill: return goodwillBreakdownMinServableVersion
     default: return businessBreakdownMinServableVersion
     }
 }
