@@ -146,11 +146,13 @@ import Foundation
         var instantFS = fieldSetFromInstant(allTags)
 
         // US-GAAP 企業: 連結 P/L・BS の値は HTML テーブルにのみ存在するため仮想タグで補完する
+        // （未移行フィールド・statement 欠測時フォールバック用。本表水準値は statement 正本）
         if std == "US-GAAP" {
             for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
+        let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
         let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cf  = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let gp  = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
@@ -161,7 +163,6 @@ import Foundation
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
         let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-        let capex = CapexExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
@@ -174,42 +175,129 @@ import Foundation
         let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let ap  = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
 
-        let opProfit = op.operatingProfit ?? is_.operatingProfit
+        func prefer(_ statement: Double?, _ legacy: Double?) -> Double? { statement ?? legacy }
 
         return Extracted(
-            sales:                  is_.sales,
-            operatingProfit:        opProfit,
-            netProfit:              is_.netProfit,
+            sales:                  prefer(statementMain?.sales, is_.sales),
+            operatingProfit:        prefer(
+                statementMain?.operatingProfit, op.operatingProfit ?? is_.operatingProfit),
+            netProfit:              prefer(statementMain?.netProfit, is_.netProfit),
             accountingStandard:     std,
             grossProfit:            gp.grossProfit,
             sga:                    op.sga,
             cfo:                    cf.cfo,
             cfi:                    cf.cfi,
-            totalAssets:            bs.totalAssets,
-            currentAssets:          bs.currentAssets,
-            nonCurrentAssets:       bs.nonCurrentAssets,
-            currentLiabilities:     bs.currentLiabilities,
-            nonCurrentLiabilities:  bs.nonCurrentLiabilities,
-            netAssets:              bs.netAssets,
+            totalAssets:            prefer(statementMain?.totalAssets, bs.totalAssets),
+            currentAssets:          prefer(statementMain?.currentAssets, bs.currentAssets),
+            nonCurrentAssets:       prefer(statementMain?.nonCurrentAssets, bs.nonCurrentAssets),
+            currentLiabilities:     prefer(statementMain?.currentLiabilities, bs.currentLiabilities),
+            nonCurrentLiabilities:  prefer(
+                statementMain?.nonCurrentLiabilities, bs.nonCurrentLiabilities),
+            netAssets:              prefer(statementMain?.netAssets, bs.netAssets),
             ibdTotal:               ibd.total,
             pretaxIncome:           tax.pretaxIncome,
             incomeTax:              tax.incomeTax,
             effectiveTaxRate:       tax.effectiveTaxRate,
-            ppeTotal:               ppe.total,
-            capex:                  capex.current,
+            ppeTotal:               prefer(statementMain?.ppeTotal, ppe.total),
+            capex:                  StatementNotesResolver.financialsCanonicalCapex(
+                xbrlDir: xbrlDir, accountingStandard: std),
             rd:                     rd.current,
             employees:              emp.current,
-            cashEq:                 cashItem.current,
+            cashEq:                 prefer(statementMain?.cashEquivalents, cashItem.current),
             interestExpense:        ie.current,
             cfTreasuryStock:        cfTs.current,
             dividendSS:             divSS.current,
-            dividendPaidCF:         divPaid.current,
-            accountsReceivable:     ar.current,
-            inventory:              inv.current,
-            accountsPayable:        ap.current,
+            dividendPaidCF:         prefer(statementMain?.dividendPaidCF, divPaid.current),
+            accountsReceivable:     prefer(statementMain?.accountsReceivable, ar.current),
+            inventory:              prefer(statementMain?.inventory, inv.current),
+            accountsPayable:        prefer(statementMain?.accountsPayable, ap.current),
             eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
             issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
         )
+    }
+
+    /// financials 組立の本表水準値が statement 正本から取れることを smoke 11 社で回帰する（タスク #5）。
+    /// statement 解決自体が失敗した書類はスキップし、取れたフィールドは期待値と照合する。
+    @Test func testFinancialsPassthroughMatchesStatementCanonical() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        var failures: [String] = []
+        var checked = 0
+
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path) else { continue }
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: fixturePath.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected),
+                  let statement = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+            else { continue }
+
+            func check(_ field: String, exp: Double?, act: Double?) {
+                guard let e = exp else { return }
+                guard let a = act else {
+                    failures.append("\(fixtureID) \(field): statement=nil expected=\(e)")
+                    return
+                }
+                let tol = max(abs(e) * Self.relTol, 1.0)
+                if abs(e - a) > tol {
+                    failures.append("\(fixtureID) \(field): statement=\(a) expected=\(e)")
+                }
+            }
+
+            let income = expected["income_statement"] as? [String: Any] ?? [:]
+            let bs = expected["balance_sheet"] as? [String: Any] ?? [:]
+            check("sales", income["sales"] as? Double, statement.sales)
+            check("operating_profit", income["operating_profit"] as? Double, statement.operatingProfit)
+            check("net_profit", income["net_profit"] as? Double, statement.netProfit)
+            check("total_assets", bs["total_assets"] as? Double, statement.totalAssets)
+            check("current_assets", bs["current_assets"] as? Double, statement.currentAssets)
+            check("non_current_assets", bs["non_current_assets"] as? Double, statement.nonCurrentAssets)
+            check("current_liabilities", bs["current_liabilities"] as? Double, statement.currentLiabilities)
+            check(
+                "non_current_liabilities", bs["non_current_liabilities"] as? Double,
+                statement.nonCurrentLiabilities)
+            check("net_assets", bs["net_assets"] as? Double, statement.netAssets)
+            check(
+                "ppe_total", (expected["tangible_fixed_assets"] as? [String: Any])?["total"] as? Double,
+                statement.ppeTotal)
+            check(
+                "cash_eq", (expected["cash_eq"] as? [String: Any])?["current"] as? Double,
+                statement.cashEquivalents)
+            check(
+                "dividend_paid_cf",
+                (expected["dividend_paid_cf"] as? [String: Any])?["current"] as? Double,
+                statement.dividendPaidCF)
+            check(
+                "accounts_receivable",
+                (expected["accounts_receivable"] as? [String: Any])?["current"] as? Double,
+                statement.accountsReceivable)
+            check(
+                "inventory", (expected["inventory"] as? [String: Any])?["current"] as? Double,
+                statement.inventory)
+            check(
+                "accounts_payable",
+                (expected["accounts_payable"] as? [String: Any])?["current"] as? Double,
+                statement.accountsPayable)
+            checked += 1
+        }
+
+        guard checked > 0 else {
+            print("SKIP   statement 正本パススルー: XBRL キャッシュなし")
+            return
+        }
+        #expect(
+            failures.isEmpty,
+            Comment(rawValue: "financials↔statement 正本不一致:\n" + failures.joined(separator: "\n")))
     }
 
     /// financials 組立の EPS / 発行済株式が notes 正本（`per_share_information` /

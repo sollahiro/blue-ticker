@@ -16,6 +16,14 @@ struct StatementAnalyzer {
         docID: String, statementTypes: Set<StatementSectionType>
     ) async -> StatementDocResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        return Self.resolveFromXBRL(xbrlDir: xbrlDir, docID: docID, statementTypes: statementTypes)
+    }
+
+    /// 既に展開済みの XBRL ディレクトリから Statement を解決する（DB / ingest 順非依存）。
+    /// financials 組立（`StatementFinancialsResolver`）と DevCLI が共有する。
+    static func resolveFromXBRL(
+        xbrlDir: URL, docID: String?, statementTypes: Set<StatementSectionType>
+    ) -> StatementDocResolveResult {
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
         let tagElements = XBRLUtils.factIndexToNumericElements(facts)
         if detectAccountingStandard(tagElements) == "US-GAAP" {

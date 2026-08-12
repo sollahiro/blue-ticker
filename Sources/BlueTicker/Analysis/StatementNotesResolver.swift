@@ -970,6 +970,17 @@ enum StatementNotesResolver {
         return payload.issuedSharesAsOf?.issuedShares
     }
 
+    /// `company_financials` 組立が読む設備投資額。正本は notes overview XBRL タグ
+    /// （`CapitalExpendituresOverviewOfCapitalExpendituresEtc`）→ 無ければ statement CF タグ。
+    /// HTML 表の `capex_segments` は note API 用の明細であり、Summary 水準値には使わない（タスク #6）。
+    static func financialsCanonicalCapex(xbrlDir: URL, accountingStandard: String) -> Double? {
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let durationFS = fieldSetFromDuration(allTagElements)
+        return CapexExtractor.extract(
+            fieldSet: durationFS, accountingStandard: accountingStandard
+        ).current
+    }
+
     /// 期末 Instant の離散 fact。連結 `CurrentYearInstant` を優先し、無ければ
     /// `CurrentYearInstant_NonConsolidatedMember`（資本金・資本準備金は親会社科目が多い）、
     /// さらに `CurrentYearInstant*` を辞書順で拾う。

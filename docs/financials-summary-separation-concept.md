@@ -147,14 +147,16 @@ DB 参照組立を選ぶ場合のみ必須。
 | 1 | **EPS パススルー** | `resolvePerShareInformation` の `eps` を正本に | 完了（PR #217） |
 | 2 | **issued_shares パススルー** | `issued_shares_and_capital` の as_of を正本に | 完了（PR #217） |
 | 3 | **値一致回帰** | smoke で financials と notes 正本の一致テスト | 完了（PR #217） |
-| 4 | **フィールド source 表の固定** | `FinancialsContract` 近傍に正本索引を置く | 完了（本 PR） |
+| 4 | **フィールド source 表の固定** | `FinancialsContract` 近傍に正本索引を置く | 完了 |
+| 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total / AR·Inv·AP / 現金 / dividend_paid_cf を statement 行から組立 | 完了（本 PR）。欠測時のみ旧 Extractor フォールバック。gross_profit / sga / CFO·CFI は未移行 |
+| 6 | **capex を notes 正本に** | overview XBRL タグ → CF タグ。表 `capex_segments` は明細のみ | 完了（本 PR） |
 
 ### 次（正本→組立の本線）
 
 | # | タスク | 内容 | 未決・注意 |
 |---|---|---|---|
-| 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total 等を statement 行から組立 | US-GAAP は HTML Statement を組立に配線（`USGAAPHtml` との一本化） |
-| 6 | **capex を notes 正本に** | overview XBRL タグ（`CapitalExpendituresOverviewOfCapitalExpendituresEtc`）→ CF タグ。表 `capex_segments` は明細のみ | 方針確定。実装は #217 同型のパススルー |
+| 5b | **US-GAAP HTML 一本化** | `USGAAPStatementHtml` と `USGAAPHtml` の入れ子合計セマンティクスを揃え、欠測フォールバックを消す | 富士フイルム AR（受取債権合計）等は statement 側で対応済み。AP 等は会社差が残る |
+| 5c | **gross_profit / sga の statement 参照** | TextBlock フォールバックを正本側へ整理してから組立配線 | IFRS TextBlock / 銀行粗利益 |
 | 7 | **dividend_ss** | SS 合計列だけでは不足 → notes `dividends` または SS 行規則のどちらを正本にするか決定して実装 | 正本選択が先 |
 | 8 | **IBD / 利息 / buyback / CFO·CFI** | statement マッチ率 50–67% の定義を突合し、ルール＋golden | 機械マッチだけでは不足 |
 
@@ -221,6 +223,8 @@ notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合
 | Summary 契約・正本索引 | `Sources/BlueTicker/Models/FinancialsContract.swift`（`// MARK: - フィールド正本`） |
 | Neon 格納 | `Sources/BltServerCore/Models/CompanyFinancials.swift` |
 | 現行組立 | `Sources/BlueTicker/Services/IndividualAnalyzer.swift` |
+| statement 本表パススルー | `Sources/BlueTicker/Analysis/StatementFinancialsResolver.swift` |
+| Statement 解決（xbrlDir） | `Sources/BlueTicker/Services/StatementAnalyzer.swift`（`resolveFromXBRL`） |
 | notes 正本 | `Sources/BlueTicker/Analysis/StatementNotesResolver.swift` |
 | breakdown 分母（逆依存） | `Sources/BltServerCore/BreakdownIngest.swift` |
 | feasibility 工具 | `Sources/BlueTicker/DevCLI/DevStatementFeasibilityCommand.swift` |
@@ -229,7 +233,8 @@ notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合
 ### 関連 PR
 
 - **#216**（本ドキュメント更新）— クローズ
-- **#217**（タスク #1–3: EPS / issued_shares パススルー）— open
+- **#217**（タスク #1–3: EPS / issued_shares パススルー）— マージ済み
+- **本 PR**（タスク #5–6: 本表 statement 参照 + capex notes パススルー）
 
 ## 関連ドキュメント
 
