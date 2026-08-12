@@ -455,6 +455,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 リース負債）を
                 note_type 単位で取得します（格納済みデータのみ）。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                注記が取得できない場合はエラー応答とともに reason が返ることがあります
+                （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
+                not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
+                available_via_statement（本 note_type の対象外だが同等の値は get-statement から取得可能。
+                例: property_plant_equipment_schedule / goodwill_and_intangibles / lease_liabilities が
+                IFRS連結企業限定のため非対象の場合）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement/notes",
@@ -491,9 +497,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Statement Notes（get-statement 本体の外にある財務諸表注記、note_type 単位）。
-                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404、DB 非接続は 503。
-                property_plant_equipment_schedule / goodwill_and_intangibles は IFRS連結企業限定
-                （J-GAAP単体の附属明細表は未対応）。
+                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404（reason 無し）、
+                対象外・非開示は 404 + reason（not_found / available_via_statement）、DB 非接続は 503。
+                property_plant_equipment_schedule / goodwill_and_intangibles / lease_liabilities は
+                IFRS連結企業限定（非対象時は available_via_statement または not_found）。
                 例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
                 """,
             mcpOutputSchema:
