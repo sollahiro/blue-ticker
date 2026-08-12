@@ -155,7 +155,11 @@ enum BreakdownExtractor {
             mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
             dedicatedHeading: "セグメント情報",
             mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
-            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords
+            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords,
+            // US-GAAP 巨大注記内のクロスリファレンス文・基準書名引用（「…」内）や句点付き
+            // 散文を見出しと誤認しない（富士フイルム S100W3XJ）。geography は散文見出しに
+            // 依存するため opt-in は business のみ。
+            mixedHeadingLikeOnly: true
         )
         let productOrServiceTables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -940,10 +944,13 @@ enum BreakdownExtractor {
     ///
     /// headingExclusionKeywords: 見出し候補の文字列がこれらを含む場合はスキップする
     /// （例: 事業別セグメント用の検索で「地域別セグメント情報」という地域注記の見出しを誤って拾わないようにする）。
+    /// headingLikeOnly: true のとき、句点を含む散文と「…」引用内のキーワード一致を見出し候補から外す
+    /// （business の mixed 経路専用。geography の散文見出し回帰を壊さないため既定は false）。
     static func keywordTablesFromHtml(
         _ html: String,
         keywords: [String],
-        headingExclusionKeywords: [String] = []
+        headingExclusionKeywords: [String] = [],
+        headingLikeOnly: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         var tables: [BreakdownTable] = []
@@ -952,7 +959,12 @@ enum BreakdownExtractor {
             guard let elems = try? soup.select("*") else { continue }
             for elem in elems {
                 let text = bs4Text(elem, strip: false)
-                guard text.contains(keyword), text.unicodeScalars.count <= 300 else { continue }
+                guard text.unicodeScalars.count <= 300 else { continue }
+                // 散文（句点を含む）は見出しではない
+                if headingLikeOnly, text.contains("。") { continue }
+                // 「…」内は他注記・基準書名の引用なので除いてから判定（【…】は見出し自体に使う）
+                let matchText = headingLikeOnly ? stripQuotedSpans(text) : text
+                guard matchText.contains(keyword) else { continue }
                 if headingExclusionKeywords.contains(where: text.contains) { continue }
                 // 直後の表が除外対象（ノイズ）だった場合、同じ見出しの下にある次の表を
                 // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
@@ -1014,7 +1026,8 @@ enum BreakdownExtractor {
         dedicatedHeading: String,
         mixedKeywords: [String],
         mixedHeadingExclusionKeywords: [String] = [],
-        skipGeographyAssetMetricTables: Bool = false
+        skipGeographyAssetMetricTables: Bool = false,
+        mixedHeadingLikeOnly: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -1041,12 +1054,20 @@ enum BreakdownExtractor {
                         keywords: mixedKeywords,
                         headingExclusionKeywords: mixedHeadingExclusionKeywords
                             + (skipGeographyAssetMetricTables
-                                ? Xbrl.geographyAssetMetricCaptionKeywords : [])
+                                ? Xbrl.geographyAssetMetricCaptionKeywords : []),
+                        headingLikeOnly: mixedHeadingLikeOnly
                     ))
                 }
             }
         }
         return tables
+    }
+
+    /// 『…』で囲まれた部分は他注記・基準書名の引用であり見出しではない
+    /// （例: 注記23「セグメント情報」に記載…、基準書2023-07「セグメント情報開示の改善」）。
+    /// 【…】は見出し自体に使われる（実データ: 【事業別セグメント情報】）ため対象外。
+    private static func stripQuotedSpans(_ text: String) -> String {
+        text.replacingOccurrences(of: "「[^」]*」", with: "", options: .regularExpression)
     }
 
     // MARK: - dimension 付き fact 抽出（フォールバック）

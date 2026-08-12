@@ -341,6 +341,60 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoIgnoresQuotedCrossReferenceToSegmentNote() {
+        // 富士フイルム型（S100W3XJ）: 注記21「収益」内の移管説明文
+        // 「…注記23「セグメント情報」に記載しております。」は見出しではない。
+        // 直後の製品細分化表を誤拾いせず、本物の注記23見出しの表だけ拾う。
+        let escaped =
+            "&lt;p&gt;事業セグメントにおける収益の分解&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;メディカルシステム&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;変更の概要については連結財務諸表注記23「セグメント情報」に記載しております。&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;半導体材料&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;23　セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ヘルスケア&lt;/td&gt;&lt;td&gt;975081&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("ヘルスケア"))
+            #expect(!result.tables[0].markdown.contains("メディカルシステム"))
+            #expect(!result.tables[0].markdown.contains("半導体材料"))
+        }
+    }
+
+    @Test func segmentInfoIgnoresAccountingStandardNameCitation() {
+        // 基準書名の引用「セグメント情報開示の改善」は見出しではない。
+        let escaped =
+            "&lt;p&gt;当社は基準書2023-07「セグメント情報開示の改善」を適用しております。&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ノイズ&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+            #expect(!result.tables[0].markdown.contains("ノイズ"))
+        }
+    }
+
+    @Test func segmentInfoAcceptsBracketedBusinessSegmentHeading() {
+        // 【事業別セグメント情報】は実データで正見出しとして使われる（『』とは別）。
+        // headingLikeOnly の引用除去が【】まで広げないことの防衛。
+        let escaped =
+            "&lt;p&gt;【事業別セグメント情報】&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
     @Test func geographyChainsSecondTableWhenDivWrappedWithShortLabelBetween() {
         // キヤノン型の回帰: 1つの見出し文が前期・当期の両方を紹介し（「第124期及び第125期に
         // おける地域別セグメント情報は...」）、表がそれぞれ個別の <div> でラップされた上で
