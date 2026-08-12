@@ -1091,9 +1091,7 @@ enum BorrowingsSchedule {
             let prior = amountSlots[0]
             let current = amountSlots[amountSlots.count - 1]
             guard prior != nil || current != nil else { continue }
-            if label.isEmpty || isUSGAAPSkipRowLabel(label) || isUSGAAPColumnHeaderLabel(label) {
-                continue
-            }
+            if label.isEmpty || isUSGAAPSkipRowLabel(label) { continue }
 
             var useLabel = label
             if let pending = pendingCategory {
