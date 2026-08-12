@@ -125,14 +125,37 @@ enum StatementNotesResolver {
     /// 3点セットを資産区分ごとに開示する（`LandIFRS`/`LandAcquisitionCostIFRS`/...等）。本 note_type
     /// では正味帳簿価額タグのみを種類別に抽出する（取得原価・累計償却は含めない）。
     ///
-    /// J-GAAP単体の「有形固定資産等明細表」（`AnnexedDetailedScheduleOfPropertyPlantAndEquipmentEtcTextBlock`、
-    /// HTMLテーブル）は今回未対応（Task 7、実データ検証で列数が多く「差引当期末残高」列の位置を
-    /// ヘッダー文言から検出する処理が別途必要と判明したため、次のタスクへ持ち越し。IFRS企業の
-    /// カバレッジのみで先行実装する）。したがって本 note_type は現時点で IFRS 連結企業限定。
+    /// 本 note_type は意図的に IFRS 連結企業限定（ユーザー判断、2026-08-12）。smoke 固定11社の
+    /// 実データ検証で、非IFRS企業の扱いは会計基準で以下のように分かれることを確認済み:
+    ///
+    /// - J-GAAP連結企業: `statement`（Statement本体のBS）の`PropertyPlantAndEquipmentAbstract`配下に
+    ///   区分別タグ（`BuildingsAndStructuresNet`・`MachineryEquipmentAndVehiclesNet`等）が構造化されて
+    ///   おり、そちらから取得できる（オークマ S100W043・ニチレイ S100VYA0・AZplanning S100VU4O・
+    ///   三菱UFJ S100W4FB・三井住友 S100W0S7 で実データ確認済み）。連結財務諸表を持たない企業
+    ///   （東邦レマック S100XRD8）は個別BS（role=`jppfs/rol_BalanceSheet`）の`BuildingsNet`等が同役割を
+    ///   果たす。これらは本note_typeでは扱わず、`statementNoteNotApplicableAvailableViaStatement`
+    ///   （`reason`でStatementを案内）に倒す。
+    /// - US-GAAP連結企業: `ix:nonFraction`が無く構造化タグで判定できない。開示HTML自体に区分別
+    ///   内訳が載るか会社によって異なる（実データ確認済み、2026-08-12: 富士フイルム S100W3XJ は
+    ///   連結BS本表に「土地／建物及び構築物／機械装置及びその他の有形固定資産／建設仮勘定」の内訳が
+    ///   直接載るが、キヤノン S100XTLJ は連結BSに「Ⅳ有形固定資産」の合計1行のみで、区分別内訳は
+    ///   別注記「注５　有形固定資産」のHTML表にしかない。`statement`のUS-GAAP HTML抽出
+    ///   （`USGAAPStatementHtml`）はBS本表しか読まないため、キヤノンのように内訳が別注記にある
+    ///   会社ではStatementからも取得できない）。会社ごとに開示形式が違い構造化タグでの判別もできない
+    ///   ため、Statementを案内する`available_via_statement`は誤りうる。`resolveBorrowingsSchedule`と
+    ///   同じ`statementNotApplicableUSGAAP`（US-GAAP自体を対応見送り）に倒す。
     static func resolvePropertyPlantEquipmentSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
-        resolveIFRSCategorySchedule(
-            xbrlDir: xbrlDir,
-            roleName: "NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS")
+        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        switch detectAccountingStandard(tagElements) {
+        case "IFRS":
+            return resolveIFRSCategorySchedule(
+                xbrlDir: xbrlDir,
+                roleName: "NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS")
+        case "US-GAAP":
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        default:
+            return .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
+        }
     }
 
     /// のれん及びその他無形資産の種類別明細（`goodwill_and_intangibles` note_type）。
