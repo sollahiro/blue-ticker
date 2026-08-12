@@ -59,6 +59,42 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
     return n >= companyFinancialsMinServableVersion
 }
 
+// MARK: - フィールド正本（Summary 水準値の source 表、タスク #4）
+//
+// `FinancialsYear` の各公開フィールドについて「誰が正本か」と現行組立経路を固定する。
+// 詳細・着手タスクは `docs/financials-summary-separation-concept.md` が正本。本表は契約近傍の索引。
+//
+// 凡例:
+// - **正本**: 値の意味的な出所（将来はここだけを信頼する）
+// - **現行**: いま `IndividualAnalyzer` が実際に読む経路
+// - **状態**: `done` = 正本パススルー済み / `extractor` = 旧 Extractor 直読み / `derived` = 他フィールドから再計算
+//
+// | フィールド | 正本 | 現行 | 状態 |
+// |---|---|---|---|
+// | sales, operating_profit, net_profit | statement（income_statement 行） | IncomeStatementExtractor / OperatingProfitExtractor | extractor |
+// | gross_profit, sga | statement | GrossProfitExtractor / OperatingProfitExtractor | extractor |
+// | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | BalanceSheetExtractor | extractor |
+// | current_liabilities, non_current_liabilities, net_assets | statement | BalanceSheetExtractor | extractor |
+// | ppe_total | statement | TangibleFixedAssetsExtractor | extractor |
+// | accounts_receivable, inventory, accounts_payable | statement | 各 AR/Inv/AP Extractor | extractor |
+// | cash_equivalents | statement | `Xbrl.cashEquivalentsTags` | extractor |
+// | cfo, cfi | statement（cash_flow 行） | CashFlowExtractor | extractor |
+// | dividend_paid_cf | statement | DividendPaidExtractor | extractor |
+// | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
+// | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
+// | capex | notes `capital_expenditures_overview`（設備投資総額。CF 取得額と概念差あり） | CapexExtractor（overview→CF フォールバック） | extractor |
+// | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
+// | employees | breakdown `employees` 軸（分母の逆依存解消が前提） | EmployeesExtractor | extractor |
+// | rd | breakdown `research_and_development` 軸 | RDExtractor | extractor |
+// | interest_bearing_debt | 未決（statement ± notes `borrowings_schedule`） | IBDExtractor | extractor |
+// | interest_expense | 未決（statement ± notes） | InterestExpenseExtractor | extractor |
+// | buyback, cf_treasury_stock | 未決（statement ± notes） | ShareBuybackExtractor / CfTreasuryStockExtractor | extractor |
+// | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
+// | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
+// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |
+//
+// Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細、政策保有株式明細。
+
 // MARK: - 年度エントリ（フラット形）
 
 struct FinancialsYear: Codable, Sendable {

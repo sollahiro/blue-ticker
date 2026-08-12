@@ -89,6 +89,25 @@ US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USG
 | 派生・視覚化 | Summary 組立層（`company_financials`）経由（Waterfall / 将来 Sankey 含む） |
 | 二重物 | 正本を1つに決め、financials 側はパススルーまたは再計算のみに |
 
+## ingest / 組立の依存解消（タスク #10 決定、2026-08-12）
+
+financials 組立が statement / notes / breakdown 正本に依存するとき、**ingest 順序変更は採らない**。
+`FactsIngest.swift` の既定順（`financials → filing-sections → breakdowns → statements → notes`）のまま、
+**同一 XBRL パス内で正本 resolver を直接呼ぶ（#10b）**。
+
+| 選択肢 | 採否 | 理由 |
+|---|---|---|
+| (a) financials 用に notes を先出し | 不採用 | ingest パイプライン全体の順序変更。breakdown 分母が financials 先行を前提にしている |
+| (b) ストレージ越し参照ではなく resolver 直接呼び | **採用** | ingest 順不変。`company_statement_notes` 0 行でも組立可能。DB 間 read 依存を作らない |
+| DB 参照パススルー（notes 行を read） | 将来オプション | live API（`get_statement_notes`）向け。#12 notes 本番 ingest 後に必要なら追加検討 |
+
+**実装パターン（#1–2 完了例）**: `IndividualAnalyzer.processDocument` 内で
+`StatementNotesResolver.financialsCanonicalEps` / `financialsCanonicalIssuedShares` を呼ぶ。
+以降の notes パススルーも同型（`financialsCanonical*` ヘルパー + smoke 値一致回帰）。
+
+**#12（notes 本番 ingest）**: 組立が #10b なら後回し可。`get_statement_notes` API 公開・
+DB 参照組立を選ぶ場合のみ必須。
+
 ## フィールド別の置き換え見立て（Summary 水準値）
 
 | 帯 | 例 | 置き換え先 |
@@ -106,12 +125,12 @@ US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USG
 
 ### すぐ着手できる（小〜中、依存が少ない）
 
-| # | タスク | 内容 | 未決・注意 |
+| # | タスク | 内容 | 状態 |
 |---|---|---|---|
-| 1 | **EPS パススルー** | `IndividualAnalyzer` の独自 `PerShareExtractor` 呼び出しをやめ、`resolvePerShareInformation` の `eps` を正本にする | ingest 順: (a) notes 先出し or (b) 同一パスで resolver 直接呼び。公開形は変えない |
-| 2 | **issued_shares パススルー** | 同上。`issued_shares_and_capital` の as_of を正本に | #1 と同じ未決 |
-| 3 | **値一致回帰** | smoke で financials.eps / issuedShares と notes 正本の一致テストを追加 | #1–2 と同時でよい |
-| 4 | **フィールド source 表の固定** | 上表を契約メモ（本ドキュメント or `FinancialsContract` 近傍）として「誰が正本か」を1か所に | 実装前の合意固定 |
+| 1 | **EPS パススルー** | `resolvePerShareInformation` の `eps` を正本に | 完了（PR #217） |
+| 2 | **issued_shares パススルー** | `issued_shares_and_capital` の as_of を正本に | 完了（PR #217） |
+| 3 | **値一致回帰** | smoke で financials と notes 正本の一致テスト | 完了（PR #217） |
+| 4 | **フィールド source 表の固定** | `FinancialsContract` 近傍に正本索引を置く | 完了（本 PR） |
 
 ### 次（正本→組立の本線）
 
@@ -127,7 +146,7 @@ US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USG
 | # | タスク | 内容 | 未決・注意 |
 |---|---|---|---|
 | 9 | **breakdown 分母の正本化** | sales / employees / rd 分母を financials 経由から外す | employees の正本（breakdown 自身 vs 別 note）・銀行分母は既存 bank 経路と整合 |
-| 10 | **ingest 順序または共有呼び出し** | financials が正本に依存できる形に | #1 の未決の本決め。DB 間 read 依存は避ける方針が有力 |
+| 10 | **ingest 順序または共有呼び出し** | financials が正本に依存できる形に | **完了（#10b 決定、上記セクション参照）** |
 | 11 | **再組立トリガ** | statement/notes/breakdown の cache_version 更新時に financials を再計算 | high_water との役割分担 |
 | 12 | **notes 本番 ingest** | 正本を組立に使う前提で Neon `company_statement_notes` を埋める | 現状 0 行。組立が DB 参照なら必須、関数共有なら後回し可 |
 
@@ -182,7 +201,7 @@ notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合
 
 | 用途 | パス |
 |---|---|
-| Summary 契約 | `Sources/BlueTicker/Models/FinancialsContract.swift` |
+| Summary 契約・正本索引 | `Sources/BlueTicker/Models/FinancialsContract.swift`（`// MARK: - フィールド正本`） |
 | Neon 格納 | `Sources/BltServerCore/Models/CompanyFinancials.swift` |
 | 現行組立 | `Sources/BlueTicker/Services/IndividualAnalyzer.swift` |
 | notes 正本 | `Sources/BlueTicker/Analysis/StatementNotesResolver.swift` |
@@ -192,7 +211,8 @@ notes 本番 ingest（#12）は live API 公開・DB 参照組立を選ぶ場合
 
 ### 関連 PR
 
-- **#216**（本ドキュメント更新）— draft。マージ後に #1–3 実装ブランチを切る。
+- **#216**（本ドキュメント更新）— クローズ
+- **#217**（タスク #1–3: EPS / issued_shares パススルー）— open
 
 ## 関連ドキュメント
 
