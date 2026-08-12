@@ -3,10 +3,10 @@
 // smoke 固定11社の実データ検証（2026-08-12）:
 // - IFRS TextBlock: 味の素（支払期日別 CL+NCL＝帳簿価額）、クボタ（現在価値＋満期バケット＝割引前CF。
 //   ROU 87,946は対象外）、スズキ（帳簿価額＋満期バケット。貸手表と表単位で分離）
-// - J-GAAP BS タグ: ニチレイ・AZplanning（`LeaseObligationsCL`/`NCL`）
+// - available_via_statement: ニチレイ・AZplanning（BS `LeaseObligations*` は statement 責務）、
+//   富士フイルム・キヤノン（US-GAAP BS）
 // - not_found: オークマ（リース債務は借入金等明細表＝`borrowings_schedule`側。PPE不可）、
 //   東邦レマック、銀行2社
-// - US-GAAP: 富士フイルム・キヤノン → available_via_statement（BS上の値は statement 責務。notesに二重取得しない）
 
 import Foundation
 import Testing
@@ -41,14 +41,14 @@ import Testing
     }
 
     @Test
-    func smokeLeaseNichireiMatchesOracle() async throws {
+    func smokeLeaseNichireiAvailableViaStatement() async throws {
         try await withSmokeCache("S100VYA0") {
             try assertMatchesOracle(docID: "S100VYA0", xbrlDir: $0)
         }
     }
 
     @Test
-    func smokeLeaseAzPlanningMatchesOracle() async throws {
+    func smokeLeaseAzPlanningAvailableViaStatement() async throws {
         try await withSmokeCache("S100VU4O") {
             try assertMatchesOracle(docID: "S100VU4O", xbrlDir: $0)
         }

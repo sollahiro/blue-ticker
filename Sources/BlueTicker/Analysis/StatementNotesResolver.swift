@@ -185,50 +185,26 @@ enum StatementNotesResolver {
 
     /// リース負債（`lease_liabilities` note_type）。
     ///
-    /// 優先順（実データ検証 2026-08-12、smoke 固定11社）:
-    /// 1. 連結 BS の構造化タグ（`LeaseLiabilitiesCLIFRS`/`NCLIFRS`、`LeaseObligationsCL`/`NCL`）。
-    ///    `fieldSetFromInstant` が連結コンテキストを優先するため、非連結のみのタグ（味の素単体・
-    ///    三菱UFJ単体等）はここでは拾わない。
-    /// 2. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路のみ。**BS HTML は使わない** —
-    ///    `get_statement` と責務が被る）。味の素は「支払期日が1年以内／1年超」＝流動・非流動の
-    ///    帳簿価額（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）。スズキは帳簿価額合計
-    ///    ＋同表の満期バケット（割引前契約CF）、クボタは現在価値合計＋同表の満期バケット。
-    ///    使用権資産合計（クボタ 87,946）は別表で対象外。貸手表の「１年以内」とは表単位で分離。
-    /// 3. US-GAAP → `.notApplicable(available_via_statement)`。連結BSのオペレーティング・リース
-    ///    負債は `statement`（`USGAAPHtmlFields`）側の責務。同じ値を本 note に引っ張らない。
+    /// **notes は TextBlock 注記のみ**（実データ検証 2026-08-12、smoke 固定11社）。
+    /// 連結 BS の構造化タグ（`LeaseLiabilities*IFRS` / `LeaseObligations*`）は `statement` と同じ
+    /// 値になるため本 note では採用しない。タグがある場合は `available_via_statement`。
     ///
-    /// J-GAAP で BS タグも IFRS TextBlock も無い会社（オークマ等）のリース債務は借入金等明細表
-    /// （`borrowings_schedule`）側。PPE 明細は資産側のためリース債務は取れない。本 note への
-    /// 明細表フォールバックはしない（責務分離）。
+    /// 1. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路。**BS HTML・BS タグは使わない**）。
+    ///    味の素は「支払期日が1年以内／1年超」＝流動・非流動の帳簿価額。スズキは帳簿価額合計
+    ///    ＋満期バケット（割引前CF）、クボタは現在価値合計＋満期バケット。貸手表とは表単位で分離。
+    /// 2. BS にリース負債タグあり、または US-GAAP → `.notApplicable(available_via_statement)`。
+    /// 3. それ以外 → `not_found`（オークマ等のリース債務は `borrowings_schedule` 側）。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(tagElements)
         let fieldSet = fieldSetFromInstant(tagElements)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
 
-        let structuredPairs: [(tags: [String], fallbackLabel: String)] = [
-            (["LeaseLiabilitiesCLIFRS", "LeaseObligationsCL"], "リース負債（流動）"),
-            (["LeaseLiabilitiesNCLIFRS", "LeaseObligationsNCL"], "リース負債（非流動）"),
-        ]
-        var structuredItems: [StatementLineItem] = []
-        for (order, pair) in structuredPairs.enumerated() {
-            let resolved = resolveItem(fieldSet, tags: pair.tags)
-            guard let tag = resolved.tag, let current = resolved.current else { continue }
-            structuredItems.append(
-                StatementLineItem(
-                    tag: tag, label: labelsByTag[tag] ?? pair.fallbackLabel, value: current,
-                    unit: "yen", order: order))
-        }
-        if !structuredItems.isEmpty {
-            return resolvedLeaseLiabilities(items: structuredItems)
-        }
-
-        // TextBlock があるときだけ IFRSLease を呼ぶ（空 TextBlock → BS HTML フォールバックを避ける）。
+        // TextBlock があるときだけ IFRSLease を呼ぶ。fieldSet は空渡しでパターンA（BSタグ）をスキップ。
         let hasIFRSTextblock =
             XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag)
             != nil
         if hasIFRSTextblock {
-            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fieldSet, xbrlDir: xbrlDir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
             var textblockItems: [StatementLineItem] = []
             for (order, component) in lease.components.enumerated() {
                 guard let current = component.current else { continue }
@@ -243,7 +219,6 @@ enum StatementNotesResolver {
                         tag: Xbrl.ifrsLeasesTextblockTag, label: "リース負債", value: current,
                         unit: "yen", order: 0))
             }
-            // 満期バケット（割引前CF）は notes のみ。IBD の components には含めない。
             let baseOrder = textblockItems.count
             for (offset, bucket) in lease.maturityBuckets.enumerated() {
                 guard let current = bucket.current else { continue }
@@ -257,7 +232,14 @@ enum StatementNotesResolver {
             }
         }
 
-        if accountingStandard == "US-GAAP" {
+        let bsLeaseTags = [
+            "LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS",
+            "LeaseObligationsCL", "LeaseObligationsNCL",
+        ]
+        let hasBSLeaseTag = bsLeaseTags.contains {
+            resolveItem(fieldSet, tags: [$0]).current != nil
+        }
+        if hasBSLeaseTag || accountingStandard == "US-GAAP" {
             return .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
         }
         return .notApplicable(reason: statementNoteNotApplicableNotFound)
