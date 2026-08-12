@@ -78,7 +78,7 @@
     ]
   },
   "S100W3XJ": {
-    "reason": "us_gaap_unsupported",
+    "reason": "available_via_statement",
     "status": "not_applicable"
   },
   "S100W043": {
@@ -122,7 +122,7 @@
     "status": "not_applicable"
   },
   "S100XTLJ": {
-    "reason": "us_gaap_unsupported",
+    "reason": "available_via_statement",
     "status": "not_applicable"
   },
   "S100W4FB": {

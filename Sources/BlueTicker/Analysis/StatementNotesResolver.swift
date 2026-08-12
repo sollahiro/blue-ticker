@@ -190,17 +190,18 @@ enum StatementNotesResolver {
     ///    `fieldSetFromInstant` が連結コンテキストを優先するため、非連結のみのタグ（味の素単体・
     ///    三菱UFJ単体等）はここでは拾わない。
     /// 2. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路のみ。**BS HTML は使わない** —
-    ///    `get_statement` と責務が被り、US-GAAP では短期のみ拾う漏れも起きた）。
-    ///    味の素は支払期日別 CL+NCL（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）、
-    ///    クボタは現在価値 83,336百万円、スズキは帳簿価額。使用権資産合計（クボタ 87,946）は別表で対象外。
-    /// 3. US-GAAP → `.notApplicable(us_gaap_unsupported)`（`borrowings_schedule` と同方針）。
+    ///    `get_statement` と責務が被る）。味の素は「支払期日が1年以内／1年超」＝流動・非流動の
+    ///    帳簿価額（成分合算 40,706百万円、開示合計セル 40,707 は丸め差）。クボタは現在価値合計
+    ///    83,336百万円、スズキは帳簿価額合計のみ。使用権資産合計（クボタ 87,946）は別表で対象外。
+    /// 3. US-GAAP → `.notApplicable(available_via_statement)`。連結BSのオペレーティング・リース
+    ///    負債は `statement`（`USGAAPHtmlFields`）側の責務。同じ値を本 note に引っ張らない。
     ///
     /// J-GAAP で BS タグも IFRS TextBlock も無い会社（オークマ等）のリース債務は借入金等明細表
     /// （`borrowings_schedule`）側。PPE 明細は資産側のためリース債務は取れない。本 note への
     /// 明細表フォールバックはしない（責務分離）。
     ///
-    /// 満期別内訳（１年以内…）: スズキ・クボタ注記には表があるが、TextBlock 内の複数表が
-    /// 「１年以内」等を共有し貸手側と混線するため、現状は合計行のみ（拡充は別途）。
+    /// スズキ・クボタの満期表（「１年以内」等）は割引前契約CFであり、味の素型の流動／非流動
+    /// 帳簿価額とは別物。貸手表とラベルが衝突するため、現状は合計行のみ。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -250,7 +251,7 @@ enum StatementNotesResolver {
         }
 
         if accountingStandard == "US-GAAP" {
-            return .notApplicable(reason: statementNotApplicableUSGAAP)
+            return .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
         }
         return .notApplicable(reason: statementNoteNotApplicableNotFound)
     }

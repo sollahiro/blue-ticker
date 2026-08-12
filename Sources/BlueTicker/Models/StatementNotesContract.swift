@@ -32,6 +32,7 @@ public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equ
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。BS 構造化タグ（`LeaseObligations*` / `LeaseLiabilities*IFRS`）または
 /// IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。使用権資産の増減表は対象外。
+/// US-GAAP の BS 上オペレーティング・リース負債は `statement` 側（`available_via_statement`）。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。

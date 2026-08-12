@@ -6,7 +6,7 @@
 // - J-GAAP BS タグ: ニチレイ・AZplanning（`LeaseObligationsCL`/`NCL`）
 // - not_found: オークマ（リース債務は借入金等明細表＝`borrowings_schedule`側。PPE不可）、
 //   東邦レマック、銀行2社
-// - US-GAAP: 富士フイルム・キヤノン → us_gaap_unsupported（BS HTML 経路は statements と責務重複のため廃止）
+// - US-GAAP: 富士フイルム・キヤノン → available_via_statement（BS上の値は statement 責務。notesに二重取得しない）
 
 import Foundation
 import Testing
@@ -55,7 +55,7 @@ import Testing
     }
 
     @Test
-    func smokeLeaseFujifilmNotApplicableUSGAAP() async throws {
+    func smokeLeaseFujifilmAvailableViaStatement() async throws {
         try await withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", xbrlDir: $0)
         }
@@ -90,7 +90,7 @@ import Testing
     }
 
     @Test
-    func smokeLeaseCanonNotApplicableUSGAAP() async throws {
+    func smokeLeaseCanonAvailableViaStatement() async throws {
         try await withSmokeCache("S100XTLJ") {
             try assertMatchesOracle(docID: "S100XTLJ", xbrlDir: $0)
         }
