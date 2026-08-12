@@ -28,7 +28,8 @@ enum StatementFinancialsResolver {
 
     /// `company_financials` 組立が読む本表水準値。正本は statement（`StatementAnalyzer.resolveFromXBRL`）。
     /// US-GAAP は HTML Statement 行のラベルから仮想タグ FieldSet を組み立て、既存 Extractor へ渡す。
-    /// J-GAAP / IFRS は Statement 行の実タグだけで FieldSet を作り、SummaryOfBusinessResults 等を混ぜない。
+    /// J-GAAP / IFRS は Statement が採用したタグだけを許可した FieldSet で Extractor を回す
+    /// （SummaryOfBusinessResults 等の本表外タグは混ぜない。コンテキストは元 fact を保持）。
     static func resolve(xbrlDir: URL) -> StatementFinancialsValues? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
@@ -43,18 +44,24 @@ enum StatementFinancialsResolver {
         if accountingStandard == "US-GAAP" {
             return resolveFromUSGAAPStatement(year)
         }
-        return resolveFromStructuredStatement(year, accountingStandard: accountingStandard)
+        return resolveFromStructuredStatement(
+            year, tagElements: tagElements, accountingStandard: accountingStandard)
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）
 
     private static func resolveFromStructuredStatement(
-        _ year: StatementYear, accountingStandard: String
+        _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String
     ) -> StatementFinancialsValues {
-        let durationFS = fieldSetFromLineItems(year.incomeStatement + year.cashFlow)
-        let instantFS = fieldSetFromLineItems(year.balanceSheet)
+        // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
+        // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
+        // （行値だけを辞書化すると先勝ちで期首や計算派生値に引きずられる）。
+        let statementTags = Set(
+            (year.balanceSheet + year.incomeStatement + year.cashFlow).map(\.tag))
+        let masked = tagElements.filter { statementTags.contains($0.key) }
+        let durationFS = fieldSetFromDuration(masked)
+        let instantFS = fieldSetFromInstant(masked)
 
-        // 空 FieldSet でも Extractor は動くが、行が無い会社は全 nil で返す。
         let is_ = IncomeStatementExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard)
         let op = OperatingProfitExtractor.extract(
@@ -307,15 +314,4 @@ enum StatementFinancialsResolver {
         return bestKey.map { map[$0]! }
     }
 
-    private static func fieldSetFromLineItems(_ items: [StatementLineItem]) -> FieldSet {
-        var fs: FieldSet = [:]
-        for item in items {
-            // 同じタグが CF 期首/期末などで複数行ある場合は先勝ち（本表水準値は BS Instant /
-            // PL Duration / CF 合計タグが主で、期末現金は BS の cash タグ側で取る）。
-            if fs[item.tag] == nil {
-                fs[item.tag] = FieldValue(current: item.value, prior: nil)
-            }
-        }
-        return fs
-    }
 }

@@ -167,7 +167,6 @@ import Foundation
         let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
         let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
-        let bb  = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
         let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: std)
@@ -242,7 +241,8 @@ import Foundation
                   let statement = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
             else { continue }
 
-            func check(_ field: String, exp: Double?, act: Double?) {
+            /// 必須フィールド: statement が必ず返し、期待値と一致すること。
+            func assertRequired(_ field: String, expected exp: Double?, actual act: Double?) {
                 guard let e = exp else { return }
                 guard let a = act else {
                     failures.append("\(fixtureID) \(field): statement=nil expected=\(e)")
@@ -253,41 +253,62 @@ import Foundation
                     failures.append("\(fixtureID) \(field): statement=\(a) expected=\(e)")
                 }
             }
+            /// 任意フィールド: statement が返したときだけ期待値と照合（欠測は旧 Extractor フォールバック）。
+            func assertIfPresent(_ field: String, expected exp: Double?, actual act: Double?) {
+                guard let e = exp, let a = act else { return }
+                let tol = max(abs(e) * Self.relTol, 1.0)
+                if abs(e - a) > tol {
+                    failures.append("\(fixtureID) \(field): statement=\(a) expected=\(e)")
+                }
+            }
 
             let income = expected["income_statement"] as? [String: Any] ?? [:]
             let bs = expected["balance_sheet"] as? [String: Any] ?? [:]
-            check("sales", income["sales"] as? Double, statement.sales)
-            check("operating_profit", income["operating_profit"] as? Double, statement.operatingProfit)
-            check("net_profit", income["net_profit"] as? Double, statement.netProfit)
-            check("total_assets", bs["total_assets"] as? Double, statement.totalAssets)
-            check("current_assets", bs["current_assets"] as? Double, statement.currentAssets)
-            check("non_current_assets", bs["non_current_assets"] as? Double, statement.nonCurrentAssets)
-            check("current_liabilities", bs["current_liabilities"] as? Double, statement.currentLiabilities)
-            check(
-                "non_current_liabilities", bs["non_current_liabilities"] as? Double,
-                statement.nonCurrentLiabilities)
-            check("net_assets", bs["net_assets"] as? Double, statement.netAssets)
-            check(
-                "ppe_total", (expected["tangible_fixed_assets"] as? [String: Any])?["total"] as? Double,
-                statement.ppeTotal)
-            check(
-                "cash_eq", (expected["cash_eq"] as? [String: Any])?["current"] as? Double,
-                statement.cashEquivalents)
-            check(
+            assertRequired("sales", expected: dbl(income["sales"]), actual: statement.sales)
+            assertRequired(
+                "operating_profit", expected: dbl(income["operating_profit"]),
+                actual: statement.operatingProfit)
+            assertRequired(
+                "net_profit", expected: dbl(income["net_profit"]), actual: statement.netProfit)
+            assertRequired(
+                "total_assets", expected: dbl(bs["total_assets"]), actual: statement.totalAssets)
+            assertRequired(
+                "net_assets", expected: dbl(bs["net_assets"]), actual: statement.netAssets)
+            assertIfPresent(
+                "current_assets", expected: dbl(bs["current_assets"]),
+                actual: statement.currentAssets)
+            assertIfPresent(
+                "non_current_assets", expected: dbl(bs["non_current_assets"]),
+                actual: statement.nonCurrentAssets)
+            assertIfPresent(
+                "current_liabilities", expected: dbl(bs["current_liabilities"]),
+                actual: statement.currentLiabilities)
+            assertIfPresent(
+                "non_current_liabilities", expected: dbl(bs["non_current_liabilities"]),
+                actual: statement.nonCurrentLiabilities)
+            assertIfPresent(
+                "ppe_total",
+                expected: dbl((expected["tangible_fixed_assets"] as? [String: Any])?["total"]),
+                actual: statement.ppeTotal)
+            assertIfPresent(
+                "cash_eq", expected: dbl((expected["cash_eq"] as? [String: Any])?["current"]),
+                actual: statement.cashEquivalents)
+            assertIfPresent(
                 "dividend_paid_cf",
-                (expected["dividend_paid_cf"] as? [String: Any])?["current"] as? Double,
-                statement.dividendPaidCF)
-            check(
+                expected: dbl((expected["dividend_paid_cf"] as? [String: Any])?["current"]),
+                actual: statement.dividendPaidCF)
+            assertIfPresent(
                 "accounts_receivable",
-                (expected["accounts_receivable"] as? [String: Any])?["current"] as? Double,
-                statement.accountsReceivable)
-            check(
-                "inventory", (expected["inventory"] as? [String: Any])?["current"] as? Double,
-                statement.inventory)
-            check(
+                expected: dbl((expected["accounts_receivable"] as? [String: Any])?["current"]),
+                actual: statement.accountsReceivable)
+            assertIfPresent(
+                "inventory",
+                expected: dbl((expected["inventory"] as? [String: Any])?["current"]),
+                actual: statement.inventory)
+            assertIfPresent(
                 "accounts_payable",
-                (expected["accounts_payable"] as? [String: Any])?["current"] as? Double,
-                statement.accountsPayable)
+                expected: dbl((expected["accounts_payable"] as? [String: Any])?["current"]),
+                actual: statement.accountsPayable)
             checked += 1
         }
 

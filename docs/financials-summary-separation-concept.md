@@ -148,7 +148,7 @@ DB 参照組立を選ぶ場合のみ必須。
 | 2 | **issued_shares パススルー** | `issued_shares_and_capital` の as_of を正本に | 完了（PR #217） |
 | 3 | **値一致回帰** | smoke で financials と notes 正本の一致テスト | 完了（PR #217） |
 | 4 | **フィールド source 表の固定** | `FinancialsContract` 近傍に正本索引を置く | 完了 |
-| 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total / AR·Inv·AP / 現金 / dividend_paid_cf を statement 行から組立 | 完了（本 PR）。欠測時のみ旧 Extractor フォールバック。gross_profit / sga / CFO·CFI は未移行 |
+| 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total / AR·Inv·AP / 現金 / dividend_paid_cf を statement 行から組立 | 完了（本 PR）。J-GAAP/IFRS は Statement 採用タグの許可リスト＋元 fact FieldSet。US-GAAP は HTML Statement ラベル。欠測時のみ旧 Extractor フォールバック（富士フイルム AR/AP の入れ子合計など）。gross_profit / sga / CFO·CFI は未移行 |
 | 6 | **capex を notes 正本に** | overview XBRL タグ → CF タグ。表 `capex_segments` は明細のみ | 完了（本 PR） |
 
 ### 次（正本→組立の本線）
