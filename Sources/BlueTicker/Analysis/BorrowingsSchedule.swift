@@ -888,7 +888,8 @@ enum BorrowingsSchedule {
     }
 
     /// 表探索の入口。直接タグ（揃っている場合）→ J-GAAP附属明細表 → IFRS注記（専用タグ→汎用タグの順）
-    /// の順にフォールバックする。
+    /// の順にフォールバックする。US-GAAP 巨大注記は `extractRows` のみが読む（IBD は HTML 仮想タグ
+    /// ＋オペレーティング・リース加算を維持するため `extract` には載せない）。
     private static func parseTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         parseDirectDebtFacts(xbrlDir: xbrlDir)
             ?? parseJGaapScheduleTable(xbrlDir: xbrlDir)
@@ -896,6 +897,304 @@ enum BorrowingsSchedule {
             ?? parseIFRSFinancialInstrumentsNote(xbrlDir: xbrlDir)
             ?? parseLeaseOnlyNote(xbrlDir: xbrlDir)
             ?? parseRollforwardNote(xbrlDir: xbrlDir)
+    }
+
+    /// US-GAAP 連結の借入金等明細。附属明細表タグは注記へのクロスリファレンスのみ（表なし）で、
+    /// 本体は `NotesToConsolidatedFinancialStatementsUSGAAPTextBlock` 内の注番号見出し配下にある。
+    /// 実データ検証（2026-08-12）:
+    /// - 富士フイルム S100W3XJ 注記9「短期の社債及び借入金・長期の社債及び借入金」:
+    ///   短期は前/当比較表、長期は区分見出し＋銘柄別「返済期限」行＋控除/差引計。
+    ///   １年以内返済は長期グロスと二重になるため落とす。オペレーティング・リースは別注記。
+    /// - キヤノン S100XTLJ 注9「短期借入金及び長期債務」: 短期は散文の百万円ペア、
+    ///   長期は colspan 付き比較表（銀行借入／その他の債務）。
+    /// IBD（`extract`）には使わない。notes の内訳表であり、IBD 合計（リース込み HTML 仮想タグ）とは母数が違う。
+    private static func parseUSGAAPNotesTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let html = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.notesToConsolidatedFinancialStatementsUSGAAPTextBlock)
+        else { return nil }
+        return parseUSGAAPNotesHtml(html)
+    }
+
+    /// テスト用に HTML 文字列からも同じ経路を踏めるようにする（CI は EDINET キャッシュ無しでも
+    /// 表形状・散文ペア・控除行の扱いを固定できる）。
+    static func parseUSGAAPNotesHtml(_ html: String) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let soup = try? SwiftSoup.parse(html) else { return nil }
+        return parseUSGAAPNotesDocument(soup)
+    }
+
+    private static let usgaapNoteHeadingPattern = try! NSRegularExpression(
+        pattern: "^(?:注記?|注)?[0-9０-９]{1,2}[\\s　]")
+    private static let usgaapYearRowPattern = try! NSRegularExpression(pattern: "^[0-9]{4}年度")
+    private static let usgaapDatePattern = try! NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
+    private static let usgaapFiscalTermPattern = try! NSRegularExpression(pattern: "第\\d+期")
+    private static let usgaapRateInLabelPattern = try! NSRegularExpression(
+        pattern: "(?:年利率|銀行利率)\\s*([0-9.]+)[％%]")
+    private static let usgaapMillionYenPairPattern = try! NSRegularExpression(
+        pattern: "([^。]+?)(?:は、それぞれ|は)([0-9,]+)百万円、([0-9,]+)百万円")
+    private static let usgaapFootnoteMarkerPattern = try! NSRegularExpression(pattern: "[*＊][0-9]+")
+
+    private static func isUSGAAPNoteHeading(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, t.unicodeScalars.count <= 80 else { return false }
+        let range = NSRange(t.startIndex..., in: t)
+        return usgaapNoteHeadingPattern.firstMatch(in: t, range: range) != nil
+    }
+
+    private static func isUSGAAPDebtNoteHeading(_ text: String) -> Bool {
+        guard isUSGAAPNoteHeading(text) else { return false }
+        return text.contains("借入金") || text.contains("長期債務") || text.contains("有利子負債")
+    }
+
+    private static func isInsideTable(_ element: Element) -> Bool {
+        var parent = element.parent()
+        while let cur = parent {
+            if cur.tagName() == "table" { return true }
+            parent = cur.parent()
+        }
+        return false
+    }
+
+    private static func parseUSGAAPNotesDocument(
+        _ document: Document
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let all = (try? document.getAllElements())?.array() else { return nil }
+        var inDebtNote = false
+        var tables: [Element] = []
+        var proseChunks: [String] = []
+        for el in all {
+            let text = (try? el.text(trimAndNormaliseWhitespace: true)) ?? ""
+            if isUSGAAPDebtNoteHeading(text) {
+                inDebtNote = true
+                continue
+            }
+            if inDebtNote, isUSGAAPNoteHeading(text), !isUSGAAPDebtNoteHeading(text) {
+                break
+            }
+            guard inDebtNote else { continue }
+            if el.tagName() == "table" {
+                tables.append(el)
+            } else if el.tagName() == "p", !isInsideTable(el), !text.isEmpty {
+                proseChunks.append(text)
+            }
+        }
+
+        var tableRows: [Row] = []
+        for table in tables {
+            guard let parsed = parseUSGAAPDebtComparisonTable(table) else { continue }
+            tableRows.append(contentsOf: parsed)
+        }
+        let proseRows = parseUSGAAPShortTermFromProse(proseChunks.joined(separator: "。"))
+        let hasShortTermTable = tableRows.contains {
+            $0.label.contains("短期借入金") || $0.label.contains("コマーシャル")
+        }
+        let shortTerm = hasShortTermTable ? [] : proseRows
+        var combined = shortTerm + tableRows
+        let hasLongTermInstrument = combined.contains { isUSGAAPLongTermInstrumentLabel($0.label) }
+        if hasLongTermInstrument {
+            combined.removeAll { isUSGAAPCurrentPortionLabel($0.label) }
+        }
+        combined = mergeConsecutiveSameLabels(combined)
+
+        guard !combined.isEmpty else { return nil }
+        let totalCurrent = combined.compactMap(\.current).reduce(0, +)
+        let priorValues = combined.compactMap(\.prior)
+        let totalPrior = priorValues.isEmpty ? nil : priorValues.reduce(0, +)
+        return (combined, totalCurrent, totalPrior)
+    }
+
+    private static func isUSGAAPCurrentPortionLabel(_ label: String) -> Bool {
+        label.contains("１年以内") || label.contains("1年以内")
+            || label.contains("１年内") || label.contains("1年内")
+    }
+
+    private static func isUSGAAPLongTermInstrumentLabel(_ label: String) -> Bool {
+        if label.contains("短期") { return false }
+        return label.contains("無担保借入") || label.contains("銀行借入")
+            || label.contains("無担保社債") || label.contains("その他の債務")
+            || label.contains("社債")
+    }
+
+    private static func isUSGAAPColumnHeaderLabel(_ label: String) -> Bool {
+        if label.contains("百万円") || label.contains("千円") || label.contains("億円") { return true }
+        if label.contains("前連結") || label.contains("当連結") { return true }
+        let range = NSRange(label.startIndex..., in: label)
+        if usgaapFiscalTermPattern.firstMatch(in: label, range: range) != nil { return true }
+        if usgaapDatePattern.firstMatch(in: label, range: range) != nil { return true }
+        return false
+    }
+
+    private static func isUSGAAPSkipRowLabel(_ label: String) -> Bool {
+        if label.isEmpty { return true }
+        if label == "小計" || label == "計" || label == "差引計" { return true }
+        if isGrandTotalLabel(label) || isRestatementOrSectionTotalLabel(label) { return true }
+        if label.contains("控除") { return true }
+        if usgaapYearRowPattern.firstMatch(
+            in: label, range: NSRange(label.startIndex..., in: label)) != nil {
+            return true
+        }
+        if label.hasSuffix("年度以降") { return true }
+        return false
+    }
+
+    private static func isUSGAAPComparisonTable(_ table: Element) -> Bool {
+        let text = (try? table.text()) ?? ""
+        if text.contains("前") && text.contains("当") { return true }
+        let range = NSRange(text.startIndex..., in: text)
+        if usgaapDatePattern.numberOfMatches(in: text, range: range) >= 2 { return true }
+        if usgaapFiscalTermPattern.numberOfMatches(in: text, range: range) >= 2 { return true }
+        return false
+    }
+
+    private static func parseUSGAAPDebtComparisonTable(_ table: Element) -> [Row]? {
+        guard isUSGAAPComparisonTable(table),
+              let trs = (try? table.select("tr"))?.array() else { return nil }
+
+        let tableText = (try? table.text()) ?? ""
+        let scale: Double = tableText.contains("千円") ? 1_000
+            : tableText.contains("億円") ? 100_000_000
+            : Financial.millionYen
+
+        var pendingCategory: String?
+        var pendingHasDetailRows = false
+        var rows: [Row] = []
+
+        for tr in trs {
+            guard let cells = (try? tr.select("td, th"))?.array(), !cells.isEmpty else { continue }
+            var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if label.isEmpty, cells.count > 1 {
+                label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+            }
+            // 無印小計行の金額がラベルが空のとき金額セルへフォールバックしない（富士フイルム長期表）。
+            if XBRLUtils.parseTextblockCellValue(label) != nil { label = "" }
+
+            // スペーサー空セルは無視し、数値または「－」だけを前期/当期スロットとみなす。
+            // コマーシャル・ペーパーのように片側が「－」の行は compactMap では1件に見える
+            // （富士フイルム S100W3XJ 短期表）。
+            var amountSlots: [Double?] = []
+            for cell in cells.dropFirst() {
+                let raw = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
+                if let value = XBRLUtils.parseTextblockCellValue(raw) {
+                    amountSlots.append(value)
+                } else {
+                    let token = normalizeLabel(raw)
+                    if ["－", "-", "—", "―"].contains(token) { amountSlots.append(nil) }
+                }
+            }
+            if amountSlots.count < 2 {
+                if !label.isEmpty, !isUSGAAPSkipRowLabel(label), !isUSGAAPCurrentPortionLabel(label),
+                   !isUSGAAPColumnHeaderLabel(label) {
+                    pendingCategory = label
+                    pendingHasDetailRows = false
+                }
+                continue
+            }
+            let prior = amountSlots[0]
+            let current = amountSlots[amountSlots.count - 1]
+            guard prior != nil || current != nil else { continue }
+            if label.isEmpty || isUSGAAPSkipRowLabel(label) || isUSGAAPColumnHeaderLabel(label) {
+                continue
+            }
+
+            var useLabel = label
+            if let pending = pendingCategory {
+                if label.hasPrefix("返済期限") {
+                    useLabel = pending
+                    pendingHasDetailRows = true
+                } else if !pendingHasDetailRows {
+                    useLabel = pending
+                    pendingCategory = nil
+                } else {
+                    pendingCategory = nil
+                    useLabel = label
+                }
+            }
+
+            let rate = usgaapSingleRatePercent(in: label)
+            rows.append(Row(
+                label: displayLabel(for: cleanedUSGAAPLabel(useLabel)),
+                current: current.map { $0 * scale },
+                prior: prior.map { $0 * scale },
+                averageInterestRatePercent: rate
+            ))
+        }
+        return rows.isEmpty ? nil : rows
+    }
+
+    private static func cleanedUSGAAPLabel(_ raw: String) -> String {
+        var s = raw
+        let range = NSRange(s.startIndex..., in: s)
+        s = usgaapFootnoteMarkerPattern.stringByReplacingMatches(
+            in: s, options: [], range: range, withTemplate: "")
+        if let idx = s.firstIndex(of: ";") { s = String(s[..<idx]) }
+        if let idx = s.firstIndex(of: "；") { s = String(s[..<idx]) }
+        return normalizeLabel(s)
+    }
+
+    private static func usgaapSingleRatePercent(in label: String) -> Double? {
+        if label.contains("～") || label.contains("~") { return nil }
+        let range = NSRange(label.startIndex..., in: label)
+        guard let match = usgaapRateInLabelPattern.firstMatch(in: label, range: range),
+              let numRange = Range(match.range(at: 1), in: label) else { return nil }
+        return Double(label[numRange])
+    }
+
+    private static func parseUSGAAPShortTermFromProse(_ text: String) -> [Row] {
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = usgaapMillionYenPairPattern.matches(in: text, range: range)
+        var rows: [Row] = []
+        for match in matches {
+            guard match.numberOfRanges >= 4,
+                  let labelRange = Range(match.range(at: 1), in: text),
+                  let priorRange = Range(match.range(at: 2), in: text),
+                  let currentRange = Range(match.range(at: 3), in: text),
+                  let label = shortTermProseLabel(String(text[labelRange])),
+                  let prior = XBRLUtils.parseTextblockCellValue(String(text[priorRange])),
+                  let current = XBRLUtils.parseTextblockCellValue(String(text[currentRange]))
+            else { continue }
+            rows.append(Row(
+                label: displayLabel(for: label),
+                current: current * Financial.millionYen,
+                prior: prior * Financial.millionYen,
+                averageInterestRatePercent: nil
+            ))
+        }
+        return rows
+    }
+
+    private static func shortTermProseLabel(_ raw: String) -> String? {
+        let n = normalizeLabel(raw)
+        guard n.contains("短期借入金") || n.contains("コマーシャル") else { return nil }
+        let markers = ["金融サービス", "その他の銀行借入", "短期借入金", "コマーシャル"]
+        for marker in markers {
+            if let r = n.range(of: marker) {
+                return String(n[r.lowerBound...])
+            }
+        }
+        return n
+    }
+
+    private static func mergeConsecutiveSameLabels(_ rows: [Row]) -> [Row] {
+        var merged: [Row] = []
+        for row in rows {
+            if let last = merged.last, last.label == row.label {
+                merged[merged.count - 1] = Row(
+                    label: last.label,
+                    current: sumOptional(last.current, row.current),
+                    prior: sumOptional(last.prior, row.prior),
+                    averageInterestRatePercent: nil
+                )
+            } else {
+                merged.append(row)
+            }
+        }
+        return merged
+    }
+
+    private static func sumOptional(_ a: Double?, _ b: Double?) -> Double? {
+        switch (a, b) {
+        case (nil, nil): return nil
+        default: return (a ?? 0) + (b ?? 0)
+        }
     }
 
     /// トヨタ自動車 S100Y8NY 実データ検証（2026-08-04）: `ifrsInterestBearingLiabilitiesTextblockTag`は
@@ -923,7 +1222,8 @@ enum BorrowingsSchedule {
 
     /// 財務諸表注記取り込み `borrowings_schedule` note_type 向け。`extract` と異なり
     /// 平均利率も保持したまま行を返す（IBD 合算には使わない生の明細表データ）。
+    /// US-GAAP は附属明細表タグがクロスリファレンスのみのため、巨大注記 HTML を追加で読む。
     static func extractRows(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        parseTable(xbrlDir: xbrlDir)
+        parseTable(xbrlDir: xbrlDir) ?? parseUSGAAPNotesTable(xbrlDir: xbrlDir)
     }
 }

@@ -71,23 +71,19 @@ enum StatementNotesResolver {
     ///
     /// 連結附属明細表「借入金等明細表」の構成科目（短期借入金・社債・長期借入金・リース負債等）を
     /// 当期首/当期末残高・平均利率つきで表として公開する。解析ロジックは
-    /// `BorrowingsSchedule.extractRows`（`IBDExtractor` が使う `extract` と表探索・合計行判定を
-    /// 共有、`BorrowingsSchedule.parseTable`）をそのまま再利用し、自前で明細表を再パースしない
-    /// （重複ロジック回避）。合計行は `isTotal: true` で区別する（平均利率は「－」表記のため nil）。
+    /// `BorrowingsSchedule.extractRows`（J-GAAP/IFRS は `IBDExtractor` が使う `extract` と表探索を
+    /// 共有。US-GAAP は巨大注記 HTML を `extractRows` のみが読む）を再利用し、自前で明細表を
+    /// 再パースしない。合計行は `isTotal: true` で区別する（平均利率は「－」表記のため nil）。
     ///
     /// v2（2026-08-02）: 当初は当期末残高のみ `items: [StatementLineItem]` で返していたが、実データ
     /// レビュー（ユーザー、SOMPO S100R1LR）で平均利率・当期首残高も欲しいとの要望があり、
     /// `BorrowingsComponentPayload` へ切り出した（単一値の `StatementLineItem` では複数値を表現
     /// できないため）。返済期限（表の5列目）はユーザー判断で対象外（フリーテキストで構造化コストが
     /// 見合わない）。
+    /// v3（2026-08-12）: US-GAAP 連結は附属明細表タグがクロスリファレンスのみのため見送りだったが、
+    /// `NotesToConsolidatedFinancialStatementsUSGAAPTextBlock` の注記表／散文から内訳を取る。
+    /// 個別 BS への silent fallback はしない。オペレーティング・リースは IBD / `lease_liabilities` 側。
     static func resolveBorrowingsSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
-        // US-GAAP 連結は附属明細表タグ経路が無く、Statement 本体と同様に明示対象外
-        // （タグ不在の not_found に頼らず会計基準で揃える。2026-08-09）。
-        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        if detectAccountingStandard(tagElements) == "US-GAAP" {
-            return .notApplicable(reason: statementNotApplicableUSGAAP)
-        }
-
         guard let result = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
@@ -142,8 +138,10 @@ enum StatementNotesResolver {
     ///   別注記「注５　有形固定資産」のHTML表にしかない。`statement`のUS-GAAP HTML抽出
     ///   （`USGAAPStatementHtml`）はBS本表しか読まないため、キヤノンのように内訳が別注記にある
     ///   会社ではStatementからも取得できない）。会社ごとに開示形式が違い構造化タグでの判別もできない
-    ///   ため、Statementを案内する`available_via_statement`は誤りうる。`resolveBorrowingsSchedule`と
-    ///   同じ`statementNotApplicableUSGAAP`（US-GAAP自体を対応見送り）に倒す。
+    ///   ため、Statementを案内する`available_via_statement`は誤りうる。US-GAAP自体を対応見送りとし
+    ///   `statementNotApplicableUSGAAP` に倒す（`borrowings_schedule` は 2026-08-12 に注記 HTML
+    ///   経路を追加したが、PPE は会社ごとに内訳の置き場が BS 本表／別注記に割れ、同じ経路では
+    ///   足りない）。
     static func resolvePropertyPlantEquipmentSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         switch detectAccountingStandard(tagElements) {

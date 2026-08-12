@@ -355,8 +355,51 @@
     ]
   },
   "S100W3XJ": {
-    "status": "not_applicable",
-    "reason": "us_gaap_unsupported"
+    "source": "xbrl_facts",
+    "components": [
+      {
+        "label": "短期借入金",
+        "prior_balance": 235030000000,
+        "current_balance": 97926000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "コマーシャル・ペーパー",
+        "prior_balance": null,
+        "current_balance": 50000000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "銀行及び保険会社等からの無担保借入金",
+        "prior_balance": 25439000000,
+        "current_balance": 175342000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "無担保社債(円建)",
+        "prior_balance": 235000000000,
+        "current_balance": 355000000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "その他",
+        "prior_balance": 7350000000,
+        "current_balance": 7640000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "合計",
+        "prior_balance": 502819000000,
+        "current_balance": 685908000000,
+        "average_interest_rate_percent": null,
+        "is_total": true
+      }
+    ]
   },
   "S100W4FB": {
     "source": "xbrl_facts",
@@ -477,7 +520,43 @@
     ]
   },
   "S100XTLJ": {
-    "status": "not_applicable",
-    "reason": "us_gaap_unsupported"
+    "source": "xbrl_facts",
+    "components": [
+      {
+        "label": "金融サービスに係る短期借入金",
+        "prior_balance": 40400000000,
+        "current_balance": 38100000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "その他の銀行借入による短期借入金",
+        "prior_balance": 276106000000,
+        "current_balance": 371112000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "銀行借入",
+        "prior_balance": 201909000000,
+        "current_balance": 401699000000,
+        "average_interest_rate_percent": 1.04,
+        "is_total": false
+      },
+      {
+        "label": "その他の債務",
+        "prior_balance": 4990000000,
+        "current_balance": 5199000000,
+        "average_interest_rate_percent": null,
+        "is_total": false
+      },
+      {
+        "label": "合計",
+        "prior_balance": 523405000000,
+        "current_balance": 816110000000,
+        "average_interest_rate_percent": null,
+        "is_total": true
+      }
+    ]
   }
 }

@@ -393,6 +393,11 @@ enum Xbrl {
     /// （東邦レマック S100XRD8 実データ検証、2026-08-08）はこちらのみ持つ。列構成・「合計」行の
     /// 判定は連結版と同じ（`parseJGaapScheduleTable` を共有）。
     static let borrowingsScheduleNonConsolidatedTextblockTag = "AnnexedDetailedScheduleOfBorrowingsFinancialStatementsTextBlock"
+    /// US-GAAP 連結財務諸表注記（巨大 TextBlock。借入金等明細表は附属明細表タグがクロスリファレンス
+    /// のみのため、この注記内の社債・借入金／長期債務表を `BorrowingsSchedule.parseUSGAAPNotesTable`
+    /// が読む。実データ検証 2026-08-12: 富士フイルム S100W3XJ 注記9、キヤノン S100XTLJ 注9）。
+    static let notesToConsolidatedFinancialStatementsUSGAAPTextBlock =
+        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock"
 
     /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記 TextBlock タグ。J-GAAP附属明細表タグが
     /// 存在しない、または財務諸表等規則の適用除外でクロスリファレンス文のみ（表なし）の場合に使う
@@ -664,7 +669,7 @@ enum Xbrl {
         "ReportableSegment",
     ]
     static let businessSegmentMixedTextBlockTags: Set<String> = [
-        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  // US-GAAP 連結財務諸表注記（事業別セグメントを内包）
+        notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（事業別セグメントを内包）
     ]
     static let businessSegmentHeadingKeywords: [String] = [
         "セグメント情報",
@@ -737,7 +742,7 @@ enum Xbrl {
     ]
     static let geographyMixedTextBlockTags: Set<String> = [
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
-        "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock",  // US-GAAP 連結財務諸表注記（地域別を内包）
+        notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（地域別を内包）
     ]
     static let geographyHeadingKeywords: [String] = [
         "地域ごとの情報",

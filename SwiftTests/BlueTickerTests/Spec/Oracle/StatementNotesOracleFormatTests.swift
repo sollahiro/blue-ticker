@@ -16,7 +16,8 @@
 // 対象:
 // - 試作3件（S100JRT9・S100R1LR・S100YHZG）: analysis_cache 経路（従来どおり）
 // - smoke 固定11社: SmokeCacheSupport（`tmp_cache/edinet`）経路。年次スモークの次元床に
-//   borrowings_schedule を載せる（2026-08-09）。US-GAAP 2社は `status=not_applicable`。
+//   borrowings_schedule を載せる（2026-08-09）。US-GAAP 2社は巨大注記 HTML から内訳を取る
+//   （2026-08-12。附属明細表タグはクロスリファレンスのみ）。
 //
 // 他ファイルの `cacheAvailable` 慣習に合わせ、docID ごとに個別 `@Test` + `.enabled(if:)` で
 // キャッシュ無しを静かに SKIP する（CI にキャッシュが無い場合でも赤くならない）。
@@ -102,7 +103,7 @@ import Testing
     }
 
     @Test
-    func smokeBorrowingsFujifilmNotApplicable() async throws {
+    func smokeBorrowingsFujifilmMatchesOracle() async throws {
         try await withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", xbrlDir: $0)
         }
@@ -137,7 +138,7 @@ import Testing
     }
 
     @Test
-    func smokeBorrowingsCanonNotApplicable() async throws {
+    func smokeBorrowingsCanonMatchesOracle() async throws {
         try await withSmokeCache("S100XTLJ") {
             try assertMatchesOracle(docID: "S100XTLJ", xbrlDir: $0)
         }
