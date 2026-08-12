@@ -89,6 +89,23 @@ US-GAAP は Statement HTML（`USGAAPStatementHtml`）と Summary 用 HTML（`USG
 | 派生・視覚化 | Summary 組立層（`company_financials`）経由（Waterfall / 将来 Sankey 含む） |
 | 二重物 | 正本を1つに決め、financials 側はパススルーまたは再計算のみに |
 
+## 正本抽出の原則（XBRL タグ優先、2026-08-12）
+
+statement / notes / breakdown の **3 正本レイヤ共通**。`AGENTS.md`「タグ透明性」と同型。
+
+| レイヤ | 正本の本体 | 補助（タグで足りないときのみ） |
+|---|---|---|
+| **statement** | BS/PL/CF/SS の構造化 XBRL タグ（`StatementClassifier` が拾う行） | US-GAAP は HTML Statement 経路 |
+| **notes** | note_type ごとの XBRL 数値タグ（例: `CapitalExpendituresOverviewOfCapitalExpendituresEtc`） | TextBlock HTML 表は **明細**（セグメント行・イベント列）。総額の正はタグ |
+| **breakdown** | 軸ごとの XBRL タグ（`totalTag` 等） | LLM 正規化はラベル揺れの補助 |
+
+**financials 組立**: 上記正本の **XBRL タグ解決結果** をパススルーする（#10b: 同一 XBRL パスで resolver 直接呼び）。
+表パース行（例: capex の「小計」行）を Summary 水準値の正本にしない。総額タグと一致するのは表の「合計」行だが、
+組立は **タグを読む**（`CapexExtractor` / notes の overview タグと同型）。
+
+**capex（#6 方針）**: notes 正本の overview XBRL タグ → 無ければ statement CF タグ（`PurchaseOfPropertyPlantAndEquipmentInvCF` 等）。
+HTML 表の `capex_segments` は note API 用の明細。smoke 11 社では overview タグ経路が現行 financials と 11/11 一致。
+
 ## ingest / 組立の依存解消（タスク #10 決定、2026-08-12）
 
 financials 組立が statement / notes / breakdown 正本に依存するとき、**ingest 順序変更は採らない**。
@@ -113,7 +130,7 @@ DB 参照組立を選ぶ場合のみ必須。
 | 帯 | 例 | 置き換え先 |
 |---|---|---|
 | statement 正本化しやすい | sales / OP / 純利益 / BS 合計類 / ppe_total / AR·在庫·AP / 現金 / dividend_paid_cf 等 | statement 行 |
-| notes パススルー本命 | eps / issued_shares / capex（概念差あり）/ dividend_ss | 各 note_type |
+| notes パススルー本命 | eps / issued_shares / capex / dividend_ss | 各 note_type の **XBRL タグ**（表明細は補助） |
 | breakdown 正本 | employees / rd | 各軸（分母の逆依存解消が前提） |
 | 定義突合が要る | IBD / 支払利息 / buyback / cfo·cfi | statement ± notes。ルール整備後 |
 | 派生 | 各種マージン / nopat / roe·roic / net_cash / cfc 等 | 入力付け替え後に financials で再計算 |
@@ -137,7 +154,7 @@ DB 参照組立を選ぶ場合のみ必須。
 | # | タスク | 内容 | 未決・注意 |
 |---|---|---|---|
 | 5 | **本表水準値の statement 参照** | sales / OP / BS 合計 / ppe_total 等を statement 行から組立 | US-GAAP は HTML Statement を組立に配線（`USGAAPHtml` との一本化） |
-| 6 | **capex を notes 正本に** | CF 取得額と設備投資総額の概念差を契約で固定し、Summary `capex` を notes から | smoke で notes 11/11 済み |
+| 6 | **capex を notes 正本に** | overview XBRL タグ（`CapitalExpendituresOverviewOfCapitalExpendituresEtc`）→ CF タグ。表 `capex_segments` は明細のみ | 方針確定。実装は #217 同型のパススルー |
 | 7 | **dividend_ss** | SS 合計列だけでは不足 → notes `dividends` または SS 行規則のどちらを正本にするか決定して実装 | 正本選択が先 |
 | 8 | **IBD / 利息 / buyback / CFO·CFI** | statement マッチ率 50–67% の定義を突合し、ルール＋golden | 機械マッチだけでは不足 |
 
