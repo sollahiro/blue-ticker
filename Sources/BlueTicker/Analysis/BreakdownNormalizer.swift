@@ -353,6 +353,47 @@ enum BreakdownNormalizer {
         let perMember = resolvePerMember(facts: facts, tag: amountTag)
         guard !perMember.isEmpty else { return nil }
 
+        return buildCountBasisSnapshot(
+            perMember: perMember, amountTag: amountTag, total: total, axis: axis,
+            warningPrefix: warningPrefix, labelsByTag: labelsByTag)
+    }
+
+    /// のれんのセグメント別内訳（内訳取り込み goodwill 軸、2026-08-12追加、実装中・未配線）。
+    /// `normalizeCountBasis` と異なり、候補タグ（`Xbrl.goodwillSegmentTags`）は「最初に現れたタグ」
+    /// ではなく「セグメント dimension 付き fact を実際に持つ最初のタグ」を選ぶ。実データ検証
+    /// （三井住友・三菱UFJ）: 全社合計は無dimensionの`Goodwill`タグにしか無く、セグメント別内訳は
+    /// 別タグ`GoodwillBeforeOffsetting`にしかない（同一タグの中に両方が同居するオークマ型とは限らない）。
+    /// `normalizeCountBasis`のタグ選択（"最初に現れる"）だと`Goodwill`が先に見つかった時点で確定し、
+    /// dimension付きfactを1件も持たないまま`perMember`が空になり誤ってnilを返してしまう。
+    static func normalizeGoodwill(
+        facts: [BreakdownFact], total: Double?, totalTag: String? = nil, axis: String,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        var amountTag: String?
+        var perMember: [String: BreakdownFact] = [:]
+        for tag in Xbrl.goodwillSegmentTags {
+            let candidate = resolvePerMember(facts: facts, tag: tag)
+            if !candidate.isEmpty {
+                amountTag = tag
+                perMember = candidate
+                break
+            }
+        }
+        guard let amountTag, !perMember.isEmpty else { return nil }
+
+        return buildCountBasisSnapshot(
+            perMember: perMember, amountTag: totalTag ?? amountTag, total: total, axis: axis,
+            warningPrefix: "goodwill", labelsByTag: labelsByTag)
+    }
+
+    /// `normalizeCountBasis`/`normalizeGoodwill` 共通の後処理（member 分類・分母解決・行組み立て）。
+    /// `amountTag`（`denominatorTag`として使う）は呼び出し側がタグ選択方式ごとに解決済みの値を渡す
+    /// （`normalizeGoodwill` は全社合計の実タグ名=`totalTag` を優先し、無ければセグメント側タグに
+    /// フォールバックする——セグメント別内訳タグと全社合計タグが別物のケースがあるため）。
+    private static func buildCountBasisSnapshot(
+        perMember: [String: BreakdownFact], amountTag: String, total: Double?, axis: String,
+        warningPrefix: String, labelsByTag: [String: String]
+    ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
             if Xbrl.segmentReconcilingMemberNames.contains(member)
