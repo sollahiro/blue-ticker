@@ -785,6 +785,205 @@ private actor RealXbrlMockChat: ChatCompleting {
     }
 }
 
+// smoke 固定11社での employees 軸実データゴールデン（2026-08-12 目視確認済み）。
+// キャッシュは `tmp_cache/edinet/`（`SmokeCacheSupport.cacheDir`）。全社 `NumberOfEmployees`
+// の事業セグメント dimension 付き fact から内訳を組み立て、denominator は非dimension の
+// 全社合計（`smoke/smoke_expected` の employees.current と一致）。11社すべて
+// needsReview=false・sum(rows)==denominator・denominatorTag=NumberOfEmployees。
+// オークマのみ報告セグメントが地域軸（日本/米州/欧州/アジア・パシフィック）。
+@Suite struct SmokeEmployeesBreakdownTests {
+
+    private static let xbrlRoot = SmokeCacheSupport.cacheDir
+    private static let employeeTag = "NumberOfEmployees"
+
+    private static func xbrlDir(_ docID: String) -> URL {
+        xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+    }
+
+    private static func cacheAvailable(_ docID: String) -> Bool {
+        FileManager.default.fileExists(atPath: xbrlDir(docID).path)
+    }
+
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID])
+        guard cacheAvailable(docID) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
+    private static func factsAndLabels(_ docID: String) -> (facts: [BreakdownFact], labels: [String: String]) {
+        let dir = xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+    }
+
+    private static func expectEmployees(
+        docID: String, total: Double,
+        rows: [(labelRaw: String, label: String?, amount: Double, rowKind: String)]
+    ) async throws {
+        guard await ensureAvailable(docID) else { return }
+        let (facts, labels) = factsAndLabels(docID)
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: total, axis: "employees", labelsByTag: labels))
+        #expect(snapshot.axis == "employees")
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.warnings.isEmpty)
+        #expect(snapshot.denominatorTag == employeeTag)
+        #expect(snapshot.denominator == total)
+        #expect(snapshot.rows.map(\.amount).reduce(0, +) == total)
+        #expect(snapshot.rows.count == rows.count)
+        for expected in rows {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == expected.labelRaw })
+            #expect(row.amount == expected.amount)
+            #expect(row.rowKind == expected.rowKind)
+            #expect(row.label == expected.label)
+        }
+    }
+
+    @Test func ajinomotoEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100VXJA", total: 34_860,
+            rows: [
+                ("CorporateSharedMember", nil, 780, "reconciling"),
+                ("FrozenFoodsReportableSegmentMember", "冷凍食品", 5_478, "segment"),
+                ("HealthcareAndOthersReportableSegmentMember", "ヘルスケア等", 5_321, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    nil, 1_185, "segment"),
+                ("SeasoningsAndFoodsReportableSegmentMember", "調味料・食品", 22_096, "segment"),
+            ])
+    }
+
+    @Test func nichireiEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100VYA0", total: 16_626,
+            rows: [
+                ("CorporateSharedMember", nil, 229, "reconciling"),
+                ("LogisticsReportableSegmentsMember", "低温物流", 4_926, "segment"),
+                ("MarineProductsReportableSegmentsMember", "水産", 744, "segment"),
+                ("MeatAndPoultryProductsReportableSegmentsMember", "畜産", 397, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    nil, 190, "segment"),
+                ("ProcessedFoodsReportableSegmentsMember", "加工食品", 10_125, "segment"),
+                ("RealEstateReportableSegmentsMember", "不動産", 15, "segment"),
+            ])
+    }
+
+    @Test func azPlanningEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100VU4O", total: 63,
+            rows: [
+                ("CorporateSharedMember", nil, 15, "reconciling"),
+                ("RealEstateLeasingReportableSegmentMember", "不動産賃貸事業", 4, "segment"),
+                ("RealEstateManagementReportableSegmentMember", "不動産管理事業", 5, "segment"),
+                ("RealEstateSalesReportableSegmentMember", "不動産販売事業", 39, "segment"),
+            ])
+    }
+
+    @Test func fujifilmEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100W3XJ", total: 72_593,
+            rows: [
+                ("BusinessInnovationReportableSegmentsMember", "ビジネスイノベーション", 34_173, "segment"),
+                ("CorporateSharedMember", nil, 4_129, "reconciling"),
+                ("ElectronicsReportableSegmentsMember", "エレクトロニクス", 6_472, "segment"),
+                ("HealthcareReportableSegmentsMember", "ヘルスケア", 21_369, "segment"),
+                ("ImagingReportableSegmentsMember", "イメージング", 6_450, "segment"),
+            ])
+    }
+
+    @Test func okumaEmployeesMatchGeographyReportableSegments() async throws {
+        try await Self.expectEmployees(
+            docID: "S100W043", total: 4_071,
+            rows: [
+                ("AmericasReportableSegmentsMember", "米州", 264, "segment"),
+                ("AsiaAndPacificReportableSegmentsMember", "アジア・パシフィック", 753, "segment"),
+                ("EuropeReportableSegmentsMember", "欧州", 388, "segment"),
+                ("JapanReportableSegmentsMember", "日本", 2_666, "segment"),
+            ])
+    }
+
+    @Test func kubotaEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100XR0M", total: 52_503,
+            rows: [
+                ("CorporateSharedMember", nil, 1_403, "reconciling"),
+                ("MachineryReportableSegmentMember", "機械", 41_342, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    nil, 1_379, "segment"),
+                ("WaterAndEnvironmentReportableSegmentMember", "水・環境", 8_379, "segment"),
+            ])
+    }
+
+    @Test func suzukiEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100W4MT", total: 74_077,
+            rows: [
+                ("AutomobileBusinessReportableSegmentMember", "四輪事業", 64_149, "segment"),
+                ("CorporateSharedMember", nil, 996, "reconciling"),
+                ("MarineBusinessReportableSegmentMember", "マリン事業", 1_460, "segment"),
+                ("MotorcycleBusinessReportableSegmentMember", "二輪事業", 7_121, "segment"),
+                ("OtherBusinessReportableSegmentMember", "その他事業", 351, "segment"),
+            ])
+    }
+
+    @Test func tohoRemacEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100XRD8", total: 74,
+            rows: [
+                ("RealEstateBusinessMember", "不動産事業", 2, "segment"),
+                ("ShoesBusinessMember", "シューズ事業", 72, "segment"),
+            ])
+    }
+
+    @Test func canonEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100XTLJ", total: 165_547,
+            rows: [
+                ("ImagingBusinessUnitReportableSegmentsMember", "イメージングビジネスユニット", 26_367, "segment"),
+                ("IndustryBusinessUnitReportableSegmentsMember", "インダストリアルビジネスユニット", 7_757, "segment"),
+                ("MedicalBusinessUnitReportableSegmentsMember", "メディカルビジネスユニット", 13_347, "segment"),
+                ("OtherAndCorporateMember", "その他及び全社", 12_138, "segment"),
+                ("PrintingBusinessUnitReportableSegmentsMember", "プリンティングビジネスユニット", 105_938, "segment"),
+            ])
+    }
+
+    @Test func mufgEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100W4FB", total: 156_253,
+            rows: [
+                ("AssetManagementAndInvestorServicesBusinessGroupMember", "受託財産事業本部", 12_635, "segment"),
+                ("CommercialBankingAndWealthManagementBusinessGroupMember", "法人・ウェルスマネジメント事業本部", 18_905, "segment"),
+                ("GlobalCommercialBankingBusinessGroupMember", "グローバルコマーシャルバンキング事業本部", 71_479, "segment"),
+                ("GlobalCorporateAndInvestmentBankingBusinessGroupMember", "グローバルCIB事業本部", 3_313, "segment"),
+                ("GlobalMarketsBusinessGroupMember", "市場事業本部", 2_546, "segment"),
+                ("JapaneseCorporateAndInvestmentBankingBusinessGroupMember", "コーポレートバンキング事業本部", 6_816, "segment"),
+                ("OtherMember", "その他", 23_101, "segment"),
+                ("RetailAndDigitalBusinessGroupMember", "リテール・デジタル事業本部", 17_458, "segment"),
+            ])
+    }
+
+    @Test func smfgEmployeesMatchDisclosedSegmentTotals() async throws {
+        try await Self.expectEmployees(
+            docID: "S100W0S7", total: 122_978,
+            rows: [
+                ("GlobalBusinessUnitReportableSegmentMember", "グローバル事業部門", 69_590, "segment"),
+                ("GlobalMarketsBusinessUnitReportableSegmentMember", "市場事業部門", 1_371, "segment"),
+                ("HeadOfficeAccountReportableSegmentMember", "本社管理", 16_293, "segment"),
+                ("RetailBusinessUnitReportableSegmentMember", "リテール事業部門", 26_979, "segment"),
+                ("WholesaleBusinessUnitReportableSegmentMember", "ホールセール事業部門", 8_745, "segment"),
+            ])
+    }
+}
+
 @Suite struct RealXbrlBreakdownResolverTests {
 
     private static let xbrlRoot: URL = {
