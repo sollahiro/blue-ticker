@@ -1,0 +1,414 @@
+{
+  "S100VU4O" : {
+    "axis" : "business",
+    "code" : "3490",
+    "denominator" : 12430301000,
+    "denominator_tag" : "RevenuesFromExternalCustomers",
+    "name" : "AZplanning",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 712449000,
+        "label" : "不動産賃貸事業",
+        "label_raw" : "RealEstateLeasingReportableSegmentMember",
+        "profit" : 128790000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 223608000,
+        "label" : "不動産管理事業",
+        "label_raw" : "RealEstateManagementReportableSegmentMember",
+        "profit" : 81259000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 11494243000,
+        "label" : "不動産販売事業",
+        "label_raw" : "RealEstateSalesReportableSegmentMember",
+        "profit" : 1031670000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100VXJA" : {
+    "axis" : "business",
+    "code" : "2802",
+    "denominator" : 1530556000000,
+    "denominator_tag" : "SalesToExternalCustomersIFRS",
+    "name" : "味の素",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 289388000000,
+        "label" : "冷凍食品",
+        "label_raw" : "FrozenFoodsReportableSegmentMember",
+        "profit" : 8040000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 328397000000,
+        "label" : "ヘルスケア等",
+        "label_raw" : "HealthcareAndOthersReportableSegmentMember",
+        "profit" : 31795000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 16758000000,
+        "label" : null,
+        "label_raw" : "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+        "profit" : 5468000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 896012000000,
+        "label" : "調味料・食品",
+        "label_raw" : "SeasoningsAndFoodsReportableSegmentMember",
+        "profit" : 113997000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100VYA0" : {
+    "axis" : "business",
+    "code" : "2871",
+    "denominator" : 702080000000,
+    "denominator_tag" : "RevenuesFromExternalCustomers",
+    "name" : "ニチレイ",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 259551000000,
+        "label" : "低温物流",
+        "label_raw" : "LogisticsReportableSegmentsMember",
+        "profit" : 15749000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 58472000000,
+        "label" : "水産",
+        "label_raw" : "MarineProductsReportableSegmentsMember",
+        "profit" : 1413000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 63836000000,
+        "label" : "畜産",
+        "label_raw" : "MeatAndPoultryProductsReportableSegmentsMember",
+        "profit" : 1082000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 5601000000,
+        "label" : null,
+        "label_raw" : "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+        "profit" : 1089000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 311342000000,
+        "label" : "加工食品",
+        "label_raw" : "ProcessedFoodsReportableSegmentsMember",
+        "profit" : 18792000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 3275000000,
+        "label" : "不動産",
+        "label_raw" : "RealEstateReportableSegmentsMember",
+        "profit" : 1900000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100W0S7" : {
+    "axis" : "business",
+    "code" : "8316",
+    "denominator" : 4126746000000,
+    "denominator_tag" : "ConsolidatedGrossProfit",
+    "name" : "三井住友",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 1344900000000,
+        "label" : "グローバル事業部門",
+        "label_raw" : "GlobalBusinessUnitReportableSegmentMember",
+        "profit" : 592000000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 636600000000,
+        "label" : "市場事業部門",
+        "label_raw" : "GlobalMarketsBusinessUnitReportableSegmentMember",
+        "profit" : 474500000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 1377300000000,
+        "label" : "リテール事業部門",
+        "label_raw" : "RetailBusinessUnitReportableSegmentMember",
+        "profit" : 273800000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 931300000000,
+        "label" : "ホールセール事業部門",
+        "label_raw" : "WholesaleBusinessUnitReportableSegmentMember",
+        "profit" : 729200000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100W3XJ" : {
+    "code" : "4901",
+    "method" : "html_table",
+    "name" : "富士フイルム",
+    "path" : "llm_input",
+    "tables" : [
+      {
+        "heading" : "セグメント情報",
+        "markdown" : "|             |  | 前連結会計年度(百万円) |  | 当連結会計年度(百万円) |\n|-------------|--|--------------|--|--------------|\n| ヘルスケア       |  | 975,081      |  | 1,022,564    |\n| エレクトロニクス    |  | 358,427      |  | 432,797      |\n| ビジネスイノベーション |  | 1,157,750    |  | 1,198,494    |\n| イメージング      |  | 469,658      |  | 541,973      |\n| 売上高 計       |  | 2,960,916    |  | 3,195,828    |\n| ヘルスケア       |  | 55,709       |  | 60,698       |\n| エレクトロニクス    |  | 26,432       |  | 25,760       |\n| ビジネスイノベーション |  | 53,850       |  | 54,507       |\n| イメージング      |  | 11,095       |  | 13,329       |\n| 研究開発費 計     |  | 147,086      |  | 154,294      |\n| ヘルスケア       |  | 821,983      |  | 884,231      |\n| エレクトロニクス    |  | 285,725      |  | 329,722      |\n| ビジネスイノベーション |  | 1,036,475    |  | 1,069,373    |\n| イメージング      |  | 356,530      |  | 389,430      |\n| その他費用 計     |  | 2,500,713    |  | 2,672,756    |\n| ヘルスケア       |  | 97,389       |  | 77,635       |\n| エレクトロニクス    |  | 46,270       |  | 77,315       |\n| ビジネスイノベーション |  | 67,425       |  | 74,614       |\n| イメージング      |  | 102,033      |  | 139,214      |\n| 営業利益 計      |  | 313,117      |  | 368,778      |\n| 全社費用等       |  | △36,392      |  | △38,623      |\n| 連結営業利益      |  | 276,725      |  | 330,155      |\n| 営業外収益及び費用   |  | 40,563       |  | 10,439       |\n| 税金等調整前当期純利益 |  | 317,288      |  | 340,594      |",
+        "period" : "比較"
+      }
+    ]
+  },
+  "S100W4FB" : {
+    "axis" : "business",
+    "code" : "8306",
+    "denominator" : 4810535000000,
+    "denominator_tag" : "NetRevenue",
+    "name" : "三菱UFJ",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 534207000000,
+        "label" : "受託財産事業本部",
+        "label_raw" : "AssetManagementAndInvestorServicesBusinessGroupMember",
+        "profit" : 135494000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 726557000000,
+        "label" : "法人・ウェルスマネジメント事業本部",
+        "label_raw" : "CommercialBankingAndWealthManagementBusinessGroupMember",
+        "profit" : 296855000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 969328000000,
+        "label" : "グローバルコマーシャルバンキング事業本部",
+        "label_raw" : "GlobalCommercialBankingBusinessGroupMember",
+        "profit" : 438103000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 913004000000,
+        "label" : "グローバルCIB事業本部",
+        "label_raw" : "GlobalCorporateAndInvestmentBankingBusinessGroupMember",
+        "profit" : 473068000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : -330602000000,
+        "label" : "市場事業本部",
+        "label_raw" : "GlobalMarketsBusinessGroupMember",
+        "profit" : -648720000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 1025616000000,
+        "label" : "コーポレートバンキング事業本部",
+        "label_raw" : "JapaneseCorporateAndInvestmentBankingBusinessGroupMember",
+        "profit" : 639005000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 27869000000,
+        "label" : "その他",
+        "label_raw" : "OtherMember",
+        "profit" : -45102000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 944554000000,
+        "label" : "リテール・デジタル事業本部",
+        "label_raw" : "RetailAndDigitalBusinessGroupMember",
+        "profit" : 277029000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100W4MT" : {
+    "axis" : "business",
+    "code" : "7269",
+    "denominator" : 5825161000000,
+    "denominator_tag" : "RevenueFromExternalCustomersIFRS",
+    "name" : "スズキ",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 5305217000000,
+        "label" : "四輪事業",
+        "label_raw" : "AutomobileBusinessReportableSegmentMember",
+        "profit" : 567634000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 109684000000,
+        "label" : "マリン事業",
+        "label_raw" : "MarineBusinessReportableSegmentMember",
+        "profit" : 30568000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 398131000000,
+        "label" : "二輪事業",
+        "label_raw" : "MotorcycleBusinessReportableSegmentMember",
+        "profit" : 40822000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 12128000000,
+        "label" : "その他事業",
+        "label_raw" : "OtherBusinessReportableSegmentMember",
+        "profit" : 3825000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100W043" : {
+    "code" : "6103",
+    "method" : "html_table",
+    "name" : "オークマ",
+    "path" : "llm_input",
+    "tables" : [
+      {
+        "heading" : "収益認識関係",
+        "markdown" : "|               | 売上高     | 構成比(％) |\n|---------------|---------|--------|\n| ＮＣ旋盤          | 40,571  | 17.8   |\n| マシニングセンタ      | 118,480 | 52.0   |\n| 複合加工機         | 60,753  | 26.6   |\n| ＮＣ研削盤         | 3,549   | 1.6    |\n| その他           | 4,640   | 2.0    |\n| 顧客との契約から生じる収益 | 227,994 | 100.0  |\n| その他の収益（注２）    | ―       | ―      |\n| 外部顧客への売上高     | 227,994 | 100.0  |",
+        "period" : "前期"
+      },
+      {
+        "heading" : "収益認識関係",
+        "markdown" : "|               | 売上高     | 構成比(％) |\n|---------------|---------|--------|\n| ＮＣ旋盤          | 37,366  | 18.1   |\n| マシニングセンタ      | 104,235 | 50.4   |\n| 複合加工機         | 55,653  | 26.9   |\n| ＮＣ研削盤         | 2,280   | 1.1    |\n| その他           | 7,287   | 3.5    |\n| 顧客との契約から生じる収益 | 206,822 | 100.0  |\n| その他の収益（注２）    | ―       | ―      |\n| 外部顧客への売上高     | 206,822 | 100.0  |",
+        "period" : "当期"
+      },
+      {
+        "heading" : "収益認識関係",
+        "markdown" : "|                     |         | (単位：百万円) |\n|---------------------|---------|----------|\n|                     | 前連結会計年度 | 当連結会計年度  |\n| 顧客との契約から生じた債権（期首残高） | 38,835  | 43,556   |\n| 顧客との契約から生じた債権（期末残高） | 43,556  | 38,713   |\n| 契約負債（期首残高）          | 9,754   | 6,864    |\n| 契約負債（期末残高）          | 6,864   | 5,445    |",
+        "period" : "比較"
+      }
+    ]
+  },
+  "S100XR0M" : {
+    "axis" : "business",
+    "code" : "6326",
+    "denominator" : 3018891000000,
+    "denominator_tag" : "SalesToExternalCustomersIFRS",
+    "name" : "クボタ",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 2628618000000,
+        "label" : "機械",
+        "label_raw" : "MachineryReportableSegmentMember",
+        "profit" : 253638000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 15921000000,
+        "label" : null,
+        "label_raw" : "OtherReportableSegmentsMember",
+        "profit" : 824000000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 374352000000,
+        "label" : "水・環境",
+        "label_raw" : "WaterAndEnvironmentReportableSegmentMember",
+        "profit" : 32983000000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100XRD8" : {
+    "axis" : "business",
+    "code" : "7422",
+    "denominator" : 4547599000,
+    "denominator_tag" : "RevenuesFromExternalCustomers",
+    "name" : "東邦レマック",
+    "needs_review" : false,
+    "path" : "xbrl_facts",
+    "rows" : [
+      {
+        "amount" : 94774000,
+        "label" : "不動産事業",
+        "label_raw" : "RealEstateBusinessReportableSegmentMember",
+        "profit" : 12385000,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 4452824000,
+        "label" : "シューズ事業",
+        "label_raw" : "ShoesBusinessReportableSegmentMember",
+        "profit" : -133019000,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "xbrl_facts",
+    "warnings" : [
+
+    ]
+  },
+  "S100XTLJ" : {
+    "code" : "7751",
+    "method" : "html_table",
+    "name" : "キヤノン",
+    "path" : "llm_input",
+    "tables" : [
+      {
+        "heading" : "セグメント情報",
+        "markdown" : "|           | プリンティング   |  | メディカル    |  | イメージング  |  | インダストリアル |  | その他及び全社   |  | 消去       |  | 連結        |\n|-----------|-----------|--|----------|--|---------|--|----------|--|-----------|--|----------|--|-----------|\n| 売上高       |           |  |          |  |         |  |          |  |           |  |          |  |           |\n| 外部顧客向け    | 2,515,543 |  | 568,260  |  | 937,028 |  | 345,863  |  | 143,127   |  | -        |  | 4,509,821 |\n| セグメント間取引  | 7,182     |  | 548      |  | 363     |  | 5,867    |  | 90,619    |  | △104,579 |  | -         |\n| 計         | 2,522,725 |  | 568,808  |  | 937,391 |  | 351,730  |  | 233,746   |  | △104,579 |  | 4,509,821 |\n| 売上原価      | 1,356,530 |  | 308,642  |  | 425,663 |  | 196,393  |  | 186,273   |  | △106,775 |  | 2,366,726 |\n| 売上総利益     | 1,166,195 |  | 260,166  |  | 511,728 |  | 155,337  |  | 47,473    |  | 2,196    |  | 2,143,095 |\n| 研究開発費     | 100,361   |  | 52,639   |  | 101,200 |  | 30,559   |  | 52,589    |  | -        |  | 337,348   |\n| その他営業費用   | 775,950   |  | 347,964  |  | 259,224 |  | 55,875   |  | 86,058    |  | 922      |  | 1,525,993 |\n| 営業利益      | 289,884   |  | △140,437 |  | 151,304 |  | 68,903   |  | △91,174   |  | 1,274    |  | 279,754   |\n| 営業外収益及び費用 | 14,262    |  | 929      |  | 3,004   |  | 1,500    |  | 1,712     |  | -        |  | 21,407    |\n| 税引前当期純利益  | 304,146   |  | △139,508 |  | 154,308 |  | 70,403   |  | △89,462   |  | 1,274    |  | 301,161   |\n| 総資産       | 1,354,948 |  | 421,453  |  | 425,515 |  | 238,625  |  | 3,329,047 |  | △3,342   |  | 5,766,246 |\n| 減価償却費     | 63,356    |  | 13,132   |  | 19,984  |  | 11,590   |  | 127,403   |  | -        |  | 235,465   |\n| 資本的支出     | 70,075    |  | 16,663   |  | 38,922  |  | 13,109   |  | 117,498   |  | -        |  | 256,267   |",
+        "period" : "前期"
+      },
+      {
+        "heading" : "セグメント情報",
+        "markdown" : "|           | プリンティング   |  | メディカル   |  | イメージング    |  | インダストリアル |  | その他及び全社   |  | 消去       |  | 連結        |\n|-----------|-----------|--|---------|--|-----------|--|----------|--|-----------|--|----------|--|-----------|\n| 売上高       |           |  |         |  |           |  |          |  |           |  |          |  |           |\n| 外部顧客向け    | 2,487,885 |  | 579,723 |  | 1,054,513 |  | 357,924  |  | 144,682   |  | -        |  | 4,624,727 |\n| セグメント間取引  | 6,513     |  | 899     |  | 387       |  | 3,204    |  | 92,434    |  | △103,437 |  | -         |\n| 計         | 2,494,398 |  | 580,622 |  | 1,054,900 |  | 361,128  |  | 237,116   |  | △103,437 |  | 4,624,727 |\n| 売上原価      | 1,362,457 |  | 316,368 |  | 491,391   |  | 205,926  |  | 191,298   |  | △104,668 |  | 2,462,772 |\n| 売上総利益     | 1,131,941 |  | 264,254 |  | 563,509   |  | 155,202  |  | 45,818    |  | 1,231    |  | 2,161,955 |\n| 研究開発費     | 94,762    |  | 46,971  |  | 112,298   |  | 32,286   |  | 52,971    |  | -        |  | 339,288   |\n| その他営業費用   | 781,420   |  | 184,508 |  | 278,340   |  | 60,391   |  | 62,298    |  | 320      |  | 1,367,277 |\n| 営業利益      | 255,759   |  | 32,775  |  | 172,871   |  | 62,525   |  | △69,451   |  | 911      |  | 455,390   |\n| 営業外収益及び費用 | 17,844    |  | 1,287   |  | 3,888     |  | 2,300    |  | 1,350     |  | -        |  | 26,669    |\n| 税引前当期純利益  | 273,603   |  | 34,062  |  | 176,759   |  | 64,825   |  | △68,101   |  | 911      |  | 482,059   |\n| 総資産       | 1,360,992 |  | 434,929 |  | 504,267   |  | 231,431  |  | 3,606,118 |  | △2,693   |  | 6,135,044 |\n| 減価償却費     | 65,486    |  | 13,928  |  | 21,615    |  | 13,938   |  | 124,269   |  | -        |  | 239,236   |\n| 資本的支出     | 71,372    |  | 16,434  |  | 41,274    |  | 15,759   |  | 104,691   |  | -        |  | 249,530   |",
+        "period" : "当期"
+      }
+    ]
+  }
+}

@@ -221,6 +221,43 @@ import Foundation
         }
     }
 
+    @Test func geographyDedicatedDualContextBlocksGetPriorThenCurrent() {
+        // ニチレイ／三菱UFJ／三井住友／オークマ型: 専用地域売上 TextBlock が
+        // Prior1YearDuration / CurrentYearDuration の2要素に分かれ、各 HTML に期間見出しが無い。
+        // contextRef から period を付けないと、ブロック単位 applyPeriodOrdering で両方「前期」になる。
+        let priorHtml =
+            "&lt;p&gt;(1)売上高&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;20&lt;/td&gt;&lt;td&gt;120&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let currentHtml =
+            "&lt;p&gt;(1)売上高&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;30&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="Prior1YearDuration">\(priorHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(currentHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+            #expect(result.tables[0].markdown.contains("| 100 | 20 | 120 |"))
+            #expect(result.tables[1].markdown.contains("| 110 | 30 | 140 |"))
+        }
+    }
+
+    @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearInstant") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearInstant") == "当期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: nil) == nil)
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "SomethingElse") == nil)
+    }
+
     @Test func segmentInfoFromUSGAAPNoteMixedBlock() {
         // キヤノン型の回帰: 事業別セグメントがUS-GAAP巨大注記(NotesToConsolidatedFinancialStatementsUSGAAPTextBlock)
         // に内包されている場合でも見出しキーワードで発見できる。
@@ -338,6 +375,92 @@ import Foundation
             #expect(result.tables.count == 1)
             #expect(result.tables[0].markdown.contains("事業A"))
             #expect(!result.tables[0].markdown.contains("日本"))
+        }
+    }
+
+    @Test func segmentInfoIgnoresQuotedCrossReferenceToSegmentNote() {
+        // 富士フイルム型（S100W3XJ）: 注記21「収益」内の移管説明文
+        // 「…注記23「セグメント情報」に記載しております。」は見出しではない。
+        // 直後の製品細分化表を誤拾いせず、本物の注記23見出しの表だけ拾う。
+        let escaped =
+            "&lt;p&gt;事業セグメントにおける収益の分解&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;メディカルシステム&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;変更の概要については連結財務諸表注記23「セグメント情報」に記載しております。&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;半導体材料&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;23　セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ヘルスケア&lt;/td&gt;&lt;td&gt;975081&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("ヘルスケア"))
+            #expect(!result.tables[0].markdown.contains("メディカルシステム"))
+            #expect(!result.tables[0].markdown.contains("半導体材料"))
+        }
+    }
+
+    @Test func segmentInfoIgnoresAccountingStandardNameCitation() {
+        // 基準書名の引用「セグメント情報開示の改善」は見出しではない。
+        let escaped =
+            "&lt;p&gt;当社は基準書2023-07「セグメント情報開示の改善」を適用しております。&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ノイズ&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+            #expect(!result.tables[0].markdown.contains("ノイズ"))
+        }
+    }
+
+    @Test func segmentInfoAcceptsBracketedBusinessSegmentHeading() {
+        // 【事業別セグメント情報】は実データで正見出しとして使われる（『』とは別）。
+        // headingLikeOnly の引用除去が【】まで広げないことの防衛。
+        let escaped =
+            "&lt;p&gt;【事業別セグメント情報】&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;500&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            #expect(result.tables[0].markdown.contains("事業A"))
+        }
+    }
+
+    @Test func segmentInfoKeepsTableIntroCaptionEndingWithPeriod() {
+        // オリックス型（S100YG5L）: 注記番号見出しの直後はセグメント定義表で、
+        // 本表は「〜は以下のとおりです。」導入文の直後。句点だけで導入文を落とすと当期表を取りこぼす。
+        let escaped =
+            "&lt;p&gt;34 セグメント情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;法人営業&lt;/td&gt;&lt;td&gt;：&lt;/td&gt;" +
+            "&lt;td&gt;リース等&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;p&gt;前連結会計年度および当連結会計年度のセグメント情報は以下のとおりです。&lt;/p&gt;" +
+            "&lt;p&gt;前連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;法人営業&lt;/td&gt;" +
+            "&lt;td&gt;銀行・クレジット&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;50&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;" +
+            "&lt;p&gt;当連結会計年度&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;法人営業&lt;/td&gt;" +
+            "&lt;td&gt;銀行・クレジット&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;収益&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;td&gt;55&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let current = result.tables.filter { $0.period == "当期" }
+            #expect(!current.isEmpty)
+            let joined = current.map(\.markdown).joined(separator: "\n")
+            #expect(joined.contains("法人営業"))
+            #expect(joined.contains("銀行・クレジット"))
+            #expect(joined.contains("110"))
+            #expect(joined.contains("55"))
         }
     }
 
@@ -1986,6 +2109,7 @@ import Foundation
 
 /// smoke/breakdown_extraction_expected.json（Python 実装の出力）と tmp_cache/edinet/ の
 /// キャッシュ済み XBRL から Swift 実装の出力を突き合わせる。
+/// 対象は有報（通期）のみ。半期/四半期（q2r 等）は含めない。
 /// BLT_EDINET_API_KEY が設定されていれば不足分を自動ダウンロードする（SmokeCacheSupport）。
 /// 未設定かつキャッシュも無い docID は個別に SKIP する。
 @Suite struct SegmentParityTests {

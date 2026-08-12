@@ -155,7 +155,12 @@ enum BreakdownExtractor {
             mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
             dedicatedHeading: "セグメント情報",
             mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
-            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords
+            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords,
+            // US-GAAP 巨大注記内のクロスリファレンス文・基準書名引用（「…」内）や句点付き
+            // 散文を見出しと誤認しない（富士フイルム S100W3XJ）。「〜は以下のとおりです。」等の
+            // 表導入文は残す（オリックス S100YG5L）。geography は散文見出しに依存するため
+            // opt-in は business のみ。
+            mixedHeadingLikeOnly: true
         )
         let productOrServiceTables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
@@ -680,6 +685,25 @@ enum BreakdownExtractor {
         return nil
     }
 
+    /// XBRL TextBlock の contextRef から当期/前期を判定する。
+    /// 専用地域売上 TextBlock が Prior1YearDuration / CurrentYearDuration の2要素に分かれる
+    /// 会社（ニチレイ・三菱UFJ・三井住友・オークマ）では HTML 内に期間見出しが無く、
+    /// ブロック単位の `applyPeriodOrdering` だと両方「前期」になるため、contextRef を正とする。
+    static func periodLabel(fromContextRef contextRef: String?) -> String? {
+        guard let contextRef, !contextRef.isEmpty else { return nil }
+        if Xbrl.priorDurationContextPatterns.contains(where: contextRef.contains)
+            || Xbrl.priorInstantContextPatterns.contains(where: contextRef.contains)
+        {
+            return "前期"
+        }
+        if Xbrl.durationContextPatterns.contains(where: contextRef.contains)
+            || Xbrl.instantContextPatterns.contains(where: contextRef.contains)
+        {
+            return "当期"
+        }
+        return nil
+    }
+
     /// テーブル前の兄弟要素（短いもの）から当期/前期を判定する。
     /// 同じ親の下に複数テーブルが並ぶ場合、テーブルに最も近い（最後に見つかった）
     /// 見出しを採用する（先頭の見出しに固定されるとテーブルが増えるほど誤判定が広がるため）。
@@ -816,9 +840,12 @@ enum BreakdownExtractor {
     /// セグメント情報の golden parity を壊さないよう、既定は false。
     /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
     /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
+    /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
+    /// （dedicated 地域売上の Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
-        skipGeographyAssetMetricTables: Bool = false
+        skipGeographyAssetMetricTables: Bool = false,
+        defaultPeriod: String? = nil
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
@@ -843,6 +870,16 @@ enum BreakdownExtractor {
             }
             let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
             tables.append(BreakdownTable(heading: defaultHeading, markdown: md, period: period))
+        }
+        // contextRef フォールバックは「このブロック内の未ラベル表がちょうど1つ」のときだけ。
+        // Prior/Current に分かれた専用地域売上 TextBlock（表1枚ずつ）を救いつつ、
+        // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
+        // 両方を当期で上書きせず applyPeriodOrdering に委ねる。
+        if let defaultPeriod {
+            let nilIndices = tables.indices.filter { tables[$0].period == nil }
+            if nilIndices.count == 1 {
+                tables[nilIndices[0]].period = defaultPeriod
+            }
         }
         applyPeriodOrdering(&tables)
         if includeFootnotes, let footnotes = footnoteMarkdown(from: soup) {
@@ -940,10 +977,14 @@ enum BreakdownExtractor {
     ///
     /// headingExclusionKeywords: 見出し候補の文字列がこれらを含む場合はスキップする
     /// （例: 事業別セグメント用の検索で「地域別セグメント情報」という地域注記の見出しを誤って拾わないようにする）。
+    /// headingLikeOnly: true のとき、句点を含む散文と「…」引用内のキーワード一致を見出し候補から外す
+    /// （business の mixed 経路専用。geography の散文見出し回帰を壊さないため既定は false）。
+    /// 「〜は以下のとおりです。」等の表導入文は句点があっても残す。
     static func keywordTablesFromHtml(
         _ html: String,
         keywords: [String],
-        headingExclusionKeywords: [String] = []
+        headingExclusionKeywords: [String] = [],
+        headingLikeOnly: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         var tables: [BreakdownTable] = []
@@ -952,7 +993,13 @@ enum BreakdownExtractor {
             guard let elems = try? soup.select("*") else { continue }
             for elem in elems {
                 let text = bs4Text(elem, strip: false)
-                guard text.contains(keyword), text.unicodeScalars.count <= 300 else { continue }
+                guard text.unicodeScalars.count <= 300 else { continue }
+                // 句点付き散文は原則見出しではないが、「〜は以下のとおりです。」等の表導入文は残す
+                // （オリックス S100YG5L: 注記番号見出しの直後は定義表で、本表は導入文の直後）。
+                if headingLikeOnly, text.contains("。"), !isTableIntroCaption(text) { continue }
+                // 「…」内は他注記・基準書名の引用なので除いてから判定（【…】は見出し自体に使う）
+                let matchText = headingLikeOnly ? stripQuotedSpans(text) : text
+                guard matchText.contains(keyword) else { continue }
                 if headingExclusionKeywords.contains(where: text.contains) { continue }
                 // 直後の表が除外対象（ノイズ）だった場合、同じ見出しの下にある次の表を
                 // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
@@ -1014,7 +1061,8 @@ enum BreakdownExtractor {
         dedicatedHeading: String,
         mixedKeywords: [String],
         mixedHeadingExclusionKeywords: [String] = [],
-        skipGeographyAssetMetricTables: Bool = false
+        skipGeographyAssetMetricTables: Bool = false,
+        mixedHeadingLikeOnly: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -1030,23 +1078,44 @@ enum BreakdownExtractor {
                 if dedicatedTags.contains(block.tag) {
                     // 収益認識関係だけ脚注段落を候補に含める（セグメント情報の表件数 golden を変えない）
                     let includeFootnotes = dedicatedHeading == revenueRecognitionHeading
+                    // contextRef→period は地域 dedicated のみ。事業セグメント dedicated は
+                    // HTML 見出し判定＋既存 golden（スズキ等）を変えない。
+                    let contextPeriod = dedicatedHeading == "地域ごとの情報"
+                        ? periodLabel(fromContextRef: block.contextRef) : nil
                     tables.append(contentsOf: allTablesFromHtml(
                         block.content, defaultHeading: dedicatedHeading,
                         includeFootnotes: includeFootnotes,
-                        skipGeographyAssetMetricTables: skipGeographyAssetMetricTables
+                        skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
+                        defaultPeriod: contextPeriod
                     ))
                 } else if mixedTags.contains(block.tag) {
+                    // mixed は1つの contextRef 配下に前期・当期 HTML が同居しうるため
+                    // contextRef フォールバックは付けず、見出し直前テキストで判定する。
                     tables.append(contentsOf: keywordTablesFromHtml(
                         block.content,
                         keywords: mixedKeywords,
                         headingExclusionKeywords: mixedHeadingExclusionKeywords
                             + (skipGeographyAssetMetricTables
-                                ? Xbrl.geographyAssetMetricCaptionKeywords : [])
+                                ? Xbrl.geographyAssetMetricCaptionKeywords : []),
+                        headingLikeOnly: mixedHeadingLikeOnly
                     ))
                 }
             }
         }
         return tables
+    }
+
+    /// 『…』で囲まれた部分は他注記・基準書名の引用であり見出しではない
+    /// （例: 注記23「セグメント情報」に記載…、基準書2023-07「セグメント情報開示の改善」）。
+    /// 【…】は見出し自体に使われる（実データ: 【事業別セグメント情報】）ため対象外。
+    private static func stripQuotedSpans(_ text: String) -> String {
+        text.replacingOccurrences(of: "「[^」]*」", with: "", options: .regularExpression)
+    }
+
+    /// 句点付きでも表の直前キャプションとして使う定型導入文か。
+    /// 「前連結会計年度および当連結会計年度のセグメント情報は以下のとおりです。」等。
+    private static func isTableIntroCaption(_ text: String) -> Bool {
+        text.contains("以下のとおり") || text.contains("次のとおり") || text.contains("下記のとおり")
     }
 
     // MARK: - dimension 付き fact 抽出（フォールバック）
@@ -1184,8 +1253,9 @@ enum BreakdownExtractor {
 /// foundCharacters の連結でデコード済み HTML 文字列が得られる。
 private final class TextBlockSAXCollector: NSObject, XMLParserDelegate {
     private let targetTags: Set<String>
-    private(set) var blocks: [(tag: String, content: String)] = []
+    private(set) var blocks: [(tag: String, content: String, contextRef: String?)] = []
     private var capturingTag: String?
+    private var capturingContextRef: String?
     private var buffer = ""
     private var depth = 0
 
@@ -1208,6 +1278,7 @@ private final class TextBlockSAXCollector: NSObject, XMLParserDelegate {
         }
         if targetTags.contains(XBRLUtils.localName(of: elementName)) {
             capturingTag = XBRLUtils.localName(of: elementName)
+            capturingContextRef = attributeDict["contextRef"]
             buffer = ""
             depth = 0
         }
@@ -1221,8 +1292,9 @@ private final class TextBlockSAXCollector: NSObject, XMLParserDelegate {
     ) {
         guard let tag = capturingTag else { return }
         if depth == 0 {
-            blocks.append((tag: tag, content: buffer))
+            blocks.append((tag: tag, content: buffer, contextRef: capturingContextRef))
             capturingTag = nil
+            capturingContextRef = nil
             buffer = ""
         } else {
             depth -= 1
