@@ -165,7 +165,8 @@ let financialsIngestYears = 6
 public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
     targets: Set<IngestTarget> = Set(IngestTarget.allCases),
-    codes: Set<String>? = nil
+    codes: Set<String>? = nil,
+    noteTypes: Set<String>? = nil
 ) async throws {
     guard let context = await makeBltServerContext() else {
         throw DocumentSyncError.apiKeyMissing
@@ -402,7 +403,9 @@ public func runFactsIngestCommand(
                         { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
                     ),
                 ]
+            let noteTypeFilter = noteTypes
             for entry in statementNoteTypes {
+                if let noteTypeFilter, !noteTypeFilter.contains(entry.noteType) { continue }
                 let s8 = try await runStatementNotesIngest(
                     db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
                     limit: stageLimit, explicitCodes: codes, noteType: entry.noteType,
