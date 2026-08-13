@@ -49,7 +49,7 @@ R2（生 XBRL 退避）は延期中で、現時点でコード上の結合はな
 - **Cloudflare SSO セッションの失効**: ユーザー介在クライアントは Access Session Duration 経過後に再ログイン。機械向けは Service Token（`docs/api-auth.md` / `deploy.md`）。
 - **Fly serviceless の再起動挙動（自動化済み）**: `[http_service]` が無いため `fly deploy` 後にマシンが stopped のままになることがある。`deploy.yml` の「Ensure machine is running」ステップが stopped を検知して `fly machine start` する。
 - **Neon 無料プランの scale-to-zero（5 分固定）**: コールドスタート切断は `withDbRetry`（ingest 本体・`configureDatabase` の `autoMigrate`）と HTTP read 4 ルートのリトライで吸収済み。接続プール待ちは `Api.dbConnectionPoolTimeoutSeconds`（45s。Fluent 既定 10s では cold start に不足）。プラン変更・別 Postgres への移行時はこの前提（suspend が起きる/起きない）を再確認する。
-- **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`dependencies.md`）。
+- **Linux ビルドの一時回避策**: swift-nio の `MemberImportVisibility` 回避フラグ（`ci.yml`・`Dockerfile`）は swift-nio 修正後に除去する（`.agents/rules/project/dependencies.md`）。
 
 ## Git の外にある状態（棚卸し）
 

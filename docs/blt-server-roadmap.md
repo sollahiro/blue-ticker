@@ -41,10 +41,10 @@ financials / filing-content の REST read は現行版との完全一致では�
 
 | 定数 | 役割 |
 |---|---|
-| `companyFinancialsCacheVersion`（いま `fin-v4`） | financials ingest の書き込み・stale 判定 |
-| `companyFinancialsMinServableVersion`（いま `2`） | financials read の最低 N（`fin-vN`） |
-| `filingSectionsCacheVersion`（いま `sections-v4`） | filing-sections ingest の書き込み・stale 判定 |
-| `filingSectionsMinServableVersion`（いま `1`） | filing-content read の最低 N（`sections-vN`） |
+| `companyFinancialsCacheVersion` | financials ingest の書き込み・stale 判定（現在値は定義箇所） |
+| `companyFinancialsMinServableVersion` | financials read の最低 N（`fin-vN`） |
+| `filingSectionsCacheVersion` | filing-sections ingest の書き込み・stale 判定 |
+| `filingSectionsMinServableVersion` | filing-content read の最低 N（`sections-vN`） |
 
 - 比較は `*-vN` を数値パースして行う（文字列辞書順は使わない）。
 - 床の引き上げは、該当旧版の stale 消化完了後に行う（引き上げで servable 穴を作らない）。
