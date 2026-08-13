@@ -166,7 +166,7 @@ private func fakeSnapshot(
         }
     }
 
-    /// `label` フィールド追加（2026-08-03、`breakdown-business-v8`）より前に格納された行は
+    /// `label` フィールド追加（2026-08-03、当時 `breakdown-business-v8`）より前に格納された行は
     /// payload JSON に `label` キーを持たない。合成 Decodable のままだと `keyNotFound` で読み取り
     /// 自体が失敗する（Opus 監査で発見）。生 SQL で `label` キー無しの旧形式 JSON を直接書き込み、
     /// `find` が失敗せず `labelRaw` へフォールバックすることを確認する。
