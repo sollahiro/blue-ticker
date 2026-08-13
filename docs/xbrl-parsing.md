@@ -308,9 +308,9 @@ smoke/
 | 注記(issued_shares_and_capital)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesAndCapitalOracleFormatTests.swift` | `smoke/statement_notes_issued_shares_and_capital_expected.json`（smoke固定11社。`as_of_period_end`＝離散タグ＋`issued_shares_events`＝textblock表。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(policy_holding_securities)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PolicyHoldingSecuritiesOracleFormatTests.swift` | `smoke/statement_notes_policy_holding_securities_expected.json`（トヨタ + smoke固定10社。SMFG(8316)は複数docID間でXBRLタグ付けが不完全なため対象外。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(他note_type)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/{Dividends,GoodwillAndIntangibles}OracleFormatTests.swift` | `smoke/statement_notes_{dividends,goodwill_and_intangibles}_expected.json`（試作1〜2docID のみ。smoke 床には未追加） |
-| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | `IBDExtractor.extract` と `resolveBorrowingsSchedule` の関係を検証。method="borrowings_schedule" で解決した docID は合計一致を、method="field_parser"（SOMPO S100R1LR）は不一致自体を実データ値で固定（`docs/test-spec-assets.md` の D） |
+| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | borrowings_schedule 解決 docID は合計一致、field_parser（SOMPO）は不一致自体を固定 |
 
-`SPEC_*` ラベルに基づくサブフォルダ移動（`docs/test-spec-assets.md` の E）を実施済み。`SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` に該当ファイルを移動し、ラベルが混在するファイル（`StatementContractTests.swift` 等）や UNCLASSIFIED が優勢なファイルは元の場所に残している（一覧は `docs/test-spec-inventory.md`）。SwiftPM のテストターゲットはサブフォルダを再帰的に含むため `Package.swift` の変更は不要。
+一部テストは `SwiftTests/.../Spec/{Oracle,Invariant,Contract,Policy}/` に配置（`docs/test-spec-assets.md`）。ラベル混在ファイルは元の場所のまま。SwiftPM はサブフォルダを再帰含むため `Package.swift` 変更不要。
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 

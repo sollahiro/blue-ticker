@@ -50,7 +50,7 @@ func registerRoutes(
         ], status: .ok)
     }
 
-    // /v1 配下の認証モードを env から決める（docs/blt-server-roadmap.md「認証」参照）。
+    // /v1 配下の認証モードを env から決める（docs/api-auth.md / docs/deploy.md）。
     // 優先順位:
     //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
     //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
