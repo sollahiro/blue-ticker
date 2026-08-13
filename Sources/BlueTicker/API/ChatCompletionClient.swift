@@ -8,6 +8,63 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/// 内訳 LLM の稼働プロバイダ。`LLM_PROVIDER` で指定する（軸共通）。
+/// OpenAI は `OPENAI_{BUSINESS,GEOGRAPHY}_*`、xAI は `XAI_{BUSINESS,GEOGRAPHY}_*`。
+enum LLMProvider: String, Sendable {
+    case openai
+    case xai
+
+    var defaultBaseURL: String {
+        switch self {
+        case .openai: return Api.openaiBaseURL
+        case .xai: return Api.xaiBaseURL
+        }
+    }
+
+    /// `business` / `geography` → `OPENAI_BUSINESS` または `XAI_BUSINESS` など。
+    func envPrefix(axis: String) -> String {
+        let axisPart = axis.uppercased()
+        switch self {
+        case .openai: return "OPENAI_\(axisPart)"
+        case .xai: return "XAI_\(axisPart)"
+        }
+    }
+
+    /// `LLM_PROVIDER`。未設定は `.xai`（既存 .env 互換）。不正値は nil。
+    static func fromEnv(_ env: [String: String]) -> LLMProvider? {
+        let raw = env["LLM_PROVIDER"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if raw.isEmpty { return .xai }
+        switch raw.lowercased() {
+        case "openai": return .openai
+        case "xai", "grok": return .xai
+        default: return nil
+        }
+    }
+
+    func endpoint(axis: String, env: [String: String]) -> ChatCompletionEndpoint? {
+        let prefix = envPrefix(axis: axis)
+        let allowLegacy = self == .xai && axis == "business"
+        let apiKey =
+            nonEmptyEnv(env["\(prefix)_API_KEY"])
+            ?? (allowLegacy ? nonEmptyEnv(env["XAI_API_KEY"]) : nil)
+        let model =
+            nonEmptyEnv(env["\(prefix)_MODEL"])
+            ?? (allowLegacy ? nonEmptyEnv(env["XAI_MODEL"]) : nil)
+        guard let apiKey, let model else { return nil }
+        let baseURL =
+            nonEmptyEnv(env["\(prefix)_BASE_URL"])
+            ?? (allowLegacy ? nonEmptyEnv(env["XAI_BASE_URL"]) : nil)
+            ?? defaultBaseURL
+        return ChatCompletionEndpoint(
+            baseURL: baseURL, apiKey: apiKey, model: model, provider: self)
+    }
+}
+
+private func nonEmptyEnv(_ value: String?) -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    return value
+}
+
 /// Chat Completions 互換エンドポイントの接続情報。
 struct ChatCompletionEndpoint: Sendable {
     var baseURL: String
@@ -17,6 +74,7 @@ struct ChatCompletionEndpoint: Sendable {
     /// プロンプト内スキーマ記述にフォールバックする（ローカル LLM 等の非対応実装を見据える）。
     var supportsJsonSchema: Bool = true
     var timeoutSeconds: Double = 60
+    var provider: LLMProvider = .xai
 }
 
 /// Analysis/ 層はこのプロトコルだけを見る。具体の HTTP 実装は API/ に閉じ込め、
@@ -57,12 +115,17 @@ actor ChatCompletionClient: ChatCompleting {
 
         var body: [String: Any] = [
             "model": endpoint.model,
-            "temperature": 0,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user],
             ],
         ]
+        // OpenAI GPT-5 系は temperature≠1 を 400 にする。抽出向けに reasoning も切る。
+        if endpoint.provider == .openai {
+            body["reasoning_effort"] = "none"
+        } else {
+            body["temperature"] = 0
+        }
         if endpoint.supportsJsonSchema {
             body["response_format"] = [
                 "type": "json_schema",
@@ -80,7 +143,10 @@ actor ChatCompletionClient: ChatCompleting {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = endpoint.timeoutSeconds
+        request.timeoutInterval =
+            endpoint.provider == .openai
+            ? max(endpoint.timeoutSeconds, 180)
+            : endpoint.timeoutSeconds
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)

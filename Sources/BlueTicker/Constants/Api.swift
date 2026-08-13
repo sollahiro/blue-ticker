@@ -1,9 +1,11 @@
 public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
-    /// Chat Completions 互換エンドポイントの既定ベースURL（`XAI_BASE_URL` 未設定時のフォールバック）。
-    /// 内訳取り込み の html_table 正規化（`GeographyBreakdownLLMNormalizer`）でのみ使用。
+    /// Chat Completions 互換エンドポイントの既定ベースURL。
+    /// 内訳取り込み の html_table 正規化でのみ使用。稼働先は `LLM_PROVIDER`、
+    /// 明示 `*_BASE_URL` があればそちらが勝つ。
     static let xaiBaseURL = "https://api.x.ai/v1"
+    static let openaiBaseURL = "https://api.openai.com/v1"
 
     /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
     static let defaultRemoteServerURL = "https://api.sollahiro.com"

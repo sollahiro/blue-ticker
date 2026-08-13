@@ -8,7 +8,8 @@
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
 # breakdowns は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
-# LLM は軸別（XAI_BUSINESS_* / XAI_GEOGRAPHY_*。business のみ旧 XAI_* フォールバック可）。
+# LLM は LLM_PROVIDER（現行 openai。Grok に戻すなら xai）と、
+# プロバイダ×軸のキー（OPENAI_* / XAI_*。xai の business のみ旧 XAI_* フォールバック可）。
 # 未設定でも xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
 # REST/MCP は business / geography の両軸を公開する（2026-07-27、品質ゲート通過後に解禁）。
 #

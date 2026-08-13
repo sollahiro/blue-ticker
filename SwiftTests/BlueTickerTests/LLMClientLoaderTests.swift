@@ -17,9 +17,12 @@ import Darwin
 
     private func withEnv(_ values: [String: String?], _ body: () throws -> Void) rethrows {
         let keys = [
+            "LLM_PROVIDER",
             "XAI_API_KEY", "XAI_MODEL", "XAI_BASE_URL",
             "XAI_BUSINESS_API_KEY", "XAI_BUSINESS_MODEL", "XAI_BUSINESS_BASE_URL",
             "XAI_GEOGRAPHY_API_KEY", "XAI_GEOGRAPHY_MODEL", "XAI_GEOGRAPHY_BASE_URL",
+            "OPENAI_BUSINESS_API_KEY", "OPENAI_BUSINESS_MODEL", "OPENAI_BUSINESS_BASE_URL",
+            "OPENAI_GEOGRAPHY_API_KEY", "OPENAI_GEOGRAPHY_MODEL", "OPENAI_GEOGRAPHY_BASE_URL",
         ]
         var previous: [String: String?] = [:]
         for key in keys {
@@ -103,6 +106,96 @@ import Darwin
         ]) {
             #expect(LLMClientLoader.resolveEndpoint(axis: .geography) == nil)
             #expect(resolveXaiEndpoint(axis: .geography) == nil)
+        }
+    }
+
+    @Test func openaiProviderReadsOpenAIKeysNotXai() throws {
+        try withEnv([
+            "LLM_PROVIDER": "openai",
+            "OPENAI_BUSINESS_API_KEY": "openai-biz",
+            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_GEOGRAPHY_API_KEY": "openai-geo",
+            "OPENAI_GEOGRAPHY_MODEL": "gpt-5.6-luna",
+            "XAI_BUSINESS_API_KEY": "xai-biz",
+            "XAI_BUSINESS_MODEL": "grok-4.5",
+            "XAI_GEOGRAPHY_API_KEY": "xai-geo",
+            "XAI_GEOGRAPHY_MODEL": "grok-4.5",
+        ]) {
+            let business = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            #expect(business.provider == .openai)
+            #expect(business.apiKey == "openai-biz")
+            #expect(business.model == "gpt-5.6-luna")
+            #expect(business.baseURL == Api.openaiBaseURL)
+            let geography = try #require(LLMClientLoader.resolveEndpoint(axis: .geography))
+            #expect(geography.apiKey == "openai-geo")
+            #expect(resolveXaiEndpoint(axis: .business)?.apiKey == "openai-biz")
+        }
+    }
+
+    @Test func xaiProviderReadsXaiKeysNotOpenAI() throws {
+        try withEnv([
+            "LLM_PROVIDER": "xai",
+            "OPENAI_BUSINESS_API_KEY": "openai-biz",
+            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_GEOGRAPHY_API_KEY": "openai-geo",
+            "OPENAI_GEOGRAPHY_MODEL": "gpt-5.6-luna",
+            "XAI_BUSINESS_API_KEY": "xai-biz",
+            "XAI_BUSINESS_MODEL": "grok-4.5",
+            "XAI_GEOGRAPHY_API_KEY": "xai-geo",
+            "XAI_GEOGRAPHY_MODEL": "grok-4.5",
+        ]) {
+            let business = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            #expect(business.provider == .xai)
+            #expect(business.apiKey == "xai-biz")
+            #expect(business.model == "grok-4.5")
+            #expect(business.baseURL == Api.xaiBaseURL)
+            let geography = try #require(LLMClientLoader.resolveEndpoint(axis: .geography))
+            #expect(geography.apiKey == "xai-geo")
+        }
+    }
+
+    @Test func omittedProviderDefaultsToXai() throws {
+        try withEnv([
+            "XAI_BUSINESS_API_KEY": "biz-key",
+            "XAI_BUSINESS_MODEL": "grok-4.5",
+        ]) {
+            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            #expect(endpoint.provider == .xai)
+            #expect(endpoint.baseURL == Api.xaiBaseURL)
+        }
+    }
+
+    @Test func invalidProviderDoesNotResolve() throws {
+        try withEnv([
+            "LLM_PROVIDER": "anthropic",
+            "OPENAI_BUSINESS_API_KEY": "biz-key",
+            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+        ]) {
+            #expect(LLMClientLoader.resolveEndpoint(axis: .business) == nil)
+            #expect(resolveXaiEndpoint(axis: .business) == nil)
+        }
+    }
+
+    @Test func openaiAxisBaseURLOverridesProviderDefault() throws {
+        try withEnv([
+            "LLM_PROVIDER": "openai",
+            "OPENAI_BUSINESS_API_KEY": "biz-key",
+            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_BUSINESS_BASE_URL": "https://proxy.example/v1",
+        ]) {
+            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            #expect(endpoint.provider == .openai)
+            #expect(endpoint.baseURL == "https://proxy.example/v1")
+        }
+    }
+
+    @Test func openaiDoesNotFallBackToXaiKeys() throws {
+        try withEnv([
+            "LLM_PROVIDER": "openai",
+            "XAI_BUSINESS_API_KEY": "xai-biz",
+            "XAI_BUSINESS_MODEL": "grok-4.5",
+        ]) {
+            #expect(LLMClientLoader.resolveEndpoint(axis: .business) == nil)
         }
     }
 }

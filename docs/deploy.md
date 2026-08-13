@@ -89,7 +89,7 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 ```bash
 swift build -c release --product blt-server   # コード変更後は必須（旧バイナリは新 stage を黙って飛ばす）
-# .env（DATABASE_URL / BLT_EDINET_API_KEY。breakdowns LLM は XAI_BUSINESS_* / XAI_GEOGRAPHY_*）
+# .env（DATABASE_URL / BLT_EDINET_API_KEY。breakdowns LLM は LLM_PROVIDER と OPENAI_* / XAI_*。手順は operations.md）
 ./scripts/install-launchd.sh
 launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
 ```

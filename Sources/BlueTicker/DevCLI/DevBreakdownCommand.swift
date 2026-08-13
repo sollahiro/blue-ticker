@@ -182,7 +182,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                 printError(
                     """
                     エラー: business の表フォールバックに LLM が必要です。\
-                    XAI_BUSINESS_API_KEY と XAI_BUSINESS_MODEL \
+                    LLM_PROVIDER と、openai なら OPENAI_BUSINESS_API_KEY / OPENAI_BUSINESS_MODEL、\
+                    xai なら XAI_BUSINESS_API_KEY / XAI_BUSINESS_MODEL \
                     （または旧 XAI_API_KEY / XAI_MODEL）を設定してください。
 
                     """
@@ -216,7 +217,8 @@ struct DevBreakdownCommand: AsyncParsableCommand {
                 printError(
                     """
                     エラー: geography が html_table のため LLM が必要です。\
-                    XAI_GEOGRAPHY_API_KEY と XAI_GEOGRAPHY_MODEL を設定してください。
+                    LLM_PROVIDER と、openai なら OPENAI_GEOGRAPHY_API_KEY / OPENAI_GEOGRAPHY_MODEL、\
+                    xai なら XAI_GEOGRAPHY_API_KEY / XAI_GEOGRAPHY_MODEL を設定してください。
 
                     """
                 )

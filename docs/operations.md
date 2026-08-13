@@ -12,6 +12,10 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 結合点は `DATABASE_URL` のみ。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
 
+### 内訳 LLM（切替容易）
+
+結合点は軸共通の `LLM_PROVIDER`（`openai` / `xai`）と、プロバイダ×軸のキー（`OPENAI_*` / `XAI_*`）。現行は `LLM_PROVIDER=openai` + GPT-5.6 Luna。Grok に戻すときは `LLM_PROVIDER=xai`（xAI 側のキーはそのまま残せる）。`BASE_URL` 省略時はプロバイダの既定 URL。html_table 経路のみ使用。切替後の再計算は `docs/breakdown.md`（`needs_review` または行削除）。
+
 ### Fly.io（代替容易）
 
 結合は `fly.toml` / Volume / secrets / deploy。アプリは素の Docker。方式A（Tunnel）のため Fly LB 非依存。切替: 新ホストで同イメージ＋secrets＋Tunnel トークン。
