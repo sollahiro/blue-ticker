@@ -27,7 +27,7 @@
 |---|---|
 | 地域別 | 内訳取り込み `geography` breakdown軸 |
 | 製品別・事業別 | 内訳取り込み `business` breakdown軸 |
-| 利益構造別 | Statement取り込み（PL本体）＋ 財務諸表注記取り込み `sga_breakdown` note_type（販管費内訳）＋ Statement SS（`changes_in_equity` 合計列） |
+| 利益構造別 | Statement取り込み（PL本体）＋ Statement SS（`changes_in_equity` 合計列） |
 | 投資構造別 | 財務諸表注記取り込み `capital_expenditures_overview`／`dividends` note_type、内訳取り込み `research_and_development` breakdown軸 |
 
 `employees`／`research_and_development` breakdown軸（内訳取り込み、今回追加）は「人員配分」観点として

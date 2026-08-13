@@ -356,16 +356,7 @@ public func runFactsIngestCommand(
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。
             // EPS/発行済株式・資本金/設備投資概要/配当金/borrowings_schedule/PPE・のれん/
-            // policy_holding_securities は注記からXBRL直接抽出（決定論）。
-            // research_and_development は note_type から廃止し内訳取り込み breakdown 軸へ集約
-            // （2026-08-11。全社合計は financials→breakdown denominator、セグメント行は dimension タグ）。
-            //
-            // sga_breakdown は実装済みだが配信を見送り中（2026-08-02、実データレビューで判明:
-            // XBRLタグとして開示されるのは常に非連結（`NonConsolidatedMember`）のみで、連結内訳は
-            // タグ化されず本文自由記述にしかない会社が複数あった。「販管費内訳」として非連結値だけ
-            // 返すのは利用者を誤解させるためユーザー判断で保留。resolver・回帰テストは将来の連結
-            // 対応（本文解析/LLM要）に備えて残す。`StatementNotesResolver.resolveSGABreakdown` /
-            // `SwiftTests/BlueTickerTests/RealXbrlStatementNotesTests.swift` 参照。
+            // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
             let statementNotesListed = codes ?? priority
             if statementNotesListed.isEmpty {
                 app.logger.warning(

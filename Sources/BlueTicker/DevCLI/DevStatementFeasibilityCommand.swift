@@ -42,9 +42,6 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     @Flag(name: .customLong("debug-rd-breakdown"), help: "--debug-doc と併用。研究開発費breakdown軸の解決結果を出力する")
     var debugRDBreakdown = false
 
-    @Flag(name: .customLong("debug-sga-breakdown"), help: "--debug-doc と併用。sga_breakdown note_typeの解決結果を出力する")
-    var debugSGABreakdown = false
-
     @Flag(
         name: .customLong("debug-borrowings-schedule"),
         help: "--debug-doc と併用。borrowings_schedule note_typeの解決結果を出力する(単独ならキャッシュ全走査)"
@@ -131,29 +128,6 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         if let debugDoc, debugRDBreakdown {
             let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
             Self.debugRDBreakdown(docID: debugDoc, xbrlDir: dir)
-            return
-        }
-        if let debugDoc, debugSGABreakdown {
-            let dir = xbrlRoot.appendingPathComponent("\(debugDoc)_xbrl", isDirectory: true)
-            Self.debugSGABreakdown(docID: debugDoc, xbrlDir: dir)
-            return
-        }
-        if debugDoc == nil, debugSGABreakdown {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            var resolvedCount = 0
-            var notApplicableCount = 0
-            for dir in dirs {
-                let docID = dir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
-                switch StatementNotesResolver.resolveSGABreakdown(xbrlDir: dir) {
-                case .resolved: resolvedCount += 1
-                case .notApplicable: notApplicableCount += 1; print("notApplicable: \(docID)")
-                case .failed: break
-                }
-            }
-            print("resolved=\(resolvedCount) notApplicable=\(notApplicableCount) total=\(dirs.count)")
             return
         }
         if let debugDoc, debugBorrowingsSchedule {
@@ -708,22 +682,6 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         print("axis=\(snapshot.axis) denominator=\(snapshot.denominator) denominatorTag=\(snapshot.denominatorTag) needsReview=\(snapshot.needsReview) warnings=\(snapshot.warnings)")
         for row in snapshot.rows {
             print("  - label=\(row.labelRaw)(\(row.label ?? "-")) amount=\(row.amount) share=\(row.share.map { String(format: "%.4f", $0) } ?? "-") rowKind=\(row.rowKind)")
-        }
-    }
-
-    // MARK: - デバッグ(財務諸表注記取り込み sga_breakdown note_type)
-
-    static func debugSGABreakdown(docID: String, xbrlDir: URL) {
-        switch StatementNotesResolver.resolveSGABreakdown(xbrlDir: xbrlDir) {
-        case .resolved(let payload, let source, let contentHash):
-            print("source=\(source) contentHash=\(contentHash)")
-            for item in payload.items ?? [] {
-                print("  tag=\(item.tag) label=\(item.label ?? "?") value=\(item.value) unit=\(item.unit ?? "-")")
-            }
-        case .notApplicable(let reason):
-            print("notApplicable(\(reason))")
-        case .failed:
-            print("failed")
         }
     }
 

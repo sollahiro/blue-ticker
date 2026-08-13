@@ -1,15 +1,6 @@
 // 実 EDINET XBRL キャッシュ（analysis_cache）での 財務諸表注記取り込み Statement Notes 決定論 resolver の
 // 回帰テスト（2026-08-01 実データ検証）。
 //
-// sga_breakdown: 「販売費及び一般管理費の主要な内訳」注記は role=NotesStatementOfIncome 配下に
-// 格納され、内訳科目タグは会社ごとに異なる拡張タグ名だが末尾は必ず SGA で統一されている。
-// 固定タグリストではなく「role + tag接尾辞」の構造的パターンで会社非依存に抽出できることを
-// 複数社の実データで確認する。開示コンテキストは常に非連結（`NonConsolidatedMember`）だが、
-// これは会計基準（IFRS/J-GAAP）とは無関係（実データ検証: IFRS連結のトヨタ自動車 S100VWVY も
-// この注記を持つ。単体決算が J-GAAP ベースであることに起因し、連結側の会計基準では判定できない
-// ため、resolver も会計基準を条件分岐に使わない）。キャッシュ済み144件中99件で解決・45件が
-// 正当な not_applicable（役割自体の不掲載）だった（キャッシュ全走査で確認、2026-08-01）。
-//
 // borrowings_schedule: 連結附属明細表「借入金等明細表」を `BorrowingsSchedule.extract`
 // （既存の IBD フォールバックと共有）経由でそのまま表として公開する。キャッシュ済み144件中
 // 79件で解決・65件が正当な not_applicable（明細表自体が無い＝XBRL タグで IBD が完結）だった。
@@ -42,69 +33,6 @@ import Testing
 
     private static func cacheAvailable(_ docID: String) -> Bool {
         FileManager.default.fileExists(atPath: xbrlDir(docID).path)
-    }
-
-    // MARK: - 京セラ S100TSIJ
-
-    @Test(.enabled(if: cacheAvailable("S100TSIJ"), "XBRL cache S100TSIJ not available"))
-    func kyoceraSGABreakdownExtractsCompanySpecificTagsByRoleAndSuffix() throws {
-        let result = StatementNotesResolver.resolveSGABreakdown(xbrlDir: Self.xbrlDir("S100TSIJ"))
-        guard case .resolved(let payload, let source, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        #expect(source == statementNoteSourceXbrlFacts)
-        let items = try #require(payload.items)
-        let byTag = Dictionary(uniqueKeysWithValues: items.map { ($0.tag, $0.value) })
-
-        // 実データ検証済みの値（2026-08-01）。
-        #expect(byTag["EmployeesSalariesAndAllowancesSGA"] == 30_184_000_000)
-        #expect(byTag["ResearchAndDevelopmentExpensesSGA"] == 113_875_000_000)
-        #expect(byTag["DepreciationSGA"] == 17_504_000_000)
-        // 前期(Prior1YearDuration)の値は混入しない（当期のみ）。
-        #expect(items.count == 6)
-    }
-
-    // MARK: - S100R09Z（別会社、別タグ名セット）
-
-    @Test(.enabled(if: cacheAvailable("S100R09Z"), "XBRL cache S100R09Z not available"))
-    func differentCompanyUsesDifferentCompanySpecificSGATagNames() throws {
-        let result = StatementNotesResolver.resolveSGABreakdown(xbrlDir: Self.xbrlDir("S100R09Z"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let items = try #require(payload.items)
-        let tags = Set(items.map(\.tag))
-        // 京セラには無い、この会社固有の拡張タグ名（固定リストに依存しない設計の確認）。
-        #expect(tags.contains("OfficeExpensesSGA"))
-        #expect(tags.contains("PromotionalExpensesSGA"))
-        #expect(!tags.contains("EmployeesSalariesAndAllowancesSGA"))
-    }
-
-    // MARK: - トヨタ自動車 S100VWVY（IFRS連結でも単体側の注記は存在する）
-
-    @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
-    func ifrsConsolidatedCompanyStillHasNonConsolidatedSGANote() throws {
-        let result = StatementNotesResolver.resolveSGABreakdown(xbrlDir: Self.xbrlDir("S100VWVY"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let tags = Set(try #require(payload.items).map(\.tag))
-        #expect(tags.contains("SalariesAndAllowancesSGA"))
-    }
-
-    // MARK: - S100L0TZ（この注記自体を持たない、正当な not_applicable）
-
-    @Test(.enabled(if: cacheAvailable("S100L0TZ"), "XBRL cache S100L0TZ not available"))
-    func companyWithoutTheNoteIsNotApplicableNotAFailure() {
-        let result = StatementNotesResolver.resolveSGABreakdown(xbrlDir: Self.xbrlDir("S100L0TZ"))
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable, got \(result)")
-            return
-        }
-        #expect(reason == statementNoteNotApplicableNotFound)
     }
 
     // MARK: - borrowings_schedule（S100JRT9、リース負債のみの明細表・千円単位）

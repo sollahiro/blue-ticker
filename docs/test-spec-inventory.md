@@ -6,14 +6,14 @@
 再生成・上書きしないこと（手動修正が失われる）。
 
 - 生成日: 2026-08-09
-- 検出した `@Test` 関数: 1054 件（複数行の `.enabled(if:)` 属性などパターン非対応分は未集計。実際の総数と若干のズレがある）
+- 検出した `@Test` 関数: 1050 件（複数行の `.enabled(if:)` 属性などパターン非対応分は未集計。実際の総数と若干のズレがある）
 - 判定根拠列: どのヒューリスティック（ファイル名/テスト関数名）でラベルが付いたかを示す。`no-match` は UNCLASSIFIED（デフォルト）で、廃棄候補ではなく単に未分類
 
 ## ラベル別件数
 
 | ラベル | 件数 |
 |---|---|
-| SPEC_ORACLE | 97 |
+| SPEC_ORACLE | 93 |
 | SPEC_INVARIANT | 8 |
 | SPEC_CONTRACT | 73 |
 | SPEC_POLICY | 222 |
@@ -866,10 +866,6 @@
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlCorporateWebsiteTests.swift` | `terumoStopsURLBeforeTrailingJapaneseText` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlCorporateWebsiteTests.swift` | `paperOnlyPublicNoticeCompanyReturnsNotApplicable` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlCorporateWebsiteTests.swift` | `directoryWithoutSectionReturnsNotFound` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `kyoceraSGABreakdownExtractsCompanySpecificTagsByRoleAndSuffix` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `differentCompanyUsesDifferentCompanySpecificSGATagNames` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `ifrsConsolidatedCompanyStillHasNonConsolidatedSGANote` | SPEC_ORACLE | file-name |
-| `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `companyWithoutTheNoteIsNotApplicableNotAFailure` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `borrowingsScheduleExtractsComponentsSummingExactlyToTotal` | SPEC_INVARIANT | test-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenBorrowingsSompoInterestRatesAndPriorBalance` | SPEC_ORACLE | file-name |
 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift` | `goldenBorrowingsAozoraBankExcludesCategorySubtotal` | SPEC_ORACLE | file-name |
