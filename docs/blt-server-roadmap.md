@@ -123,7 +123,7 @@ issue があるものは番号ポインタのみ（詳細は issue 正本）。
 
 - [~] **REST 本線化（段階 A）** — 互換・Service Token 疎通・配布 `ticker` 廃止まで完了。任意で OpenAPI 下書き。構想は `docs/public-api-concept.md`
 - [ ] **オンデマンド ingest（非同期）** — 未充足キュー＋202。公開スキーマ追加のため着手前に確認
-- [ ] **financials（Summary）と正本の分離** — 目指す流れは `XBRL → statement/notes/breakdown → company_financials → Summary/Waterfall`。すぐ着手: EPS・issued_shares の notes パススルー。続きに本表水準値の statement 参照・breakdown 分母の逆依存解消など。棚卸は `docs/financials-summary-separation-concept.md`
+- [~] **financials（Summary）と正本の分離** — 目指す流れは `XBRL → statement/notes/breakdown → company_financials → Summary/Waterfall`。EPS / issued_shares / capex の notes パススルーと本表水準値（sales・OP・BS 合計・ppe・AR/Inv/AP・現金・dividend_paid_cf）の statement 参照は配線済み。続き: gross_profit/sga・CFO/CFI/IBD 定義突合・breakdown 分母の逆依存解消。棚卸は `docs/financials-summary-separation-concept.md`
 
 ### 将来
 
