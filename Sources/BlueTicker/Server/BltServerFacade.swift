@@ -61,7 +61,7 @@ private func resolveEdinetApiKey() async -> String? {
 }
 
 /// 内訳取り込み の LLM 軸。Server / DevCLI で同じ命名規約の env を読む（実装は意図的に別）。
-enum XaiBreakdownAxis: String, Sendable {
+enum BreakdownLLMAxis: String, Sendable {
     case business
     case geography
 }
@@ -71,7 +71,7 @@ enum XaiBreakdownAxis: String, Sendable {
 /// openai は `OPENAI_{BUSINESS,GEOGRAPHY}_*`、xai は `XAI_{BUSINESS,GEOGRAPHY}_*`
 /// （xai の business のみ旧 `XAI_*` へフォールバック）。
 /// `DevCLI/LLMClientLoader` と同じ規約。未設定なら nil。
-func resolveXaiEndpoint(axis: XaiBreakdownAxis) -> ChatCompletionEndpoint? {
+func resolveBreakdownLLMEndpoint(axis: BreakdownLLMAxis) -> ChatCompletionEndpoint? {
     let env = ProcessInfo.processInfo.environment
     guard let provider = LLMProvider.fromEnv(env) else { return nil }
     return provider.endpoint(axis: axis.rawValue, env: env)
@@ -90,6 +90,14 @@ private struct UnavailableChatClient: ChatCompleting {
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
 /// LLM キー未設定でも 内訳取り込み の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
 public func makeBltServerContext() async -> BltServerContext? {
+    let env = ProcessInfo.processInfo.environment
+    if let provider = env["LLM_PROVIDER"], !provider.isEmpty,
+       LLMProvider.fromEnv(env) == nil
+    {
+        printError(
+            "[blue-ticker] Warning: LLM_PROVIDER='\(provider)' は不正です（openai または xai）。breakdowns の html_table 経路（LLM正規化）が無効になります。\n"
+        )
+    }
     guard let key = await resolveEdinetApiKey() else {
         return nil
     }
@@ -97,10 +105,10 @@ public func makeBltServerContext() async -> BltServerContext? {
     let cacheDir = URL(
         fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
     let businessChatClient: ChatCompleting =
-        resolveXaiEndpoint(axis: .business).map { ChatCompletionClient(endpoint: $0) }
+        resolveBreakdownLLMEndpoint(axis: .business).map { ChatCompletionClient(endpoint: $0) }
         ?? UnavailableChatClient()
     let geographyChatClient: ChatCompleting =
-        resolveXaiEndpoint(axis: .geography).map { ChatCompletionClient(endpoint: $0) }
+        resolveBreakdownLLMEndpoint(axis: .geography).map { ChatCompletionClient(endpoint: $0) }
         ?? UnavailableChatClient()
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
