@@ -14,7 +14,7 @@
 // （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が有報セクション取り込みと同じ
 // `filingSectionsIngestYears` を渡す想定（内訳取り込み専用の別値は持たない）。
 //
-// staleness 判定は有報セクション取り込みと異なる（docs/breakdown-normalization-concept.md「今後の検討事項8」）。
+// staleness 判定は有報セクション取り込みと異なる（docs/breakdown.md）。
 // - xbrl_facts 経由（決定的）: cache_version が現行と不一致なら再計算してよい（安価・再現可能）。
 // - LLM 経由（source != xbrl_facts）: cache_version のバンプだけでは再計算しない。needs_review が
 //   true の行のみ再試行対象にする（同一 docID の入力は不変のため、content_hash は書き込むが

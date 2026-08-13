@@ -6,12 +6,12 @@
 // docID ごとに抽出結果を1行として格納する（company_filing_sections と同じ「1書類=1行」設計）。
 // 複数年度対応は本関数の呼び出し元が filingSectionCandidates から複数 docID を受け取ることで自然に
 // 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
-// （docs/statement-normalization-concept.md「実装方針」2）。
+// （docs/statement.md）。
 //
 // 対象母集団は内訳取り込みと同じ日経225限定でスタートする。Statement 取り込みは LLM 不要でコスト制約は
 // 無いが、実データ検証（158社）が銀行・保険等の特殊タクソノミを網羅していないため、まず
 // 母集団を絞って様子を見る（呼び出し元が `listedCodes` に `priorityIngestCodes()` を渡すことで
-// 実現する。同「実装方針」1）。
+// 実現する。同docs/statement.md）。
 //
 // staleness 判定は決定論のみ（LLM 不要）のため内訳取り込みより単純: cache_version 不一致のみで
 // 再抽出対象にする（company_breakdowns の needs_review 相当の概念は無い）。

@@ -1,5 +1,5 @@
 // 財務諸表注記取り込み: 財務諸表注記（Statement Notes）の格納用 Codable 契約。
-// docs/statement-normalization-concept.md「statement-notes（今後）」・plan（財務諸表注記取り込み実装計画）参照。
+// docs/statement.md · plan（財務諸表注記取り込み実装計画）参照。
 //
 // company_breakdowns（内訳取り込み）と同型の設計: note_type ごとに1行（"\(docID)#\(noteType)" 合成キー）、
 // 決定論経路は cache_version 世代でゲート、LLM 経由は needs_review + content_hash でのみ再計算する。

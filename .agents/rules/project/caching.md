@@ -30,15 +30,11 @@ analysis_cache/
 
 パス解決は `Utils/CachePaths.swift`（`edinetCacheDir(_:)` / `derivedCacheDir(_:)`）を使う。
 
-## バージョン埋め込み
+## バージョン
 
-derived キャッシュには必ず `_cache_version` フィールドを埋め込み、読み込み時に `blueTickerVersion` と照合する。バージョン不一致はフォールスルーして再取得する。
-
-external キャッシュは原則としてグローバルバージョンに連動させない。TTL、取得日、または外部API用の個別バージョンで管理する。
-
-バージョン照合で一致したときは `_cache_version` を除いて返す（呼び出し元に露出させない）。
-
-バージョン管理の詳細は `versioning.md` を参照。
+- derived: `_cache_version` に `blueTickerVersion` を埋め込み、不一致は再取得（詳細は `versioning.md`）
+- external: グローバルバージョンに連動させない（TTL・取得日・個別バージョン）
+- Neon テーブルの `cache_version` は `blueTickerVersion` と独立（同じく `versioning.md`）
 
 ## キャッシュキーの命名規則
 
@@ -49,3 +45,7 @@ external キャッシュは原則としてグローバルバージョンに連�
 ```
 
 短すぎるキー（`"\(code)"` や `"data"` など）は衝突リスクがあるため使わない。
+
+## 落とし穴
+
+`~/.config/blue-ticker/analysis_cache/.../xbrl` を別ディレクトリへ **symlink** すると statement 抽出が 0 facts になることがある。テスト用に実 XBRL を置くときは **`cp -a` で実コピー**する。

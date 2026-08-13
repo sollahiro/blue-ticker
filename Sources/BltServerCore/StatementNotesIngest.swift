@@ -9,7 +9,7 @@
 // 引数として渡すことで実現する）。候補選定ロジックは 有報セクション取り込み・内訳取り込み・
 // Statement 取り込み と同じ `filingSectionCandidates` を再利用する。
 //
-// staleness 判定は 内訳取り込み と同型（`docs/breakdown-normalization-concept.md`「今後の検討事項8」）。
+// staleness 判定は 内訳取り込み と同型（`docs/breakdown.md`）。
 // - xbrl_facts / not_applicable 経由（決定的）: cache_version が現行と不一致なら再計算してよい。
 // - LLM 経由（source == "llm"）: cache_version のバンプだけでは再計算しない。needs_review が
 //   true の行のみ再試行対象にする。

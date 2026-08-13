@@ -25,6 +25,6 @@ Foundation / 標準ライブラリで賄えるものは外部パッケージを�
 
 ## Linux 互換
 
-`URLSession` は `FoundationNetworking`、`XMLParser` は `FoundationXML` の条件付き import が必要。macOS 専用 API（`Security.framework` 等）は `#if canImport(...)` でガードする。Linux 検証は swift:6.1 Docker コンテナで行う。
+`URLSession` は `FoundationNetworking`、`XMLParser` は `FoundationXML` の条件付き import が必要。macOS 専用 API（`Security.framework` 等）は `#if canImport(...)` でガードする。
 
-**swift-nio の Linux ビルド回避策（一時措置）**: Vapor が引き込む swift-nio 2.101.x の `_NIOFileSystem` が Linux で `import CSystem` を欠き、`MemberImportVisibility`（Swift 6.1+）下でエラー化する。Linux での `swift build`/`swift test`/Docker ビルドには `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を付ける（`ci.yml` 適用済み）。swift-nio 修正後に除去。詳細は `docs/blt-server-roadmap.md`「Linux ビルドの既知の問題」。
+**swift-nio / MemberImportVisibility（一時措置）**: Vapor 経由の swift-nio が Linux で `MemberImportVisibility`（Swift 6.1+）下でエラー化するため、Linux の `swift build` / `swift test` / Docker には `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を付ける（`AGENTS.md`「Cursor Cloud」、`.github/workflows/ci.yml`、`Dockerfile`）。swift-nio 修正後に除去する（`docs/operations.md` にも同じ注意あり）。

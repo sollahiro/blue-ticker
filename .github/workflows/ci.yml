@@ -66,7 +66,7 @@ jobs:
         # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
         # st_ctim 等がエラー化する（macOS は Darwin 経由で無傷）。swift-nio 修正までの一時措置。
-        # 詳細: docs/blt-server-roadmap.md「Linux ビルドの既知の問題」
+        # 詳細: .agents/rules/project/dependencies.md / docs/operations.md
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
   repo-invariants:

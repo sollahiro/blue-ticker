@@ -1,6 +1,6 @@
 // 収益認識関係注記（「顧客との契約から生じる収益を分解した情報」）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/breakdown-normalization-concept.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）
+// docs/breakdown.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）
 // と同型だが、対象は次の会社で収益認識関係注記から本当の事業別（製品・部門別）データを拾う:
 // - オークマ型: 報告セグメントが地域別のため、製品別が収益認識注記にある
 // - ファナック型: 単一セグメントで報告セグメント開示省略。部門が列・地域が行のマトリクス表

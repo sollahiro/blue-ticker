@@ -230,7 +230,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             #expect(years?.first?["doc_id"] as? String == "S1")
 
             // is_total/components が REST/MCP の JSON ワイヤーフォーマットまで正しく届くことを確認する
-            // （計算リンクベース由来。docs/statement-normalization-concept.md 実装方針10）。
+            // （計算リンクベース由来。docs/statement.md）。
             let balanceSheet = years?.first?["balance_sheet"] as? [[String: Any]]
             let totalAssets = balanceSheet?.first { $0["tag"] as? String == "TotalAssets" }
             #expect(totalAssets?["is_total"] as? Bool == true)

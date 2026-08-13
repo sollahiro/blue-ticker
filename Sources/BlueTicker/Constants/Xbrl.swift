@@ -779,7 +779,7 @@ enum Xbrl {
         "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock",
     ]
 
-    // MARK: - 事業別・地域別内訳の正規化（内訳取り込み, docs/breakdown-normalization-concept.md）
+    // MARK: - 事業別・地域別内訳の正規化（内訳取り込み, docs/breakdown.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
     /// （netSalesTags と同様、resolveItemPreferCurrent 相当の走査で先頭から一致するものを採用）。
@@ -800,7 +800,7 @@ enum Xbrl {
     /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
     /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
     /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や
-    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/breakdown-normalization-concept.md）。
+    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/breakdown.md）。
     static let segmentNonRevenueTagKeywords: [String] = [
         "Profit", "Loss", "Asset", "Employee", "Equity", "Depreciation",
         "Impairment", "Expenditure", "Liabilit", "Capital", "Dividend",
@@ -974,7 +974,7 @@ enum Xbrl {
     static let segmentSpecificGeographyLabelKeywordsJa: [String] =
         segmentGeographyLabelKeywordsJa.filter { $0 != "海外" && $0 != "国内" }
 
-    // MARK: - Statement（BS/PL/CF/SS 完全正規化, Statement 取り込み, docs/statement-normalization-concept.md）
+    // MARK: - Statement（BS/PL/CF/SS 完全正規化, Statement 取り込み, docs/statement.md）
 
     /// role URI の末尾セクション名（`XBRLUtils.sectionNameFromRole`）が注記・補足表であることを示す
     /// 接頭辞。`NotesConsolidatedBalanceSheet` のように本表と同じキーワードを含むため、

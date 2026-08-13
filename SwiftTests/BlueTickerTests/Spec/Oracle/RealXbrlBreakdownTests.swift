@@ -370,7 +370,7 @@ private actor RealXbrlMockChat: ChatCompleting {
     // 目視確認済み（生XBRLと突き合わせ、SCREEN HD「上記セグメント以外9,151」・日東電工
     // 「全社技術部門10,725」等、注記本文にのみ存在しXBRL dimensionタグが無い値の欠測を確認）。
     // needs_review=false の行のみ確認対象とし、正しさが確認できた絶対値をgolden化する
-    // （needs_review=true の行は開示側の構造的欠測であり別途対応、docs/breakdown-normalization-concept.md）。
+    // （needs_review=true の行は開示側の構造的欠測であり別途対応、docs/breakdown.md）。
     // 割合ではなく実額（人数・円）で確認したユーザー指摘に合わせ、golden も実額のみを見る。
 
     private static func employeesFactsAndLabels(

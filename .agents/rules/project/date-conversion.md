@@ -36,6 +36,6 @@ DateFormat.hyphenatedLength   // 10 (YYYY-MM-DD)
 
 EDINET の日付処理は **UTC 固定**が最終形（JST 0:00〜8:59 の間は当日提出分の取得が最大1日遅れるが許容。次回実行時の catchup で埋まる）。`Calendar.current` を新規コードで使わず、UTC カレンダーを使うこと。
 
-## filing コマンドの期末日フォーマット（fy_end）
+## REST / TickerDev の期末日フォーマット（fy_end）
 
-`filing` コマンドの JSON 出力では期末日を `fy_end` フィールドに **YYYY-MM** 形式で表示する。`edinet_fy_end`（YYYY-MM-DD）の先頭 7 文字をそのまま使う。これはフォーマット変換ではなく単純な切り詰めであり、`prefix(7)` が許容される唯一の例外。
+書類一覧・filing 系の JSON では期末日を `fy_end` に **YYYY-MM** で出す。`edinet_fy_end`（YYYY-MM-DD）の先頭 7 文字をそのまま使う。フォーマット変換ではなく切り詰めであり、`prefix(7)` が許容される唯一の例外（`BltServerFacade` / `TickerDev filing`）。

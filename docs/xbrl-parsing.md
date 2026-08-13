@@ -137,7 +137,7 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 | `IBDExtractor` | 有利子負債合計（直接法→積み上げ法のフォールバック、銀行固有コンポーネント含む） |
 | `TangibleFixedAssetsExtractor`（PPE） | 有形固定資産合計・内訳 |
 | `EmployeesExtractor` | 従業員数（連結→個別フォールバック） |
-| `BreakdownExtractor`（`BreakdownExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/breakdown-normalization-concept.md` |
+| `BreakdownExtractor`（`BreakdownExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/breakdown.md` |
 
 ### 4.3 売上総利益（`GrossProfitExtractor`）
 
@@ -300,7 +300,7 @@ smoke/
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
 | 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
-| Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外（詳細は `docs/statement-normalization-concept.md` / `docs/test-spec-assets.md`） |
+| Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外（詳細は `docs/statement.md` / `docs/test-spec-assets.md`） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
 | 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は巨大注記 HTML から内訳。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(capital_expenditures_overview)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/CapitalExpendituresOverviewOracleFormatTests.swift` | `smoke/statement_notes_capital_expenditures_overview_expected.json`（smoke固定11社。US-GAAP 2社も通常解決。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
@@ -308,9 +308,9 @@ smoke/
 | 注記(issued_shares_and_capital)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesAndCapitalOracleFormatTests.swift` | `smoke/statement_notes_issued_shares_and_capital_expected.json`（smoke固定11社。`as_of_period_end`＝離散タグ＋`issued_shares_events`＝textblock表。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(policy_holding_securities)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PolicyHoldingSecuritiesOracleFormatTests.swift` | `smoke/statement_notes_policy_holding_securities_expected.json`（トヨタ + smoke固定10社。SMFG(8316)は複数docID間でXBRLタグ付けが不完全なため対象外。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(他note_type)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/{Dividends,GoodwillAndIntangibles}OracleFormatTests.swift` | `smoke/statement_notes_{dividends,goodwill_and_intangibles}_expected.json`（試作1〜2docID のみ。smoke 床には未追加） |
-| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | `IBDExtractor.extract` と `resolveBorrowingsSchedule` の関係を検証。method="borrowings_schedule" で解決した docID は合計一致を、method="field_parser"（SOMPO S100R1LR）は不一致自体を実データ値で固定（`docs/test-spec-assets.md` の D） |
+| IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | borrowings_schedule 解決 docID は合計一致、field_parser（SOMPO）は不一致自体を固定 |
 
-`SPEC_*` ラベルに基づくサブフォルダ移動（`docs/test-spec-assets.md` の E）を実施済み。`SwiftTests/{BlueTickerTests,BltServerCoreTests}/Spec/{Oracle,Invariant,Contract,Policy}/` に該当ファイルを移動し、ラベルが混在するファイル（`StatementContractTests.swift` 等）や UNCLASSIFIED が優勢なファイルは元の場所に残している（一覧は `docs/test-spec-inventory.md`）。SwiftPM のテストターゲットはサブフォルダを再帰的に含むため `Package.swift` の変更は不要。
+一部テストは `SwiftTests/.../Spec/{Oracle,Invariant,Contract,Policy}/` に配置（`docs/test-spec-assets.md`）。ラベル混在ファイルは元の場所のまま。SwiftPM はサブフォルダを再帰含むため `Package.swift` 変更不要。
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 

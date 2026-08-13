@@ -50,7 +50,7 @@ func registerRoutes(
         ], status: .ok)
     }
 
-    // /v1 配下の認証モードを env から決める（docs/blt-server-roadmap.md「認証」参照）。
+    // /v1 配下の認証モードを env から決める（docs/api-auth.md / docs/deploy.md）。
     // 優先順位:
     //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
     //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
@@ -163,7 +163,7 @@ func registerRoutes(
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
     // axis は business / geography（省略時 business）。それ以外の軸は行が無く 404 になる。
-    // 内訳取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown-normalization-concept.md）。
+    // 内訳取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
@@ -178,7 +178,7 @@ func registerRoutes(
     // GET /v1/companies/{code}/statement?years=5&doc_id=...
     // DB（Statement 取り込み company_statements）の格納済み BS/PL/CF/SS のみを返す。ライブ抽出へはフォールバック
     // しない（filing-sections/breakdowns と同型）。Statement 取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。
-    // docs/statement-normalization-concept.md「実装方針」1）。
+    // docs/statement.md）。
     v1.get("companies", ":code", "statement") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]

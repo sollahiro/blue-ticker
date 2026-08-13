@@ -895,7 +895,7 @@ enum StatementNotesResolver {
             contentHash: "asOf{\(asOfHash)}|events{\(eventHash)}")
     }
 
-    // MARK: - financials 組立向けパススルー（タスク #1–2、`docs/financials-summary-separation-concept.md`）
+    // MARK: - financials 組立向けパススルー（タスク #1–2、`docs/financials-summary-separation.md`）
 
     /// `company_financials` 組立が読む EPS。正本は `per_share_information` note（`tag == "eps"`）。
     /// ingest 順序に依存せず、同一 XBRL パス内で `resolvePerShareInformation` を直接呼ぶ（#10b）。

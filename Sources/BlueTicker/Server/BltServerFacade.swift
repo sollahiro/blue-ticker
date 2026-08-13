@@ -552,7 +552,7 @@ private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdown
 
 /// 生入力（ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/
 /// スキーマは含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になる。
-/// docs/breakdown-normalization-concept.md「今後の検討事項8」）。ExtractedBreakdown は Codable ではないため
+/// docs/breakdown.md）。ExtractedBreakdown は Codable ではないため
 /// 既存の ExtractedBreakdownPayload 写経を経由する。CryptoKit は Linux（Fly.io 配信）で使えないため、
 /// 非暗号学的だが決定的な FNV-1a を使う（目的は変更検知であり耐改ざん性は不要）。
 /// business / geography いずれの抽出結果にも使う（軸ごとに入力が異なるためハッシュも分かれる）。

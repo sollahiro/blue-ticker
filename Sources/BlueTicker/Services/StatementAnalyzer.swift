@@ -1,5 +1,5 @@
 // Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。
-// docs/statement-normalization-concept.md 参照。IndividualAnalyzer（財務取り込み）と異なり、
+// docs/statement.md 参照。IndividualAnalyzer（財務取り込み）と異なり、
 // 複数年度の履歴集約（EdinetDiscovery 走査）は行わない。1書類＝1年度分の抽出のみ
 // （複数年対応は StatementIngest 実装時に追加）。
 

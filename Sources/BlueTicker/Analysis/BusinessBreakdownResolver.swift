@@ -1,5 +1,5 @@
 // `segments` キーの事業別内訳（business breakdown）を解決する。
-// docs/breakdown-normalization-concept.md 参照。`BreakdownExtractor.extractSegmentInfo` は
+// docs/breakdown.md 参照。`BreakdownExtractor.extractSegmentInfo` は
 // 既にオークマ型（axis が geography 判定される場合）を収益認識関係注記へ axis-aware に
 // swap 済みで返す（`isGeographyAxis` 判定＋`extractRevenueRecognitionInfo` フォールバック）。
 // 本リゾルバはその後段として、method に応じてどの正規化器（xbrl_facts の決定的経路 /
