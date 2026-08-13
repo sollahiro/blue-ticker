@@ -14,59 +14,6 @@ import FoundationXML
 
 enum StatementNotesResolver {
 
-    /// 販管費の内訳（`sga_breakdown` note_type）。
-    ///
-    /// 実データ検証（2026-08-01、S100TSIJ/S100R0D0/S100VXJA/S100R09Z 等）: 「販売費及び一般管理費の
-    /// 主要な内訳」注記は role=`NotesStatementOfIncome` 配下に格納され、内訳科目タグは
-    /// `EmployeesSalariesAndAllowancesSGA` のように会社ごとに異なる拡張タグ名だが、末尾は必ず
-    /// `SGA` で統一されている（EDINET拡張タクソノミの命名規約）。固定タグリストを持たず、
-    /// 「role=NotesStatementOfIncome かつ tag が SGA で終わる」という構造的パターンだけで
-    /// 会社非依存に抽出する。
-    ///
-    /// 開示コンテキストは常に非連結（`NonConsolidatedMember`）だった（サンプル全社）。これは
-    /// 連結側の会計基準（IFRS/J-GAAP）とは無関係（実データ検証: IFRS連結のトヨタ自動車
-    /// S100VWVY もこの注記を持つ）。単体決算の損益計算書関係注記として開示されるかどうかは
-    /// 会社ごとの開示判断であり、キャッシュ済み144件中99件で解決・45件が正当な
-    /// `.notApplicable(not_found)`（該当 role 自体が無い）だった。したがって本 note_type の値は
-    /// 単体（非連結）ベースであり、財務取り込み の連結 SG&A 合計とは母集団が異なる（合算しても一致しない）。
-    static func resolveSGABreakdown(xbrlDir: URL) -> StatementNoteResolveResult {
-        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
-
-        var labelsByTag: [String: String?] = [:]
-        for (tag, ctxMap) in facts where tag.hasSuffix("SGA") {
-            for fact in ctxMap.values {
-                let roles = fact.roles ?? fact.role.map { [$0] } ?? []
-                if roles.contains(where: { XBRLUtils.sectionNameFromRole($0) == "NotesStatementOfIncome" }) {
-                    labelsByTag[tag] = fact.label
-                    break
-                }
-            }
-        }
-        guard !labelsByTag.isEmpty else {
-            return .notApplicable(reason: statementNoteNotApplicableNotFound)
-        }
-
-        // 現在値の解決は非連結 Duration の正規化ロジックを再利用する（実データ検証どおり単体
-        // コンテキストのみで開示されるため。自前のコンテキスト文字列パースはしない）。
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTagElements)
-
-        var items: [StatementLineItem] = []
-        for (tag, label) in labelsByTag {
-            guard let value = ncDurationFS[tag]?.current else { continue }
-            items.append(StatementLineItem(tag: tag, label: label, value: value, unit: "yen", order: nil))
-        }
-        guard !items.isEmpty else {
-            return .notApplicable(reason: statementNoteNotApplicableNotFound)
-        }
-        items.sort { $0.tag < $1.tag }
-
-        let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
-        return .resolved(
-            payload: StatementNotePayload(items: items), source: statementNoteSourceXbrlFacts,
-            contentHash: hash)
-    }
-
     /// IBD計算用CF補足（`borrowings_schedule` note_type）。
     ///
     /// 連結附属明細表「借入金等明細表」の構成科目（短期借入金・社債・長期借入金・リース負債等）を
@@ -345,7 +292,7 @@ enum StatementNotesResolver {
     /// 銘柄は `xsi:nil="true"` の当年 fact のみ存在し、`nilAsZero: true` だとこれが `0` に化けて
     /// 「保有株式数0・計上額0円」という実態と異なる値を返してしまう（実データ検証: S100QXRZ で
     /// 41銘柄中14銘柄がこのケース）。`nil`（未開示）のまま返すのが正しい。本ファイルの他の
-    /// resolver（`resolveSGABreakdown`/`resolveIFRSCategorySchedule`）も同じ理由で値取得には
+    /// resolver（`resolveIFRSCategorySchedule` 等）も同じ理由で値取得には
     /// `nilAsZero: false` を使っており、本関数もそれに揃える。
     ///
     /// **既知の限界**: ごく稀に提出会社側のXBRLタグ付け自体が開示本文（HTMLテーブル）に対して

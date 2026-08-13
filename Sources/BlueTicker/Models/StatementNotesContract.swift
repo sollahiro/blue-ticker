@@ -19,11 +19,8 @@ import Foundation
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
 public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
-// research_and_development は note_type から廃止（2026-08-11）。事業別 R&D は内訳取り込み
-// breakdown 軸 `research_and_development` に集約（全社合計は同軸の denominator）。
 public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
-public let statementNoteTypeSGABreakdown = "sga_breakdown"
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 /// 決定論（EDINET標準タクソノミの銘柄別構造化タグ、`StatementNotesResolver.resolvePolicyHoldingSecurities`
 /// 参照）。当初「LLM必須」と見込んでいたが実データ検証で構造化タグの存在が判明し方針転換した。
@@ -42,7 +39,6 @@ public let perShareInformationNoteCacheVersion = "notes-eps-v2"
 public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
-public let sgaBreakdownNoteCacheVersion = "notes-sga-breakdown-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 /// v3（2026-08-12）: US-GAAP 連結を巨大注記 HTML（注記9の社債・借入金／長期債務表）から抽出。
@@ -66,7 +62,6 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     case statementNoteTypeIssuedSharesAndCapital: return issuedSharesAndCapitalNoteCacheVersion
     case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
-    case statementNoteTypeSGABreakdown: return sgaBreakdownNoteCacheVersion
     case statementNoteTypeBorrowingsSchedule: return borrowingsScheduleNoteCacheVersion
     case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion
     case statementNoteTypePropertyPlantEquipmentSchedule: return propertyPlantEquipmentScheduleNoteCacheVersion
@@ -128,7 +123,7 @@ public enum StatementNoteResolveResult: Sendable {
 }
 
 /// company_statement_notes.payload の中身。note_type によって使うフィールドが変わる緩めの構造:
-/// - スカラー値の note（研究開発費合計）は `value`/`unit` を使う
+/// - スカラー値の note は `value`/`unit` を使う
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
 /// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式・資本金等は

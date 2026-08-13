@@ -279,13 +279,6 @@ public extension BltServerContext {
         loadPriorityIngestCodes()
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `sga_breakdown` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveSGABreakdown` に委譲する（XBRL のみで完結・LLM 不要）。
-    func resolveSGABreakdownNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveSGABreakdown(xbrlDir: xbrlDir)
-    }
-
     /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveBorrowingsSchedule`（＝`BorrowingsSchedule.extractRows`、
     /// `IBDExtractor` が使う `extract` と表探索ロジックを共有）に委譲する。
@@ -470,8 +463,8 @@ public extension BltServerContext {
             contentHash: hash, audit: nil)
     }
 
-    /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加、
-    /// 2026-08-11 に statement-notes note_type から集約）。決定論のみ、LLM なし。
+    /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
+    /// 決定論のみ、LLM なし。
     /// `total` は財務取り込み計算済みの全社 R&D（分母）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
     /// denominatorTag には `total` を生んだ実タグ名を載せる（`RDExtractor` を同一書類のXBRLへ

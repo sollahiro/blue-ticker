@@ -1,8 +1,6 @@
 // 財務諸表注記取り込みの汎用機構（対象選定・staleness・upsert・skip・read 床）を検証する。
 // 各 note_type 固有の XBRL 抽出は `RealXbrlStatementNotesTests` / 外出しオラクル側。
-//
-// research_and_development note_type は 2026-08-11 に廃止し内訳取り込み breakdown 軸へ集約したため、
-// financials passthrough は使わず、固定結果を返すフェイクリゾルバで機構のみを見る。
+// 機構のみを見るため、固定結果を返すフェイクリゾルバを使う。
 
 import Fluent
 import FluentSQLiteDriver
