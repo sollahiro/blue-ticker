@@ -94,9 +94,9 @@ swift build -c release --product blt-server   # コード変更後は必須（�
 launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
 ```
 
-既定 limit: financials=80 / filing-sections=50 / breakdowns=30（`.env` で上書き）。長時間ランは接続リセットしやすいので完走優先で小さく。ステージ timeout 既定 5400s（`BLT_STAGE_TIMEOUT_SECONDS`）。
+既定 limit: breakdowns の `--limit` は business/geography=50（`BLT_INGEST_LIMIT_BREAKDOWNS`）。employees/rd/goodwill は ingest 側で 30・日経225固定。statements=50（`BLT_INGEST_LIMIT_STATEMENTS`）。当面の定期ジョブは sync + breakdowns + statements。長時間ランは接続リセットしやすいので完走優先で小さく。ステージ timeout 既定 5400s（`BLT_STAGE_TIMEOUT_SECONDS`）。
 
-`assets/nikkei225.csv`（gitignore）: financials/filing-sections は処理順の優先、breakdowns は**対象母集団そのもの**（未配置なら breakdowns 0 件）。
+`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。書類単位 ingest はそれに加え、ローカル XBRL 展開済みを先に回す。
 
 ジョブ末尾で status ページ再生成（失敗しても ingest 成否に影響しない）。
 

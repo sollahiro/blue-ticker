@@ -120,6 +120,19 @@ final class EdinetCacheStore: Sendable {
         return !entries.isEmpty
     }
 
+    /// 展開済み XBRL ディレクトリがある docID の集合。内訳取り込みの処理順で
+    /// 「既にダウンロード済みの書類」を先に回すために使う（EDINET 再取得を減らす）。
+    func cachedXbrlDocIDs() -> Set<String> {
+        let suffix = "_xbrl"
+        let names = (try? fm.contentsOfDirectory(atPath: xbrlRootDir.path)) ?? []
+        var ids: Set<String> = []
+        for name in names where name.hasSuffix(suffix) {
+            let docID = String(name.dropLast(suffix.count))
+            if !docID.isEmpty, hasXbrlDir(docID) { ids.insert(docID) }
+        }
+        return ids
+    }
+
     func touchXbrlDir(_ docID: String, saveDir: URL? = nil) {
         let dest = xbrlDir(docID, saveDir: saveDir)
         try? fm.setAttributes([.modificationDate: Date()], ofItemAtPath: dest.path)

@@ -1,6 +1,5 @@
-// financials/filing-sections/breakdowns 共通の候補列並び替え。ユーザーが用意した優先コード一覧
-// （`assets/nikkei225.csv`、`BltServerContext.priorityIngestCodes()`）を候補選定の後段で
-// 先頭へ寄せる。対象選定（何を取り込むか）ではなく処理順序（何から取り込むか）のみを変える。
+// 候補列の並び替え。対象選定（何を取り込むか）ではなく処理順序（何から取り込むか）のみを変える。
+// 日経225（`assets/nikkei225.csv`）とローカル XBRL 展開済み docID を重ねる。
 
 /// `priorityCodes` に含まれる要素を安定に先頭へ寄せる（同集合内・非対象内それぞれの相対順序は保持）。
 /// `priorityCodes` が空なら無並び替え（従来どおりの順序）。
@@ -16,6 +15,17 @@ func prioritized<T>(_ candidates: [T], codeOf: (T) -> String, priorityCodes: Set
         }
     }
     return head + tail
+}
+
+/// 書類単位 ingest の処理順: 日経225 → ローカル XBRL 展開済み → 元の相対順。
+/// `prioritized` をキャッシュ向け・コード向けの順に重ねる（後段の日経225が勝つ）。
+func ingestOrdered<T>(
+    _ candidates: [T], docIDOf: (T) -> String, codeOf: (T) -> String,
+    cachedDocIDs: Set<String>, priorityCodes: Set<String>
+) -> [T] {
+    prioritized(
+        prioritized(candidates, codeOf: docIDOf, priorityCodes: cachedDocIDs),
+        codeOf: codeOf, priorityCodes: priorityCodes)
 }
 
 /// 複数バケツ（優先度の高い順）の候補をラウンドロビンで束ねる。単純連結（`a + b + c`）だと

@@ -260,6 +260,11 @@ public extension BltServerContext {
         loadPriorityIngestCodes()
     }
 
+    /// ローカル XBRL キャッシュに展開済みの docID。内訳取り込みが軸を跨いで同じ書類を先に回すため。
+    func cachedXbrlDocIDs() async -> Set<String> {
+        await edinetClient.cachedXbrlDocIDs()
+    }
+
     /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveBorrowingsSchedule`（＝`BorrowingsSchedule.extractRows`、
     /// `IBDExtractor` が使う `extract` と表探索ロジックを共有）に委譲する。

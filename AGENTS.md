@@ -59,7 +59,7 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 | 9 | 225 全体で問題なければ全銘柄へ拡張 | 本番 write | しない |
 | 10 | 全銘柄展開に伴うロジック定着 | 本番 write | **する** |
 
-- **母集団**: breakdowns/statements は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。financials/filing-sections は同 CSV が処理順の優先のみ → 225 に閉じるなら `--codes` 等で明示。
+- **母集団**: statements と breakdowns の employees/rd/goodwill は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。breakdowns の business/geography と financials/filing-sections は上場全体（同 CSV は処理順の優先のみ）→ 225 に閉じるなら `--codes` 等で明示。
 - **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_PROD_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
 
 ## 監査レビューとモデル分担

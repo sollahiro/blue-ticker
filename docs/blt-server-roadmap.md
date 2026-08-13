@@ -11,7 +11,7 @@
 | sync | 稼働・日次増分 |
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
 | financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md` |
-| breakdowns | 日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
+| breakdowns | business/geography は上場全体（日経225は処理順優先）。employees/rd/goodwill は日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
 | statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes はコード配線済・本番 ingest 未 |
 | 定期ジョブ | ローカル launchd。Fly は read 専用（ingest は OOM のためローカル） |
 | MCP | `POST /` 埋め込み。Managed OAuth は `mcp.*` |

@@ -26,8 +26,10 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 
 /// edinet_documents の書類を新しい順に走査し、未パース or バージョン不一致のものを取り込む。
 /// `limit` は新規取り込み件数の上限（XBRL ダウンロードが重いためバッチ実行用）。
+/// `cachedDocIDs` はローカル XBRL 展開済み。欠測→版ずれの連結のうえ、キャッシュ済みを先頭へ寄せる。
 func runFactsIngest(
-    db: Database, limit: Int?, logger: Logger? = nil, parse: XbrlFactParser
+    db: Database, limit: Int?, cachedDocIDs: Set<String> = [], logger: Logger? = nil,
+    parse: XbrlFactParser
 ) async throws -> FactsIngestSummary {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocument.query(on: db)
@@ -64,7 +66,7 @@ func runFactsIngest(
         }
     }
 
-    let candidates = missing + stale
+    let candidates = prioritized(missing + stale, codeOf: { $0 }, priorityCodes: cachedDocIDs)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0
@@ -140,9 +142,13 @@ func storeXbrlFacts(
 /// （REST の financials は years 既定 5。read 時に要求年数へ縮める）。
 let financialsIngestYears = 6
 
+/// employees / research_and_development / goodwill の1ジョブ上限。日経225限定・決定論のみ。
+/// business / geography の `--limit`（定期ジョブ既定 50）とは独立。`--codes` 時は無視して全件。
+let unpublishedBreakdownIngestLimit = 30
+
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
-/// 内訳取り込み（事業別内訳・business軸のみ・日経225構成銘柄限定）を取り込む。
+/// 内訳取り込み（business/geography は上場全体、employees/rd/goodwill は日経225限定）を取り込む。
 ///
 /// 数値 fact 取り込み（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
 /// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
@@ -159,8 +165,8 @@ let financialsIngestYears = 6
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
-/// 内訳取り込みの対象母集団は `listed`（上場全体）ではなく `priority`（日経225構成銘柄）に限定する
-/// （LLM 呼び出し費用抑制。`priority` 空集合＝`assets/nikkei225.csv` 未配置時は内訳取り込み対象0件）。
+/// 内訳取り込み: business/geography は `listed`（上場全体。日経225は処理順の先頭寄せ）、
+/// employees/rd/goodwill は `priority`（日経225）。`--codes` 指定時は全軸その集合。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
@@ -200,7 +206,10 @@ public func runFactsIngestCommand(
                 metadata: ["event": "explicit_codes_loaded", "count": "\(codes.count)"])
         }
         if includeFacts {
-            let s3 = try await runFactsIngest(db: app.db, limit: limit, logger: app.logger) { docID in
+            let s3 = try await runFactsIngest(
+                db: app.db, limit: limit, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                logger: app.logger
+            ) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
             }
             logIngestSummary(
@@ -232,7 +241,8 @@ public func runFactsIngestCommand(
             let s5 = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: listed, years: filingSectionsIngestYears,
                 sectionKeys: currentFilingSectionKeys(), limit: stageLimit, explicitCodes: codes,
-                priorityCodes: priority, logger: app.logger
+                priorityCodes: priority, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                logger: app.logger
             ) { docID in
                 await context.extractFilingSections(docID: docID)
             }
@@ -245,27 +255,36 @@ public func runFactsIngestCommand(
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
         if targets.contains(.breakdowns) {
-            // 内訳取り込み: 既定は日経225（`priority`）を対象母集団（LLM 費用抑制）。
-            // `--codes` 指定時はその集合を母集団にする（CSV 未配置の Cloud 等でも
-            // 手動再ingestが attempted=0 にならない。issue #160）。
-            // 年数は 有報セクション取り込み と同じ集合から取るため filingSectionsIngestYears を共用する。
-            // limit は軸ごとの呼び出しで独立に適用する。
-            let breakdownListed = codes ?? priority
-            if breakdownListed.isEmpty {
+            // 内訳取り込み: business/geography は上場全体（`listed`。日経225は処理順の先頭寄せ）。
+            // employees/rd/goodwill は日経225（`priority`）限定。`--codes` 時は全軸その集合。
+            // `--limit` は business/geography に適用。未公開3軸は `unpublishedBreakdownIngestLimit`。
+            let publicBreakdownListed = codes ?? listed
+            let unpublishedBreakdownListed = codes ?? priority
+            if publicBreakdownListed.isEmpty {
                 app.logger.warning(
-                    "内訳取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping business/geography",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
+            if unpublishedBreakdownListed.isEmpty {
+                app.logger.warning(
+                    "内訳取り込み unpublished axes empty (nikkei225.csv missing and no --codes); skipping employees/rd/goodwill",
+                    metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_priority_codes"])
+            }
+            let unpublishedLimit = codes == nil ? unpublishedBreakdownIngestLimit : nil
             let s6Business = try await runBreakdownIngest(
-                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, axis: breakdownAxisBusiness, logger: app.logger
+                db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, priorityCodes: priority,
+                cachedDocIDs: await context.cachedXbrlDocIDs(),
+                axis: breakdownAxisBusiness, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveBusinessBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
             }
             let s6Geography = try await runBreakdownIngest(
-                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, axis: breakdownAxisGeography, logger: app.logger
+                db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, priorityCodes: priority,
+                cachedDocIDs: await context.cachedXbrlDocIDs(),
+                axis: breakdownAxisGeography, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveGeographyBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
@@ -273,23 +292,29 @@ public func runFactsIngestCommand(
             // employees/research_and_development は連結売上ではなく 財務取り込み 計算済みの従業員数・
             // 研究開発費合計を分母(全社合計)として使う(重複ロジック回避、2026-08-01 監査指摘対応)。
             let s6Employees = try await runBreakdownIngest(
-                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, axis: breakdownAxisEmployees, logger: app.logger,
+                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                explicitCodes: codes, priorityCodes: priority,
+                cachedDocIDs: await context.cachedXbrlDocIDs(),
+                axis: breakdownAxisEmployees, logger: app.logger,
                 denominatorForDoc: employeesForDocFromFinancials
             ) { docID, total in
                 await context.resolveEmployeesBreakdown(docID: docID, total: total)
             }
             let s6RD = try await runBreakdownIngest(
-                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, axis: breakdownAxisResearchAndDevelopment, logger: app.logger,
+                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                explicitCodes: codes, priorityCodes: priority,
+                cachedDocIDs: await context.cachedXbrlDocIDs(),
+                axis: breakdownAxisResearchAndDevelopment, logger: app.logger,
                 denominatorForDoc: rdForDocFromFinancials
             ) { docID, total in
                 await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
             }
             // goodwill は financials 分母を使わず XBRL から全社合計を自前解決（決定論のみ、LLM なし）。
             let s6Goodwill = try await runBreakdownIngest(
-                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, axis: breakdownAxisGoodwill, logger: app.logger
+                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                explicitCodes: codes, priorityCodes: priority,
+                cachedDocIDs: await context.cachedXbrlDocIDs(),
+                axis: breakdownAxisGoodwill, logger: app.logger
             ) { docID, _ in
                 await context.resolveGoodwillBreakdown(docID: docID)
             }
@@ -357,7 +382,8 @@ public func runFactsIngestCommand(
             }
             let s7 = try await runStatementIngest(
                 db: app.db, listedCodes: statementListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, logger: app.logger
+                explicitCodes: codes, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                logger: app.logger
             ) { docID in
                 await context.extractStatement(docID: docID)
             }
@@ -371,7 +397,7 @@ public func runFactsIngestCommand(
                 notApplicable: s7.notApplicable, purged: s7.purged)
         }
         if targets.contains(.notes) {
-            // 財務諸表注記取り込み: 内訳取り込み・Statement 取り込み と同じ日経225限定母集団。
+            // 財務諸表注記取り込み: Statement 取り込み と同じ日経225限定母集団。
             // EPS/発行済株式・資本金/設備投資概要/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
             let statementNotesListed = codes ?? priority
@@ -424,7 +450,9 @@ public func runFactsIngestCommand(
                 if let noteTypeFilter, !noteTypeFilter.contains(entry.noteType) { continue }
                 let s8 = try await runStatementNotesIngest(
                     db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
-                    limit: stageLimit, explicitCodes: codes, noteType: entry.noteType,
+                    limit: stageLimit, explicitCodes: codes,
+                    cachedDocIDs: await context.cachedXbrlDocIDs(),
+                    noteType: entry.noteType,
                     logger: app.logger, resolve: entry.resolve)
                 let coverage = try? await withDbRetry(
                     logger: app.logger, context: "company_statement_notes(\(entry.noteType)) 集計"
@@ -444,7 +472,8 @@ public func runFactsIngestCommand(
             if let r2Config = R2Config.resolveFromEnvironment() {
                 let s9 = try await runIconsIngest(
                     db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
-                    priorityCodes: priority, logger: app.logger
+                    priorityCodes: priority, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                    logger: app.logger
                 ) { docID, code in
                     await context.extractAndUploadCompanyIcon(docID: docID, code: code, r2Config: r2Config)
                 }

@@ -28,8 +28,8 @@ public let breakdownAxisGoodwill = "goodwill"
 /// （content_hash 一致・needs_review=false の行はそのまま据え置く。docs/breakdown.md 参照）。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
-public let businessBreakdownCacheVersion = "breakdown-business-v8"
-public let geographyBreakdownCacheVersion = "breakdown-geography-v9"
+public let businessBreakdownCacheVersion = "breakdown-business-v9"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v10"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"

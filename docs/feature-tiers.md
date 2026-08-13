@@ -10,7 +10,7 @@
 | 構造化 | Statement | 無料 | 済（日経225） | BS/PL/CF/SS 全項目 |
 | 構造化 | Note | 無料 | 済（日経225） | 注記構造化 |
 | 正規化 | Summary | 無料 | 済 | 財務水準値 |
-| 正規化 | Breakdown | 有料 | 済（日経225） | 事業・地域内訳 |
+| 正規化 | Breakdown | 有料 | 済（全上場 ingest） | 事業・地域内訳 |
 | 視覚化 | Waterfall | 有料 | 済 | 要因分解 |
 | 視覚化 | Allocation（仮称） | 有料 | 未 | 配分構造（Sankey） |
 

@@ -7,7 +7,9 @@
 # XBRL 数値 fact（facts）は停止中（issue #22。Neon 512MB 対策で消費者ができるまで
 # 蓄積を止める）。再開する場合は下の ingest に --with-facts を付ける。
 #
-# breakdowns は日経225構成銘柄（assets/nikkei225.csv）限定・business→geography の2パス。
+# breakdowns: business/geography は上場全体（--limit 既定 50）、employees/rd/goodwill は日経225（1ジョブ 30）。
+# statements は日経225限定。当面の定期ジョブは sync + breakdowns + statements
+# （financials / filing-sections は手動または再開まで止める）。
 # LLM は LLM_PROVIDER（現行 openai。Grok に戻すなら xai）と、
 # プロバイダ×軸のキー（OPENAI_* / XAI_*。xai の business のみ旧 XAI_* フォールバック可）。
 # 未設定でも xbrl_facts 経路は動くが、html_table 経路は notApplicable になる。
@@ -18,7 +20,8 @@
 #   swift build -c release --product blt-server
 #
 # ingest 件数は対象別に .env で上書きできる（既定: financials=80 /
-# filing-sections=50 / breakdowns=30）。BLT_INGEST_LIMIT がある場合は後方互換として全対象既定値に使う。
+# filing-sections=50 / breakdowns(business/geography)=50 / statements=50）。
+# employees/rd/goodwill の上限 30 は ingest 側固定。BLT_INGEST_LIMIT がある場合は後方互換として全対象既定値に使う。
 #
 # 各対象には実行時間の上限（既定 90 分）を設け、超過時は SIGTERM→SIGKILL で
 # 強制終了して次の対象へ進む（Neon 接続不安定によるハング対策）。上書きは
@@ -49,7 +52,7 @@ if [ ! -f "$REPO/.env" ]; then
 fi
 
 # .env から環境変数を読み込む（裸書きのキー値を想定。クォートで囲まない）。
-# BLT_INGEST_LIMIT_FINANCIALS / _FILING_SECTIONS / _BREAKDOWNS（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
+# BLT_INGEST_LIMIT_FINANCIALS / _FILING_SECTIONS / _BREAKDOWNS / _STATEMENTS（または BLT_INGEST_LIMIT）の上書きも .env に書けば反映される（plist はテンプレートから
 # 生成する共有ファイルのため、マシン固有のチューニング値は .env 側に置く）。
 set -a
 . "$REPO/.env"
@@ -58,7 +61,8 @@ set +a
 DEFAULT_LIMIT="${BLT_INGEST_LIMIT:-}"
 LIMIT_FINANCIALS="${BLT_INGEST_LIMIT_FINANCIALS:-${DEFAULT_LIMIT:-80}}"
 LIMIT_FILING_SECTIONS="${BLT_INGEST_LIMIT_FILING_SECTIONS:-${DEFAULT_LIMIT:-50}}"
-LIMIT_BREAKDOWNS="${BLT_INGEST_LIMIT_BREAKDOWNS:-${DEFAULT_LIMIT:-30}}"
+LIMIT_BREAKDOWNS="${BLT_INGEST_LIMIT_BREAKDOWNS:-${DEFAULT_LIMIT:-50}}"
+LIMIT_STATEMENTS="${BLT_INGEST_LIMIT_STATEMENTS:-${DEFAULT_LIMIT:-50}}"
 STAGE_TIMEOUT_SECONDS="${BLT_STAGE_TIMEOUT_SECONDS:-5400}"
 
 # コマンドをバックグラウンドで実行し、$STAGE_TIMEOUT_SECONDS 秒経っても生きていれば
@@ -86,12 +90,10 @@ run_with_timeout() {
 {
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') sync 開始 ====="
   run_with_timeout "$BIN" sync
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest financials --limit $LIMIT_FINANCIALS 開始 ====="
-  run_with_timeout "$BIN" ingest --stages financials --limit "$LIMIT_FINANCIALS"
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest filing-sections --limit $LIMIT_FILING_SECTIONS 開始 ====="
-  run_with_timeout "$BIN" ingest --stages filing-sections --limit "$LIMIT_FILING_SECTIONS"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest breakdowns --limit $LIMIT_BREAKDOWNS 開始 ====="
   run_with_timeout "$BIN" ingest --stages breakdowns --limit "$LIMIT_BREAKDOWNS"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest statements --limit $LIMIT_STATEMENTS 開始 ====="
+  run_with_timeout "$BIN" ingest --stages statements --limit "$LIMIT_STATEMENTS"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') 完了 ====="
 
   # RO 子ブランチを WRITE 親へ reset（Neon API）。Secrets 未設定ならスキップ。

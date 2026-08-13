@@ -163,7 +163,7 @@ func registerRoutes(
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
     // axis は business / geography（省略時 business）。それ以外の軸は行が無く 404 になる。
-    // 内訳取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約。docs/breakdown.md）。
+    // 内訳取り込み: business/geography は上場全体、employees/rd/goodwill は日経225（docs/breakdown.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
@@ -224,9 +224,8 @@ func registerRoutes(
 
     // GET /v1/demo/companies?q=...
     // sollahiro.com/demo（子サイト）の実データ検索専用。company_breakdowns に格納済みの銘柄
-    // （内訳取り込み 対象母集団＝日経225構成銘柄）に絞って返す。日経225の構成銘柄一覧そのものは
-    // 編集著作物のため配布・公開しない設計（PriorityIngestCodes.swift 参照）。クエリ必須にし、
-    // 全件列挙（一覧公開）にならないようにする。
+    // （内訳取り込み対象＝上場のうち格納済み）に絞って返す。銘柄一覧そのものは
+    // 全件列挙エンドポイントを設けず、クエリ必須にして検索窓の候補に留める。
     // このパスは Cloudflare Access の対象外（Bypass ポリシー）にして無認証公開する想定。
     demo.get("demo", "companies") { req async -> Response in
         let q = (req.query[String.self, at: "q"] ?? "").trimmingCharacters(in: .whitespaces)
@@ -287,7 +286,6 @@ func registerRoutes(
 // MARK: - /v1/demo 専用: company_breakdowns を対象母集団ゲートに使う
 
 /// 候補コード集合のうち company_breakdowns に格納済みの銘柄コードを返す。
-/// 日経225構成銘柄リストそのものを公開しないため、常に検索クエリの候補集合との積集合としてのみ使い、
 /// 対象母集団を単独で全件列挙できるエンドポイントは設けない。
 private func demoEligibleCodes(among candidates: [String], db: Database) async throws -> Set<String> {
     guard !candidates.isEmpty else { return [] }

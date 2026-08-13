@@ -206,7 +206,7 @@ private func seedBreakdown(
                 source: breakdownSourceSegmentInfoLLM, version: "breakdown-business-v1", db: app.db)
 
             let report = try await buildIngestStatusReport(
-                db: app.db, listedCodes: [], priorityCodes: ["7203", "6758"])
+                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
             let business = try #require(report.stages.first { $0.key == "breakdown_business" })
 
             #expect(business.docsCovered == 2)
@@ -234,7 +234,7 @@ private func seedBreakdown(
                 source: breakdownSourceXbrlFacts, version: "breakdown-business-v3", db: app.db)
 
             let report = try await buildIngestStatusReport(
-                db: app.db, listedCodes: [], priorityCodes: ["7203", "6758"])
+                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
             let business = try #require(report.stages.first { $0.key == "breakdown_business" })
 
             #expect(business.currentVersionPct == 50.0)  // 現行版(v7)は1件のみ
@@ -267,7 +267,7 @@ private func seedBreakdown(
                 source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
-                db: app.db, listedCodes: [], priorityCodes: ["7203"])
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
             let business = try #require(report.stages.first { $0.key == "breakdown_business" })
             let geography = try #require(report.stages.first { $0.key == "breakdown_geography" })
 
@@ -316,11 +316,11 @@ private func seedBreakdown(
         }
     }
 
-    @Test func breakdownDocsCoveredExcludesRowsOutsidePriorityCodes() async throws {
+    @Test func breakdownDocsCoveredExcludesRowsOutsideListedCodes() async throws {
         try await withMigratedApp { app in
             try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
             try await seedAnnualReportDoc("S2", secCode: "99990", db: app.db)
-            // "7203" は対象（priorityCodes）、"9999" は対象外の残存行。
+            // "7203" は対象（listedCodes）、"9999" は対象外の残存行。
             try await seedBreakdown(
                 docID: "S1", axis: breakdownAxisBusiness, code: "7203",
                 source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
@@ -329,7 +329,7 @@ private func seedBreakdown(
                 source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
-                db: app.db, listedCodes: [], priorityCodes: ["7203"])
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
             let business = try #require(report.stages.first { $0.key == "breakdown_business" })
 
             #expect(business.companiesCovered == 1)

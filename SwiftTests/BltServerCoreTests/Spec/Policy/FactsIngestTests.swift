@@ -145,4 +145,19 @@ private func payload(_ value: Double) -> XbrlFactIndexPayload {
             #expect(staleAfter.cacheVersion == "0.0.0")  // stale より先に空白を埋める
         }
     }
+
+    @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", submit: "2025-06-22 09:00", db: app.db)
+            try await seedDocument("S2", submit: "2025-06-20 09:00", db: app.db)
+
+            let summary = try await runFactsIngest(
+                db: app.db, limit: 1, cachedDocIDs: ["S2"]
+            ) { _ in payload(9) }
+
+            #expect(summary.attempted == 1)
+            #expect(try await EdinetXbrlFacts.find("S2", on: app.db) != nil)
+            #expect(try await EdinetXbrlFacts.find("S1", on: app.db) == nil)
+        }
+    }
 }

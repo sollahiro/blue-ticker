@@ -1,5 +1,6 @@
-// financials/filing-sections 共通の候補並び替え（prioritized）の仕様を検証する。
+// 候補並び替え（prioritized / ingestOrdered）の仕様を検証する。
 // 対象選定ではなく処理順序のみを変えること・元の相対順序を保つ（安定ソート）ことを確認する。
+// 書類単位 ingest はキャッシュ済み docID と日経225 を重ねる（後段の日経225が勝つ）。
 
 import Testing
 
@@ -24,6 +25,32 @@ struct IngestPriorityTests {
     func noMatchesLeaveOrderUnchanged() {
         let items = ["7203", "6758"]
         #expect(prioritized(items, codeOf: { $0 }, priorityCodes: ["9984"]) == items)
+    }
+
+    @Test("キャッシュ優先の上に日経225を重ねると225が勝つ")
+    func nikkeiPriorityOutranksCachedDocIDs() {
+        struct Item: Equatable { let docID: String; let code: String }
+        let items = [
+            Item(docID: "cached-other", code: "9999"),
+            Item(docID: "uncached-225", code: "7203"),
+        ]
+        let result = ingestOrdered(
+            items, docIDOf: \.docID, codeOf: \.code,
+            cachedDocIDs: ["cached-other"], priorityCodes: ["7203"])
+        #expect(result.map(\.docID) == ["uncached-225", "cached-other"])
+    }
+
+    @Test("同じ日経225内ではキャッシュ済みが先")
+    func cachedDocIDsWinWithinSameNikkeiGroup() {
+        struct Item: Equatable { let docID: String; let code: String }
+        let items = [
+            Item(docID: "uncached-225", code: "7203"),
+            Item(docID: "cached-225", code: "6758"),
+        ]
+        let result = ingestOrdered(
+            items, docIDOf: \.docID, codeOf: \.code,
+            cachedDocIDs: ["cached-225"], priorityCodes: ["7203", "6758"])
+        #expect(result.map(\.docID) == ["cached-225", "uncached-225"])
     }
 }
 

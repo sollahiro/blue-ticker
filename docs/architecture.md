@@ -83,7 +83,7 @@ flowchart LR
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
-| `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（日経225） |
+| `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |
 | `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（日経225） |
 
 エラー封筒: `{"error":...,"status":N}`。
@@ -106,7 +106,7 @@ flowchart LR
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。
+ローカルキャッシュは `external/` と `derived/`（`caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。書類単位 ingest（facts / filing-sections / breakdowns / statements / notes / icons）は日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは従来どおりダウンロード）。financials は会社単位のためこの並び対象外。
 
 ## コンテナ責務
 

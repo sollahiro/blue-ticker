@@ -74,6 +74,26 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         }
     }
 
+    @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S2", secCode: "67580", submit: "2024-06-20 09:00", db: app.db)
+
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 1,
+                cachedDocIDs: ["S2"], noteType: statementNoteTypePerShareInformation,
+                resolve: fixedResolvedResolve())
+
+            #expect(summary.attempted == 1)
+            let stored = CompanyStatementNote.compositeID(
+                docID: "S2", noteType: statementNoteTypePerShareInformation)
+            let skipped = CompanyStatementNote.compositeID(
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
+            #expect(try await CompanyStatementNote.find(stored, on: app.db) != nil)
+            #expect(try await CompanyStatementNote.find(skipped, on: app.db) == nil)
+        }
+    }
+
     // MARK: - 異常系
 
     @Test func ingestFailsWithoutStoringWhenResolverReturnsFailed() async throws {

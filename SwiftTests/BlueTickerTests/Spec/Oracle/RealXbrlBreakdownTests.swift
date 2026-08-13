@@ -171,6 +171,61 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(result.tables.first?.heading != BreakdownExtractor.revenueRecognitionHeading)
     }
 
+    // MARK: - レーザーテック S100JRT9 geography（2026-08-14）
+
+    @Test func lasertecGeographyDedicatedContextRefsLabelPriorThenCurrent() async throws {
+        guard await Self.ensureAvailable("S100JRT9") else { return }
+        // J-GAAP 関連情報: 「当連結会計年度」見出しは地域売上 TextBlock の外にあり、
+        // 表グリッドにも期ラベルが無い。専用 TextBlock が Prior1YearDuration /
+        // CurrentYearDuration に分かれるため、contextRef から period を付ける
+        // （`geographyDedicatedDualContextBlocksGetPriorThenCurrent` と同型。
+        // 本番 LLM 監査は両候補 period=前期と記録していたが、現行抽出では改善済み）。
+        let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100JRT9"))
+        #expect(result.method == "html_table")
+        let regionTables = result.tables.filter {
+            $0.markdown.contains("日本") && $0.markdown.contains("台湾")
+                && $0.markdown.contains("韓国")
+        }
+        #expect(regionTables.count >= 2)
+        let prior = try #require(regionTables.first {
+            $0.markdown.contains("28,769,951") || $0.markdown.contains("28769951")
+        })
+        let current = try #require(regionTables.first {
+            $0.markdown.contains("42,572,915") || $0.markdown.contains("42572915")
+        })
+        #expect(prior.period == "前期")
+        #expect(current.period == "当期")
+        #expect(current.markdown.contains("7,182,133") || current.markdown.contains("7182133"))
+    }
+
+    // MARK: - アサヒ S100QG09 geography（2023-03-29、本番 unknown）
+
+    @Test func asahi2023GeographyExtractionFindsJapanOverseasRevenueTable() async throws {
+        guard await Self.ensureAvailable("S100QG09") else { return }
+        // IFRS「地域に関する情報」の対外部売上収益。日本/海外（うち豪州は内数）。
+        // 合計 2,511,108 百万円は当該年度の連結売上と一致。本番は tables あり・
+        // llm_audit 無しの unknown（LLM 呼び出し失敗）で、抽出欠測ではない。
+        let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100QG09"))
+        #expect(result.method == "html_table")
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("日本"))
+        #expect(joined.contains("海外"))
+        #expect(joined.contains("1,281,768") || joined.contains("1281768"))
+        #expect(joined.contains("2,511,108") || joined.contains("2511108"))
+    }
+
+    // MARK: - 資生堂 S100XSCU business（2026-08-14）
+
+    @Test func shiseidoExtractsGeographicNamedBusinessSegmentTable() async throws {
+        guard await Self.ensureAvailable("S100XSCU") else { return }
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XSCU"))
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("日本事業"))
+        #expect(joined.contains("中国") && joined.contains("トラベルリテール"))
+        #expect(joined.contains("米州事業"))
+        #expect(joined.contains("欧州事業"))
+    }
+
     // MARK: - アサヒ S100VHC1（2026-07-24）
 
     @Test func asahiSwapsGeographySegmentsToIFRSRevenueProductMatrix() async throws {
@@ -1172,6 +1227,93 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(labels.contains("ニューロロジー領域製品"))
         #expect(labels.contains("オンコロジー領域製品"))
         #expect(labels.contains("その他"))
+        #expect(await client.timesCalled() == 1)
+    }
+
+    // MARK: - 資生堂 S100XSCU（2026-08-14）
+
+    @Test func shiseidoResolvesGeographicBusinessSegmentsViaSegmentInfoLLM() async throws {
+        guard await Self.ensureAvailable("S100XSCU") else { return }
+        // 報告セグメント名が「日本事業」「米州事業」等の地域事業ユニット。金額はユーザー確認済み
+        // （分母 969,992 百万円と一致）。ラベルが地名に見えるため needs_review は立つが、
+        // 中身は事業軸として採用する（本番 segment_info_llm / S100XSCU）。
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XSCU"))
+        let joined = segments.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("日本事業"))
+
+        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "日本事業")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当期",
+            "profit_disclosed": true,
+            "rows": [
+                ["label": "日本事業", "amount": 295_343, "profit": 38_972, "row_kind": "segment"],
+                ["label": "中国・トラベルリテール事業", "amount": 342_244, "profit": 64_525, "row_kind": "segment"],
+                ["label": "アジアパシフィック事業", "amount": 73_290, "profit": 5_079, "row_kind": "segment"],
+                ["label": "米州事業", "amount": 106_584, "profit": -11_566, "row_kind": "segment"],
+                ["label": "欧州事業", "amount": 141_129, "profit": 3_949, "row_kind": "segment"],
+                ["label": "その他", "amount": 11_399, "profit": -1_259, "row_kind": "segment"],
+                ["label": "合計", "amount": 969_992, "profit": 99_700, "row_kind": "subtotal"],
+                ["label": "調整額", "amount": 0, "profit": -55_179, "row_kind": "reconciling"],
+                ["label": "連結", "amount": 969_992, "profit": 44_520, "row_kind": "subtotal"],
+            ],
+            "notes": "報告セグメント表を採用。事業が列見出しのため転置。",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 969_992_000_000.0
+
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .segmentInfoLLM)
+        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.needsReview == true)
+        #expect(snapshot?.warnings.contains("business_label_looks_like_geography") == true)
+        #expect(snapshot?.denominator == sales)
+        let japan = try #require(snapshot?.rows.first { $0.labelRaw == "日本事業" })
+        #expect(japan.amount == 295_343_000_000)
+        #expect(japan.profit == 38_972_000_000)
+        let china = try #require(snapshot?.rows.first { $0.labelRaw.contains("トラベルリテール") })
+        #expect(china.amount == 342_244_000_000)
+        #expect(await client.timesCalled() == 1)
+    }
+
+    @Test func asahi2023ResolvesJapanOverseasGeographyViaLLM() async throws {
+        guard await Self.ensureAvailable("S100QG09") else { return }
+        let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100QG09"))
+        #expect(geography.method == "html_table")
+
+        let tableIndex = Self.preferredTableIndex(geography.tables, containing: "1,281,768")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当年度",
+            "rows": [
+                ["label": "日本", "amount": 1_281_768, "row_kind": "segment"],
+                ["label": "海外", "amount": 1_229_340, "row_kind": "segment"],
+                ["label": "合計", "amount": 2_511_108, "row_kind": "subtotal"],
+            ],
+            "notes": "対外部売上収益の日本/海外表。うちオーストラリアは内数のため出さない。",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 2_511_108_000_000.0
+
+        let (snapshot, source, _) = await GeographyBreakdownResolver.resolve(
+            geography: geography, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .geographyLLM)
+        #expect(snapshot?.axis == "geography")
+        #expect(snapshot?.needsReview == false)
+        #expect(snapshot?.denominator == sales)
+        let japan = try #require(snapshot?.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 1_281_768_000_000)
+        let overseas = try #require(snapshot?.rows.first { $0.labelRaw == "海外" })
+        #expect(overseas.amount == 1_229_340_000_000)
         #expect(await client.timesCalled() == 1)
     }
 }

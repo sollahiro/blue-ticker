@@ -1,14 +1,14 @@
-// 内訳取り込み: 日経225構成銘柄の有報について軸別（business / geography）の内訳を解決し
+// 内訳取り込み: 上場企業の有報について軸別（business / geography 等）の内訳を解決し
 // company_breakdowns へ upsert する。解決は BlueTickerCore のファサード
 // （resolveBusinessBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
 // staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
-// 呼び出し元（FactsIngest）が business → geography の順で本関数を2回呼ぶ。
+// 呼び出し元（FactsIngest）が business → geography の順で本関数を呼ぶ。
 // REST/MCP の read（loadStoredBreakdown）は business / geography の両軸を公開する
 // （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
-// 対象は東証上場全体ではなく日経225構成銘柄に限定する（LLM 呼び出し費用を抑えるため。呼び出し元
-// `FactsIngest.swift` が `priorityIngestCodes()`（`assets/nikkei225.csv`）を `filingSectionCandidates` の
-// `listedCodes` 引数として渡すことで実現する。ファイル未配置時は空集合＝対象0件（安全側））。
+// 対象母集団は呼び出し元が `listedCodes` に渡す集合。business/geography は上場全体、
+// employees/rd/goodwill は日経225。日経225（`priorityCodes`）は処理順の先頭寄せにも使う。
+// `--codes` 指定時はその集合に絞る。
 //
 // 候補選定ロジック自体は有報セクション取り込み（`filingSectionCandidates`、「対象 × 有報(120) × 直近 years 件」）を再利用する
 // （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が有報セクション取り込みと同じ
@@ -55,12 +55,13 @@ public struct BreakdownIngestSummary: Sendable, Equatable {
 public typealias BreakdownResolveFn =
     @Sendable (String, Double?) async -> BreakdownResolveResult
 
-/// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定。ファイル名は 有報セクション取り込み と揃えて汎用化して
-/// いるが対象は上場全体ではない）の有報（直近 years 年ぶん）を走査し、未解決 or 再試行対象
-/// （needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。`limit` は新規解決件数の
-/// 上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
-/// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味。`axis` は `business` / `geography` /
-/// `employees` / `research_and_development` / `goodwill`。
+/// `listedCodes`（呼び出し元は上場企業集合。`--codes` 時はその部分集合）の有報（直近 years 年ぶん）を
+/// 走査し、未解決 or 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
+/// `limit` は新規解決件数の上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
+/// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味（後者は処理順のみ）。
+/// `axis` は `business` / `geography` / `employees` / `research_and_development` / `goodwill`。
+/// `cachedDocIDs` はローカル XBRL 展開済みの書類。処理順は
+/// 日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
 ///
 /// `denominatorForDoc` は `resolve` に渡す第2引数（分母・全社合計値）を 財務取り込み
 /// （`company_financials`）から引く関数。business/geography は連結売上高（`consolidatedSalesForDoc`,
@@ -70,6 +71,7 @@ public typealias BreakdownResolveFn =
 func runBreakdownIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    cachedDocIDs: Set<String> = [],
     axis: String = breakdownAxisBusiness,
     logger: Logger? = nil,
     denominatorForDoc: @escaping @Sendable (String, String, Database) async throws -> Double? =
@@ -118,9 +120,9 @@ func runBreakdownIngest(
             skipped += 1
         }
     }
-    let candidates = prioritized(
-        interleaved([missing, flaggedForReview, staleVersion]), codeOf: \.code,
-        priorityCodes: priorityCodes)
+    let candidates = ingestOrdered(
+        interleaved([missing, flaggedForReview, staleVersion]),
+        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 

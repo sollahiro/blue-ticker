@@ -279,6 +279,22 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S2", secCode: "67580", submit: "2024-06-20 09:00", db: app.db)
+
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, sectionKeys: keys, limit: 1,
+                cachedDocIDs: ["S2"]
+            ) { _ in fakePayload() }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyFilingSections.find("S2", on: app.db) != nil)
+            #expect(try await CompanyFilingSections.find("S1", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestPrioritizesMissingBeforeStaleWhenLimited() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)  // stale existing
