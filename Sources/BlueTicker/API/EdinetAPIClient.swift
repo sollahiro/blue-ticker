@@ -195,6 +195,11 @@ actor EdinetAPIClient {
         }
     }
 
+    /// ローカルに展開済みの XBRL がある docID。内訳取り込みの処理順用（再ダウンロードしない）。
+    func cachedXbrlDocIDs() -> Set<String> {
+        cacheStore.cachedXbrlDocIDs()
+    }
+
     // MARK: - HTTP
 
     private func request(_ endpoint: String, params: [String: String] = [:], maxRetries: Int = 3) async throws -> sending [String: Any] {

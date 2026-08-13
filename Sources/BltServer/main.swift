@@ -6,11 +6,13 @@
 //                     filing-sections,breakdowns,statements,statement-notes,icons] [--codes 7203,6758]
 //                     [--note-types per_share_information,borrowings_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
-//                                                            breakdowns/statements/statement-notes は日経225構成銘柄限定。
+//                                                            breakdowns: business/geography は上場全体（--limit 適用）、
+//                                                            employees/rd/goodwill は日経225（1ジョブ 30）。
+//                                                            statements/statement-notes は日経225構成銘柄限定。
 //                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
 //                                                            --with-facts で XBRL 数値 fact も取り込む。既定は停止。issue #22。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
-//                                                            breakdowns/statements/statement-notes では --codes を対象母集団にも使う
+//                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --note-types は statement-notes ステージで ingest する
 //                                                            note_type を絞る（未指定時は全9種）。

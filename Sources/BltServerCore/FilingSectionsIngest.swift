@@ -42,9 +42,11 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
 func runFilingSectionsIngest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    cachedDocIDs: Set<String> = [],
     logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> FilingSectionsIngestSummary {
     let sets = try await filingSectionCandidates(
@@ -81,9 +83,9 @@ func runFilingSectionsIngest(
             skipped += 1
         }
     }
-    let candidates = prioritized(
-        interleaved([missing, staleVersion, staleSectionKeys]), codeOf: \.code,
-        priorityCodes: priorityCodes)
+    let candidates = ingestOrdered(
+        interleaved([missing, staleVersion, staleSectionKeys]),
+        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0

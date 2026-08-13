@@ -3,7 +3,7 @@
 #
 # blt-scheduled-sync.sh の末尾（全ステージ完了後）から呼ばれる想定。4ステージ
 # （financials/filing_sections/breakdown_business/breakdown_geography）の
-# カバレッジ・鮮度を「blt-server status-report」（DB read-only、日経225銘柄一覧そのものは
+# カバレッジ・鮮度を「blt-server status-report」（DB read-only、銘柄コード一覧そのものは
 # 出力しない）で取得し、status.html の HTML コメントマーカー間だけを書き換える。
 # 差分があれば status.html のみをコミット・push する（他ファイルは触らない）。
 #

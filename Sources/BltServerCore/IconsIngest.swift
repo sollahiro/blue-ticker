@@ -32,9 +32,11 @@ public typealias CompanyIconExtractor =
 /// `limit` は新規取得件数の上限（favicon取得・R2アップロードのネットワークI/Oのためバッチ実行用）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ）。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
 func runIconsIngest(
     db: Database, listedCodes: Set<String>, limit: Int?, explicitCodes: Set<String>? = nil,
-    priorityCodes: Set<String> = [], logger: Logger? = nil, extract: CompanyIconExtractor
+    priorityCodes: Set<String> = [], cachedDocIDs: Set<String> = [],
+    logger: Logger? = nil, extract: CompanyIconExtractor
 ) async throws -> IconsIngestSummary {
     let baseCandidates = try await latestAnnualReportPerCompany(
         db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, logger: logger)
@@ -65,8 +67,9 @@ func runIconsIngest(
             skipped += 1
         }
     }
-    let candidates = prioritized(
-        interleaved([missing, staleVersion]), codeOf: \.code, priorityCodes: priorityCodes)
+    let candidates = ingestOrdered(
+        interleaved([missing, staleVersion]),
+        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 

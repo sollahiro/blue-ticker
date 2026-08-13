@@ -8,7 +8,7 @@
 // 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
 // （docs/statement.md）。
 //
-// 対象母集団は内訳取り込みと同じ日経225限定でスタートする。Statement 取り込みは LLM 不要でコスト制約は
+// 対象母集団は日経225限定でスタートする。Statement 取り込みは LLM 不要でコスト制約は
 // 無いが、実データ検証（158社）が銀行・保険等の特殊タクソノミを網羅していないため、まず
 // 母集団を絞って様子を見る（呼び出し元が `listedCodes` に `priorityIngestCodes()` を渡すことで
 // 実現する。同docs/statement.md）。
@@ -44,9 +44,11 @@ public typealias StatementExtractor = @Sendable (String) async -> StatementDocRe
 /// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定）の有報（直近 years 年ぶん）を走査し、
 /// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
 /// `explicitCodes` / `priorityCodes` は filing-sections/breakdowns と同じ意味。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
 func runStatementIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    cachedDocIDs: Set<String> = [],
     logger: Logger? = nil, extract: StatementExtractor
 ) async throws -> StatementIngestSummary {
     let sets = try await filingSectionCandidates(
@@ -81,8 +83,9 @@ func runStatementIngest(
             skipped += 1
         }
     }
-    let candidates = prioritized(
-        interleaved([missing, staleVersion]), codeOf: \.code, priorityCodes: priorityCodes)
+    let candidates = ingestOrdered(
+        interleaved([missing, staleVersion]),
+        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 

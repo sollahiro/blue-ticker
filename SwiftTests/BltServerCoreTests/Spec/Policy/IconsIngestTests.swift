@@ -179,6 +179,21 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
         }
     }
 
+    @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S2", secCode: "67580", submit: "2024-06-20 09:00", db: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["7203", "6758"], limit: 1, cachedDocIDs: ["S2"]
+            ) { _, _ in .success(fakeResult()) }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyIcon.find("6758", on: app.db) != nil)
+            #expect(try await CompanyIcon.find("7203", on: app.db) == nil)
+        }
+    }
+
     // MARK: - 抽出失敗
 
     @Test func ingestCountsFailedWithoutStoringOnExtractorFailure() async throws {

@@ -331,7 +331,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "事業別・地域別売上内訳",
             description: """
                 有価証券報告書から事業別/地域別売上高・従業員数・研究開発費・のれんの内訳を取得します（格納済みデータのみ）。
-                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は business（既定）/ geography / employees / research_and_development / goodwill に対応。
                 employees・research_and_development・goodwill は決定論のみ（LLMフォールバックなし）で、
                 報告セグメント別の内訳が開示されている企業のみ値が入ります。
@@ -373,7 +373,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 Breakdown（事業別/地域別売上・従業員数・研究開発費・のれんの構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
-                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=business
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees

@@ -239,6 +239,17 @@ import Foundation
 
         // 空ディレクトリ（展開失敗の残骸）はキャッシュヒットにしない
         #expect(!(store.hasXbrlDir("DOC_EMPTY")))
+        #expect(!(store.cachedXbrlDocIDs().contains("DOC_EMPTY")))
+    }
+
+    @Test func testCachedXbrlDocIDsListsNonEmptyDirsOnly() throws {
+        let store = makeStore()
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "1234"])
+        _ = try store.storeXbrlZip("DOC1", content: zip)
+        try FileManager.default.createDirectory(
+            at: store.xbrlDir("DOC_EMPTY"), withIntermediateDirectories: true)
+
+        #expect(store.cachedXbrlDocIDs() == Set(["DOC1"]))
     }
 
     @Test func testStoreXbrlZipLeavesNoDirectoryWhenContentIsNotZip() {

@@ -167,7 +167,7 @@ extension BreakdownLoadResult {
     @Test func ingestExcludesCompaniesNotInTargetSet() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)  // target
-            try await seedDoc("S2", secCode: "99990", db: app.db)  // not in target (日経225外)
+            try await seedDoc("S2", secCode: "99990", db: app.db)  // not in target
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
@@ -448,6 +448,42 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
+        }
+    }
+
+    @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S2", secCode: "67580", submit: "2024-06-20 09:00", db: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 1,
+                cachedDocIDs: ["S2"]
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) != nil)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "S1", axis: "business"), on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestPrefersNikkeiOverCachedNonNikkeiWhenLimitCutsOff() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "99990", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S2", secCode: "72030", submit: "2024-06-20 09:00", db: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["9999", "7203"], years: 3, limit: 1,
+                priorityCodes: ["7203"], cachedDocIDs: ["S1"]
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) != nil)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "S1", axis: "business"), on: app.db) == nil)
         }
     }
 

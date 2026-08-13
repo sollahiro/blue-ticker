@@ -41,7 +41,7 @@
 - 比較用スナップショット: `BreakdownSnapshot`（`BreakdownContract.swift` / `BreakdownNormalizer`）。
 - 保存: `company_breakdowns`（filing-sections とは別。LLM 行を filing バンプに巻き込まない）。主キー `doc_id#axis`。
 - `not_found` は行を作らない。business の E/F/unknown は `not_applicable` プレースホルダ。REST/MCP は 404＋ボディ `reason`（200 化しない）。
-- 対象母集団は日経225。read は Fly 専用（ingest 時に LLM 計算）。
+- 対象母集団: business/geography は上場全体（日経225は処理順の優先のみ）。employees / rd / goodwill は日経225。read は Fly 専用（ingest 時に LLM 計算）。処理順は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
 - 分母は現状 `company_financials` 依存 → **正本分離で解消予定**。
 
 ## 残課題

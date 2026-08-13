@@ -213,12 +213,13 @@ private func buildDocumentLevelStage(
 }
 
 /// 4 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
-/// `listedCodes` は financials/filing_sections の対象母集団、`priorityCodes`
-/// （`assets/nikkei225.csv`）は breakdown_business/breakdown_geography の対象母集団
-/// （内訳取り込み の実 ingest スコープと同じ絞り込み）。
+/// `listedCodes` は financials/filing_sections/breakdown_business/breakdown_geography の対象母集団。
+/// `priorityCodes`（`assets/nikkei225.csv`）は処理順の優先に使い、breakdown の母集団そのものではない。
 public func buildIngestStatusReport(
     db: Database, listedCodes: Set<String>, priorityCodes: Set<String>, now: Date = Date()
 ) async throws -> IngestStatusReport {
+    // 日経225 は ingest の処理順のみ。カバレッジ分母は listedCodes（引数は呼び出し互換のため残す）。
+    _ = priorityCodes
     // financials
     let finRows = try await CompanyFinancialsStatusProjection.query(on: db).all()
     let financials = buildCompanyLevelStage(
@@ -246,10 +247,10 @@ public func buildIngestStatusReport(
         },
         targetCodes: listedCodes, docsTarget: sectionsDocsTarget, now: now)
 
-    // breakdown_business / breakdown_geography（対象母集団: priorityCodes＝日経225構成銘柄。
+    // breakdown_business / breakdown_geography（対象母集団: listedCodes＝上場全体。
     // 実 内訳取り込み ingest と同じ母集団・窓のため候補集合は 1 回だけ計算して両軸で共有する）。
     let breakdownCandidates = try await filingSectionCandidates(
-        db: db, listedCodes: priorityCodes, years: filingSectionsIngestYears)
+        db: db, listedCodes: listedCodes, years: filingSectionsIngestYears)
     let breakdownDocsTarget = breakdownCandidates.keep.count
 
     let businessRows = try await CompanyBreakdownStatusProjection.query(on: db)
@@ -269,7 +270,7 @@ public func buildIngestStatusReport(
                 code: row.code, isCurrentVersion: isCurrent, isServable: isServable,
                 updatedAt: row.updatedAt)
         },
-        targetCodes: priorityCodes, docsTarget: breakdownDocsTarget, now: now)
+        targetCodes: listedCodes, docsTarget: breakdownDocsTarget, now: now)
 
     let geographyRows = try await CompanyBreakdownStatusProjection.query(on: db)
         .filter(\.$axis == breakdownAxisGeography)
@@ -286,7 +287,7 @@ public func buildIngestStatusReport(
                 code: row.code, isCurrentVersion: isCurrent, isServable: isServable,
                 updatedAt: row.updatedAt)
         },
-        targetCodes: priorityCodes, docsTarget: breakdownDocsTarget, now: now)
+        targetCodes: listedCodes, docsTarget: breakdownDocsTarget, now: now)
 
     return IngestStatusReport(
         generatedAt: isoString(from: now),

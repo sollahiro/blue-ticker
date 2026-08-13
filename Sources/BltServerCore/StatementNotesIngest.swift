@@ -4,7 +4,7 @@
 // （ネットワーク非依存でテスト可能）。内訳取り込み（`BreakdownIngest.swift`）の axis 別構造をそのまま
 // note_type 別に踏襲する。呼び出し元（`FactsIngest.swift`）が note_type ごとに本関数を呼ぶ。
 //
-// 対象は 内訳取り込み・Statement 取り込み と同じ日経225構成銘柄に限定する（呼び出し元
+// 対象は Statement 取り込み と同じ日経225構成銘柄に限定する（呼び出し元
 // `FactsIngest.swift` が `priorityIngestCodes()` を `filingSectionCandidates` の `listedCodes`
 // 引数として渡すことで実現する）。候補選定ロジックは 有報セクション取り込み・内訳取り込み・
 // Statement 取り込み と同じ `filingSectionCandidates` を再利用する。
@@ -45,9 +45,11 @@ public typealias StatementNoteResolveFn =
 /// 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
 /// `limit` は新規解決件数の上限。`explicitCodes` / `priorityCodes` は 有報セクション取り込み・
 /// 内訳取り込み・Statement 取り込み と同じ意味。`noteType` は `statementNoteType*` 定数のいずれか。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
 func runStatementNotesIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    cachedDocIDs: Set<String> = [],
     noteType: String,
     logger: Logger? = nil, resolve: StatementNoteResolveFn
 ) async throws -> StatementNotesIngestSummary {
@@ -91,9 +93,9 @@ func runStatementNotesIngest(
             skipped += 1
         }
     }
-    let candidates = prioritized(
-        interleaved([missing, flaggedForReview, staleVersion]), codeOf: \.code,
-        priorityCodes: priorityCodes)
+    let candidates = ingestOrdered(
+        interleaved([missing, flaggedForReview, staleVersion]),
+        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 
