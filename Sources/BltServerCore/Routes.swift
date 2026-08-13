@@ -440,6 +440,7 @@ func breakdownNotFoundMessage(axis: String) -> String {
     case breakdownAxisGeography: return "地域別内訳は未算出です"
     case breakdownAxisEmployees: return "従業員数の内訳は未算出です"
     case breakdownAxisResearchAndDevelopment: return "研究開発費の内訳は未算出です"
+    case breakdownAxisGoodwill: return "のれんのセグメント別内訳は未算出です"
     default: return "事業別内訳は未算出です"
     }
 }

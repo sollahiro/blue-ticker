@@ -938,4 +938,77 @@ extension BreakdownLoadResult {
             #expect(geoRow.cacheVersion == geographyBreakdownCacheVersion)
         }
     }
+
+    // MARK: - goodwill 軸（2026-08-13）
+
+    /// goodwill は financials 分母なしで解決に進む（XBRL から全社合計を自前解決）。
+    @Test func goodwillIngestStoresResolvedWithoutFinancials() async throws {
+        try await withMigratedApp { app in
+            let model = EdinetDocument()
+            model.id = "S1"
+            model.edinetCode = "E00001"
+            model.secCode = "68410"
+            model.filerName = "横河電機株式会社"
+            model.docTypeCode = Api.docTypeAnnualReport
+            model.submitDateTime = "2025-06-20 09:00"
+            try await model.create(on: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["6841"], years: 3, limit: nil,
+                axis: breakdownAxisGoodwill
+            ) { _, _ in
+                .resolved(
+                    payload: fakePayload(axis: breakdownAxisGoodwill),
+                    source: breakdownSourceXbrlFacts, contentHash: "h-gw", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGoodwill)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.cacheVersion == goodwillBreakdownCacheVersion)
+            #expect(row.source == breakdownSourceXbrlFacts)
+        }
+    }
+
+    @Test func goodwillIngestStoresNotFoundWhenUnresolved() async throws {
+        try await withMigratedApp { app in
+            let model = EdinetDocument()
+            model.id = "S1"
+            model.edinetCode = "E00001"
+            model.secCode = "72030"
+            model.filerName = "トヨタ自動車株式会社"
+            model.docTypeCode = Api.docTypeAnnualReport
+            model.submitDateTime = "2025-06-20 09:00"
+            try await model.create(on: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
+                axis: breakdownAxisGoodwill
+            ) { _, _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGoodwill)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.source == breakdownSourceNotApplicable)
+            #expect(row.notApplicableReason == breakdownNotApplicableNotFound)
+            #expect(row.needsReview == false)
+        }
+    }
+
+    @Test func loadStoredBreakdownReturnsGoodwillAxis() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "6841", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisGoodwill, source: breakdownSourceXbrlFacts,
+                cacheVersion: goodwillBreakdownCacheVersion)
+
+            let result = try await loadStoredBreakdown(
+                code: "6841", docId: nil, axis: breakdownAxisGoodwill, db: app.db)
+            let json = try #require(result.foundJSON)
+            #expect(json["doc_id"] as? String == "S1")
+            #expect(json["axis"] as? String == breakdownAxisGoodwill)
+        }
+    }
 }
