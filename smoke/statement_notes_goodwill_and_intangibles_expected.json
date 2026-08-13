@@ -138,5 +138,37 @@
   "S100W4MT": {
     "reason": "not_found",
     "status": "not_applicable"
+  },
+  "S100VYA0": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100VU4O": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100W3XJ": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100W043": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100XRD8": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100XTLJ": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100W4FB": {
+    "reason": "not_found",
+    "status": "not_applicable"
+  },
+  "S100W0S7": {
+    "reason": "not_found",
+    "status": "not_applicable"
   }
 }
