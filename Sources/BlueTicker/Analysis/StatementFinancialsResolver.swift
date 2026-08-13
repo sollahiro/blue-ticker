@@ -224,7 +224,8 @@ enum StatementFinancialsResolver {
         )
     }
 
-    /// 富士フイルムは「受取債権合計」、キヤノンは「売上債権」。引当金行は使わない。
+    /// US-GAAP 売掛相当。単一行（受取債権合計 / 売上債権）を優先し、無ければ流動資産内の
+    /// 債権内訳を合算する（富士フイルム型。Statement は入れ子右セルの親小計を行値にしないため）。
     private static func resolveUSGAAPAccountsReceivable(_ items: [StatementLineItem]) -> Double? {
         for item in items {
             guard let label = item.label else { continue }
@@ -237,10 +238,11 @@ enum StatementFinancialsResolver {
                 return item.value
             }
         }
-        return nil
+        return sumUSGAAPCurrentReceivableComponents(items)
     }
 
-    /// キヤノン「買入債務」。関連会社債務の明細行は使わない。
+    /// US-GAAP 買掛相当。単一行（買入債務）を優先し、無ければ流動負債内の債務内訳を合算する
+    /// （富士フイルム: 営業債務 + 設備関係債務 + 関連会社等に対する債務）。
     private static func resolveUSGAAPAccountsPayable(_ items: [StatementLineItem]) -> Double? {
         for item in items {
             guard let label = item.label else { continue }
@@ -249,7 +251,53 @@ enum StatementFinancialsResolver {
                 return item.value
             }
         }
-        return nil
+        return sumUSGAAPCurrentPayableComponents(items)
+    }
+
+    /// 流動資産ブロック内の債権内訳合算。`長期*` と流動資産合計以降は除外。
+    /// 実データ（富士フイルム S100W3XJ）: 営業債権 + リース債権 + 関連会社債権 + 信用損失引当金。
+    private static func sumUSGAAPCurrentReceivableComponents(_ items: [StatementLineItem]) -> Double? {
+        var total = 0.0
+        var found = false
+        for item in items {
+            guard let label = item.label else { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped.contains("流動資産合計") { break }
+            if item.section == .liabilities || item.section == .netAssets { break }
+            if label.contains("長期") { continue }
+
+            let isReceivable =
+                stripped.contains("営業債権")
+                || stripped.contains("リース債権")
+                || (stripped.contains("関連会社") && stripped.contains("債権"))
+            // 引当金は債権ブロック開始後のみ（投資区分の長期引当と混同しない）
+            let isAllowance = found && stripped.contains("信用損失引当金")
+            guard isReceivable || isAllowance else { continue }
+            total += item.value
+            found = true
+        }
+        return found ? total : nil
+    }
+
+    /// 流動負債ブロック内の債務内訳合算。流動負債合計以降は除外。
+    private static func sumUSGAAPCurrentPayableComponents(_ items: [StatementLineItem]) -> Double? {
+        var total = 0.0
+        var found = false
+        for item in items {
+            guard item.section == .liabilities else { continue }
+            guard let label = item.label else { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped.contains("流動負債合計") { break }
+
+            let isPayable =
+                stripped.contains("営業債務")
+                || stripped.contains("設備関係債務")
+                || (stripped.contains("関連会社") && stripped.contains("債務"))
+            guard isPayable else { continue }
+            total += item.value
+            found = true
+        }
+        return found ? total : nil
     }
 
     private static func assignIfAbsent(_ fs: inout FieldSet, _ tag: String, _ value: Double) {
