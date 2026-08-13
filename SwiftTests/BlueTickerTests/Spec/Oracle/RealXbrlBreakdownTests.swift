@@ -1,6 +1,6 @@
 // 実 EDINET XBRL キャッシュ（analysis_cache）での内訳（business/geography breakdown）
 // 抽出・解決の回帰テスト。`smoke/` 配下のフィクスチャは使わず、対象企業は各 @Test 関数に
-// 個別ハードコードしている（4 @Suite: Extraction / EmployeesRD / Resolver / LiveLLM。
+// 個別ハードコードしている（5 @Suite: Extraction / EmployeesRD / GoodwillSmoke+Golden / Resolver / LiveLLM。
 // 一覧は本ファイルの @Test 関数名、または `swift test --filter RealXbrlBreakdown --list-tests`）。
 //
 // `BLT_EDINET_API_KEY`（CI の swift-macos/swift-linux ジョブは secrets 経由で設定済み）が
@@ -1268,10 +1268,158 @@ private actor RealXbrlMockChat: ChatCompleting {
 
 // MARK: - goodwill 軸（2026-08-12追加、実装中・未配線）
 
-/// `BreakdownNormalizer.normalizeGoodwill` の実データ検証（決定論のみ、LLM不使用）。
-/// smoke固定11社中のJ-GAAP3社（オークマ・三井住友・三菱UFJ）で実施——のれんがBS/セグメント注記に
-/// 開示され、ユーザーが実額（1,053/230,070/530,386百万円）を確認済み。IFRS企業側は
-/// `goodwill_and_intangibles` note_type（`GoodwillAndIntangiblesOracleFormatTests`）が別途カバーする。
+/// smoke 固定11社の goodwill 軸床（Step 1）。J-GAAP4社は resolved、残7社は segment dimension
+/// タグ欠如で not_found（IFRS/US-GAAP/非連結等。`goodwill_and_intangibles` note_type とは別経路）。
+@Suite struct SmokeGoodwillBreakdownTests {
+
+    private static let xbrlRoot = SmokeCacheSupport.cacheDir
+
+    private static func xbrlDir(_ docID: String) -> URL {
+        xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+    }
+
+    private static func ensureAvailable(_ docID: String) async -> Bool {
+        await SmokeCacheSupport.ensureCached([docID])
+        guard FileManager.default.fileExists(atPath: xbrlDir(docID).path) else {
+            print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return false
+        }
+        return true
+    }
+
+    private static func factsAndLabels(_ docID: String) -> (facts: [BreakdownFact], labels: [String: String]) {
+        let dir = xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+    }
+
+    private static func resolveGoodwill(docID: String) -> BreakdownSnapshot? {
+        let (facts, labels) = factsAndLabels(docID)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir(docID), nilAsZero: false)
+        let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        return BreakdownNormalizer.normalizeGoodwill(
+            facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+            axis: breakdownAxisGoodwill, labelsByTag: labels)
+    }
+
+    private static func expectGoodwillResolved(
+        docID: String, total: Double, totalTag: String,
+        rows: [(labelRaw: String, amount: Double, rowKind: String)]
+    ) async throws {
+        guard await ensureAvailable(docID) else { return }
+        let snapshot = try #require(resolveGoodwill(docID: docID))
+        #expect(snapshot.axis == breakdownAxisGoodwill)
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.warnings.isEmpty)
+        #expect(snapshot.denominatorTag == totalTag)
+        #expect(snapshot.denominator == total)
+        #expect(snapshot.rows.count == rows.count)
+        for expected in rows {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == expected.labelRaw })
+            #expect(row.amount == expected.amount)
+            #expect(row.rowKind == expected.rowKind)
+        }
+    }
+
+    private static func expectGoodwillNotFound(docID: String) async throws {
+        guard await ensureAvailable(docID) else { return }
+        #expect(resolveGoodwill(docID: docID) == nil)
+    }
+
+    @Test func ajinomotoGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100VXJA")
+    }
+
+    @Test func nichireiGoodwillSplitsAcrossLogisticsAndProcessedFoods() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100VYA0", total: 7_356_000_000, totalTag: "Goodwill",
+            rows: [
+                ("LogisticsReportableSegmentsMember", 6_604_000_000, "segment"),
+                ("MarineProductsReportableSegmentsMember", 0, "segment"),
+                ("MeatAndPoultryProductsReportableSegmentsMember", 0, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    0, "segment"),
+                ("ProcessedFoodsReportableSegmentsMember", 751_000_000, "segment"),
+                ("RealEstateReportableSegmentsMember", 0, "segment"),
+                ("ReportableSegmentsMember", 7_356_000_000, "subtotal"),
+                ("TotalOfReportableSegmentsAndOthersMember", 7_356_000_000, "subtotal"),
+                ("UnallocatedAmountsAndEliminationMember", 0, "reconciling"),
+            ])
+    }
+
+    @Test func azPlanningGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100VU4O")
+    }
+
+    @Test func fujifilmGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100W3XJ")
+    }
+
+    @Test func okumaGoodwillAllInEuropeSegment() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100W043", total: 1_053_000_000, totalTag: "Goodwill",
+            rows: [
+                ("AmericasReportableSegmentsMember", 0, "segment"),
+                ("AsiaAndPacificReportableSegmentsMember", 0, "segment"),
+                ("EuropeReportableSegmentsMember", 1_053_000_000, "segment"),
+                ("JapanReportableSegmentsMember", 0, "segment"),
+                ("UnallocatedAmountsAndEliminationMember", 0, "reconciling"),
+            ])
+    }
+
+    @Test func kubotaGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100XR0M")
+    }
+
+    @Test func suzukiGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100W4MT")
+    }
+
+    @Test func tohoRemacGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100XRD8")
+    }
+
+    @Test func canonGoodwillNotFound() async throws {
+        try await Self.expectGoodwillNotFound(docID: "S100XTLJ")
+    }
+
+    @Test func mufgGoodwillMatchesBalanceSheetTotal() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100W4FB", total: 530_386_000_000, totalTag: "Goodwill",
+            rows: [
+                ("AssetManagementAndInvestorServicesBusinessGroupMember", 369_353_000_000, "segment"),
+                ("CommercialBankingAndWealthManagementBusinessGroupMember", 0, "segment"),
+                ("GlobalCommercialBankingBusinessGroupMember", 50_834_000_000, "segment"),
+                ("GlobalCorporateAndInvestmentBankingBusinessGroupMember", 35_146_000_000, "segment"),
+                ("GlobalMarketsBusinessGroupMember", 0, "segment"),
+                ("JapaneseCorporateAndInvestmentBankingBusinessGroupMember", 254_000_000, "segment"),
+                ("OtherMember", 0, "segment"),
+                ("RetailAndDigitalBusinessGroupMember", 74_797_000_000, "segment"),
+                ("TotalMember", 530_386_000_000, "subtotal"),
+                ("TotalOfCustomerBusinessUnitMember", 530_386_000_000, "subtotal"),
+            ])
+    }
+
+    @Test func smfgGoodwillMatchesBalanceSheetTotal() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100W0S7", total: 230_070_000_000, totalTag: "Goodwill",
+            rows: [
+                ("GlobalBusinessUnitReportableSegmentMember", 161_611_000_000, "segment"),
+                ("GlobalMarketsBusinessUnitReportableSegmentMember", 0, "segment"),
+                ("HeadOfficeAccountsEtcReportableSegmentMember", 47_749_000_000, "reconciling"),
+                ("ReportableSegmentsMember", 230_070_000_000, "subtotal"),
+                ("RetailBusinessUnitReportableSegmentMember", 20_709_000_000, "segment"),
+                ("WholesaleBusinessUnitReportableSegmentMember", 0, "segment"),
+            ])
+    }
+}
+
+/// smoke 床では拾えないエッジケースの golden（Step 2）。`normalizeGoodwill` 決定論検証。
+/// IFRS の `goodwill_and_intangibles` note_type は `GoodwillAndIntangiblesOracleFormatTests` が別途カバー。
 @Suite struct RealXbrlGoodwillBreakdownTests {
     private static let xbrlRoot: URL = {
         FileManager.default.homeDirectoryForCurrentUser
@@ -1291,68 +1439,82 @@ private actor RealXbrlMockChat: ChatCompleting {
         return true
     }
 
-    private func resolve(docID: String) -> BreakdownSnapshot? {
-        let dir = Self.xbrlDir(docID)
+    private static func resolveGoodwill(docID: String) -> BreakdownSnapshot? {
+        let dir = xbrlDir(docID)
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
         let facts = BreakdownExtractor.extractFactsByDimension(
-            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords, contextMap: contextMap)
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: dir)
         let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
         let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
         return BreakdownNormalizer.normalizeGoodwill(
-            facts: facts, total: totalItem.current, totalTag: totalItem.tag, axis: breakdownAxisGoodwill,
-            labelsByTag: labelsByTag)
+            facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+            axis: breakdownAxisGoodwill, labelsByTag: labelsByTag)
     }
 
-    @Test func okumaGoodwillAllInEuropeSegment() async throws {
-        guard await Self.ensureAvailable("S100W043") else { return }
-        let snapshot = try #require(resolve(docID: "S100W043"))
-
-        #expect(snapshot.denominator == 1_053_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
+    private static func expectGoodwillResolved(
+        docID: String, total: Double, totalTag: String,
+        rows: [(labelRaw: String, amount: Double, rowKind: String)]
+    ) async throws {
+        guard await ensureAvailable(docID) else { return }
+        let snapshot = try #require(resolveGoodwill(docID: docID))
+        #expect(snapshot.axis == breakdownAxisGoodwill)
         #expect(snapshot.needsReview == false)
-        #expect(snapshot.rows.first { $0.labelRaw == "EuropeReportableSegmentsMember" }?.amount == 1_053_000_000)
+        #expect(snapshot.warnings.isEmpty)
+        #expect(snapshot.denominatorTag == totalTag)
+        #expect(snapshot.denominator == total)
+        #expect(snapshot.rows.count == rows.count)
+        for expected in rows {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == expected.labelRaw })
+            #expect(row.amount == expected.amount)
+            #expect(row.rowKind == expected.rowKind)
+        }
     }
 
-    @Test func smfgGoodwillMatchesBalanceSheetTotal() async throws {
-        guard await Self.ensureAvailable("S100W0S7") else { return }
-        let snapshot = try #require(resolve(docID: "S100W0S7"))
+    // MARK: - 横河電機 S100VY8X（2026-08-13）
+    //
+    // のれん全額が単一報告セグメント（制御）に集中。オークマ型（Europe 1セグメント）と同型だが
+    // 銀行の GoodwillBeforeOffsetting 分離パターンではない通常 J-GAAP 事業会社。
 
-        #expect(snapshot.denominator == 230_070_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
-        #expect(snapshot.needsReview == false)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "GlobalBusinessUnitReportableSegmentMember" }?.amount
-                == 161_611_000_000)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" }?.rowKind
-                == "reconciling")
+    @Test func yokogawaGoodwillAllInControlSegment() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100VY8X", total: 6_563_000_000, totalTag: "Goodwill",
+            rows: [
+                ("IndustrialAutomationAndControlReportableSegmentsMember", 6_563_000_000, "segment"),
+                ("NewBussinessesOtherReportableSegmentsMember", 0, "segment"),
+                ("TestAndMeasurementReportableSegmentsMember", 0, "segment"),
+            ])
     }
 
-    @Test func mufgGoodwillMatchesBalanceSheetTotal() async throws {
-        guard await Self.ensureAvailable("S100W4FB") else { return }
-        let snapshot = try #require(resolve(docID: "S100W4FB"))
+    // MARK: - SOMPO S100R1LR（2026-08-13）
+    //
+    // 保険持株。介護・海外保険の2セグメントにのれんが配分。ReportableSegmentsMember subtotal あり。
+    // 生命・損保セグメントはのれんゼロ（dimension 行は出る）。
 
-        #expect(snapshot.denominator == 530_386_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
-        #expect(snapshot.needsReview == false)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "AssetManagementAndInvestorServicesBusinessGroupMember" }?.amount
-                == 369_353_000_000)
-        #expect(snapshot.rows.first { $0.labelRaw == "TotalMember" }?.rowKind == "subtotal")
+    @Test func sompoGoodwillSplitsAcrossNursingCareAndOverseasInsurance() async throws {
+        try await Self.expectGoodwillResolved(
+            docID: "S100R1LR", total: 197_729_000_000, totalTag: "Goodwill",
+            rows: [
+                ("DomesticLifeInsuranceBusinessReportableSegmentsMember", 0, "segment"),
+                ("DomesticPAndCInsuranceBusinessReportableSegmentsMember", 0, "segment"),
+                ("NursingCareAndSeniorBusinessReportableSegmentsMember", 78_983_000_000, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    0, "segment"),
+                ("OverseasInsuranceBusinessReportableSegmentsMember", 118_746_000_000, "segment"),
+                ("ReportableSegmentsMember", 197_729_000_000, "subtotal"),
+                ("UnallocatedAmountsAndEliminationMember", 0, "reconciling"),
+            ])
     }
 
-    @Test func nichireiGoodwillSplitsAcrossLogisticsAndProcessedFoods() async throws {
-        guard await Self.ensureAvailable("S100VYA0") else { return }
-        let snapshot = try #require(resolve(docID: "S100VYA0"))
+    // MARK: - トヨタ S100VWVY（2026-08-13）
+    //
+    // BS にのれん合計タグが無く segment dimension も無い。not_found が正当（note_type 側も
+    // `toyotaHasNoGoodwillNoteIsNotApplicableNotAFailure` と対応）。
 
-        #expect(snapshot.denominator == 7_356_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
-        #expect(snapshot.needsReview == false)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "LogisticsReportableSegmentsMember" }?.amount == 6_604_000_000)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "ProcessedFoodsReportableSegmentsMember" }?.amount
-                == 751_000_000)
+    @Test func toyotaGoodwillNotFoundIsLegitimate() async throws {
+        guard await Self.ensureAvailable("S100VWVY") else { return }
+        #expect(Self.resolveGoodwill(docID: "S100VWVY") == nil)
     }
 }
