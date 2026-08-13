@@ -28,7 +28,13 @@ jobs:
           # スモークテスト（SmokeTests / SegmentParityTests）が不足 XBRL を EDINET から
           # 自動取得するための鍵。未設定（fork からの PR 等）では自動的に SKIP される。
           BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
-        run: swift test
+        # StatelessHTTPServerTransport のハング緩和テストは、60秒の未完了タスクを
+        # 意図的に残すため、SmokeTests / SegmentParityTests と同一プロセスで並列実行すると
+        # macOS の協調スレッドプール競合でタイムアウト用 Task 自体が遅延しうる。
+        # 全テストから一度だけ除外し、軽い別プロセスで実行してテスト内容は維持する。
+        run: |
+          swift test --skip StatelessTransportHangMitigationTests
+          swift test --filter StatelessTransportHangMitigationTests
 
   swift-linux:
     # SQLite では検証できない Postgres 固有挙動（JSONB・索引・String PK）も同一ジョブの
