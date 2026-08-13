@@ -49,3 +49,35 @@ struct IngestTargetTests {
         #expect(parseIngestTargets(" ") == nil)
     }
 }
+
+@Suite("parseStatementNoteTypes")
+struct StatementNoteTypesParseTests {
+    @Test("未指定は全 note_type（nil）")
+    func nilSelectsAll() {
+        #expect(parseStatementNoteTypes(nil) == nil)
+    }
+
+    @Test("単一 note_type")
+    func singleType() {
+        #expect(parseStatementNoteTypes("borrowings_schedule") == ["borrowings_schedule"])
+    }
+
+    @Test("複数 note_type")
+    func multipleTypes() {
+        let selected = parseStatementNoteTypes(
+            "per_share_information,borrowings_schedule,lease_liabilities")
+        #expect(selected == [
+            "per_share_information", "borrowings_schedule", "lease_liabilities",
+        ])
+    }
+
+    @Test("未知トークンは nil")
+    func unknownTokenIsNil() {
+        #expect(parseStatementNoteTypes("dividends,foo") == nil)
+    }
+
+    @Test("空選択は nil")
+    func emptyIsNil() {
+        #expect(parseStatementNoteTypes("") == nil)
+    }
+}

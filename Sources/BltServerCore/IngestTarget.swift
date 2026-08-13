@@ -2,6 +2,8 @@
 // 既定（未指定）は全対象。XBRL 数値 fact は issue #22 で停止中のため
 // ここには含めず、従来どおり `--with-facts` で別制御する。
 
+import BlueTickerCore
+
 /// ingest で実行できる対象。rawValue が `--stages` の CSV トークン。
 public enum IngestTarget: String, CaseIterable, Sendable {
     /// 通期財務サマリ（company_financials）。
@@ -18,6 +20,22 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 会社アイコン（company_icons、favicon の R2 格納先メタデータ）。`BLT_R2_*` 環境変数未設定時は
     /// 対象に含めてもスキップされる（`runFactsIngestCommand` 参照）。
     case icons
+}
+
+/// `--note-types` の CSV 値を note_type の集合へ変換する（`statement-notes` ステージ専用）。
+/// - `nil`（フラグ未指定）: 全 note_type。
+/// - 有効なトークンのみ: その集合。
+/// - 未知トークンを含む・有効トークンが 0 個: `nil`（呼び出し側で usage エラー）。
+public func parseStatementNoteTypes(_ csv: String?) -> Set<String>? {
+    guard let csv else { return nil }
+    var result = Set<String>()
+    for token in csv.split(separator: ",") {
+        let value = token.trimmingCharacters(in: .whitespaces)
+        if value.isEmpty { continue }
+        guard isKnownStatementNoteType(value) else { return nil }
+        result.insert(value)
+    }
+    return result.isEmpty ? nil : result
 }
 
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。

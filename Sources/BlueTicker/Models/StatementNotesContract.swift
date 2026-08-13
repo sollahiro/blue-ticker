@@ -32,6 +32,24 @@ public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// （`available_via_statement`）。使用権資産の増減表は対象外。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 
+/// ingest / `--note-types` バリデーション用の全 note_type 一覧（`FactsIngest` の走査順）。
+public let allStatementNoteTypes: [String] = [
+    statementNoteTypePerShareInformation,
+    statementNoteTypeIssuedSharesAndCapital,
+    statementNoteTypeCapitalExpendituresOverview,
+    statementNoteTypeDividends,
+    statementNoteTypeBorrowingsSchedule,
+    statementNoteTypePropertyPlantEquipmentSchedule,
+    statementNoteTypeGoodwillAndIntangibles,
+    statementNoteTypeLeaseLiabilities,
+    statementNoteTypePolicyHoldingSecurities,
+]
+
+/// 既知の note_type かどうか（`allStatementNoteTypes` と一致）。
+public func isKnownStatementNoteType(_ noteType: String) -> Bool {
+    allStatementNoteTypes.contains(noteType)
+}
+
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
 /// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
