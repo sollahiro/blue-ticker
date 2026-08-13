@@ -103,8 +103,10 @@ SS 固有の実装上の注意（2026-08-09）:
 `is_total` はラベル規則。`components` はキヤノン型（「…合計」直後の内訳が親と一致）のみ
 合成 tag で付与（富士フイルムの内訳→合計型は対象外）。HTML からも取れないときだけ
 `notApplicable(us_gaap_unsupported)`。個別 BS への silent fallback はしない。
-`borrowings_schedule` は同 reason で対象外のまま。financials/IBD の `USGAAPHtml`
-（選択フィールド→仮想タグ）は現行 summary 用として別経路。
+`borrowings_schedule` は US-GAAP 巨大注記（`NotesToConsolidatedFinancialStatementsUSGAAPTextBlock`）
+の社債・借入金／長期債務表から内訳を取る（2026-08-12、富士フイルム S100W3XJ / キヤノン S100XTLJ。
+`notes-borrowings-schedule-v3`）。オペレーティング・リースは IBD / `lease_liabilities` 側。
+financials/IBD の `USGAAPHtml`（選択フィールド→仮想タグ）は現行 summary 用として別経路。
 
 ## 公開面設計（free / paid 分離）
 
