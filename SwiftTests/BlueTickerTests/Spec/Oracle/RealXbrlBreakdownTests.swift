@@ -1439,17 +1439,37 @@ private actor RealXbrlMockChat: ChatCompleting {
         return true
     }
 
-    private func resolve(docID: String) -> BreakdownSnapshot? {
-        let dir = Self.xbrlDir(docID)
+    private static func resolveGoodwill(docID: String) -> BreakdownSnapshot? {
+        let dir = xbrlDir(docID)
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
         let facts = BreakdownExtractor.extractFactsByDimension(
-            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords, contextMap: contextMap)
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: dir)
         let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
         let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
         return BreakdownNormalizer.normalizeGoodwill(
-            facts: facts, total: totalItem.current, totalTag: totalItem.tag, axis: breakdownAxisGoodwill,
-            labelsByTag: labelsByTag)
+            facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+            axis: breakdownAxisGoodwill, labelsByTag: labelsByTag)
+    }
+
+    private static func expectGoodwillResolved(
+        docID: String, total: Double, totalTag: String,
+        rows: [(labelRaw: String, amount: Double, rowKind: String)]
+    ) async throws {
+        guard await ensureAvailable(docID) else { return }
+        let snapshot = try #require(resolveGoodwill(docID: docID))
+        #expect(snapshot.axis == breakdownAxisGoodwill)
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.warnings.isEmpty)
+        #expect(snapshot.denominatorTag == totalTag)
+        #expect(snapshot.denominator == total)
+        #expect(snapshot.rows.count == rows.count)
+        for expected in rows {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == expected.labelRaw })
+            #expect(row.amount == expected.amount)
+            #expect(row.rowKind == expected.rowKind)
+        }
     }
 
     // MARK: - 横河電機 S100VY8X（2026-08-13）
@@ -1458,17 +1478,13 @@ private actor RealXbrlMockChat: ChatCompleting {
     // 銀行の GoodwillBeforeOffsetting 分離パターンではない通常 J-GAAP 事業会社。
 
     @Test func yokogawaGoodwillAllInControlSegment() async throws {
-        guard await Self.ensureAvailable("S100VY8X") else { return }
-        let snapshot = try #require(resolve(docID: "S100VY8X"))
-
-        #expect(snapshot.denominator == 6_563_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
-        #expect(snapshot.needsReview == false)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember" }?
-                .amount == 6_563_000_000)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "TestAndMeasurementReportableSegmentsMember" }?.amount == 0)
+        try await Self.expectGoodwillResolved(
+            docID: "S100VY8X", total: 6_563_000_000, totalTag: "Goodwill",
+            rows: [
+                ("IndustrialAutomationAndControlReportableSegmentsMember", 6_563_000_000, "segment"),
+                ("NewBussinessesOtherReportableSegmentsMember", 0, "segment"),
+                ("TestAndMeasurementReportableSegmentsMember", 0, "segment"),
+            ])
     }
 
     // MARK: - SOMPO S100R1LR（2026-08-13）
@@ -1477,22 +1493,19 @@ private actor RealXbrlMockChat: ChatCompleting {
     // 生命・損保セグメントはのれんゼロ（dimension 行は出る）。
 
     @Test func sompoGoodwillSplitsAcrossNursingCareAndOverseasInsurance() async throws {
-        guard await Self.ensureAvailable("S100R1LR") else { return }
-        let snapshot = try #require(resolve(docID: "S100R1LR"))
-
-        #expect(snapshot.denominator == 197_729_000_000)
-        #expect(snapshot.denominatorTag == "Goodwill")
-        #expect(snapshot.needsReview == false)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "NursingCareAndSeniorBusinessReportableSegmentsMember" }?
-                .amount == 78_983_000_000)
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "OverseasInsuranceBusinessReportableSegmentsMember" }?.amount
-                == 118_746_000_000)
-        #expect(snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" }?.rowKind == "subtotal")
-        #expect(
-            snapshot.rows.first { $0.labelRaw == "DomesticLifeInsuranceBusinessReportableSegmentsMember" }?
-                .amount == 0)
+        try await Self.expectGoodwillResolved(
+            docID: "S100R1LR", total: 197_729_000_000, totalTag: "Goodwill",
+            rows: [
+                ("DomesticLifeInsuranceBusinessReportableSegmentsMember", 0, "segment"),
+                ("DomesticPAndCInsuranceBusinessReportableSegmentsMember", 0, "segment"),
+                ("NursingCareAndSeniorBusinessReportableSegmentsMember", 78_983_000_000, "segment"),
+                (
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                    0, "segment"),
+                ("OverseasInsuranceBusinessReportableSegmentsMember", 118_746_000_000, "segment"),
+                ("ReportableSegmentsMember", 197_729_000_000, "subtotal"),
+                ("UnallocatedAmountsAndEliminationMember", 0, "reconciling"),
+            ])
     }
 
     // MARK: - トヨタ S100VWVY（2026-08-13）
@@ -1502,6 +1515,6 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     @Test func toyotaGoodwillNotFoundIsLegitimate() async throws {
         guard await Self.ensureAvailable("S100VWVY") else { return }
-        #expect(resolve(docID: "S100VWVY") == nil)
+        #expect(Self.resolveGoodwill(docID: "S100VWVY") == nil)
     }
 }
