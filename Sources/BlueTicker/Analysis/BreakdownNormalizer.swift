@@ -358,7 +358,7 @@ enum BreakdownNormalizer {
             warningPrefix: warningPrefix, labelsByTag: labelsByTag)
     }
 
-    /// のれんのセグメント別内訳（内訳取り込み goodwill 軸、2026-08-12追加、実装中・未配線）。
+    /// のれんのセグメント別内訳（内訳取り込み goodwill 軸、2026-08-12追加）。
     /// `normalizeCountBasis` と異なり、候補タグ（`Xbrl.goodwillSegmentTags`）は「最初に現れたタグ」
     /// ではなく「セグメント dimension 付き fact を実際に持つ最初のタグ」を選ぶ。実データ検証
     /// （三井住友・三菱UFJ）: 全社合計は無dimensionの`Goodwill`タグにしか無く、セグメント別内訳は

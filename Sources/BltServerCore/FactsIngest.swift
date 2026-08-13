@@ -285,6 +285,13 @@ public func runFactsIngestCommand(
             ) { docID, total in
                 await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
             }
+            // goodwill は financials 分母を使わず XBRL から全社合計を自前解決（決定論のみ、LLM なし）。
+            let s6Goodwill = try await runBreakdownIngest(
+                db: app.db, listedCodes: breakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
+                explicitCodes: codes, axis: breakdownAxisGoodwill, logger: app.logger
+            ) { docID, _ in
+                await context.resolveGoodwillBreakdown(docID: docID)
+            }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
             ) {
@@ -328,6 +335,15 @@ public func runFactsIngestCommand(
                 notApplicableSingleSegmentDisclosed: s6RD.notApplicableSingleSegmentDisclosed,
                 notApplicableUnknown: s6RD.notApplicableUnknown,
                 purged: s6RD.purged)
+            logIngestSummary(
+                app.logger, target: "breakdowns-goodwill", attempted: s6Goodwill.attempted,
+                stored: s6Goodwill.stored, failed: s6Goodwill.failed, skipped: s6Goodwill.skipped,
+                servable: coverage?.servable, unservable: coverage?.unservable,
+                notApplicable: s6Goodwill.notApplicable,
+                notApplicableGeographyOnly: s6Goodwill.notApplicableGeographyOnly,
+                notApplicableSingleSegmentDisclosed: s6Goodwill.notApplicableSingleSegmentDisclosed,
+                notApplicableUnknown: s6Goodwill.notApplicableUnknown,
+                purged: s6Goodwill.purged)
         }
         if targets.contains(.statements) {
             // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする

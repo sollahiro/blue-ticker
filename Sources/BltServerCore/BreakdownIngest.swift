@@ -60,7 +60,7 @@ public typealias BreakdownResolveFn =
 /// （needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。`limit` は新規解決件数の
 /// 上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
 /// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味。`axis` は `business` / `geography` /
-/// `employees` / `research_and_development`。
+/// `employees` / `research_and_development` / `goodwill`。
 ///
 /// `denominatorForDoc` は `resolve` に渡す第2引数（分母・全社合計値）を 財務取り込み
 /// （`company_financials`）から引く関数。business/geography は連結売上高（`consolidatedSalesForDoc`,
@@ -147,52 +147,60 @@ func runBreakdownIngest(
         if let lim = limit, attempted >= lim { break }
         attempted += 1
 
-        let denominatorOrNil = try? await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID) 分母参照", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await denominatorForDoc(cand.code, cand.docID, db)
-        }
-
-        // 分母なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
-        // 過去の成功行（例: 保険の前年）を隠してしまう。財務取り込み が当該 doc を既に計算済みなら
-        // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
-        guard let denominator = denominatorOrNil, denominator != 0 else {
-            let financialsHasDoc = try await withDbRetry(
-                logger: logger, context: "docID=\(cand.docID) financials有無",
-                onRetry: { unhealthyRetries += 1 }
+        let resolveResult: BreakdownResolveResult
+        if axis == breakdownAxisGoodwill {
+            // のれん軸は XBRL から分母（全社合計）を自前解決する。financials 分母は不要。
+            resolveResult = await resolve(cand.docID, nil)
+        } else {
+            let denominatorOrNil = try? await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID) 分母参照", onRetry: { unhealthyRetries += 1 }
             ) {
-                try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
+                try await denominatorForDoc(cand.code, cand.docID, db)
             }
-            if financialsHasDoc {
-                notApplicable += 1
-                // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
-                if let existing, existing.source != breakdownSourceNotApplicable {
-                    logger?.warning(
-                        "内訳取り込み(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
-                    )
-                } else {
-                    let placeholder = BreakdownSnapshotPayload(
-                        axis: axis, denominator: 0, denominatorTag: "", rows: [],
-                        sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
-                    try await withDbRetry(
-                        logger: logger, context: "docID=\(cand.docID)",
-                        onRetry: { unhealthyRetries += 1 }
-                    ) {
-                        try await storeBreakdown(
-                            existing: existing, docID: cand.docID, axis: axis,
-                            code: cand.code, submitDateTime: cand.submitDateTime,
-                            payload: placeholder, source: breakdownSourceNotApplicable,
-                            contentHash: "", cacheVersion: currentCacheVersion, llmAudit: nil,
-                            notApplicableReason: breakdownNotApplicableNotFound, db: db)
-                    }
+
+            // 分母なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
+            // 過去の成功行（例: 保険の前年）を隠してしまう。財務取り込み が当該 doc を既に計算済みなら
+            // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
+            guard let denominator = denominatorOrNil, denominator != 0 else {
+                let financialsHasDoc = try await withDbRetry(
+                    logger: logger, context: "docID=\(cand.docID) financials有無",
+                    onRetry: { unhealthyRetries += 1 }
+                ) {
+                    try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
                 }
-            } else {
-                skipped += 1
+                if financialsHasDoc {
+                    notApplicable += 1
+                    // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
+                    if let existing, existing.source != breakdownSourceNotApplicable {
+                        logger?.warning(
+                            "内訳取り込み(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
+                        )
+                    } else {
+                        let placeholder = BreakdownSnapshotPayload(
+                            axis: axis, denominator: 0, denominatorTag: "", rows: [],
+                            sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
+                        try await withDbRetry(
+                            logger: logger, context: "docID=\(cand.docID)",
+                            onRetry: { unhealthyRetries += 1 }
+                        ) {
+                            try await storeBreakdown(
+                                existing: existing, docID: cand.docID, axis: axis,
+                                code: cand.code, submitDateTime: cand.submitDateTime,
+                                payload: placeholder, source: breakdownSourceNotApplicable,
+                                contentHash: "", cacheVersion: currentCacheVersion, llmAudit: nil,
+                                notApplicableReason: breakdownNotApplicableNotFound, db: db)
+                        }
+                    }
+                } else {
+                    skipped += 1
+                }
+                continue
             }
-            continue
+
+            resolveResult = await resolve(cand.docID, denominator)
         }
 
-        switch await resolve(cand.docID, denominator) {
+        switch resolveResult {
         case .resolved(let payload, let source, let contentHash, let audit):
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
@@ -392,9 +400,9 @@ enum BreakdownLoadResult {
 }
 
 /// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
-/// axis は "business" / "geography" / "employees" / "research_and_development" を受け付ける
+/// axis は "business" / "geography" / "employees" / "research_and_development" / "goodwill" を受け付ける
 /// （geography は 2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ
-/// 解禁。employees/research_and_development は 2026-08-01 追加、決定論のみで LLM 非依存だが
+/// 解禁。employees/research_and_development/goodwill は決定論のみで LLM 非依存だが
 /// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
 /// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
@@ -407,6 +415,7 @@ func loadStoredBreakdown(
     guard
         axis == breakdownAxisBusiness || axis == breakdownAxisGeography
             || axis == breakdownAxisEmployees || axis == breakdownAxisResearchAndDevelopment
+            || axis == breakdownAxisGoodwill
     else { return .absent }
 
     let row: CompanyBreakdown?

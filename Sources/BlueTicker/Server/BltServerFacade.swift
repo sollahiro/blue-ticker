@@ -499,9 +499,7 @@ public extension BltServerContext {
             contentHash: hash, audit: nil)
     }
 
-    /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加、実装中・未配線。
-    /// smoke固定11社中のIFRS3社では未検証——J-GAAP企業実データ（オークマ・三井住友・三菱UFJ）のみで
-    /// 動作確認済み）。決定論のみ、LLMなし。
+    /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
     ///
     /// R&D/employees軸と異なり全社合計（denominator）を渡してくれる既存の計算パイプラインが無いため
     /// （`goodwill_and_intangibles` note_typeはIFRS限定でJ-GAAPの値を持たない）、`Xbrl.goodwillSegmentTags`

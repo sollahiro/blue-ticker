@@ -1266,7 +1266,7 @@ private actor RealXbrlMockChat: ChatCompleting {
     }
 }
 
-// MARK: - goodwill 軸（2026-08-12追加、実装中・未配線）
+// MARK: - goodwill 軸（2026-08-12追加）
 
 /// smoke 固定11社の goodwill 軸床（Step 1）。J-GAAP4社は resolved、残7社は segment dimension
 /// タグ欠如で not_found（IFRS/US-GAAP/非連結等。`goodwill_and_intangibles` note_type とは別経路）。

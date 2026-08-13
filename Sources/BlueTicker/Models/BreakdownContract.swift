@@ -15,7 +15,7 @@ public let breakdownAxisGeography = "geography"
 public let breakdownAxisEmployees = "employees"
 /// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisResearchAndDevelopment = "research_and_development"
-/// のれん（全社合計）のセグメント別内訳軸（2026-08-12追加、実装中・未配線）。決定論のみ
+/// のれん（全社合計）のセグメント別内訳軸（2026-08-12追加）。決定論のみ
 /// （LLMフォールバックなし）。`goodwill_and_intangibles` note_type（IFRS連結限定の種類別明細）とは別物
 /// ——本軸はJ-GAAP企業がBS/注記に持つ「のれん」単一タグをセグメントdimensionで内訳化する
 /// （実データ検証: オークマ・三井住友・三菱UFJ）。
@@ -110,12 +110,12 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
 }
 
 /// `breakdown-business-vN` / `breakdown-geography-vN` / `breakdown-employees-vN` /
-/// `breakdown-research-and-development-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
+/// `breakdown-research-and-development-vN` / `breakdown-goodwill-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
 /// パース不能なら nil（非 servable 扱い）。
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     let prefixes = [
         "breakdown-business-v", "breakdown-geography-v", "breakdown-employees-v",
-        "breakdown-research-and-development-v", "breakdown-v",
+        "breakdown-research-and-development-v", "breakdown-goodwill-v", "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
         let suffix = version.dropFirst(prefix.count)
