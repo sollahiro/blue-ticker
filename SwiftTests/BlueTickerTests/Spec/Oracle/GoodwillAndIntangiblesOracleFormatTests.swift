@@ -71,4 +71,62 @@ import Testing
             try assertMatchesOracle(docID: "S100W4MT", xbrlDir: $0)
         }
     }
+
+    // MARK: - smoke 床11社 - 非IFRS8社は not_found（法定附属明細表自体が無い）
+
+    @Test
+    func smokeGoodwillNichireiNotApplicable() async throws {
+        try await withSmokeCache("S100VYA0") {
+            try assertMatchesOracle(docID: "S100VYA0", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillAZplanningNotApplicable() async throws {
+        try await withSmokeCache("S100VU4O") {
+            try assertMatchesOracle(docID: "S100VU4O", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillFujifilmNotApplicable() async throws {
+        try await withSmokeCache("S100W3XJ") {
+            try assertMatchesOracle(docID: "S100W3XJ", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillOkumaNotApplicable() async throws {
+        try await withSmokeCache("S100W043") {
+            try assertMatchesOracle(docID: "S100W043", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillTohoRemacNotApplicable() async throws {
+        try await withSmokeCache("S100XRD8") {
+            try assertMatchesOracle(docID: "S100XRD8", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillCanonNotApplicable() async throws {
+        try await withSmokeCache("S100XTLJ") {
+            try assertMatchesOracle(docID: "S100XTLJ", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillMUFGNotApplicable() async throws {
+        try await withSmokeCache("S100W4FB") {
+            try assertMatchesOracle(docID: "S100W4FB", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokeGoodwillSMFGNotApplicable() async throws {
+        try await withSmokeCache("S100W0S7") {
+            try assertMatchesOracle(docID: "S100W0S7", xbrlDir: $0)
+        }
+    }
 }
