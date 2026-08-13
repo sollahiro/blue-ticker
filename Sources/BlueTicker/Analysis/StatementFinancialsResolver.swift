@@ -1,4 +1,4 @@
-// financials 組立向けの本表水準値パススルー（タスク #5、`docs/financials-summary-separation-concept.md`）。
+// financials 組立向けの本表水準値パススルー（タスク #5、`docs/financials-summary-separation.md`）。
 // 正本は statement（BS/PL/CF 行）。ingest 順に依存せず、同一 XBRL パスで Statement を直接解決する（#10b）。
 
 import Foundation

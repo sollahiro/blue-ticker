@@ -2,7 +2,7 @@
 //
 // EDINET の US-GAAP 連結には ix:nonFraction が無いため、XBRL fact + presentation 経路
 // （StatementClassifier）は使えない。開示 HTML テーブルを決定論で読み、
-// StatementLineItem として返す（LLM なし。docs/statement-normalization-concept.md）。
+// StatementLineItem として返す（LLM なし。docs/statement.md）。
 //
 // 現行 summary 用の USGAAPHtml（選択ラベル→仮想タグ）とは別経路。こちらは全データ行を
 // 開示ラベルのまま出す（企業間の科目統一はしない）。

@@ -1,6 +1,6 @@
 # blt-server ロードマップ
 
-現在地と次の意思決定の索引。手順は `deploy.md` / `operations.md`、構成は `architecture.md`、完了経緯は Git。
+**進捗・未決・次の索引**。構成は `architecture.md`、手順は `deploy.md` / `operations.md`、cache 床は `.agents/rules/project/versioning.md`、経緯は Git。
 
 ## 現在地
 
@@ -10,9 +10,9 @@
 | CLI | 配布 `ticker` 廃止。開発は `TickerDev`、運用は `blt-server` sync/ingest |
 | sync | 稼働・日次増分 |
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
-| financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`（定義箇所が正本） |
+| financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md` |
 | breakdowns | 日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
-| statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`、BS/PL/CF/SS）。notes はコード配線済・本番 ingest 未 |
+| statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes はコード配線済・本番 ingest 未 |
 | 定期ジョブ | ローカル launchd。Fly は read 専用（ingest は OOM のためローカル） |
 | MCP | `POST /` 埋め込み。Managed OAuth は `mcp.*` |
 
@@ -23,21 +23,18 @@
 - **REST `/v1` が契約の正**。MCP は追従面。新機能は REST 先。
 - Core はサーバー専用にしない（`TickerDev`・テストと共有）。
 - オンデマンド ingest（404→202＋キュー）は設計あり・未実装（公開スキーマ追加のため着手前確認）。
-- 段階 A（自社 REST）→ B（第三者公開）は `docs/public-api-concept.md`。
+- 第三者公開（段階 B）は `public-api.md`。課金境界は `feature-tiers.md`。
 
-### financials / filing-sections read 床
+read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かない）。床の引き上げは旧版 stale 消化後。
 
-現行版完全一致ではなく **min servable 以上**を返す。定数・バンプ規則は `.agents/rules/project/versioning.md`。床の引き上げは旧版 stale 消化後。`/healthz` の `*_min_servable` で確認可。
+## パイプライン進捗
 
-## データパイプライン
-
-| 対象 | 保存先 | 状態 |
-|---|---|---|
-| sync | `edinet_documents` / `edinet_sync_state` | 稼働 |
-| 生 XBRL | ローカル / Fly Volume | 保持。R2 は延期 |
-| facts | `edinet_xbrl_facts` | 停止中 |
-| financials | `company_financials` | バックフィル中。read は床以上・未格納 404 |
-| filing-sections | `company_filing_sections` | 同上 |
+| 対象 | 状態 |
+|---|---|
+| sync | 稼働 |
+| 生 XBRL | 保持。R2 は延期 |
+| facts | 停止中 |
+| financials / filing-sections | バックフィル中。read は床以上・未格納 404 |
 
 重い ingest はローカル→Neon。Fly serving は read-only。
 
@@ -55,16 +52,17 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XB
 
 - [ ] financials / filing-sections の stale 消化継続
 - [ ] オンデマンド ingest（非同期・着手前確認）
-- [ ] financials と正本の分離（配線継続）— `docs/financials-summary-separation-concept.md`
+- [ ] financials と正本の分離（配線継続）— `financials-summary-separation.md`
 - [ ] notes 本番 ingest、goodwill breakdown 配線、employees/rd 公開可否
 - [ ] statements 母集団拡大（銀行・保険等の実データ確認後）
+- [ ] Allocation（要求具体化後）— 材料は `feature-tiers.md`
 - [ ] MCP/REST レイテンシ（Tunnel/Access 区間）
 - [ ] ストレージ強化の方式選定
-- [ ] REST 第三者公開（段階 B）— `docs/public-api-concept.md`
-- [ ] Monetize Gateway（`docs/feature-tiers.md`）
+- [ ] REST 第三者公開（段階 B）— `public-api.md`
+- [ ] Monetize Gateway（`feature-tiers.md`）
 - [ ] filing-sections: 半期(160) 拡張
 - [ ] 抽出差分検証ツール / LLM 抜き打ち整合
 
 ## 関連
 
-`architecture.md` · `public-api-concept.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `operations.md` · `breakdown-normalization-concept.md` · `statement-normalization-concept.md` · `financials-summary-separation-concept.md` · `.agents/rules/project/versioning.md`
+`architecture.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `operations.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `feature-tiers.md` · `.agents/rules/project/versioning.md`

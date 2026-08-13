@@ -1,4 +1,4 @@
-// 事業別・地域別売上の比較用コモンモデル（内訳取り込み, docs/breakdown-normalization-concept.md）
+// 事業別・地域別売上の比較用コモンモデル（内訳取り込み, docs/breakdown.md）
 // BreakdownExtractor の xbrl_facts 結果を BreakdownSnapshot（比較可能な正規化スナップショット）へ写す。
 //
 // html_table 由来（method == "html_table"）は行パース未実装のため対象外（nil を返す）。

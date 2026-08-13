@@ -1,12 +1,12 @@
 // geography（地域別情報）の html_table 結果を LLM で BreakdownSnapshot へ正規化する。
-// docs/breakdown-normalization-concept.md 参照。BreakdownNormalizer.swift（xbrl_facts 経路）とは
+// docs/breakdown.md 参照。BreakdownNormalizer.swift（xbrl_facts 経路）とは
 // 別経路。会社ごとに表の向き・表数・見出しキーワードの取り違えが不揃いなため、
 // 表全体（markdown）を LLM に渡して構造化させ、Swift 側は単位変換・分母整合性・
 // 地域ラベル妥当性のみ決定的に検証する（契約検証の増分。ingest/CLI/REST 配線は対象外）。
 //
 // segments（business）軸への適用は今回のスコープ外（smoke 11社中 0社が html_table のため）。
 // オークマ型（segments キーの axis が geography 判定になるケース）の配線方針は
-// docs/breakdown-normalization-concept.md「今後の検討事項3」に記載。ここでは扱わない。
+// docs/breakdown.mdに記載。ここでは扱わない。
 
 import Foundation
 

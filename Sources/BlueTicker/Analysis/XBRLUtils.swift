@@ -546,8 +546,8 @@ enum XBRLUtils {
     /// 計算リンクベース（`_cal.xml`）から {roleURI: {local_tag（合計行）: 構成要素}} を作る。
     /// `summation-item` arc の `weight`（±1）付きで、presentation linkbase とは独立に
     /// 「二重計上せず合計を検算・再構成できる」ことを保証する（presentation の親子関係は表示上の
-    /// ネストでしかなく計算の正しさを保証しない。`docs/statement-normalization-concept.md`
-    /// 実装方針8参照）。presentation と同じく、同じ sectionType に複数 role（IFRS連結用・
+    /// ネストでしかなく計算の正しさを保証しない。`docs/statement.md`
+    /// docs/statement.md 参照）。presentation と同じく、同じ sectionType に複数 role（IFRS連結用・
     /// J-GAAP個別用等）が対応することがあるため role ごとに分けて持ち、`StatementClassifier` が
     /// `primaryRole`（presentation のカバレッジ基準で選んだのと同じ role）で1つに絞って使う。
     /// 同一ディレクトリはキャッシュを返す。

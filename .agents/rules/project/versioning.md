@@ -58,7 +58,7 @@ derived キャッシュには `_cache_version` フィールドを埋め込み、
 | `company_statement_notes`（note_type 別） | `*NoteCacheVersion` / `statementNoteMinServableVersion(forType:)` | `Models/StatementNotesContract.swift` |
 | company icons | `companyIconsCacheVersion` | `Models/CompanyIconContract.swift` |
 
-business/geography 等の軸は cache_version が分離しており、片方のバンプが他軸を stale にしない。LLM 経由の行は cache_version バンプに連動しない（`needs_review=true` のときのみ再試行）。詳細は `docs/breakdown-normalization-concept.md`。
+business/geography 等の軸は cache_version が分離しており、片方のバンプが他軸を stale にしない。LLM 経由の行は cache_version バンプに連動しない（`needs_review=true` のときのみ再試行）。詳細は `docs/breakdown.md`。
 
 ### バンプ規則
 

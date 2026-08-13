@@ -1,6 +1,6 @@
-# 財務諸表完全正規化（statements / statement-notes）
+# Statement / Notes（ドメイン仕様）
 
-有報 XBRL の BS/PL/CF/SS を絞り込みなしで構造化する。Summary は主要指標、Breakdown は比較用割合。正本→組立は `docs/financials-summary-separation-concept.md`。
+有報 XBRL の BS/PL/CF/SS を絞り込みなしで構造化する。**現行の実装方針・再発防止の正本**（構想メモではない）。Summary は主要指標、Breakdown は比較用割合。正本→組立は `docs/financials-summary-separation.md`。
 
 ## 目的
 
@@ -54,4 +54,4 @@
 
 ## 関連
 
-`feature-tiers.md` · `breakdown-normalization-concept.md` · `financials-summary-separation-concept.md` · `blt-server-roadmap.md` · `.agents/rules/project/xbrl-analysis.md` · `versioning.md`
+`feature-tiers.md` · `breakdown.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `.agents/rules/project/xbrl-analysis.md` · `versioning.md`

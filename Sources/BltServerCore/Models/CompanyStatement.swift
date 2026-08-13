@@ -1,6 +1,6 @@
 // Statement 取り込み: 有報1件分の抽出済み BS/PL/CF/SS（StatementYear）= 1 行。
-// company_filing_sections（有報セクション取り込み）と同じ「1書類=1行」設計（docs/statement-normalization-concept.md
-// 「実装方針」2）。抽出は決定論のみ（LLM 不要）のため、company_breakdowns のような
+// company_filing_sections（有報セクション取り込み）と同じ「1書類=1行」設計（docs/statement.md
+// docs/statement.md）。抽出は決定論のみ（LLM 不要）のため、company_breakdowns のような
 // needs_review/source/content_hash 列は持たない。
 //
 // 過去書類も保持するため docID を主キーにする。read-by-code のため code（4 桁）と

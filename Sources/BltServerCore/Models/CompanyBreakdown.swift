@@ -1,8 +1,8 @@
 // 内訳取り込み: 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショット（BreakdownSnapshotPayload）= 1 行。
-// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。company_filing_sections（有報セクション取り込み,
+// docs/breakdown.md参照。company_filing_sections（有報セクション取り込み,
 // 生のsegments/geography表）とは別テーブル — LLM 経由の行（source != xbrl_facts）は
 // content_hash + needs_review でのみ再計算し、cache_version バンプでの全件再計算対象にしない
-// ため（decisive/deterministic 経路と再計算経済性が違う。今後の検討事項8）。
+// ため（decisive/deterministic 経路と再計算経済性が違う。）。
 //
 // 主キーは "doc_id#axis" の合成文字列（例: "S100XTLJ#business"）。本プロジェクトの既存テーブルは
 // すべて単一 String ID の慣習（company_filing_sections 等）のため、複合IDではなくこの合成キーで揃える。
@@ -60,7 +60,7 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     var cacheVersion: String
 
     /// LLM 経由の行にのみ添える軽量な監査情報（どの表・期間列・単位・利益開示有無を採用したか）。
-    /// 生レスポンス全文のログ化は別途未着手（今後の検討事項8）。xbrl_facts 経由の行は nil。
+    /// 生レスポンス全文のログ化は別途未着手。xbrl_facts 経由の行は nil。
     @OptionalField(key: "llm_audit")
     var llmAudit: LLMBreakdownAuditPayload?
 

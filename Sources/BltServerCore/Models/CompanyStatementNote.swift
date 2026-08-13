@@ -1,5 +1,5 @@
 // 財務諸表注記取り込み: 書類1件・note_type1つ分の財務諸表注記（StatementNotePayload）= 1 行。
-// 財務諸表注記取り込み実装計画（stateful-tickling-ritchie plan）・docs/statement-normalization-concept.md
+// 財務諸表注記取り込み実装計画（stateful-tickling-ritchie plan）・docs/statement.md
 // 「statement-notes（今後）」参照。company_statements（Statement取り込み 本体）とは別テーブル
 // （バージョニング独立・課金境界をエンドポイント単位で分離するため）。
 //

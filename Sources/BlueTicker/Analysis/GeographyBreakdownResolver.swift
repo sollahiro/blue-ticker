@@ -1,5 +1,5 @@
 // `geography` キーの地域別内訳（geography breakdown）を解決する。
-// docs/breakdown-normalization-concept.md 参照。DevCLI の live geography 分岐
+// docs/breakdown.md 参照。DevCLI の live geography 分岐
 // （`DevBreakdownCommand.runLive`）と同じ振り分けを 内訳取り込み ingest と共有する。
 //
 // 1. method == not_found → snapshot nil（呼び出し側が not_applicable / not_found を永続化）

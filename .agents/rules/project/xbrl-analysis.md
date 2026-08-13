@@ -40,4 +40,4 @@ statement・notes・breakdown の配信契約（`denominatorTag`・`amountTag` �
 
 ## 詳細リファレンス
 
-タグ体系・コンテキスト命名規則・会計基準判定・US-GAAP HTML・smoke 床は `docs/xbrl-parsing.md`。breakdown 正規化の再発防止ルールは `docs/breakdown-normalization-concept.md`（学び）。
+タグ体系・コンテキスト命名規則・会計基準判定・US-GAAP HTML・smoke 床は `docs/xbrl-parsing.md`。breakdown 正規化の再発防止ルールは `docs/breakdown.md`。

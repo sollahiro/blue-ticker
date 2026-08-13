@@ -63,10 +63,10 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 //
 // **正本抽出の原則（statement / notes / breakdown 共通）**: 水準値の正は XBRL タグ。
 // HTML 表パース・LLM は明細・ラベル補助。financials 組立は正本 resolver のタグ解決結果を
-// パススルーする（`docs/financials-summary-separation-concept.md`「正本抽出の原則」参照）。
+// パススルーする（`docs/financials-summary-separation.md`「正本抽出の原則」参照）。
 //
 // `FinancialsYear` の各公開フィールドについて「誰が正本か」と現行組立経路を固定する。
-// 詳細・着手タスクは `docs/financials-summary-separation-concept.md` が正本。本表は契約近傍の索引。
+// 詳細・着手タスクは `docs/financials-summary-separation.md` が正本。本表は契約近傍の索引。
 //
 // 凡例:
 // - **正本**: 値の意味的な出所（将来はここだけを信頼する）

@@ -1123,7 +1123,7 @@ import Foundation
         }
     }
 
-    // MARK: - 収益認識関係（オークマ型: docs/breakdown-normalization-concept.md 今後の検討事項3）
+    // MARK: - 収益認識関係（オークマ型: docs/breakdown.md）
 
     @Test func revenueRecognitionInfoFromTextBlock() {
         let xml = textBlockXml(

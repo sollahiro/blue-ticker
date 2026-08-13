@@ -1,6 +1,6 @@
-# 機能別提供価値と課金方針（構想）
+# 機能別提供価値と課金方針
 
-契約の正は REST。MCP は追従面。配布 `ticker` は廃止。
+契約の正は REST。MCP は追従面。ドメイン仕様は `statement.md` / `breakdown.md`。第三者公開（段階 B）は `public-api.md`。
 
 ## 機能表
 
@@ -25,12 +25,12 @@
 ## 境界
 
 - **Summary** = 水準値のみ。**Waterfall** = 前年差・要因分解込み（同じ `company_financials` 行の投影）。
-- **Breakdown**: `?axis=business|geography`（詳細は `breakdown-normalization-concept.md`）。
+- **Breakdown**: `?axis=business|geography`（`breakdown.md`）。
 - **Statement / Note**: 別エンドポイント。統合するかは未決（形状・コスト差で分離継続もあり）。
-- **Allocation**: `allocation-concept.md`。Breakdown の立体化はスコープ外。
+- **Allocation（未着手）**: サーバーは分解済み数値のみ返し描画はクライアント。観点の材料は geography / business / Statement PL+SS / notes(capex·dividends)+rd。複数観点の合成・JSON 形式・エンドポイントは要求具体化まで設計しない。Breakdown の立体化はスコープ外。
 
-正本分離のデータフロー構想: `docs/financials-summary-separation-concept.md`。
+正本分離: `financials-summary-separation.md`。
 
 ## 関連
 
-`public-api-concept.md` · `breakdown-normalization-concept.md` · `statement-normalization-concept.md` · `allocation-concept.md` · `blt-server-roadmap.md`
+`public-api.md` · `breakdown.md` · `statement.md` · `blt-server-roadmap.md`

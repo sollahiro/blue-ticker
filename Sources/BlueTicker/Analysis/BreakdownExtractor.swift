@@ -135,7 +135,7 @@ enum BreakdownExtractor {
     /// 連結財務諸表注記から事業別（報告セグメント別）情報を抽出する。
     ///
     /// 報告セグメント（xbrl_facts 経路）のメンバーが全て地域名の場合（オークマ型:
-    /// docs/breakdown-normalization-concept.md 学び10）、その内容は「事業別」ではなく
+    /// docs/breakdown.md 学び10）、その内容は「事業別」ではなく
     /// 「地域別」であるため、収益認識関係注記（`extractRevenueRecognitionInfo`）に本当の
     /// 事業別（製品別）データがあればそちらを優先する。見つからない場合は元の地域別
     /// xbrl_facts をそのまま返す（未検証企業での誤判定時に表示が消える regression を避けるため）。

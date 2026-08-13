@@ -1,4 +1,4 @@
-// Statement 取り込み（Statement 本体）の BS/PL/CF/SS 判定・抽出。docs/statement-normalization-concept.md 参照。
+// Statement 取り込み（Statement 本体）の BS/PL/CF/SS 判定・抽出。docs/statement.md 参照。
 //
 // XBRLUtils.collectAllNumericFacts が既に付与している role/label メタデータを使い、
 // タグを事前に決め打ちせず（企業拡張タグも含め）BS/PL/CF/SS へ振り分ける。実データ検証
@@ -274,7 +274,7 @@ enum StatementClassifier {
     /// タグそのものではなく祖先を判定に使う理由: 個々の明細タグ名（例: `CashAndDeposits`）は
     /// 区分を表す語を含まないことが多く、区分は presentation linkbase 上の親子関係（例:
     /// `CashAndDeposits` → `CurrentAssetsAbstract` → `AssetsAbstract`）でのみ判定できる
-    /// （`docs/statement-normalization-concept.md`）。`parentTagsByTag` は同一タグが役割内で
+    /// （`docs/statement.md`）。`parentTagsByTag` は同一タグが役割内で
     /// 複数回参照される場合に複数の親を持ちうるため、BFS で全経路を辿り最初に一致した祖先で確定する。
     /// 祖先が複数区分のキーワードに同時一致する場合（負債合計と純資産合計を束ねる見出し、例:
     /// `LiabilitiesAndEquityIFRSAbstract`）は曖昧なため確定させず、さらに上の祖先を辿り続ける

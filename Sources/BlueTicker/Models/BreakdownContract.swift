@@ -1,5 +1,5 @@
 // 内訳取り込み（事業別・地域別売上の正規化スナップショット）の格納用 Codable 契約。
-// docs/breakdown-normalization-concept.md「今後の検討事項5」参照。
+// docs/breakdown.md参照。
 //
 // 内部型 BreakdownSnapshot/BreakdownRow/LLMBreakdownAudit（Analysis/BreakdownNormalizer.swift,
 // Analysis/GeographyBreakdownLLMNormalizer.swift, internal）は露出させず、有報セクション取り込み の
@@ -25,7 +25,7 @@ public let breakdownAxisGoodwill = "goodwill"
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
 /// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
-/// （content_hash 一致・needs_review=false の行はそのまま据え置く。今後の検討事項8参照）。
+/// （content_hash 一致・needs_review=false の行はそのまま据え置く。docs/breakdown.md 参照）。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 public let businessBreakdownCacheVersion = "breakdown-business-v8"
@@ -134,7 +134,7 @@ public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
 
 /// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が当該軸の床以上の
 /// ときのみ（バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
-/// docs/breakdown-normalization-concept.md「今後の検討事項8」参照）。
+/// docs/breakdown.md参照）。
 /// `axis` 省略時は business（現行 REST/MCP 公開軸）。
 public func isServableBreakdown(source: String, cacheVersion: String, axis: String = "business") -> Bool {
     guard isVersionGatedBreakdownSource(source) else { return true }
@@ -206,7 +206,7 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
 
 /// LLMBreakdownAudit（内部型）の公開 Codable 写経。LLM 経由の行にのみ添える軽量な監査情報
 /// （どの表・期間列・単位・利益開示有無を採用したか）。生レスポンス全文のログ化は別途未着手
-/// （今後の検討事項8）。
+/// 。
 public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     public var sourceTableIndex: Int?
     public var periodColumn: String?

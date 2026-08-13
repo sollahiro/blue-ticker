@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-現構成のスナップショット。計画は `blt-server-roadmap.md`、経緯は Git。
+**現構成の正本**（箱・依存・エンドポイント）。進捗は `blt-server-roadmap.md`、cache 床は `.agents/rules/project/versioning.md`、経緯は Git。
 
 ## デプロイモード
 
@@ -92,17 +92,17 @@ flowchart LR
 
 `BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。ChatGPT 非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
 
-## データパイプライン
+## データパイプライン（構成）
 
-| 対象 | 保存先 | 状態 |
-|---|---|---|
-| sync | `edinet_documents` / `edinet_sync_state` | 稼働 |
-| 生 XBRL | Volume / ローカル | 保持（HTML 依存のため） |
-| facts | `edinet_xbrl_facts` | 停止中可 |
-| financials | `company_financials` | ingest・DB read |
-| filing-sections / breakdowns / statements / notes | 各テーブル | roadmap 参照 |
+取り込み対象と保存先の**構成**のみ。進捗・停止理由は `blt-server-roadmap.md`。床定数は `versioning.md`。
 
-facts RAW は非公開。
+| 対象 | 保存先 |
+|---|---|
+| sync | `edinet_documents` / `edinet_sync_state` |
+| 生 XBRL | Volume / ローカル |
+| facts | `edinet_xbrl_facts`（非公開 RAW） |
+| financials | `company_financials` |
+| filing-sections / breakdowns / statements / notes | 各テーブル |
 
 ## キャッシュとデプロイ
 

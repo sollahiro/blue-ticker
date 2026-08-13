@@ -1,14 +1,14 @@
 // `segments` キー自体が html_table を返すケース（例: キヤノンの US-GAAP 連結注記23。事業名が
 // 列見出しで指標が行という向きの表が、巨大注記内に直接内包されている）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/breakdown-normalization-concept.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）・
+// docs/breakdown.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）・
 // RevenueRecognitionLLMNormalizer.swift（オークマ型、収益認識注記由来）と同型だが、対象は
 // `segments` キー自体（オークマ型のような axis-aware swap を経ていない、素の segments 結果）
 // が html_table になっているケース。
 //
 // ライブ read 経路（REST/MCP）や ingest には配線しない（他の LLM 正規化器と同じ理由。
 // concept doc で確定済み: LLM は financials/filing-sections と同じ ingest バッチ経路に置く方針だが、
-// 永続化スキーマ配線自体は今後の検討事項1で未着手）。
+// 永続化スキーマ配線自体はで未着手）。
 
 import Foundation
 

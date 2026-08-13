@@ -24,7 +24,7 @@ import Foundation
     /// normalize が nil を返す会社（US-GAAP 2社は segments facts に売上自体が無く、
     /// segmentExternalRevenueTags にも segmentBankGrossProfitTags にも一致するタグを持たない）。
     /// オークマ（6103）は別の理由で nil: `BreakdownExtractor.extractSegmentInfo` の
-    /// axis-aware swap（docs/breakdown-normalization-concept.md 今後の検討事項3）により、
+    /// axis-aware swap（docs/breakdown.md）により、
     /// golden の "segments" が xbrl_facts（地域別）から html_table（収益認識１由来の製品別）
     /// に変わった。BreakdownNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
     /// （html_table 側の正規化は RevenueRecognitionLLMNormalizer が別途担う）。
@@ -178,7 +178,7 @@ import Foundation
         return BreakdownNormalizer.normalize(result, consolidatedSales: consolidatedSales)
     }
 
-    /// 学び11（`docs/breakdown-normalization-concept.md`）の回帰テスト。実データ検証（2026-07-20）:
+    /// 学び11（`docs/breakdown.md`）の回帰テスト。実データ検証（2026-07-20）:
     /// 1802大林組・1812鹿島建設・1808長谷工・2413エムスリーはいずれも Domestic/Overseas を
     /// 含む事業区分名（「国内建築」「海外事業」等）の混在で誤って needs_review=true になっていた。
     /// axis=business の正しさは sum(segment)≈denominator でユーザーが確認済み。

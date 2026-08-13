@@ -1,6 +1,6 @@
 # financials（Summary）と正本の分離
 
-`company_financials`（公開面は Summary / Waterfall）を、正本（statement / notes / breakdown）からの組立ビューへ寄せる構想。
+`company_financials`（公開面は Summary / Waterfall）を、正本（statement / notes / breakdown）からの組立ビューへ寄せる**進行中の設計**。ドメイン個別の仕様は `statement.md` / `breakdown.md`。
 
 ## 用語
 
@@ -82,4 +82,4 @@ XBRL → statement / notes / breakdown（正本・並列）
 
 ## 関連
 
-`feature-tiers.md` · `statement-normalization-concept.md` · `breakdown-normalization-concept.md` · `allocation-concept.md` · `versioning.md` · `blt-server-roadmap.md`
+`feature-tiers.md` · `statement.md` · `breakdown.md` · `versioning.md` · `blt-server-roadmap.md`

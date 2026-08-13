@@ -1,8 +1,8 @@
-# 事業別・地域別売上の正規化（breakdowns）
+# Breakdown（ドメイン仕様）
 
-企業間比較（同業の割合）と同一企業の期ごと推移が目的。**同じ形の割合（軸・分母・外部売上）で並べること**が本体。行ラベルの会社間統一はしない。
+企業間比較（同業の割合）と同一企業の期ごと推移が目的。**現行の正規化方針・再発防止の正本**（構想メモではない）。**同じ形の割合（軸・分母・外部売上）で並べること**が本体。行ラベルの会社間統一はしない。
 
-関連: 抽出は `BreakdownExtractor`（`docs/xbrl-parsing.md`）、正本分離は `docs/financials-summary-separation-concept.md`。
+関連: 抽出は `BreakdownExtractor`（`docs/xbrl-parsing.md`）、正本分離は `docs/financials-summary-separation.md`。
 
 ## 方針（確定）
 

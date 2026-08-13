@@ -25,4 +25,4 @@
 
 ## 関連
 
-`public-api-concept.md` · `feature-tiers.md` · `deploy.md` · `operations.md`
+`public-api.md` · `feature-tiers.md` · `deploy.md` · `operations.md`

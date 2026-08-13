@@ -2,7 +2,7 @@
 
 自社向け REST 本線化（段階 A）の契約ルール。第三者公開（段階 B）では deprecation 期間などを足す前提で、いまはゆるく運用する。
 
-構想全体は `docs/public-api-concept.md`。内部の Neon `cache_version` / read 床は本ポリシーの対象外（`.agents/rules/project/versioning.md`）。
+構想全体は `docs/public-api.md`（段階 B）。段階 A の契約は本ファイルと `api-auth.md` / `feature-tiers.md`。内部の Neon `cache_version` / read 床は本ポリシーの対象外（`.agents/rules/project/versioning.md`）。
 
 ## 原則
 

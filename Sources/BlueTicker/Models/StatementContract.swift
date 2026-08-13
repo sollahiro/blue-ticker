@@ -1,5 +1,5 @@
 // Statement（BS/PL/CF/SS 完全正規化、Statement 取り込み）API の公開契約。
-// docs/statement-normalization-concept.md 参照。
+// docs/statement.md 参照。
 //
 // compute 関数・DB モデル・ingest・REST・MCP 配線は実装済み（日経225限定）。
 // FinancialsContract.swift のバージョニング四点セット（cache_version 文字列・
@@ -109,11 +109,10 @@ public struct StatementLineComponent: Codable, Sendable {
 
 /// BS/PL/CF/SS いずれかの1行分。`order` は presentation linkbase の表示順（`StatementClassifier`
 /// 参照)。role 内で取得できないタグは nil（呼び出し側がタグ名アルファベット順へフォールバック）。
-/// `isTotal`/`components` は presentation ではなく計算リンクベース由来（`docs/statement-
-/// normalization-concept.md` 実装方針8）。presentation の親子関係は表示上のネストでしかなく
+/// `isTotal`/`components` は presentation ではなく計算リンクベース由来（`docs/statement.md`）。
+/// presentation の親子関係は表示上のネストでしかなく
 /// 二重計上の防止を保証しないため、「この行が他の行の合計かどうか・何を足したものか」は
-/// こちらでのみ決定的に判断できる。企業拡張タグの区別は docs/statement-normalization-concept.md
-/// 「未決事項」参照（v1では未対応）。
+/// こちらでのみ決定的に判断できる。企業拡張タグの区別は `docs/statement.md` 参照（v1では未対応）。
 /// US-GAAP HTML 経路（`USGAAPStatementHtml`）のみ例外: calculation linkbase が無いため
 /// `is_total` はラベル規則、`components` はキヤノン型（合計直後の内訳が親と一致）の推定。
 /// SS は合計列のみ（資本構成員次元は含めない）。
@@ -170,7 +169,7 @@ public struct StatementLineItem: Codable, Sendable {
     }
 
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
-    /// 非 nil（docs/statement-normalization-concept.md「実装方針」3）。`section` は BS/CF のみ、
+    /// 非 nil（`docs/statement.md`）。`section` は BS/CF のみ、
     /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
     /// 解決できた場合のみ非 nil。
     public func jsonObject() -> [String: Any] {
@@ -287,7 +286,7 @@ public struct StatementResponse: Codable, Sendable {
 
     /// REST/MCP 応答用 JSON オブジェクト。`name`/`sector`/`market` は v1 では常に nil
     /// （company_statements は company_filing_sections と同様 code のみ非正規化して持つ。
-    /// docs/statement-normalization-concept.md）。
+    /// docs/statement.md）。
     public func jsonObject() -> [String: Any] {
         [
             "schema_version": schemaVersion,
