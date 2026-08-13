@@ -155,7 +155,8 @@ DB 参照組立を選ぶ場合のみ必須。
 
 | # | タスク | 内容 | 未決・注意 |
 |---|---|---|---|
-| 5b | **US-GAAP HTML 一本化** | `USGAAPStatementHtml` と `USGAAPHtml` の入れ子合計セマンティクスを揃え、欠測フォールバックを消す | AR/AP は Statement 行の内訳合算で対応（親小計は Statement 契約を濁すため不採用）。残: GP/SGA 等と `USGAAPHtml` 撤去 |
+| 5b-1 | **#5 フィールドのフォールバック撤去** | 本表水準値を statement 必須にし、旧 Extractor への `preferStatement` を外す | 完了（本 PR）。`USGAAPHtml` 注入は未移行フィールド用に残置 |
+| 5b-2 | **US-GAAP HTML 一本化（残）** | 未移行フィールドも Statement から組み立て、`USGAAPHtml` 注入・本体を撤去 | GP/SGA/IBD/税/利息等が先（#5c / #8） |
 | 5c | **gross_profit / sga の statement 参照** | TextBlock フォールバックを正本側へ整理してから組立配線 | IFRS TextBlock / 銀行粗利益 |
 | 7 | **dividend_ss** | SS 合計列だけでは不足 → notes `dividends` または SS 行規則のどちらを正本にするか決定して実装 | 正本選択が先 |
 | 8 | **IBD / 利息 / buyback / CFO·CFI** | statement マッチ率 50–67% の定義を突合し、ルール＋golden | 機械マッチだけでは不足 |

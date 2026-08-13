@@ -75,15 +75,15 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 //
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
-// | sales, operating_profit, net_profit | statement（income_statement 行） | StatementFinancialsResolver | done |
+// | sales, operating_profit, net_profit | statement（income_statement 行） | StatementFinancialsResolver（#5b-1: 旧経路フォールバックなし） | done |
 // | gross_profit, sga | statement | GrossProfitExtractor / OperatingProfitExtractor | extractor |
-// | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver | done |
-// | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver | done |
-// | ppe_total | statement | StatementFinancialsResolver | done |
-// | accounts_receivable, inventory, accounts_payable | statement | StatementFinancialsResolver | done |
-// | cash_equivalents | statement | StatementFinancialsResolver | done |
+// | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
+// | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
+// | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
+// | accounts_receivable, inventory, accounts_payable | statement | StatementFinancialsResolver（#5b-1） | done |
+// | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cfo, cfi | statement（cash_flow 行） | CashFlowExtractor | extractor（タスク #8） |
-// | dividend_paid_cf | statement | StatementFinancialsResolver | done |
+// | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |

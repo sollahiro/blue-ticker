@@ -145,78 +145,66 @@ import Foundation
         var durationFS = fieldSetFromDuration(allTags)
         var instantFS = fieldSetFromInstant(allTags)
 
-        // US-GAAP 企業: 連結 P/L・BS の値は HTML テーブルにのみ存在するため仮想タグで補完する
-        // （未移行フィールド・statement 欠測時フォールバック用。本表水準値は statement 正本）
+        // US-GAAP: 未移行フィールド（GP/SGA/IBD/税等）用に USGAAPHtml 仮想タグを注入。
+        // 本表水準値（#5）は statement 正本のみ（#5b-1: 旧 Extractor フォールバックなし）。
         if std == "US-GAAP" {
             for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let cf  = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let gp  = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
         let op  = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let bs  = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
-        let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: std)
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
         let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
-        let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let ar  = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-        let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-        let ap  = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: std)
-
-        func prefer(_ statement: Double?, _ legacy: Double?) -> Double? { statement ?? legacy }
 
         return Extracted(
-            sales:                  prefer(statementMain?.sales, is_.sales),
-            operatingProfit:        prefer(
-                statementMain?.operatingProfit, op.operatingProfit ?? is_.operatingProfit),
-            netProfit:              prefer(statementMain?.netProfit, is_.netProfit),
+            sales:                  statementMain?.sales,
+            operatingProfit:        statementMain?.operatingProfit,
+            netProfit:              statementMain?.netProfit,
             accountingStandard:     std,
             grossProfit:            gp.grossProfit,
             sga:                    op.sga,
             cfo:                    cf.cfo,
             cfi:                    cf.cfi,
-            totalAssets:            prefer(statementMain?.totalAssets, bs.totalAssets),
-            currentAssets:          prefer(statementMain?.currentAssets, bs.currentAssets),
-            nonCurrentAssets:       prefer(statementMain?.nonCurrentAssets, bs.nonCurrentAssets),
-            currentLiabilities:     prefer(statementMain?.currentLiabilities, bs.currentLiabilities),
-            nonCurrentLiabilities:  prefer(
-                statementMain?.nonCurrentLiabilities, bs.nonCurrentLiabilities),
-            netAssets:              prefer(statementMain?.netAssets, bs.netAssets),
+            totalAssets:            statementMain?.totalAssets,
+            currentAssets:          statementMain?.currentAssets,
+            nonCurrentAssets:       statementMain?.nonCurrentAssets,
+            currentLiabilities:     statementMain?.currentLiabilities,
+            nonCurrentLiabilities:  statementMain?.nonCurrentLiabilities,
+            netAssets:              statementMain?.netAssets,
             ibdTotal:               ibd.total,
             pretaxIncome:           tax.pretaxIncome,
             incomeTax:              tax.incomeTax,
             effectiveTaxRate:       tax.effectiveTaxRate,
-            ppeTotal:               prefer(statementMain?.ppeTotal, ppe.total),
+            ppeTotal:               statementMain?.ppeTotal,
             capex:                  StatementNotesResolver.financialsCanonicalCapex(
                 xbrlDir: xbrlDir, accountingStandard: std),
             rd:                     rd.current,
             employees:              emp.current,
-            cashEq:                 prefer(statementMain?.cashEquivalents, cashItem.current),
+            cashEq:                 statementMain?.cashEquivalents,
             interestExpense:        ie.current,
             cfTreasuryStock:        cfTs.current,
             dividendSS:             divSS.current,
-            dividendPaidCF:         prefer(statementMain?.dividendPaidCF, divPaid.current),
-            accountsReceivable:     prefer(statementMain?.accountsReceivable, ar.current),
-            inventory:              prefer(statementMain?.inventory, inv.current),
-            accountsPayable:        prefer(statementMain?.accountsPayable, ap.current),
+            dividendPaidCF:         statementMain?.dividendPaidCF,
+            accountsReceivable:     statementMain?.accountsReceivable,
+            inventory:              statementMain?.inventory,
+            accountsPayable:        statementMain?.accountsPayable,
             eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
             issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
         )
     }
 
-    /// financials 組立の本表水準値が statement 正本から取れることを smoke 11 社で回帰する（タスク #5）。
-    /// statement 解決自体が失敗した書類はスキップし、取れたフィールドは期待値と照合する。
+    /// financials 組立の本表水準値が statement 正本のみから取れることを smoke 11 社で回帰する
+    ///（タスク #5 / #5b-1。旧 Extractor フォールバックなし）。
     @Test func testFinancialsPassthroughMatchesStatementCanonical() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
@@ -241,21 +229,13 @@ import Foundation
                   let statement = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
             else { continue }
 
-            /// 必須フィールド: statement が必ず返し、期待値と一致すること。
+            /// 期待値があるフィールドは statement が必ず返し一致すること（#5b-1）。
             func assertRequired(_ field: String, expected exp: Double?, actual act: Double?) {
                 guard let e = exp else { return }
                 guard let a = act else {
                     failures.append("\(fixtureID) \(field): statement=nil expected=\(e)")
                     return
                 }
-                let tol = max(abs(e) * Self.relTol, 1.0)
-                if abs(e - a) > tol {
-                    failures.append("\(fixtureID) \(field): statement=\(a) expected=\(e)")
-                }
-            }
-            /// 任意フィールド: statement が返したときだけ期待値と照合（欠測は旧 Extractor フォールバック）。
-            func assertIfPresent(_ field: String, expected exp: Double?, actual act: Double?) {
-                guard let e = exp, let a = act else { return }
                 let tol = max(abs(e) * Self.relTol, 1.0)
                 if abs(e - a) > tol {
                     failures.append("\(fixtureID) \(field): statement=\(a) expected=\(e)")
@@ -274,38 +254,38 @@ import Foundation
                 "total_assets", expected: dbl(bs["total_assets"]), actual: statement.totalAssets)
             assertRequired(
                 "net_assets", expected: dbl(bs["net_assets"]), actual: statement.netAssets)
-            assertIfPresent(
+            assertRequired(
                 "current_assets", expected: dbl(bs["current_assets"]),
                 actual: statement.currentAssets)
-            assertIfPresent(
+            assertRequired(
                 "non_current_assets", expected: dbl(bs["non_current_assets"]),
                 actual: statement.nonCurrentAssets)
-            assertIfPresent(
+            assertRequired(
                 "current_liabilities", expected: dbl(bs["current_liabilities"]),
                 actual: statement.currentLiabilities)
-            assertIfPresent(
+            assertRequired(
                 "non_current_liabilities", expected: dbl(bs["non_current_liabilities"]),
                 actual: statement.nonCurrentLiabilities)
-            assertIfPresent(
+            assertRequired(
                 "ppe_total",
                 expected: dbl((expected["tangible_fixed_assets"] as? [String: Any])?["total"]),
                 actual: statement.ppeTotal)
-            assertIfPresent(
+            assertRequired(
                 "cash_eq", expected: dbl((expected["cash_eq"] as? [String: Any])?["current"]),
                 actual: statement.cashEquivalents)
-            assertIfPresent(
+            assertRequired(
                 "dividend_paid_cf",
                 expected: dbl((expected["dividend_paid_cf"] as? [String: Any])?["current"]),
                 actual: statement.dividendPaidCF)
-            assertIfPresent(
+            assertRequired(
                 "accounts_receivable",
                 expected: dbl((expected["accounts_receivable"] as? [String: Any])?["current"]),
                 actual: statement.accountsReceivable)
-            assertIfPresent(
+            assertRequired(
                 "inventory",
                 expected: dbl((expected["inventory"] as? [String: Any])?["current"]),
                 actual: statement.inventory)
-            assertIfPresent(
+            assertRequired(
                 "accounts_payable",
                 expected: dbl((expected["accounts_payable"] as? [String: Any])?["current"]),
                 actual: statement.accountsPayable)

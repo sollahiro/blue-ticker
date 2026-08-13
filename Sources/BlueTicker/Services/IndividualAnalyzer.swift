@@ -126,54 +126,40 @@ struct IndividualAnalyzer {
         // Instant FieldSet（貸借対照表・有利子負債用）
         var instantFS = fieldSetFromInstant(allTagElements)
 
-        // US-GAAP 企業: 連結 P/L・BS の値は HTML テーブルにのみ存在するため仮想タグで補完する
+        // US-GAAP: 未移行フィールド（GP/SGA/IBD/税等）用に HTML 仮想タグを注入。
+        // 本表水準値は StatementFinancialsResolver（USGAAPStatementHtml）側。
         if accountingStandard == "US-GAAP" {
             for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
-        // 本表水準値は statement 正本からパススルー（タスク #5）。未移行フィールドは旧 Extractor。
-        // statement が欠測のフィールドのみ旧経路で埋める（US-GAAP の入れ子合計など未配線分）。
+        // 本表水準値は statement 正本のみ（タスク #5 / #5b-1）。旧 Extractor へのフィールド単位
+        // フォールバックはしない。USGAAPHtml 注入は未移行フィールド（GP/SGA/IBD/税等）用に残す。
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
 
-        // 各抽出器を実行（未移行フィールド・statement 欠測時フォールバック・派生入力用）
-        let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        // 未移行フィールド用の抽出器
         let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let bs = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTagElements)
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
-        let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let nr = NetRevenueExtractor.extract(fieldSet: durationFS)
         let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
-        let divPaid = DividendPaidExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let ar = AccountsReceivableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
-        let inv = InventoryExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
-        let ap = AccountsPayableExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard)
-        let cashItem = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
-
-        func preferStatement(_ statement: Double?, _ legacy: Double?) -> Double? {
-            statement ?? legacy
-        }
 
         // RawData 組み立て
         var raw = RawData()
         raw.curFYEn = fyEnd
         raw.curPerType = doc["period_type"] as? String ?? "FY"
         raw.discDate = doc["submitDateTime"] as? String
-        // 売上高・営業利益・純利益・現金・純資産（百万円単位。正本は statement）
-        raw.sales = preferStatement(statementMain?.sales, is_.sales).map { $0 / millionYen }
-        raw.op = preferStatement(
-            statementMain?.operatingProfit, op.operatingProfit ?? is_.operatingProfit
-        ).map { $0 / millionYen }
-        raw.np = preferStatement(statementMain?.netProfit, is_.netProfit).map { $0 / millionYen }
-        raw.netAssets = preferStatement(statementMain?.netAssets, bs.netAssets).map { $0 / millionYen }
+        // 売上高・営業利益・純利益・現金・純資産（百万円単位。正本は statement のみ）
+        raw.sales = statementMain?.sales.map { $0 / millionYen }
+        raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
+        raw.np = statementMain?.netProfit.map { $0 / millionYen }
+        raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
         raw.cfo = cf.cfo.map { $0 / millionYen }
         raw.cfi = cf.cfi.map { $0 / millionYen }
         // 設備投資は notes overview タグ → CF タグ（タスク #6）
@@ -182,10 +168,8 @@ struct IndividualAnalyzer {
         ).map { $0 / millionYen }
         raw.rd = rd.current.map { $0 / millionYen }
         raw.buyback = bb.current.map { $0 / millionYen }
-        raw.salesLabel = statementMain?.salesLabel ?? is_.salesLabel
-        raw.cashEq = preferStatement(statementMain?.cashEquivalents, cashItem.current).map {
-            $0 / millionYen
-        }
+        raw.salesLabel = statementMain?.salesLabel
+        raw.cashEq = statementMain?.cashEquivalents.map { $0 / millionYen }
         // 基本EPS（円・連結当期）と発行済普通株式数（期末残高・株）は notes 正本からパススルー
         raw.eps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
         raw.shOutFY = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
@@ -202,25 +186,13 @@ struct IndividualAnalyzer {
         calc.sellingGeneralAdministrativeExpenses = op.sga.map { $0 / millionYen }
         calc.opLabel = statementMain?.operatingProfitLabel ?? op.label
 
-        // BS 項目（正本は statement）
-        calc.totalAssets = preferStatement(statementMain?.totalAssets, bs.totalAssets).map {
-            $0 / millionYen
-        }
-        calc.currentAssets = preferStatement(statementMain?.currentAssets, bs.currentAssets).map {
-            $0 / millionYen
-        }
-        calc.nonCurrentAssets = preferStatement(
-            statementMain?.nonCurrentAssets, bs.nonCurrentAssets
-        ).map { $0 / millionYen }
-        calc.currentLiabilities = preferStatement(
-            statementMain?.currentLiabilities, bs.currentLiabilities
-        ).map { $0 / millionYen }
-        calc.nonCurrentLiabilities = preferStatement(
-            statementMain?.nonCurrentLiabilities, bs.nonCurrentLiabilities
-        ).map { $0 / millionYen }
-        calc.netAssets = preferStatement(statementMain?.netAssets, bs.netAssets).map {
-            $0 / millionYen
-        }
+        // BS 項目（正本は statement のみ）
+        calc.totalAssets = statementMain?.totalAssets.map { $0 / millionYen }
+        calc.currentAssets = statementMain?.currentAssets.map { $0 / millionYen }
+        calc.nonCurrentAssets = statementMain?.nonCurrentAssets.map { $0 / millionYen }
+        calc.currentLiabilities = statementMain?.currentLiabilities.map { $0 / millionYen }
+        calc.nonCurrentLiabilities = statementMain?.nonCurrentLiabilities.map { $0 / millionYen }
+        calc.netAssets = statementMain?.netAssets.map { $0 / millionYen }
         calc.balanceSheetAccountingStandard = accountingStandard
 
         // 有利子負債
@@ -236,38 +208,17 @@ struct IndividualAnalyzer {
         calc.effectiveTaxRate = tax.effectiveTaxRate.map { $0 * percent }
         calc.interestExpense = ie.current.map { $0 / millionYen }
 
-        // 有形固定資産（正本は statement）
-        calc.ppeTotal = preferStatement(statementMain?.ppeTotal, ppe.total).map { $0 / millionYen }
+        // 有形固定資産（正本は statement のみ）
+        calc.ppeTotal = statementMain?.ppeTotal.map { $0 / millionYen }
         calc.ppeAccountingStandard = accountingStandard
 
-        // CF自己株式・配当・BS運転資本（運転資本・配当CF は statement）
+        // CF自己株式・配当SS は未移行。運転資本・配当CF は statement のみ
         calc.cfTreasuryStock = cfTs.current.map { $0 / millionYen }
         calc.dividendSS = divSS.current.map { $0 / millionYen }
-        calc.dividendPaidCF = preferStatement(statementMain?.dividendPaidCF, divPaid.current).map {
-            $0 / millionYen
-        }
-        calc.accountsReceivable = preferStatement(statementMain?.accountsReceivable, ar.current).map {
-            $0 / millionYen
-        }
-        calc.inventory = preferStatement(statementMain?.inventory, inv.current).map { $0 / millionYen }
-        calc.accountsPayable = preferStatement(statementMain?.accountsPayable, ap.current).map {
-            $0 / millionYen
-        }
-
-        // IFRS金融会社フォールバック: statement / 本表タグ双方で Sales が未取得のとき純収益で補完
-        if nr.found {
-            if raw.sales == nil, let netRevM = nr.netRevenue {
-                raw.sales = netRevM / millionYen
-                raw.salesLabel = "純収益"
-                if let gp = calc.grossProfit, let s = raw.sales, s > 0 {
-                    calc.grossProfitMargin = (gp / s) * percent
-                }
-            }
-            if raw.op == nil, let bpM = nr.businessProfit {
-                raw.op = bpM / millionYen
-                calc.opLabel = "事業利益"
-            }
-        }
+        calc.dividendPaidCF = statementMain?.dividendPaidCF.map { $0 / millionYen }
+        calc.accountsReceivable = statementMain?.accountsReceivable.map { $0 / millionYen }
+        calc.inventory = statementMain?.inventory.map { $0 / millionYen }
+        calc.accountsPayable = statementMain?.accountsPayable.map { $0 / millionYen }
 
         // 営業利益率
         if let s = raw.sales, s > 0, let rawOP = raw.op {
