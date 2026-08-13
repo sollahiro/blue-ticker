@@ -305,7 +305,7 @@ private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bo
 /// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_PUBLIC_BASE_URL` 未設定・
 /// DB クエリ失敗時は空辞書（呼び出し側は該当 code を icon_url: null として扱う）。
 /// read 経路のためアップロード用秘密鍵（`R2Config`）は要求しない（`R2PublicURLConfig` のみ使用）。
-/// `environment` はテスト注入用（既定はプロセス環境。`resolveXaiEndpoint` と同型）。
+/// `environment` はテスト注入用（既定はプロセス環境。`resolveBreakdownLLMEndpoint` と同型）。
 func iconURLs(
     for codes: [String], db: Database,
     environment: [String: String] = ProcessInfo.processInfo.environment
