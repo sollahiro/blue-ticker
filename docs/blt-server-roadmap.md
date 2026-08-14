@@ -59,7 +59,7 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XB
 - [ ] MCP/REST レイテンシ（Tunnel/Access 区間）
 - [ ] ストレージ強化の方式選定
 - [ ] REST 第三者公開（段階 B）— `public-api.md`
-- [ ] Monetize Gateway（`feature-tiers.md`）
+- [ ] 課金有効化（x402。ChatGPT 面は無料）— `feature-tiers.md`
 - [ ] filing-sections: 半期(160) 拡張
 - [ ] 抽出差分検証ツール / LLM 抜き打ち整合
 
