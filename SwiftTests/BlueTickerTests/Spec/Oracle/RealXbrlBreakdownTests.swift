@@ -253,6 +253,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let joined = result.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("顧客との契約から認識した収益"))
         #expect(joined.contains("地球環境") || joined.contains("マテリアル") || joined.contains("金属資源"))
+        #expect(joined.contains("18,915,995") || joined.contains("18915995"))
     }
 
     @Test func aozoraExtractsProductOrServiceOrdinaryRevenue() async throws {
@@ -334,6 +335,61 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(product.map(\.period) == ["前期", "当期"])
         #expect(product[0].markdown.contains("1,164,922") || product[0].markdown.contains("1164922"))
         #expect(product[1].markdown.contains("2,313,051") || product[1].markdown.contains("2313051"))
+    }
+
+    // MARK: - ディスコ S100YC6I / 東京エレクトロン S100YEOO（2026-08-14）
+
+    @Test func discoExtractsProductRevenueTableFromRevenueRecognition() async throws {
+        guard await Self.ensureAvailable("S100YC6I") else { return }
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YC6I"))
+        #expect(result.method == "html_table")
+        #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("精密加工装置"))
+        #expect(joined.contains("精密加工ツール"))
+        #expect(joined.contains("273,957") || joined.contains("273957"))
+        #expect(joined.contains("94,976") || joined.contains("94976"))
+        #expect(joined.contains("67,955") || joined.contains("67955"))
+        #expect(joined.contains("436,889") || joined.contains("436889"))
+    }
+
+    @Test func tokyoElectronExtractsProductRevenueTableFromRevenueRecognition() async throws {
+        guard await Self.ensureAvailable("S100YEOO") else { return }
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YEOO"))
+        #expect(result.method == "html_table")
+        #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("新規装置"))
+        #expect(joined.contains("フィールドソリューション"))
+        #expect(joined.contains("1,817,250") || joined.contains("1817250"))
+        #expect(joined.contains("626,282") || joined.contains("626282"))
+        #expect(joined.contains("2,443,533") || joined.contains("2443533"))
+    }
+
+    // MARK: - 第一生命 S100VZZW（2026-08-14）
+
+    @Test func daiichiLifeKeepsConsolidatedExternalRevenueEntityTotal() async throws {
+        guard await Self.ensureAvailable("S100VZZW") else { return }
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100VZZW"))
+        #expect(result.method == "xbrl_facts")
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.axis == "business")
+        #expect(snap.sourceKind == "xbrl_facts")
+        #expect(snap.rows.contains {
+            $0.labelRaw.contains("DomesticInsurance") && $0.amount == 7_708_824_000_000
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw.contains("OverseasInsurance") && $0.amount == 3_621_288_000_000
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "OtherReportableSegmentsMember" && $0.amount == 43_217_000_000
+        })
+        #expect(snap.rows.contains {
+            $0.labelRaw == "ReportableSegmentsMember" && $0.amount == 11_373_330_000_000
+        })
+        let entity = try #require(snap.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 9_873_251_000_000)
+        #expect(entity.rowKind == "subtotal")
     }
 
     // MARK: - オリックス S100YG5L（2026-07-25、issue #103）
@@ -1184,6 +1240,111 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(labels.contains("サーマルシステム"))
         #expect(labels.contains("パワトレインシステム"))
         #expect(labels.contains("モビリティエレクトロニクス"))
+        #expect(await client.timesCalled() == 1)
+    }
+
+    @Test func discoResolvesViaRevenueRecognitionLLM() async throws {
+        guard await Self.ensureAvailable("S100YC6I") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YC6I"))
+        #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+
+        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "精密加工装置")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "精密加工装置", "amount": 273_957, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "精密加工ツール", "amount": 94_976, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他", "amount": 67_955, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "売上高合計", "amount": 436_889, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "製品群別",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 436_889_000_000.0
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+        #expect(source == .revenueRecognitionLLM)
+        #expect(snapshot?.axis == "business")
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("精密加工装置"))
+        #expect(labels.contains("精密加工ツール"))
+        #expect(snapshot?.rows.contains { $0.labelRaw == "精密加工装置" && $0.amount == 273_957_000_000 } == true)
+        #expect(await client.timesCalled() == 1)
+    }
+
+    @Test func tokyoElectronResolvesViaRevenueRecognitionLLM() async throws {
+        guard await Self.ensureAvailable("S100YEOO") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YEOO"))
+        #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+
+        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "新規装置")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "新規装置", "amount": 1_817_250, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "フィールドソリューション他", "amount": 626_282, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 2_443_533, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "製品別",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 2_443_533_000_000.0
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+        #expect(source == .revenueRecognitionLLM)
+        #expect(snapshot?.axis == "business")
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("新規装置"))
+        #expect(labels.contains("フィールドソリューション他"))
+        #expect(snapshot?.rows.contains { $0.labelRaw == "新規装置" && $0.amount == 1_817_250_000_000 } == true)
+        #expect(await client.timesCalled() == 1)
+    }
+
+    @Test func mitsubishiResolvesViaRevenueRecognitionLLM() async throws {
+        guard await Self.ensureAvailable("S100YB25") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
+        #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+
+        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "地球環境エネルギー")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "地球環境エネルギー", "amount": 1_748_741, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "マテリアルソリューション", "amount": 3_978_475, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "金属資源", "amount": 1_219_273, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "社会インフラ", "amount": 786_423, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "モビリティ", "amount": 672_507, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "食品産業", "amount": 1_790_685, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他", "amount": 8_719_891, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 18_915_995, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "事業グループ別",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 18_915_995_000_000.0
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+        #expect(source == .revenueRecognitionLLM)
+        #expect(snapshot?.axis == "business")
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("地球環境エネルギー"))
+        #expect(labels.contains("マテリアルソリューション"))
+        #expect(snapshot?.rows.contains { $0.rowKind == "subtotal" && $0.amount == 18_915_995_000_000 } == true)
         #expect(await client.timesCalled() == 1)
     }
 

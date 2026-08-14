@@ -2253,6 +2253,27 @@ import Foundation
             #expect(reason == .unknown)
         }
     }
+
+    /// 東京エレクトロン型: 単一セグメント省略の文言があっても、製品別 html_table があれば F にしない。
+    /// F は needs_review=false の not_applicable になり再試行されない。
+    @Test func classifyNotApplicableReasonLeavesUnknownWhenSingleSegmentTextAndTablesExist() {
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: "| 新規装置 | 1817250 |\n| フィールドソリューション他 | 626282 |",
+                period: "当期")],
+            facts: [])
+        let xml = textBlockXml(
+            tag: "DescriptionOfFactThatCompanysBusinessComprisesSingleSegment",
+            escapedHtml: "半導体製造装置の単一セグメントであるため、記載を省略しております。"
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 2_443_533_000_000, xbrlDir: dir)
+            #expect(reason == .unknown)
+        }
+    }
 }
 
 // MARK: - Python ゴールデンファイルとのパリティ検証
@@ -2332,19 +2353,23 @@ import Foundation
             }
         }
 
-        // facts: 順序不定のため (tag, contextRef) でソートして比較
+        // facts: 順序不定のため (tag, contextRef) で照合する。
+        // 実抽出が Python golden より多い fact を持っていてもよい
+        // （dimension なしの連結財務諸表計上額など、後から足した列）。
         let expFacts = (expected["facts"] as? [[String: Any]] ?? []).sorted {
             (($0["tag"] as? String ?? ""), ($0["contextRef"] as? String ?? ""))
                 < (($1["tag"] as? String ?? ""), ($1["contextRef"] as? String ?? ""))
         }
-        if expFacts.count != actual.facts.count {
-            diffs.append("\(label): facts 件数 \(expFacts.count) != \(actual.facts.count)")
-            return diffs
+        var actualByKey: [String: BreakdownFact] = [:]
+        for fact in actual.facts {
+            actualByKey["\(fact.tag)|\(fact.contextRef)"] = fact
         }
-        for (i, (exp, act)) in zip(expFacts, actual.facts).enumerated() {
-            let key = "\(label): facts[\(i)] (\(act.tag), \(act.contextRef))"
-            if exp["tag"] as? String != act.tag || exp["contextRef"] as? String != act.contextRef {
-                diffs.append("\(key): tag/contextRef 不一致 expected (\(exp["tag"] ?? ""), \(exp["contextRef"] ?? ""))")
+        for exp in expFacts {
+            let tag = exp["tag"] as? String ?? ""
+            let contextRef = exp["contextRef"] as? String ?? ""
+            let key = "\(label): facts (\(tag), \(contextRef))"
+            guard let act = actualByKey["\(tag)|\(contextRef)"] else {
+                diffs.append("\(key): 欠落")
                 continue
             }
             if exp["dimensions"] as? [String: String] != act.dimensions {
@@ -2354,8 +2379,8 @@ import Foundation
             if expValue != act.value {
                 diffs.append("\(key): value \(expValue.map { String($0) } ?? "nil") != \(act.value)")
             }
-            if exp["label"] as? String != act.label {
-                diffs.append("\(key): label \(exp["label"] ?? "nil") != \(act.label ?? "nil")")
+            if let expLabel = exp["label"] as? String, expLabel != (act.label ?? "") {
+                diffs.append("\(key): label \(expLabel) != \(act.label ?? "nil")")
             }
             if exp["unitRef"] as? String != act.unitRef {
                 diffs.append("\(key): unitRef \(exp["unitRef"] ?? "nil") != \(act.unitRef ?? "nil")")

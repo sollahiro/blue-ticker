@@ -106,18 +106,14 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
-    /// INPEX旧filings型: revenue_recognition_llm 経由の結果でも needs_review が立つ場合
-    /// （分母不一致など低確信度）は採用せず not_found にする。同一書類を複数回実行すると
-    /// 候補表の誤選択でシェア合計が売上高から乖離することがあり（実データ検証:
-    /// S100QH2B、2026-07-25）、低確信度のまま business 軸として保存するより空の方が安全という
-    /// ユーザー判断。オークマ（needs_review=false）の挙動は変えない。
-    @Test func revenueRecognitionLLMResultWithNeedsReviewIsDiscardedAsNotFound() async throws {
+    /// 収益認識 LLM が needs_review（分母不一致など）でも snapshot は採用する。
+    /// 捨てると単一セグメント開示（F）へ落ち、東京エレクトロン型の製品別が取れない。
+    @Test func revenueRecognitionLLMResultWithNeedsReviewIsStillAdopted() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
 
         // 分母（sales）の117%相当を返し、llm_row_sum_mismatch で needs_review が立つ
-        // ケースを再現する（実データ検証で観測した S100QH2B のシェア合計117%と同型）。
         let response: [String: Any] = [
             "applicable": true,
             "unit": "million_yen",
@@ -135,8 +131,9 @@ private actor MockChatCompleting: ChatCompleting {
             segments: segments, consolidatedSales: sales, client: client
         )
 
-        #expect(snapshot == nil)
-        #expect(source == .notFound)
+        #expect(source == .revenueRecognitionLLM)
+        #expect(snapshot?.needsReview == true)
+        #expect(snapshot?.warnings.contains("llm_row_sum_mismatch") == true)
     }
 
     /// Grok 4.5 レビュー指摘の回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
@@ -365,13 +362,9 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(audit?.notApplicableReason == "geography_only")
     }
 
-    /// 回帰防止（Opus監査 2026-07-26）: revenueRecognitionLLM が needs_review=true で低確信度の
-    /// ため採用しなかった応答（`revenueRecognitionLLMResultWithNeedsReviewIsDiscardedAsNotFound` と
-    /// 同型）でも、その応答に schema 制約で埋まった not_applicable_reason（applicable=true の
-    /// ときは無視すべき値）が誤って audit へ伝搬しないこと。伝搬してしまうと
-    /// `classifyNotApplicableReason` が低確信度の非決定的結果を geography_only（needs_review=false・
-    /// 再試行停止）として誤確定させてしまう。
-    @Test func discardedNeedsReviewResultDoesNotLeakStrayNotApplicableReasonIntoAudit() async throws {
+    /// 収益認識 LLM が needs_review でも採用する。schema 制約で埋まった
+    /// not_applicable_reason（applicable=true）は audit へ漏らさない。
+    @Test func adoptedNeedsReviewResultDoesNotLeakStrayNotApplicableReasonIntoAudit() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
@@ -395,8 +388,8 @@ private actor MockChatCompleting: ChatCompleting {
             segments: segments, consolidatedSales: sales, client: client
         )
 
-        #expect(snapshot == nil)
-        #expect(source == .notFound)
+        #expect(snapshot?.needsReview == true)
+        #expect(source == .revenueRecognitionLLM)
         #expect(audit?.notApplicableReason == nil)
     }
 
