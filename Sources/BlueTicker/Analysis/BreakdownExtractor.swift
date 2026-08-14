@@ -788,6 +788,86 @@ enum BreakdownExtractor {
         return Double(intersection.count) / Double(union.count) >= Xbrl.noteRowLabelJaccardThreshold
     }
 
+    /// 改ページで割れた同一表の行ラベル。製品名が第2列に来る表（武田: 空セル｜ENTYVIO｜金額）
+    /// では `rowLabelSet` が空になるため、先頭の非空・非数値セルを使う。
+    /// チェーン判定（小松・オリックス・富士フイルム）の Jaccard は `rowLabelSet` のまま変えない。
+    private static func continuationRowLabelSet(_ grid: [[String]]) -> Set<String> {
+        var labels: Set<String> = []
+        for row in grid.dropFirst() {
+            guard let label = row.first(where: { !$0.isEmpty && XBRLUtils.parseHtmlNumber($0) == nil }) else {
+                continue
+            }
+            guard !Xbrl.segmentGeographyLabelKeywordsJa.contains(where: label.contains) else { continue }
+            let hasNumeric = row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+            if hasNumeric { labels.insert(label) }
+        }
+        return labels
+    }
+
+    /// 列見出しとして使う期間行（「前年度／当年度」「前連結会計年度」等）。単位行だけの
+    /// 1行目一致では別開示まで結合してしまうため、期間行があればそちらを優先する。
+    private static func periodHeaderRow(_ grid: [[String]]) -> [String]? {
+        let markers = ["前年度", "当年度", "前連結会計年度", "当連結会計年度", "前期", "当期"]
+        return grid.prefix(4).first { row in
+            let joined = row.joined()
+            return markers.contains(where: joined.contains)
+        }
+    }
+
+    /// 同一表が紙面の改ページで `<table>` 分割された続きか。
+    /// 列構成が一致し、行ラベルがほぼ互いに素で、期間が同じ（または両方未判定）ときだけ true。
+    /// 小松（年度ラベル違いの前期/当期）・オリックス（列は違うが行ラベル高一致）・
+    /// キヤノン（見出し一致だが前期→当期、または地域名のみ）は false。
+    private static func isVerticalTableContinuation(
+        leading: [[String]],
+        trailing: [[String]],
+        leadingPeriod: String?,
+        trailingPeriod: String?
+    ) -> Bool {
+        guard leading.count >= 2, trailing.count >= 2 else { return false }
+        guard leading[0].count == trailing[0].count, leading[0].count >= 2 else { return false }
+        // 単位行（「（単位：百万円）」）だけの一致では別開示まで結合する。期間列（前年度/当年度）
+        // が両方の表に同じ文言で載っていることだけを列構成の根拠にする。
+        guard let pa = periodHeaderRow(leading), let pb = periodHeaderRow(trailing), pa == pb else {
+            return false
+        }
+        switch (leadingPeriod, trailingPeriod) {
+        case ("前期", "当期"), ("当期", "前期"):
+            return false
+        default:
+            break
+        }
+        let labelsA = continuationRowLabelSet(leading)
+        let labelsB = continuationRowLabelSet(trailing)
+        guard !labelsA.isEmpty, !labelsB.isEmpty else { return false }
+        let union = labelsA.union(labelsB)
+        guard !union.isEmpty else { return false }
+        let jaccard = Double(labelsA.intersection(labelsB).count) / Double(union.count)
+        return jaccard < Xbrl.noteVerticalContinuationJaccardMax
+    }
+
+    /// 続き表の単位行・期間見出しを落として行方向に結合する。
+    private static func mergeContinuationGrids(_ leading: [[String]], _ trailing: [[String]]) -> [[String]] {
+        var skip = 0
+        while skip < trailing.count, skip < leading.count, leading[skip] == trailing[skip] {
+            skip += 1
+        }
+        if skip == 0 {
+            while skip < trailing.count, isRepeatedContinuationHeaderRow(trailing[skip]) {
+                skip += 1
+            }
+        }
+        return leading + Array(trailing.dropFirst(skip))
+    }
+
+    private static func isRepeatedContinuationHeaderRow(_ row: [String]) -> Bool {
+        let joined = row.joined()
+        if joined.contains("単位") { return true }
+        let periodMarkers = ["前年度", "当年度", "前連結会計年度", "当連結会計年度"]
+        if periodMarkers.contains(where: joined.contains) { return true }
+        return row.allSatisfy(\.isEmpty)
+    }
+
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
     static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
         var i = 0
@@ -851,6 +931,19 @@ enum BreakdownExtractor {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
         var tables: [BreakdownTable] = []
+        var pendingElement: Element?
+        var pendingGrid: [[String]]?
+        var pendingPeriod: String?
+
+        func flushPending() {
+            guard let grid = pendingGrid else { return }
+            tables.append(BreakdownTable(
+                heading: defaultHeading, markdown: gridToMarkdown(grid), period: pendingPeriod))
+            pendingElement = nil
+            pendingGrid = nil
+            pendingPeriod = nil
+        }
+
         for table in tableEls {
             if skipGeographyAssetMetricTables,
                 let metricCaption = nearestGeographyMetricCaption(before: table),
@@ -870,8 +963,23 @@ enum BreakdownExtractor {
                 continue
             }
             let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
-            tables.append(BreakdownTable(heading: defaultHeading, markdown: md, period: period))
+            if let prevEl = pendingElement, let prevGrid = pendingGrid,
+               let chained = findImmediatelyChainedTable(after: prevEl),
+               ObjectIdentifier(chained) == ObjectIdentifier(table),
+               isVerticalTableContinuation(
+                leading: prevGrid, trailing: grid,
+                leadingPeriod: pendingPeriod, trailingPeriod: period)
+            {
+                pendingGrid = mergeContinuationGrids(prevGrid, grid)
+                pendingElement = table
+                continue
+            }
+            flushPending()
+            pendingElement = table
+            pendingGrid = grid
+            pendingPeriod = period
         }
+        flushPending()
         // contextRef フォールバックは「このブロック内の未ラベル表がちょうど1つ」のときだけ。
         // Prior/Current に分かれた専用地域売上 TextBlock（表1枚ずつ）を救いつつ、
         // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
@@ -1020,7 +1128,28 @@ enum BreakdownExtractor {
                         continue
                     }
                     let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
-                    tables.append(BreakdownTable(heading: keyword, markdown: md, period: period))
+                    var workingGrid = grid
+                    var workingTable = table
+                    var workingPeriod = period
+                    // 改ページで割れた同一表は markdown を結合して1候補にする（武田製品別売上）。
+                    // 小松・オリックスは isVerticalTableContinuation が false のため従来どおり
+                    // 別候補として拾い続ける。
+                    while let chained = findImmediatelyChainedTable(after: workingTable),
+                          !seen.contains(ObjectIdentifier(chained))
+                    {
+                        let chainedGrid = expandTable(chained)
+                        let chainedPeriod =
+                            detectPeriodFromPreceding(chained) ?? detectPeriodFromGrid(chainedGrid)
+                        guard isVerticalTableContinuation(
+                            leading: workingGrid, trailing: chainedGrid,
+                            leadingPeriod: workingPeriod, trailingPeriod: chainedPeriod)
+                        else { break }
+                        seen.insert(ObjectIdentifier(chained))
+                        workingGrid = mergeContinuationGrids(workingGrid, chainedGrid)
+                        workingTable = chained
+                    }
+                    tables.append(BreakdownTable(
+                        heading: keyword, markdown: gridToMarkdown(workingGrid), period: workingPeriod))
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを
@@ -1034,11 +1163,11 @@ enum BreakdownExtractor {
                     //     Jaccard で高一致する（実データ検証: オリックスの US-GAAP セグメント
                     //     注記、issue #103。事業別 view→地域別 view のように列構成が変わる
                     //     開示は (a) では拾えず当期表を取りこぼしていた）
-                    if let chained = findImmediatelyChainedTable(after: table),
+                    if let chained = findImmediatelyChainedTable(after: workingTable),
                        !seen.contains(ObjectIdentifier(chained)) {
                         let chainedGrid = expandTable(chained)
-                        if headerRowsMatch(chainedGrid.first, grid.first)
-                            || rowLabelSetsOverlapEnough(grid, chainedGrid) {
+                        if headerRowsMatch(chainedGrid.first, workingGrid.first)
+                            || rowLabelSetsOverlapEnough(workingGrid, chainedGrid) {
                             candidate = chained
                             continue
                         }

@@ -301,6 +301,27 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(snap.needsReview == false)
     }
 
+    // MARK: - 武田 S100YB5L（2026-08-14）
+
+    @Test func takedaMergesPageSplitProductByProductRevenueTables() async throws {
+        guard await Self.ensureAvailable("S100YB5L") else { return }
+        // ビジネスエリア別・製品別売上が改ページで2つの <table> に割れる。
+        // 前半（ENTYVIO / 消化器系疾患 / 希少疾患）と後半（血漿分画 / 売上収益合計）が
+        // 同一候補に載ること。LLM に複数表選択を頼まない。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB5L"))
+        #expect(result.method == "html_table")
+        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("ENTYVIO"))
+        #expect(joined.contains("消化器系疾患"))
+        #expect(joined.contains("血漿分画"))
+        #expect(joined.contains("売上収益合計"))
+        #expect(joined.contains("4,505,720") || joined.contains("4505720"))
+        let merged = result.tables.filter {
+            $0.markdown.contains("ENTYVIO") && $0.markdown.contains("売上収益合計")
+        }
+        #expect(!merged.isEmpty)
+    }
+
     // MARK: - 任天堂 S100Y9NX（2026-08-14）
 
     @Test func nintendoProductOrServiceDualContextGetsPriorThenCurrent() async throws {

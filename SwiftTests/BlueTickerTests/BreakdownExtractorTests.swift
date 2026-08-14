@@ -668,6 +668,106 @@ import Foundation
         }
     }
 
+    @Test func segmentInfoMergesPageSplitProductTableWithDisjointRowLabels() {
+        // 武田型: 製品別売上が改ページで2つの <table> に割れ、列見出し（前年度/当年度）は
+        // 同じだが行ラベル（ENTYVIO と免疫グロブリン）は互いに素。別候補のままだと LLM が
+        // 片方だけを選ぶ。dedicated タグ経路（allTablesFromHtml）で1表に結合する。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;消化器系疾患&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;ENTYVIO&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;消化器系疾患合計&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;血漿分画製剤&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;免疫グロブリン&lt;/td&gt;&lt;td&gt;80&lt;/td&gt;&lt;td&gt;90&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;売上収益合計&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;180&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "SegmentInformationIFRSTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            let md = result.tables[0].markdown
+            #expect(md.contains("ENTYVIO"))
+            #expect(md.contains("消化器系疾患"))
+            #expect(md.contains("免疫グロブリン"))
+            #expect(md.contains("売上収益合計"))
+            #expect(md.contains("180") && md.contains("200"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotMergeWhenSameRowLabelsRepeatAcrossTables() {
+        // 前期/当期で行ラベルが共通の2表は結合しない（小松・キヤノンの分離を守る）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;事業B&lt;/td&gt;&lt;td&gt;50&lt;/td&gt;&lt;td&gt;55&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;事業A&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;td&gt;210&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;事業B&lt;/td&gt;&lt;td&gt;80&lt;/td&gt;&lt;td&gt;85&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "SegmentInformationIFRSTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("100"))
+            #expect(result.tables[1].markdown.contains("200"))
+        }
+    }
+
+    @Test func segmentInfoDoesNotMergeWhenOnlyUnitRowMatches() {
+        // 単位行だけが共通の前期/当期表は結合しない。期間列（前年度/当年度）が無いと
+        // 列構成の根拠が足りない（ニチレイ型の誤結合防止）。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;加工食品&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;低温物流&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "SegmentInformationIFRSTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+        }
+    }
+
+    @Test func segmentInfoMergesPageSplitProductTableOnMixedKeywordPath() {
+        // mixed US-GAAP 巨大注記（keywordTablesFromHtml）でも同じ結合が走る。
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;ENTYVIO&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;110&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;" +
+            "&lt;div&gt;&lt;table&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;前年度&lt;/td&gt;&lt;td&gt;当年度&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;免疫グロブリン&lt;/td&gt;&lt;td&gt;80&lt;/td&gt;&lt;td&gt;90&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;売上収益合計&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;180&lt;/td&gt;&lt;td&gt;200&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;&lt;/div&gt;"
+        let xml = textBlockXml(tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            let md = result.tables[0].markdown
+            #expect(md.contains("ENTYVIO") && md.contains("免疫グロブリン") && md.contains("売上収益合計"))
+        }
+    }
+
     @Test func segmentInfoDoesNotChainWhenRowLabelOverlapBelowMinimumCount() {
         // Grok 4.5 監査指摘の回帰（2026-07-25）: 行ラベルが2件しか一致しない場合は
         // `Xbrl.noteRowLabelMinOverlapCount`（3）未満のため Jaccard 経路も発火せず、
