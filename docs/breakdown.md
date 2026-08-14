@@ -35,6 +35,7 @@
 10. 連結優先・非連結フォールバック必須。member ラベル選択は Dictionary 走査順に依存させない。
 11. LLM の `profit == nil` だけでは未開示と見落としを区別できない → `profit_disclosed`＋決定的ガード。
 12. LLM 行は `cache_version` バンプだけでは再計算しない（`needs_review` または削除）。`content_hash` は生入力＋分母のみ（プロンプト/モデルを含めない）。
+13. 製品・サービス別専用 TextBlock が Prior / Current に分かれるとき、HTML に期間見出しが無い。`contextRef` を `period` にする（地域 dedicated と同じ）。事業セグメント dedicated には付けない。
 
 ## 契約・永続化（現行）
 

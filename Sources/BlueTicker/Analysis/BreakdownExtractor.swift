@@ -686,8 +686,9 @@ enum BreakdownExtractor {
     }
 
     /// XBRL TextBlock の contextRef から当期/前期を判定する。
-    /// 専用地域売上 TextBlock が Prior1YearDuration / CurrentYearDuration の2要素に分かれる
-    /// 会社（ニチレイ・三菱UFJ・三井住友・オークマ）では HTML 内に期間見出しが無く、
+    /// 専用地域売上・製品サービス別 TextBlock が Prior1YearDuration / CurrentYearDuration
+    /// の2要素に分かれる会社（地域: ニチレイ・三菱UFJ・三井住友・オークマ、
+    /// 製品: ファナック・任天堂・太陽誘電）では HTML 内に期間見出しが無く、
     /// ブロック単位の `applyPeriodOrdering` だと両方「前期」になるため、contextRef を正とする。
     static func periodLabel(fromContextRef contextRef: String?) -> String? {
         guard let contextRef, !contextRef.isEmpty else { return nil }
@@ -841,7 +842,7 @@ enum BreakdownExtractor {
     /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
     /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
-    /// （dedicated 地域売上の Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
+    /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
         skipGeographyAssetMetricTables: Bool = false,
@@ -1078,9 +1079,12 @@ enum BreakdownExtractor {
                 if dedicatedTags.contains(block.tag) {
                     // 収益認識関係だけ脚注段落を候補に含める（セグメント情報の表件数 golden を変えない）
                     let includeFootnotes = dedicatedHeading == revenueRecognitionHeading
-                    // contextRef→period は地域 dedicated のみ。事業セグメント dedicated は
-                    // HTML 見出し判定＋既存 golden（スズキ等）を変えない。
-                    let contextPeriod = dedicatedHeading == "地域ごとの情報"
+                    // contextRef→period は HTML に期間見出しが無い dedicated 分割ブロック向け。
+                    // 地域（ニチレイ等）と製品・サービス別（ファナック・任天堂・太陽誘電）。
+                    // 事業セグメント dedicated は HTML 見出し判定＋既存 golden（スズキ等）を変えない。
+                    let contextPeriod =
+                        dedicatedHeading == "地域ごとの情報"
+                        || dedicatedHeading == productOrServiceHeading
                         ? periodLabel(fromContextRef: block.contextRef) : nil
                     tables.append(contentsOf: allTablesFromHtml(
                         block.content, defaultHeading: dedicatedHeading,

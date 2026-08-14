@@ -254,8 +254,57 @@ import Foundation
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearInstant") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearInstant") == "当期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration_NonConsolidatedMember") == "前期")
+        #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration_NonConsolidatedMember") == "当期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: nil) == nil)
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "SomethingElse") == nil)
+    }
+
+    @Test func productOrServiceDedicatedDualContextBlocksGetPriorThenCurrent() {
+        // ファナック／任天堂／太陽誘電型: 製品・サービス別専用 TextBlock が
+        // Prior1YearDuration / CurrentYearDuration の2要素に分かれ、各 HTML に期間見出しが無い。
+        // contextRef から period を付けないと、ブロック単位 applyPeriodOrdering で両方「前期」になる。
+        let priorHtml =
+            "&lt;p&gt;１ 製品及びサービスごとの情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;製品A&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;外部顧客への売上高&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let currentHtml =
+            "&lt;p&gt;１ 製品及びサービスごとの情報&lt;/p&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;製品A&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;外部顧客への売上高&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="Prior1YearDuration">\(priorHtml)</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+            <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="CurrentYearDuration">\(currentHtml)</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let product = result.tables.filter { $0.heading == BreakdownExtractor.productOrServiceHeading }
+            #expect(product.count == 2)
+            #expect(product.map(\.period) == ["前期", "当期"])
+            #expect(product[0].markdown.contains("| 100 | 100 |"))
+            #expect(product[1].markdown.contains("| 140 | 140 |"))
+        }
+    }
+
+    @Test func productOrServiceSingleCurrentBlockWithTwoUnlabeledTablesKeepsOrdering() {
+        // クボタ型: 単一 CurrentYearDuration に期間見出しの無い表が2つあるときは
+        // 両方を当期で上書きせず、applyPeriodOrdering（前期→当期）に委ねる。
+        let html =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;製品A&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;製品A&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="CurrentYearDuration">\(html)</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            let product = result.tables.filter { $0.heading == BreakdownExtractor.productOrServiceHeading }
+            #expect(product.map(\.period) == ["前期", "当期"])
+        }
     }
 
     @Test func segmentInfoFromUSGAAPNoteMixedBlock() {
@@ -1212,6 +1261,7 @@ import Foundation
             let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.method == "html_table")
             #expect(result.tables.first?.heading == BreakdownExtractor.productOrServiceHeading)
+            #expect(result.tables.first?.period == "当期")
             #expect(result.tables.first?.markdown.contains("貸出業務") == true)
             #expect(result.tables.first?.markdown.contains("外部顧客に対する経常収益") == true)
             #expect(BreakdownExtractor.tablesContainSalesEquivalent(result.tables))

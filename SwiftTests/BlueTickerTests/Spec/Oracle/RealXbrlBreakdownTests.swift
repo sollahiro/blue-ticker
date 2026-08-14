@@ -301,6 +301,20 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(snap.needsReview == false)
     }
 
+    // MARK: - 任天堂 S100Y9NX（2026-08-14）
+
+    @Test func nintendoProductOrServiceDualContextGetsPriorThenCurrent() async throws {
+        guard await Self.ensureAvailable("S100Y9NX") else { return }
+        // 製品・サービス別専用タグが Prior1YearDuration / CurrentYearDuration に分かれ、
+        // HTML に期間見出しが無い。contextRef を period にしないと両方「前期」になる。
+        let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100Y9NX"))
+        let product = result.tables.filter { $0.heading == BreakdownExtractor.productOrServiceHeading }
+        #expect(product.count == 2)
+        #expect(product.map(\.period) == ["前期", "当期"])
+        #expect(product[0].markdown.contains("1,164,922") || product[0].markdown.contains("1164922"))
+        #expect(product[1].markdown.contains("2,313,051") || product[1].markdown.contains("2313051"))
+    }
+
     // MARK: - オリックス S100YG5L（2026-07-25、issue #103）
 
     @Test func orixChainsCurrentPeriodBusinessSegmentTableAcrossColumnViews() async throws {
