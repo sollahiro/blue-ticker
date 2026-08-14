@@ -49,19 +49,19 @@ func runIconsIngest(
     var missing: [(docID: String, code: String)] = []
     var staleVersion: [(docID: String, code: String)] = []
 
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "会社アイコン取り込み 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await CompanyIconCacheVersionOnly.query(on: db).all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for cand in baseCandidates {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため 会社アイコン取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ちあり)")
-            break
-        }
-        let existing = try await withDbRetry(
-            logger: logger, context: "code=\(cand.code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyIcon.find(cand.code, on: db)
-        }
-        if existing == nil {
+        guard let existing = classifyIndex[cand.code] else {
             missing.append(cand)
-        } else if existing?.cacheVersion != companyIconsCacheVersion {
+            continue
+        }
+        if existing.cacheVersion != companyIconsCacheVersion {
             staleVersion.append(cand)
         } else {
             skipped += 1
@@ -161,4 +161,17 @@ func storeCompanyIcon(
             }
         )
     }
+}
+
+/// `cache_version` のみを対象にした軽量射影（分類の N+1 find 回避用）。
+final class CompanyIconCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = CompanyIcon.schema
+
+    @ID(custom: "code", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
 }

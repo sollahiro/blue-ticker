@@ -45,21 +45,20 @@ func runFactsIngest(
     var missing: [String] = []
     var stale: [String] = []
 
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "数値 fact 取り込み 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await EdinetXbrlFactsCacheVersionOnly.query(on: db).all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for doc in documents {
         guard let docID = doc.id else { continue }
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
-            break
-        }
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await EdinetXbrlFacts.find(docID, on: db)
-        }
-        if existing == nil {
+        guard let existing = classifyIndex[docID] else {
             missing.append(docID)
-        } else if existing?.cacheVersion != xbrlFactsCacheVersion {
+            continue
+        }
+        if existing.cacheVersion != xbrlFactsCacheVersion {
             stale.append(docID)
         } else {
             skipped += 1
@@ -136,6 +135,19 @@ func storeXbrlFacts(
     }
 }
 
+/// `cache_version` のみを対象にした軽量射影（`facts` の JSONB を転送しない。分類の N+1 find 回避用）。
+final class EdinetXbrlFactsCacheVersionOnly: Model, @unchecked Sendable {
+    static let schema = EdinetXbrlFacts.schema
+
+    @ID(custom: "doc_id", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    init() {}
+}
+
 // MARK: - CLI エントリ
 
 /// 財務取り込みで格納する年数。要求が増えても再計算が走らないよう余裕を持たせる
@@ -205,9 +217,58 @@ public func runFactsIngestCommand(
                 "Explicit ingest codes specified",
                 metadata: ["event": "explicit_codes_loaded", "count": "\(codes.count)"])
         }
+        let cachedDocIDs = await context.cachedXbrlDocIDs()
+        let publicBreakdownListed = codes ?? listed
+        let nikkeiListed = codes ?? priority
+        let needsListedFilings =
+            targets.contains(.filingSections) || targets.contains(.breakdowns)
+        let needsNikkeiFilings =
+            targets.contains(.statements) || targets.contains(.notes)
+            || targets.contains(.breakdowns)
+
+        func loadCandidateSets(_ listedCodes: Set<String>) async throws -> FilingSectionCandidateSets {
+            if listedCodes.isEmpty {
+                return FilingSectionCandidateSets(keep: [], purge: [])
+            }
+            return try await filingSectionCandidates(
+                db: app.db, listedCodes: listedCodes, explicitCodes: codes,
+                years: filingSectionsIngestYears, logger: app.logger)
+        }
+
+        let listedFilingSets: FilingSectionCandidateSets
+        if needsListedFilings {
+            listedFilingSets = try await loadCandidateSets(listed)
+        } else {
+            listedFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
+        }
+
+        let publicBreakdownSets: FilingSectionCandidateSets
+        if targets.contains(.breakdowns) {
+            if publicBreakdownListed == listed {
+                publicBreakdownSets = listedFilingSets
+            } else {
+                publicBreakdownSets = try await loadCandidateSets(publicBreakdownListed)
+            }
+        } else {
+            publicBreakdownSets = FilingSectionCandidateSets(keep: [], purge: [])
+        }
+
+        let nikkeiFilingSets: FilingSectionCandidateSets
+        if needsNikkeiFilings {
+            if nikkeiListed == listed && needsListedFilings {
+                nikkeiFilingSets = listedFilingSets
+            } else if nikkeiListed == publicBreakdownListed && targets.contains(.breakdowns) {
+                nikkeiFilingSets = publicBreakdownSets
+            } else {
+                nikkeiFilingSets = try await loadCandidateSets(nikkeiListed)
+            }
+        } else {
+            nikkeiFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
+        }
+
         if includeFacts {
             let s3 = try await runFactsIngest(
-                db: app.db, limit: limit, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                db: app.db, limit: limit, cachedDocIDs: cachedDocIDs,
                 logger: app.logger
             ) { docID in
                 await context.parseXbrlFactIndex(docID: docID)
@@ -241,7 +302,8 @@ public func runFactsIngestCommand(
             let s5 = try await runFilingSectionsIngest(
                 db: app.db, listedCodes: listed, years: filingSectionsIngestYears,
                 sectionKeys: currentFilingSectionKeys(), limit: stageLimit, explicitCodes: codes,
-                priorityCodes: priority, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                priorityCodes: priority, cachedDocIDs: cachedDocIDs,
+                candidateSets: listedFilingSets,
                 logger: app.logger
             ) { docID in
                 await context.extractFilingSections(docID: docID)
@@ -258,24 +320,25 @@ public func runFactsIngestCommand(
             // 内訳取り込み: business/geography は上場全体（`listed`。日経225は処理順の先頭寄せ）。
             // employees/rd/goodwill は日経225（`priority`）限定。`--codes` 時は全軸その集合。
             // `--limit` は business/geography に適用。未公開3軸は `unpublishedBreakdownIngestLimit`。
-            let publicBreakdownListed = codes ?? listed
-            let unpublishedBreakdownListed = codes ?? priority
             if publicBreakdownListed.isEmpty {
                 app.logger.warning(
                     "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping business/geography",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
-            if unpublishedBreakdownListed.isEmpty {
+            if nikkeiListed.isEmpty {
                 app.logger.warning(
                     "内訳取り込み unpublished axes empty (nikkei225.csv missing and no --codes); skipping employees/rd/goodwill",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_priority_codes"])
             }
             let unpublishedLimit = codes == nil ? unpublishedBreakdownIngestLimit : nil
+            let unpublishedSets =
+                nikkeiListed == publicBreakdownListed
+                ? publicBreakdownSets : nikkeiFilingSets
             let s6Business = try await runBreakdownIngest(
                 db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: await context.cachedXbrlDocIDs(),
-                axis: breakdownAxisBusiness, logger: app.logger
+                cachedDocIDs: cachedDocIDs,
+                axis: breakdownAxisBusiness, candidateSets: publicBreakdownSets, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveBusinessBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
@@ -283,8 +346,8 @@ public func runFactsIngestCommand(
             let s6Geography = try await runBreakdownIngest(
                 db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: await context.cachedXbrlDocIDs(),
-                axis: breakdownAxisGeography, logger: app.logger
+                cachedDocIDs: cachedDocIDs,
+                axis: breakdownAxisGeography, candidateSets: publicBreakdownSets, logger: app.logger
             ) { docID, consolidatedSales in
                 await context.resolveGeographyBreakdown(
                     docID: docID, consolidatedSales: consolidatedSales)
@@ -292,29 +355,29 @@ public func runFactsIngestCommand(
             // employees/research_and_development は連結売上ではなく 財務取り込み 計算済みの従業員数・
             // 研究開発費合計を分母(全社合計)として使う(重複ロジック回避、2026-08-01 監査指摘対応)。
             let s6Employees = try await runBreakdownIngest(
-                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: await context.cachedXbrlDocIDs(),
-                axis: breakdownAxisEmployees, logger: app.logger,
+                cachedDocIDs: cachedDocIDs,
+                axis: breakdownAxisEmployees, candidateSets: unpublishedSets, logger: app.logger,
                 denominatorForDoc: employeesForDocFromFinancials
             ) { docID, total in
                 await context.resolveEmployeesBreakdown(docID: docID, total: total)
             }
             let s6RD = try await runBreakdownIngest(
-                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: await context.cachedXbrlDocIDs(),
-                axis: breakdownAxisResearchAndDevelopment, logger: app.logger,
+                cachedDocIDs: cachedDocIDs,
+                axis: breakdownAxisResearchAndDevelopment, candidateSets: unpublishedSets, logger: app.logger,
                 denominatorForDoc: rdForDocFromFinancials
             ) { docID, total in
                 await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
             }
             // goodwill は financials 分母を使わず XBRL から全社合計を自前解決（決定論のみ、LLM なし）。
             let s6Goodwill = try await runBreakdownIngest(
-                db: app.db, listedCodes: unpublishedBreakdownListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
+                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: await context.cachedXbrlDocIDs(),
-                axis: breakdownAxisGoodwill, logger: app.logger
+                cachedDocIDs: cachedDocIDs,
+                axis: breakdownAxisGoodwill, candidateSets: unpublishedSets, logger: app.logger
             ) { docID, _ in
                 await context.resolveGoodwillBreakdown(docID: docID)
             }
@@ -382,7 +445,8 @@ public func runFactsIngestCommand(
             }
             let s7 = try await runStatementIngest(
                 db: app.db, listedCodes: statementListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                explicitCodes: codes, cachedDocIDs: cachedDocIDs,
+                candidateSets: nikkeiFilingSets,
                 logger: app.logger
             ) { docID in
                 await context.extractStatement(docID: docID)
@@ -451,8 +515,9 @@ public func runFactsIngestCommand(
                 let s8 = try await runStatementNotesIngest(
                     db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
                     limit: stageLimit, explicitCodes: codes,
-                    cachedDocIDs: await context.cachedXbrlDocIDs(),
+                    cachedDocIDs: cachedDocIDs,
                     noteType: entry.noteType,
+                    candidateSets: nikkeiFilingSets,
                     logger: app.logger, resolve: entry.resolve)
                 let coverage = try? await withDbRetry(
                     logger: app.logger, context: "company_statement_notes(\(entry.noteType)) 集計"
@@ -472,7 +537,7 @@ public func runFactsIngestCommand(
             if let r2Config = R2Config.resolveFromEnvironment() {
                 let s9 = try await runIconsIngest(
                     db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
-                    priorityCodes: priority, cachedDocIDs: await context.cachedXbrlDocIDs(),
+                    priorityCodes: priority, cachedDocIDs: cachedDocIDs,
                     logger: app.logger
                 ) { docID, code in
                     await context.extractAndUploadCompanyIcon(docID: docID, code: code, r2Config: r2Config)

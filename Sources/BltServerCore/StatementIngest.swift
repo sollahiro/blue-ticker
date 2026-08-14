@@ -45,14 +45,21 @@ public typealias StatementExtractor = @Sendable (String) async -> StatementDocRe
 /// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
 /// `explicitCodes` / `priorityCodes` は filing-sections/breakdowns と同じ意味。
 /// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
+/// `candidateSets` を渡すと候補選定クエリを省略する（呼び出し元がステージ間で候補を共有するとき）。
 func runStatementIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
+    candidateSets: FilingSectionCandidateSets? = nil,
     logger: Logger? = nil, extract: StatementExtractor
 ) async throws -> StatementIngestSummary {
-    let sets = try await filingSectionCandidates(
-        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    let sets: FilingSectionCandidateSets
+    if let candidateSets {
+        sets = candidateSets
+    } else {
+        sets = try await filingSectionCandidates(
+            db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    }
     let baseCandidates = sets.keep
 
     var attempted = 0
@@ -64,20 +71,19 @@ func runStatementIngest(
     var missing: [(docID: String, code: String, submitDateTime: String)] = []
     var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
 
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "Statement 取り込み 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await CompanyStatementCacheVersionOnly.query(on: db).all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for cand in baseCandidates {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため Statement 取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
-            break
-        }
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyStatement.find(cand.docID, on: db)
-        }
-        if existing == nil {
+        guard let existing = classifyIndex[cand.docID] else {
             missing.append(cand)
-        } else if existing?.cacheVersion != statementCacheVersion {
+            continue
+        }
+        if existing.cacheVersion != statementCacheVersion {
             staleVersion.append(cand)
         } else {
             skipped += 1
@@ -138,19 +144,21 @@ func runStatementIngest(
     // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
     unhealthyRetries = 0
     var purged = 0
-    for docID in sets.purge {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため Statement 取り込み purge を中断します(リトライ\(unhealthyRetries)回)")
-            break
+    if !sets.purge.isEmpty {
+        let purgeDocIDs = Set(sets.purge)
+        purged = try await withDbRetry(
+            logger: logger, context: "Statement 取り込み purge", onRetry: { unhealthyRetries += 1 }
+        ) {
+            let n = try await CompanyStatement.query(on: db)
+                .filter(\.$id ~~ purgeDocIDs)
+                .count()
+            if n > 0 {
+                try await CompanyStatement.query(on: db)
+                    .filter(\.$id ~~ purgeDocIDs)
+                    .delete()
+            }
+            return n
         }
-        let deleted = try await withDbRetry(
-            logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) { () -> Bool in
-            guard let row = try await CompanyStatement.find(docID, on: db) else { return false }
-            try await row.delete(on: db)
-            return true
-        }
-        if deleted { purged += 1 }
     }
 
     return StatementIngestSummary(

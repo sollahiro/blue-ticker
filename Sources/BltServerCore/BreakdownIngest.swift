@@ -73,14 +73,20 @@ func runBreakdownIngest(
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
     axis: String = breakdownAxisBusiness,
+    candidateSets: FilingSectionCandidateSets? = nil,
     logger: Logger? = nil,
     denominatorForDoc: @escaping @Sendable (String, String, Database) async throws -> Double? =
         consolidatedSalesForDoc,
     resolve: BreakdownResolveFn
 ) async throws -> BreakdownIngestSummary {
     let currentCacheVersion = breakdownCacheVersion(forAxis: axis)
-    let sets = try await filingSectionCandidates(
-        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    let sets: FilingSectionCandidateSets
+    if let candidateSets {
+        sets = candidateSets
+    } else {
+        sets = try await filingSectionCandidates(
+            db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    }
     let baseCandidates = sets.keep
 
     var attempted = 0
@@ -96,24 +102,27 @@ func runBreakdownIngest(
     var flaggedForReview: [(docID: String, code: String, submitDateTime: String)] = []
     var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
 
+    // 分類は payload を含まない1クエリ。候補ごとに find すると上場全体×6年で
+    // Neon 往復が数万回になり、実処理より分類がステージ timeout を食う。
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "内訳取り込み(\(axis)) 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await CompanyBreakdownSourceVersionOnly.query(on: db)
+            .filter(\.$axis == axis)
+            .all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for cand in baseCandidates {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため 内訳取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)")
-            break
-        }
         let key = CompanyBreakdown.compositeID(docID: cand.docID, axis: axis)
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyBreakdown.find(key, on: db)
-        }
-        if existing == nil {
+        guard let existing = classifyIndex[key] else {
             missing.append(cand)
-        } else if existing?.needsReview == true {
+            continue
+        }
+        if existing.needsReview {
             flaggedForReview.append(cand)
-        } else if let source = existing?.source, isVersionGatedBreakdownSource(source),
-            existing?.cacheVersion != currentCacheVersion
+        } else if isVersionGatedBreakdownSource(existing.source),
+            existing.cacheVersion != currentCacheVersion
         {
             staleVersion.append(cand)
         } else {
@@ -258,20 +267,23 @@ func runBreakdownIngest(
     // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
     unhealthyRetries = 0
     var purged = 0
-    for docID in sets.purge {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため 内訳取り込み(\(axis)) purge を中断します(リトライ\(unhealthyRetries)回)")
-            break
+    if !sets.purge.isEmpty {
+        let purgeDocIDs = Set(sets.purge)
+        purged = try await withDbRetry(
+            logger: logger, context: "内訳取り込み(\(axis)) purge", onRetry: { unhealthyRetries += 1 }
+        ) {
+            let n = try await CompanyBreakdown.query(on: db)
+                .filter(\.$axis == axis)
+                .filter(\.$docID ~~ purgeDocIDs)
+                .count()
+            if n > 0 {
+                try await CompanyBreakdown.query(on: db)
+                    .filter(\.$axis == axis)
+                    .filter(\.$docID ~~ purgeDocIDs)
+                    .delete()
+            }
+            return n
         }
-        let key = CompanyBreakdown.compositeID(docID: docID, axis: axis)
-        let deleted = try await withDbRetry(
-            logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) { () -> Bool in
-            guard let row = try await CompanyBreakdown.find(key, on: db) else { return false }
-            try await row.delete(on: db)
-            return true
-        }
-        if deleted { purged += 1 }
     }
 
     return BreakdownIngestSummary(
@@ -358,8 +370,8 @@ func storeBreakdown(
 
 // MARK: - servable/unservable 集計
 
-/// `source`/`cache_version`/`axis` を対象にした軽量射影（`payload` の JSONB を転送しない）。
-/// company_breakdowns 全件の servable/unservable 集計用。
+/// `source`/`cache_version`/`axis`/`needs_review` を対象にした軽量射影（`payload` の JSONB を転送しない）。
+/// 内訳取り込みの分類と servable/unservable 集計用。
 final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
     static let schema = CompanyBreakdown.schema
 
@@ -374,6 +386,9 @@ final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
 
     @Field(key: "axis")
     var axis: String
+
+    @Field(key: "needs_review")
+    var needsReview: Bool
 
     init() {}
 }

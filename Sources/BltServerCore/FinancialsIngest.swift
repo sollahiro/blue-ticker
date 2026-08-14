@@ -57,19 +57,16 @@ func runFinancialsIngest(
     var staleYears: [(code: String, highWater: String?)] = []
     var staleHighWater: [(code: String, highWater: String?)] = []
 
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "財務取り込み 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await CompanyFinancialsCacheVersionOnly.query(on: db).all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for code in codes {
         let highWater = highWaterMap[code]
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため 財務取り込み を中断します(リトライ\(unhealthyRetries)回・残り分類待ち企業あり)")
-            break
-        }
-        let existing = try await withDbRetry(
-            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyFinancials.find(code, on: db)
-        }
-        guard let row = existing else {
+        guard let row = classifyIndex[code] else {
             missing.append((code, highWater))
             continue
         }
@@ -219,6 +216,12 @@ final class CompanyFinancialsCacheVersionOnly: Model, @unchecked Sendable {
 
     @Field(key: "cache_version")
     var cacheVersion: String
+
+    @Field(key: "requested_years")
+    var requestedYears: Int
+
+    @OptionalField(key: "high_water")
+    var highWater: String?
 
     init() {}
 }
