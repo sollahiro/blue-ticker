@@ -27,7 +27,7 @@ Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。
 ## 定常運用
 
 - ログは JSON 1行（`ingest_summary` / `db_retry` / `http_access`）。レイテンシ切り分けは `duration_ms`（サーバー内）とクライアント往復を比較。乖離が大きいときは Tunnel/Access 側を疑う。
-- 重い ingest はローカル launchd 依存。鮮度監視: `scripts/check-ingest-freshness.sh`。
+- 重い ingest はローカル。鮮度監視: `scripts/check-ingest-freshness.sh`。
 - デプロイ: CI 成功後 `deploy.yml` が自動（手動は `workflow_dispatch`）。`/healthz` の `cache_versions` で版確認。
 - cloudflared は Dockerfile で版固定。数ヶ月に一度更新。
 - Fly serviceless 後は stopped になり得る → deploy ワークフローが `machine start`。
@@ -41,6 +41,6 @@ Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。
 | Fly secrets | API キー / DB / Access / Tunnel | 再発行・`fly secrets set` |
 | Neon | 全テーブル | dump または再 ingest |
 | Cloudflare | Tunnel / Access / IdP | `deploy.md` で再作成 |
-| ローカル Mac | launchd plist・`.env` | `deploy.md` 定期同期 |
+| ローカル Mac | 手元スケジュール・`.env` | `deploy.md` 定期同期 |
 | Fly Volume `/data` | EDINET キャッシュ | 再取得で可 |
 | Cloudflare Pages（apex） | Git 連携 `assets/apex-site` | ダッシュボードで再接続 |

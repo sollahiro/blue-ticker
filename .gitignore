@@ -30,6 +30,11 @@ mebuki_startup.log
 .env.local
 .env.*.local
 
+# Machine-local ingest schedule (launchd). CLI が正本。
+/scripts/blt-scheduled-sync.sh
+/scripts/install-launchd.sh
+/scripts/launchd/
+
 # Temporary files
 *_dump_*.json
 *.tmp

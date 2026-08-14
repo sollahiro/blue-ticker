@@ -103,6 +103,6 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 | `NEON_WRITE_BRANCH_ID` | WRITE 親の `br-…`（`source_branch_id`） | 接続 URL の `ep-…` や `postgresql://` を流用しない |
 | `NEON_RO_BRANCH_ID` | RO 子の `br-…`（reset 対象） | 同上 |
 
-**RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。定期 sync（`blt-scheduled-sync.sh`）は上記 4 変数が揃っているとき ingest 後に自動実行（欠ける／失敗しても ingest 成否には影響させない）。手動: 同スクリプトをそのまま実行。
+**RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。ingest 後に上記 4 変数が揃っていれば実行（欠ける／失敗しても ingest 成否には影響させない）。
 
 **42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
