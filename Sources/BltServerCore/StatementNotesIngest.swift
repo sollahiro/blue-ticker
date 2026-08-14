@@ -46,16 +46,23 @@ public typealias StatementNoteResolveFn =
 /// `limit` は新規解決件数の上限。`explicitCodes` / `priorityCodes` は 有報セクション取り込み・
 /// 内訳取り込み・Statement 取り込み と同じ意味。`noteType` は `statementNoteType*` 定数のいずれか。
 /// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
+/// `candidateSets` を渡すと候補選定クエリを省略する（呼び出し元がステージ間で候補を共有するとき）。
 func runStatementNotesIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
     noteType: String,
+    candidateSets: FilingSectionCandidateSets? = nil,
     logger: Logger? = nil, resolve: StatementNoteResolveFn
 ) async throws -> StatementNotesIngestSummary {
     let currentCacheVersion = statementNoteCacheVersion(forType: noteType)
-    let sets = try await filingSectionCandidates(
-        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    let sets: FilingSectionCandidateSets
+    if let candidateSets {
+        sets = candidateSets
+    } else {
+        sets = try await filingSectionCandidates(
+            db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+    }
     let baseCandidates = sets.keep
 
     var attempted = 0
@@ -68,25 +75,25 @@ func runStatementNotesIngest(
     var flaggedForReview: [(docID: String, code: String, submitDateTime: String)] = []
     var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
 
+    let classifyRows = try await withDbRetry(
+        logger: logger, context: "財務諸表注記取り込み(\(noteType)) 分類", onRetry: { unhealthyRetries += 1 }
+    ) {
+        try await CompanyStatementNoteSourceVersionOnly.query(on: db)
+            .filter(\.$noteType == noteType)
+            .all()
+    }
+    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+
     for cand in baseCandidates {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため 財務諸表注記取り込み(\(noteType)) を中断します(リトライ\(unhealthyRetries)回・残り分類待ち書類あり)"
-            )
-            break
-        }
         let key = CompanyStatementNote.compositeID(docID: cand.docID, noteType: noteType)
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyStatementNote.find(key, on: db)
-        }
-        if existing == nil {
+        guard let existing = classifyIndex[key] else {
             missing.append(cand)
-        } else if existing?.needsReview == true {
+            continue
+        }
+        if existing.needsReview {
             flaggedForReview.append(cand)
-        } else if let source = existing?.source, isVersionGatedStatementNoteSource(source),
-            existing?.cacheVersion != currentCacheVersion
+        } else if isVersionGatedStatementNoteSource(existing.source),
+            existing.cacheVersion != currentCacheVersion
         {
             staleVersion.append(cand)
         } else {
@@ -162,20 +169,23 @@ func runStatementNotesIngest(
     // 保持窓を超えた既存行を purge する。分類・実処理フェーズとは別のリトライ予算を使う。
     unhealthyRetries = 0
     var purged = 0
-    for docID in sets.purge {
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error("DB接続が不安定なため 財務諸表注記取り込み(\(noteType)) purge を中断します(リトライ\(unhealthyRetries)回)")
-            break
+    if !sets.purge.isEmpty {
+        let purgeDocIDs = Set(sets.purge)
+        purged = try await withDbRetry(
+            logger: logger, context: "財務諸表注記取り込み(\(noteType)) purge", onRetry: { unhealthyRetries += 1 }
+        ) {
+            let n = try await CompanyStatementNote.query(on: db)
+                .filter(\.$noteType == noteType)
+                .filter(\.$docID ~~ purgeDocIDs)
+                .count()
+            if n > 0 {
+                try await CompanyStatementNote.query(on: db)
+                    .filter(\.$noteType == noteType)
+                    .filter(\.$docID ~~ purgeDocIDs)
+                    .delete()
+            }
+            return n
         }
-        let key = CompanyStatementNote.compositeID(docID: docID, noteType: noteType)
-        let deleted = try await withDbRetry(
-            logger: logger, context: "purge docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) { () -> Bool in
-            guard let row = try await CompanyStatementNote.find(key, on: db) else { return false }
-            try await row.delete(on: db)
-            return true
-        }
-        if deleted { purged += 1 }
     }
 
     return StatementNotesIngestSummary(
@@ -297,6 +307,9 @@ final class CompanyStatementNoteSourceVersionOnly: Model, @unchecked Sendable {
 
     @Field(key: "note_type")
     var noteType: String
+
+    @Field(key: "needs_review")
+    var needsReview: Bool
 
     init() {}
 }

@@ -202,6 +202,25 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
         }
     }
 
+    @Test func ingestRespectsPrecomputedCandidateKeepList() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedDoc("S2", secCode: "67580", db: app.db)
+            let sets = FilingSectionCandidateSets(
+                keep: [(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
+                purge: [])
+
+            let summary = try await runStatementIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil,
+                candidateSets: sets
+            ) { docID in .resolved(fakeYear(docID: docID)) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyStatement.find("S2", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)

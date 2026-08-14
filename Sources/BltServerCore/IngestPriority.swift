@@ -17,6 +17,16 @@ func prioritized<T>(_ candidates: [T], codeOf: (T) -> String, priorityCodes: Set
     return head + tail
 }
 
+/// 軽量射影行を主キーで引ける辞書にする（分類の N+1 find 回避用）。
+func ingestIndexByID<T>(_ rows: [T], idOf: (T) -> String?) -> [String: T] {
+    var index: [String: T] = [:]
+    index.reserveCapacity(rows.count)
+    for row in rows {
+        if let id = idOf(row) { index[id] = row }
+    }
+    return index
+}
+
 /// 書類単位 ingest の処理順: 日経225 → ローカル XBRL 展開済み → 元の相対順。
 /// `prioritized` をキャッシュ向け・コード向けの順に重ねる（後段の日経225が勝つ）。
 func ingestOrdered<T>(

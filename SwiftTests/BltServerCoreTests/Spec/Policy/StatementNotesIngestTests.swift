@@ -74,6 +74,30 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         }
     }
 
+    @Test func ingestRespectsPrecomputedCandidateKeepList() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedDoc("S2", secCode: "67580", db: app.db)
+            let sets = FilingSectionCandidateSets(
+                keep: [(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
+                purge: [])
+
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil,
+                noteType: statementNoteTypePerShareInformation,
+                candidateSets: sets,
+                resolve: fixedResolvedResolve())
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(
+                try await CompanyStatementNote.find(
+                    CompanyStatementNote.compositeID(
+                        docID: "S2", noteType: statementNoteTypePerShareInformation),
+                    on: app.db) == nil)
+        }
+    }
+
     @Test func ingestPrefersCachedDocWhenLimitCutsOff() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
