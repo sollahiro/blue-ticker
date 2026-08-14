@@ -62,13 +62,12 @@ enum BusinessBreakdownResolver {
                     segments, consolidatedSales: consolidatedSales, client: client
                 )
                 lastAudit = audit
-                // needs_review が立った swap 経路の結果は採用しない。オークマ型は候補表が
-                // 単一で needs_review=false に安定するが、INPEX旧filings型（複数期の候補表が
-                // 同じ見出し・紛らわしい period ラベルで並ぶ）は再実行のたびに結果が変わる
-                // （source_table_index の誤選択・タイムアウト・not_found が非決定的に発生）。
-                // 低確信度のまま business 軸として保存するより空のままにする方が安全
-                // （実データ検証: S100QH2B を複数回再実行し結果が毎回変化することを確認、2026-07-25）。
-                if let snapshot, !snapshot.needsReview { return (snapshot, .revenueRecognitionLLM, audit) }
+                // needs_review 付きでも採用する（segment_info 経路と同じ）。空にすると
+                // classifyNotApplicableReason が単一セグメント開示（F）を確定し、東京エレクトロン・
+                // ディスコ（報告セグメント省略＋収益認識の製品別）と三菱商事（事業グループ別）の
+                // 新規銘柄が not_applicable のまま再試行されない。INPEX 型のぶれは needs_review
+                // でキューに残す。
+                if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
             } else {
                 let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
                     segments, consolidatedSales: consolidatedSales, client: client

@@ -654,6 +654,37 @@ import Foundation
                 == 37_302_000_000)
     }
 
+    @Test func entityLevelExternalRevenueIsKeptAsConsolidatedSubtotal() throws {
+        // 第一生命型: 報告セグメント計と連結財務諸表計上額（dimension なし）が別値。
+        // 後者を落とすと 9,873,251 が欠ける。分母は segment 合計に近い「計」のまま。
+        func fact(_ member: String?, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers",
+                contextRef: member.map { "CurrentYearDuration_\($0)" } ?? "CurrentYearDuration",
+                dimensions: member.map { ["OperatingSegmentsAxis": $0] } ?? [:],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let facts = [
+            fact("DomesticInsuranceBusinessReportableSegmentMember", 7_708_824_000_000),
+            fact("OverseasInsuranceBusinessReportableSegmentMember", 3_621_288_000_000),
+            fact("OtherReportableSegmentsMember", 43_217_000_000),
+            fact("ReportableSegmentsMember", 11_373_330_000_000),
+            fact("ReconcilingItemsMember", 1_500_079_000_000),
+            fact(nil, 9_873_251_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominator == 11_373_330_000_000)
+        let entity = try #require(snap.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 9_873_251_000_000)
+        #expect(entity.rowKind == "subtotal")
+        #expect(snap.rows.contains {
+            $0.labelRaw == "DomesticInsuranceBusinessReportableSegmentMember"
+                && $0.amount == 7_708_824_000_000
+        })
+    }
+
     @Test func salesBasisTakesPriorityOverInternalSubtotalBasisWhenBothTagsPresent() throws {
         // 通常の売上高ホワイトリストタグが存在する会社（銀行・保険ではない大多数）は
         // 引き続き normalizeSalesBasis を優先する（normalizeInternalSubtotalBasis に

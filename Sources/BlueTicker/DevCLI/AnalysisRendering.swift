@@ -274,6 +274,7 @@ enum FilingRendering {
             case "ReconcilingItemsMember":   return "調整"
             case "CorporateSharedMember":    return "全社"
             case "NonConsolidatedMember":    return "単体"
+            case Xbrl.entityTotalMemberName: return "連結"
             default:
                 var n = m
                 for sfx in ["ReportableSegmentsMember", "ReportabelSegmentsMember",
@@ -289,6 +290,7 @@ enum FilingRendering {
             if m == "ReportableSegmentsMember" { return 90 }
             if m.contains("Corporate")         { return 91 }
             if m.contains("Reconciling")       { return 92 }
+            if m == Xbrl.entityTotalMemberName { return 93 }
             if m.contains("NonConsolidated")   { return 95 }
             return 0
         }

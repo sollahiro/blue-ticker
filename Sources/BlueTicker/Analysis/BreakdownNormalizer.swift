@@ -40,6 +40,8 @@ enum BreakdownNormalizer {
     /// 財務取り込み の `sales` が欠損していても（保険の経常収益ラベルのみ・東宝など）、
     /// セグメント注記に外部顧客売上タグがあれば内部小計基準で解決する
     /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
+    /// セグメント dimension が付かない全社合計 fact は `EntityTotal` 小計行として残す
+    /// （第一生命: 計 11,373,330 ≠ 連結財務諸表計上額 9,873,251）。
     static func normalize(
         _ result: ExtractedBreakdown, consolidatedSales: Double?,
         labelsByTag: [String: String] = [:]
@@ -93,14 +95,18 @@ enum BreakdownNormalizer {
             return nil
         }
 
-        let perMember = resolvePerMember(facts: facts, tag: denominatorTag)
+        let perMember = withEntityTotal(
+            resolvePerMember(facts: facts, tag: denominatorTag), facts: facts, tag: denominatorTag)
         guard !perMember.isEmpty else { return nil }
 
         // 利益は任意フィールド（対応する利益タグが無い/取れない member は profit=nil のまま）。
         let profitTag = Xbrl.segmentProfitTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
         })
-        let profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
+        var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
+        if let profitTag {
+            profitByMember = withEntityTotal(profitByMember, facts: facts, tag: profitTag)
+        }
 
         // 1次判定: タクソノミ標準の小計・調整 member を名称で分類する。
         var kinds: [String: String] = [:]
@@ -216,7 +222,8 @@ enum BreakdownNormalizer {
             facts.contains(where: { $0.tag == tag })
         }) else { return nil }
 
-        let perMember = resolvePerMember(facts: facts, tag: amountTag)
+        let perMember = withEntityTotal(
+            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
         guard !perMember.isEmpty else { return nil }
 
         var kinds: [String: String] = [:]
@@ -254,7 +261,10 @@ enum BreakdownNormalizer {
         let profitTag = profitTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
         })
-        let profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
+        var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
+        if let profitTag {
+            profitByMember = withEntityTotal(profitByMember, facts: facts, tag: profitTag)
+        }
 
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
             let fact = perMember[member]!
@@ -461,6 +471,29 @@ enum BreakdownNormalizer {
             perMember[member] = fact
         }
         return perMember
+    }
+
+    /// セグメント dimension が付かない当期の全社合計 fact（表の「連結財務諸表計上額」列）。
+    /// `resolvePerMember` は primaryMember 必須のため、ここでのみ拾う。
+    /// employees / rd の人数・費用基準は呼ばない（既存の全社合計は呼び出し側の `total`）。
+    private static func resolveEntityTotal(facts: [BreakdownFact], tag: String) -> BreakdownFact? {
+        let candidateFacts = facts.filter {
+            $0.tag == tag && isCurrentPeriod($0.contextRef) && primaryMember($0.dimensions) == nil
+        }
+        let consolidatedFacts = candidateFacts.filter(isConsolidated)
+        let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
+        return source.sorted { $0.contextRef < $1.contextRef }.first
+    }
+
+    private static func withEntityTotal(
+        _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String
+    ) -> [String: BreakdownFact] {
+        guard perMember[Xbrl.entityTotalMemberName] == nil,
+              let entity = resolveEntityTotal(facts: facts, tag: tag)
+        else { return perMember }
+        var result = perMember
+        result[Xbrl.entityTotalMemberName] = entity
+        return result
     }
 
     /// `Xbrl.segmentExternalRevenueTags` ホワイトリストに一致するタグが無い場合の候補発見。
