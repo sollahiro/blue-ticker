@@ -730,6 +730,11 @@ enum Xbrl {
     static let noteRowLabelJaccardThreshold = 0.6
     // 偶然2項目だけ一致した場合の誤検出を避けるための最低一致件数。
     static let noteRowLabelMinOverlapCount = 3
+    // 改ページで <table> が縦に割れた同一表（武田の製品別売上など）は、列見出しは一致するが
+    // 行ラベルはほぼ互いに素。Jaccard がこの値未満なら「縦の続き」として markdown を結合する。
+    // 小松・キヤノンの前期/当期（同一行ラベル・高 Jaccard）やオリックスの別 view（高 Jaccard）
+    // は結合しない。
+    static let noteVerticalContinuationJaccardMax = 0.15
 
     // 地域別（売上・外部顧客向け）。資産のみの TextBlock は含めない
     // （`PropertyPlantAndEquipmentInformationForEachRegionTextBlock` は有形固定資産専用）。
