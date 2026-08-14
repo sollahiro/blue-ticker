@@ -1,7 +1,7 @@
 #!/bin/zsh
 # assets/apex-site/status.html（公開ステータスページ）を最新の ingest 状況で再生成する。
 #
-# blt-scheduled-sync.sh の末尾（全ステージ完了後）から呼ばれる想定。4ステージ
+# 手元の定期ジョブ末尾（全ステージ完了後）から呼ばれる想定。4ステージ
 # （financials/filing_sections/breakdown_business/breakdown_geography）の
 # カバレッジ・鮮度を「blt-server status-report」（DB read-only、銘柄コード一覧そのものは
 # 出力しない）で取得し、status.html の HTML コメントマーカー間だけを書き換える。
@@ -22,7 +22,7 @@
 #
 # 終了コード: 0=成功（コミット有無を問わず）/ 1=致命的失敗
 #             （binary無し・DATABASE_URL未設定・jq無し・出力がJSONでない・マーカー未検出・
-#              git commit/push 失敗）。呼び出し側（blt-scheduled-sync.sh）は
+#              git commit/push 失敗）。呼び出し側は
 #              ingest 本体が既に成功している前提のため、このスクリプトの失敗で
 #              全体を止めない設計にすること（呼び出し側で exit code を無視してログするだけに留める）。
 

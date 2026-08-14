@@ -83,18 +83,19 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 3. 許可 IdP（例: One-Time PIN）と redirect URI（`https://claude.ai/api/mcp/auth_callback`、`http://localhost/callback`、`http://127.0.0.1/callback` — ポートなしで登録）
 4. discovery が 200、未認証 `tools/list` が 401 であることを確認
 
-## 定期同期（ローカル launchd）
+## 定期同期（ローカル）
 
-重い ingest はローカル。`scripts/blt-scheduled-sync.sh` + `scripts/install-launchd.sh`。
+重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。
 
 ```bash
 swift build -c release --product blt-server   # コード変更後は必須（旧バイナリは新 stage を黙って飛ばす）
 # .env（DATABASE_URL / BLT_EDINET_API_KEY。breakdowns LLM は LLM_PROVIDER と OPENAI_* / XAI_*。手順は operations.md）
-./scripts/install-launchd.sh
-launchctl kickstart gui/$(id -u)/com.sollahiro.blt-sync
+set -a; . ./.env; set +a
+./.build/release/blt-server sync
+./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ```
 
-既定 limit: breakdowns の `--limit` は business/geography=50（`BLT_INGEST_LIMIT_BREAKDOWNS`）。employees/rd/goodwill は ingest 側で 30・日経225固定。statements=50（`BLT_INGEST_LIMIT_STATEMENTS`）。当面の定期ジョブは sync + breakdowns + statements。長時間ランは接続リセットしやすいので完走優先で小さく。ステージ timeout 既定 5400s（`BLT_STAGE_TIMEOUT_SECONDS`）。
+件数・timeout・起動間隔は手元。完走優先で小さく。employees/rd/goodwill は ingest 側で 30・日経225固定。ジョブ末尾で `scripts/generate-status-page.sh`。NEON_* が揃っていれば `scripts/neon-reset-ro-from-parent.sh`（失敗しても ingest 成否には影響させない）。
 
 `assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。書類単位 ingest はそれに加え、ローカル XBRL 展開済みを先に回す。
 
