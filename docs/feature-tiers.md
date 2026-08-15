@@ -2,6 +2,23 @@
 
 契約の正は REST。MCP は追従面。ドメイン仕様は `statement.md` / `breakdown.md`。第三者公開（段階 B）は `public-api.md`。
 
+## Class 依存
+
+機能のわかりやすさ・実装順の正は次（下は上に依存）。JP 現状もこれに沿う。EU も同じ（`eu-esef-roadmap.md`）。
+
+```text
+Meta → Struct → Norm → Viz
+```
+
+| Class | 層（下表） | 役割 |
+|---|---|---|
+| Meta | （検索・アイコン等） | 発行体・書類の同定 |
+| Struct | 構造化 | 開示テキスト・本表・注記 |
+| Norm | 正規化 | 横断比較可能な水準・内訳 |
+| Viz | 視覚化 | 正規化値の分解・配分 |
+
+Feed（Trend / Update / Status / Report）は製品・運用面で、上記縦依存の外。
+
 ## 機能表
 
 | 層 | 機能 | 課金（構想） | 実装 | 価値 |
