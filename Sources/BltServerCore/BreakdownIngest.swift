@@ -169,17 +169,22 @@ func runBreakdownIngest(
                 try await denominatorForDoc(cand.code, cand.docID, db)
             }
 
-            // 分母なしで LLM/正規化に進むと nil→unknown になり、提出日降順の最新行として
-            // 過去の成功行（例: 保険の前年）を隠してしまう。財務取り込み が当該 doc を既に計算済みなら
-            // 分母不能を not_found で確定し、未計算なら行を書かずスキップ（次回再試行）。
-            guard let denominator = denominatorOrNil, denominator != 0 else {
+            // 分母なしで LLM に進むと nil→unknown になる。geography / employees / rd は
+            // 財務取り込み計算済みなら not_found 確定、未計算なら skip。
+            // business は保険等で sales が無くても xbrl_facts 決定論（第一生命型）が使えるので
+            // 解決を試す。即 not_found にすると新規銘柄が永久欠測になる。
+            if let denominator = denominatorOrNil, denominator != 0 {
+                resolveResult = await resolve(cand.docID, denominator)
+            } else {
                 let financialsHasDoc = try await withDbRetry(
                     logger: logger, context: "docID=\(cand.docID) financials有無",
                     onRetry: { unhealthyRetries += 1 }
                 ) {
                     try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
                 }
-                if financialsHasDoc {
+                if axis == breakdownAxisBusiness, financialsHasDoc {
+                    resolveResult = await resolve(cand.docID, denominatorOrNil)
+                } else if financialsHasDoc {
                     notApplicable += 1
                     // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
                     if let existing, existing.source != breakdownSourceNotApplicable {
@@ -202,13 +207,12 @@ func runBreakdownIngest(
                                 notApplicableReason: breakdownNotApplicableNotFound, db: db)
                         }
                     }
+                    continue
                 } else {
                     skipped += 1
+                    continue
                 }
-                continue
             }
-
-            resolveResult = await resolve(cand.docID, denominator)
         }
 
         switch resolveResult {

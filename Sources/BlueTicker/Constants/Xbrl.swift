@@ -862,9 +862,16 @@ enum Xbrl {
         "InsuranceServiceResultIFRS",  // 東京海上
     ]
 
+    /// セグメント dimension が付かない当期の全社合計 fact を行にするときの sentinel。
+    /// 開示表の「連結財務諸表計上額」列に相当する（タクソノミの member 名ではない）。
+    /// 実データ: 第一生命 S100VZZW の外部顧客経常収益は 計 11,373,330 と
+    /// 連結計上額 9,873,251 が別値（調整 △1,500,079）。
+    static let entityTotalMemberName = "EntityTotal"
+
     /// EDINET/ASBJ タクソノミ標準の小計・調整・全社共通費 member（企業拡張ラベルではなく標準語彙）。
     /// これらは比較の分母・シェア計算から除外する（行自体は保持する）。
     static let segmentSubtotalMemberNames: Set<String> = [
+        entityTotalMemberName,
         "ReportableSegmentsMember",
         "TotalOfReportableSegmentsAndOthersMember",
         "CorporateSharedMember",

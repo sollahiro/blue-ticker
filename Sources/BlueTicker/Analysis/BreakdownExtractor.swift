@@ -188,7 +188,9 @@ enum BreakdownExtractor {
         }
         let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
 
-        if shouldPreferRevenueRecognition(over: result) {
+        if shouldPreferRevenueRecognition(over: result)
+            || (detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil && result.method != "xbrl_facts")
+        {
             let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
             if revenueRecognition.method == "html_table",
                 !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
@@ -242,6 +244,10 @@ enum BreakdownExtractor {
         if result.method == "xbrl_facts", isGeographyAxis(result.facts) { return true }
         // 東京エレクトロン型: セグメント開示なし
         if result.method == "not_found" { return true }
+        // 東京エレクトロン / ディスコ実データ: 単一セグメント省略の文言はあるが、
+        // セグメント注記に地域別・主要顧客の売上表が残るため method は html_table。
+        // 製品別は収益認識注記側。xbrl_facts で事業 member が取れている会社
+        // （S100XUDW 等）は単一セグメント検出があっても swap しない。
         // 三菱商事型: セグメント表に売上相当行が無く、利益・資産だけ
         // （製品・サービス別表が既にあればそちらを残すので swap しない。
         // 　facts に既に売上相当タグ（buildResult と同じ判定、`factsContainRecognizedAmountTag`）が
@@ -391,10 +397,9 @@ enum BreakdownExtractor {
     }
 
     /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
-    /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は専用タグ・マーカーで直接
-    /// 確認できる最も具体的な signal のため、地域軸swap失敗（E）の推定より優先して判定する
-    /// （実データ確認: 資生堂4911は地域区分facts（method=xbrl_facts）を持ちながら実際は単一セグメント
-    /// 開示省略であり、method=="not_found" 限定の旧実装ではF判定に到達できなかった、issue調査2026-07-26）。
+    /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は表が無いときだけ確定する
+    /// （製品別 html_table がある東京エレクトロン型を F にすると再試行されない）。表が無い資生堂型は
+    /// 地域軸 facts（E）より F を優先する。
     /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
     /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
     /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、
@@ -402,7 +407,10 @@ enum BreakdownExtractor {
     static func classifyNotApplicableReason(
         segments: ExtractedBreakdown, consolidatedSales: Double?, xbrlDir: URL, llmHint: String? = nil
     ) -> BusinessBreakdownNotApplicableReason {
-        if detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil {
+        // 単一セグメント開示（F）は、製品別・収益認識の表が無いときだけ確定する。
+        // 表がある東京エレクトロン型を F にすると needs_review=false の not_applicable になり
+        // 再試行されない（新規上場の同型が欠測のまま残る）。
+        if detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil, segments.tables.isEmpty {
             return .singleSegmentDisclosed
         }
         if segments.method == "xbrl_facts",
@@ -1272,6 +1280,10 @@ enum BreakdownExtractor {
     /// `BltServerContext.resolveEmployeesBreakdown`/`resolveResearchAndDevelopmentBreakdown`
     /// （`Server/BltServerFacade.swift`、内訳取り込み employees / research_and_development 軸）
     /// からも再利用するため internal のまま公開する。
+    ///
+    /// 対象 dimension 付き fact があるタグについては、同じタグの dimension なし
+    /// （または連結/非連結軸だけ）の fact も拾う。セグメント表の「連結財務諸表計上額」列に相当し、
+    /// 報告セグメント計とは別値になり得る（第一生命: 計 11,373,330 ≠ 連結 9,873,251）。
     static func extractFactsByDimension(
         xbrlDir: URL,
         dimensionKeywords: [String],
@@ -1294,8 +1306,42 @@ enum BreakdownExtractor {
                 ))
             }
         }
+        let dimensionedTags = Set(results.map(\.tag))
+        if !dimensionedTags.isEmpty {
+            for (tag, ctxMap) in allFacts {
+                guard dimensionedTags.contains(tag) else { continue }
+                for (ctxID, fact) in ctxMap {
+                    let dims = contextMap[ctxID] ?? [:]
+                    let hasTargetDim = dims.keys.contains { dim in
+                        dimensionKeywords.contains { dim.contains($0) }
+                    }
+                    guard !hasTargetDim else { continue }
+                    // contextMap が欠けると dimension 付き context がここに落ちる。
+                    // 連結/非連結以外の Member が contextRef にあれば全社合計ではない。
+                    guard isEntityLevelContext(ctxID, dims: dims) else { continue }
+                    results.append(BreakdownFact(
+                        tag: tag,
+                        contextRef: ctxID,
+                        dimensions: dims,
+                        value: fact.value,
+                        label: fact.label,
+                        unitRef: fact.unitRef,
+                        decimals: fact.decimals
+                    ))
+                }
+            }
+        }
         // Swift Dictionary は走査順が不定のため、出力を決定的にする
         return results.sorted { ($0.tag, $0.contextRef) < ($1.tag, $1.contextRef) }
+    }
+
+    /// セグメント表の「連結財務諸表計上額」列。dimension が空、または連結/非連結軸のみ。
+    /// contextRef に他の Member が残っていれば contextMap 欠落の dimension 付き fact。
+    private static func isEntityLevelContext(_ contextRef: String, dims: [String: String]) -> Bool {
+        let extraDims = dims.keys.filter { $0 != "ConsolidatedOrNonConsolidatedAxis" }
+        guard extraDims.isEmpty else { return false }
+        let members = contextRef.split(separator: "_").filter { $0.hasSuffix("Member") }
+        return members.allSatisfy { $0 == "NonConsolidatedMember" || $0 == "ConsolidatedMember" }
     }
 
     /// facts に売上高/銀行/保険いずれかの認識可能なタグが含まれる場合に限り、

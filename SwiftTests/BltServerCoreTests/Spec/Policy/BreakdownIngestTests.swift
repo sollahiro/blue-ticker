@@ -51,7 +51,8 @@ private func seedDoc(
     model.submitDateTime = submit
     try await model.create(on: db)
 
-    // 内訳取り込み は分母売上（財務取り込み）が無いと解決に進まない（missing sales → skip / not_found）。
+    // 内訳取り込み は分母売上（財務取り込み）が無いと geography / employees / rd は解決に進まない
+    // （missing sales → skip / not_found）。business は保険等で売上欠測でも解決を試す。
     // 有報候補の seed には対応する financials 行も添える。
     if let secCode, docType == nil || docType == Api.docTypeAnnualReport {
         try await seedSalesForDoc(code: String(secCode.prefix(4)), docID: docID, db: db)
@@ -81,6 +82,26 @@ private func seedSalesForDoc(
         return
     }
 
+    var result = MetricsResult.blank
+    result.code = code
+    result.years = [newYear]
+    let response = FinancialsResponse(
+        code: code, name: "テスト", sector: "", market: "", result: result)
+    let row = CompanyFinancials()
+    row.id = code
+    row.response = response
+    row.cacheVersion = companyFinancialsCacheVersion
+    row.requestedYears = 6
+    try await row.create(on: db)
+}
+
+/// 財務取り込み は当該書類を計算済みだが売上を持たない（保険の経常収益ラベルのみ等）。
+private func seedFinancialsDocWithoutSales(code: String, docID: String, db: Database) async throws {
+    let yearJSON = """
+        {"fy_end":"2025-03-31","FinancialPeriod":"通期",
+         "RawData":{},"CalculatedData":{"DocID":"\(docID)"}}
+        """
+    let newYear = try JSONDecoder().decode(YearEntry.self, from: Data(yearJSON.utf8))
     var result = MetricsResult.blank
     result.code = code
     result.years = [newYear]
@@ -161,6 +182,66 @@ extension BreakdownLoadResult {
             let row = try #require(try await CompanyBreakdown.find(key1, on: app.db))
             #expect(row.code == "7203")
             #expect(row.source == breakdownSourceXbrlFacts)
+        }
+    }
+
+    /// 第一生命型: financials に書類はあるが売上がない。business は解決を試す。
+    @Test func ingestResolvesBusinessWhenFinancialsHasDocButNoSales() async throws {
+        try await withMigratedApp { app in
+            let model = EdinetDocument()
+            model.id = "S1"
+            model.edinetCode = "E00001"
+            model.secCode = "87500"
+            model.filerName = "第一生命ホールディングス株式会社"
+            model.docTypeCode = Api.docTypeAnnualReport
+            model.submitDateTime = "2025-06-20 09:00"
+            try await model.create(on: app.db)
+            try await seedFinancialsDocWithoutSales(code: "8750", docID: "S1", db: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["8750"], years: 3, limit: nil
+            ) { _, _ in
+                .resolved(
+                    payload: fakePayload(), source: breakdownSourceXbrlFacts,
+                    contentHash: "h-ins", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.source == breakdownSourceXbrlFacts)
+        }
+    }
+
+    /// geography は売上なしのまま解決しない（business だけ保険フォールバック）。
+    @Test func ingestMarksGeographyNotFoundWhenFinancialsHasDocButNoSales() async throws {
+        try await withMigratedApp { app in
+            let model = EdinetDocument()
+            model.id = "S1"
+            model.edinetCode = "E00001"
+            model.secCode = "87500"
+            model.filerName = "第一生命ホールディングス株式会社"
+            model.docTypeCode = Api.docTypeAnnualReport
+            model.submitDateTime = "2025-06-20 09:00"
+            try await model.create(on: app.db)
+            try await seedFinancialsDocWithoutSales(code: "8750", docID: "S1", db: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["8750"], years: 3, limit: nil,
+                axis: breakdownAxisGeography
+            ) { _, _ in
+                .resolved(
+                    payload: fakePayload(axis: breakdownAxisGeography),
+                    source: breakdownSourceGeographyLLM, contentHash: "h-geo", audit: nil)
+            }
+
+            #expect(summary.notApplicable == 1)
+            #expect(summary.stored == 0)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.source == breakdownSourceNotApplicable)
+            #expect(row.notApplicableReason == breakdownNotApplicableNotFound)
         }
     }
 
