@@ -1,39 +1,7 @@
-# 型・並行性の規約
+# 型・並行性
 
-Swift 6 言語モードへの移行を見据え、`StrictConcurrency` を有効にしている。コンパイラ警告を増やさないこと。
+頭字語は全大文字（`XBRLParser`）。例外: EDINET は `Edinet`。既存の不一致名はリネームしない。新規だけこの規則。
 
-## 命名規則（頭字語）
+契約・キャッシュは `Codable`。`[String: Any]` は EDINET 等の外部 JSON 境界だけ。共有可変状態は `actor`。モジュール級の可変グローバルは禁止。
 
-Swift API Design Guidelines に従い、頭字語は識別子内で大文字小文字を混ぜず一貫して扱う。
-
-- **頭字語（XBRL・API・URL・JSON・HTTP・CSV 等）は全大文字**にする（例: `XBRLParser`、`EdinetAPIClient`）。lowerCamelCase の先頭に来る場合のみ全小文字（例: `xbrlDir`、`apiKey`）
-- **例外: EDINET は `Edinet`（単語扱い）で統一**する。既存コード全域（`EdinetAPIClient`・`EdinetDiscovery` 等）で一貫しているため、全大文字化しない
-- **既存の不一致はリネームしない**（例: `XbrlFactRecord`・`enum Xbrl`・`resolveEdinetApiKey`）。一括リネームは diff が大きい割に実利がないため、既存名は現状維持とし、**新規宣言にのみ**この規則を適用する。既存の不一致名を参照する新規コードは既存名をそのまま使う
-
-## 設計ガイダンス
-
-### struct / Codable と辞書の使い分け
-
-| ケース | 使うもの |
-|---|---|
-| JSON / キャッシュ / レイヤー間のデータ | `Codable` struct（または `toDictionary()` で `[String: Any]` へ変換） |
-| ロジックを持つオブジェクト | `struct` + メソッド、共有可変状態は `actor` |
-| 一時的な戻り値（2〜3フィールド） | ラベル付きタプル `(current: Double?, prior: Double?)` |
-| EDINET API レスポンス等の動的 JSON | `[String: Any]`（外部境界に限定） |
-
-複数モジュールが共有するドメイン型は `Sources/BlueTicker/Models/` に独立ファイルとして置く。
-
-### 並行性
-
-- 共有可変状態（キャッシュ・HTTP クライアント）は `actor` で排他する（`CacheManager`・`EdinetAPIClient`）
-- モジュールレベルの可変グローバルは原則禁止。やむを得ない場合は `nonisolated(unsafe)` ＋ `NSLock` で直列化し、理由をコメントする
-
-### Optional の扱い
-
-- 抽出失敗・データ欠落は `nil` で表現する（`error-handling.md` の戻り値パターン参照）
-- `try?` は外部ライブラリ境界（SwiftSoup 等）でのみ使い、自前ロジックの失敗を握りつぶさない
-- 強制アンラップ（`!`）は直前の構築から非 nil が自明な場合のみ
-
-### Any の使用を最小限に
-
-使ってよい箇所：外部 API レスポンス（EDINET / MOF）・JSONSerialization 境界の `[String: Any]`。値の型が絞れる場合は `Any` を使わない。
+欠落は `nil`。`try?` は外部ライブラリ境界のみ。`!` は直前の構築から非 nil が自明なときだけ。

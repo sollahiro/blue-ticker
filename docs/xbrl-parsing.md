@@ -474,7 +474,7 @@ grep -r "GrossProfit" tmp_cache/edinet/*/XBRL/PublicDoc/*.xbrl | head -5
 
 **Step 4: `Constants/Xbrl.swift` に追加**
 
-確認できたタグ名を適切な定数配列に追加します（`.agents/rules/project/constants.md` の「やってはいけないパターン」参照）。
+確認できたタグ名を適切な定数配列に追加します（`.agents/rules/project/constants.md`）。
 
 ### 7.6 IFRS タグの調べ方
 

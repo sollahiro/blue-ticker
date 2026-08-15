@@ -1,6 +1,7 @@
 # AGENTS.md
 
 エージェント向けの作業合意。ビルド・ターゲット境界の正本は本ファイル、運用ルールは `.agents/rules/`、アーキテクチャは `docs/`。
+`.agents/rules/` は毎回読まない。日付・バンプ・キャッシュ・XBRL・訂正など、該当作業のときだけ同名ファイルを読む。
 
 ## 原理原則
 
@@ -61,6 +62,7 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 
 - **母集団**: statements と breakdowns の employees/rd/goodwill は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。breakdowns の business/geography と financials/filing-sections は上場全体（同 CSV は処理順の優先のみ）→ 225 に閉じるなら `--codes` 等で明示。
 - **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_PROD_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
+- **訂正有報 (130)**: 自動マージしない。手動確認し、見た docID は原本準拠でも Git に残す（`.agents/rules/project/amendments.md`）。不審フラグと同じく手動 ingest（段階 3・8）。
 
 ## 監査レビューとモデル分担
 
@@ -85,7 +87,7 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 
 Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
-- **build/test**: `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` 必須（`.agents/rules/project/dependencies.md`、`.github/workflows/ci.yml` の `swift-linux`）。
+- **build/test**: `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` 必須（`.github/workflows/ci.yml` の `swift-linux`）。
 - **起動**: 非空 `BLT_EDINET_API_KEY`（ダミー可）。既定 `127.0.0.1:3000`。`DATABASE_URL` なし＝ステートレス、`CF_ACCESS_TEAM_DOMAIN` なし＝無認証。例: `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server` → `curl -s http://127.0.0.1:3000/healthz`（認証は `docs/api-auth.md`）。
 - **テスト SKIP**: `BLT_TEST_POSTGRES_URL` / 実 EDINET 鍵 / `XAI_API_KEY` 未設定時（Neon Secrets とは別）。
 

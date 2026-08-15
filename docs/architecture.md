@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-**現構成の正本**（箱・依存・エンドポイント）。進捗は `blt-server-roadmap.md`、cache 床は `.agents/rules/project/versioning.md`、経緯は Git。
+**現構成の正本**（箱・依存・エンドポイント）。進捗は `blt-server-roadmap.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
 
 ## デプロイモード
 
