@@ -5,3 +5,5 @@
 derived は `_cache_version`＝`blueTickerVersion`。external はグローバル版に連動させない。Neon の `cache_version` は独立（`versioning.md`）。
 
 キーは `{機能}_{識別子}_{パラメーター}`。XBRL キャッシュを symlink すると 0 facts になることがある。テスト用は `cp -a`。
+
+探索用（Swift 非経由）: `tmp_cache/edinet/`（JP/EDINET）と `tmp_cache/eu/esef/`（EU/ESEF）。規約は `regions.md`。

@@ -1,5 +1,5 @@
 {
-  "originHash" : "dfd1b175910c624666f2631ffb9858d68dc6344ece23353772b7f88273f2a0d4",
+  "originHash" : "661c764af0dac3bdcfb1a9376885e5f054b1b3f0543df86b653138f37cc902e8",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -197,15 +197,6 @@
       "state" : {
         "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
         "version" : "1.6.0"
-      }
-    },
-    {
-      "identity" : "swift-configuration",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-configuration.git",
-      "state" : {
-        "revision" : "be76c4ad929eb6c4bcaf3351799f2adf9e6848a9",
-        "version" : "1.2.0"
       }
     },
     {

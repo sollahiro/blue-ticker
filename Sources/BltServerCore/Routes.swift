@@ -90,6 +90,15 @@ func registerRoutes(
         return jsonResponse(merged, status: .ok)
     }
 
+    // GET /v1/eu/companies?q={query}
+    // Region EU · Source ESEF の Meta Search（preview）。`/v1/skills`・MCP には未掲載。
+    // Icon 保留。entity index 全件運用は ESAP（目安 2027-07）まで保留（roadmap）。
+    // 当面は LEI / fxo_id / 名称完全一致（live）。
+    v1.get("eu", "companies") { req async -> Response in
+        let q = req.query[String.self, at: "q"] ?? ""
+        return makeResponse(await context.searchEuCompanies(q: q))
+    }
+
     // GET /v1/skills: MCP tools/list に相当する「いつ使うか／どう呼ぶか」カタログ（一覧）。
     // 正本は BlueTickerCore の apiSkillsCatalog（MCP ツール説明と共有）。
     v1.get("skills") { _ async -> Response in

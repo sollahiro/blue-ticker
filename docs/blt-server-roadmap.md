@@ -65,4 +65,4 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XB
 
 ## 関連
 
-`architecture.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `operations.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `feature-tiers.md` · `.agents/rules/project/versioning.md`
+`architecture.md` · `eu-esef-roadmap.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `operations.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `feature-tiers.md` · `.agents/rules/project/versioning.md`
