@@ -40,8 +40,9 @@ Filing / Statement / Statement-Notes / Breakdown
 | 項目 | 状態 |
 |---|---|
 | 探索モック | `scripts/eu/esef/pipeline_mock.py`（直 Summary スパイク） |
-| Swift Core / ingest / REST / MCP | 未着手（JP/EDINET のみ） |
-| identity（Meta） | LEI + `fxo_id` をモックで使用。上場ティッカー対応なし |
+| **Meta Search** | Core + REST preview `GET /v1/eu/companies`（skills/MCP **未掲載**）。Icon 保留 |
+| Struct / Norm / Viz ingest | 未着手（JP/EDINET のみ） |
+| identity | Search は LEI/`identifier`・`fxo_id`・名称。上場ティッカー対応なし |
 | 正本経路 | 未。Spike ≠ Filing/Statement/Notes/Breakdown 組立 |
 
 ## 方針
@@ -56,8 +57,8 @@ Filing / Statement / Statement-Notes / Breakdown
 
 | Class | Feature | EU | 依存・メモ |
 |---|---|---|---|
-| Meta | Search | 未 | identity（LEI / 表示名 / 書類ID）。配信パスの前提 |
-| Meta | Icon | 未 | URL 取得は ESEF 向けに別。favicon 層のみ流用可 |
+| Meta | Search | REST preview | `GET /v1/eu/companies?q=`。skills/MCP 未掲載。Icon 保留 |
+| Meta | Icon | 保留 | — |
 | Struct | Filing | 未 | 正本の一つ。セクション方針は要設計 |
 | Struct | Statement | 未 | 正本。presentation/calc・拡張・anchoring |
 | Struct | Statement-Notes | 未 | 正本。EU note_type を再定義 |
@@ -108,9 +109,9 @@ Struct / Breakdown 正本が無い段階で Summary を本番公開しない。�
 
 ## 次（すぐ）
 
-1. **Meta**: identity / Search の配信パス案を確認（着手前確認）
+1. Meta Search preview（`/v1/eu/companies`）の応答形を実運用で磨き、skills/MCP 掲載は別途確認
 2. **Struct**: 固定 LEI smoke と Statement 境界。Filing 方針のたたき台
-3. スパイクは参照データに留め、Summary 正式実装は Filing/Statement/Notes/Breakdown 経路の組立として設計する
+3. スパイク Summary は参照データに留め、正式 Summary は Filing/Statement/Notes/Breakdown 組立として設計する
 
 ## 関連
 

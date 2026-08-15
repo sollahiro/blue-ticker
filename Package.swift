@@ -40,6 +40,9 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/BlueTicker",
+            exclude: [
+                "API/Esef/README.md",
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
             ],

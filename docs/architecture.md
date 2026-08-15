@@ -95,7 +95,8 @@ flowchart LR
 |---|---|
 | `GET /healthz` | ヘルス（認証不要）・`cache_versions` |
 | `GET /v1/skills` · `/v1/skills/{id}` | 能力カタログ |
-| `GET /v1/companies?q=` | 企業検索 |
+| `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
+| `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills/MCP 未掲載） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
