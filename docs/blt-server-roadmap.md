@@ -1,6 +1,6 @@
 # blt-server ロードマップ
 
-**進捗・未決・次の索引**。構成は `architecture.md`、手順は `deploy.md` / `operations.md`、cache 床は `.agents/rules/project/versioning.md`、経緯は Git。
+**進捗・未決・次の索引**。構成は `architecture.md`、手順は `deploy.md` / `operations.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
 
 ## 現在地
 

@@ -5,7 +5,7 @@ let assetsPathEnv = "BLUE_TICKER_ASSETS_PATH"
 /// `assets/` 配下のファイルを env → CWD → 実行ファイル隣接 → Homebrew share の順で探す共通探索。
 /// `resolveEdinetCSVURL`（`Services/MasterDataManager.swift`）・`resolvePriorityCodesCSVURL`
 /// （`Services/PriorityIngestCodes.swift`）・標準タクソノミラベル解決（`Analysis/XBRLUtils.swift`）で共有する。
-/// `Analysis/` は `Services/` を参照できないため（CLAUDE.md 依存ルール）、この探索本体は
+/// `Analysis/` は `Services/` を参照できないため（AGENTS.md 依存ルール）、この探索本体は
 /// Service 非依存の `Utils/` に置く。
 func resolveAssetFileURL(
     filename: String,
