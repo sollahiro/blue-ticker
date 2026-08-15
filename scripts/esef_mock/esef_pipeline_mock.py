@@ -32,7 +32,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
