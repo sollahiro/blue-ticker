@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""ESEF / EU IFRS pipeline mock (script-level).
+"""EU / ESEF pipeline mock (script-level).
 
-Mirrors the JP BlueTicker stages at a coarse grain:
+Monorepo naming: Region JP↔EU, Source EDINET↔ESEF
+(see `docs/architecture.md` § Region × Source, `.agents/rules/project/regions.md`).
+
+Mirrors JP/EDINET BlueTicker stages at a coarse grain:
 
   EDINET discovery/download  →  filings.xbrl.org API + xBRL-JSON
   XBRLUtils.collect*Facts    →  FactIndex from xBRL-JSON
@@ -9,17 +12,16 @@ Mirrors the JP BlueTicker stages at a coarse grain:
   FieldSet + resolveItem     →  period-normalized summary resolve
   Statement (presentation)   →  undimensional primary-line dump (no linkbase walk yet)
 
-This is intentionally stdlib-only exploration code. It does not touch Swift
-targets, DB, REST, or MCP. Prefer real filings.xbrl.org data over fixtures.
+Stdlib-only exploration. Does not touch Swift targets, DB, REST, or MCP.
 
 API docs: https://filings.xbrl.org/docs/api
 ESEF taxonomy overview (ESMA): esma32-60-417 ESEF XBRL taxonomy documentation
 
 Examples:
-  python3 scripts/esef_mock/esef_pipeline_mock.py discover --country NL --limit 5
-  python3 scripts/esef_mock/esef_pipeline_mock.py summary --country NL --limit 1
-  python3 scripts/esef_mock/esef_pipeline_mock.py summary --fxo-id 7245009QH646WM76PR25-2025-12-31-ESEF-NL-0
-  python3 scripts/esef_mock/esef_pipeline_mock.py package-tree --fxo-id 7245009QH646WM76PR25-2025-12-31-ESEF-NL-0
+  python3 scripts/eu/esef/pipeline_mock.py discover --country NL --limit 5
+  python3 scripts/eu/esef/pipeline_mock.py summary --country NL --limit 1
+  python3 scripts/eu/esef/pipeline_mock.py summary --fxo-id 7245009QH646WM76PR25-2025-12-31-ESEF-NL-0
+  python3 scripts/eu/esef/pipeline_mock.py package-tree --fxo-id 7245009QH646WM76PR25-2025-12-31-ESEF-NL-0
 """
 
 from __future__ import annotations
@@ -38,8 +40,8 @@ from typing import Any, Iterable, Optional
 
 API_BASE = "https://filings.xbrl.org/api"
 FILES_BASE = "https://filings.xbrl.org"
-USER_AGENT = "BlueTicker-ESEF-mock/0.1 (+https://github.com/sollahiro/blue-ticker)"
-DEFAULT_CACHE = Path("tmp_cache/esef")
+USER_AGENT = "BlueTicker-EU-ESEF-mock/0.1 (+https://github.com/sollahiro/blue-ticker)"
+DEFAULT_CACHE = Path("tmp_cache/eu/esef")
 
 # ---------------------------------------------------------------------------
 # IFRS-full priority lists (EU/ESEF analogue of Constants/Xbrl.swift tag lists)
@@ -796,7 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--cache-dir",
         default=str(DEFAULT_CACHE),
-        help="local cache root (default: tmp_cache/esef)",
+        help="local cache root (default: tmp_cache/eu/esef)",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 

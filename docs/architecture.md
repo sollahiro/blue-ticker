@@ -2,6 +2,23 @@
 
 **現構成の正本**（箱・依存・エンドポイント）。進捗は `blt-server-roadmap.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
 
+## Region × Source（モノレポ命名）
+
+単一リポジトリで複数市場を扱う。命名の対応は固定:
+
+| 軸 | 対 |
+|---|---|
+| **Region** | `JP` ↔ `EU` |
+| **Source** | `EDINET` ↔ `ESEF` |
+
+| | JP / EDINET | EU / ESEF |
+|---|---|---|
+| 実装の正 | `Sources/BlueTicker/`（現行） | 探索: `scripts/eu/esef/`（Core 追加時は Region/Source がパスから分かる場所） |
+| 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
+| cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
+
+規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。
+
 ## デプロイモード
 
 配布 CLI `ticker` は廃止。ユーザー接点は REST / MCP。EDINET 直叩きは配布しない `TickerDev`（`swift run TickerDev`。products 非搭載）。
