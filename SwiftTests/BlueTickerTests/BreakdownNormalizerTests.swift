@@ -1140,6 +1140,145 @@ import Foundation
         }
     }
 
+    private static let otherBusinessMember =
+        "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"
+
+    private static func employeeFact(_ member: String, _ value: Double) -> BreakdownFact {
+        BreakdownFact(
+            tag: "NumberOfEmployees", contextRef: "CurrentYearInstant_\(member)",
+            dimensions: ["OperatingSegmentsAxis": member],
+            value: value, label: nil, unitRef: "pure", decimals: "0")
+    }
+
+    private static func rdFact(_ member: String, _ value: Double) -> BreakdownFact {
+        BreakdownFact(
+            tag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+            contextRef: "CurrentYearDuration_\(member)",
+            dimensions: ["OperatingSegmentsAxis": member],
+            value: value, label: nil, unitRef: "JPY", decimals: "-6")
+    }
+
+    /// 報告セグメント fact が親 member にしか無く、残る内訳がその他事業だけのとき
+    /// 親を segment に昇格する（エーザイ S100YB05）。
+    @Test func employeesPromotesSoleReportableSegmentsMemberAlongsideOtherBusiness() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("ReportableSegmentsMember", 9_832),
+                    Self.employeeFact(Self.otherBusinessMember, 711),
+                ],
+                total: 10_543, axis: breakdownAxisEmployees,
+                labelsByTag: [
+                    "ReportableSegmentsMember": "医薬品事業",
+                    Self.otherBusinessMember: "その他事業",
+                ]))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        let pharma = try #require(snap.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(pharma.rowKind == "segment")
+        #expect(pharma.amount == 9_832)
+        #expect(pharma.label == "医薬品事業")
+        let other = try #require(snap.rows.first { $0.labelRaw == Self.otherBusinessMember })
+        #expect(other.rowKind == "segment")
+        #expect(other.amount == 711)
+    }
+
+    /// 子セグメントが fact として載っている親小計は昇格しない（サッポロ型）。
+    @Test func employeesKeepsReportableSegmentsAsSubtotalWhenChildrenArePresent() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("AlcoholicBeveragesReportableSegmentMember", 3_565),
+                    Self.employeeFact("FoodAndSoftDrinksReportableSegmentMember", 2_255),
+                    Self.employeeFact("RealEstateReportableSegmentMember", 138),
+                    Self.employeeFact("ReportableSegmentsMember", 5_958),
+                    Self.employeeFact("CorporateSharedMember", 144),
+                ],
+                total: 6_102, axis: breakdownAxisEmployees))
+        #expect(snap.needsReview == false)
+        let rs = try #require(snap.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(rs.rowKind == "subtotal")
+    }
+
+    /// 子と合計が分母に一致する親セグメントを subtotal へ落とす（花王 S100XT6G）。
+    @Test func employeesDemotesParentSegmentThatDoubleCountsChildren() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("BusinessConnectedBusinessReportableSegmentMember", 841),
+                    Self.employeeFact("ChemicalBusinessReportableSegmentMember", 4_068),
+                    Self.employeeFact("CosmeticsBusinessReportableSegmentMember", 9_331),
+                    Self.employeeFact("GlobalConsumerCareBusinessReportableSegmentMember", 26_192),
+                    Self.employeeFact("HealthBeautyCareBusinessReportableSegmentMember", 7_521),
+                    Self.employeeFact("HygieneLivingCareBusinessReportableSegmentMember", 8_499),
+                    Self.employeeFact("CorporateSharedMember", 1_254),
+                ],
+                total: 31_514, axis: breakdownAxisEmployees))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        let parent = try #require(
+            snap.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
+        #expect(parent.rowKind == "subtotal")
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 31_514)
+    }
+
+    /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。
+    @Test func researchAndDevelopmentSubtractsEliminationWhenThatReconcilesToTotal() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: [
+                    Self.rdFact("IntegratedICTBusinessReportableSegmentMember", 123_776_000_000),
+                    Self.rdFact("GlobalSolutionsBusinessReportableSegmentMember", 41_993_000_000),
+                    Self.rdFact("RegionalCommunicationsBusinessReportableSegmentMember", 82_110_000_000),
+                    Self.rdFact("OthersRealEstateEnergyAndOthersReportableSegmentMember", 149_987_000_000),
+                    Self.rdFact("ReportableSegmentsMember", 397_866_000_000),
+                    Self.rdFact("UnallocatedAmountsAndEliminationMember", 119_217_000_000),
+                ],
+                total: 278_649_000_000, axis: breakdownAxisResearchAndDevelopment))
+        #expect(snap.needsReview == false)
+        let elim = try #require(
+            snap.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
+        #expect(elim.rowKind == "reconciling")
+        #expect(elim.amount == -119_217_000_000)
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 278_649_000_000)
+    }
+
+    /// 未配賦を足すと分母に一致するときは正のまま残す（味の素 S100VXJA）。
+    @Test func researchAndDevelopmentKeepsUnallocatedPositiveWhenAddingReconciles() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: [
+                    Self.rdFact("SeasoningsAndFoodsReportableSegmentMember", 10_000_000_000),
+                    Self.rdFact("FrozenFoodsReportableSegmentMember", 5_000_000_000),
+                    Self.rdFact("HealthcareAndOthersReportableSegmentMember", 11_212_000_000),
+                    Self.rdFact("UnallocatedAmountsAndEliminationMember", 9_562_000_000),
+                ],
+                total: 35_774_000_000, axis: breakdownAxisResearchAndDevelopment))
+        #expect(snap.needsReview == false)
+        let unallocated = try #require(
+            snap.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
+        #expect(unallocated.amount == 9_562_000_000)
+        #expect(unallocated.rowKind == "reconciling")
+    }
+
+    /// 未タグ残差で分母から大きく欠ける場合は needs_review のまま（ホンダ四輪欠落）。
+    @Test func researchAndDevelopmentKeepsNeedsReviewWhenTaggedSegmentsAreFarBelowTotal() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: [
+                    Self.rdFact("MotorcycleBusinessReportableSegmentMember", 112_300_000_000),
+                    Self.rdFact("PowerProductAndOtherBusinessesReportableSegmentMember", 33_200_000_000),
+                ],
+                total: 1_540_646_000_000, axis: breakdownAxisResearchAndDevelopment))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("research_and_development_segment_sum_far_from_total"))
+        #expect(snap.rows.contains { $0.labelRaw == "MotorcycleBusinessReportableSegmentMember" })
+    }
+
     /// statement-notes の RD note 廃止後、セグメント dimension が無くても全社合計だけで
     /// breakdown RD 軸が成立する（オークマ型）。呼び出し側が実タグ名（`totalTag`）を渡せば
     /// denominatorTag に反映される（実データ: S100W043 で

@@ -450,7 +450,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
 
         // 全社合計は 財務取り込み 計算済みの値を想定した固定値（実データ: 73,165人）。
         let snapshot = try #require(
@@ -491,7 +491,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
 
         let snapshot = try #require(
             BreakdownNormalizer.normalizeResearchAndDevelopment(
@@ -508,6 +508,58 @@ private actor RealXbrlMockChat: ChatCompleting {
         let devicesAndModules = try #require(
             snapshot.rows.first { $0.labelRaw == "DevicesAndModulesReportableSegmentsMember" })
         #expect(devicesAndModules.label == "デバイス・モジュール")
+    }
+
+    @Test func eisaiEmployeesPromotesPharmaceuticalBusinessLabel() async throws {
+        guard await Self.ensureAvailable("S100YB05") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100YB05")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 10_543, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        let pharma = try #require(emp.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(pharma.rowKind == "segment")
+        #expect(pharma.amount == 9_832)
+        #expect(pharma.label == "医薬品事業")
+        let other = try #require(
+            emp.rows.first {
+                $0.labelRaw
+                    == "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"
+            })
+        #expect(other.amount == 711)
+        #expect(other.rowKind == "segment")
+    }
+
+    @Test func kaoEmployeesDemotesGlobalConsumerCareParent() async throws {
+        guard await Self.ensureAvailable("S100XT6G") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100XT6G")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 31_514, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        let parent = try #require(
+            emp.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
+        #expect(parent.rowKind == "subtotal")
+        let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 31_514)
+    }
+
+    @Test func nttResearchAndDevelopmentSubtractsIntersegmentElimination() async throws {
+        guard await Self.ensureAvailable("S100YCP3") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100YCP3")
+        let rd = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 278_649_000_000, axis: "research_and_development",
+                labelsByTag: labels))
+        #expect(rd.needsReview == false)
+        let elim = try #require(
+            rd.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
+        #expect(elim.rowKind == "reconciling")
+        #expect(elim.amount == -119_217_000_000)
+        let reconciled = rd.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 278_649_000_000)
     }
 
     // MARK: - employees/research_and_development 軸 実データゴールデン（2026-08-03、10社レビュー）
@@ -527,7 +579,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+        return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
     @Test func yokogawaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
@@ -778,7 +830,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+        return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
     private static let rdTag = "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
@@ -965,7 +1017,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+        return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
     private static func expectEmployees(
@@ -1631,7 +1683,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        return (facts, XBRLUtils.loadLabelsByTag(in: dir))
+        return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
     private static func resolveGoodwill(docID: String) -> BreakdownSnapshot? {
@@ -1783,7 +1835,7 @@ private actor RealXbrlMockChat: ChatCompleting {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: dir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: dir)
         let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
         let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
         return BreakdownNormalizer.normalizeGoodwill(

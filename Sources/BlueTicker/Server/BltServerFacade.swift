@@ -435,7 +435,7 @@ public extension BltServerContext {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeEmployees(
                 facts: facts, total: total, axis: breakdownAxisEmployees, labelsByTag: labelsByTag)
@@ -465,7 +465,7 @@ public extension BltServerContext {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let totalTag = RDExtractor.extract(
             fieldSet: fieldSetFromDuration(allTagElements),
@@ -496,7 +496,7 @@ public extension BltServerContext {
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
         guard
