@@ -822,6 +822,26 @@ enum BreakdownExtractor {
         }
     }
 
+    /// 隣接する2表が縦または横の続きなら結合後の grid を返す。
+    /// 縦（武田: 同じ列・行が続く）を先に試し、該当しなければ横（三菱商事: 同じ行・列が続く）。
+    private static func mergedContinuationGrid(
+        leading: [[String]],
+        trailing: [[String]],
+        leadingPeriod: String?,
+        trailingPeriod: String?
+    ) -> [[String]]? {
+        if isVerticalTableContinuation(
+            leading: leading, trailing: trailing,
+            leadingPeriod: leadingPeriod, trailingPeriod: trailingPeriod)
+        {
+            return mergeContinuationGrids(leading, trailing)
+        }
+        if isHorizontalTableContinuation(leading: leading, trailing: trailing) {
+            return mergeHorizontalGrids(leading, trailing)
+        }
+        return nil
+    }
+
     /// 同一表が紙面の改ページで `<table>` 分割された続きか。
     /// 列構成が一致し、行ラベルがほぼ互いに素で、期間が同じ（または両方未判定）ときだけ true。
     /// 小松（年度ラベル違いの前期/当期）・オリックス（列は違うが行ラベル高一致）・
@@ -874,6 +894,90 @@ enum BreakdownExtractor {
         let periodMarkers = ["前年度", "当年度", "前連結会計年度", "当連結会計年度"]
         if periodMarkers.contains(where: joined.contains) { return true }
         return row.allSatisfy(\.isEmpty)
+    }
+
+    /// 同一表が改ページで列方向に割れた続きか（三菱商事の事業グループ別収益）。
+    /// 行ラベル（先頭列）が一致し、列見出しは互いに素、右表だけが合計/連結金額列を持ち、
+    /// 左の数値合計＋右の事業列が右の合計列に一致するときだけ true。
+    /// オリックス（事業 view と地域 view、合計列が無いか数値が一致しない）や
+    /// 小松（列見出しが同じ前期/当期）は false。期間ラベルは使わない（HTML に期間が無く
+    /// applyPeriodOrdering が左右を前期/当期と誤ることがあるため）。
+    private static func isHorizontalTableContinuation(leading: [[String]], trailing: [[String]]) -> Bool {
+        guard leading.count >= 2, trailing.count >= 2, leading.count == trailing.count else {
+            return false
+        }
+        guard leading[0].count >= 2, trailing[0].count >= 3 else { return false }
+        for (leftRow, rightRow) in zip(leading, trailing) {
+            let leftStub = leftRow.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let rightStub = rightRow.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard leftStub == rightStub else { return false }
+        }
+        let leftHeaders = horizontalHeaderLabels(leading[0])
+        let rightHeaders = horizontalHeaderLabels(trailing[0])
+        guard !leftHeaders.isEmpty, !rightHeaders.isEmpty else { return false }
+        guard leftHeaders.isDisjoint(with: rightHeaders) else { return false }
+        let leftTotals = leftHeaders.filter(isHorizontalTotalColumnHeader)
+        let rightTotals = rightHeaders.filter(isHorizontalTotalColumnHeader)
+        let rightSegments = rightHeaders.subtracting(rightTotals)
+        guard leftTotals.isEmpty, !rightTotals.isEmpty, !rightSegments.isEmpty else { return false }
+        return horizontalNumericRowsAlign(leading: leading, trailing: trailing)
+    }
+
+    /// 右表の合計列を落として、左表の各行に右表の列を足す。
+    private static func mergeHorizontalGrids(_ leading: [[String]], _ trailing: [[String]]) -> [[String]] {
+        zip(leading, trailing).map { left, right in
+            left + Array(right.dropFirst())
+        }
+    }
+
+    private static func horizontalHeaderLabels(_ headerRow: [String]) -> Set<String> {
+        Set(
+            headerRow.dropFirst().map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    private static func isHorizontalTotalColumnHeader(_ text: String) -> Bool {
+        Xbrl.noteHorizontalTotalColumnHeaders.contains(
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    /// データ行について、左の数値合計＋右の非合計列 ≈ 右のいずれかの合計列、が
+    /// 1行以上成立し、合計列の値が読める行ではすべて成立すること。
+    private static func horizontalNumericRowsAlign(leading: [[String]], trailing: [[String]]) -> Bool {
+        let rightHeaders = trailing[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        var matched = 0
+        for rowIndex in 1..<leading.count {
+            let leftRow = leading[rowIndex]
+            let rightRow = trailing[rowIndex]
+            let leftSum = leftRow.dropFirst().compactMap(XBRLUtils.parseHtmlNumber).reduce(0, +)
+            var segmentSum = 0.0
+            var totalValues: [Double] = []
+            for col in 1..<rightHeaders.count {
+                let header = col < rightHeaders.count ? rightHeaders[col] : ""
+                let raw = col < rightRow.count ? rightRow[col] : ""
+                guard let value = XBRLUtils.parseHtmlNumber(raw) else { continue }
+                if isHorizontalTotalColumnHeader(header) {
+                    totalValues.append(value)
+                } else {
+                    segmentSum += value
+                }
+            }
+            guard !totalValues.isEmpty else { continue }
+            let combined = leftSum + segmentSum
+            let rowMatches = totalValues.contains { total in
+                horizontalAmountsMatch(combined, total)
+            }
+            if !rowMatches { return false }
+            matched += 1
+        }
+        return matched >= 1
+    }
+
+    private static func horizontalAmountsMatch(_ lhs: Double, _ rhs: Double) -> Bool {
+        let scale = max(1.0, abs(rhs), abs(lhs))
+        return abs(lhs - rhs) <= max(1.0, scale * Xbrl.noteHorizontalContinuationRelativeTolerance)
     }
 
     /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
@@ -974,11 +1078,11 @@ enum BreakdownExtractor {
             if let prevEl = pendingElement, let prevGrid = pendingGrid,
                let chained = findImmediatelyChainedTable(after: prevEl),
                ObjectIdentifier(chained) == ObjectIdentifier(table),
-               isVerticalTableContinuation(
+               let merged = mergedContinuationGrid(
                 leading: prevGrid, trailing: grid,
                 leadingPeriod: pendingPeriod, trailingPeriod: period)
             {
-                pendingGrid = mergeContinuationGrids(prevGrid, grid)
+                pendingGrid = merged
                 pendingElement = table
                 continue
             }
@@ -1139,8 +1243,9 @@ enum BreakdownExtractor {
                     var workingGrid = grid
                     var workingTable = table
                     var workingPeriod = period
-                    // 改ページで割れた同一表は markdown を結合して1候補にする（武田製品別売上）。
-                    // 小松・オリックスは isVerticalTableContinuation が false のため従来どおり
+                    // 改ページで割れた同一表は markdown を結合して1候補にする
+                    // （縦: 武田製品別売上 / 横: 三菱商事の事業グループ別収益）。
+                    // 小松・オリックスは mergedContinuationGrid が nil のため従来どおり
                     // 別候補として拾い続ける。
                     while let chained = findImmediatelyChainedTable(after: workingTable),
                           !seen.contains(ObjectIdentifier(chained))
@@ -1148,12 +1253,12 @@ enum BreakdownExtractor {
                         let chainedGrid = expandTable(chained)
                         let chainedPeriod =
                             detectPeriodFromPreceding(chained) ?? detectPeriodFromGrid(chainedGrid)
-                        guard isVerticalTableContinuation(
+                        guard let merged = mergedContinuationGrid(
                             leading: workingGrid, trailing: chainedGrid,
                             leadingPeriod: workingPeriod, trailingPeriod: chainedPeriod)
                         else { break }
                         seen.insert(ObjectIdentifier(chained))
-                        workingGrid = mergeContinuationGrids(workingGrid, chainedGrid)
+                        workingGrid = merged
                         workingTable = chained
                     }
                     tables.append(BreakdownTable(

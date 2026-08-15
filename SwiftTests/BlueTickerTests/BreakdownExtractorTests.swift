@@ -768,6 +768,121 @@ import Foundation
         }
     }
 
+    /// 三菱商事型: 事業グループが列の収益表が改ページで左右に割れ、行ラベルは同じ。
+    /// 右表の合計列が左＋右の事業列と一致するとき dedicated 経路で1表に結合する。
+    @Test func revenueRecognitionMergesHorizontallySplitBusinessGroupTables() {
+        let escaped = mitsubishiStyleSplitPair(
+            left: [("地球環境エネルギー", "100", "10", "110"), ("マテリアルソリューション", "200", "5", "205")],
+            slc: ("80", "8", "88"),
+            power: ("40", "4", "44"),
+            subtotal: ("420", "27", "447"),
+            other: ("2", "－", "2"),
+            adj: ("△2", "－", "△2"),
+            consolidated: ("420", "27", "447")
+        ) + mitsubishiStyleSplitPair(
+            left: [("地球環境エネルギー", "110", "12", "122"), ("マテリアルソリューション", "210", "6", "216")],
+            slc: ("90", "9", "99"),
+            power: ("45", "5", "50"),
+            subtotal: ("455", "32", "487"),
+            other: ("3", "－", "3"),
+            adj: ("0", "－", "0"),
+            consolidated: ("458", "32", "490")
+        )
+        // 顧客: 100+200+80+40+2-2=420 連結 / 100+200+80+40=420 合計
+        // 当期: 110+210+90+45=455 合計、+3+0=458 連結
+        let xml = textBlockXml(
+            tag: "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+            #expect(result.tables[0].markdown.contains("地球環境エネルギー"))
+            #expect(result.tables[0].markdown.contains("S.L.C."))
+            #expect(result.tables[0].markdown.contains("420"))
+            #expect(result.tables[1].markdown.contains("地球環境エネルギー"))
+            #expect(result.tables[1].markdown.contains("S.L.C."))
+            #expect(result.tables[1].markdown.contains("458"))
+        }
+    }
+
+    @Test func revenueRecognitionDoesNotMergeHorizontalSplitWhenRowSumsDoNotMatchTotal() {
+        // 行ラベル・列の素は三菱商事型だが、右の合計列が右半分だけの小計（オリックスに近い数値）。
+        let escaped = mitsubishiStyleSplitPair(
+            left: [("地球環境エネルギー", "100", "10", "110"), ("マテリアルソリューション", "200", "5", "205")],
+            slc: ("80", "8", "88"),
+            power: ("40", "4", "44"),
+            subtotal: ("120", "12", "132"),
+            other: ("0", "－", "0"),
+            adj: ("0", "－", "0"),
+            consolidated: ("120", "12", "132")
+        )
+        let xml = textBlockXml(
+            tag: "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables[0].markdown.contains("地球環境エネルギー"))
+            #expect(!result.tables[0].markdown.contains("S.L.C."))
+            #expect(result.tables[1].markdown.contains("S.L.C."))
+        }
+    }
+
+    @Test func segmentInfoMergesHorizontalSplitOnMixedKeywordPath() {
+        let escaped =
+            "&lt;p&gt;セグメント情報&lt;/p&gt;"
+            + mitsubishiStyleSplitPair(
+                left: [("地球環境エネルギー", "100", "10", "110"), ("マテリアルソリューション", "200", "5", "205")],
+                slc: ("80", "8", "88"),
+                power: ("40", "4", "44"),
+                subtotal: ("420", "27", "447"),
+                other: ("2", "－", "2"),
+                adj: ("△2", "－", "△2"),
+                consolidated: ("420", "27", "447")
+            )
+        let xml = textBlockXml(
+            tag: "NotesToConsolidatedFinancialStatementsUSGAAPTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            let merged = result.tables.filter {
+                $0.markdown.contains("地球環境エネルギー") && $0.markdown.contains("S.L.C.")
+            }
+            #expect(merged.count == 1)
+            #expect(merged[0].markdown.contains("420"))
+        }
+    }
+
+    /// 左表の事業列と右表（S.L.C. / 電力 / 合計 / その他 / 調整 / 連結金額）の横割れ HTML。
+    private func mitsubishiStyleSplitPair(
+        left: [(name: String, contract: String, other: String, total: String)],
+        slc: (String, String, String),
+        power: (String, String, String),
+        subtotal: (String, String, String),
+        other: (String, String, String),
+        adj: (String, String, String),
+        consolidated: (String, String, String)
+    ) -> String {
+        func row(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let leftHeader = [""] + left.map(\.name)
+        let leftContract = ["顧客との契約から認識した収益"] + left.map(\.contract)
+        let leftOther = ["その他の源泉から認識した収益"] + left.map(\.other)
+        let leftTotal = ["合計"] + left.map(\.total)
+        let rightHeader = ["", "S.L.C.", "電力ソリューション", "合計", "その他", "調整・消去", "連結金額"]
+        let rightContract = ["顧客との契約から認識した収益", slc.0, power.0, subtotal.0, other.0, adj.0, consolidated.0]
+        let rightOther = ["その他の源泉から認識した収益", slc.1, power.1, subtotal.1, other.1, adj.1, consolidated.1]
+        let rightTotal = ["合計", slc.2, power.2, subtotal.2, other.2, adj.2, consolidated.2]
+        return "&lt;div&gt;&lt;table&gt;"
+            + row(leftHeader) + row(leftContract) + row(leftOther) + row(leftTotal)
+            + "&lt;/table&gt;&lt;/div&gt;"
+            + "&lt;div&gt;&lt;table&gt;"
+            + row(rightHeader) + row(rightContract) + row(rightOther) + row(rightTotal)
+            + "&lt;/table&gt;&lt;/div&gt;"
+    }
+
     @Test func segmentInfoDoesNotChainWhenRowLabelOverlapBelowMinimumCount() {
         // Grok 4.5 監査指摘の回帰（2026-07-25）: 行ラベルが2件しか一致しない場合は
         // `Xbrl.noteRowLabelMinOverlapCount`（3）未満のため Jaccard 経路も発火せず、
