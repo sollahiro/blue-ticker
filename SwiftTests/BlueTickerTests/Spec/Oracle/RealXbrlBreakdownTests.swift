@@ -59,6 +59,11 @@ private actor RealXbrlMockChat: ChatCompleting {
         return true
     }
 
+    private func containsAmount(_ markdown: String, _ commaSeparated: String) -> Bool {
+        markdown.contains(commaSeparated)
+            || markdown.contains(commaSeparated.replacingOccurrences(of: ",", with: ""))
+    }
+
     // MARK: - ブリヂストン S100XRPR
 
     @Test func bridgestoneExtractsIFRSRevenueBusinessRowsAndFootnotes() async throws {
@@ -245,19 +250,40 @@ private actor RealXbrlMockChat: ChatCompleting {
 
     // MARK: - 三菱商事 / あおぞら / 三井住友トラスト（2026-07-24）
 
-    @Test func mitsubishiExtractsRevenue2BusinessGroups() async throws {
+    @Test func mitsubishiMergesHorizontallySplitRevenue2BusinessGroupsForFY2026() async throws {
         guard await Self.ensureAvailable("S100YB25") else { return }
+        // 事業グループが列の収益表が改ページで左右に割れる。左（地球環境…食品）と
+        // 右（S.L.C. / 電力 / 合計 / 連結金額）を1表に結合し、LLM に半分だけ選ばせない。
+        // 当期は 2025-04-01〜2026-03-31。合計行の連結金額が連結売上 18,915,995 百万円。
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
         #expect(result.method == "html_table")
         #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
         let merged = result.tables.filter {
             $0.markdown.contains("地球環境エネルギー") && $0.markdown.contains("S.L.C.")
         }
-        #expect(merged.count >= 1)
-        let joined = merged.map(\.markdown).joined(separator: "\n")
-        #expect(joined.contains("顧客との契約から認識した収益"))
-        #expect(joined.contains("18,915,995") || joined.contains("18915995"))
-        #expect(joined.contains("電力ソリューション"))
+        #expect(merged.count == 2)
+        #expect(merged.map(\.period) == ["前期", "当期"])
+        let prior = merged[0].markdown
+        let current = merged[1].markdown
+        #expect(containsAmount(prior, "18,617,601"))
+        #expect(containsAmount(current, "18,915,995"))
+        #expect(current.contains("顧客との契約から認識した収益"))
+        #expect(current.contains("マテリアルソリューション"))
+        #expect(current.contains("金属資源"))
+        #expect(current.contains("社会インフラ"))
+        #expect(current.contains("モビリティ"))
+        #expect(current.contains("食品産業"))
+        #expect(current.contains("電力ソリューション"))
+        // 合計行（顧客契約＋その他の源泉）。分母と一致する連結金額の内訳。
+        #expect(containsAmount(current, "3,267,295"))
+        #expect(containsAmount(current, "3,631,197"))
+        #expect(containsAmount(current, "4,083,329"))
+        #expect(containsAmount(current, "930,638"))
+        #expect(containsAmount(current, "837,375"))
+        #expect(containsAmount(current, "2,324,535"))
+        #expect(containsAmount(current, "2,514,143"))
+        #expect(containsAmount(current, "1,318,984"))
+        #expect(containsAmount(current, "8,539"))
     }
 
     @Test func aozoraExtractsProductOrServiceOrdinaryRevenue() async throws {
@@ -1379,16 +1405,19 @@ private actor RealXbrlMockChat: ChatCompleting {
             "period_column": "当期",
             "profit_disclosed": false,
             "rows": [
-                ["label": "地球環境エネルギー", "amount": 1_748_741, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "マテリアルソリューション", "amount": 3_978_475, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "金属資源", "amount": 1_219_273, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "社会インフラ", "amount": 786_423, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "モビリティ", "amount": 672_507, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "食品産業", "amount": 1_790_685, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "その他", "amount": 8_719_891, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "合計", "amount": 18_915_995, "profit": NSNull(), "row_kind": "subtotal"],
+                ["label": "地球環境エネルギー", "amount": 3_267_295, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "マテリアルソリューション", "amount": 3_631_197, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "金属資源", "amount": 4_083_329, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "社会インフラ", "amount": 930_638, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "モビリティ", "amount": 837_375, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "食品産業", "amount": 2_324_535, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "S.L.C.", "amount": 2_514_143, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "電力ソリューション", "amount": 1_318_984, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "その他", "amount": 8_539, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "調整・消去", "amount": -40, "profit": NSNull(), "row_kind": "reconciling"],
+                ["label": "連結金額", "amount": 18_915_995, "profit": NSNull(), "row_kind": "subtotal"],
             ],
-            "notes": "事業グループ別",
+            "notes": "当期の横結合表の合計行",
         ]
         let client = RealXbrlMockChat(responseJSON: response)
         let sales = 18_915_995_000_000.0
@@ -1399,8 +1428,11 @@ private actor RealXbrlMockChat: ChatCompleting {
         #expect(snapshot?.axis == "business")
         let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
         #expect(labels.contains("地球環境エネルギー"))
-        #expect(labels.contains("マテリアルソリューション"))
+        #expect(labels.contains("S.L.C."))
+        #expect(labels.contains("電力ソリューション"))
+        #expect(snapshot?.rows.contains { $0.labelRaw == "金属資源" && $0.amount == 4_083_329_000_000 } == true)
         #expect(snapshot?.rows.contains { $0.rowKind == "subtotal" && $0.amount == 18_915_995_000_000 } == true)
+        #expect(snapshot?.needsReview == false)
         #expect(await client.timesCalled() == 1)
     }
 
