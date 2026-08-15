@@ -258,6 +258,29 @@ enum XBRLUtils {
         return labelsByTag
     }
 
+    /// 内訳取り込み（employees / RD / goodwill）向けラベル。`ReportableSegmentsMember` の
+    /// プレゼンテーション直下がただ1つの報告セグメント member なら、その日本語ラベルで親を上書きする。
+    /// 実データ: エーザイ S100YB05 は親 fact に医薬品事業 9,832 人が載る。
+    static func breakdownMemberLabels(in dir: URL) -> [String: String] {
+        var labels = loadLabelsByTag(in: dir)
+        if let sole = soleReportableSegmentChildLabel(in: dir, labelsByTag: labels) {
+            labels["ReportableSegmentsMember"] = sole
+        }
+        return labels
+    }
+
+    static func soleReportableSegmentChildLabel(in dir: URL, labelsByTag: [String: String]) -> String? {
+        var children = Set<String>()
+        for roleParents in loadPresentationParents(in: dir).values {
+            for (tag, parents) in roleParents where parents.contains("ReportableSegmentsMember") {
+                children.insert(tag)
+            }
+        }
+        children.remove("ReportableSegmentsMember")
+        guard children.count == 1, let child = children.first else { return nil }
+        return labelsByTag[child]
+    }
+
     /// ラベルリンクベースから {local_tag: {ラベルロールURI: テキスト}} を作る（`loadLabelsByTag` の
     /// ロール別・非収束版）。`preferredLabel`（presentation linkbase の presentationArc 属性。合計行・
     /// 期首/期末残高等でどのロールのラベルを使うべきかを示す）に応じて Statement 取り込み Statement が正しい

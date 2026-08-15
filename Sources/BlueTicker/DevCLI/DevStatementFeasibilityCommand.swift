@@ -638,7 +638,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             fieldSet: fieldSetFromInstant(allTagElements), tagElements: allTagElements
         ).current
         print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil")")
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeEmployees(
                 facts: facts, total: total, axis: breakdownAxisEmployees, labelsByTag: labelsByTag)
@@ -670,7 +670,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             fieldSet: fieldSetFromDuration(allTagElements), accountingStandard: accountingStandard)
         let total = rdResult.current
         print("全社合計(非dimension fact): \(total.map { String($0) } ?? "nil") tag=\(rdResult.tag ?? "nil")")
-        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
                 facts: facts, total: total, totalTag: rdResult.tag, axis: breakdownAxisResearchAndDevelopment,

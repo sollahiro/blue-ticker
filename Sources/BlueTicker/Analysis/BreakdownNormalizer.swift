@@ -341,16 +341,20 @@ enum BreakdownNormalizer {
     /// マッチングには依存しない。
     ///
     /// `CorporateSharedMember`/`UnallocatedAmountsAndEliminationMember` は代替総合計ではなく
-    /// 「本社機能等の少額バケツ」であり、実際に総合計の一部として加算されている（実データ検証:
-    /// S100TSIJ 従業員数は segment 3件 + `CorporateSharedMember` の合計が総数と一致）。これを
+    /// 「本社機能等の少額バケツ」または消去行であり、売上文脈の subtotal とは別物。これを
     /// 「subtotal」（合計チェック対象外）に分類すると sum(segment) が常に total を下回り、
-    /// 5%乖離チェックが恒常的に誤検知して needs_review=true が固定化する（監査指摘、2026-08-01）。
-    /// count-basis 文脈ではこれらを `countBasisAdditiveBucketMemberNames` として「reconciling」
-    /// （合計チェックには算入するが代替分母としては採用しない）に分類する。
+    /// 5%乖離チェックが恒常的に誤検知して needs_review=true が固定化する（監査指摘、2026-08-01、
+    /// 実データ: S100TSIJ 従業員は segment + `CorporateSharedMember` が総数と一致）。
+    /// count-basis 文脈では「reconciling」（合計チェックには算入するが代替分母としては採用しない）。
+    /// `UnallocatedAmountsAndEliminationMember` は加算（味の素 R&D の未配賦）と減算
+    /// （NTT R&D のセグメント間取引消去）の両方があり、符号は分母との一致で決める。
     private static let countBasisAdditiveBucketMemberNames: Set<String> = [
         "CorporateSharedMember",
         "UnallocatedAmountsAndEliminationMember",
     ]
+
+    private static let countBasisEliminationMemberName = "UnallocatedAmountsAndEliminationMember"
+    private static let countBasisReportableSegmentsMemberName = "ReportableSegmentsMember"
 
     private static func normalizeCountBasis(
         facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String,
@@ -416,6 +420,14 @@ enum BreakdownNormalizer {
                 kinds[member] = "segment"
             }
         }
+        promoteSoleReportableSegmentsMember(kinds: &kinds)
+        var amounts: [String: Double] = [:]
+        for (member, fact) in perMember {
+            amounts[member] = fact.value
+        }
+        demoteRedundantParentSegments(kinds: &kinds, amounts: amounts, total: total)
+        applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
+
         // 合計チェック・フォールバック分母は segment に加え reconciling（本社機能等の少額バケツ）も
         // 算入する。subtotal（代替総合計 member）だけは二重計上を避けるため除外する。
         let reconciledKinds: Set<String> = ["segment", "reconciling"]
@@ -424,29 +436,89 @@ enum BreakdownNormalizer {
         let denominator: Double
         if let total, total > 0 {
             denominator = total
-            let segmentSum = perMember.keys.filter { reconciledKinds.contains(kinds[$0]!) }
-                .reduce(0.0) { $0 + perMember[$1]!.value }
+            let segmentSum = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+                .reduce(0.0) { $0 + amounts[$1]! }
             if segmentSum > 0, abs(segmentSum - total) / total > 0.05 {
                 warnings.append("\(warningPrefix)_segment_sum_far_from_total")
             }
         } else {
             // 全社合計 fact が取れない場合のみ segment+reconciling 行合計にフォールバックする（要レビュー）。
-            denominator = perMember.keys.filter { reconciledKinds.contains(kinds[$0]!) }
-                .reduce(0.0) { $0 + perMember[$1]!.value }
+            denominator = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+                .reduce(0.0) { $0 + amounts[$1]! }
             warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
         }
         guard denominator > 0 else { return nil }
 
         let rows = perMember.keys.sorted().map { member -> BreakdownRow in
-            let fact = perMember[member]!
+            let amount = amounts[member]!
             return BreakdownRow(
-                labelRaw: member, label: labelsByTag[member], amount: fact.value,
-                share: fact.value / denominator, profit: nil, rowKind: kinds[member]!)
+                labelRaw: member, label: labelsByTag[member], amount: amount,
+                share: amount / denominator, profit: nil, rowKind: kinds[member]!)
         }
 
         return BreakdownSnapshot(
             axis: axis, denominator: denominator, denominatorTag: amountTag, rows: rows,
             sourceKind: "xbrl_facts", needsReview: !warnings.isEmpty, warnings: warnings)
+    }
+
+    /// 報告セグメント fact が `ReportableSegmentsMember` 親だけ（子 member の人数・費用が無く、
+    /// 残る segment はその他事業のみ）のとき、親を segment 行に昇格する。
+    /// 実データ: エーザイ S100YB05 従業員は医薬品事業 9,832 人が親 member に載り、
+    /// `OperatingSegmentsNotIncluded…` 711 人だけが segment 扱いになって needs_review になっていた。
+    private static func promoteSoleReportableSegmentsMember(kinds: inout [String: String]) {
+        guard kinds[countBasisReportableSegmentsMemberName] == "subtotal" else { return }
+        let segmentMembers = kinds.keys.filter { kinds[$0] == "segment" }
+        guard segmentMembers.allSatisfy({ Xbrl.segmentOtherBusinessMemberNames.contains($0) }) else {
+            return
+        }
+        kinds[countBasisReportableSegmentsMemberName] = "segment"
+    }
+
+    /// 子セグメントと同居する親小計を subtotal へ落とす。含めると分母から 5% 超ずれ、
+    /// その1 member を除外すると ±5% に収まる場合のみ（候補が複数なら触らない）。
+    /// 実データ: 花王 S100XT6G 従業員の `GlobalConsumerCareBusinessReportableSegmentMember`
+    /// は化粧品・HBC・ハイジーンの親であり、除外すると全社 31,514 人と一致する。
+    private static func demoteRedundantParentSegments(
+        kinds: inout [String: String], amounts: [String: Double], total: Double?
+    ) {
+        guard let total, total > 0 else { return }
+        let included = reconciledAmount(kinds: kinds, amounts: amounts)
+        guard included > 0, abs(included - total) / total > 0.05 else { return }
+
+        let candidates = amounts.keys.filter { kinds[$0] == "segment" }.filter { member in
+            var trial = kinds
+            trial[member] = "subtotal"
+            let sum = reconciledAmount(kinds: trial, amounts: amounts)
+            return sum > 0 && abs(sum - total) / total <= 0.05
+        }
+        guard candidates.count == 1, let parent = candidates.first else { return }
+        kinds[parent] = "subtotal"
+    }
+
+    /// `UnallocatedAmountsAndEliminationMember` を足すと分母からずれ、引くと ±5% に収まるとき
+    /// 符号を反転する（NTT S100YCP3 のセグメント間取引消去）。足す方が合う場合は正のまま
+    /// （味の素 S100VXJA の未配賦 R&D）。
+    private static func applyEliminationSign(
+        amounts: inout [String: Double], kinds: [String: String], total: Double?
+    ) {
+        guard let total, total > 0 else { return }
+        let member = countBasisEliminationMemberName
+        guard kinds[member] == "reconciling", let value = amounts[member], value != 0 else { return }
+
+        var without = kinds
+        without[member] = "subtotal"
+        let sumExcl = reconciledAmount(kinds: without, amounts: amounts)
+        let addErr = abs(sumExcl + value - total) / total
+        let subErr = abs(sumExcl - value - total) / total
+        if subErr <= 0.05, addErr > 0.05 {
+            amounts[member] = -abs(value)
+        }
+    }
+
+    private static func reconciledAmount(kinds: [String: String], amounts: [String: Double]) -> Double {
+        let reconciledKinds: Set<String> = ["segment", "reconciling"]
+        return amounts.keys.filter { reconciledKinds.contains(kinds[$0] ?? "") }
+            .reduce(0.0) { $0 + amounts[$1]! }
     }
 
     // MARK: - 内部ロジック
