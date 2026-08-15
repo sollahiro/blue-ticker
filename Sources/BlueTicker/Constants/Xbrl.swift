@@ -735,6 +735,15 @@ enum Xbrl {
     // 小松・キヤノンの前期/当期（同一行ラベル・高 Jaccard）やオリックスの別 view（高 Jaccard）
     // は結合しない。
     static let noteVerticalContinuationJaccardMax = 0.15
+    // 改ページで列方向に割れた同一表（三菱商事の事業グループ別収益など）の右表合計列。
+    // 行ラベルは一致し列見出しは互いに素。右表にこれらの列があり、左列合計＋右の事業列が
+    // その値に一致するときだけ横結合する（オリックスの事業 view→地域 view は合計列が無いか
+    // 数値が一致しないので結合しない）。
+    static let noteHorizontalTotalColumnHeaders: Set<String> = [
+        "合計", "連結金額", "連結合計", "連結計",
+    ]
+    // 百万円単位の開示は整数一致が原則。丸めずれだけ 1% または 1 単位まで許容する。
+    static let noteHorizontalContinuationRelativeTolerance = 0.01
 
     // 地域別（売上・外部顧客向け）。資産のみの TextBlock は含めない
     // （`PropertyPlantAndEquipmentInformationForEachRegionTextBlock` は有形固定資産専用）。

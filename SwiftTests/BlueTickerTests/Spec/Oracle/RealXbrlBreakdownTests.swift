@@ -250,10 +250,14 @@ private actor RealXbrlMockChat: ChatCompleting {
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
         #expect(result.method == "html_table")
         #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
-        let joined = result.tables.map(\.markdown).joined(separator: "\n")
+        let merged = result.tables.filter {
+            $0.markdown.contains("地球環境エネルギー") && $0.markdown.contains("S.L.C.")
+        }
+        #expect(merged.count >= 1)
+        let joined = merged.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("顧客との契約から認識した収益"))
-        #expect(joined.contains("地球環境") || joined.contains("マテリアル") || joined.contains("金属資源"))
         #expect(joined.contains("18,915,995") || joined.contains("18915995"))
+        #expect(joined.contains("電力ソリューション"))
     }
 
     @Test func aozoraExtractsProductOrServiceOrdinaryRevenue() async throws {
