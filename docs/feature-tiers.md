@@ -4,7 +4,7 @@
 
 ## Class 依存
 
-機能のわかりやすさ・実装順の正は次（下は上に依存）。JP 現状もこれに沿う。EU も同じ（`eu-esef-roadmap.md`）。
+機能のわかりやすさ・実装順の正は次（下は上に依存）。JP 現状・EU 目標とも同じ（`eu-esef-roadmap.md`）。
 
 ```text
 Meta → Struct → Norm → Viz
@@ -13,11 +13,11 @@ Meta → Struct → Norm → Viz
 | Class | 層（下表） | 役割 |
 |---|---|---|
 | Meta | （検索・アイコン等） | 発行体・書類の同定 |
-| Struct | 構造化 | 開示テキスト・本表・注記 |
-| Norm | 正規化 | 横断比較可能な水準・内訳 |
-| Viz | 視覚化 | 正規化値の分解・配分 |
+| Struct | 構造化 | 開示テキスト・本表・注記（**正本**） |
+| Norm | 正規化 | Breakdown（内訳正本）と **Summary（正本からの組立）** |
+| Viz | 視覚化 | 組立・正規化値の分解・配分 |
 
-Feed（Trend / Update / Status / Report）は製品・運用面で、上記縦依存の外。
+**Summary** は Filing / Statement / Statement-Notes / Breakdown 経路の組立スナップショット（`financials-summary-separation.md`）。独立の XBRL→Summary 本流ではない。Feed は縦依存の外。
 
 ## 機能表
 
@@ -52,7 +52,7 @@ Feed（Trend / Update / Status / Report）は製品・運用面で、上記縦�
 
 ## 境界
 
-- **Summary** = 水準値のみ。**Waterfall** = 前年差・要因分解込み（同じ `company_financials` 行の投影）。
+- **Summary** = Filing / Statement / Statement-Notes / Breakdown 経路から組んだ水準値投影。**Waterfall** = 同行走査の分析投影（同じ `company_financials` 行）。
 - **Breakdown**: `?axis=business|geography`（`breakdown.md`）。
 - **Statement / Note**: 別エンドポイント。統合するかは未決（形状・コスト差で分離継続もあり）。
 - **Allocation（未着手）**: サーバーは分解済み数値のみ返し描画はクライアント。観点の材料は geography / business / Statement PL+SS / notes(capex·dividends)+rd。複数観点の合成・JSON 形式・エンドポイントは要求具体化まで設計しない。Breakdown の立体化はスコープ外。
