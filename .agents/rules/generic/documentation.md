@@ -31,7 +31,8 @@
 | ファイル | 正本とするもの |
 |---|---|
 | `architecture.md` | 現構成（箱・依存・エンドポイント・Region×Source 命名） |
-| `blt-server-roadmap.md` | 進捗・未決・次 |
+| `blt-server-roadmap.md` | 進捗・未決・次（JP / 全体） |
+| `eu-esef-roadmap.md` | Region EU · Source ESEF の進捗・未決・次 |
 | `deploy.md` | デプロイ・同期の手順 |
 | `operations.md` | 外部依存の結合点・代替・定常の落とし穴 |
 | `api-auth.md` | 認証の住み分け |

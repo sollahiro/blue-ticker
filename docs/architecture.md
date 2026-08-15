@@ -17,7 +17,7 @@
 | 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
 | cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
 
-規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。
+規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の進捗・未決・次は `eu-esef-roadmap.md`。
 
 ## デプロイモード
 
