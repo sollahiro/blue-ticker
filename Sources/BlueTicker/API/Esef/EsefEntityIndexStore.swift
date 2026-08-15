@@ -1,7 +1,7 @@
 import Foundation
 
-/// EU/ESEF 発行体マスター（JP `MasterDataManager` + EDINET CSV の対）。
-/// 部分一致検索は filings.xbrl.org が提供しないため、ローカル索引で行う。
+/// EU/ESEF 発行体マスターの試作（JP `MasterDataManager` + EDINET CSV の対）。
+/// **本番の全件索引運用は ESAP（目安 2027-07）まで保留**（`docs/eu-esef-roadmap.md`）。
 actor EsefEntityIndexStore {
     private var entities: [EsefEntity] = []
     private var byIdentifier: [String: EsefEntity] = [:]

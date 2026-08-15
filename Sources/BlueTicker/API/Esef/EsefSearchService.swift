@@ -5,7 +5,10 @@ enum EsefSearchError: Error, Equatable {
 }
 
 /// EU/ESEF Meta Search（JP `CompanyInfoService.searchCompanies` の対）。
-/// Icon は保留。REST / MCP / DB には未配線。
+/// Icon 保留。REST preview は `GET /v1/eu/companies`（skills / MCP 未掲載）。
+///
+/// **entity index（`refreshIndex`）は ESAP 一般公開（目安 2027-07）まで本番運用しない。**
+/// 当面の正は LEI / fxo_id / 名称の live 完全一致（`docs/eu-esef-roadmap.md`）。
 actor EsefSearchService {
     private let client: EsefFilingsAPIClient
     private let index: EsefEntityIndexStore
@@ -22,6 +25,7 @@ actor EsefSearchService {
     }
 
     /// filings.xbrl.org から entity 全件を引き、ローカル索引を更新する。
+    /// **ESAP 公開まで本番ジョブ化しない**（テスト・将来用。roadmap 参照）。
     @discardableResult
     func refreshIndex(pageSize: Int = 200) async throws -> Int {
         let entities = try await client.fetchAllEntities(pageSize: pageSize)

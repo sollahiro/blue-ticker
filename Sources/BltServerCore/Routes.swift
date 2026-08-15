@@ -92,7 +92,8 @@ func registerRoutes(
 
     // GET /v1/eu/companies?q={query}
     // Region EU · Source ESEF の Meta Search（preview）。`/v1/skills`・MCP には未掲載。
-    // Icon 保留。索引は `EsefSearchService.refreshIndex`（ローカル／将来ジョブ）。
+    // Icon 保留。entity index 全件運用は ESAP（目安 2027-07）まで保留（roadmap）。
+    // 当面は LEI / fxo_id / 名称完全一致（live）。
     v1.get("eu", "companies") { req async -> Response in
         let q = req.query[String.self, at: "q"] ?? ""
         return makeResponse(await context.searchEuCompanies(q: q))

@@ -40,9 +40,10 @@ Filing / Statement / Statement-Notes / Breakdown
 | 項目 | 状態 |
 |---|---|
 | 探索モック | `scripts/eu/esef/pipeline_mock.py`（直 Summary スパイク） |
-| **Meta Search** | Core + REST preview `GET /v1/eu/companies`（skills/MCP **未掲載**）。Icon 保留 |
+| **Meta Search** | REST preview `GET /v1/eu/companies`（skills/MCP **未掲載**）。Icon 保留 |
+| **entity index** | **保留** — ESAP（European Single Access Point）一般公開（目安 **2027-07**）まで、全件マスター構築・運用はしない |
 | Struct / Norm / Viz ingest | 未着手（JP/EDINET のみ） |
-| identity | Search は LEI/`identifier`・`fxo_id`・名称。上場ティッカー対応なし |
+| identity | 当面は LEI/`identifier`・`fxo_id`・**名称の完全一致**（live）。部分一致名称は index 依存のため ESAP 後 |
 | 正本経路 | 未。Spike ≠ Filing/Statement/Notes/Breakdown 組立 |
 
 ## 方針
@@ -52,12 +53,13 @@ Filing / Statement / Statement-Notes / Breakdown
 - Source 固有は `eu/esef` 配下に閉じ、共有は FieldSet / resolve / 配信契約 / Waterfall 計算に限る。
 - JP の実装サイクル（smoke → golden → 限定投入 → 公開）を EU でも踏む。
 - 公開範囲・スキーマ追加は着手前に都度確認（`workflow.md`）。
+- **発行体マスター（entity index）は ESAP 公開まで保留。** それまでは filings.xbrl.org の live 完全一致（LEI / 正確な name / fxo_id）と、固定 LEI セットでの Struct 以降を優先する。`EsefEntityIndexStore` / `refreshIndex` はコード上の試作として残し、本番ジョブ化しない。
 
 ## 機能カバレッジ（Class 順）
 
 | Class | Feature | EU | 依存・メモ |
 |---|---|---|---|
-| Meta | Search | REST preview | `GET /v1/eu/companies?q=`。skills/MCP 未掲載。Icon 保留 |
+| Meta | Search | REST preview | `GET /v1/eu/companies?q=`。skills/MCP 未掲載。**index 保留（ESAP まで）**。Icon 保留 |
 | Meta | Icon | 保留 | — |
 | Struct | Filing | 未 | 正本の一つ。セクション方針は要設計 |
 | Struct | Statement | 未 | 正本。presentation/calc・拡張・anchoring |
@@ -75,7 +77,7 @@ Filing / Statement / Statement-Notes / Breakdown
 | # | Class 焦点 | 成果 | 書き込み |
 |---|---|---|---|
 | 0 | （スパイク） | ESEF 事実取得の実証（直 Summary・完了寄り） | ローカル |
-| 1 | Meta | identity / Search 契約（要確認）。`API/Esef` 発見・取得 | ローカル |
+| 1 | Meta | Search 契約の磨き（LEI/fxo_id/exact name）。**entity index 本番化は ESAP 後** | ローカル |
 | 2 | Struct | Filing 方針 + Statement。smoke/golden 固定 LEI | ローカル |
 | 3 | Struct | Statement-Notes（EU note_type） | ローカル |
 | 4 | Norm | Breakdown。続けて **正本→Summary 組立**（直 extract を正にしない） | ローカル→使い捨て |
@@ -93,13 +95,15 @@ Struct / Breakdown 正本が無い段階で Summary を本番公開しない。�
 - JP と同一 note_type / 有報セクション ID の無理な共通化
 - オンデマンドライブパースを serving に載せる
 - Meta/Struct を空にしたまま Norm/Viz だけ公開
+- **ESAP 一般公開前に entity index の全件取得ジョブ・本番マスター運用を始めること**
 
 ## 未決
 
 | 項目 | 論点 |
 |---|---|
-| identity（Meta） | `companies/{code}` / LEI / Region プレフィックス |
-| 母集団 | 全 ESEF / 指数 / 国。初期は少数 LEI 固定でよい |
+| identity（Meta） | LEI 主キーでよいか。ティッカー併記は ESAP 後に再検討 |
+| entity index / マスター | **ESAP（目安 2027-07）まで保留。** ソースを ESAP にするか filings.xbrl.org 継続かもその時点で決める |
+| 母集団 | 当面は固定 LEI（smoke）。全 ESEF / 指数は ESAP・index 後 |
 | DB | `source` 列共用か Source 別テーブルか |
 | cache_version | JP 共有床か Region/Source 別か |
 | 通貨・単位 | 配信での明示・正規化 |
@@ -109,7 +113,7 @@ Struct / Breakdown 正本が無い段階で Summary を本番公開しない。�
 
 ## 次（すぐ）
 
-1. Meta Search preview（`/v1/eu/companies`）の応答形を実運用で磨き、skills/MCP 掲載は別途確認
+1. Meta Search preview は **LEI / fxo_id / 名称完全一致** に寄せて契約を磨く（部分一致・全件 index は ESAP 後）
 2. **Struct**: 固定 LEI smoke と Statement 境界。Filing 方針のたたき台
 3. スパイク Summary は参照データに留め、正式 Summary は Filing/Statement/Notes/Breakdown 組立として設計する
 
