@@ -96,7 +96,7 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
 ### Neon Secrets
 
-アプリが読むのは `DATABASE_URL` のみ。本番系は明示オプトイン（上表の書き込み先）。
+手元の変数一覧は `.env.example`（コピーして `.env`）。アプリが読むのは `DATABASE_URL` のみ。本番系は明示オプトイン（下表の書き込み先）。
 
 | Secret | 用途 | 禁止 |
 |---|---|---|

@@ -89,9 +89,11 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 ```bash
 swift build -c release --product blt-server   # コード変更後は必須（旧バイナリは新 stage を黙って飛ばす）
-# .env（DATABASE_URL / BLT_EDINET_API_KEY。breakdowns LLM は LLM_PROVIDER と OPENAI_* / XAI_*。手順は operations.md）
+# .env は `.env.example` をコピー（Neon / EDINET / LLM / R2。正本の禁止事項は AGENTS.md「Neon Secrets」）
 set -a; . ./.env; set +a
 ./.build/release/blt-server sync
+# 使い捨て DB 向け。本番 WRITE へ書くときはコマンド単位で上書き（.env の DATABASE_URL は差し替えない）:
+# DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ```
 
