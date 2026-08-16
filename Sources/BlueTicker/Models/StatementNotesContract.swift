@@ -3,8 +3,8 @@
 //
 // company_breakdowns（内訳取り込み）と同型の設計: note_type ごとに1行（"\(docID)#\(noteType)" 合成キー）、
 // 決定論経路は cache_version 世代でゲート、LLM 経由は needs_review + content_hash でのみ再計算する。
-// company_statements（Statement取り込み 本体）とは別テーブル（バージョニング独立・課金境界をエンドポイント
-// 単位で分離するため。docs/feature-tiers.md）。
+// company_statements（Statement取り込み 本体）とは別テーブル（バージョニング独立。
+// 提供面は docs/feature-tiers.md）。
 //
 // 政策保有株式（policyHoldingSecurities）は当初「LLM必須」と見込んでいたが、実データ検証
 // （2026-08-02）の結果 EDINET標準タクソノミで銘柄ごとに完全構造化タグされていると判明したため、

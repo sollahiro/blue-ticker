@@ -1,6 +1,6 @@
 # EU / ESEF ロードマップ
 
-**Region `EU` · Source `ESEF` の進捗・未決・次**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP 全体の進捗は `blt-server-roadmap.md`。機能・課金は `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。
+**Region `EU` · Source `ESEF` の進捗・未決・次**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP 全体の進捗は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。
 
 モノレポ前提（JP↔EU / EDINET↔ESEF）。リポジトリ分割はしない。
 
@@ -17,7 +17,7 @@ Meta → Struct → Norm → Viz
 | **Meta** | 誰の・どの書類か | Search, Icon |
 | **Struct** | 開示の構造化（正本） | Filing, Statement, Statement-Notes |
 | **Norm** | 正本からの正規化・組立 | Breakdown（内訳正本）, **Summary（組立スナップショット）** |
-| **Viz** | 正規化値の分解・可視化 | Waterfall, Sankey/Allocation |
+| **Viz** | 正規化値の分解・可視化 | Waterfall, Sankey |
 
 **Summary の位置（重要）**: 独立の XBRL→Summary 本流ではない。JP と同じく次の経路から組む:
 
@@ -67,7 +67,7 @@ Filing / Statement / Statement-Notes / Breakdown
 | Norm | Breakdown | 未 | 内訳正本。Summary 組立の入力にもなる |
 | Norm | Summary | スパイクのみ | **組立ビュー**。Filing/Statement/Notes/Breakdown 後に正式配置 |
 | Viz | Waterfall | 未 | Summary 行（組立結果）の投影。計算は流用可 |
-| Viz | Sankey / Allocation | 未（JP も未） | Breakdown + Statement 等の材料後 |
+| Viz | Sankey | 未（JP も未） | Breakdown + Statement 等の材料後 |
 | Feed | Update | 未 | filings.xbrl.org sync |
 | Feed | Status | 未 | 母集団定義後 |
 | Feed | Trend / Report | — | 未実装 / 構想 |
@@ -81,7 +81,7 @@ Filing / Statement / Statement-Notes / Breakdown
 | 2 | Struct | Filing 方針 + Statement。smoke/golden 固定 LEI | ローカル |
 | 3 | Struct | Statement-Notes（EU note_type） | ローカル |
 | 4 | Norm | Breakdown。続けて **正本→Summary 組立**（直 extract を正にしない） | ローカル→使い捨て |
-| 5 | Viz | Waterfall（組立 Summary の投影）。Allocation は要求具体化後 | 同上 |
+| 5 | Viz | Waterfall（組立 Summary の投影）。Sankey は要求具体化後 | 同上 |
 | 6 | Feed | Update / Status | 同上 |
 | 7 | 配信 | REST/MCP に Region/Source（要確認） | 公開は都度確認 |
 | 8 | 母集団拡大 | 選定ユニバース → 定着後バンプ | 本番 write は明示時のみ |

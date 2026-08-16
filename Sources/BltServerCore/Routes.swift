@@ -201,8 +201,8 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/statement/notes?note_type=policy_holding_securities&doc_id=...
     // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
-    // `statement` 本体とは別エンドポイント（課金境界をエンドポイント単位で分離するため。
-    // docs/feature-tiers.md）。財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
+    // `statement` 本体とは別エンドポイント（バージョニング独立。docs/feature-tiers.md）。
+    // 財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
     v1.get("companies", ":code", "statement", "notes") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]

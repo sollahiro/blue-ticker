@@ -108,7 +108,7 @@ flowchart LR
 
 ### MCP（`POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。ChatGPT 非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。**当面 Apps in ChatGPT 専用**（`feature-tiers.md`）。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
 
 ## データパイプライン（構成）
 

@@ -4,7 +4,7 @@
 
 - 認証の住み分け → `api-auth.md`
 - 互換ポリシー → `api-compatibility.md`
-- 機能・課金境界 → `feature-tiers.md`
+- 機能マトリクス・提供面 → `feature-tiers.md`
 - クライアント面の現構成 → `architecture.md`
 
 ## 定義
@@ -17,11 +17,11 @@
 | 契約の安定化 | 後方互換の約束を厳格化（段階 B で deprecation 期間等を足す） |
 | 利用制御 | レート制限（未払い 402 連打も含む）。クォータは x402 の従量で代替 |
 
-ChatGPT 面は課金しない（`feature-tiers.md`）。段階 B の対象は REST と、x402 を話せる MCP。
+機能単位の有料マスクは採らない（`feature-tiers.md`）。**段階 B の対象は REST（x402）**。MCP は当面 Apps in ChatGPT 専用で、段階 B の x402 対象外（課金なし）。
 
 ## 着手順（暫定）
 
-1. 課金面への x402（識別子＝払済み。機能境界は `feature-tiers.md`）
+1. 課金面への x402（識別子＝払済み）
 2. レート制限
 3. CORS（必要なら）
 4. 外部向け OpenAPI 等
