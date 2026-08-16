@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_interest_bearing_debt.py 相当
 // IBDExtractor / IFRSLease.extractLeaseLiabilities の動作を検証する。
 
 import Testing

@@ -23,7 +23,7 @@ XBRL → statement / notes / breakdown（正本・並列）
          ↓
       company_financials（組立スナップショット）
          ↓
-      Summary / Waterfall（＋将来 Allocation）
+      Summary / Waterfall（＋将来 Sankey）
 ```
 
 - 正本 API も直接公開。`company_financials` は materialized view（read 時 join は採らない）。
@@ -59,13 +59,13 @@ XBRL → statement / notes / breakdown（正本・並列）
 | 9 | breakdown 分母の正本化 |
 | 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
-| 13+ | 明細整理・Allocation・契約露出変更は後回し |
+| 13+ | 明細整理・Sankey・契約露出変更は後回し |
 
 完了済み（EPS/issued_shares/本表の一部/capex パススルー等）の経緯は Git。
 
 ## 落とし穴
 
-- analysis_cache の **symlink → 0 facts**。実コピー（`cp -a`）を使う（`caching.md`）。
+- analysis_cache の **symlink → 0 facts**。実コピー（`cp -a`）を使う（`.agents/rules/project/caching.md`）。
 - `USGAAPStatementHtml` と `USGAAPHtml` を混同しない。
 - goodwill note は Summary 置換候補ではない。
 
@@ -78,7 +78,6 @@ XBRL → statement / notes / breakdown（正本・並列）
 | statement パススルー | `Analysis/StatementFinancialsResolver.swift` |
 | notes | `Analysis/StatementNotesResolver.swift` |
 | breakdown 分母 | `BltServerCore/BreakdownIngest.swift` |
-| feasibility | `DevCLI/DevStatementFeasibilityCommand.swift` |
 
 ## 関連
 

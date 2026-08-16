@@ -80,7 +80,7 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 1. Tunnel に `mcp.<domain>` → 同 origin
 2. Access アプリ（パスなし）＋ Managed OAuth ON
-3. 許可 IdP（例: One-Time PIN）と redirect URI（`https://claude.ai/api/mcp/auth_callback`、`http://localhost/callback`、`http://127.0.0.1/callback` — ポートなしで登録）
+3. 許可 IdP（例: One-Time PIN）と redirect URI（Apps in ChatGPT 用に Access へ登録した callback、加えて `http://localhost/callback`・`http://127.0.0.1/callback` — ポートなしで登録）
 4. discovery が 200、未認証 `tools/list` が 401 であることを確認
 
 ## 定期同期（ローカル）

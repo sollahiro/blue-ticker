@@ -1,5 +1,4 @@
 // サービス層テスト共通ヘルパー
-// Python tests/test_edinet_* / test_cache_pruner の tmp_path・os.utime・zip 生成相当
 
 import Foundation
 import ZIPFoundation

@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_cash_flow.py 相当
 // J-GAAP/IFRS 各タグで CFO・CFI を取得できること、タグが存在しない場合は nil を返すことを検証する。
 
 import Testing

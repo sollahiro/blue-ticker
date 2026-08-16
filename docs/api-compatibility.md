@@ -57,7 +57,7 @@ breaking 再編時は可能な範囲で:
 
 | もの | 理由 |
 |---|---|
-| Neon `cache_version`（`fin-v4` 等）・min servable 床 | ingest / 配信世代の内部制御。公開契約に漏らさない |
+| Neon `cache_version`（`fin-vN` 等）・min servable 床 | ingest / 配信世代の内部制御。公開契約に漏らさない |
 | `blueTickerVersion`（配布物バージョン） | CLI / キャッシュ用。REST `schema_version` とは独立 |
 | facts RAW | 非公開 |
 

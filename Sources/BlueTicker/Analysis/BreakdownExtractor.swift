@@ -1,5 +1,4 @@
 // 連結財務諸表注記からセグメント・地域別情報を抽出する
-// Python の blue_ticker/analysis/segment_extractor.py 相当
 //
 //   extractSegmentInfo()   → 事業別（報告セグメント別）
 //   extractGeographyInfo() → 地域別（所在地別）
@@ -58,7 +57,7 @@ struct ExtractedBreakdown: Equatable {
 }
 
 extension ExtractedBreakdown {
-    /// toDictionary() の逆変換。remote CLI が filing-content の JSON をローカル同等に描画するために使う。
+    /// toDictionary() の逆変換。
     init(dictionary: [String: Any]) {
         method = dictionary["method"] as? String ?? "not_found"
         tables = (dictionary["tables"] as? [[String: Any]] ?? []).map { t in
@@ -366,7 +365,7 @@ enum BreakdownExtractor {
 
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
     /// `classifyNotApplicableReason`（company_breakdowns への永続化に使う本番判定）から呼ばれる
-    /// ほか、DevCLI診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
+    /// ほか、診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
     /// 表を持たず・マーカー＋集中度語を含み・同一セグメント定型句を含まない場合のみ採用する。
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
         let targetTags = singleSegmentDisclosureTags.union(Xbrl.productOrServiceTextBlockTags)

@@ -12,10 +12,6 @@ func defaultUserDataPath(
     return defaultConfigRoot().appendingPathComponent(configDirName, isDirectory: true)
 }
 
-func candidateSecretPaths() -> [URL] {
-    [defaultUserDataPath().appendingPathComponent("secrets.json")]
-}
-
 private func defaultConfigRoot() -> URL {
     // XDG_CONFIG_HOME → ~/.config
     if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {

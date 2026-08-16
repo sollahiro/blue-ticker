@@ -1,41 +1,23 @@
-// financials API の公開契約（flatten 形）。サーバーとクライアントで共有する単一の Codable 型。
+// financials API の公開契約（flatten 形）。サーバー・テストで共有する Codable 型。
 //
-// 設計意図:
-// - サーバー（財務取り込み ingest の computeFinancials → DB 格納 → read で jsonObject()）は
-//   この型から JSON を生成し、remote CLI（RemoteAPIClient）は同じ型でデコードして MetricsResult に復元する。
-//   キー定義が 1 か所（CodingKeys）に集約され、契約のドリフトを防ぐ（「統一」）。
-// - 内部モデル（MetricsResult/RawData/CalculatedData）は直シリアライズせず、ここで
-//   公開用フラット形（snake_case）へ写像する（公開 API を内部モデルから疎結合に保つ）。
-// - 出力は「全キーが存在する（欠落値は null）」を維持する（既存契約の互換性）。
-//   nil の Optional を JSONEncoder は省略するため、jsonObject() で CodingKeys.allCases を
-//   使って null を補完する。
+// - ingest（computeFinancials → DB）と read（jsonObject()）のキー定義を CodingKeys に集約する。
+// - 内部モデル（MetricsResult 等）は直シリアライズせず、公開用フラット形（snake_case）へ写像する。
+// - 「全キー存在（欠落は null）」を維持するため、jsonObject() で CodingKeys.allCases から null を補完する。
 //
-// Foundation のみ依存（NIO/Vapor 非依存）。サーバー・CLI 双方から使う。
+// Foundation のみ依存（NIO/Vapor 非依存）。
 
 import Foundation
 
-/// 財務取り込み（通期）の計算結果。「対象外」（有価証券報告書が未提出、新規上場等で設計通り・再提出待ち）と
-/// 「失敗」（書類はあるが抽出できない、要調査）を区別する（issue #86）。
-/// ingest サマリで前者を failed カウントへ混入させないために使う。
+/// 財務取り込み（通期）の計算結果。「対象外」（有報未提出等）と「失敗」（抽出不可）を区別する。
+/// ingest サマリで前者を failed カウントへ混入させない。
 public enum FinancialsComputeResult: Sendable {
     case success(FinancialsResponse)
     case notApplicable
     case failed
 }
 
-/// Neon 財務取り込み キャッシュ（`company_financials.cache_version`）の計算バージョン。
-/// `blueTickerVersion` とは独立し、財務計算ロジック（`computeFinancials` / `Analysis` 抽出器）
-/// または本契約型（`FinancialsResponse` / `FinancialsYear`）の意味を変えたときのみバンプする。
-/// グローバルバージョンに連動させないことで、月内 Micro バンプで高コストな全社再計算
-/// （XBRL 再ダウンロード＋HTML 依存抽出の再実行）を走らせない（XBRL 数値 RAW の `xbrlFactsCacheVersion` と同思想）。
-///
-/// PR #27（6836 売掛金の企業拡張タグ対応）はこのバージョンをバンプせず fin-v3 のまま合流した。
-/// 抽出ロジック変更の反映（既存キャッシュ済み行の再計算）は、他の同種修正が貯まってから
-/// まとめて fin-v4 へバンプし、全社再 ingest を一度に走らせる方針のため意図的に保留している。
-///
-/// v5（2026-08-05）: `BorrowingsSchedule.extract`（financials の有利子負債フォールバック、
-/// `Extractors.swift`）を大幅改修（借入金等明細表のスケール判定・インデント処理バグ修正、
-/// IFRS/J-GAAP多数のフォールバック経路追加）。財務値に影響するためバンプする。
+/// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
+/// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
 public let companyFinancialsCacheVersion = "fin-v5"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
@@ -334,7 +316,7 @@ extension FinancialsYear {
         ccc = calc.ccc
     }
 
-    /// 公開フラット形 → 内部モデル（YearEntry）。remote CLI が既存レンダラへ渡すために復元する。
+    /// 公開フラット形 → 内部モデル（YearEntry）。
     /// レンダラが参照するフィールドのみ詰める（その他は nil）。
     func toYearEntry() -> YearEntry {
         var raw = RawData.blank
@@ -503,7 +485,7 @@ extension FinancialsResponse {
         years = (result.years ?? []).map { FinancialsYear($0) }
     }
 
-    /// 公開契約レスポンス → 内部モデル（MetricsResult）。remote CLI が既存レンダラへ渡す。
+    /// 公開契約レスポンス → 内部モデル（MetricsResult）。
     func toMetricsResult() -> MetricsResult {
         var result = MetricsResult.blank
         result.code = code

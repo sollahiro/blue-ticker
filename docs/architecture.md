@@ -21,11 +21,11 @@
 
 ## デプロイモード
 
-配布 CLI `ticker` は廃止。ユーザー接点は REST / MCP。EDINET 直叩きは配布しない `TickerDev`（`swift run TickerDev`。products 非搭載）。
+配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。ユーザー接点は REST / MCP。検証は `swift test`（smoke/golden）と、使い捨て Neon へ ingest したうえでの `/v1`。
 
 | モード | EDINET | blt-server | 状態 |
 |---|---|---|---|
-| `TickerDev` | 自身 | なし | 開発・フィクスチャ専用 |
+| local verify | キャッシュ or 取得 | 任意（契約確認時は disposable DB） | 開発 |
 | remote (self-host) | blt-server | 同一マシン | 基盤あり |
 | remote (cloud) | blt-server | Fly (nrt) + Neon | **本番** |
 
@@ -33,16 +33,19 @@
 
 ## ターゲット構成と依存方向
 
-Core に Vapor/Fluent をリンクさせない。依存は `BltServerCore` → `BlueTickerCore` のみ。
+Core に Vapor/Fluent をリンクさせない。実行バイナリは薄く、Web/DB は `BltServerCore` に閉じる。
+
+外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/project/dependencies.md`）。
 
 ```mermaid
 graph TD
     subgraph exe["実行ターゲット"]
         blt["BltServer"]
-        tickerdev["TickerDev"]
+    end
+    subgraph mcp["BltMcpServerCore"]
+        MCP["MCP.Server / Tools"]
     end
     subgraph core["BlueTickerCore"]
-        DevCLI["DevCLI/（DevCLIEntry）"]
         Server["Server/（REST ファサード）"]
         Services["Services/"]
         Analysis["Analysis/"]
@@ -55,10 +58,9 @@ graph TD
         Ingest["*Ingest / DocumentSync"]
     end
     blt --> servercore
-    blt --> core
-    tickerdev --> core
     servercore --> core
-    DevCLI --> Services
+    servercore --> mcp
+    mcp --> core
     Server --> Services
     Services --> Analysis
     Transport --> Server
@@ -67,9 +69,9 @@ graph TD
 
 products は `blt-server` のみ。同一モジュール内の依存はレビューで担保（`AGENTS.md` と同趣旨）:
 
-- `Services/` → `DevCLI/` 禁止
-- `Analysis/` `API/` `Utils/` → `Services/` `Server/` `DevCLI/` 禁止
-- `Server/` はファサードのみ。`DevCLI/` の public 面は `DevCLIEntry` のみ
+- `Services/` → `Server/` 禁止
+- `Analysis/` `API/` `Utils/` → `Services/` `Server/` 禁止
+- `Server/` はファサードのみ
 
 ## リクエストフロー
 
@@ -78,11 +80,9 @@ products は `blt-server` のみ。同一モジュール内の依存はレビュ
 ```mermaid
 flowchart LR
     user(["クライアント"]) -->|"HTTPS /v1 または MCP POST /"| server["blt-server"]
-    dev(["開発者"]) --> tickerdev["TickerDev"]
-    tickerdev --> facade0["DevCLIEntry"]
+    dev(["開発者"]) -->|"swift test / ingest+curl"| server
     server --> facade["BltServerContext"]
-    facade0 --> svc["Services / Analysis"]
-    facade --> svc
+    facade --> svc["Services / Analysis"]
     svc --> edinet[("EDINET")]
     server -.->|DB read| pg[("Neon")]
 ```
@@ -108,7 +108,7 @@ flowchart LR
 
 ### MCP（`POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。ChatGPT 非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。**当面 Apps in ChatGPT 専用**（`feature-tiers.md`）。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
 
 ## データパイプライン（構成）
 
@@ -124,7 +124,7 @@ flowchart LR
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは従来どおりダウンロード）。facts は全書類の提出日時順、icons は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/project/caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは従来どおりダウンロード）。facts は全書類の提出日時順、icons は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 

@@ -1,5 +1,4 @@
 // XBRL 抽出結果の型定義
-// Python の XbrlFact TypedDict と XbrlFactIndex の Swift 対応
 
 struct XbrlFact {
     var tag: String

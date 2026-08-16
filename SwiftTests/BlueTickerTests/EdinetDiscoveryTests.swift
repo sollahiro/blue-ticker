@@ -1,11 +1,5 @@
-// Python tests/test_edinet_discovery.py の移植
-//
-// Python は内部関数の monkeypatch で検証するが、Swift はキャッシュシード方式で移植する
-// （年次インデックスを事前にファイルへ書き込み、API キーなしでネットワークを遮断する）。
-// 直近書類の探索（findMostRecentFiling）もシードした年次インデックス経由で実際に動く。
-//
-// Python との相違:
-// - buildDocumentIndexForCode は not_found_fy_ends を返さない（Swift では戻り値が docs のみ）
+// 年次インデックスを事前にシードし、API キーなしでネットワークを遮断して検証する。
+// findMostRecentFiling もシードした年次インデックス経由で動く。
 
 import Testing
 import Foundation

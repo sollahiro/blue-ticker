@@ -1,5 +1,4 @@
 // FieldSet 正規化レイヤー
-// Python の blue_ticker/analysis/field_parser.py 相当
 
 import Foundation
 

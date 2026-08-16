@@ -1,5 +1,4 @@
 // XBRL ユニットテスト共通ヘルパー
-// Python tests/test_xbrl_*.py の _make_xbrl / _fs ヘルパー相当
 
 import Foundation
 import SwiftSoup
@@ -129,7 +128,7 @@ enum XBRLTestSupport {
     }
 }
 
-/// (tag, current, prior) の組から FieldSet を構築する（Python の _fs 相当）。
+/// (tag, current, prior) の組から FieldSet を構築する。
 func makeFieldSet(_ entries: (tag: String, current: Double?, prior: Double?)...) -> FieldSet {
     var fs: FieldSet = [:]
     for (tag, current, prior) in entries {

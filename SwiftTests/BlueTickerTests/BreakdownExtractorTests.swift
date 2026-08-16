@@ -1,5 +1,4 @@
 // BreakdownExtractor のユニットテスト
-// Python tests/test_segment_extractor.py 相当＋TextBlock/dimension fact 統合テスト
 
 // 注意: このファイルで SwiftSoup を import しないこと。
 // SwiftSoup.Comment が #expect マクロ展開の生成する Comment と曖昧衝突し、

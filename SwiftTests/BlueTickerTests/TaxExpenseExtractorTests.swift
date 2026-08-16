@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_tax_expense.py 相当
 // 税引前利益・法人税等の抽出と実効税率計算を検証する（J-GAAP / IFRS / US-GAAP HTML）。
 // 前期側の値（prior_*）は Swift の TaxExpenseResult に未実装のため検証対象外。
 

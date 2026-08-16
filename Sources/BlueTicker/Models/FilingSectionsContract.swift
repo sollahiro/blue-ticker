@@ -95,7 +95,7 @@ public struct ExtractedBreakdownPayload: Codable, Sendable, Equatable {
         self.facts = facts
     }
 
-    /// ExtractedBreakdown.toDictionary() と同じ形（remote CLI が ExtractedBreakdown(dictionary:) で復元できる）。
+    /// ExtractedBreakdown.toDictionary() と同じ形。
     public func toDictionary() -> [String: Any] {
         let tablesArr: [[String: Any]] = tables.map { t in
             var d: [String: Any] = ["heading": t.heading, "markdown": t.markdown]

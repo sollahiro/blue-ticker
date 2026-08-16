@@ -1,4 +1,3 @@
-// Python tests/test_cache_pruner.py の移植（現行ディレクトリ構造向け）
 //
 // 移植対象外:
 // - test_stats_counts_cache_categories / test_audit_lists_cache_categories

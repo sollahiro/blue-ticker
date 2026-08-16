@@ -1,4 +1,3 @@
-// Python tests/test_edinet_cache_store.py の移植
 //
 // 移植対象外:
 // - test_file_lock_prints_wait_notice（time.sleep / monotonic のモックが前提で実時間依存になるため）

@@ -1,5 +1,4 @@
 // 財務指標モデル
-// Python の TypedDict(total=False) → Swift の struct + Optional フィールド
 
 struct IBDComponent: Codable {
     var label: String?

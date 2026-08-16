@@ -30,8 +30,12 @@
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
 
 import BltServerCore
-import BlueTickerCore
 import Foundation
+
+/// エントリ専用。Core の `printError` に頼らず stderr へ書く（BltServer → BlueTickerCore 直リンクを避ける）。
+private func printError(_ message: String) {
+    FileHandle.standardError.write(Data(message.utf8))
+}
 
 /// 名前付きオプション（--key value）を argv から取り出す。
 private func optionValue(_ name: String, in argv: [String]) -> String? {

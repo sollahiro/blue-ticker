@@ -1,5 +1,4 @@
 // XBRL セクション抽出
-// Python の blue_ticker/analysis/xbrl_parser.py 相当
 
 import Foundation
 #if canImport(FoundationXML)

@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_income_statement.py 相当
 // J-GAAP/IFRS 各タグで売上高・営業利益・純利益を取得できること、
 // ordinary_income フォールバック・salesLabel 付与・not_found を検証する。
 

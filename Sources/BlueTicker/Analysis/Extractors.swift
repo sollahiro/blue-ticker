@@ -1,5 +1,4 @@
 // XBRL 分析抽出器群
-// Python の blue_ticker/analysis/{income_statement,cash_flow,balance_sheet,...}.py 相当
 
 import Foundation
 import SwiftSoup
@@ -480,7 +479,7 @@ enum OperatingProfitExtractor {
 
 enum IBDExtractor {
 
-    // コンポーネント表示用ラベル（Python: COMPONENT_DEFINITIONS）
+    // コンポーネント表示用ラベル
     private static let componentDefs: [(label: String, tags: [String])] = [
         ("短期借入金", ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
         ("コマーシャル・ペーパー", ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"]),

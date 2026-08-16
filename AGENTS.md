@@ -12,38 +12,38 @@
 - **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **Region × Source**: モノレポ。市場は `JP`↔`EU`、開示系は `EDINET`↔`ESEF`（同階層の対）。パス・新規モジュールはこの対応で命名する（`.agents/rules/project/regions.md`、`docs/architecture.md`）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
-- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**、および **breakdown の `business` / `geography` 軸**（外出しオラクル。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合）。`statement`（Statement 取り込み本体）は `SmokeTests.swift` 自体は通らないが、smoke 固定11社中 US-GAAP2社を除く9社全件の golden を `RealXbrlStatementTests.swift` に追加済み（US-GAAP2社は同ファイルの HTML 経路 golden）。公開 note_type 9種はいずれも床に載済み。新規 note_type 追加時は同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden（深さ）と smoke（床）の役割・固定企業・対象 note_type / breakdown 軸は `docs/xbrl-parsing.md` §6。新規 note_type 追加時は床を広げる。言語非依存の資産と実装紐づきの分けは `docs/test-spec-assets.md`。
 
 ## ビルド・テスト
 
 ```bash
-swift build                          # blt-server / TickerDev バイナリを生成
-swift test                           # 全テスト（Swift Testing）
-.build/debug/blt-server --help       # ローカル実行（要 BLT_EDINET_API_KEY 等）
-swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
+swift build                          # blt-server を生成
+swift test                           # 全テスト（Swift Testing）。段階1–2の床
+BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server   # 使い捨て Neon を使うときは DATABASE_URL に束ねる
+.build/debug/blt-server ingest --codes 7203 --stages financials,statements,statement-notes,breakdowns
+curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=1'
 ```
 
-**サーバー動作確認はローカル優先**: 外部クライアント（ChatGPT 等）の実接続確認を含め、挙動を1回ごとに見て試行錯誤する段階は `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server`（`127.0.0.1:3000`）で行う。外部から到達させる必要がある場合は `cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate` 等の一時トンネルを使う。PR → CI → デプロイの待ちは1周が数分かかり、本番へも影響しうる。ローカルは秒単位で再現でき、失敗させても本番に影響しない。ロジックが固まってから通常のブランチ運用（PR・CI・レビュー・マージ）に進む。
+**検証の分担**: 段階1–2は `swift test`（smoke/golden。キャッシュ無しなら EDINET オンライン）。契約・配信の確認は使い捨て Neon へ ingest したうえで `/v1`。サーバー動作確認はローカル優先（`127.0.0.1:3000`）。外部から到達させる場合は `cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate` 等。PR → CI → デプロイの待ちは1周が数分かかり本番へも影響しうる。ロジックが固まってから通常のブランチ運用へ。
 
 ## ターゲット構成と依存ルール
 
+詳細図は `docs/architecture.md`。外部パッケージ一覧は `Package.swift` 先頭コメント（`.agents/rules/project/dependencies.md`）。
+
 | ターゲット | 内容 |
 |---|---|
-| `BlueTickerCore`（`Sources/BlueTicker/`） | XBRL解析・サービス・REST ファサード（`Server/`）・開発用ローカル解析（`DevCLI/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
-| `BltMcpServerCore`（`Sources/BltMcpServerCore/`） | MCP プロトコル層（ツールカタログ・`MCP.Server` ファクトリ）。ビジネスロジック・DB は持たない。**Vapor/Fluent には依存しない** |
-| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。MCP はルートパス（`POST /`）として配線。Web/DB 依存をここに閉じ込める |
-| `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ（唯一の配布 executable product） |
-| `TickerDev`（`Sources/TickerDevMain/`） | 開発用ローカル解析 CLI のエントリポイントのみ。**`Package.swift` の `products` に含めない**（`swift run TickerDev` でのみ実行） |
+| `BlueTickerCore` | XBRL・サービス・REST ファサード。**Vapor/Fluent 非依存** |
+| `BltMcpServerCore` | MCP プロトコル層。**Vapor/Fluent 非依存** |
+| `BltServerCore` | Vapor トランスポート＋ Fluent DB。MCP は `POST /` |
+| `BltServer` | `blt-server` エントリのみ（唯一の配布 product）。`BltServerCore` のみに依存 |
 
-ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。
+依存方向: `BltServer` → `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore`。逆は不可。
 
-`BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
+`BlueTickerCore` 内（同一モジュールのためレビューで担保）:
 
-- `Services/` は `DevCLI/` のコマンド型を参照してはならない
-- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `Services/`・`Server/`・`DevCLI/` を参照してはならない
-- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`、breakdowns 取り込み結果を表す `BreakdownResolveResult` 等）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
-- `DevCLI/` は `TickerDev` ターゲット向けの **ファサード**。公開面は `DevCLIEntry` の1点のみ。ローカル解析コマンド実装は internal のまま置き、新たに public 化しない
-
+- `Services/` → `Server/` 禁止（ファサードは `Server/` が Services を呼ぶ）
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` → `Services/`・`Server/` 禁止
+- `Server/` はファサードのみ（Vapor/Fluent は `BltServerCore`）
 ## 機能の実装サイクル
 
 新機能・Stage 拡張は次の順。**バンプ**は Neon `cache_version` のみ（`blueTickerVersion` ではない → `versioning.md`）。**公開範囲**（REST/MCP 解禁など）は機能ごとに都度確認。
@@ -76,6 +76,7 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 - **タイミング**: main マージ前（ブランチ高度＝品質ゲート）。
 - **手段**: `Agent` / `Task`、または `pi` 非対話（Cursor CLI 不使用）。
 - **pi 経由の timeout**: 10〜15 分程度を確保する（短すぎると思考中に打ち切られる）。
+- **pi 用 Cursor Secrets**（VM）: `OPENAI_API_KEY` · `MOONSHOTAI_API_KEY`（アプリの内訳 LLM 鍵 `OPENAI_BUSINESS_*` / `XAI_*` とは別）。
 
 | 作業 | モデル |
 |---|---|
@@ -102,8 +103,8 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 |---|---|---|
 | `DATABASE_URL` | プロセス束縛。blt-server が読む唯一の接続先。手元の既定は disposable を代入。未設定＝ステートレス | 手元 `.env` の既定を本番 WRITE に差し替えたままにしない（WRITE はコマンド単位上書き） |
 | `BLT_NEON_DISPOSABLE_DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し | 本番を指させない |
-| `BLT_NEON_RO_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子＝RO**。作成／reset 時点のコピー）。旧名 `BLT_PROD_DATABASE_URL` | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
-| `BLT_NEON_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝WRITE**）。旧名 `BLT_PROD_WRITE_DATABASE_URL` | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
+| `BLT_NEON_RO_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子＝RO**。作成／reset 時点のコピー） | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
+| `BLT_NEON_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝WRITE**） | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
 | `NEON_API_KEY` | RO を親へ reset する Neon API 認証 | リポジトリへ書かない |
 | `NEON_PROJECT_ID` | Neon project id | — |
 | `NEON_WRITE_BRANCH_ID` | WRITE 親の `br-…`（`source_branch_id`）。`BLT_NEON_WRITE_DATABASE_URL` と同ブランチ | 接続 URL の `ep-…` や `postgresql://` を流用しない |
@@ -111,4 +112,4 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
 **RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。ingest 後に上記 4 変数が揃っていれば実行（欠ける／失敗しても ingest 成否には影響させない）。
 
-**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$BLT_NEON_DISPOSABLE_DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
+**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ disposable 接続で `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`。本番では不可。

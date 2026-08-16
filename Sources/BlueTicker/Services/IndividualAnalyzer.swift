@@ -1,16 +1,13 @@
 import Foundation
 
 // MARK: - IndividualAnalyzer
-// Python の blue_ticker/services/analyzer.py 相当
 // 個別銘柄の EDINET 書類から財務指標を抽出してメトリクスを組み立てる。
 
 private let _cacheVersion = blueTickerVersion
 private let millionYen = 1_000_000.0
 private let percent = 100.0
 
-/// `IndividualAnalyzer.fetchAndBuild` の結果。「有価証券報告書が未提出」（対象外、新規上場等で
-/// 初回本決算前）と「書類はあるが抽出できない」（失敗、要調査）を呼び出し元が区別できるようにする
-/// （issue #86）。
+/// `IndividualAnalyzer.fetchAndBuild` の結果。有報未提出（対象外）と抽出不可（失敗）を区別する。
 enum IndividualAnalyzeOutcome {
     case result(MetricsResult)
     case notApplicable
@@ -68,11 +65,9 @@ struct IndividualAnalyzer {
         )
         guard !docs.isEmpty else { return .notApplicable }
 
-        // 最新 analysisYears 件に絞る（EdinetDiscovery は最大件数を返すが多い場合もある）
         let targetDocs = Array(docs.prefix(analysisYears))
 
-        // 並列で XBRL ダウンロード + 抽出（メモリピーク抑制のため並列度を制限）
-        // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーでクロージャ境界を渡す
+        // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーで渡す
         struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
         var yearEntries: [YearEntry] = await withBoundedTaskGroup(
             items: targetDocs.map { SendableDoc(value: $0) },
@@ -83,10 +78,8 @@ struct IndividualAnalyzer {
 
         guard !yearEntries.isEmpty else { return .failed }
 
-        // fyEnd 降順ソート（最新が先頭）
         yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
 
-        // ウォーターフォール分解（全年度揃ってから実行）
         applyOperatingProfitChangeToYears(&yearEntries)
         applyRoicWaterfallToYears(&yearEntries)
         applyRoeWaterfallToYears(&yearEntries)
@@ -108,22 +101,16 @@ struct IndividualAnalyzer {
         guard let docID = doc["docID"] as? String,
               let fyEnd = doc["edinet_fy_end"] as? String else { return nil }
 
-        // XBRL ダウンロード（キャッシュ済みなら即返す）
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
 
-        // XBRL 全数値要素を収集
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !allTagElements.isEmpty else { return nil }
 
         let accountingStandard = detectAccountingStandard(allTagElements)
 
-        // Duration FieldSet（損益計算書・CF用）
         var durationFS = fieldSetFromDuration(allTagElements)
-        // 非連結 Duration FieldSet（自己株式取得・配当金の非連結フォールバック用）
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTagElements)
-        // IFRS 親会社帰属持分 Duration FieldSet（SS配当・SS自己株の NCI除外用）
         let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTagElements)
-        // Instant FieldSet（貸借対照表・有利子負債用）
         var instantFS = fieldSetFromInstant(allTagElements)
 
         // US-GAAP: 未移行フィールド（GP/SGA/IBD/税等）用に HTML 仮想タグを注入。
@@ -133,11 +120,9 @@ struct IndividualAnalyzer {
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
-        // 本表水準値は statement 正本のみ（タスク #5 / #5b-1）。旧 Extractor へのフィールド単位
-        // フォールバックはしない。USGAAPHtml 注入は未移行フィールド（GP/SGA/IBD/税等）用に残す。
+        // 本表水準値は statement 正本のみ（#5 / #5b-1）。旧 Extractor へのフィールド単位フォールバックはしない。
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
 
-        // 未移行フィールド用の抽出器
         let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
@@ -150,19 +135,17 @@ struct IndividualAnalyzer {
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
 
-        // RawData 組み立て
         var raw = RawData()
         raw.curFYEn = fyEnd
         raw.curPerType = doc["period_type"] as? String ?? "FY"
         raw.discDate = doc["submitDateTime"] as? String
-        // 売上高・営業利益・純利益・現金・純資産（百万円単位。正本は statement のみ）
         raw.sales = statementMain?.sales.map { $0 / millionYen }
         raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
         raw.np = statementMain?.netProfit.map { $0 / millionYen }
         raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
         raw.cfo = cf.cfo.map { $0 / millionYen }
         raw.cfi = cf.cfi.map { $0 / millionYen }
-        // 設備投資は notes overview タグ → CF タグ（タスク #6）
+        // 設備投資: notes overview → CF（#6）
         raw.capex = StatementNotesResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
         ).map { $0 / millionYen }
@@ -170,11 +153,9 @@ struct IndividualAnalyzer {
         raw.buyback = bb.current.map { $0 / millionYen }
         raw.salesLabel = statementMain?.salesLabel
         raw.cashEq = statementMain?.cashEquivalents.map { $0 / millionYen }
-        // 基本EPS（円・連結当期）と発行済普通株式数（期末残高・株）は notes 正本からパススルー
         raw.eps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
         raw.shOutFY = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
 
-        // CalculatedData 組み立て
         var calc = CalculatedData()
         calc.docID = docID
         calc.grossProfit = gp.grossProfit.map { $0 / millionYen }
@@ -186,7 +167,6 @@ struct IndividualAnalyzer {
         calc.sellingGeneralAdministrativeExpenses = op.sga.map { $0 / millionYen }
         calc.opLabel = statementMain?.operatingProfitLabel ?? op.label
 
-        // BS 項目（正本は statement のみ）
         calc.totalAssets = statementMain?.totalAssets.map { $0 / millionYen }
         calc.currentAssets = statementMain?.currentAssets.map { $0 / millionYen }
         calc.nonCurrentAssets = statementMain?.nonCurrentAssets.map { $0 / millionYen }
@@ -195,20 +175,16 @@ struct IndividualAnalyzer {
         calc.netAssets = statementMain?.netAssets.map { $0 / millionYen }
         calc.balanceSheetAccountingStandard = accountingStandard
 
-        // 有利子負債
         calc.interestBearingDebt = ibd.total.map { $0 / millionYen }
         calc.ibdAccountingStandard = ibd.accountingStandard
 
-        // 従業員数
         if let e = emp.current { calc.employees = Int(e) }
 
-        // 税金・支払利息
         calc.pretaxIncome = tax.pretaxIncome.map { $0 / millionYen }
         calc.incomeTax = tax.incomeTax.map { $0 / millionYen }
         calc.effectiveTaxRate = tax.effectiveTaxRate.map { $0 * percent }
         calc.interestExpense = ie.current.map { $0 / millionYen }
 
-        // 有形固定資産（正本は statement のみ）
         calc.ppeTotal = statementMain?.ppeTotal.map { $0 / millionYen }
         calc.ppeAccountingStandard = accountingStandard
 
@@ -220,12 +196,10 @@ struct IndividualAnalyzer {
         calc.inventory = statementMain?.inventory.map { $0 / millionYen }
         calc.accountsPayable = statementMain?.accountsPayable.map { $0 / millionYen }
 
-        // 営業利益率
         if let s = raw.sales, s > 0, let rawOP = raw.op {
             calc.operatingMargin = (rawOP / s) * percent
         }
 
-        // NOPAT
         if let op_ = raw.op, let taxRate = tax.effectiveTaxRate {
             let clampedTax = min(max(taxRate, Financial.nopatMinNormalTaxRate), Financial.nopatMaxNormalTaxRate)
             calc.nopat = op_ * (1.0 - clampedTax)

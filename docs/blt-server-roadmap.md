@@ -7,23 +7,23 @@
 | 項目 | 状態 |
 |---|---|
 | 本番 | Fly (nrt) + Neon + Cloudflare Access/Tunnel。`api.*` / `mcp.*`。main push（CI 成功後）で自動デプロイ |
-| CLI | 配布 `ticker` 廃止。開発は `TickerDev`、運用は `blt-server` sync/ingest |
+| CLI | 配布 `ticker` / 開発 `TickerDev` 廃止。運用・検証は `blt-server` sync/ingest と `/v1` |
 | sync | 稼働・日次増分 |
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
 | financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`。**Statement / Note / Breakdown → financials 組立ができた段階で `fin-v6` 切替。それまで financials バンプなし**（`financials-summary-separation.md`） |
 | breakdowns | business/geography は上場全体（日経225は処理順優先）。employees/rd/goodwill は日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
 | statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes はコード配線済・本番 ingest 未 |
 | 定期ジョブ | ローカル launchd。Fly は read 専用（ingest は OOM のためローカル） |
-| MCP | `POST /` 埋め込み。Managed OAuth は `mcp.*` |
+| MCP | `POST /` 埋め込み。Managed OAuth は `mcp.*`（当面 Apps in ChatGPT 専用） |
 
 カバレッジ確認例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`。
 
 ## 方針
 
 - **REST `/v1` が契約の正**。MCP は追従面。新機能は REST 先。
-- Core はサーバー専用にしない（`TickerDev`・テストと共有）。
+- Core はサーバー専用にしない（テスト・ingest 計算と共有）。
 - オンデマンド ingest（404→202＋キュー）は設計あり・未実装（公開スキーマ追加のため着手前確認）。
-- 第三者公開（段階 B）は `public-api.md`。課金境界は `feature-tiers.md`。
+- 第三者公開（段階 B）と x402 は `public-api.md`。機能マトリクス・提供面は `feature-tiers.md`（機能単位の有料マスクは採らない）。
 - Summary の次世代は **Statement / Note / Breakdown → financials** 組立。**組立ができた段階で `fin-v6` に切替える。それまで financials の `cache_version` バンプはしない。** Waterfall も同行走査のため同じ切替に乗る。
 
 read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かない）。床の引き上げは旧版 stale 消化後。
@@ -56,11 +56,11 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XB
 - [ ] Summary: Statement / Note / Breakdown → financials 組立を完成させ、その段階で `fin-v6` 切替（途中バンプなし）— `financials-summary-separation.md`
 - [ ] notes 本番 ingest、goodwill breakdown 配線、employees/rd 公開可否
 - [ ] statements 母集団拡大（銀行・保険等の実データ確認後）
-- [ ] Allocation（要求具体化後）— 材料は `feature-tiers.md`
+- [ ] Sankey（要求具体化後）— `feature-tiers.md`
 - [ ] MCP/REST レイテンシ（Tunnel/Access 区間）
 - [ ] ストレージ強化の方式選定
 - [ ] REST 第三者公開（段階 B）— `public-api.md`
-- [ ] 課金有効化（x402。ChatGPT 面は無料）— `feature-tiers.md`
+- [ ] 段階 B の x402 有効化（REST のみ。MCP は当面課金なし）— `feature-tiers.md`
 - [ ] filing-sections: 半期(160) 拡張
 - [ ] 抽出差分検証ツール / LLM 抜き打ち整合
 

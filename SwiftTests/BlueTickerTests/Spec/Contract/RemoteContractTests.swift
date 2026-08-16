@@ -3,8 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// REST 公開契約（FinancialsResponse）とデコード仕様を検証する。
-/// サーバー出力 → クライアント復元で、レンダラが使うフィールドが往復することを保証する。
+/// REST 公開契約（FinancialsResponse 等）の Codable 往復とキー存在を検証する。
 @Suite struct RemoteContractTests {
     /// MetricsResult → 契約 JSON → MetricsResult で、v2 で追加したフィールドを含め往復する。
     @Test func financialsContractRoundTripsRenderedFields() throws {
@@ -86,47 +85,14 @@ import Testing
         }
     }
 
-    /// companies の公開 JSON は location を含む（remote search のローカル同等表示に必要）。
+    /// companies の公開 JSON は location を含む。
     @Test func companyJSONDecodesLocation() throws {
         let json = #"[{"code":"7203","name":"トヨタ","sector":"輸送用機器","market":"プライム","location":"愛知県"}]"#
         let arr = try JSONDecoder().decode([StockSearchResult].self, from: Data(json.utf8))
         #expect(arr.first?.location == "愛知県")
     }
 
-    /// Cloudflare Access SSO JWT が設定されているとき、JWT が CF_Authorization Cookie で付与される。
-    /// Access のエッジ認証は Cookie を見るため（`Cf-Access-Jwt-Assertion` ヘッダーでは通らないことを実機で確認済み）。
-    @Test func buildRequestAddsCfAuthorizationCookieWhenSsoJwtSet() throws {
-        let client = try #require(
-            RemoteAPIClient(baseURLString: "https://api.example.com", cfAccessJwt: "jwt-token"))
-        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
-
-        #expect(request.value(forHTTPHeaderField: "Cookie") == "CF_Authorization=jwt-token")
-    }
-
-    /// 空文字は未設定扱い（Cookie を付与しない）。
-    @Test func buildRequestOmitsCfAuthorizationCookieWhenEmpty() throws {
-        let client = try #require(
-            RemoteAPIClient(baseURLString: "https://api.example.com", cfAccessJwt: ""))
-        let request = try #require(client.buildRequest("/v1/companies", query: [:]))
-
-        #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
-    }
-
-    /// filings の公開 JSON が RemoteFilings へデコードできる。
-    @Test func remoteFilingsDecodes() throws {
-        let json = #"""
-        {"code":"7203","name":"トヨタ","filings":[
-          {"doc_id":"S1","doc_type":"120","doc_type_label":"有価証券報告書","fy_end":"2025-03","submitted_at":"2025-06-20"}
-        ]}
-        """#
-        let f = try JSONDecoder().decode(RemoteFilings.self, from: Data(json.utf8))
-        #expect(f.filings.count == 1)
-        #expect(f.filings[0].docId == "S1")
-        #expect(f.filings[0].docTypeLabel == "有価証券報告書")
-        #expect(f.filings[0].submittedAt == "2025-06-20")
-    }
-
-    /// ExtractedBreakdown.toDictionary() ↔ init(dictionary:) が往復する（remote filing の段差復元）。
+    /// ExtractedBreakdown.toDictionary() ↔ init(dictionary:) が往復する。
     @Test func extractedBreakdownRoundTripsThroughDictionary() {
         let original = ExtractedBreakdown(
             method: "html_table",

@@ -1,5 +1,4 @@
 // IFRS リース負債・財政状態計算書 TextBlock 抽出
-// Python の blue_ticker/analysis/interest_bearing_debt.py の IFRS TextBlock/HTML 部分相当
 //
 // IFRS 企業ではリース負債（IFRS 16）の連結値が XBRL 数値タグに存在せず、
 // リース注記 TextBlock または財務諸表本文 HTML のテーブルにのみ埋め込まれている場合がある。

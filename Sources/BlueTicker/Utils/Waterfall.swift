@@ -1,5 +1,4 @@
 // 財務ウォーターフォール分解ユーティリティ
-// Python の blue_ticker/utils/{roe_waterfall,roic_waterfall,operating_profit_change}.py 相当
 
 import Foundation
 
