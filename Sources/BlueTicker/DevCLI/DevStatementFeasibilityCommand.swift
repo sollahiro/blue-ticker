@@ -108,10 +108,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
         let fm = FileManager.default
 
         if let exportNotesReviewPath {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             try Self.exportNotesReview(dirs: dirs, to: URL(fileURLWithPath: exportNotesReviewPath))
             return
         }
@@ -148,10 +145,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugBorrowingsSchedule {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             for dir in dirs {
@@ -171,10 +165,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugPolicyHoldingSecurities {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             var totalSecurities = 0
@@ -199,10 +190,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugDividends {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             var totalEvents = 0
@@ -227,10 +215,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugPerShare {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             var withBps = 0
@@ -260,10 +245,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugCapex {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             var withTable = 0
@@ -291,10 +273,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugIssuedSharesAndCapital {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             for dir in dirs {
@@ -317,10 +296,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugPPESchedule {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             for dir in dirs {
@@ -342,10 +318,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugGoodwill {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             for dir in dirs {
@@ -367,10 +340,7 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             return
         }
         if debugDoc == nil, debugLeaseLiabilities {
-            guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
-            else { return }
-            let dirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            guard let dirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else { return }
             var resolvedCount = 0
             var notApplicableCount = 0
             for dir in dirs {
@@ -392,12 +362,10 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
             Self.debugDump(docID: debugDoc, xbrlDir: dir, tags: tags)
             return
         }
-        guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil) else {
+        guard var docDirs = Self.listedXbrlDirs(at: xbrlRoot, fm: fm) else {
             printError("エラー: XBRL キャッシュディレクトリが見つかりません: \(xbrlRoot.path)\n")
             throw ExitCode.failure
         }
-        var docDirs = entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
         if limit > 0 { docDirs = Array(docDirs.prefix(limit)) }
 
         printError("対象書類数: \(docDirs.count)\n")
@@ -422,6 +390,14 @@ struct DevStatementFeasibilityCommand: AsyncParsableCommand {
     }
 
     // MARK: - 1書類分の解析
+
+    /// キャッシュ直下の `*_xbrl` ディレクトリを名前順で返す。
+    private static func listedXbrlDirs(at xbrlRoot: URL, fm: FileManager = .default) -> [URL]? {
+        guard let entries = try? fm.contentsOfDirectory(at: xbrlRoot, includingPropertiesForKeys: nil)
+        else { return nil }
+        return entries.filter { $0.lastPathComponent.hasSuffix("_xbrl") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
 
     struct FeasibilityRow {
         var docID: String
