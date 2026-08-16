@@ -10,7 +10,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Neon（代替容易）
 
-結合点は `DATABASE_URL` のみ。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
+結合点はプロセス束縛の `DATABASE_URL` のみ（手元では `BLT_NEON_DISPOSABLE_DATABASE_URL` 等を代入）。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
 
 ### 内訳 LLM（切替容易）
 
