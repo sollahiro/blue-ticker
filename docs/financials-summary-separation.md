@@ -78,7 +78,6 @@ XBRL → statement / notes / breakdown（正本・並列）
 | statement パススルー | `Analysis/StatementFinancialsResolver.swift` |
 | notes | `Analysis/StatementNotesResolver.swift` |
 | breakdown 分母 | `BltServerCore/BreakdownIngest.swift` |
-| feasibility | `DevCLI/DevStatementFeasibilityCommand.swift` |
 
 ## 関連
 

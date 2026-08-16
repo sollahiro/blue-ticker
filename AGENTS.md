@@ -17,13 +17,14 @@
 ## ビルド・テスト
 
 ```bash
-swift build                          # blt-server / TickerDev バイナリを生成
-swift test                           # 全テスト（Swift Testing）
-.build/debug/blt-server --help       # ローカル実行（要 BLT_EDINET_API_KEY 等）
-swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布しない。要 BLT_EDINET_API_KEY）
+swift build                          # blt-server を生成
+swift test                           # 全テスト（Swift Testing）。段階1–2の床
+BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server   # 使い捨て Neon を使うときは DATABASE_URL に束ねる
+.build/debug/blt-server ingest --codes 7203 --stages financials,statements,statement-notes,breakdowns
+curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=1'
 ```
 
-**サーバー動作確認はローカル優先**: 外部クライアント（ChatGPT 等）の実接続確認を含め、挙動を1回ごとに見て試行錯誤する段階は `BLT_EDINET_API_KEY=dev-local-dummy ./.build/debug/blt-server`（`127.0.0.1:3000`）で行う。外部から到達させる必要がある場合は `cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate` 等の一時トンネルを使う。PR → CI → デプロイの待ちは1周が数分かかり、本番へも影響しうる。ローカルは秒単位で再現でき、失敗させても本番に影響しない。ロジックが固まってから通常のブランチ運用（PR・CI・レビュー・マージ）に進む。
+**検証の分担**: 段階1–2は `swift test`（smoke/golden。キャッシュ無しなら EDINET オンライン）。契約・配信の確認は使い捨て Neon へ ingest したうえで `/v1`。サーバー動作確認はローカル優先（`127.0.0.1:3000`）。外部から到達させる場合は `cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate` 等。PR → CI → デプロイの待ちは1周が数分かかり本番へも影響しうる。ロジックが固まってから通常のブランチ運用へ。
 
 ## ターゲット構成と依存ルール
 
@@ -31,19 +32,18 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 
 | ターゲット | 内容 |
 |---|---|
-| `BlueTickerCore` | XBRL・サービス・REST ファサード・DevCLI。**Vapor/Fluent 非依存** |
+| `BlueTickerCore` | XBRL・サービス・REST ファサード。**Vapor/Fluent 非依存** |
 | `BltMcpServerCore` | MCP プロトコル層。**Vapor/Fluent 非依存** |
 | `BltServerCore` | Vapor トランスポート＋ Fluent DB。MCP は `POST /` |
 | `BltServer` | `blt-server` エントリのみ（唯一の配布 product）。`BltServerCore` のみに依存 |
-| `TickerDev` | 開発用 CLI エントリ。products 非搭載（`swift run TickerDev`） |
 
 依存方向: `BltServer` → `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore`。逆は不可。
 
 `BlueTickerCore` 内（同一モジュールのためレビューで担保）:
 
-- `Services/` → `DevCLI/` 禁止
-- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` → `Services/`・`Server/`・`DevCLI/` 禁止
-- `Server/` はファサードのみ。`DevCLI/` の public 面は `DevCLIEntry` のみ
+- `Services/` → `Server/` 禁止（ファサードは `Server/` が Services を呼ぶ）
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` → `Services/`・`Server/` 禁止
+- `Server/` はファサードのみ（Vapor/Fluent は `BltServerCore`）
 ## 機能の実装サイクル
 
 新機能・Stage 拡張は次の順。**バンプ**は Neon `cache_version` のみ（`blueTickerVersion` ではない → `versioning.md`）。**公開範囲**（REST/MCP 解禁など）は機能ごとに都度確認。
@@ -111,4 +111,4 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
 **RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。ingest 後に上記 4 変数が揃っていれば実行（欠ける／失敗しても ingest 成否には影響させない）。
 
-**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$BLT_NEON_DISPOSABLE_DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
+**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ disposable 接続で `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`。本番では不可。

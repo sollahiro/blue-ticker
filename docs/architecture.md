@@ -21,11 +21,11 @@
 
 ## デプロイモード
 
-配布 CLI `ticker` は廃止。ユーザー接点は REST / MCP。EDINET 直叩きは配布しない `TickerDev`（`swift run TickerDev`。products 非搭載）。
+配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。ユーザー接点は REST / MCP。検証は `swift test`（smoke/golden）と、使い捨て Neon へ ingest したうえでの `/v1`。
 
 | モード | EDINET | blt-server | 状態 |
 |---|---|---|---|
-| `TickerDev` | 自身 | なし | 開発・フィクスチャ専用 |
+| local verify | キャッシュ or 取得 | 任意（契約確認時は disposable DB） | 開発 |
 | remote (self-host) | blt-server | 同一マシン | 基盤あり |
 | remote (cloud) | blt-server | Fly (nrt) + Neon | **本番** |
 
@@ -41,13 +41,11 @@ Core に Vapor/Fluent をリンクさせない。実行バイナリは薄く、W
 graph TD
     subgraph exe["実行ターゲット"]
         blt["BltServer"]
-        tickerdev["TickerDev"]
     end
     subgraph mcp["BltMcpServerCore"]
         MCP["MCP.Server / Tools"]
     end
     subgraph core["BlueTickerCore"]
-        DevCLI["DevCLI/（DevCLIEntry）"]
         Server["Server/（REST ファサード）"]
         Services["Services/"]
         Analysis["Analysis/"]
@@ -60,11 +58,9 @@ graph TD
         Ingest["*Ingest / DocumentSync"]
     end
     blt --> servercore
-    tickerdev --> core
     servercore --> core
     servercore --> mcp
     mcp --> core
-    DevCLI --> Services
     Server --> Services
     Services --> Analysis
     Transport --> Server
@@ -73,9 +69,9 @@ graph TD
 
 products は `blt-server` のみ。同一モジュール内の依存はレビューで担保（`AGENTS.md` と同趣旨）:
 
-- `Services/` → `DevCLI/` 禁止
-- `Analysis/` `API/` `Utils/` → `Services/` `Server/` `DevCLI/` 禁止
-- `Server/` はファサードのみ。`DevCLI/` の public 面は `DevCLIEntry` のみ
+- `Services/` → `Server/` 禁止
+- `Analysis/` `API/` `Utils/` → `Services/` `Server/` 禁止
+- `Server/` はファサードのみ
 
 ## リクエストフロー
 
@@ -84,11 +80,9 @@ products は `blt-server` のみ。同一モジュール内の依存はレビュ
 ```mermaid
 flowchart LR
     user(["クライアント"]) -->|"HTTPS /v1 または MCP POST /"| server["blt-server"]
-    dev(["開発者"]) --> tickerdev["TickerDev"]
-    tickerdev --> facade0["DevCLIEntry"]
+    dev(["開発者"]) -->|"swift test / ingest+curl"| server
     server --> facade["BltServerContext"]
-    facade0 --> svc["Services / Analysis"]
-    facade --> svc
+    facade --> svc["Services / Analysis"]
     svc --> edinet[("EDINET")]
     server -.->|DB read| pg[("Neon")]
 ```

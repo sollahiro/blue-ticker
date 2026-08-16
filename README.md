@@ -53,7 +53,7 @@ Claude Desktop などのカスタムコネクタに **`https://mcp.sollahiro.com
 
 ## ドキュメント
 
-デプロイ・セルフホスト・開発用 CLI（`TickerDev`）などは [`docs/`](docs/) を参照してください。
+デプロイ・セルフホスト・開発検証（`swift test` / 使い捨て ingest + `/v1`）などは [`docs/`](docs/) を参照してください。
 
 - [`docs/architecture.md`](docs/architecture.md) — 構成
 - [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md) — 運用

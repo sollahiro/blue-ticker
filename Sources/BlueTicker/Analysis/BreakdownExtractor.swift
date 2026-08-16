@@ -365,7 +365,7 @@ enum BreakdownExtractor {
 
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
     /// `classifyNotApplicableReason`（company_breakdowns への永続化に使う本番判定）から呼ばれる
-    /// ほか、DevCLI診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
+    /// ほか、診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
     /// 表を持たず・マーカー＋集中度語を含み・同一セグメント定型句を含まない場合のみ採用する。
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
         let targetTags = singleSegmentDisclosureTags.union(Xbrl.productOrServiceTextBlockTags)

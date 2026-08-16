@@ -1,7 +1,7 @@
 name: CI
 
-# 配布 `ticker` / Homebrew release は廃止済み（旧 release.yml 削除）。
-# 検証対象は blt-server（唯一の product）と TickerDev を含むテストスイート、
+# 配布 `ticker` / Homebrew release / 開発 CLI `TickerDev` は廃止済み。
+# 検証対象は blt-server（唯一の product）とテストスイート、
 # および fly.toml の serviceless 不変条件。デプロイは deploy.yml（CI 成功後）。
 
 on:

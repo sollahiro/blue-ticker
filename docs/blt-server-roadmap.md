@@ -7,7 +7,7 @@
 | 項目 | 状態 |
 |---|---|
 | 本番 | Fly (nrt) + Neon + Cloudflare Access/Tunnel。`api.*` / `mcp.*`。main push（CI 成功後）で自動デプロイ |
-| CLI | 配布 `ticker` 廃止。開発は `TickerDev`、運用は `blt-server` sync/ingest |
+| CLI | 配布 `ticker` / 開発 `TickerDev` 廃止。運用・検証は `blt-server` sync/ingest と `/v1` |
 | sync | 稼働・日次増分 |
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
 | financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`。**Statement / Note / Breakdown → financials 組立ができた段階で `fin-v6` 切替。それまで financials バンプなし**（`financials-summary-separation.md`） |
@@ -21,7 +21,7 @@
 ## 方針
 
 - **REST `/v1` が契約の正**。MCP は追従面。新機能は REST 先。
-- Core はサーバー専用にしない（`TickerDev`・テストと共有）。
+- Core はサーバー専用にしない（テスト・ingest 計算と共有）。
 - オンデマンド ingest（404→202＋キュー）は設計あり・未実装（公開スキーマ追加のため着手前確認）。
 - 第三者公開（段階 B）は `public-api.md`。課金境界は `feature-tiers.md`。
 - Summary の次世代は **Statement / Note / Breakdown → financials** 組立。**組立ができた段階で `fin-v6` に切替える。それまで financials の `cache_version` バンプはしない。** Waterfall も同行走査のため同じ切替に乗る。

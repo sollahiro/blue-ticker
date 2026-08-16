@@ -64,7 +64,7 @@ private func resolveEdinetApiKey() async -> String? {
     return (envKey?.isEmpty == false) ? envKey : nil
 }
 
-/// 内訳取り込み の LLM 軸。Server / DevCLI で同じ命名規約の env を読む（実装は意図的に別）。
+/// 内訳取り込み の LLM 軸。環境変数は軸別に読む（`resolveBreakdownLLMEndpoint`）。
 enum BreakdownLLMAxis: String, Sendable {
     case business
     case geography
@@ -73,8 +73,7 @@ enum BreakdownLLMAxis: String, Sendable {
 /// 内訳取り込み の LLM（Chat Completions 互換）エンドポイントを軸別に環境変数から解決する。
 /// 稼働プロバイダは軸共通の `LLM_PROVIDER`（`openai` / `xai`。未設定は xai。不正値は未解決）。
 /// openai は `OPENAI_{BUSINESS,GEOGRAPHY}_*`、xai は `XAI_{BUSINESS,GEOGRAPHY}_*`
-/// （xai の business のみ旧 `XAI_*` へフォールバック）。
-/// `DevCLI/LLMClientLoader` と同じ規約。未設定なら nil。
+/// （xai の business のみ旧 `XAI_*` へフォールバック）。未設定なら nil。
 func resolveBreakdownLLMEndpoint(axis: BreakdownLLMAxis) -> ChatCompletionEndpoint? {
     let env = ProcessInfo.processInfo.environment
     guard let provider = LLMProvider.fromEnv(env) else { return nil }

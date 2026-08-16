@@ -1,4 +1,4 @@
-// LLMClientLoader / Server 側 resolveBreakdownLLMEndpoint の軸別キー解決を検証する。
+// resolveBreakdownLLMEndpoint の軸別キー解決を検証する。
 // プロセス環境を一時的に差し替えるため、並列実行で他テストと干渉しないよう
 // `.serialized` で直列化する。
 
@@ -13,7 +13,7 @@ import Darwin
 
 @testable import BlueTickerCore
 
-@Suite(.serialized) struct LLMClientLoaderTests {
+@Suite(.serialized) struct BreakdownLLMEndpointTests {
 
     private func withEnv(_ values: [String: String?], _ body: () throws -> Void) rethrows {
         let keys = [
@@ -57,14 +57,10 @@ import Darwin
             "XAI_MODEL": "legacy-model",
             "XAI_BASE_URL": "https://legacy.example/",
         ]) {
-            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(endpoint.apiKey == "biz-key")
             #expect(endpoint.model == "biz-model")
             #expect(endpoint.baseURL == "https://biz.example/")
-
-            let server = try #require(resolveBreakdownLLMEndpoint(axis: .business))
-            #expect(server.apiKey == "biz-key")
-            #expect(server.model == "biz-model")
         }
     }
 
@@ -73,13 +69,10 @@ import Darwin
             "XAI_API_KEY": "legacy-key",
             "XAI_MODEL": "legacy-model",
         ]) {
-            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(endpoint.apiKey == "legacy-key")
             #expect(endpoint.model == "legacy-model")
             #expect(endpoint.baseURL == Api.xaiBaseURL)
-
-            let server = try #require(resolveBreakdownLLMEndpoint(axis: .business))
-            #expect(server.apiKey == "legacy-key")
         }
     }
 
@@ -90,21 +83,17 @@ import Darwin
             "XAI_API_KEY": "legacy-key",
             "XAI_MODEL": "legacy-model",
         ]) {
-            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .geography))
+            let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .geography))
             #expect(endpoint.apiKey == "geo-key")
             #expect(endpoint.model == "geo-model")
-
-            let server = try #require(resolveBreakdownLLMEndpoint(axis: .geography))
-            #expect(server.apiKey == "geo-key")
         }
     }
 
-    @Test func geographyDoesNotFallBackToLegacyXai() throws {
-        try withEnv([
+    @Test func geographyDoesNotFallBackToLegacyXai() {
+        withEnv([
             "XAI_API_KEY": "legacy-key",
             "XAI_MODEL": "legacy-model",
         ]) {
-            #expect(LLMClientLoader.resolveEndpoint(axis: .geography) == nil)
             #expect(resolveBreakdownLLMEndpoint(axis: .geography) == nil)
         }
     }
@@ -121,22 +110,21 @@ import Darwin
         try withEnv([
             "LLM_PROVIDER": "openai",
             "OPENAI_BUSINESS_API_KEY": "openai-biz",
-            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_BUSINESS_MODEL": "fixture-openai-model",
             "OPENAI_GEOGRAPHY_API_KEY": "openai-geo",
-            "OPENAI_GEOGRAPHY_MODEL": "gpt-5.6-luna",
+            "OPENAI_GEOGRAPHY_MODEL": "fixture-openai-model",
             "XAI_BUSINESS_API_KEY": "xai-biz",
             "XAI_BUSINESS_MODEL": "grok-4.5",
             "XAI_GEOGRAPHY_API_KEY": "xai-geo",
             "XAI_GEOGRAPHY_MODEL": "grok-4.5",
         ]) {
-            let business = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let business = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(business.provider == .openai)
             #expect(business.apiKey == "openai-biz")
-            #expect(business.model == "gpt-5.6-luna")
+            #expect(business.model == "fixture-openai-model")
             #expect(business.baseURL == Api.openaiBaseURL)
-            let geography = try #require(LLMClientLoader.resolveEndpoint(axis: .geography))
+            let geography = try #require(resolveBreakdownLLMEndpoint(axis: .geography))
             #expect(geography.apiKey == "openai-geo")
-            #expect(resolveBreakdownLLMEndpoint(axis: .business)?.apiKey == "openai-biz")
         }
     }
 
@@ -144,20 +132,20 @@ import Darwin
         try withEnv([
             "LLM_PROVIDER": "xai",
             "OPENAI_BUSINESS_API_KEY": "openai-biz",
-            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_BUSINESS_MODEL": "fixture-openai-model",
             "OPENAI_GEOGRAPHY_API_KEY": "openai-geo",
-            "OPENAI_GEOGRAPHY_MODEL": "gpt-5.6-luna",
+            "OPENAI_GEOGRAPHY_MODEL": "fixture-openai-model",
             "XAI_BUSINESS_API_KEY": "xai-biz",
             "XAI_BUSINESS_MODEL": "grok-4.5",
             "XAI_GEOGRAPHY_API_KEY": "xai-geo",
             "XAI_GEOGRAPHY_MODEL": "grok-4.5",
         ]) {
-            let business = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let business = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(business.provider == .xai)
             #expect(business.apiKey == "xai-biz")
             #expect(business.model == "grok-4.5")
             #expect(business.baseURL == Api.xaiBaseURL)
-            let geography = try #require(LLMClientLoader.resolveEndpoint(axis: .geography))
+            let geography = try #require(resolveBreakdownLLMEndpoint(axis: .geography))
             #expect(geography.apiKey == "xai-geo")
         }
     }
@@ -167,19 +155,18 @@ import Darwin
             "XAI_BUSINESS_API_KEY": "biz-key",
             "XAI_BUSINESS_MODEL": "grok-4.5",
         ]) {
-            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(endpoint.provider == .xai)
             #expect(endpoint.baseURL == Api.xaiBaseURL)
         }
     }
 
-    @Test func invalidProviderDoesNotResolve() throws {
-        try withEnv([
+    @Test func invalidProviderDoesNotResolve() {
+        withEnv([
             "LLM_PROVIDER": "anthropic",
             "OPENAI_BUSINESS_API_KEY": "biz-key",
-            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_BUSINESS_MODEL": "fixture-openai-model",
         ]) {
-            #expect(LLMClientLoader.resolveEndpoint(axis: .business) == nil)
             #expect(resolveBreakdownLLMEndpoint(axis: .business) == nil)
         }
     }
@@ -188,22 +175,22 @@ import Darwin
         try withEnv([
             "LLM_PROVIDER": "openai",
             "OPENAI_BUSINESS_API_KEY": "biz-key",
-            "OPENAI_BUSINESS_MODEL": "gpt-5.6-luna",
+            "OPENAI_BUSINESS_MODEL": "fixture-openai-model",
             "OPENAI_BUSINESS_BASE_URL": "https://proxy.example/v1",
         ]) {
-            let endpoint = try #require(LLMClientLoader.resolveEndpoint(axis: .business))
+            let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .business))
             #expect(endpoint.provider == .openai)
             #expect(endpoint.baseURL == "https://proxy.example/v1")
         }
     }
 
-    @Test func openaiDoesNotFallBackToXaiKeys() throws {
-        try withEnv([
+    @Test func openaiDoesNotFallBackToXaiKeys() {
+        withEnv([
             "LLM_PROVIDER": "openai",
             "XAI_BUSINESS_API_KEY": "xai-biz",
             "XAI_BUSINESS_MODEL": "grok-4.5",
         ]) {
-            #expect(LLMClientLoader.resolveEndpoint(axis: .business) == nil)
+            #expect(resolveBreakdownLLMEndpoint(axis: .business) == nil)
         }
     }
 }

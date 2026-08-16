@@ -6,7 +6,6 @@ import PackageDescription
 //
 // | パッケージ                    | 用途                         | リンク先ターゲット                          |
 // |-------------------------------|------------------------------|---------------------------------------------|
-// | swift-argument-parser         | TickerDev CLI                | BlueTickerCore, BlueTickerTests             |
 // | SwiftSoup                     | 壊れた HTML/XBRL 注記パース  | BlueTickerCore, BlueTickerTests             |
 // | ZIPFoundation                 | EDINET XBRL ZIP 展開         | BlueTickerCore, BlueTickerTests             |
 // | swift-crypto                  | R2 SigV4 HMAC-SHA256         | BlueTickerCore（Vapor 推移的だが Core 直接）|
@@ -17,8 +16,8 @@ import PackageDescription
 // | swift-sdk (MCP)               | MCP プロトコル               | BltMcpServerCore, BltMcpServerCoreTests     |
 //
 // ターゲット間: BltServer → BltServerCore → BlueTickerCore / BltMcpServerCore
-//               TickerDev → BlueTickerCore
 // Core は Vapor/Fluent を参照しない（AGENTS.md / docs/architecture.md）。
+// 検証: 段階1–2 は smoke/golden、契約確認は使い捨て Neon へ ingest 後に /v1。
 // =============================================================================
 
 let package = Package(
@@ -30,7 +29,6 @@ let package = Package(
         .executable(name: "blt-server", targets: ["BltServer"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0"),
@@ -44,7 +42,6 @@ let package = Package(
         .target(
             name: "BlueTickerCore",
             dependencies: [
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "SwiftSoup",
                 "ZIPFoundation",
                 .product(name: "Crypto", package: "swift-crypto"),
@@ -98,22 +95,10 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-        // 開発用ローカル解析 CLI（配布しない）。products に含めない。
-        .executableTarget(
-            name: "TickerDev",
-            dependencies: [
-                "BlueTickerCore",
-            ],
-            path: "Sources/TickerDevMain",
-            swiftSettings: [
-                .swiftLanguageMode(.v6),
-            ]
-        ),
         .testTarget(
             name: "BlueTickerTests",
             dependencies: [
                 "BlueTickerCore",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 "ZIPFoundation",
                 "SwiftSoup",
             ],

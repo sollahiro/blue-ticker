@@ -1,4 +1,4 @@
-// financials API の公開契約（flatten 形）。サーバー・TickerDev・テストで共有する Codable 型。
+// financials API の公開契約（flatten 形）。サーバー・テストで共有する Codable 型。
 //
 // - ingest（computeFinancials → DB）と read（jsonObject()）のキー定義を CodingKeys に集約する。
 // - 内部モデル（MetricsResult 等）は直シリアライズせず、公開用フラット形（snake_case）へ写像する。

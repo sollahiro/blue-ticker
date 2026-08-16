@@ -1,5 +1,5 @@
 // GeographyBreakdownResolver のユニットテスト。
-// DevCLI live geography 分岐と同じ振り分け（not_found / xbrl_facts / html_table）を
+// geography 軸の振り分け（not_found / xbrl_facts / html_table）を
 // smoke golden + モック LLM で検証する。
 
 import Foundation

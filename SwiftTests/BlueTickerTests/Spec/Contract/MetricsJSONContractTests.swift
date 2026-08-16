@@ -2,12 +2,9 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-// waterfall / summary --format json の出力キー契約。
-// MetricsJSON.print は JSONEncoder().encode(MetricsResult) の結果を
-// 整形して出力するだけなので、CodingKeys のキー名がそのまま CLI JSON 出力の公開契約になる。
-// キー名の変更（リネーム・大文字小文字の変更を含む）は破壊的変更であることをここで固定する。
-// リモート REST 契約（FinancialsResponse）は RemoteContractTests が守る。本スイートはローカル
-// 分析パス（MetricsResult）の契約を守る。
+// MetricsResult の Codable キー契約（分析パスの内部モデル）。
+// キー名の変更は破壊的になり得るためここで固定する。
+// 公開 REST 契約（FinancialsResponse）は RemoteContractTests が守る。
 
 @Suite struct MetricsJSONContractTests {
 

@@ -1626,7 +1626,7 @@ private actor RealXbrlMockChat: ChatCompleting {
     }
 
     private static func makeClient() throws -> ChatCompletionClient {
-        let endpoint = try #require(LLMClientLoader.resolveEndpoint())
+        let endpoint = try #require(resolveBreakdownLLMEndpoint(axis: .business))
         return ChatCompletionClient(endpoint: endpoint)
     }
 

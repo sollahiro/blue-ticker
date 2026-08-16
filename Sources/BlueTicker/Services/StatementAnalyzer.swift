@@ -20,7 +20,7 @@ struct StatementAnalyzer {
     }
 
     /// 既に展開済みの XBRL ディレクトリから Statement を解決する（DB / ingest 順非依存）。
-    /// financials 組立（`StatementFinancialsResolver`）と DevCLI が共有する。
+    /// financials 組立（`StatementFinancialsResolver`）と statement ingest が共有する。
     static func resolveFromXBRL(
         xbrlDir: URL, docID: String?, statementTypes: Set<StatementSectionType>
     ) -> StatementDocResolveResult {
