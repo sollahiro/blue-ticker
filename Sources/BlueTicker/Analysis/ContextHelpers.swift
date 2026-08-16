@@ -1,5 +1,4 @@
 // XBRL コンテキスト判定ユーティリティ
-// Python の blue_ticker/analysis/context_helpers.py 相当
 
 enum ContextHelpers {
 

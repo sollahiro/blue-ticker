@@ -1,4 +1,3 @@
-// Python tests/test_field_parser.py 相当
 // resolveItem / resolveItemPreferCurrent / resolveAggregate / deriveSubtraction /
 // fieldSetFromDuration / fieldSetFromInstant を検証する。
 

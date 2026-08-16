@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_tangible_fixed_assets.py 相当
 // 有形固定資産（PPE）抽出を実XBRLキャッシュ値ベースで検証する。
 
 import Testing

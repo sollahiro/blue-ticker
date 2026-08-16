@@ -1,16 +1,5 @@
-// Python tests/test_edinet_client.py の移植
-//
-// Python はクライアントのサブクラス化（fetch のモック）で検証するが、
-// Swift の EdinetAPIClient は actor で継承不可のため、キャッシュシード方式で移植する:
-// - 事前に EdinetCacheStore へ検索キャッシュ・年次インデックスを書き込む
-// - API キーを未設定（nil）にして HTTP リクエストを即時失敗させる
-// これによりネットワークなしで同じコードパス（キャッシュ優先・フォールバック）を検証できる。
-//
-// 移植対象外:
-// - test_client_accepts_cache_backend_boundary（Swift はバックエンド抽象を持たない）
-// - test_resolve_ca_bundle_*（URLSession は CA バンドル解決を OS に委ねるため該当コードなし）
-// - フェッチ回数のアサーション（fetch_dates カウント等）はフェッチをモックできないため検証不能。
-//   「キャッシュがあればリクエストを発行しない」は結果の正しさ（nil でないこと）で代替確認する
+// EdinetAPIClient は actor のため継承モック不可。キャッシュシード＋API キー未設定で
+// ネットワークなしにキャッシュ優先パスを検証する。
 
 import Testing
 import Foundation

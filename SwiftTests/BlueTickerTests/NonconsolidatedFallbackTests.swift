@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_nonconsolidated_fallback.py 相当
 // 単体のみ企業は plain context を使い、連結企業は連結タグ欠落時に単体へフォールバックしない
 // （nil を返す）ことを検証する。
 

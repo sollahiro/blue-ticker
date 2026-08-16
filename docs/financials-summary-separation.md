@@ -65,7 +65,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 
 ## 落とし穴
 
-- analysis_cache の **symlink → 0 facts**。実コピー（`cp -a`）を使う（`caching.md`）。
+- analysis_cache の **symlink → 0 facts**。実コピー（`cp -a`）を使う（`.agents/rules/project/caching.md`）。
 - `USGAAPStatementHtml` と `USGAAPHtml` を混同しない。
 - goodwill note は Summary 置換候補ではない。
 

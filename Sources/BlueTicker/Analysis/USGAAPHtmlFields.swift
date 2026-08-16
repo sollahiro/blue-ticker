@@ -1,5 +1,4 @@
 // US-GAAP HTML財務諸表フィールド抽出
-// Python の blue_ticker/analysis/usgaap/{html_fields,gross_profit,interest_expense}.py 相当
 //
 // US-GAAP 有価証券報告書は連結 P/L・BS の値が XBRL 数値タグではなく
 // iXBRL HTML テーブルにのみ存在するため、HTML から仮想タグ（USGAAP_HTML_*）を生成して

@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_operating_profit.py 相当
 // 営業利益の直接取得・GP−SGA 計算・経常利益フォールバック・連結優先を検証する。
 
 import Testing

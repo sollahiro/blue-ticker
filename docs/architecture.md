@@ -124,7 +124,7 @@ flowchart LR
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは従来どおりダウンロード）。facts は全書類の提出日時順、icons は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/project/caching.md`）。本番: Fly compute + Neon DB。R2 退避は延期。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは従来どおりダウンロード）。facts は全書類の提出日時順、icons は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 

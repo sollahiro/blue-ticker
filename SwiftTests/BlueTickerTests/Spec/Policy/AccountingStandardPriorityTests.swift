@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_accounting_standard_priority.py 相当
 // IFRS/US-GAAP 要約タグが J-GAAP 要約タグより優先されることを検証する。
 
 import Testing

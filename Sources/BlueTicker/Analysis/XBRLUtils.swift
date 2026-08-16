@@ -1,5 +1,4 @@
 // XBRL 解析共通ユーティリティ
-// Python の blue_ticker/analysis/xbrl_utils.py 相当
 
 import Foundation
 #if canImport(FoundationXML)

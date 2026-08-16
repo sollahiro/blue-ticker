@@ -12,7 +12,7 @@
 - **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **Region × Source**: モノレポ。市場は `JP`↔`EU`、開示系は `EDINET`↔`ESEF`（同階層の対）。パス・新規モジュールはこの対応で命名する（`.agents/rules/project/regions.md`、`docs/architecture.md`）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
-- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**、および **breakdown の `business` / `geography` 軸**（外出しオラクル。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合）。`statement`（Statement 取り込み本体）は `SmokeTests.swift` 自体は通らないが、smoke 固定11社中 US-GAAP2社を除く9社全件の golden を `RealXbrlStatementTests.swift` に追加済み（US-GAAP2社は同ファイルの HTML 経路 golden）。公開 note_type 9種はいずれも床に載済み。新規 note_type 追加時は同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden（深さ）と smoke（床）の役割・固定企業・対象 note_type / breakdown 軸は `docs/xbrl-parsing.md` §6。新規 note_type 追加時は床を広げる。言語非依存の資産と実装紐づきの分けは `docs/test-spec-assets.md`。
 
 ## ビルド・テスト
 
@@ -102,8 +102,8 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 |---|---|---|
 | `DATABASE_URL` | プロセス束縛。blt-server が読む唯一の接続先。手元の既定は disposable を代入。未設定＝ステートレス | 手元 `.env` の既定を本番 WRITE に差し替えたままにしない（WRITE はコマンド単位上書き） |
 | `BLT_NEON_DISPOSABLE_DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し | 本番を指させない |
-| `BLT_NEON_RO_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子＝RO**。作成／reset 時点のコピー）。旧名 `BLT_PROD_DATABASE_URL` | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
-| `BLT_NEON_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝WRITE**）。旧名 `BLT_PROD_WRITE_DATABASE_URL` | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
+| `BLT_NEON_RO_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子＝RO**。作成／reset 時点のコピー） | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
+| `BLT_NEON_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝WRITE**） | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
 | `NEON_API_KEY` | RO を親へ reset する Neon API 認証 | リポジトリへ書かない |
 | `NEON_PROJECT_ID` | Neon project id | — |
 | `NEON_WRITE_BRANCH_ID` | WRITE 親の `br-…`（`source_branch_id`）。`BLT_NEON_WRITE_DATABASE_URL` と同ブランチ | 接続 URL の `ep-…` や `postgresql://` を流用しない |

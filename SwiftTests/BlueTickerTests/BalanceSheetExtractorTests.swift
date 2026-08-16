@@ -1,7 +1,4 @@
-// Python tests/test_xbrl_balance_sheet.py 相当
 // BS 6項目の抽出・IFRS/US-GAAP 優先順位・US-GAAP 非流動資産の積み上げを検証する。
-// （_apply_balance_sheet は Python analyzer 固有のため対象外。
-//   components のタグ名検証は Swift の components がタグを保持しないため対象外）
 
 import Testing
 import Foundation

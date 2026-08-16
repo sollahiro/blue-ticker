@@ -1,5 +1,4 @@
 // XBRL コンテキストパターン・タグ定数
-// Python の blue_ticker/constants/xbrl.py 相当
 
 enum Xbrl {
     /// インスタンス文書が十分大きいとみなす最小バイト数（zero_debt 判定）。

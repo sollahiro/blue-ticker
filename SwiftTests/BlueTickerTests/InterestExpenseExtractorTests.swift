@@ -1,4 +1,3 @@
-// Python tests/test_xbrl_interest_expense.py 相当
 // 支払利息の抽出を検証する（J-GAAP / IFRS / IFRS注記テキスト / US-GAAP HTML）。
 // （XMLParsedAsHTMLWarning 抑止テストは bs4 固有のため対象外）
 

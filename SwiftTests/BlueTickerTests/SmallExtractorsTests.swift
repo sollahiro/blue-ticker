@@ -1,6 +1,4 @@
-// Python tests/test_xbrl_small_extractors.py 相当
 // employees / capital_expenditure / research_development を FieldSet ダイレクト構築でテストする。
-// net_revenue / share_buyback は Swift 未実装のため対象外（Python 側にのみ存在）。
 
 import Testing
 import Foundation

@@ -4,7 +4,6 @@ import ZIPFoundation
 // MARK: - EdinetCacheStore
 
 /// EDINET の日別検索結果と XBRL 展開ディレクトリをローカルで管理する。
-/// Python 版 EdinetCacheStore と同じディレクトリ構造・ファイル形式を維持する。
 final class EdinetCacheStore: Sendable {
     let cacheDir: URL
     let documentsByDateDir: URL

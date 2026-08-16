@@ -1,5 +1,3 @@
-// Python tests/test_user_paths.py の移植
-
 import Testing
 import Foundation
 @testable import BlueTickerCore
