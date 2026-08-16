@@ -64,7 +64,7 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 | 10 | 全銘柄展開に伴うロジック定着 | 本番 write | **する** |
 
 - **母集団**: statements と breakdowns の employees/rd/goodwill は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。breakdowns の business/geography と financials/filing-sections は上場全体（同 CSV は処理順の優先のみ）→ 225 に閉じるなら `--codes` 等で明示。
-- **接続**: 使い捨て＝`DATABASE_URL`、本番 read＝`BLT_NEON_RO_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
+- **接続**: 使い捨て＝`BLT_NEON_DISPOSABLE_DATABASE_URL`（手元では `DATABASE_URL` に束ねる）、本番 read＝`BLT_NEON_RO_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。`DATABASE_URL` はプロセスが読む接続スロットのみ。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
 - **訂正有報 (130)**: 自動マージしない。手動確認し、見た docID は原本準拠でも Git に残す（`.agents/rules/project/amendments.md`）。不審フラグと同じく手動 ingest（段階 3・8）。
 
 ## 監査レビューとモデル分担
@@ -96,11 +96,12 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
 ### Neon Secrets
 
-手元の変数一覧は `.env.example`（コピーして `.env`）。アプリが読むのは `DATABASE_URL` のみ。本番系は明示オプトイン（下表の書き込み先）。
+手元の変数一覧は `.env.example`（コピーして `.env`）。アプリが読むのは `DATABASE_URL` のみ（役割つき URL を束ねるスロット）。本番系は明示オプトイン（下表）。
 
 | Secret | 用途 | 禁止 |
 |---|---|---|
-| `DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し。アプリが読む接続先はこれのみ | 本番を指させない |
+| `DATABASE_URL` | プロセス束縛。blt-server が読む唯一の接続先。手元の既定は disposable を代入。未設定＝ステートレス | 手元 `.env` の既定を本番 WRITE に差し替えたままにしない（WRITE はコマンド単位上書き） |
+| `BLT_NEON_DISPOSABLE_DATABASE_URL` | 使い捨て（schema only 可）。探索・検証・スキーマやり直し | 本番を指させない |
 | `BLT_NEON_RO_DATABASE_URL` | 本番 SELECT / 件数（WRITE の **子＝RO**。作成／reset 時点のコピー）。旧名 `BLT_PROD_DATABASE_URL` | 書き込み・`DROP`・これを `DATABASE_URL` にして起動（`autoMigrate`） |
 | `BLT_NEON_WRITE_DATABASE_URL` | サイクル上の本番 ingest／ユーザー明示の書き込み（**親＝WRITE**）。旧名 `BLT_PROD_WRITE_DATABASE_URL` | 既定差し替え・`DROP`・未検証の探索 ingest。未設定なら追加案内して停止（RO へ書かない） |
 | `NEON_API_KEY` | RO を親へ reset する Neon API 認証 | リポジトリへ書かない |
@@ -110,4 +111,4 @@ Linux（Ubuntu 24.04）+ swiftly。詳細背景はリンク先。
 
 **RO 同期**: WRITE への書き込みは RO に流れない。`scripts/neon-reset-ro-from-parent.sh`（Neon Restore API＝GUI の Reset from parent 相当）で RO を親 HEAD に上書きする。ingest 後に上記 4 変数が揃っていれば実行（欠ける／失敗しても ingest 成否には影響させない）。
 
-**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。
+**42P07**（使い捨てのみ）: テーブルあり・`_fluent_migrations` 空で起動失敗 → 空確認のうえ `psql "$BLT_NEON_DISPOSABLE_DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`。本番では不可。

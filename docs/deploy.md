@@ -12,7 +12,7 @@
 | `BLT_EDINET_API_KEY` | EDINET（**secret・必須**） |
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード。公開デプロイでは**必須**（未設定＝無認証） |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
-| `DATABASE_URL` | Neon（未設定＝ステートレス） |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
@@ -92,7 +92,7 @@ swift build -c release --product blt-server   # コード変更後は必須（�
 # .env は `.env.example` をコピー（Neon / EDINET / LLM / R2。正本の禁止事項は AGENTS.md「Neon Secrets」）
 set -a; . ./.env; set +a
 ./.build/release/blt-server sync
-# 使い捨て DB 向け。本番 WRITE へ書くときはコマンド単位で上書き（.env の DATABASE_URL は差し替えない）:
+# 手元の既定は disposable（.env で DATABASE_URL に束ねる）。本番 WRITE へ書くときはコマンド単位で上書き（.env の DATABASE_URL は差し替えない）:
 # DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ```

@@ -4,7 +4,8 @@
 # RO（BLT_NEON_RO_DATABASE_URL）は WRITE の自動レプリカではなく、作成／前回 reset
 # 時点のスナップショット。WRITE へ ingest したあと本スクリプトで揃える。
 # 必要 Secrets: NEON_API_KEY / NEON_PROJECT_ID / NEON_RO_BRANCH_ID / NEON_WRITE_BRANCH_ID
-# （接続 URL のペアは BLT_NEON_RO_DATABASE_URL / BLT_NEON_WRITE_DATABASE_URL。
+# （接続 URL の役割は BLT_NEON_DISPOSABLE_DATABASE_URL /
+#  BLT_NEON_RO_DATABASE_URL / BLT_NEON_WRITE_DATABASE_URL。
 #  AGENTS.md「Neon Secrets」参照）。
 
 set -euo pipefail
