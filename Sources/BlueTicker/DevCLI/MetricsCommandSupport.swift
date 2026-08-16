@@ -1,4 +1,3 @@
-import ArgumentParser
 import Foundation
 
 // waterfall / summary が共有する JSON 出力・表組みプリミティブ（TickerDev / DevCLI）。

@@ -33,13 +33,18 @@
 
 ## ターゲット構成と依存方向
 
-Core に Vapor/Fluent をリンクさせない。依存は `BltServerCore` → `BlueTickerCore` のみ。
+Core に Vapor/Fluent をリンクさせない。実行バイナリは薄く、Web/DB は `BltServerCore` に閉じる。
+
+外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/project/dependencies.md`）。
 
 ```mermaid
 graph TD
     subgraph exe["実行ターゲット"]
         blt["BltServer"]
         tickerdev["TickerDev"]
+    end
+    subgraph mcp["BltMcpServerCore"]
+        MCP["MCP.Server / Tools"]
     end
     subgraph core["BlueTickerCore"]
         DevCLI["DevCLI/（DevCLIEntry）"]
@@ -55,9 +60,10 @@ graph TD
         Ingest["*Ingest / DocumentSync"]
     end
     blt --> servercore
-    blt --> core
     tickerdev --> core
     servercore --> core
+    servercore --> mcp
+    mcp --> core
     DevCLI --> Services
     Server --> Services
     Services --> Analysis

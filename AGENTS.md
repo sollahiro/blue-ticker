@@ -27,23 +27,23 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 
 ## ターゲット構成と依存ルール
 
+詳細図は `docs/architecture.md`。外部パッケージ一覧は `Package.swift` 先頭コメント（`.agents/rules/project/dependencies.md`）。
+
 | ターゲット | 内容 |
 |---|---|
-| `BlueTickerCore`（`Sources/BlueTicker/`） | XBRL解析・サービス・REST ファサード（`Server/`）・開発用ローカル解析（`DevCLI/`）を含む共有ライブラリ。**Vapor/Fluent には依存しない** |
-| `BltMcpServerCore`（`Sources/BltMcpServerCore/`） | MCP プロトコル層（ツールカタログ・`MCP.Server` ファクトリ）。ビジネスロジック・DB は持たない。**Vapor/Fluent には依存しない** |
-| `BltServerCore`（`Sources/BltServerCore/`） | REST サーバーのトランスポート層（Vapor）と DB 層（Fluent）。`BlueTickerCore` のファサードと `BltMcpServerCore` を呼ぶ。MCP はルートパス（`POST /`）として配線。Web/DB 依存をここに閉じ込める |
-| `BltServer`（`Sources/BltServer/`） | `blt-server` のエントリポイントのみ（唯一の配布 executable product） |
-| `TickerDev`（`Sources/TickerDevMain/`） | 開発用ローカル解析 CLI のエントリポイントのみ。**`Package.swift` の `products` に含めない**（`swift run TickerDev` でのみ実行） |
+| `BlueTickerCore` | XBRL・サービス・REST ファサード・DevCLI。**Vapor/Fluent 非依存** |
+| `BltMcpServerCore` | MCP プロトコル層。**Vapor/Fluent 非依存** |
+| `BltServerCore` | Vapor トランスポート＋ Fluent DB。MCP は `POST /` |
+| `BltServer` | `blt-server` エントリのみ（唯一の配布 product）。`BltServerCore` のみに依存 |
+| `TickerDev` | 開発用 CLI エントリ。products 非搭載（`swift run TickerDev`） |
 
-ターゲット間の依存方向: `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore` は可。逆は不可（Core は Vapor/Fluent を参照しない）。
+依存方向: `BltServer` → `BltServerCore` → `BlueTickerCore` / `BltMcpServerCore`。逆は不可。
 
-`BlueTickerCore` 内のディレクトリ責務（同一モジュールのため import 方向はコンパイラで強制されない。レビューで担保する）:
+`BlueTickerCore` 内（同一モジュールのためレビューで担保）:
 
-- `Services/` は `DevCLI/` のコマンド型を参照してはならない
-- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` は `Services/`・`Server/`・`DevCLI/` を参照してはならない
-- `Server/` は REST サーバーの **ファサード**（`BltServerContext`・`BltServerResponse`・`makeBltServerContext`、breakdowns 取り込み結果を表す `BreakdownResolveResult` 等）のみを置く。Vapor トランスポート・Fluent DB 層は `BltServerCore` ターゲットに置く
-- `DevCLI/` は `TickerDev` ターゲット向けの **ファサード**。公開面は `DevCLIEntry` の1点のみ。ローカル解析コマンド実装は internal のまま置き、新たに public 化しない
-
+- `Services/` → `DevCLI/` 禁止
+- `Analysis/` / `API/` / `Infrastructure/` / `Utils/` → `Services/`・`Server/`・`DevCLI/` 禁止
+- `Server/` はファサードのみ。`DevCLI/` の public 面は `DevCLIEntry` のみ
 ## 機能の実装サイクル
 
 新機能・Stage 拡張は次の順。**バンプ**は Neon `cache_version` のみ（`blueTickerVersion` ではない → `versioning.md`）。**公開範囲**（REST/MCP 解禁など）は機能ごとに都度確認。
