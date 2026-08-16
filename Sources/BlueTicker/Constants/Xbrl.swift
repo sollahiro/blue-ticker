@@ -372,6 +372,31 @@ enum Xbrl {
         "LeaseObligationsCL", "LeaseObligationsNCL",
     ]
 
+    /// 連結／個別 BS の有形固定資産・区分別正味帳簿価額タグ（存在判定用。
+    /// `property_plant_equipment_schedule` の `available_via_statement` 判定。合計のみの
+    /// `PropertyPlantAndEquipment` は含めない——区分内訳が statement にあるかの代理）。
+    /// 実データ: ニチレイ・オークマは結合タグ、銀行・東邦レマック・AZplanning は細分化タグ。
+    static let propertyPlantEquipmentScheduleBSTags: [String] = [
+        "BuildingsAndStructuresNet",
+        "MachineryEquipmentAndVehiclesNet",
+        "ToolsFurnitureAndFixturesNet",
+        "BuildingsNet",
+        "StructuresNet",
+        "MachineryAndEquipmentNet",
+        "VehiclesNet",
+        "Land",
+        "ConstructionInProgress",
+        "OtherNetPPE",
+        "LeaseAssetsNetPPE",
+        // IFRS 連結 BS にも区分タグが載る場合（注記 role 解決失敗時の statement 案内）
+        "BuildingsAndStructuresIFRS",
+        "MachineryAndVehiclesIFRS",
+        "MachineryAndEquipmentAndOthersIFRS",
+        "ToolsFurnitureAndFixturesIFRS",
+        "LandIFRS",
+        "ConstructionInProgressIFRS",
+    ]
+
     static let ibdIFRSCLTags: [String] = [
         "InterestBearingLiabilitiesCLIFRS",
         "BondsAndBorrowingsCLIFRS",

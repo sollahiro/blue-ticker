@@ -65,7 +65,9 @@ public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v3"
 /// 計上額の合計額）を追加する payload 構造変更。本番は v1 時点で0件ingest済みのため実害はないが、
 /// 将来の再発防止として抽出ロジック変更に揃えてバンプする。
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
-public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
+/// v2（2026-08-16）: `available_via_statement` を会計基準一括ではなく BS 区分タグ当期値あり判定に変更
+/// （`lease_liabilities` と同型。区分タグ無し J-GAAP は `not_found`）。
+public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v2"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 /// v2（2026-08-12）: スズキ・クボタ型 TextBlock の満期バケット（割引前契約CF）を表単位で追加。
 /// v3（2026-08-12）: BS 構造化タグ経路を廃止（`statement` と同一値のため `available_via_statement`）。
@@ -114,8 +116,8 @@ public let statementNoteSourceNotApplicable = "not_applicable"
 public let statementNoteNotApplicableNotFound = "not_found"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は `statement`（Statement本体のBS）から
-/// 取得できる）。`property_plant_equipment_schedule` がIFRS連結企業限定である理由の案内に使う
-/// （`StatementNotesResolver.resolvePropertyPlantEquipmentSchedule` 参照）。
+/// 取得できる）。`property_plant_equipment_schedule` / `lease_liabilities` は BS 構造化タグに
+/// 当期値があるときこの reason を返す（各 resolver 参照）。
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
 
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を

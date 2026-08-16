@@ -68,39 +68,40 @@ enum StatementNotesResolver {
     /// 3点セットを資産区分ごとに開示する（`LandIFRS`/`LandAcquisitionCostIFRS`/...等）。本 note_type
     /// では正味帳簿価額タグのみを種類別に抽出する（取得原価・累計償却は含めない）。
     ///
-    /// 本 note_type は意図的に IFRS 連結企業限定（ユーザー判断、2026-08-12）。smoke 固定11社の
-    /// 実データ検証で、非IFRS企業の扱いは会計基準で以下のように分かれることを確認済み:
+    /// 判定順は `lease_liabilities` と同型（2026-08-16）:
+    /// 1. IFRS 注記 role の構造化タグ → `resolved`（取れなければ次へ）
+    /// 2. BS 区分別正味帳簿価額タグ（`Xbrl.propertyPlantEquipmentScheduleBSTags`）に当期値あり →
+    ///    `available_via_statement`（`statement` の BS から取得可能。J-GAAP 連結の
+    ///    `BuildingsAndStructuresNet` 等、単体の `BuildingsNet` 等。smoke 固定11社で確認済み）
+    /// 3. US-GAAP → `us_gaap_unsupported`（連結 BS の区分は HTML 本表／別注記に割れ、
+    ///    `fieldSetFromInstant` も US-GAAP 社の NonConsolidated 区分タグを落とすため、
+    ///    BS タグ判定だけでは案内できない）
+    /// 4. それ以外 → `not_found`
     ///
-    /// - J-GAAP連結企業: `statement`（Statement本体のBS）の`PropertyPlantAndEquipmentAbstract`配下に
-    ///   区分別タグ（`BuildingsAndStructuresNet`・`MachineryEquipmentAndVehiclesNet`等）が構造化されて
-    ///   おり、そちらから取得できる（オークマ S100W043・ニチレイ S100VYA0・AZplanning S100VU4O・
-    ///   三菱UFJ S100W4FB・三井住友 S100W0S7 で実データ確認済み）。連結財務諸表を持たない企業
-    ///   （東邦レマック S100XRD8）は個別BS（role=`jppfs/rol_BalanceSheet`）の`BuildingsNet`等が同役割を
-    ///   果たす。これらは本note_typeでは扱わず、`statementNoteNotApplicableAvailableViaStatement`
-    ///   （`reason`でStatementを案内）に倒す。
-    /// - US-GAAP連結企業: `ix:nonFraction`が無く構造化タグで判定できない。開示HTML自体に区分別
-    ///   内訳が載るか会社によって異なる（実データ確認済み、2026-08-12: 富士フイルム S100W3XJ は
-    ///   連結BS本表に「土地／建物及び構築物／機械装置及びその他の有形固定資産／建設仮勘定」の内訳が
-    ///   直接載るが、キヤノン S100XTLJ は連結BSに「Ⅳ有形固定資産」の合計1行のみで、区分別内訳は
-    ///   別注記「注５　有形固定資産」のHTML表にしかない。`statement`のUS-GAAP HTML抽出
-    ///   （`USGAAPStatementHtml`）はBS本表しか読まないため、キヤノンのように内訳が別注記にある
-    ///   会社ではStatementからも取得できない）。会社ごとに開示形式が違い構造化タグでの判別もできない
-    ///   ため、Statementを案内する`available_via_statement`は誤りうる。US-GAAP自体を対応見送りとし
-    ///   `statementNotApplicableUSGAAP` に倒す（`borrowings_schedule` は 2026-08-12 に注記 HTML
-    ///   経路を追加したが、PPE は会社ごとに内訳の置き場が BS 本表／別注記に割れ、同じ経路では
-    ///   足りない）。
+    /// J-GAAP 附属明細表 TextBlock（`AnnexedDetailedScheduleOfPropertyPlantAndEquipmentEtcTextBlock`）
+    /// は未対応。notes 側は HTML 表パースが必要で、BS 構造化タグ判定より重い。
     static func resolvePropertyPlantEquipmentSchedule(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        switch detectAccountingStandard(tagElements) {
-        case "IFRS":
-            return resolveIFRSCategorySchedule(
+        let accountingStandard = detectAccountingStandard(tagElements)
+
+        if accountingStandard == "IFRS" {
+            let ifrs = resolveIFRSCategorySchedule(
                 xbrlDir: xbrlDir,
                 roleName: "NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS")
-        case "US-GAAP":
-            return .notApplicable(reason: statementNotApplicableUSGAAP)
-        default:
+            if case .resolved = ifrs { return ifrs }
+        }
+
+        let fieldSet = fieldSetFromInstant(tagElements)
+        let hasBSPPECategory = Xbrl.propertyPlantEquipmentScheduleBSTags.contains {
+            resolveItem(fieldSet, tags: [$0]).current != nil
+        }
+        if hasBSPPECategory {
             return .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
         }
+        if accountingStandard == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+        return .notApplicable(reason: statementNoteNotApplicableNotFound)
     }
 
     /// のれん及びその他無形資産の種類別明細（`goodwill_and_intangibles` note_type）。
