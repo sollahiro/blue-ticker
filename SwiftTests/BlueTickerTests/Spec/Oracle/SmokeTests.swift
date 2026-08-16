@@ -350,6 +350,198 @@ import Foundation
         #expect(failures.isEmpty, Comment(rawValue: "financials↔notes 正本不一致:\n" + failures.joined(separator: "\n")))
     }
 
+    /// Summary（financials 組立）の未移行フィールドが、statement 正本マスク / 0101010
+    /// `SummaryOfBusinessResults` タグだけで smoke 期待値に届くかを測る。
+    /// 既存の done フィールド（本表パススルー・notes EPS/株式）は対象外。
+    @Test func testSummaryPathChangeFeasibility() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        struct FieldStat {
+            var expected = 0
+            var statementOK = 0
+            var summaryOK = 0
+            var currentOK = 0
+            var statementNil = 0
+            var summaryNil = 0
+        }
+        var stats: [String: FieldStat] = [:]
+        var companyLines: [String] = []
+        var checked = 0
+
+        let remaining: [(field: String, expectedKey: ( [String: Any] ) -> Double?)] = [
+            ("gross_profit", { dbl(($0["gross_profit"] as? [String: Any])?["gross_profit"]) }),
+            ("sga", { dbl(($0["sga"] as? [String: Any])?["current"]) }),
+            ("cfo", { dbl(($0["cash_flow"] as? [String: Any])?["cfo"]) }),
+            ("cfi", { dbl(($0["cash_flow"] as? [String: Any])?["cfi"]) }),
+            ("ibd", { dbl(($0["interest_bearing_debt"] as? [String: Any])?["total"]) }),
+            ("pretax_income", { dbl(($0["tax_expense"] as? [String: Any])?["pretax_income"]) }),
+            ("income_tax", { dbl(($0["tax_expense"] as? [String: Any])?["income_tax"]) }),
+            ("rd", { dbl(($0["research_development"] as? [String: Any])?["current"]) }),
+            ("employees", { dbl(($0["employees"] as? [String: Any])?["current"]) }),
+            ("interest_expense", { dbl(($0["interest_expense"] as? [String: Any])?["current"]) }),
+            ("cf_treasury_stock", { dbl(($0["cf_treasury_stock"] as? [String: Any])?["current"]) }),
+            ("dividend_ss", { dbl(($0["dividend_ss"] as? [String: Any])?["current"]) }),
+        ]
+
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path),
+                  FileManager.default.fileExists(atPath: fixturePath.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected)
+            else { continue }
+
+            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let statementVals = statementRemainingValues(xbrlDir: xbrlDir)
+            let summaryVals = summaryTagRemainingValues(xbrlDir: xbrlDir)
+            checked += 1
+
+            var cells: [String] = [fixtureID]
+            for spec in remaining {
+                let exp = spec.expectedKey(expected)
+                let st: Double? = statementVals[spec.field] ?? nil
+                let sm: Double? = summaryVals[spec.field] ?? nil
+                let cu = currentRemainingValue(current, field: spec.field)
+                var stat = stats[spec.field] ?? FieldStat()
+                if let exp {
+                    stat.expected += 1
+                    if closeEnough(exp, st) { stat.statementOK += 1 }
+                    else if st == nil { stat.statementNil += 1 }
+                    if closeEnough(exp, sm) { stat.summaryOK += 1 }
+                    else if sm == nil { stat.summaryNil += 1 }
+                    if closeEnough(exp, cu) { stat.currentOK += 1 }
+                }
+                stats[spec.field] = stat
+                cells.append(
+                    "\(statusMark(exp: exp, act: st))/\(statusMark(exp: exp, act: sm))/\(statusMark(exp: exp, act: cu))"
+                )
+            }
+            companyLines.append(cells.joined(separator: " | "))
+        }
+
+        guard checked > 0 else {
+            print("SKIP   summary 経路変更可行性: XBRL キャッシュなし")
+            return
+        }
+
+        print("summary path feasibility (\(checked) companies)")
+        print("cell = statement / SummaryOfBusinessResults / current extractor")
+        print(
+            "fixture | "
+                + remaining.map(\.field).joined(separator: " | "))
+        for line in companyLines { print(line) }
+
+        var switchable: [String] = []
+        var partial: [String] = []
+        var blocked: [String] = []
+        var summaryEnough: [String] = []
+        for spec in remaining {
+            let s = stats[spec.field] ?? FieldStat()
+            let line =
+                "\(spec.field): expected=\(s.expected) statement=\(s.statementOK) (nil=\(s.statementNil)) summaryTags=\(s.summaryOK) (nil=\(s.summaryNil)) current=\(s.currentOK)"
+            print(line)
+            if s.expected > 0 && s.statementOK == s.expected { switchable.append(spec.field) }
+            else if s.statementOK > 0 { partial.append("\(spec.field)(\(s.statementOK)/\(s.expected))") }
+            else { blocked.append(spec.field) }
+            if s.expected > 0 && s.summaryOK == s.expected { summaryEnough.append(spec.field) }
+        }
+        print("statement-switchable-now: \(switchable.joined(separator: ", "))")
+        print("statement-partial: \(partial.joined(separator: ", "))")
+        print("statement-blocked: \(blocked.joined(separator: ", "))")
+        print("summary-tags-enough: \(summaryEnough.joined(separator: ", "))")
+
+        var mainStats: [String: FieldStat] = [:]
+        let mainFields: [(field: String, expectedKey: ([String: Any]) -> Double?)] = [
+            ("sales", { dbl(($0["income_statement"] as? [String: Any])?["sales"]) }),
+            ("operating_profit", { dbl(($0["income_statement"] as? [String: Any])?["operating_profit"]) }),
+            ("net_profit", { dbl(($0["income_statement"] as? [String: Any])?["net_profit"]) }),
+            ("total_assets", { dbl(($0["balance_sheet"] as? [String: Any])?["total_assets"]) }),
+            ("current_assets", { dbl(($0["balance_sheet"] as? [String: Any])?["current_assets"]) }),
+            ("non_current_assets", { dbl(($0["balance_sheet"] as? [String: Any])?["non_current_assets"]) }),
+            ("current_liabilities", { dbl(($0["balance_sheet"] as? [String: Any])?["current_liabilities"]) }),
+            ("non_current_liabilities", { dbl(($0["balance_sheet"] as? [String: Any])?["non_current_liabilities"]) }),
+            ("net_assets", { dbl(($0["balance_sheet"] as? [String: Any])?["net_assets"]) }),
+            ("ppe_total", { dbl(($0["tangible_fixed_assets"] as? [String: Any])?["total"]) }),
+            ("cash_eq", { dbl(($0["cash_eq"] as? [String: Any])?["current"]) }),
+        ]
+        print("main-table vs SummaryOfBusinessResults tags")
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected)
+            else { continue }
+            let summaryMain = summaryTagMainTableValues(xbrlDir: xbrlDir)
+            let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+            for spec in mainFields {
+                let exp = spec.expectedKey(expected)
+                let sm = summaryMain[spec.field] ?? nil
+                let st: Double? = {
+                    switch spec.field {
+                    case "sales": return statementMain?.sales
+                    case "operating_profit": return statementMain?.operatingProfit
+                    case "net_profit": return statementMain?.netProfit
+                    case "total_assets": return statementMain?.totalAssets
+                    case "current_assets": return statementMain?.currentAssets
+                    case "non_current_assets": return statementMain?.nonCurrentAssets
+                    case "current_liabilities": return statementMain?.currentLiabilities
+                    case "non_current_liabilities": return statementMain?.nonCurrentLiabilities
+                    case "net_assets": return statementMain?.netAssets
+                    case "ppe_total": return statementMain?.ppeTotal
+                    case "cash_eq": return statementMain?.cashEquivalents
+                    default: return nil
+                    }
+                }()
+                var stat = mainStats[spec.field] ?? FieldStat()
+                if let exp {
+                    stat.expected += 1
+                    if closeEnough(exp, st) { stat.statementOK += 1 }
+                    else if st == nil { stat.statementNil += 1 }
+                    if closeEnough(exp, sm) { stat.summaryOK += 1 }
+                    else if sm == nil { stat.summaryNil += 1 }
+                }
+                mainStats[spec.field] = stat
+            }
+        }
+        var summaryMainEnough: [String] = []
+        var summaryMainBlocked: [String] = []
+        for spec in mainFields {
+            let s = mainStats[spec.field] ?? FieldStat()
+            print(
+                "\(spec.field): expected=\(s.expected) statement=\(s.statementOK) (nil=\(s.statementNil)) summaryTags=\(s.summaryOK) (nil=\(s.summaryNil))"
+            )
+            if s.expected > 0 && s.summaryOK == s.expected { summaryMainEnough.append(spec.field) }
+            if s.expected > 0 && s.summaryOK == 0 { summaryMainBlocked.append(spec.field) }
+        }
+        print("summary-tags-main-enough: \(summaryMainEnough.joined(separator: ", "))")
+        print("summary-tags-main-blocked: \(summaryMainBlocked.joined(separator: ", "))")
+
+        // 現行 Extractor が期待値を満たすことは床。statement 全面置換はまだ要求しない。
+        for spec in remaining {
+            let s = stats[spec.field] ?? FieldStat()
+            #expect(
+                s.expected == 0 || s.currentOK == s.expected,
+                "\(spec.field): current extractor \(s.currentOK)/\(s.expected)")
+        }
+        // smoke 11 社で statement 行だけで期待値に届く未移行フィールド。経路切替の床。
+        for field in ["gross_profit", "sga", "pretax_income"] {
+            let s = stats[field] ?? FieldStat()
+            #expect(
+                s.expected > 0 && s.statementOK == s.expected,
+                "\(field): statement path \(s.statementOK)/\(s.expected)")
+        }
+    }
+
     // MARK: - 比較
 
     private func compare(
@@ -446,6 +638,186 @@ import Foundation
     }
 
     // MARK: - Helpers
+
+    private func closeEnough(_ expected: Double, _ actual: Double?) -> Bool {
+        guard let actual else { return false }
+        let tol = max(abs(expected) * Self.relTol, 1.0)
+        return abs(expected - actual) <= tol
+    }
+
+    private func statusMark(exp: Double?, act: Double?) -> String {
+        guard exp != nil else { return "-" }
+        if closeEnough(exp!, act) { return "OK" }
+        return act == nil ? "nil" : "DIFF"
+    }
+
+    private func currentRemainingValue(_ actual: Extracted, field: String) -> Double? {
+        switch field {
+        case "gross_profit": return actual.grossProfit
+        case "sga": return actual.sga
+        case "cfo": return actual.cfo
+        case "cfi": return actual.cfi
+        case "ibd": return actual.ibdTotal
+        case "pretax_income": return actual.pretaxIncome
+        case "income_tax": return actual.incomeTax
+        case "rd": return actual.rd
+        case "employees": return actual.employees
+        case "interest_expense": return actual.interestExpense
+        case "cf_treasury_stock": return actual.cfTreasuryStock
+        case "dividend_ss": return actual.dividendSS
+        default: return nil
+        }
+    }
+
+    private func firstByLabel(_ items: [StatementLineItem], contains: String, excluding: [String] = []) -> Double? {
+        for item in items {
+            let label = item.label ?? ""
+            guard label.contains(contains) else { continue }
+            if excluding.contains(where: { label.contains($0) }) { continue }
+            return item.value
+        }
+        return nil
+    }
+
+    /// statement 行のタグだけを許可した FieldSet で未移行 Extractor を回す。US-GAAP は
+    /// 合成タグのためラベルから直接拾う。HTML/TextBlock フォールバックは付けない。
+    private func statementRemainingValues(xbrlDir: URL) -> [String: Double?] {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir, docID: nil,
+            statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]
+        ) else { return [:] }
+
+        if std == "US-GAAP" {
+            return [
+                "gross_profit": firstByLabel(year.incomeStatement, contains: "売上総利益"),
+                "sga": firstByLabel(year.incomeStatement, contains: "販売費及び一般管理費"),
+                "cfo": firstByLabel(
+                    year.cashFlow, contains: "営業活動によるキャッシュ・フロー",
+                    excluding: ["期首", "期末", "明細"]),
+                "cfi": firstByLabel(
+                    year.cashFlow, contains: "投資活動によるキャッシュ・フロー",
+                    excluding: ["期首", "期末", "明細"]),
+                "ibd": nil,
+                "pretax_income": firstByLabel(year.incomeStatement, contains: "税引前")
+                    ?? firstByLabel(year.incomeStatement, contains: "税金等調整前"),
+                "income_tax": firstByLabel(year.incomeStatement, contains: "法人税等")
+                    ?? firstByLabel(year.incomeStatement, contains: "法人税"),
+                "rd": firstByLabel(year.incomeStatement, contains: "研究開発"),
+                "employees": nil,
+                "interest_expense": firstByLabel(year.incomeStatement, contains: "支払利息")
+                    ?? firstByLabel(year.incomeStatement, contains: "利息費用"),
+                "cf_treasury_stock": firstByLabel(year.cashFlow, contains: "自己株式"),
+                "dividend_ss": firstByLabel(year.changesInEquity, contains: "配当"),
+            ]
+        }
+
+        let statementTags = Set(
+            (year.balanceSheet + year.incomeStatement + year.cashFlow + year.changesInEquity)
+                .map(\.tag))
+        let masked = allTags.filter { statementTags.contains($0.key) }
+        let durationFS = fieldSetFromDuration(masked)
+        let instantFS = fieldSetFromInstant(masked)
+        let gp = GrossProfitExtractor.extract(
+            fieldSet: durationFS, accountingStandard: std, xbrlDir: nil)
+        let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ibd = IBDExtractor.extract(
+            fieldSet: instantFS, accountingStandard: std, xbrlDir: nil)
+        let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: masked)
+        let ie = InterestExpenseExtractor.extract(
+            fieldSet: durationFS, accountingStandard: std, xbrlDir: nil)
+        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(masked)
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(masked)
+        let divSS = DividendSSExtractor.extract(
+            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            accountingStandard: std)
+        return [
+            "gross_profit": gp.grossProfit,
+            "sga": op.sga,
+            "cfo": cf.cfo,
+            "cfi": cf.cfi,
+            "ibd": ibd.total,
+            "pretax_income": tax.pretaxIncome,
+            "income_tax": tax.incomeTax,
+            "rd": rd.current,
+            "employees": emp.current,
+            "interest_expense": ie.current,
+            "cf_treasury_stock": cfTs.current,
+            "dividend_ss": divSS.current,
+        ]
+    }
+
+    /// 0101010 相当の `*SummaryOfBusinessResults` タグだけを読んだ場合の未移行フィールド。
+    private func summaryTagRemainingValues(xbrlDir: URL) -> [String: Double?] {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        let summaryOnly = allTags.filter { $0.key.contains("SummaryOfBusinessResults") }
+        let durationFS = fieldSetFromDuration(summaryOnly)
+        let instantFS = fieldSetFromInstant(summaryOnly)
+        let gp = GrossProfitExtractor.extract(
+            fieldSet: durationFS, accountingStandard: std, xbrlDir: nil)
+        let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ibd = IBDExtractor.extract(
+            fieldSet: instantFS, accountingStandard: std, xbrlDir: nil)
+        let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: summaryOnly)
+        let ie = InterestExpenseExtractor.extract(
+            fieldSet: durationFS, accountingStandard: std, xbrlDir: nil)
+        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(summaryOnly)
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(summaryOnly)
+        let divSS = DividendSSExtractor.extract(
+            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            accountingStandard: std)
+        return [
+            "gross_profit": gp.grossProfit,
+            "sga": op.sga,
+            "cfo": cf.cfo,
+            "cfi": cf.cfi,
+            "ibd": ibd.total,
+            "pretax_income": tax.pretaxIncome,
+            "income_tax": tax.incomeTax,
+            "rd": rd.current,
+            "employees": emp.current,
+            "interest_expense": ie.current,
+            "cf_treasury_stock": cfTs.current,
+            "dividend_ss": divSS.current,
+        ]
+    }
+
+    /// 0101010 `*SummaryOfBusinessResults` だけで本表水準値が取れるか。
+    private func summaryTagMainTableValues(xbrlDir: URL) -> [String: Double?] {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        let summaryOnly = allTags.filter { $0.key.contains("SummaryOfBusinessResults") }
+        let durationFS = fieldSetFromDuration(summaryOnly)
+        let instantFS = fieldSetFromInstant(summaryOnly)
+        let is_ = IncomeStatementExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        let bs = BalanceSheetExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let ppe = TangibleFixedAssetsExtractor.extract(fieldSet: instantFS, accountingStandard: std)
+        let cash = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
+        return [
+            "sales": is_.sales,
+            "operating_profit": op.operatingProfit ?? is_.operatingProfit,
+            "net_profit": is_.netProfit,
+            "total_assets": bs.totalAssets,
+            "current_assets": bs.currentAssets,
+            "non_current_assets": bs.nonCurrentAssets,
+            "current_liabilities": bs.currentLiabilities,
+            "non_current_liabilities": bs.nonCurrentLiabilities,
+            "net_assets": bs.netAssets,
+            "ppe_total": ppe.total,
+            "cash_eq": cash.current,
+        ]
+    }
 
     private func loadFixture(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
