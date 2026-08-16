@@ -42,7 +42,8 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
 /// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 /// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
-/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は各社の最新有報 → 前年以降。同一年次内は
+/// 日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
 /// `candidateSets` を渡すと候補選定クエリを省略する（呼び出し元がステージ間で候補を共有するとき）。
 func runFilingSectionsIngest(
     db: Database, listedCodes: Set<String>, years: Int, sectionKeys: String,
@@ -65,9 +66,9 @@ func runFilingSectionsIngest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
-    var missing: [(docID: String, code: String, submitDateTime: String)] = []
-    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
-    var staleSectionKeys: [(docID: String, code: String, submitDateTime: String)] = []
+    var missing: [FilingDocCandidate] = []
+    var staleVersion: [FilingDocCandidate] = []
+    var staleSectionKeys: [FilingDocCandidate] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "有報セクション取り込み 分類", onRetry: { unhealthyRetries += 1 }
@@ -89,9 +90,10 @@ func runFilingSectionsIngest(
             skipped += 1
         }
     }
-    let candidates = ingestOrdered(
-        interleaved([missing, staleVersion, staleSectionKeys]),
-        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
+    let candidates = ingestOrderedByYearRank(
+        [missing, staleVersion, staleSectionKeys],
+        docIDOf: \.docID, codeOf: \.code, yearRankOf: \.yearRank,
+        cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0
@@ -157,9 +159,24 @@ func runFilingSectionsIngest(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
 }
 
-/// 取り込み候補（保持窓内。docID・4桁コード・提出日時）と、保持窓を超えた既存書類の docID（purge 対象）。
+/// 保持窓内の1書類。`yearRank` は当該社の窓内での新しさ（0 が最新有報）。
+struct FilingDocCandidate: Equatable, Sendable {
+    var docID: String
+    var code: String
+    var submitDateTime: String
+    var yearRank: Int
+
+    init(docID: String, code: String, submitDateTime: String, yearRank: Int = 0) {
+        self.docID = docID
+        self.code = code
+        self.submitDateTime = submitDateTime
+        self.yearRank = yearRank
+    }
+}
+
+/// 取り込み候補（保持窓内。docID・4桁コード・提出日時・yearRank）と、保持窓を超えた既存書類の docID（purge 対象）。
 struct FilingSectionCandidateSets {
-    let keep: [(docID: String, code: String, submitDateTime: String)]
+    let keep: [FilingDocCandidate]
     let purge: [String]
 }
 
@@ -188,22 +205,25 @@ func filingSectionCandidates(
         byCode[code, default: []].append((docID, doc.submitDateTime))
     }
 
-    var keep: [(docID: String, code: String, submitDateTime: String)] = []
+    var keep: [FilingDocCandidate] = []
     var purge: [String] = []
     for (code, docs) in byCode {
         let sorted = docs.sorted { $0.submitDateTime > $1.submitDateTime }
-        for d in sorted.prefix(years) {
-            keep.append((docID: d.docID, code: code, submitDateTime: d.submitDateTime))
+        for (rank, d) in sorted.prefix(years).enumerated() {
+            keep.append(
+                FilingDocCandidate(
+                    docID: d.docID, code: code, submitDateTime: d.submitDateTime, yearRank: rank))
         }
         for d in sorted.dropFirst(years) {
             purge.append(d.docID)
         }
     }
-    let sortedKeep = keep.sorted {
+    keep.sort {
+        if $0.yearRank != $1.yearRank { return $0.yearRank < $1.yearRank }
         if $0.submitDateTime != $1.submitDateTime { return $0.submitDateTime > $1.submitDateTime }
         return $0.docID < $1.docID
     }
-    return FilingSectionCandidateSets(keep: sortedKeep, purge: purge)
+    return FilingSectionCandidateSets(keep: keep, purge: purge)
 }
 
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。

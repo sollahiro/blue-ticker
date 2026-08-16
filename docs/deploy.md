@@ -97,7 +97,7 @@ set -a; . ./.env; set +a
 
 件数・timeout・起動間隔は手元。完走優先で小さく。employees/rd/goodwill は ingest 側で 30・日経225固定。ジョブ末尾で `scripts/generate-status-page.sh`。NEON_* が揃っていれば `scripts/neon-reset-ro-from-parent.sh`（失敗しても ingest 成否には影響させない）。
 
-`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。書類単位 ingest はそれに加え、ローカル XBRL 展開済みを先に回す。
+`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカル XBRL 展開済みを先に回す。
 
 ジョブ末尾で status ページ再生成（失敗しても ingest 成否に影響しない）。
 

@@ -45,7 +45,8 @@ public typealias StatementNoteResolveFn =
 /// 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
 /// `limit` は新規解決件数の上限。`explicitCodes` / `priorityCodes` は 有報セクション取り込み・
 /// 内訳取り込み・Statement 取り込み と同じ意味。`noteType` は `statementNoteType*` 定数のいずれか。
-/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
+/// `cachedDocIDs` はローカル XBRL 展開済み。処理順は各社の最新有報 → 前年以降。同一年次内は
+/// 日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
 /// `candidateSets` を渡すと候補選定クエリを省略する（呼び出し元がステージ間で候補を共有するとき）。
 func runStatementNotesIngest(
     db: Database, listedCodes: Set<String>, years: Int,
@@ -71,9 +72,9 @@ func runStatementNotesIngest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
-    var missing: [(docID: String, code: String, submitDateTime: String)] = []
-    var flaggedForReview: [(docID: String, code: String, submitDateTime: String)] = []
-    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
+    var missing: [FilingDocCandidate] = []
+    var flaggedForReview: [FilingDocCandidate] = []
+    var staleVersion: [FilingDocCandidate] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "財務諸表注記取り込み(\(noteType)) 分類", onRetry: { unhealthyRetries += 1 }
@@ -100,9 +101,10 @@ func runStatementNotesIngest(
             skipped += 1
         }
     }
-    let candidates = ingestOrdered(
-        interleaved([missing, flaggedForReview, staleVersion]),
-        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
+    let candidates = ingestOrderedByYearRank(
+        [missing, flaggedForReview, staleVersion],
+        docIDOf: \.docID, codeOf: \.code, yearRankOf: \.yearRank,
+        cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 
