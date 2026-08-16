@@ -25,7 +25,8 @@ public let breakdownAxisGoodwill = "goodwill"
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
 /// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
 /// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
-/// （content_hash 一致・needs_review=false の行はそのまま据え置く。docs/breakdown.md 参照）。
+/// （needs_review=true または削除。docs/breakdown.md 参照）。決定論は逆で needs_review
+/// だけでは再計算せず、バンプで再計算する。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 public let businessBreakdownCacheVersion = "breakdown-business-v9"
@@ -70,8 +71,9 @@ public let breakdownNotApplicableGeographyOnly = "geography_only"
 /// F: 単一セグメントのため報告セグメント開示自体が省略されていた
 /// （`DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` タグで確認）。
 public let breakdownNotApplicableSingleSegmentDisclosed = "single_segment_disclosed"
-/// 上記いずれにも該当しない・原因未特定（要調査）。ingest 側は `needsReview=true` で保存し、
-/// 分類ロジック改善後の再 ingest（`--codes` 指名 or 通常巡回）で再分類できるようにする。
+/// 上記いずれにも該当しない・原因未特定（要調査）。ingest 側は `needsReview=true` で保存する。
+/// 決定論（`not_applicable`）なので通常巡回では再計算せず、分類ロジック改善後は
+/// `cache_version` バンプ（または行削除）で再分類する。
 public let breakdownNotApplicableUnknown = "unknown"
 /// geography 軸: 地域注記自体が無い（`BreakdownExtractor.extractGeographyInfo` の
 /// `method == "not_found"`）。正当欠測として `needsReview=false` で永続化し、無駄な再 LLM を止める
@@ -79,8 +81,9 @@ public let breakdownNotApplicableUnknown = "unknown"
 public let breakdownNotApplicableNotFound = "not_found"
 
 /// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
-/// E/F（business）と geography の正当欠測（`not_found`）が該当。`unknown` や正規化/LLM 失敗は
-/// `needs_review=true` で再処理キューへ載せる（内訳取り込み ingest と共用）。
+/// E/F（business）と geography の正当欠測（`not_found`）が該当。`unknown` は
+/// `needs_review=true` で残すが、決定論のため再計算は `cache_version` バンプ（または行削除）。
+/// LLM 失敗の `needs_review=true` だけが通常巡回の再処理キューに載る。
 public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Bool {
     reason == breakdownNotApplicableGeographyOnly
         || reason == breakdownNotApplicableSingleSegmentDisclosed

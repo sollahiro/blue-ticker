@@ -15,7 +15,9 @@
 // `filingSectionsIngestYears` を渡す想定（内訳取り込み専用の別値は持たない）。
 //
 // staleness 判定は有報セクション取り込みと異なる（docs/breakdown.md）。
-// - xbrl_facts 経由（決定的）: cache_version が現行と不一致なら再計算してよい（安価・再現可能）。
+// - xbrl_facts / not_applicable（決定的）: cache_version が現行と不一致なら再計算してよい
+//   （安価・再現可能）。needs_review=true だけでは再試行しない（RD の未タグ残差など、
+//   同じ入力では結果が変わらないフラグが limit を埋め続けるため）。
 // - LLM 経由（source != xbrl_facts）: cache_version のバンプだけでは再計算しない。needs_review が
 //   true の行のみ再試行対象にする（同一 docID の入力は不変のため、content_hash は書き込むが
 //   スキップ判定には使わない。抽出ロジックが非決定的になった場合はこの前提が崩れるため、
@@ -119,12 +121,14 @@ func runBreakdownIngest(
             missing.append(cand)
             continue
         }
-        if existing.needsReview {
+        if isVersionGatedBreakdownSource(existing.source) {
+            if existing.cacheVersion != currentCacheVersion {
+                staleVersion.append(cand)
+            } else {
+                skipped += 1
+            }
+        } else if existing.needsReview {
             flaggedForReview.append(cand)
-        } else if isVersionGatedBreakdownSource(existing.source),
-            existing.cacheVersion != currentCacheVersion
-        {
-            staleVersion.append(cand)
         } else {
             skipped += 1
         }
@@ -149,12 +153,16 @@ func runBreakdownIngest(
         ) {
             try await CompanyBreakdown.find(key, on: db)
         }
-        if let row = existing, row.needsReview == false,
-            !isVersionGatedBreakdownSource(row.source)
-                || row.cacheVersion == currentCacheVersion
-        {
-            skipped += 1
-            continue
+        if let row = existing {
+            let versionGated = isVersionGatedBreakdownSource(row.source)
+            if versionGated, row.cacheVersion == currentCacheVersion {
+                skipped += 1
+                continue
+            }
+            if !versionGated, row.needsReview == false {
+                skipped += 1
+                continue
+            }
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
@@ -247,7 +255,7 @@ func runBreakdownIngest(
                 )
             } else {
                 // E/F / geography not_found は決定的判定のため needsReview=false。
-                // unknown 等は要調査のため needsReview=true にして再処理キューへ載せる。
+                // unknown 等は要調査のため needsReview=true で残す（再計算は cache_version バンプ）。
                 let needsReview = !isDeterministicBreakdownNotApplicableReason(reason)
                 let placeholder = BreakdownSnapshotPayload(
                     axis: axis, denominator: 0, denominatorTag: "", rows: [],

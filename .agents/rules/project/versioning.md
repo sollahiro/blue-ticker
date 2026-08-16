@@ -10,4 +10,4 @@
 
 ## Neon `cache_version`
 
-`blueTickerVersion` と独立。値は各 Contract 定数が正本。上げるのは抽出ロジックまたは契約の意味が変わったときだけ。read 床（`*MinServableVersion`）は serving ポリシー変更時。LLM 行はバンプだけでは再計算しない（`needs_review` または削除）。
+`blueTickerVersion` と独立。値は各 Contract 定数が正本。上げるのは抽出ロジックまたは契約の意味が変わったときだけ。read 床（`*MinServableVersion`）は serving ポリシー変更時。LLM 行はバンプだけでは再計算しない（`needs_review` または削除）。決定論（`xbrl_facts` / `not_applicable`）は `needs_review` だけでは再計算せず、バンプで再計算する。
