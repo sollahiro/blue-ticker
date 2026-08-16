@@ -290,8 +290,9 @@ public extension BltServerContext {
         return StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する（IFRS連結企業
-    /// 限定、J-GAAP単体の附属明細表は未対応。`StatementNotesResolver` のドキュメント参照）。
+    /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する
+    /// （IFRS 注記 role → BS 区分タグ当期値で `available_via_statement` → それ以外。
+    /// J-GAAP 附属明細表 TextBlock は未対応。`StatementNotesResolver` のドキュメント参照）。
     func resolvePropertyPlantEquipmentScheduleNote(docID: String) async -> StatementNoteResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         return StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir)

@@ -12,7 +12,7 @@
 - **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **Region × Source**: モノレポ。市場は `JP`↔`EU`、開示系は `EDINET`↔`ESEF`（同階層の対）。パス・新規モジュールはこの対応で命名する（`.agents/rules/project/regions.md`、`docs/architecture.md`）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
-- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`goodwill_and_intangibles` note_type**、および **breakdown の `business` / `geography` 軸**（外出しオラクル。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合）。`statement`（Statement 取り込み本体）は `SmokeTests.swift` 自体は通らないが、smoke 固定11社中 US-GAAP2社を除く9社全件の golden を `RealXbrlStatementTests.swift` に追加済み（US-GAAP2社は同ファイルの HTML 経路 golden）。他 note_type の決定論ロジックはまだ床に含めていない。ロジックが固まったら同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
+- **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden回帰（`RealXbrl*Tests.swift`）とsmoke（`SmokeTests.swift`）は役割が別（詳細は `docs/xbrl-parsing.md` §6）: smokeは会計基準・決算期移行境界・連結有無など「次元」を意図して選んだ固定企業セットで既存ロジックの最低品質を継続的に守る床、goldenは個別ロジックの実装・改善時に見つけたエッジケース企業をその都度蓄積する深さ方向の回帰。smoke 床の対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）に加え **`borrowings_schedule`・`capital_expenditures_overview`・`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**、および **breakdown の `business` / `geography` 軸**（外出しオラクル。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合）。`statement`（Statement 取り込み本体）は `SmokeTests.swift` 自体は通らないが、smoke 固定11社中 US-GAAP2社を除く9社全件の golden を `RealXbrlStatementTests.swift` に追加済み（US-GAAP2社は同ファイルの HTML 経路 golden）。公開 note_type 9種はいずれも床に載済み。新規 note_type 追加時は同様に床を広げる。テストを「言語非依存で残る資産（オラクル・不変条件・契約・政策）」と「実装に紐づく部分」に分けて考える指針は `docs/test-spec-assets.md`。
 
 ## ビルド・テスト
 
@@ -48,10 +48,12 @@ swift run TickerDev waterfall <code>   # 開発用ローカル解析（配布し
 
 新機能・Stage 拡張は次の順。**バンプ**は Neon `cache_version` のみ（`blueTickerVersion` ではない → `versioning.md`）。**公開範囲**（REST/MCP 解禁など）は機能ごとに都度確認。
 
+表の「バンプ」列は **本番 write への再計算を伴う定着バンプ**（段階10）を指す。一方、smoke〜ロジック確認中の PR では、抽出ロジックまたは契約の意味が変わったときに Contract 定数を上げてよい（次の ingest から新世代。中間の細かい連続バンプはマージ前に1つへまとめてよい）。
+
 | # | 段階 | 書き込み先 | バンプ |
 |---|---|---|---|
-| 1 | 実装初期は smoke 固定企業セット（`docs/xbrl-parsing.md` §6）で検証し、ロジックをブラッシュアップする | ローカル | しない |
-| 2 | smoke だけでは拾えない個別の失敗事例は、見つかり次第 golden（`RealXbrl*Tests.swift`）へ追加して蓄積する | ローカル | しない |
+| 1 | 実装初期は smoke 固定企業セット（`docs/xbrl-parsing.md` §6）で検証し、ロジックをブラッシュアップする | ローカル | しない（PR 内の定数上げは可 → 上注） |
+| 2 | smoke だけでは拾えない個別の失敗事例は、見つかり次第 golden（`RealXbrl*Tests.swift`）へ追加して蓄積する | ローカル | しない（PR 内の定数上げは可 → 上注） |
 | 3 | ロジックが安定したら日経225限定で使い捨てへ投入して確認し、問題なければ本番へ初期投入（最新年度を埋める。探索的試し書き禁止）。不審フラグ（`needs_review`・あいまい失敗・異常欠測など）はこの段階でも手動 ingest で解消する | 使い捨て→本番 write | しない |
 | 4 | 最新年度 100% 後にロジック改善（母数＝最新有報が取れた社。欠測は正当か不具合か確認） | — | しない |
 | 5 | 改善結果を使い捨てで検証 | 使い捨て | しない |

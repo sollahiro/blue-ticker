@@ -459,8 +459,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
                 not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
                 available_via_statement（本 note_type の対象外だが同等の値は get-statement から取得可能。
-                例: property_plant_equipment_schedule / goodwill_and_intangibles / lease_liabilities が
-                IFRS連結企業限定のため非対象の場合）。
+                例: property_plant_equipment_schedule / lease_liabilities で BS に区分・負債の
+                構造化タグ当期値がある場合。goodwill_and_intangibles は IFRS 注記限定のため非対象時も同様）、
+                available_via_notes（本 note_type の対象外だが同等の値は他の note_type から取得可能。
+                例: lease_liabilities のリース債務が borrowings_schedule＝借入金等明細表側にある場合）、
+                us_gaap_unsupported（US-GAAP 連結で本 note_type の構造化タグ判定ができない場合）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement/notes",
@@ -498,9 +501,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 Statement Notes（get-statement 本体の外にある財務諸表注記、note_type 単位）。
                 日経225構成銘柄のみ。格納済みデータのみ。未算出は 404（reason 無し）、
-                対象外・非開示は 404 + reason（not_found / available_via_statement）、DB 非接続は 503。
-                property_plant_equipment_schedule / goodwill_and_intangibles / lease_liabilities は
-                IFRS連結企業限定（非対象時は available_via_statement または not_found）。
+                対象外・非開示は 404 + reason（not_found / available_via_statement /
+                available_via_notes / us_gaap_unsupported）、DB 非接続は 503。
+                property_plant_equipment_schedule / lease_liabilities は IFRS 注記（または TextBlock）を
+                優先し、それ以外は BS 構造化タグ当期値で available_via_statement（lease は借入金等明細表の
+                リース債務なら available_via_notes。US-GAAP は us_gaap_unsupported）。
+                goodwill_and_intangibles は IFRS 注記限定。
                 例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
                 """,
             mcpOutputSchema:

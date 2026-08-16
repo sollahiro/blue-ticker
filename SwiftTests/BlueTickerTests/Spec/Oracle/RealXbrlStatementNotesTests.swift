@@ -1002,9 +1002,8 @@ import Testing
     // （正味帳簿価額）・「{資産区分}AcquisitionCostIFRS」（取得原価）・
     // 「{資産区分}AccumulatedDepreciationAndImpairmentLossesIFRS」等（累計償却/減損）の3点セットで
     // 開示される。正味帳簿価額タグだけを抽出できているかを実データで確認する
-    // （取得原価・累計償却タグが誤って混入していないこと）。property_plant_equipment_schedule は
-    // 意図的にIFRS連結企業限定（ユーザー判断、2026-08-12。非IFRS企業のnotApplicable理由・smoke
-    // 11社の内訳は `PropertyPlantEquipmentScheduleOracleFormatTests.swift` 参照）。
+    // （取得原価・累計償却タグが誤って混入していないこと）。非IFRSは BS 区分タグ当期値で
+    // `available_via_statement`（lease と同型。内訳は `PropertyPlantEquipmentScheduleOracleFormatTests`）。
 
     @Test(.enabled(if: cacheAvailable("S100TSIJ"), "XBRL cache S100TSIJ not available"))
     func kyoceraPPEScheduleExtractsNetCarryingAmountsOnly() throws {
