@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/shutosorahiro/blue-ticker/.codex/hooks/precompact-snapshot.sh'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/shutosorahiro/blue-ticker/.codex/hooks/session-start-handoff.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}
