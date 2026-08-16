@@ -4,7 +4,8 @@
 // - IFRS TextBlock: 味の素（支払期日別 CL+NCL＝帳簿価額）、クボタ（現在価値＋割引前総額＋満期バケット。
 //   ROU 87,946は対象外）、スズキ（帳簿価額＋契約上CF＋満期バケット。貸手表と表単位で分離）
 // - available_via_statement: ニチレイ・AZplanning（BS `LeaseObligations*` は statement 責務）
-// - available_via_notes: オークマ・東邦レマック・三菱UFJ・三井住友（借入金等明細表にリース債務）
+// - available_via_notes: オークマ・東邦レマック・三菱UFJ・三井住友
+//   （借入金等明細表の区分行ラベルがリース債務／リース負債。HTML「リース」部分一致ではない）
 // - us_gaap_unsupported: 富士フイルム・キヤノン（statement の構造化タグ判定不可）
 
 import Foundation

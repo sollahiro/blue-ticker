@@ -75,7 +75,9 @@ public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 /// v5（2026-08-12）: クボタ型「控除：利息相当額」を追加。
 /// v6（2026-08-16）: 借入金等明細表にリース債務があるとき `available_via_notes`。US-GAAP は
 /// `us_gaap_unsupported`（statement の構造化タグ判定不可のため一括 `available_via_statement` を廃止）。
-public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v6"
+/// v7（2026-08-16）: `available_via_notes` を HTML「リース」部分一致から区分行ラベル
+/// （`BorrowingsSchedule.hasLeaseDebtRowLabel`）判定へ変更。
+public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v7"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {
@@ -123,8 +125,8 @@ public let statementNoteNotApplicableNotFound = "not_found"
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は他の statement note から取得できる）。
-/// `lease_liabilities` は BS にリース負債タグが無く、借入金等明細表（`borrowings_schedule`）に
-/// リース債務行があるときこの reason を返す。
+/// `lease_liabilities` は BS にリース負債タグが無く、借入金等明細表（`borrowings_schedule`）の
+/// 区分行にリース債務／リース負債があるときこの reason を返す。
 public let statementNoteNotApplicableAvailableViaNotes = "available_via_notes"
 
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を
