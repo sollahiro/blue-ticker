@@ -76,6 +76,7 @@ curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=1'
 - **タイミング**: main マージ前（ブランチ高度＝品質ゲート）。
 - **手段**: `Agent` / `Task`、または `pi` 非対話（Cursor CLI 不使用）。
 - **pi 経由の timeout**: 10〜15 分程度を確保する（短すぎると思考中に打ち切られる）。
+- **pi 用 Cursor Secrets**（VM）: `OPENAI_API_KEY` · `MOONSHOTAI_API_KEY`（アプリの内訳 LLM 鍵 `OPENAI_BUSINESS_*` / `XAI_*` とは別）。
 
 | 作業 | モデル |
 |---|---|
