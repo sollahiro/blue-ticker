@@ -16,7 +16,7 @@
 
 **いま**: `XBRL → IndividualAnalyzer → company_financials → Summary/Waterfall`
 
-**目指す形**:
+**組立完成時（`fin-v6`。roadmap）**:
 
 ```
 XBRL → statement / notes / breakdown（正本・並列）
@@ -34,7 +34,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | 項目 | 方針 |
 |---|---|
 | 格納 | `company_financials` 維持 |
-| `fin-vN` | 存続。意味を徐々に「組立＋派生」へ |
+| `fin-vN` | 存続。**組立ができた段階で `fin-v6` に切替。それまでバンプしない**（roadmap） |
 | 新規生値 | まず正本へ。financials に足さない |
 | 二重物 | 正本を1つに決め、financials はパススルー／再計算 |
 | ingest 依存 | 順序変更は採らない。**同一 XBRL パスで resolver 直接呼び（#10b）** |
