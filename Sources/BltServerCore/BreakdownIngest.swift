@@ -60,7 +60,7 @@ public typealias BreakdownResolveFn =
 /// `limit` は新規解決件数の上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
 /// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味（後者は処理順のみ）。
 /// `axis` は `business` / `geography` / `employees` / `research_and_development` / `goodwill`。
-/// `cachedDocIDs` はローカル XBRL 展開済みの書類。処理順は
+/// `cachedDocIDs` はローカル XBRL 展開済みの書類。処理順は各社の最新有報 → 前年以降。同一年次内は
 /// 日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
 ///
 /// `denominatorForDoc` は `resolve` に渡す第2引数（分母・全社合計値）を 財務取り込み
@@ -98,9 +98,9 @@ func runBreakdownIngest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
-    var missing: [(docID: String, code: String, submitDateTime: String)] = []
-    var flaggedForReview: [(docID: String, code: String, submitDateTime: String)] = []
-    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
+    var missing: [FilingDocCandidate] = []
+    var flaggedForReview: [FilingDocCandidate] = []
+    var staleVersion: [FilingDocCandidate] = []
 
     // 分類は payload を含まない1クエリ。候補ごとに find すると上場全体×6年で
     // Neon 往復が数万回になり、実処理より分類がステージ timeout を食う。
@@ -129,9 +129,10 @@ func runBreakdownIngest(
             skipped += 1
         }
     }
-    let candidates = ingestOrdered(
-        interleaved([missing, flaggedForReview, staleVersion]),
-        docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
+    let candidates = ingestOrderedByYearRank(
+        [missing, flaggedForReview, staleVersion],
+        docIDOf: \.docID, codeOf: \.code, yearRankOf: \.yearRank,
+        cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     unhealthyRetries = 0
 

@@ -1,5 +1,6 @@
 // 候補列の並び替え。対象選定（何を取り込むか）ではなく処理順序（何から取り込むか）のみを変える。
-// 日経225（`assets/nikkei225.csv`）とローカル XBRL 展開済み docID を重ねる。
+// 書類単位 ingest の年次は各社の最新有報（yearRank 0）を先に完了してから前年へ進む。
+// 同一 yearRank 内では日経225（`assets/nikkei225.csv`）とローカル XBRL 展開済み docID を重ねる。
 
 /// `priorityCodes` に含まれる要素を安定に先頭へ寄せる（同集合内・非対象内それぞれの相対順序は保持）。
 /// `priorityCodes` が空なら無並び替え（従来どおりの順序）。
@@ -27,7 +28,7 @@ func ingestIndexByID<T>(_ rows: [T], idOf: (T) -> String?) -> [String: T] {
     return index
 }
 
-/// 書類単位 ingest の処理順: 日経225 → ローカル XBRL 展開済み → 元の相対順。
+/// 同一 yearRank 内の処理順: 日経225 → ローカル XBRL 展開済み → 元の相対順。
 /// `prioritized` をキャッシュ向け・コード向けの順に重ねる（後段の日経225が勝つ）。
 func ingestOrdered<T>(
     _ candidates: [T], docIDOf: (T) -> String, codeOf: (T) -> String,
@@ -36,6 +37,27 @@ func ingestOrdered<T>(
     prioritized(
         prioritized(candidates, codeOf: docIDOf, priorityCodes: cachedDocIDs),
         codeOf: codeOf, priorityCodes: priorityCodes)
+}
+
+/// 書類単位 ingest の処理順: 各社の最新有報（yearRank 0）を先に完了してから前年へ進む。
+/// 同一 yearRank 内は欠測/要再試行/版ずれをラウンドロビンし、その上で `ingestOrdered`（日経225 → キャッシュ）。
+/// yearRank をまたいでラウンドロビンしない（`limit` が最新年度を埋める前に前年へ進まないようにする）。
+func ingestOrderedByYearRank<T>(
+    _ buckets: [[T]],
+    docIDOf: (T) -> String, codeOf: (T) -> String, yearRankOf: (T) -> Int,
+    cachedDocIDs: Set<String>, priorityCodes: Set<String>
+) -> [T] {
+    let ranks = Set(buckets.flatMap { $0 }.map(yearRankOf)).sorted()
+    var result: [T] = []
+    result.reserveCapacity(buckets.reduce(0) { $0 + $1.count })
+    for rank in ranks {
+        let sliced = buckets.map { $0.filter { yearRankOf($0) == rank } }
+        result += ingestOrdered(
+            interleaved(sliced),
+            docIDOf: docIDOf, codeOf: codeOf,
+            cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
+    }
+    return result
 }
 
 /// 複数バケツ（優先度の高い順）の候補をラウンドロビンで束ねる。単純連結（`a + b + c`）だと

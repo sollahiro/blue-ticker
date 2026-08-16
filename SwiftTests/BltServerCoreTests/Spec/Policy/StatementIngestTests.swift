@@ -207,7 +207,7 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
             let sets = FilingSectionCandidateSets(
-                keep: [(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
+                keep: [FilingDocCandidate(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
                 purge: [])
 
             let summary = try await runStatementIngest(
@@ -234,6 +234,26 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             #expect(summary.attempted == 1)
             #expect(try await CompanyStatement.find("S2", on: app.db) != nil)
             #expect(try await CompanyStatement.find("S1", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestPrefersEachCompanysLatestYearBeforeOlderYearsWhenLimited() async throws {
+        try await withMigratedApp { app in
+            // 7203 の前年（2025-06）は提出日時が 6758 の最新（2025-03）より新しい。
+            // 提出日時順だと前年が先になるが、yearRank では各社の最新が先。
+            try await seedDoc("LATEST7203", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedDoc("PRIOR7203", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("LATEST6758", secCode: "67580", submit: "2025-03-31 09:00", db: app.db)
+
+            let summary = try await runStatementIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 2,
+                cachedDocIDs: ["PRIOR7203"]
+            ) { docID in .resolved(fakeYear(docID: docID)) }
+
+            #expect(summary.attempted == 2)
+            #expect(try await CompanyStatement.find("LATEST7203", on: app.db) != nil)
+            #expect(try await CompanyStatement.find("LATEST6758", on: app.db) != nil)
+            #expect(try await CompanyStatement.find("PRIOR7203", on: app.db) == nil)
         }
     }
 

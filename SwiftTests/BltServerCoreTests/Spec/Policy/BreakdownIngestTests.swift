@@ -537,7 +537,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
             let sets = FilingSectionCandidateSets(
-                keep: [(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
+                keep: [FilingDocCandidate(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
                 purge: [])
 
             let summary = try await runBreakdownIngest(
@@ -572,6 +572,27 @@ extension BreakdownLoadResult {
                 CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) != nil)
             #expect(try await CompanyBreakdown.find(
                 CompanyBreakdown.compositeID(docID: "S1", axis: "business"), on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestPrefersEachCompanysLatestYearBeforeOlderYearsWhenLimited() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("LATEST7203", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedDoc("PRIOR7203", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("LATEST6758", secCode: "67580", submit: "2025-03-31 09:00", db: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 2,
+                cachedDocIDs: ["PRIOR7203"]
+            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+
+            #expect(summary.attempted == 2)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "LATEST7203", axis: "business"), on: app.db) != nil)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "LATEST6758", axis: "business"), on: app.db) != nil)
+            #expect(try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "PRIOR7203", axis: "business"), on: app.db) == nil)
         }
     }
 

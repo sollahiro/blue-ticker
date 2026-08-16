@@ -284,7 +284,7 @@ private let keys = "business_risks,mda,segments"
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedDoc("S2", secCode: "67580", db: app.db)
             let sets = FilingSectionCandidateSets(
-                keep: [(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
+                keep: [FilingDocCandidate(docID: "S1", code: "7203", submitDateTime: "2025-06-20 09:00")],
                 purge: [])
 
             let summary = try await runFilingSectionsIngest(
