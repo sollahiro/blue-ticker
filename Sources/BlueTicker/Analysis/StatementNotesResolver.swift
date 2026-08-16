@@ -131,15 +131,17 @@ enum StatementNotesResolver {
 
     /// リース負債（`lease_liabilities` note_type）。
     ///
-    /// **notes は TextBlock 注記のみ**（実データ検証 2026-08-12、smoke 固定11社）。
+    /// **notes は IFRS TextBlock 注記のみを resolved にする**（実データ検証 2026-08-12、smoke 固定11社）。
     /// 連結 BS の構造化タグ（`LeaseLiabilities*IFRS` / `LeaseObligations*`）は `statement` と同じ
-    /// 値になるため本 note では採用しない。タグがある場合は `available_via_statement`。
+    /// 値になるため本 note では採用しない。
     ///
     /// 1. IFRS リース注記 TextBlock（`IFRSLease` の TextBlock 経路。**BS HTML・BS タグは使わない**）。
-    ///    味の素は「支払期日が1年以内／1年超」＝流動・非流動の帳簿価額。スズキは帳簿価額合計
-    ///    ＋満期バケット（割引前CF）、クボタは現在価値合計＋満期バケット。貸手表とは表単位で分離。
-    /// 2. BS にリース負債タグあり、または US-GAAP → `.notApplicable(available_via_statement)`。
-    /// 3. それ以外 → `not_found`（オークマ等のリース債務は `borrowings_schedule` 側）。
+    /// 2. BS にリース負債タグ当期値あり → `available_via_statement`。
+    /// 3. US-GAAP → `us_gaap_unsupported`（連結は HTML 経路で、`fieldSetFromInstant` の
+    ///    構造化タグ判定では statement 案内ができない。PPE と同型）。
+    /// 4. 借入金等明細表 TextBlock に「リース」行あり → `available_via_notes`
+    ///    （`borrowings_schedule` 側。オークマ・東邦レマック・三菱UFJ・三井住友）。
+    /// 5. それ以外 → `not_found`。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -181,10 +183,28 @@ enum StatementNotesResolver {
         let hasBSLeaseTag = Xbrl.leaseLiabilitiesBSTags.contains {
             resolveItem(fieldSet, tags: [$0]).current != nil
         }
-        if hasBSLeaseTag || accountingStandard == "US-GAAP" {
+        if hasBSLeaseTag {
             return .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
         }
+        if accountingStandard == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+        if hasBorrowingsScheduleLeaseDebt(xbrlDir: xbrlDir) {
+            return .notApplicable(reason: statementNoteNotApplicableAvailableViaNotes)
+        }
         return .notApplicable(reason: statementNoteNotApplicableNotFound)
+    }
+
+    /// 借入金等明細表 TextBlock（連結または単体）にリース債務行があるか。
+    /// 表全体の HTML に「リース」が含まれるかで判定（`borrowings_schedule` が読むのと同じタグ）。
+    private static func hasBorrowingsScheduleLeaseDebt(xbrlDir: URL) -> Bool {
+        let html =
+            XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+            ?? XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag)
+        guard let html else { return false }
+        return html.contains("リース")
     }
 
     private static func resolvedLeaseLiabilities(items: [StatementLineItem]) -> StatementNoteResolveResult {

@@ -28,8 +28,8 @@ public let statementNoteTypePolicyHoldingSecurities = "policy_holding_securities
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
-/// BS 構造化タグ（`LeaseObligations*` / `LeaseLiabilities*IFRS`）や BS HTML は `statement` 側
-/// （`available_via_statement`）。使用権資産の増減表は対象外。
+/// BS 構造化タグは `available_via_statement`、借入金等明細表のリース債務は `available_via_notes`。
+/// 使用権資産の増減表は対象外。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 
 /// ingest / `--note-types` バリデーション用の全 note_type 一覧（`FactsIngest` の走査順）。
@@ -73,7 +73,9 @@ public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 /// v3（2026-08-12）: BS 構造化タグ経路を廃止（`statement` と同一値のため `available_via_statement`）。
 /// v4（2026-08-12）: クボタ型「割引前のリース負債総額」/ スズキ型「契約上のキャッシュ・フロー」を追加。
 /// v5（2026-08-12）: クボタ型「控除：利息相当額」を追加。
-public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v5"
+/// v6（2026-08-16）: 借入金等明細表にリース債務があるとき `available_via_notes`。US-GAAP は
+/// `us_gaap_unsupported`（statement の構造化タグ判定不可のため一括 `available_via_statement` を廃止）。
+public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v6"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {
@@ -119,6 +121,11 @@ public let statementNoteNotApplicableNotFound = "not_found"
 /// 取得できる）。`property_plant_equipment_schedule` / `lease_liabilities` は BS 構造化タグに
 /// 当期値があるときこの reason を返す（各 resolver 参照）。
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
+
+/// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は他の statement note から取得できる）。
+/// `lease_liabilities` は BS にリース負債タグが無く、借入金等明細表（`borrowings_schedule`）に
+/// リース債務行があるときこの reason を返す。
+public let statementNoteNotApplicableAvailableViaNotes = "available_via_notes"
 
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を
 /// 判定すべき source かどうか。LLM 経由はここに含めない。

@@ -69,6 +69,7 @@ import Testing
         #expect(skill.description.contains("未取り込み"))
         #expect(skill.description.contains("not_found"))
         #expect(skill.description.contains("available_via_statement"))
+        #expect(skill.description.contains("available_via_notes"))
         #expect(skill.description.contains("isError"))
     }
 }
