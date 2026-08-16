@@ -27,16 +27,16 @@ smoke / golden は主に `SPEC_ORACLE` / `SPEC_INVARIANT`（`xbrl-parsing.md` §
 
 ## 既知のギャップ
 
-- smoke 床に未搭載の note_type がある（`dividends` / `goodwill_and_intangibles` は 11社追加済み。詳細は `xbrl-parsing.md` §6）
+- 公開 note_type 9種はいずれも smoke 固定11社の外出しオラクル床に載済み（詳細は `xbrl-parsing.md` §6）
 - `statement` 本体は `SmokeTests` 未通過（golden で smoke 社をカバー）
 - 横断 `SPEC_INVARIANT`（financials↔statement↔notes↔breakdown）は薄い
 - golden 期待値の多くがハードコード。外出しオラクルは一部 note_type / breakdown のみ
 
 ## 次の候補
 
-- 残り note_type の外出し／smoke 積み増し判断
 - 横断 INVARIANT の追加
 - ラベル混在テストファイルの分割要否
+- golden ハードコードの外出し判断（都度）
 
 ## 方針
 

@@ -3,8 +3,8 @@
 // property_plant_equipment_schedule は意図的に IFRS 連結企業限定（ユーザー判断、2026-08-12）。
 // smoke 固定11社の実データ検証: IFRS連結3社（味の素・クボタ・スズキ）は resolved。非IFRS8社は
 // 会計基準で理由が分かれる（`StatementNotesResolver.resolvePropertyPlantEquipmentSchedule` 参照）:
-// - J-GAAP6社（ニチレイ・AZplanning・東邦レマック・三菱UFJ・三井住友、+オークマは別ファイルで
-//   既存golden）は `available_via_statement`（`statement`本体のBSに区分別タグが構造化済み）
+// - J-GAAP6社（ニチレイ・AZplanning・オークマ・東邦レマック・三菱UFJ・三井住友）は
+//   `available_via_statement`（`statement`本体のBSに区分別タグが構造化済み）
 // - US-GAAP2社（富士フイルム・キヤノン）は `us_gaap_unsupported`（`ix:nonFraction`が無く構造化
 //   タグで判定できない。実データ確認済み: 富士フイルムは連結BS本表に区分内訳が載るが、キヤノンは
 //   BS本表が合計1行のみで内訳は別注記「注５有形固定資産」のHTML表にしかなく、`statement`のUS-GAAP
@@ -74,6 +74,13 @@ import Testing
     func smokePPEScheduleAZplanningNotApplicable() async throws {
         try await withSmokeCache("S100VU4O") {
             try assertMatchesOracle(docID: "S100VU4O", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokePPEScheduleOkumaNotApplicable() async throws {
+        try await withSmokeCache("S100W043") {
+            try assertMatchesOracle(docID: "S100W043", xbrlDir: $0)
         }
     }
 
