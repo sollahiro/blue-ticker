@@ -28,8 +28,8 @@ public let statementNoteTypePolicyHoldingSecurities = "policy_holding_securities
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
-/// BS 構造化タグ（`LeaseObligations*` / `LeaseLiabilities*IFRS`）や BS HTML は `statement` 側
-/// （`available_via_statement`）。使用権資産の増減表は対象外。
+/// BS 構造化タグは `available_via_statement`、借入金等明細表のリース債務は `available_via_notes`。
+/// 使用権資産の増減表は対象外。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 
 /// ingest / `--note-types` バリデーション用の全 note_type 一覧（`FactsIngest` の走査順）。
@@ -65,13 +65,19 @@ public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v3"
 /// 計上額の合計額）を追加する payload 構造変更。本番は v1 時点で0件ingest済みのため実害はないが、
 /// 将来の再発防止として抽出ロジック変更に揃えてバンプする。
 public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
-public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v1"
+/// v2（2026-08-16）: `available_via_statement` を会計基準一括ではなく BS 区分タグ当期値あり判定に変更
+/// （`lease_liabilities` と同型。区分タグ無し J-GAAP は `not_found`）。
+public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v2"
 public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 /// v2（2026-08-12）: スズキ・クボタ型 TextBlock の満期バケット（割引前契約CF）を表単位で追加。
 /// v3（2026-08-12）: BS 構造化タグ経路を廃止（`statement` と同一値のため `available_via_statement`）。
 /// v4（2026-08-12）: クボタ型「割引前のリース負債総額」/ スズキ型「契約上のキャッシュ・フロー」を追加。
 /// v5（2026-08-12）: クボタ型「控除：利息相当額」を追加。
-public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v5"
+/// v6（2026-08-16）: 借入金等明細表にリース債務があるとき `available_via_notes`。US-GAAP は
+/// `us_gaap_unsupported`（statement の構造化タグ判定不可のため一括 `available_via_statement` を廃止）。
+/// v7（2026-08-16）: `available_via_notes` を HTML「リース」部分一致から区分行ラベル
+/// （`BorrowingsSchedule.hasLeaseDebtRowLabel`）判定へ変更。
+public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v7"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {
@@ -114,9 +120,29 @@ public let statementNoteSourceNotApplicable = "not_applicable"
 public let statementNoteNotApplicableNotFound = "not_found"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は `statement`（Statement本体のBS）から
-/// 取得できる）。`property_plant_equipment_schedule` がIFRS連結企業限定である理由の案内に使う
-/// （`StatementNotesResolver.resolvePropertyPlantEquipmentSchedule` 参照）。
+/// 取得できる）。`property_plant_equipment_schedule` / `lease_liabilities` は BS 構造化タグに
+/// 当期値があるときこの reason を返す（各 resolver 参照）。
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
+
+/// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は他の statement note から取得できる）。
+/// `lease_liabilities` は BS にリース負債タグが無く、借入金等明細表（`borrowings_schedule`）の
+/// 区分行にリース債務／リース負債があるときこの reason を返す。
+public let statementNoteNotApplicableAvailableViaNotes = "available_via_notes"
+
+/// REST/MCP 404 の `reason` として返しうる statement-notes の既知コード一覧（公開契約）。
+/// `us_gaap_unsupported` は Statement 本体と共用（`statementNotApplicableUSGAAP`）。
+/// 追加・改名したら ApiSkills の description / instructions と本配列を同時更新する。
+public let allStatementNoteNotApplicableReasons: [String] = [
+    statementNoteNotApplicableNotFound,
+    statementNoteNotApplicableAvailableViaStatement,
+    statementNoteNotApplicableAvailableViaNotes,
+    statementNotApplicableUSGAAP,
+]
+
+/// 404 `reason` が公開契約の既知コードか（クライアント／カタログ突合用）。
+public func isKnownStatementNoteNotApplicableReason(_ reason: String) -> Bool {
+    allStatementNoteNotApplicableReasons.contains(reason)
+}
 
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を
 /// 判定すべき source かどうか。LLM 経由はここに含めない。

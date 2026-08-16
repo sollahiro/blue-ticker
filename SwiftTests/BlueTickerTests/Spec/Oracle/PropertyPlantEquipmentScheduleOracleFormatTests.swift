@@ -1,15 +1,12 @@
 // 外出し SPEC_ORACLE フォーマット（`StatementNotesOracleFormatTests.swift`=borrowings_schedule と同型）。
 //
-// property_plant_equipment_schedule は意図的に IFRS 連結企業限定（ユーザー判断、2026-08-12）。
-// smoke 固定11社の実データ検証: IFRS連結3社（味の素・クボタ・スズキ）は resolved。非IFRS8社は
-// 会計基準で理由が分かれる（`StatementNotesResolver.resolvePropertyPlantEquipmentSchedule` 参照）:
-// - J-GAAP6社（ニチレイ・AZplanning・東邦レマック・三菱UFJ・三井住友、+オークマは別ファイルで
-//   既存golden）は `available_via_statement`（`statement`本体のBSに区分別タグが構造化済み）
-// - US-GAAP2社（富士フイルム・キヤノン）は `us_gaap_unsupported`（`ix:nonFraction`が無く構造化
-//   タグで判定できない。実データ確認済み: 富士フイルムは連結BS本表に区分内訳が載るが、キヤノンは
-//   BS本表が合計1行のみで内訳は別注記「注５有形固定資産」のHTML表にしかなく、`statement`のUS-GAAP
-//   HTML抽出（BS本表のみ読む）でも拾えない。会社ごとに開示形式が違い判別もできないため
-//   `available_via_statement`は誤りうる）
+// property_plant_equipment_schedule: IFRS 注記 role で resolved、それ以外は lease と同型の
+// BS 区分タグ当期値判定（`Xbrl.propertyPlantEquipmentScheduleBSTags`）。
+// smoke 固定11社（2026-08-16）:
+// - IFRS連結3社（味の素・クボタ・スズキ）は resolved
+// - J-GAAP6社は BS 区分タグあり → `available_via_statement`
+// - US-GAAP2社（富士フイルム・キヤノン）は `us_gaap_unsupported`（連結 HTML 経路と
+//   fieldSet の NonConsolidated 落としのため BS タグ判定では案内しない）
 // 京セラ(S100TSIJ)・トヨタ(S100VWVY)は既存の `RealXbrlStatementNotesTests.swift` 側の
 // ハードコードgoldenを維持し、本ファイルには重複追加しない。
 
@@ -61,7 +58,7 @@ import Testing
         }
     }
 
-    // MARK: - smoke 床11社 - 非IFRS8社は available_via_statement で notApplicable
+    // MARK: - smoke 床11社 - J-GAAP6社は BS 区分タグ当期値あり → available_via_statement
 
     @Test
     func smokePPEScheduleNichireiNotApplicable() async throws {
@@ -74,6 +71,13 @@ import Testing
     func smokePPEScheduleAZplanningNotApplicable() async throws {
         try await withSmokeCache("S100VU4O") {
             try assertMatchesOracle(docID: "S100VU4O", xbrlDir: $0)
+        }
+    }
+
+    @Test
+    func smokePPEScheduleOkumaNotApplicable() async throws {
+        try await withSmokeCache("S100W043") {
+            try assertMatchesOracle(docID: "S100W043", xbrlDir: $0)
         }
     }
 

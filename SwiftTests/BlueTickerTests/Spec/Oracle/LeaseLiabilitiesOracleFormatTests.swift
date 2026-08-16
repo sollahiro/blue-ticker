@@ -1,12 +1,12 @@
 // 外出し SPEC_ORACLE フォーマット（`StatementNotesOracleFormatTests.swift`=borrowings_schedule と同型）。
 //
-// smoke 固定11社の実データ検証（2026-08-12）:
+// smoke 固定11社の実データ検証（2026-08-16）:
 // - IFRS TextBlock: 味の素（支払期日別 CL+NCL＝帳簿価額）、クボタ（現在価値＋割引前総額＋満期バケット。
 //   ROU 87,946は対象外）、スズキ（帳簿価額＋契約上CF＋満期バケット。貸手表と表単位で分離）
-// - available_via_statement: ニチレイ・AZplanning（BS `LeaseObligations*` は statement 責務）、
-//   富士フイルム・キヤノン（US-GAAP BS）
-// - not_found: オークマ（リース債務は借入金等明細表＝`borrowings_schedule`側。PPE不可）、
-//   東邦レマック、銀行2社
+// - available_via_statement: ニチレイ・AZplanning（BS `LeaseObligations*` は statement 責務）
+// - available_via_notes: オークマ・東邦レマック・三菱UFJ・三井住友
+//   （借入金等明細表の区分行ラベルがリース債務／リース負債。HTML「リース」部分一致ではない）
+// - us_gaap_unsupported: 富士フイルム・キヤノン（statement の構造化タグ判定不可）
 
 import Foundation
 import Testing
@@ -55,14 +55,14 @@ import Testing
     }
 
     @Test
-    func smokeLeaseFujifilmAvailableViaStatement() async throws {
+    func smokeLeaseFujifilmUSGAAPUnsupported() async throws {
         try await withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", xbrlDir: $0)
         }
     }
 
     @Test
-    func smokeLeaseOkumaNotApplicable() async throws {
+    func smokeLeaseOkumaAvailableViaNotes() async throws {
         try await withSmokeCache("S100W043") {
             try assertMatchesOracle(docID: "S100W043", xbrlDir: $0)
         }
@@ -83,28 +83,28 @@ import Testing
     }
 
     @Test
-    func smokeLeaseTohoRemacNotApplicable() async throws {
+    func smokeLeaseTohoRemacAvailableViaNotes() async throws {
         try await withSmokeCache("S100XRD8") {
             try assertMatchesOracle(docID: "S100XRD8", xbrlDir: $0)
         }
     }
 
     @Test
-    func smokeLeaseCanonAvailableViaStatement() async throws {
+    func smokeLeaseCanonUSGAAPUnsupported() async throws {
         try await withSmokeCache("S100XTLJ") {
             try assertMatchesOracle(docID: "S100XTLJ", xbrlDir: $0)
         }
     }
 
     @Test
-    func smokeLeaseMufgNotApplicable() async throws {
+    func smokeLeaseMufgAvailableViaNotes() async throws {
         try await withSmokeCache("S100W4FB") {
             try assertMatchesOracle(docID: "S100W4FB", xbrlDir: $0)
         }
     }
 
     @Test
-    func smokeLeaseSmfgNotApplicable() async throws {
+    func smokeLeaseSmfgAvailableViaNotes() async throws {
         try await withSmokeCache("S100W0S7") {
             try assertMatchesOracle(docID: "S100W0S7", xbrlDir: $0)
         }

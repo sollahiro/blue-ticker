@@ -157,6 +157,38 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
 
     // MARK: - 汎用機構（staleness / skip）
 
+    @Test func ingestReattemptsNotApplicableRowWhenVersionStaleAndRewritesReason() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "83060", db: app.db)
+            let stale = CompanyStatementNote(
+                docID: "S1", noteType: statementNoteTypeLeaseLiabilities)
+            stale.code = "8306"
+            stale.submitDateTime = "2025-06-20 09:00"
+            stale.payload = StatementNotePayload(needsReview: false, warnings: [])
+            stale.needsReview = false
+            stale.source = statementNoteSourceNotApplicable
+            stale.contentHash = ""
+            stale.cacheVersion = "notes-lease-liabilities-v5"
+            stale.notApplicableReason = statementNoteNotApplicableNotFound
+            try await stale.create(on: app.db)
+
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["8306"], years: 3, limit: nil,
+                noteType: statementNoteTypeLeaseLiabilities
+            ) { _, _ in
+                .notApplicable(reason: statementNoteNotApplicableAvailableViaNotes)
+            }
+
+            #expect(summary.notApplicable == 1)
+            let key = CompanyStatementNote.compositeID(
+                docID: "S1", noteType: statementNoteTypeLeaseLiabilities)
+            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
+            #expect(row.cacheVersion == leaseLiabilitiesNoteCacheVersion)
+            #expect(row.notApplicableReason == statementNoteNotApplicableAvailableViaNotes)
+            #expect(isKnownStatementNoteNotApplicableReason(row.notApplicableReason ?? ""))
+        }
+    }
+
     @Test func ingestSkipsWhenStoredAtCurrentVersion() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)

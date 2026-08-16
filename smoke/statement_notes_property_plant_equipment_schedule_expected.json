@@ -195,6 +195,10 @@
     "status": "not_applicable",
     "reason": "available_via_statement"
   },
+  "S100W043": {
+    "status": "not_applicable",
+    "reason": "available_via_statement"
+  },
   "S100W3XJ": {
     "status": "not_applicable",
     "reason": "us_gaap_unsupported"

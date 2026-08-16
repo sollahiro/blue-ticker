@@ -1204,6 +1204,50 @@ enum BorrowingsSchedule {
         return parseRollforwardEndingBalancePairTables(in: soup)
     }
 
+    /// 借入金等明細表の区分行にリース債務／リース負債があるか（金額の有無は問わない）。
+    /// `lease_liabilities` の `available_via_notes` 判定用。HTML 全文の「リース」部分一致は使わず、
+    /// 区分ラベルのみを見る（「リース債務を除く」等の除外文言・注記文への誤ヒットを避ける）。
+    /// 東邦レマック S100XRD8 のように残高がすべて「－」の行も、区分が開示されていれば true。
+    static func hasLeaseDebtRowLabel(xbrlDir: URL) -> Bool {
+        guard let html = XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+                ?? XBRLUtils.extractTextblockHtml(
+                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
+              let soup = try? SwiftSoup.parse(html),
+              let tables = (try? soup.select("table"))?.array() else { return false }
+
+        let table = tables.first { ((try? $0.text()) ?? "").contains("計") } ?? tables.first
+        guard let table, let rows = (try? table.select("tr"))?.array() else { return false }
+
+        for row in rows {
+            guard let cells = (try? row.select("td, th"))?.array(), !cells.isEmpty else { continue }
+            let labelPs = (try? cells[0].select("p"))?.array() ?? []
+            if labelPs.count > 1 {
+                for p in labelPs {
+                    let label = normalizeLabel((try? p.text(trimAndNormaliseWhitespace: true)) ?? "")
+                    if isLeaseDebtScheduleRowLabel(label) { return true }
+                }
+            }
+            let label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if isLeaseDebtScheduleRowLabel(label) { return true }
+        }
+        return false
+    }
+
+    /// 区分ラベルがリース債務／リース負債の明細行か。
+    /// 「借入金（リース債務を除く）」のようにリースを母数から除外する文言は false。
+    /// 「リース債務（１年以内返済予定のものを除く）」は長期リース行なので true。
+    static func isLeaseDebtScheduleRowLabel(_ label: String) -> Bool {
+        guard !label.isEmpty else { return false }
+        if label.contains("リース債務を除") || label.contains("リース負債を除")
+            || label.contains("リース債務を含ま") || label.contains("リース負債を含ま")
+            || label.contains("リース債務等を除") || label.contains("リース負債等を除")
+        {
+            return false
+        }
+        return label.contains("リース債務") || label.contains("リース負債")
+    }
+
     /// 借入金等明細表から有利子負債を積み上げ抽出する。
     /// IBD を XBRL タグで解決できない場合のフォールバック（会計基準は問わない）。
     static func extract(xbrlDir: URL, accountingStandard: String) -> IBDResult? {

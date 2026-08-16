@@ -34,11 +34,11 @@
     "status": "not_applicable"
   },
   "S100W3XJ": {
-    "reason": "available_via_statement",
+    "reason": "us_gaap_unsupported",
     "status": "not_applicable"
   },
   "S100W043": {
-    "reason": "not_found",
+    "reason": "available_via_notes",
     "status": "not_applicable"
   },
   "S100XR0M": {
@@ -194,19 +194,19 @@
     ]
   },
   "S100XRD8": {
-    "reason": "not_found",
+    "reason": "available_via_notes",
     "status": "not_applicable"
   },
   "S100XTLJ": {
-    "reason": "available_via_statement",
+    "reason": "us_gaap_unsupported",
     "status": "not_applicable"
   },
   "S100W4FB": {
-    "reason": "not_found",
+    "reason": "available_via_notes",
     "status": "not_applicable"
   },
   "S100W0S7": {
-    "reason": "not_found",
+    "reason": "available_via_notes",
     "status": "not_applicable"
   }
 }
