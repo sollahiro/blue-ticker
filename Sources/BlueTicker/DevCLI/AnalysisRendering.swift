@@ -7,8 +7,8 @@ import Foundation
 // MARK: - ticker waterfall（増減分析）
 
 enum WaterfallRendering {
-    /// 年次の増減分析を表示する。`commandPrefix` は案内文言に使うコマンド名（`ticker` / `ticker-dev`）。
-    static func renderAnnual(_ yearsData: [YearEntry], commandPrefix: String = "ticker") {
+    /// 年次の増減分析を表示する。`commandPrefix` は案内文言に使うコマンド名（既定 `ticker-dev`）。
+    static func renderAnnual(_ yearsData: [YearEntry], commandPrefix: String = "ticker-dev") {
         let periods = yearsData.reversed().map { $0 }  // 古い順（前年差の基準）
         printError("\n[増減分析]\n")
         // 前期 = 直前の年度（年次は 1 期前）

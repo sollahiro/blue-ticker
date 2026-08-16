@@ -127,9 +127,7 @@ public enum Api {
     static let docTypeAmendedHalfYearReport = "170"
 
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
-    /// レスポンス形を破壊的に変更したときのみ +1 する（クライアントのデコード整合判定用）。
-    /// v2: remote CLI のローカル同等表示のため、flatten にラベル・SGA・NOPAT・実効税率・
-    ///     支払利息・流動/固定資産負債・PPE・ネット D/E・capex/buyback/RD・配当内訳等を追加。
+    /// レスポンス形を破壊的に変更したときのみ +1 する。
     static let financialsSchemaVersion = 2
 
     /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。

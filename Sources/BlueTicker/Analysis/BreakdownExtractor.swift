@@ -1,5 +1,4 @@
 // 連結財務諸表注記からセグメント・地域別情報を抽出する
-// Python の blue_ticker/analysis/segment_extractor.py 相当
 //
 //   extractSegmentInfo()   → 事業別（報告セグメント別）
 //   extractGeographyInfo() → 地域別（所在地別）
@@ -58,7 +57,7 @@ struct ExtractedBreakdown: Equatable {
 }
 
 extension ExtractedBreakdown {
-    /// toDictionary() の逆変換。remote CLI が filing-content の JSON をローカル同等に描画するために使う。
+    /// toDictionary() の逆変換。
     init(dictionary: [String: Any]) {
         method = dictionary["method"] as? String ?? "not_found"
         tables = (dictionary["tables"] as? [[String: Any]] ?? []).map { t in
