@@ -67,9 +67,11 @@ import Testing
         let skill = try #require(apiSkill(id: "get-statement-notes"))
         #expect(skill.description.contains("reason"))
         #expect(skill.description.contains("未取り込み"))
-        #expect(skill.description.contains("not_found"))
-        #expect(skill.description.contains("available_via_statement"))
-        #expect(skill.description.contains("available_via_notes"))
         #expect(skill.description.contains("isError"))
+        for reason in allStatementNoteNotApplicableReasons {
+            #expect(
+                skill.description.contains(reason) || skill.instructions.contains(reason),
+                "missing reason \(reason)")
+        }
     }
 }

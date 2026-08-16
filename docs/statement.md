@@ -44,6 +44,15 @@
 
 決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。本番 `company_statement_notes` の ingest は未実施の場合あり（現在地は roadmap）。
 
+REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
+
+| reason | 意味 |
+|---|---|
+| `not_found` | 当該 note_type の開示・タグが無い（正当欠測） |
+| `available_via_statement` | 本 note_type 対象外だが同等値は `get-statement` から取得可 |
+| `available_via_notes` | 本 note_type 対象外だが同等値は他 note_type（例: `borrowings_schedule`）から取得可 |
+| `us_gaap_unsupported` | US-GAAP 連結で本 note_type の構造化タグ判定ができない |
+
 ## 残課題
 
 - 銀行・保険等を含む母集団拡大前の追加実データ確認

@@ -129,6 +129,21 @@ public let statementNoteNotApplicableAvailableViaStatement = "available_via_stat
 /// 区分行にリース債務／リース負債があるときこの reason を返す。
 public let statementNoteNotApplicableAvailableViaNotes = "available_via_notes"
 
+/// REST/MCP 404 の `reason` として返しうる statement-notes の既知コード一覧（公開契約）。
+/// `us_gaap_unsupported` は Statement 本体と共用（`statementNotApplicableUSGAAP`）。
+/// 追加・改名したら ApiSkills の description / instructions と本配列を同時更新する。
+public let allStatementNoteNotApplicableReasons: [String] = [
+    statementNoteNotApplicableNotFound,
+    statementNoteNotApplicableAvailableViaStatement,
+    statementNoteNotApplicableAvailableViaNotes,
+    statementNotApplicableUSGAAP,
+]
+
+/// 404 `reason` が公開契約の既知コードか（クライアント／カタログ突合用）。
+public func isKnownStatementNoteNotApplicableReason(_ reason: String) -> Bool {
+    allStatementNoteNotApplicableReasons.contains(reason)
+}
+
 /// xbrl_facts と同じく決定的ロジックで解決され、cache_version 世代で再計算・read 可否を
 /// 判定すべき source かどうか。LLM 経由はここに含めない。
 public func isVersionGatedStatementNoteSource(_ source: String) -> Bool {

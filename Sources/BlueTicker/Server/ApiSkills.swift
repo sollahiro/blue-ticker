@@ -462,7 +462,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: property_plant_equipment_schedule / lease_liabilities で BS に区分・負債の
                 構造化タグ当期値がある場合。goodwill_and_intangibles は IFRS 注記限定のため非対象時も同様）、
                 available_via_notes（本 note_type の対象外だが同等の値は他の note_type から取得可能。
-                例: lease_liabilities のリース債務が borrowings_schedule＝借入金等明細表側にある場合）。
+                例: lease_liabilities のリース債務が borrowings_schedule＝借入金等明細表側にある場合）、
+                us_gaap_unsupported（US-GAAP 連結で本 note_type の構造化タグ判定ができない場合）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement/notes",
