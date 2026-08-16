@@ -4,7 +4,8 @@
 // ネットワーク非依存で見る。
 //
 // 有報セクション取り込み との最大の違い（意図的に重点検証する）:
-// - xbrl_facts 経由（決定的）の行は cache_version のバージョン不一致で再試行してよい。
+// - xbrl_facts / not_applicable（決定的）の行は cache_version のバージョン不一致で再試行してよい。
+//   needs_review=true だけでは再試行しない。
 // - LLM 経由（source != xbrl_facts）の行は cache_version のバンプだけでは再試行しない
 //   （needs_review=true のときのみ）。read の servable 判定も同じ非対称性を持つ
 //   （xbrl_facts はバージョン床、LLM 経由は存在すれば常に servable）。
@@ -295,8 +296,8 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// unknown は要調査のため needsReview=true で保存し、通常巡回や `--codes` 指名 ingest で
-    /// 再分類できるようにする（ユーザー要望: 「unknownは開発側でレビューして指名ingestなど」）。
+    /// unknown は要調査のため needsReview=true で保存する。決定論なので通常巡回では
+    /// 再計算せず、分類ロジック改善後は cache_version バンプで再分類する。
     @Test func ingestFlagsUnknownNotApplicableReasonForReview() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
@@ -401,6 +402,26 @@ extension BreakdownLoadResult {
         }
     }
 
+    @Test func ingestSkipsUnknownNotApplicableFlaggedForReviewAtCurrentVersion() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
+                needsReview: true, notApplicableReason: breakdownNotApplicableUnknown)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in
+                Issue.record("resolver must not run for a current-version not_applicable row")
+                return .failed
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
     /// issue #130（E/F判定の検知結果明示化）: notApplicable の理由別内訳が正しく集計されること。
     @Test func ingestClassifiesNotApplicableReasonsSeparately() async throws {
         try await withMigratedApp { app in
@@ -497,7 +518,7 @@ extension BreakdownLoadResult {
         }
     }
 
-    @Test func ingestReattemptsRowFlaggedForReviewRegardlessOfSource() async throws {
+    @Test func ingestReattemptsLLMRowFlaggedForReview() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
@@ -514,6 +535,53 @@ extension BreakdownLoadResult {
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.needsReview == false)
+        }
+    }
+
+    /// 決定論の needs_review は同じ入力では結果が変わらない（RD 未タグ残差など）。
+    /// 現行版のまま再試行すると unpublished 軸の limit を埋め続ける。
+    @Test func ingestSkipsDeterministicRowFlaggedForReviewAtCurrentVersion() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts, cacheVersion: businessBreakdownCacheVersion,
+                needsReview: true)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in
+                Issue.record("resolver must not run for a current-version xbrl_facts row")
+                return .failed
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
+    @Test func ingestReattemptsDeterministicRowFlaggedForReviewWhenVersionStale() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts, cacheVersion: "old-version",
+                needsReview: true)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in
+                .resolved(
+                    payload: fakePayload(needsReview: true), source: breakdownSourceXbrlFacts,
+                    contentHash: "h-stale-review", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.cacheVersion == businessBreakdownCacheVersion)
+            #expect(row.needsReview == true)
         }
     }
 
