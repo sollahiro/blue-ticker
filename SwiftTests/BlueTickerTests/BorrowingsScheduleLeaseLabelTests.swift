@@ -1,5 +1,6 @@
 // BorrowingsSchedule.hasLeaseDebtRowLabel / isLeaseDebtScheduleRowLabel の区分ラベル判定。
 
+import Foundation
 import Testing
 @testable import BlueTickerCore
 
