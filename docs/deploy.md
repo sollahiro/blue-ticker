@@ -93,7 +93,7 @@ swift build -c release --product blt-server   # コード変更後は必須（�
 set -a; . ./.env; set +a
 ./.build/release/blt-server sync
 # 使い捨て DB 向け。本番 WRITE へ書くときはコマンド単位で上書き（.env の DATABASE_URL は差し替えない）:
-# DATABASE_URL="$BLT_PROD_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
+# DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
 ```
 
