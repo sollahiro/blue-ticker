@@ -542,6 +542,133 @@ import Foundation
         }
     }
 
+    /// 組立ルール（statement で計算できればそれ、できなければ notes）を既存 smoke IBD 期待値と突合する。
+    /// A: statement が非 nil なら採用（リース未加算でも採用）。
+    /// B: statement が現行 Extractor 合計と一致するときだけ採用（BS だけで足りる場合）。それ以外は notes。
+    /// C: B と同じだが銀行 `bank_components`（預金込み）は statement 不足とみなし notes へ。
+    @Test func testSummaryIbdAssemblyVsSmokeExpected() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        var checked = 0
+        var aOK = 0
+        var bOK = 0
+        var cOK = 0
+        var notesOK = 0
+        var statementOK = 0
+
+        print("ibd assembly vs smoke expected")
+        print(
+            "fixture | std | smoke | extractor | statement | notes | notes_via | A | B | C"
+        )
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path),
+                  FileManager.default.fileExists(atPath: fixturePath.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected)
+            else { continue }
+
+            let smoke = dbl((expected["interest_bearing_debt"] as? [String: Any])?["total"])
+            let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+            let std = detectAccountingStandard(allTags)
+            var instantFS = fieldSetFromInstant(allTags)
+            if std == "US-GAAP" {
+                for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
+            }
+            let extractor = IBDExtractor.extract(
+                fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
+            let statement = statementRemainingValues(xbrlDir: xbrlDir)["ibd"] ?? nil
+            let notes = notesIbdTotal(xbrlDir: xbrlDir)
+
+            let ruleA = statement ?? notes.value
+            let statementComplete = closeEnoughOptional(statement, extractor.total)
+            let ruleB = statementComplete ? statement : notes.value
+            let bank = extractor.method == "bank_components"
+            let ruleC = (statementComplete && !bank) ? statement : notes.value
+
+            checked += 1
+            if closeEnoughOptional(smoke, statement) { statementOK += 1 }
+            if closeEnoughOptional(smoke, notes.value) { notesOK += 1 }
+            if closeEnoughOptional(smoke, ruleA) { aOK += 1 }
+            if closeEnoughOptional(smoke, ruleB) { bOK += 1 }
+            if closeEnoughOptional(smoke, ruleC) { cOK += 1 }
+
+            print(
+                "\(fixtureID) | \(std) | \(yen(smoke)) | \(extractor.method) | \(yen(statement)) | \(yen(notes.value)) | \(notes.detail) | \(statusMark(exp: smoke, act: ruleA)) | \(statusMark(exp: smoke, act: ruleB)) | \(statusMark(exp: smoke, act: ruleC))"
+            )
+        }
+
+        guard checked > 0 else {
+            print("SKIP   ibd assembly vs smoke: XBRL キャッシュなし")
+            return
+        }
+        print("checked=\(checked)")
+        print("statement-vs-smoke: \(statementOK)/\(checked)")
+        print("notes-vs-smoke: \(notesOK)/\(checked)")
+        print("ruleA statement-if-non-nil: \(aOK)/\(checked)")
+        print("ruleB statement-if-complete-else-notes: \(bOK)/\(checked)")
+        print("ruleC B-but-banks-to-notes: \(cOK)/\(checked)")
+        #expect(checked == Self.docIDs.count)
+    }
+
+    /// notes の IBD: 借入金等明細表合計。明細にリース行が無く `lease_liabilities` が resolved なら帳簿価額を足す。
+    private func notesIbdTotal(xbrlDir: URL) -> (value: Double?, detail: String) {
+        var borrowings: Double?
+        switch StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir) {
+        case .resolved(let payload, _, _):
+            borrowings = payload.borrowingsComponents?.first(where: \.isTotal)?.currentBalance
+        default:
+            break
+        }
+        let hasLeaseRow = BorrowingsSchedule.hasLeaseDebtRowLabel(xbrlDir: xbrlDir)
+        var leaseBook: Double?
+        var leaseStatus = "n/a"
+        switch StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
+        case .resolved:
+            leaseStatus = "resolved"
+            leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current
+        case .notApplicable(let reason):
+            leaseStatus = reason
+        case .failed:
+            leaseStatus = "failed"
+        }
+
+        if hasLeaseRow, let borrowings {
+            return (borrowings, "borrowings+lease-rows; lease=\(leaseStatus)")
+        }
+        if let borrowings, let leaseBook {
+            return (borrowings + leaseBook, "borrowings+lease_note; lease=\(leaseStatus)")
+        }
+        if let borrowings {
+            return (borrowings, "borrowings; lease=\(leaseStatus)")
+        }
+        if let leaseBook {
+            return (leaseBook, "lease_note; lease=\(leaseStatus)")
+        }
+        return (nil, "none; lease=\(leaseStatus)")
+    }
+
+    private func closeEnoughOptional(_ expected: Double?, _ actual: Double?) -> Bool {
+        guard let expected else { return actual == nil }
+        return closeEnough(expected, actual)
+    }
+
+    private func yen(_ v: Double?) -> String {
+        guard let v else { return "nil" }
+        if abs(v) >= 1e12 { return String(format: "%.2f兆", v / 1e12) }
+        if abs(v) >= 1e8 { return String(format: "%.1f億", v / 1e8) }
+        return fmt(v)
+    }
+
     // MARK: - 比較
 
     private func compare(
