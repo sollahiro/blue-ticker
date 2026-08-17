@@ -56,7 +56,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | pretax_income | 11/11 | 11/11 | 11/11 | 公開フィールドではないが税計算入力。resolver 載済 |
 | rd | — | 7/7 | 7/7 | **breakdown `research_and_development` 分母が正本**。PL 行は使わない |
 | employees | — | 11/11 | 11/11 | **breakdown `employees` 分母が正本**。本表に人数行なし |
-| cfo / cfi | 8/11 | 8/11 | 11/11 | IFRS 3社（味の素・クボタ・スズキ）は CF 合計が `SummaryOfBusinessResults` のみ。Summary は正本にしない |
+| cfo / cfi | 11/11 | 11/11 | 11/11 | CF 本表合計。IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS`（Summary は正本にしない） |
 | income_tax | 10/11 | 10/11 | 11/11 | 富士フイルム US-GAAP は statement ラベルと現行 HTML 節抽出が不一致 |
 | dividend_ss | 9/11 | 9/11 | 11/11 | US-GAAP 2社。notes `dividends` 合計では埋まらない |
 | cf_treasury_stock | 8/10 | 8/10 | 10/10 | US-GAAP 2社は現行 `USGAAPHtml` 専用抽出 |
@@ -76,7 +76,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | 5b-2 | 未移行の **statement 正本**フィールドを IndividualAnalyzer へ切替。`USGAAPHtml` 撤去 |
 | 5c | GP / SGA / pretax は statement で smoke 到達。resolver 載済・IA 未切替 |
 | 7 | dividend_ss は statement SS 9/11。notes 合計では US-GAAP 欠測を埋めない |
-| 8 | IBD 定義は PR #247。CFO·CFI 8/11（IFRS 3社は Summary のみ）。利息 4/9、buyback 8/10 |
+| 8 | IBD 定義は PR #247。CFO·CFI は CF 本表 11/11（IA 未切替）。利息 4/9、buyback 8/10 |
 | 9 | employees / rd の正本は breakdown 分母。financials はパススルー。ingest はまだ financials → breakdown の逆依存。売上分母も financials 逆依存 |
 | 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |

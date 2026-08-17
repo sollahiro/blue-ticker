@@ -786,13 +786,13 @@ import Foundation
                 s.expected == 0 || s.currentOK == s.expected,
                 "\(spec.name): current extractor \(s.currentOK)/\(s.expected)")
         }
-        for field in ["gross_profit", "sga", "pretax_income"] {
+        for field in ["gross_profit", "sga", "pretax_income", "cfo", "cfi"] {
             let s = stats[field] ?? FieldStat()
             #expect(
                 s.expected > 0 && s.statementOK == s.expected,
                 "\(field): statement path \(s.statementOK)/\(s.expected)")
         }
-        for field in ["gross_profit", "sga", "pretax_income", "rd", "employees"] {
+        for field in ["gross_profit", "sga", "pretax_income", "rd", "employees", "cfo", "cfi"] {
             let s = stats[field] ?? FieldStat()
             #expect(
                 s.expected > 0 && s.composedOK == s.expected,

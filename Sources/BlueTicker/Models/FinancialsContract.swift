@@ -65,7 +65,7 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
 // | accounts_receivable, inventory, accounts_payable | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
-// | cfo, cfi | statement（cash_flow 行） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
+// | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |

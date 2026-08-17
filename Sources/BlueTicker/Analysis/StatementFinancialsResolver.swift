@@ -252,12 +252,14 @@ enum StatementFinancialsResolver {
             dividendPaidCF: divPaid.current,
             grossProfit: firstByLabel(year.incomeStatement, contains: "売上総利益"),
             sga: op.sga,
-            cfo: firstByLabel(
-                year.cashFlow, contains: "営業活動によるキャッシュ・フロー",
-                excluding: ["期首", "期末", "明細"]),
-            cfi: firstByLabel(
-                year.cashFlow, contains: "投資活動によるキャッシュ・フロー",
-                excluding: ["期首", "期末", "明細"]),
+            cfo: statementCashFlowTotal(year.cashFlow, tags: Xbrl.cfOperatingTags)
+                ?? firstByLabel(
+                    year.cashFlow, contains: "営業活動によるキャッシュ・フロー",
+                    excluding: ["期首", "期末", "明細"]),
+            cfi: statementCashFlowTotal(year.cashFlow, tags: Xbrl.cfInvestingTags)
+                ?? firstByLabel(
+                    year.cashFlow, contains: "投資活動によるキャッシュ・フロー",
+                    excluding: ["期首", "期末", "明細"]),
             pretaxIncome: tax.pretaxIncome
                 ?? firstByLabel(year.incomeStatement, contains: "税引前")
                 ?? firstByLabel(year.incomeStatement, contains: "税金等調整前"),
@@ -287,13 +289,19 @@ enum StatementFinancialsResolver {
         let gp = GrossProfitExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
         let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        // IFRS 等で CF 合計タグが presentation に無く Summary 側だけにあるとき、本表ラベルで拾う。
-        let cfo = cf.cfo ?? firstByLabel(
-            cashFlow, contains: "営業活動によるキャッシュ・フロー",
-            excluding: ["期首", "期末", "明細"])
-        let cfi = cf.cfi ?? firstByLabel(
-            cashFlow, contains: "投資活動によるキャッシュ・フロー",
-            excluding: ["期首", "期末", "明細"])
+        // 正本は CF 本表の合計行。SummaryOfBusinessResults は使わない。
+        // IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS` が本表にあり、旧 extractor は
+        // Summary タグで拾っていた。ラベル部分一致は verbose label で外れることがある。
+        let cfo = statementCashFlowTotal(cashFlow, tags: Xbrl.cfOperatingTags)
+            ?? cf.cfo
+            ?? firstByLabel(
+                cashFlow, contains: "営業活動によるキャッシュ・フロー",
+                excluding: ["期首", "期末", "明細"])
+        let cfi = statementCashFlowTotal(cashFlow, tags: Xbrl.cfInvestingTags)
+            ?? cf.cfi
+            ?? firstByLabel(
+                cashFlow, contains: "投資活動によるキャッシュ・フロー",
+                excluding: ["期首", "期末", "明細"])
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let ie = InterestExpenseExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
@@ -319,6 +327,18 @@ enum StatementFinancialsResolver {
             dividendSS: divSS.current,
             buyback: buyback.current
         )
+    }
+
+    /// CF 本表の合計。`SummaryOfBusinessResults` は本表ではないので候補から外す。
+    private static func statementCashFlowTotal(
+        _ items: [StatementLineItem], tags: [String]
+    ) -> Double? {
+        for tag in tags where !tag.contains("SummaryOfBusinessResults") {
+            if let item = items.first(where: { $0.tag == tag }) {
+                return item.value
+            }
+        }
+        return nil
     }
 
     private static func firstByLabel(
