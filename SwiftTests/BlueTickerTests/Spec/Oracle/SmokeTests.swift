@@ -656,6 +656,10 @@ import Foundation
             print("  parts: \(composed.parts)")
         }
         print("composed-vs-smoke: \(match)/\(checked)")
+        guard checked > 0 else {
+            print("SKIP   ibd item-tag compose vs smoke: XBRL キャッシュなし")
+            return
+        }
         #expect(checked == Self.docIDs.count)
         #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
     }
