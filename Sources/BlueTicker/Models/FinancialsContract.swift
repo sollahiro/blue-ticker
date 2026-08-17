@@ -43,10 +43,9 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 
 // MARK: - フィールド正本（Summary 水準値の source 表、タスク #4）
 //
-// **正本抽出の原則**: Summary 生値の正本は statement / notes / breakdown のみ。
-// financials 組立は正本 resolver の結果をパススルー／構成要素集計する
-// （`docs/financials-summary-separation.md`「正本抽出の原則」参照）。
-// notes の表パースは notes 側。financials 層で表を再パースしない。
+// **正本抽出の原則**: Summary 生値は statement / notes / breakdown のみ。
+// 組立は計算できることが前提。statement で取れればそれ、なければ notes、なければ breakdown。
+// 1 値を複数源から足さない。notes の表パースは notes 側。
 //
 // `FinancialsYear` の各公開フィールドについて「誰が正本か」と現行組立経路を固定する。
 // 詳細・着手タスクは `docs/financials-summary-separation.md` が正本。本表は契約近傍の索引。
@@ -71,9 +70,9 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
 // | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
-// | employees | breakdown `employees` 軸（合計） | EmployeesExtractor | extractor |
-// | rd | breakdown `rd` 軸（合計） | RDExtractor | extractor |
-// | interest_bearing_debt | notes `borrowings_schedule`（構成要素を集計） | IBDExtractor | extractor |
+// | employees | statement に無ければ breakdown `employees` 合計 | EmployeesExtractor | extractor |
+// | rd | statement に無ければ breakdown `rd` 合計 | RDExtractor | extractor |
+// | interest_bearing_debt | statement で計算できればそれ、できなければ notes（借入明細＋必要ならリース注記） | IBDExtractor | extractor |
 // | interest_expense | 未決（statement ± notes） | InterestExpenseExtractor | extractor |
 // | buyback, cf_treasury_stock | 未決（statement ± notes） | ShareBuybackExtractor / CfTreasuryStockExtractor | extractor |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
