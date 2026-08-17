@@ -13,13 +13,51 @@ import Testing
             && R2StorageConfig.resolveXbrlFromEnvironment() != nil
     }
 
+    @Test(.enabled(if: liveEnabled, "BLT_R2_XBRL_LIVE_TEST=1 and R2 XBRL creds required"))
+    func probeXbrlAndIconsBuckets() async {
+        let xbrl = R2StorageConfig.resolveXbrlFromEnvironment()!
+        let missing = "jp/edinet/xbrl/__blt_probe_missing__.zip"
+        let xbrlResult = await R2Client.download(key: missing, config: xbrl)
+        print("XBRL bucket probe: \(probeLabel(xbrlResult))")
+
+        if let icons = R2StorageConfig.resolveIconsFromEnvironment() {
+            let iconsResult = await R2Client.download(key: missing, config: icons)
+            print("icons bucket probe: \(probeLabel(iconsResult))")
+            switch iconsResult {
+            case .notFound, .success:
+                break
+            default:
+                Issue.record("icons bucket unexpected: \(probeLabel(iconsResult))")
+            }
+        }
+
+        switch xbrlResult {
+        case .notFound, .success:
+            break
+        case .httpStatus(403, _):
+            Issue.record(
+                """
+                XBRL bucket 403 AccessDenied. Same token returns 404 on the icons bucket for a missing key, so SigV4 is fine. \
+                Grant Object Read & Write on BLT_R2_XBRL_BUCKET (create the bucket if it does not exist).
+                """)
+        default:
+            Issue.record("XBRL bucket unexpected: \(probeLabel(xbrlResult))")
+        }
+    }
+
     @Test(
         .enabled(if: liveEnabled, "BLT_R2_XBRL_LIVE_TEST=1 and R2 XBRL creds required"),
         .timeLimit(.minutes(30))
     )
     func seedAndReloadSmokeDocsFromR2() async throws {
-        let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"]
         let config = try #require(R2StorageConfig.resolveXbrlFromEnvironment())
+        let probe = await R2Client.download(
+            key: "jp/edinet/xbrl/__blt_probe_missing__.zip", config: config)
+        if case .httpStatus(403, _) = probe {
+            Issue.record("XBRL bucket 403; skip smoke reload until the R2 token can access BLT_R2_XBRL_BUCKET")
+            return
+        }
+        let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"]
         if let iconsBucket = R2StorageConfig.resolveIconsFromEnvironment()?.bucket {
             #expect(iconsBucket != config.bucket)
         }
@@ -90,5 +128,15 @@ import Testing
         print(logLines.joined(separator: "\n"))
         #expect(failures.isEmpty, Comment(rawValue: failures.joined(separator: "\n")))
         #expect(logLines.contains(where: { $0.hasPrefix("OK ") }))
+    }
+
+    private func probeLabel(_ result: R2Client.DownloadResult) -> String {
+        switch result {
+        case .success(let data): return "success bytes=\(data.count)"
+        case .notFound: return "notFound"
+        case .invalidURL: return "invalidURL"
+        case .transportError(let message): return "transport \(message)"
+        case .httpStatus(let status, let snippet): return "http=\(status) \(snippet)"
+        }
     }
 }
