@@ -241,6 +241,17 @@ import Foundation
         #expect(!(store.cachedXbrlDocIDs().contains("DOC_EMPTY")))
     }
 
+    @Test func testHasXbrlDirRejectsNonEmptyDirectoryWithoutExtractMarker() throws {
+        let store = makeStore()
+        let dir = store.xbrlDir("DOC_PARTIAL")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("partial".utf8).write(to: dir.appendingPathComponent("a.txt"))
+
+        // 展開途中の非空ディレクトリもキャッシュヒットにしない
+        #expect(!(store.hasXbrlDir("DOC_PARTIAL")))
+        #expect(!(store.cachedXbrlDocIDs().contains("DOC_PARTIAL")))
+    }
+
     @Test func testCachedXbrlDocIDsListsNonEmptyDirsOnly() throws {
         let store = makeStore()
         let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "1234"])
