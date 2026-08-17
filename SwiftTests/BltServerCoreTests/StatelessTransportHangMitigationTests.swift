@@ -118,7 +118,7 @@ import MCP
         // スケジューリング遅延を吸収できるよう余裕を持たせる（issue #99: 3秒境界で2回連続 flake
         // → 10秒に緩和。その後も macOS CI で 13.5〜38.3秒の elapsed を観測し再度 flake したため
         // 45秒へ再緩和。並列実行される重いスイート（SmokeTests・SegmentParityTests）との
-        // 協調スレッドプール競合が原因で、Linux では未発生）。
+        // 協調スレッドプール競合が原因。macOS / Linux とも CI は本スイートを別プロセスで実行する）。
         #expect(response == nil)
         #expect(elapsed < 45)
     }

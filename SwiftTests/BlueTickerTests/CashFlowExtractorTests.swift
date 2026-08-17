@@ -37,6 +37,31 @@ import Foundation
         #expect(result.accountingStandard == "IFRS")
     }
 
+    @Test func testIfrsNetCashStatementTotalsAreNotPickedByExtractor() {
+        // 本表の NetCash*IFRS は StatementFinancialsResolver が読む。IA の
+        // CashFlowExtractor には載せない（Summary 欠測時の現行出力を変えない）。
+        let fs = makeFieldSet(
+            ("NetCashProvidedByUsedInOperatingActivitiesIFRS", 209_898_000_000.0, nil),
+            ("NetCashProvidedByUsedInInvestingActivitiesIFRS", -77_382_000_000.0, nil)
+        )
+        let result = CashFlowExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.cfo == nil)
+        #expect(result.cfi == nil)
+    }
+
+    @Test func testIfrsSummaryStillPreferredWhenBothPresent() {
+        // IA 現行経路を変えない: Summary タグがある FieldSet ではそちらを先に取る。
+        let fs = makeFieldSet(
+            ("CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults", 669_784_000_000.0, nil),
+            ("NetCashProvidedByUsedInOperatingActivitiesIFRS", 1.0, nil),
+            ("CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", -475_605_000_000.0, nil),
+            ("NetCashProvidedByUsedInInvestingActivitiesIFRS", -1.0, nil)
+        )
+        let result = CashFlowExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.cfo == 669_784_000_000.0)
+        #expect(result.cfi == -475_605_000_000.0)
+    }
+
     @Test func testNotFoundReturnsNil() {
         let result = CashFlowExtractor.extract(fieldSet: [:], accountingStandard: "J-GAAP")
         #expect(result.cfo == nil)

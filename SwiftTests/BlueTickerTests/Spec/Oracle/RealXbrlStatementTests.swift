@@ -783,6 +783,10 @@ import Foundation
         let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年３月31日") }
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
+        // SS 合計列に当社株主配当が載る（△72,289）。financials は符号反転して正のキャッシュアウト。
+        #expect(
+            Self.labelValues(year.changesInEquity, containing: "当社株主への")
+                .contains(-72_289_000_000))
 
         // 2026-08-10 レビュー指摘: 入れ子行は当該科目（左）を取り、親小計（右）を取らない。
         // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。
@@ -790,6 +794,8 @@ import Foundation
         #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
+        // 法人税等の合計行は無く、当期税＋繰延が親合計（77,595）になる（入れ子右セルは行値にしない）。
+        #expect(Self.exactLabelValue(year.incomeStatement, "１ 法人税・住民税及び事業税") == 81_809_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "２ 法人税等調整額") == -4_214_000_000)
         #expect(Self.exactLabelValue(year.cashFlow, "(6) その他") == -21_377_000_000)
         #expect(
@@ -882,6 +888,9 @@ import Foundation
         let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2025年12月31日") }
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
+        #expect(
+            Self.labelValues(year.changesInEquity, containing: "当社株主への配当金")
+                .contains(-147_644_000_000))
 
         // 短期借入の内訳はキヤノン型 components（直後2行・合計一致）
         let stTotal = try #require(
