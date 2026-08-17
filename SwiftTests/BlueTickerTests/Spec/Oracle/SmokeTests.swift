@@ -676,6 +676,7 @@ import Foundation
     }
 
     /// 未配線フィールドを statement → notes → breakdown で組み、smoke 期待値と突合する。
+    /// employees / rd は breakdown 分母のみ（statement PL は使わない）。
     /// IBD は `testIbdItemTagsComposeVsSmoke`。IndividualAnalyzer の差し替えはしない。
     @Test func testRemainingFieldsComposeVsSmoke() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -711,7 +712,7 @@ import Foundation
         var stats: [String: FieldStat] = [:]
         var checked = 0
 
-        print("remaining compose vs smoke (statement → notes → breakdown)")
+        print("remaining compose vs smoke (statement → notes → breakdown; employees/rd は breakdown のみ)")
         print("cell = statement / composed / current")
         print("fixture | " + fields.map(\.name).joined(separator: " | "))
 
@@ -735,7 +736,10 @@ import Foundation
             for spec in fields {
                 let exp = spec.expectedKey(expected)
                 let st = statementRemainingField(statement, spec.name)
-                let composed = st ?? notes[spec.name] ?? breakdown[spec.name]
+                let breakdownOnly = spec.name == "employees" || spec.name == "rd"
+                let composed = breakdownOnly
+                    ? breakdown[spec.name]
+                    : (st ?? notes[spec.name] ?? breakdown[spec.name])
                 let cu = spec.name == "buyback"
                     ? currentBuyback : currentRemainingValue(current, field: spec.name)
                 var stat = stats[spec.name] ?? FieldStat()
@@ -1211,8 +1215,6 @@ import Foundation
         case "cfi": return statement.cfi
         case "pretax_income": return statement.pretaxIncome
         case "income_tax": return statement.incomeTax
-        case "rd": return statement.rd
-        case "employees": return statement.employees
         case "interest_expense": return statement.interestExpense
         case "cf_treasury_stock": return statement.cfTreasuryStock
         case "dividend_ss": return statement.dividendSS
@@ -1238,17 +1240,15 @@ import Foundation
         return out
     }
 
-    /// breakdown 分母と同じ XBRL タグ（employees / rd）。financials 逆依存は使わない。
+    /// breakdown 正本の分母（employees / rd）。PL 行は使わない。
     private func breakdownRemainingFills(xbrlDir: URL) -> [String: Double] {
-        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let std = detectAccountingStandard(allTags)
-        let durationFS = fieldSetFromDuration(allTags)
-        let instantFS = fieldSetFromInstant(allTags)
-        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
-        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         var out: [String: Double] = [:]
-        if let v = emp.current { out["employees"] = v }
-        if let v = rd.current { out["rd"] = v }
+        if let v = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir) {
+            out["employees"] = v
+        }
+        if let v = BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir) {
+            out["rd"] = v
+        }
         return out
     }
 

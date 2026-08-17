@@ -30,8 +30,6 @@ struct StatementFinancialsValues {
     var cfi: Double?
     var pretaxIncome: Double?
     var incomeTax: Double?
-    var rd: Double?
-    var employees: Double?
     var interestExpense: Double?
     var cfTreasuryStock: Double?
     var dividendSS: Double?
@@ -95,7 +93,7 @@ enum StatementFinancialsResolver {
             fieldSet: durationFS, accountingStandard: accountingStandard)
         let cash = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let remaining = remainingFromStatementExtractors(
-            durationFS: durationFS, instantFS: instantFS, masked: masked,
+            durationFS: durationFS, masked: masked,
             accountingStandard: accountingStandard, operating: op,
             cashFlow: year.cashFlow)
 
@@ -139,8 +137,6 @@ enum StatementFinancialsResolver {
             cfi: remaining.cfi,
             pretaxIncome: remaining.pretaxIncome,
             incomeTax: remaining.incomeTax,
-            rd: remaining.rd,
-            employees: remaining.employees,
             interestExpense: remaining.interestExpense,
             cfTreasuryStock: remaining.cfTreasuryStock,
             dividendSS: remaining.dividendSS,
@@ -268,8 +264,6 @@ enum StatementFinancialsResolver {
             incomeTax: tax.incomeTax
                 ?? firstByLabel(year.incomeStatement, contains: "法人税等")
                 ?? firstByLabel(year.incomeStatement, contains: "法人税"),
-            rd: firstByLabel(year.incomeStatement, contains: "研究開発"),
-            employees: nil,
             interestExpense: firstByLabel(year.incomeStatement, contains: "支払利息")
                 ?? firstByLabel(year.incomeStatement, contains: "利息費用"),
             cfTreasuryStock: firstByLabel(year.cashFlow, contains: "自己株式"),
@@ -282,12 +276,12 @@ enum StatementFinancialsResolver {
 
     /// statement 行に載る未配線フィールド。HTML/TextBlock フォールバックは付けない。
     private static func remainingFromStatementExtractors(
-        durationFS: FieldSet, instantFS: FieldSet, masked: XbrlTagElements,
+        durationFS: FieldSet, masked: XbrlTagElements,
         accountingStandard: String, operating: OperatingProfitResult,
         cashFlow: [StatementLineItem]
     ) -> (
         grossProfit: Double?, sga: Double?, cfo: Double?, cfi: Double?,
-        pretaxIncome: Double?, incomeTax: Double?, rd: Double?, employees: Double?,
+        pretaxIncome: Double?, incomeTax: Double?,
         interestExpense: Double?, cfTreasuryStock: Double?, dividendSS: Double?, buyback: Double?
     ) {
         let gp = GrossProfitExtractor.extract(
@@ -301,8 +295,6 @@ enum StatementFinancialsResolver {
             cashFlow, contains: "投資活動によるキャッシュ・フロー",
             excluding: ["期首", "期末", "明細"])
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: masked)
         let ie = InterestExpenseExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
         let cfTs = CfTreasuryStockExtractor.extract(
@@ -322,8 +314,6 @@ enum StatementFinancialsResolver {
             cfi: cfi,
             pretaxIncome: tax.pretaxIncome,
             incomeTax: tax.incomeTax,
-            rd: rd.current,
-            employees: emp.current,
             interestExpense: ie.current,
             cfTreasuryStock: cfTs.current,
             dividendSS: divSS.current,

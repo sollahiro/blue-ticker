@@ -45,6 +45,7 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 //
 // **正本抽出の原則**: Summary 生値は statement / notes / breakdown のみ。
 // 組立は計算できることが前提。statement で取れればそれ、なければ notes、なければ breakdown。
+// employees / rd は breakdown 分母が正本（PL の研究開発行は使わない）。
 // 1 値を複数源から足さない。notes の表パースは notes 側。
 //
 // `FinancialsYear` の各公開フィールドについて「誰が正本か」と現行組立経路を固定する。
@@ -70,8 +71,8 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
 // | dividend_ss | statement SS 行。notes `dividends` 合計は代用候補（smoke 突合で確認） | StatementFinancialsResolver / DividendSSExtractor | extractor |
-// | employees | statement に無ければ breakdown 分母と同じ XBRL タグ | StatementFinancialsResolver / EmployeesExtractor | extractor |
-// | rd | statement に無ければ breakdown 分母と同じ XBRL タグ | StatementFinancialsResolver / RDExtractor | extractor |
+// | employees | breakdown `employees` 分母 | EmployeesExtractor（IA 未切替） | extractor |
+// | rd | breakdown `research_and_development` 分母 | RDExtractor（IA 未切替） | extractor |
 // | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
 // | interest_expense | statement PL 行。無ければ IFRS notes 文章（TextBlock） | StatementFinancialsResolver / InterestExpenseExtractor | extractor |
 // | buyback, cf_treasury_stock | statement SS/CF 行 | StatementFinancialsResolver / Extractor | extractor |
