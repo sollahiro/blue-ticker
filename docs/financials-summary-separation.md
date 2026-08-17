@@ -28,7 +28,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 
 - 正本 API も直接公開。`company_financials` は materialized view（read 時 join は採らない）。
 - 生値の正本は **statement / notes / breakdown のみ**（Filing は本文ではない）。
-- **組立**: そのフィールドを計算できることが前提。statement で取れたらそれ。取れなければ notes、それも無ければ breakdown。1 値を複数源から足し合わせない。`available_via_*` は notes の 404 理由であり組立の分岐ではない。
+- **組立**: そのフィールドを計算できることが前提。statement で取れたらそれ。取れなければ notes、それも無ければ breakdown。1 値を複数源の**合計同士**から足し合わせない。IBD のリースだけは下表。`available_via_*` は notes の 404 理由であり組立の分岐ではない。
 - 派生は組立層。financials 層で XBRL を再解釈しない。
 
 ## 設計方針（確定）
@@ -39,7 +39,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | `fin-vN` | 存続。**組立ができた段階で `fin-v6` に切替。それまでバンプしない**（roadmap） |
 | 新規生値 | まず正本へ。financials に足さない |
 | 組立 | statement → notes → breakdown。取れた源を1つ採用 |
-| IBD | 計算できること。statement の BS で足りればそれ。足りなければ notes（`borrowings_schedule` の構成要素。リースは明細行または `lease_liabilities` が resolved のとき） |
+| IBD | statement の有利子負債**各項目**（コンポーネント）。それが無ければ notes `borrowings_schedule` 合計。リースが BS の独立科目でなく金融負債等に含まれるときは `lease_liabilities` を別途足す（味の素: その他の金融負債 ≠ リース帳簿） |
 | ingest 依存 | 順序変更は採らない。**同一 XBRL パスで resolver 直接呼び（#10b）** |
 
 正本の原則: 水準値は正本 resolver の結果。statement は XBRL タグ（US-GAAP 本表は `USGAAPStatementHtml`）。notes の表パースは notes 側。financials は選んで渡すだけ。
@@ -57,7 +57,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | 5b-2 | 未移行の **statement 正本**フィールドを Statement 組立へ。`USGAAPHtml` 撤去 |
 | 5c | gross_profit / sga の statement 参照（TextBlock / 銀行粗利益の整理） |
 | 7 | dividend_ss の正本選択（notes `dividends` vs SS 行規則）→実装 |
-| 8 | IBD は statement で計算できればそれ、できなければ notes。利息 / buyback / CFO·CFI の statement 突合 |
+| 8 | IBD: statement 各項目、無ければ notes 合計。金融負債に埋もれたリースは別取り。利息 / buyback / CFO·CFI の statement 突合 |
 | 9 | employees / rd は statement に無ければ breakdown 合計。売上分母の financials 逆依存解消 |
 | 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
