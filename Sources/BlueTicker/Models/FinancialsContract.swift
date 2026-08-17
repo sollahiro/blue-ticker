@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v5"
+public let companyFinancialsCacheVersion = "fin-v6"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -43,9 +43,9 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 
 // MARK: - フィールド正本（Summary 水準値の source 表、タスク #4）
 //
-// **正本抽出の原則（statement / notes / breakdown 共通）**: 水準値の正は XBRL タグ。
-// HTML 表パース・LLM は明細・ラベル補助。financials 組立は正本 resolver のタグ解決結果を
-// パススルーする（`docs/financials-summary-separation.md`「正本抽出の原則」参照）。
+// **正本抽出の原則**: Summary 生値は statement / notes / breakdown のみ。
+// 組立は計算できることが前提。statement で取れればそれ、なければ notes、なければ breakdown。
+// 1 値を複数源から足さない。notes の表パースは notes 側。
 //
 // `FinancialsYear` の各公開フィールドについて「誰が正本か」と現行組立経路を固定する。
 // 詳細・着手タスクは `docs/financials-summary-separation.md` が正本。本表は契約近傍の索引。
@@ -70,9 +70,9 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
 // | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
-// | employees | breakdown `employees` 軸（分母の逆依存解消が前提） | EmployeesExtractor | extractor |
-// | rd | breakdown `research_and_development` 軸 | RDExtractor | extractor |
-// | interest_bearing_debt | 未決（statement ± notes `borrowings_schedule`） | IBDExtractor | extractor |
+// | employees | statement に無ければ breakdown `employees` 合計 | EmployeesExtractor | extractor |
+// | rd | statement に無ければ breakdown `rd` 合計 | RDExtractor | extractor |
+// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
 // | interest_expense | 未決（statement ± notes） | InterestExpenseExtractor | extractor |
 // | buyback, cf_treasury_stock | 未決（statement ± notes） | ShareBuybackExtractor / CfTreasuryStockExtractor | extractor |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |

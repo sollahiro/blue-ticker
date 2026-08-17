@@ -506,7 +506,8 @@ enum IBDExtractor {
     static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> IBDResult {
         // 銀行業: DepositsLiabilitiesBNK が存在すれば銀行業コンポーネント積み上げ
         if let bankResult = extractBankIBD(fieldSet: fieldSet, accountingStandard: accountingStandard) {
-            return bankResult
+            return appendingNotesLeaseIfMissing(
+                bankResult, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
         }
 
         let resolved = resolveIBD(fieldSet)
@@ -580,7 +581,57 @@ enum IBDExtractor {
             }
         }
 
-        return result
+        return appendingNotesLeaseIfMissing(
+            result, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
+    }
+
+    /// statement 側にリース科目が無いとき、notes のリース帳簿だけを足す。
+    /// IFRS TextBlock / US-GAAP HTML で既に足している場合は components にリースがあるので何もしない。
+    /// 明細表フォールバック（method=borrowings_schedule）は合計にリース込みのため呼ばない。
+    private static func appendingNotesLeaseIfMissing(
+        _ result: IBDResult, xbrlDir: URL?, accountingStandard: String
+    ) -> IBDResult {
+        guard let dir = xbrlDir else { return result }
+        if result.components.contains(where: { $0.label.contains("リース") }) { return result }
+        let lease = notesLeaseComponents(xbrlDir: dir, accountingStandard: accountingStandard)
+        guard lease.current != nil || lease.prior != nil else { return result }
+        return IBDResult(
+            total: (result.total ?? 0) + (lease.current ?? 0),
+            priorTotal: (result.priorTotal ?? 0) + (lease.prior ?? 0),
+            components: result.components + lease.components,
+            method: result.method + "+lease_notes",
+            accountingStandard: result.accountingStandard
+        )
+    }
+
+    /// IFRS は `lease_liabilities` が resolved のとき帳簿価額。J-GAAP / 銀行は借入金等明細表のリース区分行。
+    private static func notesLeaseComponents(xbrlDir: URL, accountingStandard: String) -> (
+        current: Double?, prior: Double?, components: [IBDComponentEntry]
+    ) {
+        if accountingStandard == "IFRS",
+           case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+        {
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
+            if lease.current != nil || lease.prior != nil {
+                return (lease.current, lease.prior, lease.components)
+            }
+        }
+        guard let parsed = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else {
+            return (nil, nil, [])
+        }
+        var components: [IBDComponentEntry] = []
+        var currentTotal = 0.0
+        var priorTotal = 0.0
+        var hasCurrent = false
+        var hasPrior = false
+        for row in parsed.rows {
+            guard BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.label) else { continue }
+            guard row.current != nil || row.prior != nil else { continue }
+            if let c = row.current { currentTotal += c; hasCurrent = true }
+            if let p = row.prior { priorTotal += p; hasPrior = true }
+            components.append((label: row.label, current: row.current, prior: row.prior))
+        }
+        return (hasCurrent ? currentTotal : nil, hasPrior ? priorTotal : nil, components)
     }
 
     /// 解決順: 直接法 → IFRS集約タグ → コンポーネント積み上げ → US-GAAP HTML仮想タグ。

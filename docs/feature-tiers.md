@@ -26,7 +26,7 @@ Meta → Struct → Norm → Viz
 | Viz | 正規化値の分解・配分 |
 | Feed | 縦依存の外（検索・更新・鮮度・レポート系） |
 
-**Summary** は Filing / Statement / Statement-Notes / Breakdown 経路の組立スナップショット（`financials-summary-separation.md`）。
+**Summary** は Statement / Statement-Notes / Breakdown 経路の組立スナップショット（Filing は本文。`financials-summary-separation.md`）。
 
 ## Feature（Class × Module）
 

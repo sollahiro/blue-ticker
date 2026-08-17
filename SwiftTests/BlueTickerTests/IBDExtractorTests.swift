@@ -364,8 +364,8 @@ import Foundation
         }
     }
 
-    @Test func testBorrowingsScheduleNotUsedWhenTagsResolve() {
-        // 連結借入金タグが解決できる企業では、明細表ではなくタグ（field_parser）を優先する。
+    @Test func testBorrowingsScheduleLeaseAddedWhenTagsResolveWithoutLease() {
+        // 連結借入金タグが解決できても、BS にリース科目が無ければ明細表のリース行だけ足す（オークマ型）。
         let rows = scheduleRow("リース債務", "1,000", "2,000") + scheduleRow("合計", "1,000", "2,000")
         let xml = makeXbrlWithBorrowingsSchedule(rows, baseElementsXml: """
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
@@ -373,13 +373,14 @@ import Foundation
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            #expect(result.method == "field_parser")
-            #expect(result.total == 10_000_000_000)
+            #expect(result.method == "field_parser+lease_notes")
+            #expect(result.total == 10_000_000_000 + 2_000 * Financial.millionYen)
+            #expect(result.components.contains { $0.label.contains("リース") })
         }
     }
 
-    @Test func testJgaapLeaseNotAdded() {
-        // J-GAAPではリース注記があってもリース負債は加算されない
+    @Test func testJgaapIfrsLeaseTextblockNotAdded() {
+        // J-GAAP では IFRS リース TextBlock 経路は使わない（明細表のリース行とは別）
         let rows = "&lt;tr&gt;&lt;td&gt;支払期日が1年以内&lt;/td&gt;&lt;td&gt;4,000&lt;/td&gt;&lt;td&gt;5,000&lt;/td&gt;&lt;/tr&gt;"
         let jgaapXml = """
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"

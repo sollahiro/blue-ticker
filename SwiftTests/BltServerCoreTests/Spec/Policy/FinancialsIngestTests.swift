@@ -603,7 +603,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
     @Test func countServableCompanyFinancialsSplitsByReadFloor() async throws {
         try await withMigratedApp { app in
-            // fin-v3: 床(4)未満 → unservable。fin-v4/fin-v5: 床以上 → servable。
+            // fin-v3: 床(4)未満 → unservable。fin-v4/fin-v6: 床以上 → servable。
             for (code, version) in [("7203", "fin-v3"), ("6758", "fin-v4"), ("9984", "fin-v5")] {
                 let row = CompanyFinancials()
                 row.id = code
@@ -683,13 +683,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// 床判定は現行版との完全一致ではなく数値比較（n >= 床）。将来のバージョン（fin-v5）も 200。
+    /// 床判定は現行版との完全一致ではなく数値比較（n >= 床）。将来のバージョン（fin-v9）も 200。
     @Test func loadStoredFinancialsAcceptsVersionAboveCurrent() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = try makeResponse(code: "7203", years: 6)
-            row.cacheVersion = "fin-v5"
+            row.cacheVersion = "fin-v9"
             row.requestedYears = 6
             try await row.create(on: app.db)
 

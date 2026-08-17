@@ -171,6 +171,8 @@ J-GAAP / IFRS:
   3. IFRS集約タグ: 粒度別タグ不在時は Xbrl.ibdIFRSCLTags / Xbrl.ibdIFRSNCLTags で代替
      （BondsAndBorrowingsCLIFRS / BondsBorrowingsAndLeaseLiabilitiesCLIFRS 等）
   4. 連結値がなければ個別値にフォールバック
+  5. statement にリース科目が無ければ notes のリースだけ足す
+     （`lease_liabilities` 帳簿、または借入金等明細表のリース区分。銀行の `bank_components` も同じ）
 ```
 
 ### 4.5 営業利益（`OperatingProfitExtractor`）
@@ -328,7 +330,7 @@ XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用�
 
 `RealXbrlBreakdownTests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
 
-CI では `swift-macos` ジョブの `Test` ステップに repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。
+CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。未設定（fork からの PR 等）では各テストが SKIP し、ジョブは失敗しません。
 
 ### 6.2 対象企業
 

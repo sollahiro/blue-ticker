@@ -69,6 +69,9 @@ jobs:
       - name: Test
         env:
           BLT_TEST_POSTGRES_URL: postgres://postgres:blt@postgres:5432/blt?sslmode=disable
+          # SmokeTests / RealXbrl* が不足 XBRL を EDINET から取得する（swift-macos と同じ）。
+          # 未設定（fork からの PR 等）では自動的に SKIP される。
+          BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
         # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
         # st_ctim 等がエラー化する（macOS は Darwin 経由で無傷）。swift-nio 修正までの一時措置。
