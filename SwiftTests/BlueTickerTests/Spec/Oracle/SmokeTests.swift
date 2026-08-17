@@ -620,6 +620,128 @@ import Foundation
         #expect(checked == Self.docIDs.count)
     }
 
+    /// statement の有利子負債項目 ＋ statement に無い notes 項目（合計行は使わない）が
+    /// 既存 smoke IBD と揃うか。
+    @Test func testIbdItemTagsComposeVsSmoke() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        var checked = 0
+        var match = 0
+        print("ibd item-tag compose vs smoke")
+        print("fixture | std | smoke | composed | extras | mark")
+
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path),
+                  FileManager.default.fileExists(atPath: fixturePath.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected)
+            else { continue }
+
+            let smoke = dbl((expected["interest_bearing_debt"] as? [String: Any])?["total"])
+            let composed = composeIbdFromItemTags(xbrlDir: xbrlDir)
+            checked += 1
+            if closeEnoughOptional(smoke, composed.total) { match += 1 }
+            print(
+                "\(fixtureID) | \(composed.std) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.extras) | \(statusMark(exp: smoke, act: composed.total))"
+            )
+            print("  parts: \(composed.parts)")
+        }
+        print("composed-vs-smoke: \(match)/\(checked)")
+        #expect(checked == Self.docIDs.count)
+        #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
+    }
+
+    private func ibdFamily(_ label: String) -> String {
+        if label.contains("リース") { return "lease" }
+        if label.contains("コマーシャル") { return "cp" }
+        if label.contains("預金") { return "deposits" }
+        let cl = label.contains("1年") || label.contains("１年") || label.contains("年内")
+        if label.contains("社債") { return cl ? "bonds_cl" : "bonds" }
+        if label.contains("借入") || label.contains("借用") {
+            if label.contains("短期") { return "st" }
+            if cl { return "lt_cl" }
+            return "borrowings"
+        }
+        return label
+    }
+
+    private func composeIbdFromItemTags(xbrlDir: URL) -> (
+        std: String, total: Double?, parts: String, extras: String
+    ) {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        var instantFS: FieldSet
+        if std == "US-GAAP" {
+            instantFS = [:]
+            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
+        } else if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
+        ) {
+            let statementTags = Set(year.balanceSheet.map(\.tag))
+            instantFS = fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
+        } else {
+            instantFS = fieldSetFromInstant(allTags)
+        }
+
+        let statementIBD = IBDExtractor.extract(
+            fieldSet: instantFS, accountingStandard: std, xbrlDir: nil)
+        var families = Set(statementIBD.components.compactMap { c -> String? in
+            guard c.current != nil else { return nil }
+            return ibdFamily(c.label)
+        })
+        var total = statementIBD.components.reduce(0.0) { $0 + ($1.current ?? 0) }
+        var hasAny = statementIBD.components.contains { $0.current != nil }
+        var parts: [String] = statementIBD.components.compactMap { c in
+            guard let v = c.current else { return nil }
+            return "stmt:\(c.label)=\(yen(v))"
+        }
+        var extras: [String] = []
+
+        if !families.contains("lease") {
+            var leaseBook: Double?
+            if case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
+                leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current
+            }
+            if let leaseBook {
+                total += leaseBook
+                hasAny = true
+                families.insert("lease")
+                parts.append("notes:lease=\(yen(leaseBook))")
+            }
+        }
+
+        if case .resolved(let payload, _, _) = StatementNotesResolver.resolveBorrowingsSchedule(
+            xbrlDir: xbrlDir)
+        {
+            for row in payload.borrowingsComponents ?? [] {
+                guard !row.isTotal, let value = row.currentBalance else { continue }
+                let family = ibdFamily(row.label)
+                if families.contains(family) { continue }
+                families.insert(family)
+                total += value
+                hasAny = true
+                extras.append("\(row.label)=\(yen(value))")
+                parts.append("notes:\(row.label)=\(yen(value))")
+            }
+        }
+
+        return (
+            std: std,
+            total: hasAny ? total : nil,
+            parts: parts.joined(separator: ", "),
+            extras: extras.isEmpty ? "-" : extras.joined(separator: ", ")
+        )
+    }
+
     /// 味の素 statement IBD（4,554億）の内訳と、BS / notes / リースの抽出項目を全部出す。
     @Test func testAjinomotoStatementIbdComponentsDump() async throws {
         let docID = "S100VXJA"
