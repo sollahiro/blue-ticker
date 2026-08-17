@@ -23,7 +23,8 @@ enum SmokeCacheSupport {
         let client = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
 
         for docID in docIDs {
-            guard !store.hasXbrlDir(docID, saveDir: dir) else { continue }
+            // hasXbrlDir の事前判定は行わない。展開途中ディレクトリとの race を避け、
+            // downloadDocument 側のファイルロック内で完了済みか判定させる。
             if await client.downloadDocument(docID, saveDir: dir) == nil {
                 print("FAIL   \(docID): ダウンロード失敗")
             }

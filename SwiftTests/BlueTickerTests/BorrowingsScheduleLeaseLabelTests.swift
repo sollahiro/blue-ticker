@@ -29,10 +29,11 @@ import Testing
 
     @Test func smokeCompaniesWithLeaseDebtRowsMatchLabelGate() async throws {
         let withLeaseRow = ["S100W043", "S100XRD8", "S100W4FB", "S100W0S7", "S100VYA0", "S100VU4O"]
+        let store = EdinetCacheStore(cacheDir: SmokeCacheSupport.cacheDir)
         for docID in withLeaseRow {
             await SmokeCacheSupport.ensureCached([docID])
+            guard store.hasXbrlDir(docID) else { continue }
             let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
-            guard FileManager.default.fileExists(atPath: dir.path) else { continue }
             #expect(
                 BorrowingsSchedule.hasLeaseDebtRowLabel(xbrlDir: dir),
                 "expected lease debt row label for \(docID)")

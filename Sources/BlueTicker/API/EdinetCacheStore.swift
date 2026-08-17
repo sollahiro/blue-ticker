@@ -109,14 +109,18 @@ final class EdinetCacheStore: Sendable {
         return root.appendingPathComponent("\(docID)_xbrl", isDirectory: true)
     }
 
+    /// 展開完了後にのみ書き込む。並列テスト／プロセスが ZIP 展開途中の
+    /// 非空ディレクトリを「取得済み」と誤判定する race を防ぐ。
+    static let xbrlExtractCompleteMarker = ".extract_complete"
+
     func hasXbrlDir(_ docID: String, saveDir: URL? = nil) -> Bool {
         let dest = xbrlDir(docID, saveDir: saveDir)
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: dest.path, isDirectory: &isDir), isDir.boolValue else { return false }
         // 空ディレクトリはキャッシュヒットとみなさない。展開失敗（非 ZIP の混入等）で残った
         // 空ディレクトリを「取得済み」と誤判定すると、再取得されず facts=0 で永続的に失敗するため。
-        let entries = (try? fm.contentsOfDirectory(atPath: dest.path)) ?? []
-        return !entries.isEmpty
+        // 展開途中の非空ディレクトリも同様に除外する（完了マーカーの有無で判定）。
+        return fm.fileExists(atPath: dest.appendingPathComponent(Self.xbrlExtractCompleteMarker).path)
     }
 
     /// 展開済み XBRL ディレクトリがある docID の集合。内訳取り込みの処理順で
@@ -146,6 +150,7 @@ final class EdinetCacheStore: Sendable {
         defer { try? fm.removeItem(at: zipPath) }
         do {
             try extractZip(at: zipPath, to: dest)
+            try Data().write(to: dest.appendingPathComponent(Self.xbrlExtractCompleteMarker))
         } catch {
             // 展開失敗時に残る dest（多くは空）を消す。残すと hasXbrlDir が誤ヒットしてキャッシュが汚染される。
             try? fm.removeItem(at: dest)
