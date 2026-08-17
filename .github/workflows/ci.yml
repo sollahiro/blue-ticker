@@ -76,7 +76,14 @@ jobs:
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
         # st_ctim 等がエラー化する（macOS は Darwin 経由で無傷）。swift-nio 修正までの一時措置。
         # 詳細: .agents/rules/project/dependencies.md / docs/operations.md
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+        #
+        # StatelessHTTPServerTransport のハング緩和テストは macOS と同じ理由で分離する。
+        # 60秒の未完了タスクを意図的に残すため、SmokeTests 等と同一プロセスで並列実行すると
+        # タイムアウト用 Task 自体が遅延し、elapsed < 45 が Linux でも flake する
+        # （run 32031247211: elapsed 160s）。テスト内容は維持する。
+        run: |
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
 
   repo-invariants:
     # 方式A（Cloudflare Access・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
