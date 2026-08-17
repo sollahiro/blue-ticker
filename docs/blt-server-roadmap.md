@@ -33,7 +33,7 @@ read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かな�
 | 対象 | 状態 |
 |---|---|
 | sync | 稼働 |
-| 生 XBRL | ローカル L1 ＋ R2 L2（資格情報オプトイン。未設定時は従来） |
+| 生 XBRL | ローカル L1 ＋ R2 L2（`BLT_R2_XBRL_BUCKET` オプトイン。未設定時は従来） |
 | facts | 停止中 |
 | financials / filing-sections | バックフィル中。read は床以上・未格納 404 |
 

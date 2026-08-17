@@ -48,7 +48,7 @@ public struct BltServerContext: Sendable {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
         let xbrlObjectStore: (any XbrlObjectStoring)? =
-            R2StorageConfig.resolveFromEnvironment().map { R2XbrlObjectStore(config: $0) }
+            R2StorageConfig.resolveXbrlFromEnvironment().map { R2XbrlObjectStore(config: $0) }
         self.edinetClient = EdinetAPIClient(
             apiKey: apiKey, cacheStore: store, xbrlObjectStore: xbrlObjectStore)
         self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))

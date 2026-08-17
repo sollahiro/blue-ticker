@@ -8,4 +8,4 @@ derived は `_cache_version`＝`blueTickerVersion`。external はグローバル
 
 探索用（Swift 非経由）: `tmp_cache/edinet/`（JP/EDINET）と `tmp_cache/eu/esef/`（EU/ESEF）。規約は `regions.md`。
 
-生 XBRL の中央コピーは R2（キー `jp/edinet/xbrl/{docID}.zip`）。ingest の取得順はローカル展開 → R2 → EDINET。資格情報未設定なら R2 を飛ばす。配信は R2 を読まない。
+生 XBRL の中央コピーは R2（バケット `BLT_R2_XBRL_BUCKET`、キー `jp/edinet/xbrl/{docID}.zip`）。ingest の取得順はローカル展開 → R2 → EDINET。バケット未設定なら R2 を飛ばす。配信は R2 を読まない。アイコンは別バケット（`BLT_R2_ICONS_BUCKET`）。

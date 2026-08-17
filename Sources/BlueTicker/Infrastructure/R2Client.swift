@@ -8,8 +8,8 @@ import FoundationNetworking
 #endif
 
 /// 生 XBRL ZIP など、公開 URL を持たない R2 オブジェクト操作用の資格情報。
-/// `BLT_R2_PUBLIC_BASE_URL` は要求しない（配信プロセスへ秘密鍵を渡す必要もないが、
-/// ingest は GET/PUT のためこの4つが揃ったときだけ L2 を有効化する）。
+/// アカウントと鍵はアイコンと共有し、バケットだけ分ける（公開カスタムドメイン付きの
+/// アイコン用バケットへ原本 ZIP を置かないため）。
 struct R2StorageConfig: Sendable {
     let accountID: String
     let accessKeyID: String
@@ -18,15 +18,31 @@ struct R2StorageConfig: Sendable {
 
     var endpointHost: String { "\(accountID).r2.cloudflarestorage.com" }
 
-    /// `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` /
-    /// `BLT_R2_BUCKET` から解決する。いずれか欠落時は nil。公開 URL は見ない。
-    static func resolveFromEnvironment(
+    /// 会社アイコン用。`BLT_R2_ICONS_BUCKET`、無ければ旧名 `BLT_R2_BUCKET`。
+    /// アカウント／鍵が欠けるかバケット未設定なら nil。
+    static func resolveIconsFromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> R2StorageConfig? {
+        let bucket = nonEmpty(environment["BLT_R2_ICONS_BUCKET"])
+            ?? nonEmpty(environment["BLT_R2_BUCKET"])
+        guard let bucket else { return nil }
+        return resolve(environment, bucket: bucket)
+    }
+
+    /// 生 XBRL ZIP 用。`BLT_R2_XBRL_BUCKET` のみ（アイコン用バケットへフォールバックしない）。
+    static func resolveXbrlFromEnvironment(
+        _ environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> R2StorageConfig? {
+        guard let bucket = nonEmpty(environment["BLT_R2_XBRL_BUCKET"]) else { return nil }
+        return resolve(environment, bucket: bucket)
+    }
+
+    private static func resolve(
+        _ environment: [String: String], bucket: String
     ) -> R2StorageConfig? {
         guard let accountID = nonEmpty(environment["BLT_R2_ACCOUNT_ID"]),
             let accessKeyID = nonEmpty(environment["BLT_R2_ACCESS_KEY_ID"]),
-            let secretAccessKey = nonEmpty(environment["BLT_R2_SECRET_ACCESS_KEY"]),
-            let bucket = nonEmpty(environment["BLT_R2_BUCKET"])
+            let secretAccessKey = nonEmpty(environment["BLT_R2_SECRET_ACCESS_KEY"])
         else { return nil }
         return R2StorageConfig(
             accountID: accountID, accessKeyID: accessKeyID, secretAccessKey: secretAccessKey,
@@ -56,11 +72,12 @@ public struct R2Config: Sendable {
     }
 
     /// `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` /
-    /// `BLT_R2_BUCKET` / `BLT_R2_PUBLIC_BASE_URL` から解決する。いずれか欠落時は nil。
+    /// `BLT_R2_ICONS_BUCKET`（無ければ旧 `BLT_R2_BUCKET`）/ `BLT_R2_PUBLIC_BASE_URL`
+    /// から解決する。いずれか欠落時は nil。
     public static func resolveFromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> R2Config? {
-        guard let storage = R2StorageConfig.resolveFromEnvironment(environment),
+        guard let storage = R2StorageConfig.resolveIconsFromEnvironment(environment),
             let publicBaseURL = nonEmpty(environment["BLT_R2_PUBLIC_BASE_URL"])
         else { return nil }
         return R2Config(

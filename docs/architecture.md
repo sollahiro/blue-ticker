@@ -117,7 +117,7 @@ flowchart LR
 | 対象 | 保存先 |
 |---|---|
 | sync | `edinet_documents` / `edinet_sync_state` |
-| 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
+| 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、`BLT_R2_XBRL_BUCKET` 未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
 | facts | `edinet_xbrl_facts`（非公開 RAW） |
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル |
