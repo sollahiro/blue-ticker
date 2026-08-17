@@ -620,6 +620,145 @@ import Foundation
         #expect(checked == Self.docIDs.count)
     }
 
+    /// 味の素 statement IBD（4,554億）の内訳と、BS / notes / リースの抽出項目を全部出す。
+    @Test func testAjinomotoStatementIbdComponentsDump() async throws {
+        let docID = "S100VXJA"
+        await SmokeCacheSupport.ensureCached([docID])
+        let xbrlDir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: xbrlDir.path) else {
+            print("SKIP   Ajinomoto XBRL cache missing")
+            return
+        }
+
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir, docID: docID,
+            statementTypes: [.balanceSheet]
+        ) else {
+            Issue.record("statement resolve failed")
+            return
+        }
+        let statementTags = Set(year.balanceSheet.map(\.tag))
+        let masked = allTags.filter { statementTags.contains($0.key) }
+        let instantFS = fieldSetFromInstant(masked)
+        let fullFS = fieldSetFromInstant(allTags)
+
+        let statementIBD = IBDExtractor.extract(
+            fieldSet: instantFS, accountingStandard: "IFRS", xbrlDir: nil)
+        let fullIBD = IBDExtractor.extract(
+            fieldSet: fullFS, accountingStandard: "IFRS", xbrlDir: xbrlDir)
+
+        let direct = resolveItem(instantFS, tags: Xbrl.ibdDirectTags)
+        let ifrsAgg = resolveAggregate(
+            instantFS, componentTagLists: [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags])
+        let comp = resolveAggregate(
+            instantFS, componentTagLists: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents)
+
+        func yenLine(_ v: Double?) -> String {
+            guard let v else { return "nil" }
+            return "\(fmt(v)) (\(yen(v)))"
+        }
+
+        print("=== 味の素 S100VXJA statement IBD ===")
+        print("statement IBDExtractor total=\(yenLine(statementIBD.total)) method=\(statementIBD.method)")
+        print("full IBDExtractor total=\(yenLine(fullIBD.total)) method=\(fullIBD.method)")
+        print("resolve path: direct.tag=\(direct.tag ?? "nil") ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
+        print("ifrsAgg current=\(yenLine(ifrsAgg.current))")
+        print("component-stack current=\(yenLine(comp.current))")
+
+        print("--- IBDExtractor statement components ---")
+        for c in statementIBD.components {
+            print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
+        }
+        print("--- IBDExtractor full components ---")
+        for c in fullIBD.components {
+            print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
+        }
+
+        let candidateTags =
+            Xbrl.ibdDirectTags + Xbrl.ibdIFRSCLTags + Xbrl.ibdIFRSNCLTags
+            + Xbrl.ibdCurrentComponents.flatMap { $0 }
+            + Xbrl.ibdNonCurrentComponents.flatMap { $0 }
+            + Xbrl.leaseLiabilitiesBSTags
+            + [
+                "BondsAndBorrowingsLiabilitiesIFRS",
+                "FinancialLiabilitiesIFRS",
+                "OtherFinancialLiabilitiesIFRS",
+                "OtherFinancialLiabilitiesCLIFRS",
+                "OtherFinancialLiabilitiesNCLIFRS",
+            ]
+        print("--- IBD/金融負債 candidate tags on statement FieldSet ---")
+        var seen = Set<String>()
+        for tag in candidateTags {
+            guard !seen.contains(tag) else { continue }
+            seen.insert(tag)
+            let onStatement = statementTags.contains(tag)
+            let fv = instantFS[tag]
+            let full = fullFS[tag]
+            if fv?.current != nil || fv?.prior != nil || full?.current != nil || onStatement {
+                print(
+                    "  \(tag): statement=\(onStatement) stmtCurrent=\(yenLine(fv?.current)) stmtPrior=\(yenLine(fv?.prior)) fullCurrent=\(yenLine(full?.current))"
+                )
+            }
+        }
+
+        let keywords = ["借入", "社債", "リース", "コマーシャル", "有利子", "金融負債", "債券", "CP"]
+        print("--- statement BS lines matching debt/lease/financial-liability labels ---")
+        for item in year.balanceSheet.sorted(by: { ($0.order ?? 0) < ($1.order ?? 0) }) {
+            let label = item.label ?? ""
+            let hit = keywords.contains { label.contains($0) || item.tag.contains($0) }
+                || item.tag.contains("Borrow") || item.tag.contains("Bond")
+                || item.tag.contains("Lease") || item.tag.contains("FinancialLiab")
+                || item.tag.contains("CommercialPaper") || item.tag.contains("InterestBearing")
+            guard hit else { continue }
+            var extra = ""
+            if item.isTotal {
+                extra += " is_total"
+                if let comps = item.components {
+                    extra += " children=[" + comps.map { "\($0.tag) w=\($0.weight)" }.joined(separator: ", ") + "]"
+                }
+            }
+            print(
+                "  order=\(item.order.map(String.init) ?? "-") section=\(item.section?.rawValue ?? "-") \(item.tag) |\(label)| \(yenLine(item.value))\(extra)"
+            )
+        }
+
+        print("--- notes borrowings_schedule ---")
+        switch StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir) {
+        case .resolved(let payload, _, _):
+            for row in payload.borrowingsComponents ?? [] {
+                print(
+                    "  \(row.isTotal ? "TOTAL " : "")\(row.label): current=\(yenLine(row.currentBalance)) prior=\(yenLine(row.priorBalance)) rate=\(row.averageInterestRatePercent.map { String($0) } ?? "nil")"
+                )
+            }
+        case .notApplicable(let reason):
+            print("  notApplicable \(reason)")
+        case .failed:
+            print("  failed")
+        }
+
+        print("--- notes lease_liabilities ---")
+        switch StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
+        case .resolved(let payload, _, _):
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
+            print("  book=\(yenLine(lease.current))")
+            for item in payload.items ?? [] {
+                print("  \(item.label ?? "?"): \(yenLine(item.value)) tag=\(item.tag)")
+            }
+        case .notApplicable(let reason):
+            print("  notApplicable \(reason)")
+        case .failed:
+            print("  failed")
+        }
+
+        let statementTotal = try #require(statementIBD.total)
+        #expect(abs(statementTotal - 455_353_000_000) / 455_353_000_000 < 1e-4)
+        let leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current
+        if let leaseBook, let full = fullIBD.total {
+            #expect(abs((statementTotal + leaseBook) - full) < 1)
+        }
+    }
+
     /// notes の IBD: 借入金等明細表合計。明細にリース行が無く `lease_liabilities` が resolved なら帳簿価額を足す。
     private func notesIbdTotal(xbrlDir: URL) -> (value: Double?, detail: String) {
         var borrowings: Double?
