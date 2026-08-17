@@ -675,18 +675,20 @@ import Foundation
             print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
         }
 
-        let candidateTags =
-            Xbrl.ibdDirectTags + Xbrl.ibdIFRSCLTags + Xbrl.ibdIFRSNCLTags
-            + Xbrl.ibdCurrentComponents.flatMap { $0 }
-            + Xbrl.ibdNonCurrentComponents.flatMap { $0 }
-            + Xbrl.leaseLiabilitiesBSTags
-            + [
-                "BondsAndBorrowingsLiabilitiesIFRS",
-                "FinancialLiabilitiesIFRS",
-                "OtherFinancialLiabilitiesIFRS",
-                "OtherFinancialLiabilitiesCLIFRS",
-                "OtherFinancialLiabilitiesNCLIFRS",
-            ]
+        var candidateTags: [String] = []
+        candidateTags.append(contentsOf: Xbrl.ibdDirectTags)
+        candidateTags.append(contentsOf: Xbrl.ibdIFRSCLTags)
+        candidateTags.append(contentsOf: Xbrl.ibdIFRSNCLTags)
+        candidateTags.append(contentsOf: Xbrl.ibdCurrentComponents.flatMap { $0 })
+        candidateTags.append(contentsOf: Xbrl.ibdNonCurrentComponents.flatMap { $0 })
+        candidateTags.append(contentsOf: Xbrl.leaseLiabilitiesBSTags)
+        candidateTags.append(contentsOf: [
+            "BondsAndBorrowingsLiabilitiesIFRS",
+            "FinancialLiabilitiesIFRS",
+            "OtherFinancialLiabilitiesIFRS",
+            "OtherFinancialLiabilitiesCLIFRS",
+            "OtherFinancialLiabilitiesNCLIFRS",
+        ])
         print("--- IBD/金融負債 candidate tags on statement FieldSet ---")
         var seen = Set<String>()
         for tag in candidateTags {
@@ -706,11 +708,13 @@ import Foundation
         print("--- statement BS lines matching debt/lease/financial-liability labels ---")
         for item in year.balanceSheet.sorted(by: { ($0.order ?? 0) < ($1.order ?? 0) }) {
             let label = item.label ?? ""
-            let hit = keywords.contains { label.contains($0) || item.tag.contains($0) }
-                || item.tag.contains("Borrow") || item.tag.contains("Bond")
-                || item.tag.contains("Lease") || item.tag.contains("FinancialLiab")
-                || item.tag.contains("CommercialPaper") || item.tag.contains("InterestBearing")
-            guard hit else { continue }
+            let tag = item.tag
+            let keywordHit = keywords.contains { label.contains($0) || tag.contains($0) }
+            let tagHit =
+                tag.contains("Borrow") || tag.contains("Bond") || tag.contains("Lease")
+                || tag.contains("FinancialLiab") || tag.contains("CommercialPaper")
+                || tag.contains("InterestBearing")
+            guard keywordHit || tagHit else { continue }
             var extra = ""
             if item.isTotal {
                 extra += " is_total"
