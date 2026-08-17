@@ -68,12 +68,14 @@ enum StatementFinancialsResolver {
         // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
         // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
         // （行値だけを辞書化すると先勝ちで期首や計算派生値に引きずられる）。
-        let statementTags = Set(
-            (year.balanceSheet + year.incomeStatement + year.cashFlow + year.changesInEquity)
-                .map(\.tag))
-        let masked = tagElements.filter { statementTags.contains($0.key) }
-        let durationFS = fieldSetFromDuration(masked)
-        let instantFS = fieldSetFromInstant(masked)
+        // SS は dividend_ss / buyback 専用。済み本表 Extractor（sales 等）の候補に混ぜない。
+        let mainTags = Set(
+            (year.balanceSheet + year.incomeStatement + year.cashFlow).map(\.tag))
+        let equityTags = Set(year.changesInEquity.map(\.tag))
+        let maskedMain = tagElements.filter { mainTags.contains($0.key) }
+        let maskedEquity = tagElements.filter { mainTags.union(equityTags).contains($0.key) }
+        let durationFS = fieldSetFromDuration(maskedMain)
+        let instantFS = fieldSetFromInstant(maskedMain)
 
         let is_ = IncomeStatementExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard)
@@ -93,7 +95,9 @@ enum StatementFinancialsResolver {
             fieldSet: durationFS, accountingStandard: accountingStandard)
         let cash = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
         let remaining = remainingFromStatementExtractors(
-            durationFS: durationFS, masked: masked,
+            durationFS: durationFS,
+            equityDurationFS: fieldSetFromDuration(maskedEquity),
+            maskedEquity: maskedEquity,
             accountingStandard: accountingStandard, operating: op,
             cashFlow: year.cashFlow)
 
@@ -252,11 +256,11 @@ enum StatementFinancialsResolver {
             dividendPaidCF: divPaid.current,
             grossProfit: firstByLabel(year.incomeStatement, contains: "売上総利益"),
             sga: op.sga,
-            cfo: statementCashFlowTotal(year.cashFlow, tags: Xbrl.cfOperatingTags)
+            cfo: statementCashFlowTotal(year.cashFlow, tags: statementOperatingCashFlowTags)
                 ?? firstByLabel(
                     year.cashFlow, contains: "営業活動によるキャッシュ・フロー",
                     excluding: ["期首", "期末", "明細"]),
-            cfi: statementCashFlowTotal(year.cashFlow, tags: Xbrl.cfInvestingTags)
+            cfi: statementCashFlowTotal(year.cashFlow, tags: statementInvestingCashFlowTags)
                 ?? firstByLabel(
                     year.cashFlow, contains: "投資活動によるキャッシュ・フロー",
                     excluding: ["期首", "期末", "明細"]),
@@ -276,7 +280,7 @@ enum StatementFinancialsResolver {
 
     /// statement 行に載る未配線フィールド。HTML/TextBlock フォールバックは付けない。
     private static func remainingFromStatementExtractors(
-        durationFS: FieldSet, masked: XbrlTagElements,
+        durationFS: FieldSet, equityDurationFS: FieldSet, maskedEquity: XbrlTagElements,
         accountingStandard: String, operating: OperatingProfitResult,
         cashFlow: [StatementLineItem]
     ) -> (
@@ -286,17 +290,14 @@ enum StatementFinancialsResolver {
     ) {
         let gp = GrossProfitExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
-        let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         // 正本は CF 本表の合計行。SummaryOfBusinessResults は使わない。
-        // IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS` が本表にあり、旧 extractor は
-        // Summary タグで拾っていた。ラベル部分一致は verbose label で外れることがある。
-        let cfo = statementCashFlowTotal(cashFlow, tags: Xbrl.cfOperatingTags)
-            ?? cf.cfo
+        // IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS` が本表にあり、IA の
+        // CashFlowExtractor は Summary タグで拾う。ここは本表タグだけを見る。
+        let cfo = statementCashFlowTotal(cashFlow, tags: statementOperatingCashFlowTags)
             ?? firstByLabel(
                 cashFlow, contains: "営業活動によるキャッシュ・フロー",
                 excluding: ["期首", "期末", "明細"])
-        let cfi = statementCashFlowTotal(cashFlow, tags: Xbrl.cfInvestingTags)
-            ?? cf.cfi
+        let cfi = statementCashFlowTotal(cashFlow, tags: statementInvestingCashFlowTags)
             ?? firstByLabel(
                 cashFlow, contains: "投資活動によるキャッシュ・フロー",
                 excluding: ["期首", "期末", "明細"])
@@ -305,13 +306,15 @@ enum StatementFinancialsResolver {
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
         let cfTs = CfTreasuryStockExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard)
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(masked)
-        let equityAttrFS = fieldSetFromIFRSEquityAttributable(masked)
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(maskedEquity)
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(maskedEquity)
         let divSS = DividendSSExtractor.extract(
-            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            fieldSet: equityDurationFS, ncFieldSet: ncDurationFS,
+            equityAttributableFieldSet: equityAttrFS,
             accountingStandard: accountingStandard)
         let buyback = ShareBuybackExtractor.extract(
-            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            fieldSet: equityDurationFS, ncFieldSet: ncDurationFS,
+            equityAttributableFieldSet: equityAttrFS,
             accountingStandard: accountingStandard)
         return (
             grossProfit: gp.grossProfit,
@@ -326,6 +329,22 @@ enum StatementFinancialsResolver {
             buyback: buyback.current
         )
     }
+
+    /// CF 本表合計。IA の `Xbrl.cf*Tags` には載せない（Summary 欠測時の IA 出力を変えない）。
+    private static let statementOperatingCashFlowTags: [String] = [
+        "CashFlowsFromUsedInOperationsIFRS",
+        "CashFlowsFromUsedInOperatingActivitiesIFRS",
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesIFRS",
+    ]
+    private static let statementInvestingCashFlowTags: [String] = [
+        "CashFlowsUsedInInvestingActivitiesIFRS",
+        "CashFlowsFromUsedInInvestingActivitiesIFRS",
+        "NetCashProvidedByUsedInInvestingActivities",
+        "NetCashProvidedByUsedInInvestmentActivities",
+        "NetCashProvidedByUsedInInvestingActivitiesIFRS",
+        "NetCashProvidedByUsedInInvestmentActivitiesIFRS",
+    ]
 
     /// CF 本表の合計。`SummaryOfBusinessResults` は本表ではないので候補から外す。
     private static func statementCashFlowTotal(

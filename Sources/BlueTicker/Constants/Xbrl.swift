@@ -239,9 +239,6 @@ enum Xbrl {
         "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults",
         "NetCashProvidedByUsedInOperatingActivities",
         "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults",
-        // CF 本表の IFRS 合計。Summary より後に置き、IA の現行経路（Summary タグ）は変えない。
-        // statement 組立は Summary を除外してこのタグを読む（味の素・クボタ・スズキ）。
-        "NetCashProvidedByUsedInOperatingActivitiesIFRS",
     ]
 
     static let cfInvestingTags: [String] = [
@@ -253,8 +250,6 @@ enum Xbrl {
         "NetCashProvidedByUsedInInvestingActivities",
         "NetCashProvidedByUsedInInvestmentActivities",
         "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults",
-        "NetCashProvidedByUsedInInvestingActivitiesIFRS",
-        "NetCashProvidedByUsedInInvestmentActivitiesIFRS",
     ]
 
     // MARK: - 貸借対照表タグ

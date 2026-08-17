@@ -37,15 +37,16 @@ import Foundation
         #expect(result.accountingStandard == "IFRS")
     }
 
-    @Test func testIfrsNetCashStatementTotals() {
-        // 味の素・クボタ・スズキ: CF 本表は NetCash*IFRS。Summary タグは無い FieldSet でも拾う。
+    @Test func testIfrsNetCashStatementTotalsAreNotPickedByExtractor() {
+        // 本表の NetCash*IFRS は StatementFinancialsResolver が読む。IA の
+        // CashFlowExtractor には載せない（Summary 欠測時の現行出力を変えない）。
         let fs = makeFieldSet(
             ("NetCashProvidedByUsedInOperatingActivitiesIFRS", 209_898_000_000.0, nil),
             ("NetCashProvidedByUsedInInvestingActivitiesIFRS", -77_382_000_000.0, nil)
         )
         let result = CashFlowExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
-        #expect(result.cfo == 209_898_000_000.0)
-        #expect(result.cfi == -77_382_000_000.0)
+        #expect(result.cfo == nil)
+        #expect(result.cfi == nil)
     }
 
     @Test func testIfrsSummaryStillPreferredWhenBothPresent() {
