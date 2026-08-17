@@ -263,9 +263,8 @@ enum StatementFinancialsResolver {
             pretaxIncome: tax.pretaxIncome
                 ?? firstByLabel(year.incomeStatement, contains: "税引前")
                 ?? firstByLabel(year.incomeStatement, contains: "税金等調整前"),
-            incomeTax: tax.incomeTax
-                ?? firstByLabel(year.incomeStatement, contains: "法人税等")
-                ?? firstByLabel(year.incomeStatement, contains: "法人税"),
+            incomeTax: resolveUSGAAPIncomeTax(year.incomeStatement)
+                ?? tax.incomeTax,
             interestExpense: firstByLabel(year.incomeStatement, contains: "支払利息")
                 ?? firstByLabel(year.incomeStatement, contains: "利息費用"),
             cfTreasuryStock: firstByLabel(year.cashFlow, contains: "自己株式"),
@@ -349,6 +348,43 @@ enum StatementFinancialsResolver {
             guard label.contains(contains) else { continue }
             if excluding.contains(where: { label.contains($0) }) { continue }
             return item.value
+        }
+        return nil
+    }
+
+    /// US-GAAP 法人税等。合計行（キヤノン「Ⅴ 法人税等」）を優先し、無ければ当期税＋繰延
+    /// （富士フイルム: 入れ子右セルの親合計は statement 行に出ないので内訳を足す）。
+    /// 「法人税等」の部分一致は「法人税等調整額」に当たるため使わない。
+    private static func resolveUSGAAPIncomeTax(_ items: [StatementLineItem]) -> Double? {
+        for item in items {
+            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped == "法人税等合計" || stripped.hasSuffix("法人税等合計") {
+                return item.value
+            }
+        }
+        for item in items {
+            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            if USGAAPHtml.stripSectionPrefix(label) == "法人税等" {
+                return item.value
+            }
+        }
+        var current: Double?
+        var deferred: Double?
+        for item in items {
+            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            if label.contains("未払") { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped.contains("法人税等調整") {
+                deferred = item.value
+            } else if stripped.contains("法人税")
+                && (stripped.contains("住民税") || stripped.contains("事業税"))
+            {
+                current = item.value
+            }
+        }
+        if current != nil || deferred != nil {
+            return (current ?? 0) + (deferred ?? 0)
         }
         return nil
     }

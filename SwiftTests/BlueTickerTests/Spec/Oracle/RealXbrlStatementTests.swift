@@ -790,6 +790,8 @@ import Foundation
         #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
+        // 法人税等の合計行は無く、当期税＋繰延が親合計（77,595）になる（入れ子右セルは行値にしない）。
+        #expect(Self.exactLabelValue(year.incomeStatement, "１ 法人税・住民税及び事業税") == 81_809_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "２ 法人税等調整額") == -4_214_000_000)
         #expect(Self.exactLabelValue(year.cashFlow, "(6) その他") == -21_377_000_000)
         #expect(
