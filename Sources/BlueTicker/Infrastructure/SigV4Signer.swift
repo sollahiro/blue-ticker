@@ -1,6 +1,6 @@
 // AWS Signature Version 4（SigV4）署名の最小実装。R2Client（Cloudflare R2）専用。
 // R2 は S3 互換 API のみを公開し AWS SDK は存在しないため、単一ヘッダー・単一署名対象
-// （PUT オブジェクト、クエリ文字列なし）に絞って自前実装する。汎用 SigV4（マルチパート・
+// （PUT / GET オブジェクト、クエリ文字列なし）に絞って自前実装する。汎用 SigV4（マルチパート・
 // 事前署名URL等）はサポートしない。
 
 import Crypto
@@ -14,13 +14,14 @@ enum SigV4Signer {
         let authorization: String
     }
 
-    /// `PUT https://{host}{path}` を SigV4 署名する（クエリ文字列なし、ヘッダーは
-    /// content-type/host/x-amz-content-sha256/x-amz-date の4つに固定）。
+    /// `PUT` / `GET https://{host}{path}` を SigV4 署名する（クエリ文字列なし）。
+    /// `contentType` があるとき（PUT）は content-type を署名対象に含める。GET は空ボディで
+    /// content-type なし（host / x-amz-content-sha256 / x-amz-date の3つ）。
     static func sign(
         method: String,
         host: String,
         path: String,
-        contentType: String,
+        contentType: String? = nil,
         payload: Data,
         accessKeyID: String,
         secretAccessKey: String,
@@ -32,9 +33,17 @@ enum SigV4Signer {
         let dateStamp = String(amzDate.prefix(8))
         let payloadHash = sha256Hex(payload)
 
-        let canonicalHeaders =
-            "content-type:\(contentType)\nhost:\(host)\nx-amz-content-sha256:\(payloadHash)\nx-amz-date:\(amzDate)\n"
-        let signedHeaderNames = "content-type;host;x-amz-content-sha256;x-amz-date"
+        let canonicalHeaders: String
+        let signedHeaderNames: String
+        if let contentType {
+            canonicalHeaders =
+                "content-type:\(contentType)\nhost:\(host)\nx-amz-content-sha256:\(payloadHash)\nx-amz-date:\(amzDate)\n"
+            signedHeaderNames = "content-type;host;x-amz-content-sha256;x-amz-date"
+        } else {
+            canonicalHeaders =
+                "host:\(host)\nx-amz-content-sha256:\(payloadHash)\nx-amz-date:\(amzDate)\n"
+            signedHeaderNames = "host;x-amz-content-sha256;x-amz-date"
+        }
         let canonicalRequest = [
             method, uriEncodePath(path), "", canonicalHeaders, signedHeaderNames, payloadHash,
         ].joined(separator: "\n")

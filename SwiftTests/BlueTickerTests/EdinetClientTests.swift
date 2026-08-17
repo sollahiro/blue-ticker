@@ -186,4 +186,109 @@ import Foundation
         let lockPath = store.locksDir.appendingPathComponent("xbrl_S100MISS.lock")
         #expect(!(FileManager.default.fileExists(atPath: lockPath.path)))
     }
+
+    @Test func testDownloadDocumentUsesR2WhenLocalMissingWithoutApiKey() async throws {
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "from-r2"])
+        let objectStore = MemoryXbrlObjectStore(
+            objects: ["jp/edinet/xbrl/S100R2HIT.zip": zip]
+        )
+        let r2Client = EdinetAPIClient(apiKey: nil, cacheStore: store, xbrlObjectStore: objectStore)
+
+        let dir = await r2Client.downloadDocument("S100R2HIT")
+
+        #expect(dir != nil)
+        #expect(store.hasXbrlDir("S100R2HIT"))
+        let extracted = try String(
+            contentsOf: store.xbrlDir("S100R2HIT").appendingPathComponent("a.txt"), encoding: .utf8)
+        #expect(extracted == "from-r2")
+        #expect(await objectStore.getKeys == ["jp/edinet/xbrl/S100R2HIT.zip"])
+        #expect(await objectStore.putKeys.isEmpty)
+    }
+
+    @Test func testDownloadDocumentSkipsR2WhenLocalCacheHits() async throws {
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "local"])
+        _ = try store.storeXbrlZip("S100LOCAL", content: zip)
+        let objectStore = MemoryXbrlObjectStore()
+        let r2Client = EdinetAPIClient(apiKey: nil, cacheStore: store, xbrlObjectStore: objectStore)
+
+        let dir = await r2Client.downloadDocument("S100LOCAL")
+
+        #expect(dir != nil)
+        #expect(await objectStore.getKeys.isEmpty)
+        #expect(await objectStore.putKeys.isEmpty)
+    }
+
+    @Test func testDownloadDocumentPutsToR2AfterRemoteFetch() async throws {
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "from-edinet"])
+        let objectStore = MemoryXbrlObjectStore()
+        let r2Client = EdinetAPIClient(
+            apiKey: "dummy",
+            cacheStore: store,
+            xbrlObjectStore: objectStore,
+            xbrlZipDownloader: { _ in zip }
+        )
+
+        let dir = await r2Client.downloadDocument("S100PUT")
+
+        #expect(dir != nil)
+        #expect(store.hasXbrlDir("S100PUT"))
+        #expect(await objectStore.getKeys == ["jp/edinet/xbrl/S100PUT.zip"])
+        #expect(await objectStore.putKeys == ["jp/edinet/xbrl/S100PUT.zip"])
+        #expect(await objectStore.objects["jp/edinet/xbrl/S100PUT.zip"] == zip)
+    }
+
+    @Test func testDownloadDocumentFallsBackToRemoteWhenR2ZipIsCorrupt() async throws {
+        let good = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "recovered"])
+        let objectStore = MemoryXbrlObjectStore(
+            objects: ["jp/edinet/xbrl/S100BAD.zip": Data("not-a-zip".utf8)]
+        )
+        let r2Client = EdinetAPIClient(
+            apiKey: "dummy",
+            cacheStore: store,
+            xbrlObjectStore: objectStore,
+            xbrlZipDownloader: { _ in good }
+        )
+
+        let dir = await r2Client.downloadDocument("S100BAD")
+
+        #expect(dir != nil)
+        let extracted = try String(
+            contentsOf: store.xbrlDir("S100BAD").appendingPathComponent("a.txt"), encoding: .utf8)
+        #expect(extracted == "recovered")
+        #expect(await objectStore.putKeys == ["jp/edinet/xbrl/S100BAD.zip"])
+        #expect(await objectStore.objects["jp/edinet/xbrl/S100BAD.zip"] == good)
+    }
+
+    @Test func testDownloadDocumentReturnsNilWhenR2MissesWithoutRemote() async throws {
+        let objectStore = MemoryXbrlObjectStore()
+        let r2Client = EdinetAPIClient(apiKey: nil, cacheStore: store, xbrlObjectStore: objectStore)
+
+        let dir = await r2Client.downloadDocument("S100R2MISS")
+
+        #expect(dir == nil)
+        #expect(!(store.hasXbrlDir("S100R2MISS")))
+        #expect(await objectStore.getKeys == ["jp/edinet/xbrl/S100R2MISS.zip"])
+        #expect(await objectStore.putKeys.isEmpty)
+    }
+}
+
+actor MemoryXbrlObjectStore: XbrlObjectStoring {
+    var objects: [String: Data]
+    var getKeys: [String] = []
+    var putKeys: [String] = []
+
+    init(objects: [String: Data] = [:]) {
+        self.objects = objects
+    }
+
+    func getObject(key: String) async -> Data? {
+        getKeys.append(key)
+        return objects[key]
+    }
+
+    func putObject(_ data: Data, key: String, contentType: String) async -> Bool {
+        putKeys.append(key)
+        objects[key] = data
+        return true
+    }
 }

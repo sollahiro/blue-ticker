@@ -22,7 +22,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Cloudflare（撤退経路なし・SSO）
 
-Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 は未結合。
+Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 は会社アイコン（公開 URL）と生 XBRL ZIP（私有 L2。ingest のみ。`BLT_R2_PUBLIC_BASE_URL` 不要）。
 
 ## 定常運用
 
@@ -40,7 +40,7 @@ Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。
 |---|---|---|
 | Fly secrets | API キー / DB / Access / Tunnel | 再発行・`fly secrets set` |
 | Neon | 全テーブル | dump または再 ingest |
-| Cloudflare | Tunnel / Access / IdP | `deploy.md` で再作成 |
+| Cloudflare | Tunnel / Access / IdP / R2（icons・生 XBRL ZIP） | `deploy.md` で再作成。ZIP は EDINET 再取得可 |
 | ローカル Mac | 手元スケジュール・`.env` | `deploy.md` 定期同期 |
-| Fly Volume `/data` | EDINET キャッシュ | 再取得で可 |
+| Fly Volume `/data` | EDINET キャッシュ（L1） | 再取得または R2 L2 |
 | Cloudflare Pages（apex） | Git 連携 `assets/apex-site` | ダッシュボードで再接続 |

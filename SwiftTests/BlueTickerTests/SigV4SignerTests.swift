@@ -34,6 +34,30 @@ import Testing
         )
     }
 
+    @Test func signsGetRequestMatchingKnownVector() {
+        let signed = SigV4Signer.sign(
+            method: "GET",
+            host: "test-account.r2.cloudflarestorage.com",
+            path: "/test-bucket/jp/edinet/xbrl/S100TEST.zip",
+            contentType: nil,
+            payload: Data(),
+            accessKeyID: "AKIAIOSFODNN7EXAMPLE",
+            secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            region: "auto",
+            service: "s3",
+            date: Self.fixedDate
+        )
+
+        #expect(signed.amzDate == "20150830T123600Z")
+        #expect(signed.payloadHash == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        #expect(
+            signed.authorization
+                == "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20150830/auto/s3/aws4_request, "
+                    + "SignedHeaders=host;x-amz-content-sha256;x-amz-date, "
+                    + "Signature=8e567a8bddeb13f2a53716f6f860a66433cd1cfc2929921a5f2716ddd79f7dff"
+        )
+    }
+
     @Test func signatureChangesWhenPayloadDiffers() {
         func signature(for payload: Data) -> String {
             SigV4Signer.sign(
