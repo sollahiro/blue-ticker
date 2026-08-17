@@ -592,7 +592,7 @@ import Foundation
             let ruleA = statement ?? notes.value
             let statementComplete = closeEnoughOptional(statement, extractor.total)
             let ruleB = statementComplete ? statement : notes.value
-            let bank = extractor.method == "bank_components"
+            let bank = extractor.method.hasPrefix("bank_components")
             let ruleC = (statementComplete && !bank) ? statement : notes.value
 
             checked += 1
@@ -657,8 +657,7 @@ import Foundation
         }
         print("composed-vs-smoke: \(match)/\(checked)")
         #expect(checked == Self.docIDs.count)
-        // 二重計上せず「足りないリース項目だけ notes から足す」なら現行 smoke と揃う想定。
-        // オークマ等、BS にリース科目が無く明細にだけある J-GAAP は差分になりうる。
+        #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
     }
 
     private func ibdFamily(_ label: String) -> String {
@@ -707,8 +706,7 @@ import Foundation
         }
         var extras: [String] = []
 
-        let isBank = statementIBD.method == "bank_components"
-        if !isBank && !families.contains("lease") {
+        if !families.contains("lease") {
             var leaseBook: Double?
             if case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
                 leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current

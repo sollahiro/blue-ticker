@@ -26,8 +26,8 @@
     "accounting_standard": "J-GAAP"
   },
   "interest_bearing_debt": {
-    "total": 286855946000000.0,
-    "method": "bank_components"
+    "total": 286946640000000.0,
+    "method": "bank_components+lease_notes"
   },
   "cash_flow": {
     "cfo": 6415000000.0,

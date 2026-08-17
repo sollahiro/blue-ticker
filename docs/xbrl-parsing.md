@@ -171,6 +171,8 @@ J-GAAP / IFRS:
   3. IFRS集約タグ: 粒度別タグ不在時は Xbrl.ibdIFRSCLTags / Xbrl.ibdIFRSNCLTags で代替
      （BondsAndBorrowingsCLIFRS / BondsBorrowingsAndLeaseLiabilitiesCLIFRS 等）
   4. 連結値がなければ個別値にフォールバック
+  5. statement にリース科目が無ければ notes のリースだけ足す
+     （`lease_liabilities` 帳簿、または借入金等明細表のリース区分。銀行の `bank_components` も同じ）
 ```
 
 ### 4.5 営業利益（`OperatingProfitExtractor`）
