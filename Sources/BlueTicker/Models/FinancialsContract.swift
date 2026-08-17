@@ -72,7 +72,7 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
 // | employees | statement に無ければ breakdown `employees` 合計 | EmployeesExtractor | extractor |
 // | rd | statement に無ければ breakdown `rd` 合計 | RDExtractor | extractor |
-// | interest_bearing_debt | 項目タグの合算。statement の有利子負債項目＋statement に無い notes タグ（借入区分・リース帳簿）。notes 合計では代用しない | IBDExtractor | extractor |
+// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
 // | interest_expense | 未決（statement ± notes） | InterestExpenseExtractor | extractor |
 // | buyback, cf_treasury_stock | 未決（statement ± notes） | ShareBuybackExtractor / CfTreasuryStockExtractor | extractor |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |

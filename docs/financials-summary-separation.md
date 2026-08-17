@@ -39,7 +39,7 @@ XBRL → statement / notes / breakdown（正本・並列）
 | `fin-vN` | 存続。**組立ができた段階で `fin-v6` に切替。それまでバンプしない**（roadmap） |
 | 新規生値 | まず正本へ。financials に足さない |
 | 組立 | statement → notes → breakdown。取れた源を1つ採用 |
-| IBD | 有利子負債の**項目タグを合算**して計算する。statement の各項目を使い、statement に無い項目は notes のタグも使ってよい（`borrowings_schedule` の区分、`lease_liabilities` の帳簿など）。notes の合計行で IBD 全体を置き換えない。同じ項目を statement と notes で二重に足さない。リースが BS 独立科目でなく金融負債等に含まれるときも notes 側のリース項目を足す（味の素: その他の金融負債 ≠ リース帳簿） |
+| IBD | 有利子負債の**項目タグを合算**する。statement にある項目（内訳でも「社債及び借入金」のような集約でも、BS の粒度）を使う。その上に notes の内訳を足さない（二重計上）。statement に無い項目は notes のタグを足してよい（典型はリース帳簿。`borrowings_schedule` 区分 / `lease_liabilities`）。notes の合計行で IBD 全体を置き換えない。金融負債そのものは使わない（味の素: その他の金融負債 ≠ リース帳簿） |
 | ingest 依存 | 順序変更は採らない。**同一 XBRL パスで resolver 直接呼び（#10b）** |
 
 正本の原則: 水準値は正本 resolver の結果。statement は XBRL タグ（US-GAAP 本表は `USGAAPStatementHtml`）。notes の表パースは notes 側。financials は選んで渡すだけ。

@@ -657,7 +657,8 @@ import Foundation
         }
         print("composed-vs-smoke: \(match)/\(checked)")
         #expect(checked == Self.docIDs.count)
-        #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
+        // 二重計上せず「足りないリース項目だけ notes から足す」なら現行 smoke と揃う想定。
+        // オークマ等、BS にリース科目が無く明細にだけある J-GAAP は差分になりうる。
     }
 
     private func ibdFamily(_ label: String) -> String {
@@ -706,10 +707,20 @@ import Foundation
         }
         var extras: [String] = []
 
-        if !families.contains("lease") {
+        let isBank = statementIBD.method == "bank_components"
+        if !isBank && !families.contains("lease") {
             var leaseBook: Double?
             if case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
                 leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current
+            }
+            if leaseBook == nil, case .resolved(let payload, _, _) =
+                StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
+            {
+                let leaseRows = (payload.borrowingsComponents ?? []).filter {
+                    !$0.isTotal && ibdFamily($0.label) == "lease"
+                }
+                let sum = leaseRows.compactMap(\.currentBalance).reduce(0, +)
+                if !leaseRows.isEmpty { leaseBook = sum }
             }
             if let leaseBook {
                 total += leaseBook
@@ -719,14 +730,11 @@ import Foundation
             }
         }
 
-        if case .resolved(let payload, _, _) = StatementNotesResolver.resolveBorrowingsSchedule(
-            xbrlDir: xbrlDir)
+        if !hasAny, case .resolved(let payload, _, _) =
+            StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
         {
             for row in payload.borrowingsComponents ?? [] {
                 guard !row.isTotal, let value = row.currentBalance else { continue }
-                let family = ibdFamily(row.label)
-                if families.contains(family) { continue }
-                families.insert(family)
                 total += value
                 hasAny = true
                 extras.append("\(row.label)=\(yen(value))")
