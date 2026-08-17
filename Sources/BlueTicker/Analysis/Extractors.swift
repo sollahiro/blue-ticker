@@ -506,7 +506,8 @@ enum IBDExtractor {
     static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> IBDResult {
         // 銀行業: DepositsLiabilitiesBNK が存在すれば銀行業コンポーネント積み上げ
         if let bankResult = extractBankIBD(fieldSet: fieldSet, accountingStandard: accountingStandard) {
-            return appendingNotesLeaseIfMissing(bankResult, xbrlDir: xbrlDir)
+            return appendingNotesLeaseIfMissing(
+                bankResult, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
         }
 
         let resolved = resolveIBD(fieldSet)
@@ -580,18 +581,19 @@ enum IBDExtractor {
             }
         }
 
-        return appendingNotesLeaseIfMissing(result, xbrlDir: xbrlDir)
+        return appendingNotesLeaseIfMissing(
+            result, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
     }
 
     /// statement 側にリース科目が無いとき、notes のリース帳簿だけを足す。
     /// IFRS TextBlock / US-GAAP HTML で既に足している場合は components にリースがあるので何もしない。
     /// 明細表フォールバック（method=borrowings_schedule）は合計にリース込みのため呼ばない。
     private static func appendingNotesLeaseIfMissing(
-        _ result: IBDResult, xbrlDir: URL?
+        _ result: IBDResult, xbrlDir: URL?, accountingStandard: String
     ) -> IBDResult {
         guard let dir = xbrlDir else { return result }
         if result.components.contains(where: { $0.label.contains("リース") }) { return result }
-        let lease = notesLeaseComponents(xbrlDir: dir)
+        let lease = notesLeaseComponents(xbrlDir: dir, accountingStandard: accountingStandard)
         guard lease.current != nil || lease.prior != nil else { return result }
         return IBDResult(
             total: (result.total ?? 0) + (lease.current ?? 0),
@@ -602,11 +604,13 @@ enum IBDExtractor {
         )
     }
 
-    /// `lease_liabilities` が resolved なら帳簿価額。でなければ借入金等明細表のリース区分行。
-    private static func notesLeaseComponents(xbrlDir: URL) -> (
+    /// IFRS は `lease_liabilities` が resolved のとき帳簿価額。J-GAAP / 銀行は借入金等明細表のリース区分行。
+    private static func notesLeaseComponents(xbrlDir: URL, accountingStandard: String) -> (
         current: Double?, prior: Double?, components: [IBDComponentEntry]
     ) {
-        if case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
+        if accountingStandard == "IFRS",
+           case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+        {
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
             if lease.current != nil || lease.prior != nil {
                 return (lease.current, lease.prior, lease.components)
