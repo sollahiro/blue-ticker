@@ -289,6 +289,17 @@ import Foundation
                 "accounts_payable",
                 expected: dbl((expected["accounts_payable"] as? [String: Any])?["current"]),
                 actual: statement.accountsPayable)
+            assertRequired(
+                "gross_profit",
+                expected: dbl((expected["gross_profit"] as? [String: Any])?["gross_profit"]),
+                actual: statement.grossProfit)
+            assertRequired(
+                "sga", expected: dbl((expected["sga"] as? [String: Any])?["current"]),
+                actual: statement.sga)
+            assertRequired(
+                "pretax_income",
+                expected: dbl((expected["tax_expense"] as? [String: Any])?["pretax_income"]),
+                actual: statement.pretaxIncome)
             checked += 1
         }
 
@@ -662,6 +673,127 @@ import Foundation
         }
         #expect(checked == Self.docIDs.count)
         #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
+    }
+
+    /// 未配線フィールドを statement → notes → breakdown で組み、smoke 期待値と突合する。
+    /// IBD は `testIbdItemTagsComposeVsSmoke`。IndividualAnalyzer の差し替えはしない。
+    @Test func testRemainingFieldsComposeVsSmoke() async throws {
+        let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
+        let xbrlBase = SmokeCacheSupport.cacheDir
+        guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
+            print("SKIP   smoke/smoke_expected が見つかりません")
+            return
+        }
+        await SmokeCacheSupport.ensureCached(Self.docIDs.values)
+
+        let fields: [(name: String, expectedKey: ([String: Any]) -> Double?)] = [
+            ("gross_profit", { dbl(($0["gross_profit"] as? [String: Any])?["gross_profit"]) }),
+            ("sga", { dbl(($0["sga"] as? [String: Any])?["current"]) }),
+            ("cfo", { dbl(($0["cash_flow"] as? [String: Any])?["cfo"]) }),
+            ("cfi", { dbl(($0["cash_flow"] as? [String: Any])?["cfi"]) }),
+            ("pretax_income", { dbl(($0["tax_expense"] as? [String: Any])?["pretax_income"]) }),
+            ("income_tax", { dbl(($0["tax_expense"] as? [String: Any])?["income_tax"]) }),
+            ("rd", { dbl(($0["research_development"] as? [String: Any])?["current"]) }),
+            ("employees", { dbl(($0["employees"] as? [String: Any])?["current"]) }),
+            ("interest_expense", { dbl(($0["interest_expense"] as? [String: Any])?["current"]) }),
+            ("cf_treasury_stock", { dbl(($0["cf_treasury_stock"] as? [String: Any])?["current"]) }),
+            ("dividend_ss", { dbl(($0["dividend_ss"] as? [String: Any])?["current"]) }),
+            ("buyback", { dbl(($0["share_buyback"] as? [String: Any])?["current"]) }),
+        ]
+
+        struct FieldStat {
+            var expected = 0
+            var statementOK = 0
+            var composedOK = 0
+            var currentOK = 0
+        }
+        var stats: [String: FieldStat] = [:]
+        var checked = 0
+
+        print("remaining compose vs smoke (statement → notes → breakdown)")
+        print("cell = statement / composed / current")
+        print("fixture | " + fields.map(\.name).joined(separator: " | "))
+
+        for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
+            let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
+            let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
+            guard FileManager.default.fileExists(atPath: xbrlDir.path),
+                  FileManager.default.fileExists(atPath: fixturePath.path),
+                  let expected = try? loadFixture(fixturePath),
+                  !isAllNull(expected),
+                  let statement = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+            else { continue }
+
+            let notes = notesRemainingFills(xbrlDir: xbrlDir)
+            let breakdown = breakdownRemainingFills(xbrlDir: xbrlDir)
+            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let currentBuyback = currentBuybackValue(xbrlDir: xbrlDir)
+            checked += 1
+
+            var cells: [String] = [fixtureID]
+            for spec in fields {
+                let exp = spec.expectedKey(expected)
+                let st = statementRemainingField(statement, spec.name)
+                let composed = st ?? notes[spec.name] ?? breakdown[spec.name]
+                let cu = spec.name == "buyback"
+                    ? currentBuyback : currentRemainingValue(current, field: spec.name)
+                var stat = stats[spec.name] ?? FieldStat()
+                if let exp {
+                    stat.expected += 1
+                    if closeEnough(exp, st) { stat.statementOK += 1 }
+                    if closeEnough(exp, composed) { stat.composedOK += 1 }
+                    if closeEnough(exp, cu) { stat.currentOK += 1 }
+                }
+                stats[spec.name] = stat
+                cells.append(
+                    "\(statusMark(exp: exp, act: st))/\(statusMark(exp: exp, act: composed))/\(statusMark(exp: exp, act: cu))"
+                )
+            }
+            print(cells.joined(separator: " | "))
+        }
+
+        guard checked > 0 else {
+            print("SKIP   remaining compose vs smoke: XBRL キャッシュなし")
+            return
+        }
+
+        var switchable: [String] = []
+        var composedOK: [String] = []
+        var partial: [String] = []
+        for spec in fields {
+            let s = stats[spec.name] ?? FieldStat()
+            print(
+                "\(spec.name): expected=\(s.expected) statement=\(s.statementOK) composed=\(s.composedOK) current=\(s.currentOK)"
+            )
+            if s.expected > 0 && s.statementOK == s.expected { switchable.append(spec.name) }
+            else if s.expected > 0 && s.composedOK == s.expected { composedOK.append(spec.name) }
+            else if s.composedOK > 0 { partial.append("\(spec.name)(\(s.composedOK)/\(s.expected))") }
+        }
+        print("statement-switchable-now: \(switchable.joined(separator: ", "))")
+        print("compose-complete: \(composedOK.joined(separator: ", "))")
+        print("compose-partial: \(partial.joined(separator: ", "))")
+
+        #expect(checked == Self.docIDs.count)
+        // buyback は testSmokeAll の床に無い（US-GAAP 2社で現行 Extractor も不一致）。
+        for spec in fields where spec.name != "buyback" {
+            let s = stats[spec.name] ?? FieldStat()
+            #expect(
+                s.expected == 0 || s.currentOK == s.expected,
+                "\(spec.name): current extractor \(s.currentOK)/\(s.expected)")
+        }
+        for field in ["gross_profit", "sga", "pretax_income"] {
+            let s = stats[field] ?? FieldStat()
+            #expect(
+                s.expected > 0 && s.statementOK == s.expected,
+                "\(field): statement path \(s.statementOK)/\(s.expected)")
+        }
+        for field in ["gross_profit", "sga", "pretax_income", "rd", "employees"] {
+            let s = stats[field] ?? FieldStat()
+            #expect(
+                s.expected > 0 && s.composedOK == s.expected,
+                "\(field): composed \(s.composedOK)/\(s.expected)")
+        }
     }
 
     private func ibdFamily(_ label: String) -> String {
@@ -1069,6 +1201,70 @@ import Foundation
         case "dividend_ss": return actual.dividendSS
         default: return nil
         }
+    }
+
+    private func statementRemainingField(_ statement: StatementFinancialsValues, _ field: String) -> Double? {
+        switch field {
+        case "gross_profit": return statement.grossProfit
+        case "sga": return statement.sga
+        case "cfo": return statement.cfo
+        case "cfi": return statement.cfi
+        case "pretax_income": return statement.pretaxIncome
+        case "income_tax": return statement.incomeTax
+        case "rd": return statement.rd
+        case "employees": return statement.employees
+        case "interest_expense": return statement.interestExpense
+        case "cf_treasury_stock": return statement.cfTreasuryStock
+        case "dividend_ss": return statement.dividendSS
+        case "buyback": return statement.buyback
+        default: return nil
+        }
+    }
+
+    /// notes から足せる未配線フィールド。statement で取れた値は組立側で優先する。
+    private func notesRemainingFills(xbrlDir: URL) -> [String: Double] {
+        var out: [String: Double] = [:]
+        if case .resolved(let payload, _, _) = StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir) {
+            let sum = (payload.dividendEvents ?? []).compactMap(\.totalAmount).reduce(0, +)
+            if sum != 0 { out["dividend_ss"] = sum }
+        }
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        if std == "IFRS" {
+            let ie = InterestExpenseExtractor.extract(
+                fieldSet: [:], accountingStandard: std, xbrlDir: xbrlDir)
+            if let v = ie.current { out["interest_expense"] = v }
+        }
+        return out
+    }
+
+    /// breakdown 分母と同じ XBRL タグ（employees / rd）。financials 逆依存は使わない。
+    private func breakdownRemainingFills(xbrlDir: URL) -> [String: Double] {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        let durationFS = fieldSetFromDuration(allTags)
+        let instantFS = fieldSetFromInstant(allTags)
+        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
+        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
+        var out: [String: Double] = [:]
+        if let v = emp.current { out["employees"] = v }
+        if let v = rd.current { out["rd"] = v }
+        return out
+    }
+
+    private func currentBuybackValue(xbrlDir: URL) -> Double? {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        var durationFS = fieldSetFromDuration(allTags)
+        if std == "US-GAAP" {
+            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
+        }
+        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
+        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
+        return ShareBuybackExtractor.extract(
+            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            accountingStandard: std
+        ).current
     }
 
     private func firstByLabel(_ items: [StatementLineItem], contains: String, excluding: [String] = []) -> Double? {

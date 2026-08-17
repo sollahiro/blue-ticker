@@ -58,23 +58,23 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（income_statement 行） | StatementFinancialsResolver（#5b-1: 旧経路フォールバックなし） | done |
-// | gross_profit, sga | statement | GrossProfitExtractor / OperatingProfitExtractor | extractor |
+// | gross_profit, sga | statement（income_statement 行） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
 // | accounts_receivable, inventory, accounts_payable | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
-// | cfo, cfi | statement（cash_flow 行） | CashFlowExtractor | extractor（タスク #8） |
+// | cfo, cfi | statement（cash_flow 行） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
-// | dividend_ss | 未決（notes `dividends` vs SS 行規則） | DividendSSExtractor | extractor |
-// | employees | statement に無ければ breakdown `employees` 合計 | EmployeesExtractor | extractor |
-// | rd | statement に無ければ breakdown `rd` 合計 | RDExtractor | extractor |
+// | dividend_ss | statement SS 行。notes `dividends` 合計は代用候補（smoke 突合で確認） | StatementFinancialsResolver / DividendSSExtractor | extractor |
+// | employees | statement に無ければ breakdown 分母と同じ XBRL タグ | StatementFinancialsResolver / EmployeesExtractor | extractor |
+// | rd | statement に無ければ breakdown 分母と同じ XBRL タグ | StatementFinancialsResolver / RDExtractor | extractor |
 // | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
-// | interest_expense | 未決（statement ± notes） | InterestExpenseExtractor | extractor |
-// | buyback, cf_treasury_stock | 未決（statement ± notes） | ShareBuybackExtractor / CfTreasuryStockExtractor | extractor |
+// | interest_expense | statement PL 行。無ければ IFRS notes 文章（TextBlock） | StatementFinancialsResolver / InterestExpenseExtractor | extractor |
+// | buyback, cf_treasury_stock | statement SS/CF 行 | StatementFinancialsResolver / Extractor | extractor |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |

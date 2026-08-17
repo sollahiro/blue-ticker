@@ -44,9 +44,27 @@ XBRL → statement / notes / breakdown（正本・並列）
 
 正本の原則: 水準値は正本 resolver の結果。statement は XBRL タグ（US-GAAP 本表は `USGAAPStatementHtml`）。notes の表パースは notes 側。financials は選んで渡すだけ。
 
+## smoke 組立到達（固定11社）
+
+`testRemainingFieldsComposeVsSmoke`。cell は statement / composed（statement → notes → breakdown） / 現行 Extractor。IBD は PR #247。IndividualAnalyzer は未切替。
+
+| フィールド | statement | composed | 現行 | メモ |
+|---|---|---|---|---|
+| gross_profit | 11/11 | 11/11 | 11/11 | resolver 載済。IA 未切替 |
+| sga | 9/9 | 9/9 | 9/9 | 銀行2社は期待値なし。resolver 載済 |
+| pretax_income | 11/11 | 11/11 | 11/11 | 公開フィールドではないが税計算入力。resolver 載済 |
+| rd | 4/7 | 7/7 | 7/7 | statement に無ければ RD タグ（breakdown 分母と同じ） |
+| employees | 0/11 | 11/11 | 11/11 | 本表に人数行なし。従業員タグ（breakdown 分母と同じ） |
+| cfo / cfi | 8/11 | 8/11 | 11/11 | IFRS 3社（味の素・クボタ・スズキ）は CF 合計が `SummaryOfBusinessResults` のみ。Summary は正本にしない |
+| income_tax | 10/11 | 10/11 | 11/11 | 富士フイルム US-GAAP は statement ラベルと現行 HTML 節抽出が不一致 |
+| dividend_ss | 9/11 | 9/11 | 11/11 | US-GAAP 2社。notes `dividends` 合計では埋まらない |
+| cf_treasury_stock | 8/10 | 8/10 | 10/10 | US-GAAP 2社は現行 `USGAAPHtml` 専用抽出 |
+| interest_expense | 4/9 | 4/9 | 9/9 | IFRS TextBlock / US-GAAP HTML。notes 文章埋めは statement と不一致 |
+| buyback | 8/10 | 8/10 | 8/10 | `testSmokeAll` の床に無い。US-GAAP 2社は現行 Extractor も不一致 |
+
 ## 現状の逆依存・ギャップ
 
-- breakdown 分母（売上）が financials 経由。employees / rd の Summary 値もまだ Extractor 直読み。
+- breakdown 分母（売上）が financials 経由。employees / rd の Summary 値もまだ Extractor 直読み（組立ではタグで smoke 再現可）。
 - US-GAAP は Statement HTML と旧 Summary HTML（`USGAAPHtml`）が別経路。後者は撤去対象。
 - goodwill / PPE **明細**は Summary 置換対象外（正本 API）。
 
@@ -54,11 +72,11 @@ XBRL → statement / notes / breakdown（正本・並列）
 
 | # | 内容 |
 |---|---|
-| 5b-2 | 未移行の **statement 正本**フィールドを Statement 組立へ。`USGAAPHtml` 撤去 |
-| 5c | gross_profit / sga の statement 参照（TextBlock / 銀行粗利益の整理） |
-| 7 | dividend_ss の正本選択（notes `dividends` vs SS 行規則）→実装 |
-| 8 | IBD: statement 項目タグ＋notes から取れる項目タグで計算（notes 合計では代用しない）。利息 / buyback / CFO·CFI の statement 突合 |
-| 9 | employees / rd は statement に無ければ breakdown 合計。売上分母の financials 逆依存解消 |
+| 5b-2 | 未移行の **statement 正本**フィールドを IndividualAnalyzer へ切替。`USGAAPHtml` 撤去 |
+| 5c | GP / SGA / pretax は statement で smoke 到達。resolver 載済・IA 未切替 |
+| 7 | dividend_ss は statement SS 9/11。notes 合計では US-GAAP 欠測を埋めない |
+| 8 | IBD 定義は PR #247。CFO·CFI 8/11（IFRS 3社は Summary のみ）。利息 4/9、buyback 8/10 |
+| 9 | employees / rd は statement に無ければ同一 XBRL タグ（breakdown 分母）。売上分母の financials 逆依存解消 |
 | 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
 | 13+ | 明細整理・Sankey・契約露出変更は後回し |
@@ -77,7 +95,8 @@ XBRL → statement / notes / breakdown（正本・並列）
 |---|---|
 | 正本索引 | `Models/FinancialsContract.swift`（`フィールド正本`） |
 | 組立 | `Services/IndividualAnalyzer.swift` |
-| statement パススルー | `Analysis/StatementFinancialsResolver.swift` |
+| statement パススルー | `Analysis/StatementFinancialsResolver.swift`（本表＋未配線フィールドの statement 値） |
+| remaining vs smoke | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift`（`testRemainingFieldsComposeVsSmoke`） |
 | notes | `Analysis/StatementNotesResolver.swift` |
 | breakdown 分母 | `BltServerCore/BreakdownIngest.swift` |
 
