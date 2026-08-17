@@ -113,6 +113,19 @@ public enum Api {
 
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
+    /// 生 XBRL ZIP の R2 オブジェクトキー接頭辞（Region JP / Source EDINET）。
+    /// 完成キーは `{prefix}/{docID}.zip`。公開 URL は付けない（私有 L2）。
+    static let xbrlR2KeyPrefix = "jp/edinet/xbrl"
+
+    /// R2 へ置く XBRL パッケージの Content-Type。
+    static let xbrlZipContentType = "application/zip"
+
+    /// 会社アイコン PUT の待ち上限（秒）。小さいオブジェクト向け。
+    static let r2IconUploadTimeoutSeconds: Double = 15
+
+    /// 生 XBRL ZIP の R2 GET/PUT 待ち上限（秒）。有報パッケージは数十 MB になりうる。
+    static let r2XbrlTransferTimeoutSeconds: Double = 180
+
     /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
     /// メモリピーク抑制のため（issue #34）。
     static let xbrlProcessConcurrency = 2

@@ -9,14 +9,26 @@ import FoundationNetworking
 actor EdinetAPIClient {
     var apiKey: String?
     private let cacheStore: EdinetCacheStore
+    /// 生 XBRL ZIP の L2（R2）。未設定ならローカル → EDINET の従来経路。
+    private let xbrlObjectStore: (any XbrlObjectStoring)?
+    /// テスト用。非 nil なら EDINET `requestBinary` の代わりに ZIP バイトを返す。
+    private let xbrlZipDownloader: (@Sendable (String) async throws -> Data)?
 
     private let dateFetchSemaphore = AsyncSemaphore(value: 10)
     private let xbrlDownloadSemaphore = AsyncSemaphore(value: 4)
     private var documentIndexLocks: [Int: AsyncLock] = [:]
     private var downloadLocks: [String: AsyncLock] = [:]
 
-    init(apiKey: String? = nil, cacheDir: URL? = nil, cacheStore: EdinetCacheStore? = nil) {
+    init(
+        apiKey: String? = nil,
+        cacheDir: URL? = nil,
+        cacheStore: EdinetCacheStore? = nil,
+        xbrlObjectStore: (any XbrlObjectStoring)? = nil,
+        xbrlZipDownloader: (@Sendable (String) async throws -> Data)? = nil
+    ) {
         self.apiKey = apiKey
+        self.xbrlObjectStore = xbrlObjectStore
+        self.xbrlZipDownloader = xbrlZipDownloader
         if let store = cacheStore {
             self.cacheStore = store
         } else {
@@ -173,22 +185,48 @@ actor EdinetAPIClient {
             cacheStore.touchXbrlDir(docID, saveDir: dir)
             return dest
         }
-        guard apiKey?.isEmpty == false else { return nil }
+        let hasApiKey = apiKey?.isEmpty == false
+        let canFetchRemote = hasApiKey || xbrlZipDownloader != nil
+        // L2 もリモート取得も無ければロック不要（従来の早期リターン）。
+        if xbrlObjectStore == nil && !canFetchRemote { return nil }
 
         // ファイルロックでプロセス間の同一 docID 同時取得・展開を防ぎ、セマフォで並列ダウンロード数を制限する
         // actor プロパティを @Sendable クロージャ境界を渡す前にキャプチャする
         let cs = cacheStore
         let semaphore = xbrlDownloadSemaphore
+        let objectStore = xbrlObjectStore
+        let zipDownloader = xbrlZipDownloader
+        let objectKey = xbrlR2ObjectKey(docID: docID)
         do {
             return try await cacheStore.withFileLock("xbrl_\(docID)") {
                 if cs.hasXbrlDir(docID, saveDir: dir) {
                     cs.touchXbrlDir(docID, saveDir: dir)
                     return dest
                 }
+                if let objectStore, let objectKey,
+                   let zip = await objectStore.getObject(key: objectKey)
+                {
+                    do {
+                        return try cs.storeXbrlZip(docID, content: zip, saveDir: dir)
+                    } catch {
+                        // 壊れた L2 はミス扱いし、EDINET 再取得へ進む。
+                    }
+                }
+                guard canFetchRemote else { return nil }
                 await semaphore.wait()
                 defer { semaphore.signal() }
-                let content = try await self.requestBinary("/documents/\(docID)", params: ["type": "1"])
-                return try cs.storeXbrlZip(docID, content: content, saveDir: dir)
+                let content: Data
+                if let zipDownloader {
+                    content = try await zipDownloader(docID)
+                } else {
+                    content = try await self.requestBinary("/documents/\(docID)", params: ["type": "1"])
+                }
+                let extracted = try cs.storeXbrlZip(docID, content: content, saveDir: dir)
+                if let objectStore, let objectKey {
+                    _ = await objectStore.putObject(
+                        content, key: objectKey, contentType: Api.xbrlZipContentType)
+                }
+                return extracted
             }
         } catch {
             return nil

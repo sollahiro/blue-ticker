@@ -33,7 +33,7 @@ read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かな�
 | 対象 | 状態 |
 |---|---|
 | sync | 稼働 |
-| 生 XBRL | 保持。R2 は延期 |
+| 生 XBRL | ローカル L1 ＋ R2 L2（`BLT_R2_XBRL_BUCKET` オプトイン。未設定時は従来） |
 | facts | 停止中 |
 | financials / filing-sections | バックフィル中。read は床以上・未格納 404 |
 
@@ -47,7 +47,7 @@ read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かな�
 
 ## ストレージ（未決）
 
-facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XBRL/facts のオブジェクトストレージ＋フォールバック。目標 A（タグ系→facts）着手時に決める。
+facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) facts のオブジェクトストレージ。生 XBRL の R2 L2 は実装済み。目標 A（タグ系→facts）着手時に facts 側を決める。
 
 ## TODO
 
@@ -58,7 +58,7 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) 生 XB
 - [ ] statements 母集団拡大（銀行・保険等の実データ確認後）
 - [ ] Sankey（要求具体化後）— `feature-tiers.md`
 - [ ] MCP/REST レイテンシ（Tunnel/Access 区間）
-- [ ] ストレージ強化の方式選定
+- [ ] ストレージ強化の方式選定（facts。生 XBRL の R2 L2 は済）
 - [ ] REST 第三者公開（段階 B）— `public-api.md`
 - [ ] 段階 B の x402 有効化（REST のみ。MCP は当面課金なし）— `feature-tiers.md`
 - [ ] filing-sections: 半期(160) 拡張
