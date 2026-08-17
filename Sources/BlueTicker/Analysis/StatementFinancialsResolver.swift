@@ -268,8 +268,7 @@ enum StatementFinancialsResolver {
             interestExpense: firstByLabel(year.incomeStatement, contains: "支払利息")
                 ?? firstByLabel(year.incomeStatement, contains: "利息費用"),
             cfTreasuryStock: firstByLabel(year.cashFlow, contains: "自己株式"),
-            dividendSS: firstByLabel(year.changesInEquity, contains: "当社株主への")
-                ?? firstByLabel(year.changesInEquity, contains: "配当"),
+            dividendSS: resolveUSGAAPDividendSS(year.changesInEquity),
             buyback: firstByLabel(year.changesInEquity, contains: "自己株式")
                 ?? firstByLabel(year.cashFlow, contains: "自己株式")
         )
@@ -387,6 +386,19 @@ enum StatementFinancialsResolver {
             return (current ?? 0) + (deferred ?? 0)
         }
         return nil
+    }
+
+    /// US-GAAP の SS「当社株主への配当金」。合計列（純資産合計）に載る減少額は負。
+    /// financials の `dividend_ss` はキャッシュアウト正（`DividendSSExtractor` と同じ符号反転）。
+    /// 前期・当期が同一表に並ぶ場合は最後の行（当期）を使う。
+    private static func resolveUSGAAPDividendSS(_ items: [StatementLineItem]) -> Double? {
+        var last: Double?
+        for item in items {
+            let label = item.label ?? ""
+            guard label.contains("当社株主への") else { continue }
+            last = item.value
+        }
+        return last.map { -$0 }
     }
 
     /// US-GAAP 売掛相当。単一行（受取債権合計 / 売上債権）を優先し、無ければ流動資産内の
