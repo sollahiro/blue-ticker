@@ -22,7 +22,7 @@ Meta → Struct → Norm → Viz
 **Summary の位置（重要）**: 独立の XBRL→Summary 本流ではない。JP と同じく次の経路から組む:
 
 ```text
-Filing / Statement / Statement-Notes / Breakdown
+Statement / Statement-Notes / Breakdown
                     ↓
             company_financials（組立）
                     ↓
