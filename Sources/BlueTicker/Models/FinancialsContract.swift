@@ -59,18 +59,18 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（income_statement 行） | StatementFinancialsResolver（#5b-1: 旧経路フォールバックなし） | done |
-// | gross_profit, sga | statement（income_statement 行） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
+// | gross_profit, sga | statement（income_statement 行） | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
 // | accounts_receivable, inventory, accounts_payable | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
-// | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver が statement 値を返す。IndividualAnalyzer は未切替 | extractor |
+// | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver（#5c） | done |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
-// | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver / DividendSSExtractor | extractor |
+// | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
 // | employees | breakdown `employees` 分母 | EmployeesExtractor（IA 未切替） | extractor |
 // | rd | breakdown `research_and_development` 分母 | RDExtractor（IA 未切替） | extractor |
 // | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |

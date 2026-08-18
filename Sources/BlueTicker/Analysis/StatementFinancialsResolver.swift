@@ -22,17 +22,18 @@ struct StatementFinancialsValues {
     var accountsPayable: Double?
     var cashEquivalents: Double?
     var dividendPaidCF: Double?
-    /// 未配線フィールド（IndividualAnalyzer はまだ Extractor 直読み）。statement 行だけで
-    /// 取れる値。notes / breakdown フォールバックは組立層。
+    /// #5c: IndividualAnalyzer 切替済。statement 行だけで取れる値。
     var grossProfit: Double?
+    var grossProfitLabel: String?
     var sga: Double?
     var cfo: Double?
     var cfi: Double?
     var pretaxIncome: Double?
     var incomeTax: Double?
+    var dividendSS: Double?
+    /// #8: IndividualAnalyzer はまだ Extractor 直読み。notes / breakdown フォールバックは組立層。
     var interestExpense: Double?
     var cfTreasuryStock: Double?
-    var dividendSS: Double?
     var buyback: Double?
 }
 
@@ -136,14 +137,15 @@ enum StatementFinancialsResolver {
             cashEquivalents: cash.current,
             dividendPaidCF: divPaid.current,
             grossProfit: remaining.grossProfit,
+            grossProfitLabel: remaining.grossProfitLabel,
             sga: remaining.sga,
             cfo: remaining.cfo,
             cfi: remaining.cfi,
             pretaxIncome: remaining.pretaxIncome,
             incomeTax: remaining.incomeTax,
+            dividendSS: remaining.dividendSS,
             interestExpense: remaining.interestExpense,
             cfTreasuryStock: remaining.cfTreasuryStock,
-            dividendSS: remaining.dividendSS,
             buyback: remaining.buyback
         )
     }
@@ -229,6 +231,7 @@ enum StatementFinancialsResolver {
         let cash = resolveItem(instantFS, tags: Xbrl.cashEquivalentsTags)
 
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: "US-GAAP")
+        let gpItem = year.incomeStatement.first { ($0.label ?? "").contains("売上総利益") }
 
         // US-GAAP 非流動資産: 直接行が無いとき Total − Current。
         var nonCurrent = bs.nonCurrentAssets
@@ -254,7 +257,8 @@ enum StatementFinancialsResolver {
             accountsPayable: ap.current,
             cashEquivalents: cash.current,
             dividendPaidCF: divPaid.current,
-            grossProfit: firstByLabel(year.incomeStatement, contains: "売上総利益"),
+            grossProfit: gpItem?.value,
+            grossProfitLabel: gpItem?.label.map { USGAAPHtml.stripSectionPrefix($0) },
             sga: op.sga,
             cfo: statementCashFlowTotal(year.cashFlow, tags: statementOperatingCashFlowTags)
                 ?? firstByLabel(
@@ -269,29 +273,29 @@ enum StatementFinancialsResolver {
                 ?? firstByLabel(year.incomeStatement, contains: "税金等調整前"),
             incomeTax: resolveUSGAAPIncomeTax(year.incomeStatement)
                 ?? tax.incomeTax,
+            dividendSS: resolveUSGAAPDividendSS(year.changesInEquity),
             interestExpense: resolveUSGAAPInterestExpense(year.incomeStatement),
             cfTreasuryStock: resolveUSGAAPTreasuryPurchase(year.cashFlow),
-            dividendSS: resolveUSGAAPDividendSS(year.changesInEquity),
             buyback: resolveUSGAAPTreasuryPurchase(year.changesInEquity)
                 ?? resolveUSGAAPTreasuryPurchase(year.cashFlow)
         )
     }
 
-    /// statement 行に載る未配線フィールド。HTML/TextBlock フォールバックは付けない。
+    /// statement 行に載る #5c / #8 フィールド。HTML/TextBlock フォールバックは付けない。
     private static func remainingFromStatementExtractors(
         durationFS: FieldSet, equityDurationFS: FieldSet, maskedEquity: XbrlTagElements,
         accountingStandard: String, operating: OperatingProfitResult,
         cashFlow: [StatementLineItem]
     ) -> (
-        grossProfit: Double?, sga: Double?, cfo: Double?, cfi: Double?,
-        pretaxIncome: Double?, incomeTax: Double?,
-        interestExpense: Double?, cfTreasuryStock: Double?, dividendSS: Double?, buyback: Double?
+        grossProfit: Double?, grossProfitLabel: String?, sga: Double?, cfo: Double?, cfi: Double?,
+        pretaxIncome: Double?, incomeTax: Double?, dividendSS: Double?,
+        interestExpense: Double?, cfTreasuryStock: Double?, buyback: Double?
     ) {
         let gp = GrossProfitExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
         // 正本は CF 本表の合計行。SummaryOfBusinessResults は使わない。
-        // IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS` が本表にあり、IA の
-        // CashFlowExtractor は Summary タグで拾う。ここは本表タグだけを見る。
+        // IFRS 3社は `NetCashProvidedByUsedIn*ActivitiesIFRS` が本表にあり、旧
+        // CashFlowExtractor は Summary タグで拾っていた。ここは本表タグだけを見る。
         let cfo = statementCashFlowTotal(cashFlow, tags: statementOperatingCashFlowTags)
             ?? firstByLabel(
                 cashFlow, contains: "営業活動によるキャッシュ・フロー",
@@ -321,19 +325,20 @@ enum StatementFinancialsResolver {
             accountingStandard: accountingStandard)
         return (
             grossProfit: gp.grossProfit,
+            grossProfitLabel: gp.grossProfitLabel,
             sga: operating.sga,
             cfo: cfo,
             cfi: cfi,
             pretaxIncome: tax.pretaxIncome,
             incomeTax: tax.incomeTax,
+            dividendSS: divSS.current,
             interestExpense: ie.current,
             cfTreasuryStock: cfTs.current,
-            dividendSS: divSS.current,
             buyback: buyback.current
         )
     }
 
-    /// CF 本表合計。IA の `Xbrl.cf*Tags` には載せない（Summary 欠測時の IA 出力を変えない）。
+    /// CF 本表合計。旧 Extractor の `Xbrl.cf*Tags` には載せない（Summary 欠測時の旧出力を変えない）。
     private static let statementOperatingCashFlowTags: [String] = [
         "CashFlowsFromUsedInOperationsIFRS",
         "CashFlowsFromUsedInOperatingActivitiesIFRS",

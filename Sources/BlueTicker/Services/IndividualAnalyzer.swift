@@ -113,27 +113,22 @@ struct IndividualAnalyzer {
         let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTagElements)
         var instantFS = fieldSetFromInstant(allTagElements)
 
-        // US-GAAP: 未移行フィールド（GP/SGA/IBD/税等）用に HTML 仮想タグを注入。
-        // 本表水準値は StatementFinancialsResolver（USGAAPStatementHtml）側。
+        // US-GAAP: 未移行 Extractor（IBD / 利息 / buyback / cf_treasury_stock）用に HTML 仮想タグを注入。
+        // 本表水準値（#5 / #5b-1 / #5c）は StatementFinancialsResolver（USGAAPStatementHtml）。
         if accountingStandard == "US-GAAP" {
             for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
-        // 本表水準値は statement 正本のみ（#5 / #5b-1）。旧 Extractor へのフィールド単位フォールバックはしない。
+        // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c）。旧 Extractor へのフィールド単位フォールバックはしない。
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
 
-        let cf = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let gp = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
-        let op = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTagElements)
-        let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
         let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
         let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
 
         var raw = RawData()
         raw.curFYEn = fyEnd
@@ -143,8 +138,8 @@ struct IndividualAnalyzer {
         raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
         raw.np = statementMain?.netProfit.map { $0 / millionYen }
         raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
-        raw.cfo = cf.cfo.map { $0 / millionYen }
-        raw.cfi = cf.cfi.map { $0 / millionYen }
+        raw.cfo = statementMain?.cfo.map { $0 / millionYen }
+        raw.cfi = statementMain?.cfi.map { $0 / millionYen }
         // 設備投資: notes overview → CF（#6）
         raw.capex = StatementNotesResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
@@ -158,14 +153,14 @@ struct IndividualAnalyzer {
 
         var calc = CalculatedData()
         calc.docID = docID
-        calc.grossProfit = gp.grossProfit.map { $0 / millionYen }
-        calc.grossProfitLabel = gp.grossProfitLabel
-        calc.grossProfitMethod = gp.method
+        calc.grossProfit = statementMain?.grossProfit.map { $0 / millionYen }
+        calc.grossProfitLabel = statementMain?.grossProfitLabel
+        calc.grossProfitMethod = statementMain?.grossProfit == nil ? nil : "statement"
         if let gp_ = calc.grossProfit, let s = raw.sales, s > 0 {
             calc.grossProfitMargin = (gp_ / s) * percent
         }
-        calc.sellingGeneralAdministrativeExpenses = op.sga.map { $0 / millionYen }
-        calc.opLabel = statementMain?.operatingProfitLabel ?? op.label
+        calc.sellingGeneralAdministrativeExpenses = statementMain?.sga.map { $0 / millionYen }
+        calc.opLabel = statementMain?.operatingProfitLabel
 
         calc.totalAssets = statementMain?.totalAssets.map { $0 / millionYen }
         calc.currentAssets = statementMain?.currentAssets.map { $0 / millionYen }
@@ -180,17 +175,23 @@ struct IndividualAnalyzer {
 
         if let e = emp.current { calc.employees = Int(e) }
 
-        calc.pretaxIncome = tax.pretaxIncome.map { $0 / millionYen }
-        calc.incomeTax = tax.incomeTax.map { $0 / millionYen }
-        calc.effectiveTaxRate = tax.effectiveTaxRate.map { $0 * percent }
+        let pretax = statementMain?.pretaxIncome
+        let incomeTax = statementMain?.incomeTax
+        let taxRateFraction: Double? = {
+            guard let pretax, let incomeTax, pretax != 0 else { return nil }
+            return incomeTax / pretax
+        }()
+        calc.pretaxIncome = pretax.map { $0 / millionYen }
+        calc.incomeTax = incomeTax.map { $0 / millionYen }
+        calc.effectiveTaxRate = taxRateFraction.map { $0 * percent }
         calc.interestExpense = ie.current.map { $0 / millionYen }
 
         calc.ppeTotal = statementMain?.ppeTotal.map { $0 / millionYen }
         calc.ppeAccountingStandard = accountingStandard
 
-        // CF自己株式・配当SS は未移行。運転資本・配当CF は statement のみ
+        // CF自己株式は未移行（#8）。配当SS・運転資本・配当CF は statement のみ
         calc.cfTreasuryStock = cfTs.current.map { $0 / millionYen }
-        calc.dividendSS = divSS.current.map { $0 / millionYen }
+        calc.dividendSS = statementMain?.dividendSS.map { $0 / millionYen }
         calc.dividendPaidCF = statementMain?.dividendPaidCF.map { $0 / millionYen }
         calc.accountsReceivable = statementMain?.accountsReceivable.map { $0 / millionYen }
         calc.inventory = statementMain?.inventory.map { $0 / millionYen }
@@ -200,7 +201,7 @@ struct IndividualAnalyzer {
             calc.operatingMargin = (rawOP / s) * percent
         }
 
-        if let op_ = raw.op, let taxRate = tax.effectiveTaxRate {
+        if let op_ = raw.op, let taxRate = taxRateFraction {
             let clampedTax = min(max(taxRate, Financial.nopatMinNormalTaxRate), Financial.nopatMaxNormalTaxRate)
             calc.nopat = op_ * (1.0 - clampedTax)
         } else if let op_ = raw.op {
