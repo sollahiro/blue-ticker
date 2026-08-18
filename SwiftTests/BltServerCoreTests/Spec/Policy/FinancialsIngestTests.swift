@@ -603,7 +603,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
     @Test func countServableCompanyFinancialsSplitsByReadFloor() async throws {
         try await withMigratedApp { app in
-            // fin-v3: 床(4)未満 → unservable。fin-v4/fin-v7: 床以上 → servable。
+            // fin-v3: 床(4)未満 → unservable。fin-v4/fin-v6: 床以上 → servable。
             for (code, version) in [("7203", "fin-v3"), ("6758", "fin-v4"), ("9984", "fin-v5")] {
                 let row = CompanyFinancials()
                 row.id = code
