@@ -966,7 +966,7 @@ enum ShareBuybackExtractor {
     /// 自己株式取得額（正値、円単位）を抽出する。
     ///
     /// XBRL の SS・CF 値は負値（キャッシュアウトフロー）で報告されるため符号反転して返す。
-    /// US-GAAP HTML 仮想タグはすでに正値のためそのまま返す。
+    /// US-GAAP HTML 仮想タグも CF 上は △ の負値なので絶対値にする。
     static func extract(
         fieldSet: FieldSet,
         ncFieldSet: FieldSet,
@@ -976,7 +976,8 @@ enum ShareBuybackExtractor {
         if accountingStandard == "US-GAAP" {
             let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_CFTreasuryStock"])
             if let v = item.current {
-                return ShareBuybackResult(current: v, method: "usgaap_html")
+                // CF HTML は △ の負値。financials / smoke はキャッシュアウト正。
+                return ShareBuybackResult(current: abs(v), method: "usgaap_html")
             }
             let ncItem = resolveItem(ncFieldSet, tags: Xbrl.shareBuybackSSJGAAPTags)
             if ncItem.tag != nil, let v = ncItem.current {
@@ -1019,7 +1020,8 @@ enum CfTreasuryStockExtractor {
         if accountingStandard == "US-GAAP" {
             let item = resolveItem(fieldSet, tags: ["USGAAP_HTML_CFTreasuryStock"])
             if item.tag != nil {
-                return CfTreasuryStockResult(current: item.current.map { -$0 }, method: "usgaap_html")
+                // CF HTML は △ の負値。financials / smoke はキャッシュアウト正。
+                return CfTreasuryStockResult(current: item.current.map { abs($0) }, method: "usgaap_html")
             }
             return CfTreasuryStockResult(current: nil, method: "not_found")
         }

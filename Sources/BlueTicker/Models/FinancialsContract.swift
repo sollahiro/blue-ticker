@@ -74,8 +74,8 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | employees | breakdown `employees` 分母 | EmployeesExtractor（IA 未切替） | extractor |
 // | rd | breakdown `research_and_development` 分母 | RDExtractor（IA 未切替） | extractor |
 // | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
-// | interest_expense | statement PL 行。無ければ IFRS notes 文章（TextBlock） | StatementFinancialsResolver / InterestExpenseExtractor | extractor |
-// | buyback, cf_treasury_stock | statement SS/CF 行 | StatementFinancialsResolver / Extractor | extractor |
+// | interest_expense | statement PL 行（US-GAAP は △ を絶対値）。無ければ IFRS notes の支払利息タグ / TextBlock（PL の FinanceCostsIFRS は使わない） | StatementFinancialsResolver / InterestExpenseExtractor | extractor |
+// | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver / Extractor | extractor |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |

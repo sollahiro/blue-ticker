@@ -136,7 +136,7 @@ import Foundation
         var inventory: Double?
         var accountsPayable: Double?
         var eps: Double?
-        var issuedShares: Double?
+        var shareBuyback: Double?
     }
 
     private func extractFromXBRL(xbrlDir: URL) -> Extracted {
@@ -165,6 +165,9 @@ import Foundation
         let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
+        let buyback = ShareBuybackExtractor.extract(
+            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
+            accountingStandard: std)
 
         return Extracted(
             sales:                  statementMain?.sales,
@@ -199,7 +202,8 @@ import Foundation
             inventory:              statementMain?.inventory,
             accountsPayable:        statementMain?.accountsPayable,
             eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
-            issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
+            issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir),
+            shareBuyback:           buyback.current
         )
     }
 
@@ -729,7 +733,6 @@ import Foundation
             let notes = notesRemainingFills(xbrlDir: xbrlDir)
             let breakdown = breakdownRemainingFills(xbrlDir: xbrlDir)
             let current = extractFromXBRL(xbrlDir: xbrlDir)
-            let currentBuyback = currentBuybackValue(xbrlDir: xbrlDir)
             checked += 1
 
             var cells: [String] = [fixtureID]
@@ -740,8 +743,7 @@ import Foundation
                 let composed = breakdownOnly
                     ? breakdown[spec.name]
                     : (st ?? notes[spec.name] ?? breakdown[spec.name])
-                let cu = spec.name == "buyback"
-                    ? currentBuyback : currentRemainingValue(current, field: spec.name)
+                let cu = currentRemainingValue(current, field: spec.name)
                 var stat = stats[spec.name] ?? FieldStat()
                 if let exp {
                     stat.expected += 1
@@ -779,20 +781,19 @@ import Foundation
         print("compose-partial: \(partial.joined(separator: ", "))")
 
         #expect(checked == Self.docIDs.count)
-        // buyback は testSmokeAll の床に無い（US-GAAP 2社で現行 Extractor も不一致）。
-        for spec in fields where spec.name != "buyback" {
+        for spec in fields {
             let s = stats[spec.name] ?? FieldStat()
             #expect(
                 s.expected == 0 || s.currentOK == s.expected,
                 "\(spec.name): current extractor \(s.currentOK)/\(s.expected)")
         }
-        for field in ["gross_profit", "sga", "pretax_income", "cfo", "cfi", "income_tax", "dividend_ss"] {
+        for field in ["gross_profit", "sga", "pretax_income", "cfo", "cfi", "income_tax", "dividend_ss", "cf_treasury_stock", "buyback"] {
             let s = stats[field] ?? FieldStat()
             #expect(
                 s.expected > 0 && s.statementOK == s.expected,
                 "\(field): statement path \(s.statementOK)/\(s.expected)")
         }
-        for field in ["gross_profit", "sga", "pretax_income", "rd", "employees", "cfo", "cfi", "income_tax", "dividend_ss"] {
+        for field in ["gross_profit", "sga", "pretax_income", "rd", "employees", "cfo", "cfi", "income_tax", "dividend_ss", "interest_expense", "cf_treasury_stock", "buyback"] {
             let s = stats[field] ?? FieldStat()
             #expect(
                 s.expected > 0 && s.composedOK == s.expected,
@@ -1153,6 +1154,9 @@ import Foundation
         let cfTs = expected["cf_treasury_stock"] as? [String: Any] ?? [:]
         check("cfTreasuryStock", exp: dbl(cfTs["current"]), act: actual.cfTreasuryStock)
 
+        let buyback = expected["share_buyback"] as? [String: Any] ?? [:]
+        check("shareBuyback", exp: dbl(buyback["current"]), act: actual.shareBuyback)
+
         let divSS = expected["dividend_ss"] as? [String: Any] ?? [:]
         check("dividendSS", exp: dbl(divSS["current"]), act: actual.dividendSS)
 
@@ -1203,6 +1207,7 @@ import Foundation
         case "interest_expense": return actual.interestExpense
         case "cf_treasury_stock": return actual.cfTreasuryStock
         case "dividend_ss": return actual.dividendSS
+        case "buyback": return actual.shareBuyback
         default: return nil
         }
     }
@@ -1233,8 +1238,10 @@ import Foundation
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let std = detectAccountingStandard(allTags)
         if std == "IFRS" {
+            // 注記の支払利息タグ（InterestExpensesIFRS 等）と TextBlock。空 FieldSet だと
+            // 数値タグを逃して文章パターンだけになり、smoke 期待値と不一致になる。
             let ie = InterestExpenseExtractor.extract(
-                fieldSet: [:], accountingStandard: std, xbrlDir: xbrlDir)
+                fieldSet: fieldSetFromDuration(allTags), accountingStandard: std, xbrlDir: xbrlDir)
             if let v = ie.current { out["interest_expense"] = v }
         }
         return out
@@ -1250,21 +1257,6 @@ import Foundation
             out["rd"] = v
         }
         return out
-    }
-
-    private func currentBuybackValue(xbrlDir: URL) -> Double? {
-        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let std = detectAccountingStandard(allTags)
-        var durationFS = fieldSetFromDuration(allTags)
-        if std == "US-GAAP" {
-            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
-        }
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
-        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
-        return ShareBuybackExtractor.extract(
-            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
-            accountingStandard: std
-        ).current
     }
 
     private func firstByLabel(_ items: [StatementLineItem], contains: String, excluding: [String] = []) -> Double? {

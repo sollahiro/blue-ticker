@@ -477,6 +477,8 @@ enum Xbrl {
         "InterestExpensesIFRS",
         "FinancialLiabilitiesMeasuredAtAmortizedCostInterestExpensesIFRS",
         "FinancialAssetsMeasuredAtAmortizedCostInterestExpensesIFRS",
+        // PL の金融費用。支払利息内訳が無いときの現行 Extractor 最終フォールバック。
+        // statement 正本では使わない（`StatementFinancialsResolver` が除外）。
         "FinanceCostsIFRS",
     ]
 

@@ -37,10 +37,38 @@ import Foundation
         #expect(result.method == "not_found")
     }
 
+    @Test func testCfTreasuryStockUsgaapAbsNegativeHtml() {
+        // CF HTML の △ は負値。financials はキャッシュアウト正。
+        let fs = makeFieldSet(("USGAAP_HTML_CFTreasuryStock", -16_000_000.0, nil))
+        let result = CfTreasuryStockExtractor.extract(fieldSet: fs, accountingStandard: "US-GAAP")
+        #expect(result.current == 16_000_000.0)
+        #expect(result.method == "usgaap_html")
+    }
+
     @Test func testCfTreasuryStockNotFound() {
         let result = CfTreasuryStockExtractor.extract(fieldSet: [:], accountingStandard: "J-GAAP")
         #expect(result.current == nil)
         #expect(result.method == "not_found")
+    }
+
+    // MARK: - ShareBuybackExtractor
+
+    @Test func testShareBuybackUsgaapAbsNegativeHtml() {
+        let fs = makeFieldSet(("USGAAP_HTML_CFTreasuryStock", -300_019_000_000.0, nil))
+        let result = ShareBuybackExtractor.extract(
+            fieldSet: fs, ncFieldSet: [:], equityAttributableFieldSet: [:],
+            accountingStandard: "US-GAAP")
+        #expect(result.current == 300_019_000_000.0)
+        #expect(result.method == "usgaap_html")
+    }
+
+    @Test func testShareBuybackJgaapNegatesSS() {
+        let fs = makeFieldSet(("PurchaseOfTreasuryStock", -1_227_000_000.0, nil))
+        let result = ShareBuybackExtractor.extract(
+            fieldSet: fs, ncFieldSet: [:], equityAttributableFieldSet: [:],
+            accountingStandard: "J-GAAP")
+        #expect(result.current == 1_227_000_000.0)
+        #expect(result.method == "ss_consolidated")
     }
 
     // MARK: - DividendSSExtractor
