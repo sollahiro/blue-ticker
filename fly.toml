@@ -26,4 +26,4 @@ primary_region = "nrt"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "2gb"               # XBRL パースがメモリを使うため 512mb/1gb より余裕を持たせる
+  memory = "512mb"             # serving 実測 RSS ~60MB。ingest はローカル（#34）
