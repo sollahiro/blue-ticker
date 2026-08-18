@@ -167,7 +167,8 @@ enum IncomeStatementExtractor {
         if Xbrl.ordinaryRevenueTags.contains(tag) { return "経常収益" }
         if Xbrl.operatingRevenueTags.contains(tag) { return "営業収益" }
         switch tag {
-        case "NetSalesIFRS", "RevenueIFRS", "RevenueIFRSSummaryOfBusinessResults", "Revenue":
+        case "NetSalesIFRS", "TotalNetRevenuesIFRS", "RevenueIFRS",
+            "RevenueIFRSSummaryOfBusinessResults", "Revenue":
             return "売上収益"
         case "NetSalesOfCompletedConstructionContractsCNS",
              "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults":
