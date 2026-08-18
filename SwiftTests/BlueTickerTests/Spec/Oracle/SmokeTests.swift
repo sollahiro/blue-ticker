@@ -136,6 +136,7 @@ import Foundation
         var inventory: Double?
         var accountsPayable: Double?
         var eps: Double?
+        var issuedShares: Double?
         var shareBuyback: Double?
     }
 
