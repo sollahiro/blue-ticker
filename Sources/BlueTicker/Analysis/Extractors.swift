@@ -585,6 +585,16 @@ enum IBDExtractor {
             result, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
     }
 
+    /// financials 組立が読む IBD。statement の有利子負債項目 ＋ statement に無い notes リース。
+    /// ingest 順に依存せず、同一 XBRL パスで statement を直接解決する（#10b / #8）。
+    static func extractCanonical(xbrlDir: URL) -> IBDResult {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        let instantFS = statementInstantFieldSet(
+            xbrlDir: xbrlDir, allTags: allTags, accountingStandard: std)
+        return extract(fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
+    }
+
     /// statement 側にリース科目が無いとき、notes のリース帳簿だけを足す。
     /// IFRS TextBlock / US-GAAP HTML で既に足している場合は components にリースがあるので何もしない。
     /// 明細表フォールバック（method=borrowings_schedule）は合計にリース込みのため呼ばない。
@@ -632,6 +642,69 @@ enum IBDExtractor {
             components.append((label: row.label, current: row.current, prior: row.prior))
         }
         return (hasCurrent ? currentTotal : nil, hasPrior ? priorTotal : nil, components)
+    }
+
+    /// statement BS だけを許可した Instant FieldSet。US-GAAP は Statement HTML の借入・リース行。
+    private static func statementInstantFieldSet(
+        xbrlDir: URL, allTags: XbrlTagElements, accountingStandard: String
+    ) -> FieldSet {
+        if accountingStandard == "US-GAAP" {
+            if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+                xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
+            ) {
+                let mapped = usgaapStatementIBDFieldSet(year.balanceSheet)
+                if mapped["USGAAP_HTML_IBDCurrent"] != nil
+                    || mapped["USGAAP_HTML_IBDNonCurrent"] != nil
+                {
+                    return mapped
+                }
+            }
+            return USGAAPHtml.parseBSFields(in: xbrlDir)
+        }
+        if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
+        ), !year.balanceSheet.isEmpty {
+            let statementTags = Set(year.balanceSheet.map(\.tag))
+            return fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
+        }
+        return fieldSetFromInstant(allTags)
+    }
+
+    private static let usgaapIBDLabelMap: [String: String] = [
+        "社債及び短期借入金": "USGAAP_HTML_IBDCurrent",
+        "社債及び長期借入金": "USGAAP_HTML_IBDNonCurrent",
+        "短期借入金及び１年以内に返済する長期債務合計": "USGAAP_HTML_IBDCurrent",
+        "Ⅱ　長期債務": "USGAAP_HTML_IBDNonCurrent",
+        "短期オペレーティング": "USGAAP_HTML_LeaseLiabilitiesCurrent",
+        "長期オペレーティング": "USGAAP_HTML_LeaseLiabilitiesNonCurrent",
+    ]
+
+    private static func usgaapStatementIBDFieldSet(_ items: [StatementLineItem]) -> FieldSet {
+        var fs: FieldSet = [:]
+        for item in items {
+            guard let label = item.label else { continue }
+            if let tag = bestMatchingUSGAAPIBDTag(label), fs[tag] == nil {
+                fs[tag] = FieldValue(current: item.value, prior: nil)
+            }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped == "長期債務", fs["USGAAP_HTML_IBDNonCurrent"] == nil {
+                fs["USGAAP_HTML_IBDNonCurrent"] = FieldValue(current: item.value, prior: nil)
+            }
+        }
+        return fs
+    }
+
+    private static func bestMatchingUSGAAPIBDTag(_ label: String) -> String? {
+        let stripped = USGAAPHtml.stripSectionPrefix(label)
+        var bestKey: String?
+        for key in usgaapIBDLabelMap.keys {
+            if stripped.contains(key) || label.contains(key) {
+                if bestKey == nil || key.count > bestKey!.count {
+                    bestKey = key
+                }
+            }
+        }
+        return bestKey.map { usgaapIBDLabelMap[$0]! }
     }
 
     /// 解決順: 直接法 → IFRS集約タグ → コンポーネント積み上げ → US-GAAP HTML仮想タグ。

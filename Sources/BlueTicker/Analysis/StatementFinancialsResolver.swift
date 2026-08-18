@@ -31,7 +31,7 @@ struct StatementFinancialsValues {
     var pretaxIncome: Double?
     var incomeTax: Double?
     var dividendSS: Double?
-    /// #8: IndividualAnalyzer はまだ Extractor 直読み。notes / breakdown フォールバックは組立層。
+    /// #8: IndividualAnalyzer 切替済。statement 行だけで取れる値。IFRS 支払利息の notes は組立層。
     var interestExpense: Double?
     var cfTreasuryStock: Double?
     var buyback: Double?

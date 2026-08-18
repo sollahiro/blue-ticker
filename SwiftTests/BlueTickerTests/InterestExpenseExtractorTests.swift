@@ -109,6 +109,30 @@ import Foundation
         }
     }
 
+    /// 組立の notes 支払利息は PL の FinanceCostsIFRS を使わない。
+    @Test func financialsCanonicalInterestExpenseIgnoresFinanceCosts() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:FinanceCostsIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">6000000000</jpifrs_cor:FinanceCostsIFRS>
+            <jpifrs_cor:InterestExpensesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">5000000000</jpifrs_cor:InterestExpensesIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: dir) == 5_000_000_000)
+        }
+        let financeOnly = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:FinanceCostsIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">6000000000</jpifrs_cor:FinanceCostsIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(financeOnly) { dir in
+            #expect(StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: dir) == nil)
+        }
+    }
+
     @Test func testInterestExpenseNoteTextblockFallback() {
         // IFRS: numeric タグがない場合、支払利息注記のテキストから取得する（トヨタ型）
         let xml = XBRLTestSupport.makeXbrlDuration("""

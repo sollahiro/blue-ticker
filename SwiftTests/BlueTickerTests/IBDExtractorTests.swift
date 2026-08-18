@@ -51,6 +51,23 @@ import Foundation
         }
     }
 
+    /// statement が無い合成 XBRL では全 Instant タグへフォールバックし、従来 extract と同じ合計になる。
+    @Test func extractCanonicalMatchesExtractWhenStatementIsAbsent() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:InterestBearingDebt contextRef="CurrentYearInstant"
+                unitRef="JPY">500000000000</jppfs_cor:InterestBearingDebt>
+            <jppfs_cor:InterestBearingDebt contextRef="Prior1YearInstant"
+                unitRef="JPY">450000000000</jppfs_cor:InterestBearingDebt>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let canonical = IBDExtractor.extractCanonical(xbrlDir: dir)
+            let full = extract(in: dir)
+            #expect(canonical.total == full.total)
+            #expect(canonical.priorTotal == full.priorTotal)
+            #expect(canonical.method == full.method)
+        }
+    }
+
     // MARK: - J-GAAP コンポーネント積み上げ
 
     @Test func testJgaapComponentsSumToTotalIBD() {

@@ -913,6 +913,19 @@ enum StatementNotesResolver {
         ).current
     }
 
+    /// IFRS 支払利息の notes 正本（`InterestExpensesIFRS` 等＋ TextBlock）。
+    /// PL の `FinanceCostsIFRS` は使わない。statement で取れた値は組立側が優先する。
+    static func financialsCanonicalInterestExpense(xbrlDir: URL) -> Double? {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        guard std == "IFRS" else { return nil }
+        var durationFS = fieldSetFromDuration(allTags)
+        durationFS["FinanceCostsIFRS"] = nil
+        return InterestExpenseExtractor.extract(
+            fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir
+        ).current
+    }
+
     /// 期末 Instant の離散 fact。連結 `CurrentYearInstant` を優先し、無ければ
     /// `CurrentYearInstant_NonConsolidatedMember`（資本金・資本準備金は親会社科目が多い）、
     /// さらに `CurrentYearInstant*` を辞書順で拾う。
