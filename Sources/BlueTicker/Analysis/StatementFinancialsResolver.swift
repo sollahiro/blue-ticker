@@ -274,11 +274,10 @@ enum StatementFinancialsResolver {
             incomeTax: resolveUSGAAPIncomeTax(year.incomeStatement)
                 ?? tax.incomeTax,
             dividendSS: resolveUSGAAPDividendSS(year.changesInEquity),
-            interestExpense: firstByLabel(year.incomeStatement, contains: "支払利息")
-                ?? firstByLabel(year.incomeStatement, contains: "利息費用"),
-            cfTreasuryStock: firstByLabel(year.cashFlow, contains: "自己株式"),
-            buyback: firstByLabel(year.changesInEquity, contains: "自己株式")
-                ?? firstByLabel(year.cashFlow, contains: "自己株式")
+            interestExpense: resolveUSGAAPInterestExpense(year.incomeStatement),
+            cfTreasuryStock: resolveUSGAAPTreasuryPurchase(year.cashFlow),
+            buyback: resolveUSGAAPTreasuryPurchase(year.changesInEquity)
+                ?? resolveUSGAAPTreasuryPurchase(year.cashFlow)
         )
     }
 
@@ -306,8 +305,12 @@ enum StatementFinancialsResolver {
                 cashFlow, contains: "投資活動によるキャッシュ・フロー",
                 excluding: ["期首", "期末", "明細"])
         let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        // PL の金融費用 (`FinanceCostsIFRS`) は支払利息ではない。現行 Extractor の最終
+        // フォールバック用で、statement 正本では使わない（味の素・クボタ・スズキは注記タグ）。
+        var ieFS = durationFS
+        ieFS["FinanceCostsIFRS"] = nil
         let ie = InterestExpenseExtractor.extract(
-            fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: nil)
+            fieldSet: ieFS, accountingStandard: accountingStandard, xbrlDir: nil)
         let cfTs = CfTreasuryStockExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard)
         let ncDurationFS = fieldSetFromNonConsolidatedDuration(maskedEquity)
@@ -410,6 +413,29 @@ enum StatementFinancialsResolver {
             return (current ?? 0) + (deferred ?? 0)
         }
         return nil
+    }
+
+    /// US-GAAP 支払利息。PL は △ 表示の負値。financials は費用の絶対値。
+    /// 「受取利息」「未払利息」は除外する（`USGAAPHtml.extractInterestExpense` と同じ）。
+    private static func resolveUSGAAPInterestExpense(_ items: [StatementLineItem]) -> Double? {
+        absIfPresent(
+            firstByLabel(items, contains: "支払利息", excluding: ["受取", "未払"])
+                ?? firstByLabel(items, contains: "利息費用", excluding: ["受取", "未払"]))
+    }
+
+    /// US-GAAP の自己株式取得（SS 合計列 / CF 財務）。△ は負。financials はキャッシュアウト正。
+    /// 「取得」を含む行だけを対象にし、売却のみの行は拾わない。
+    private static func resolveUSGAAPTreasuryPurchase(_ items: [StatementLineItem]) -> Double? {
+        for item in items {
+            let label = item.label ?? ""
+            guard label.contains("自己株式"), label.contains("取得") else { continue }
+            return abs(item.value)
+        }
+        return nil
+    }
+
+    private static func absIfPresent(_ value: Double?) -> Double? {
+        value.map { abs($0) }
     }
 
     /// US-GAAP の SS「当社株主への配当金」。合計列（純資産合計）に載る減少額は負。
