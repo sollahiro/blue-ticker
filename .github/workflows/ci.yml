@@ -28,12 +28,15 @@ jobs:
           # スモークテスト（SmokeTests / SegmentParityTests）が不足 XBRL を EDINET から
           # 自動取得するための鍵。未設定（fork からの PR 等）では自動的に SKIP される。
           BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
-        # StatelessHTTPServerTransport のハング緩和テストは、60秒の未完了タスクを
-        # 意図的に残すため、SmokeTests / SegmentParityTests と同一プロセスで並列実行すると
-        # macOS の協調スレッドプール競合でタイムアウト用 Task 自体が遅延しうる。
-        # 全テストから一度だけ除外し、軽い別プロセスで実行してテスト内容は維持する。
+        # 数分かかる XBRL スイート（SmokeTests / SegmentParityTests）と、60秒の未完了
+        # タスクを残すハング緩和テストを、残りの Vapor/SQLite テストと同一プロセスで
+        # 並列実行しない。協調スレッドプールが飽和すると MCP の withOperationTimeout
+        # が遅延し、DB テストが 200 秒タイムアウトや空の in-memory SQLite 接続を踏む
+        # （run 32125967324: MCPRouteTests 500、FilingSectionsIngestTests purged=0）。
+        # テスト内容は維持し、プロセスだけ分ける。
         run: |
-          swift test --skip StatelessTransportHangMitigationTests
+          swift test --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
+          swift test --filter 'SmokeTests|SegmentParityTests'
           swift test --filter StatelessTransportHangMitigationTests
 
   swift-linux:
@@ -77,12 +80,13 @@ jobs:
         # st_ctim 等がエラー化する（macOS は Darwin 経由で無傷）。swift-nio 修正までの一時措置。
         # 詳細: .agents/rules/project/dependencies.md / docs/operations.md
         #
-        # StatelessHTTPServerTransport のハング緩和テストは macOS と同じ理由で分離する。
-        # 60秒の未完了タスクを意図的に残すため、SmokeTests 等と同一プロセスで並列実行すると
-        # タイムアウト用 Task 自体が遅延し、elapsed < 45 が Linux でも flake する
-        # （run 32031247211: elapsed 160s）。テスト内容は維持する。
+        # 数分かかる XBRL スイートとハング緩和テストは macOS と同じ理由で分離する。
+        # 同一プロセス並列だとタイムアウト用 Task が遅延し、elapsed < 45 が Linux でも
+        # flake する（run 32031247211: elapsed 160s）。加えて MCP の 200 秒打ち切りと
+        # in-memory SQLite の接続分裂が起きる（run 32125967324）。テスト内容は維持する。
         run: |
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter 'SmokeTests|SegmentParityTests'
           swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
 
   repo-invariants:
