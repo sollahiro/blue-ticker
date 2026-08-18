@@ -26,4 +26,4 @@ primary_region = "nrt"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "1gb"               # serving は Neon read。ingest はローカル（#34: Fly 2–4GB でも OOM）
+  memory = "512mb"             # serving 実測 RSS ~60MB。ingest はローカル（#34）
