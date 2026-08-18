@@ -10,7 +10,7 @@
 | CLI | 配布 `ticker` / 開発 `TickerDev` 廃止。運用・検証は `blt-server` sync/ingest と `/v1` |
 | sync | 稼働・日次増分 |
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
-| financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`。`fin-v6` は IBD の notes リース欠測埋め。GP/SGA/CFO/CFI/税/dividend_ss は statement 正本へ IA 切替済。組立完成は次世代 |
+| financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`。`fin-v6` は IBD の notes リース欠測埋め。`fin-v7` は GP/SGA/CFO/CFI/税/dividend_ss の statement 正本切替。組立完成は次世代 |
 | breakdowns | business/geography は上場全体（日経225は処理順優先）。employees/rd/goodwill は日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
 | statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes はコード配線済・本番 ingest 未 |
 | 定期ジョブ | ローカル launchd。Fly は read 専用（ingest は OOM のためローカル） |
@@ -24,7 +24,7 @@
 - Core はサーバー専用にしない（テスト・ingest 計算と共有）。
 - オンデマンド ingest（404→202＋キュー）は設計あり・未実装（公開スキーマ追加のため着手前確認）。
 - 第三者公開（段階 B）と x402 は `public-api.md`。機能マトリクス・提供面は `feature-tiers.md`（機能単位の有料マスクは採らない）。
-- Summary の次世代は **Statement / Note / Breakdown → financials** 組立。IBD の notes リース欠測埋めは `fin-v6`。GP/SGA/CFO/CFI/税/dividend_ss は statement 正本へ切替済。組立完成の切替は次世代。Waterfall も同行走査のため同じ切替に乗る。
+- Summary の次世代は **Statement / Note / Breakdown → financials** 組立。IBD の notes リース欠測埋めは `fin-v6`。GP/SGA/CFO/CFI/税/dividend_ss の statement 切替は `fin-v7`。組立完成の切替は次世代。Waterfall も同行走査のため同じ切替に乗る。
 
 read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かない）。床の引き上げは旧版 stale 消化後。
 
