@@ -145,36 +145,35 @@ import Foundation
         var durationFS = fieldSetFromDuration(allTags)
         var instantFS = fieldSetFromInstant(allTags)
 
-        // US-GAAP: 未移行フィールド（GP/SGA/IBD/税等）用に USGAAPHtml 仮想タグを注入。
-        // 本表水準値（#5）は statement 正本のみ（#5b-1: 旧 Extractor フォールバックなし）。
+        // US-GAAP: 未移行 Extractor（IBD / 利息 / buyback / cf_treasury_stock）用に USGAAPHtml 仮想タグを注入。
+        // 本表水準値（#5 / #5b-1 / #5c）は statement 正本のみ（旧 Extractor フォールバックなし）。
         if std == "US-GAAP" {
             for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
             for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
         }
 
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let cf  = CashFlowExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let gp  = GrossProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
-        let op  = OperatingProfitExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
         let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
-        let tax = TaxExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std)
         let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
         let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
-        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
         let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let divSS = DividendSSExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: std)
+        let pretax = statementMain?.pretaxIncome
+        let incomeTax = statementMain?.incomeTax
+        let taxRate: Double? = {
+            guard let pretax, let incomeTax, pretax != 0 else { return nil }
+            return incomeTax / pretax
+        }()
 
         return Extracted(
             sales:                  statementMain?.sales,
             operatingProfit:        statementMain?.operatingProfit,
             netProfit:              statementMain?.netProfit,
             accountingStandard:     std,
-            grossProfit:            gp.grossProfit,
-            sga:                    op.sga,
-            cfo:                    cf.cfo,
-            cfi:                    cf.cfi,
+            grossProfit:            statementMain?.grossProfit,
+            sga:                    statementMain?.sga,
+            cfo:                    statementMain?.cfo,
+            cfi:                    statementMain?.cfi,
             totalAssets:            statementMain?.totalAssets,
             currentAssets:          statementMain?.currentAssets,
             nonCurrentAssets:       statementMain?.nonCurrentAssets,
@@ -182,9 +181,9 @@ import Foundation
             nonCurrentLiabilities:  statementMain?.nonCurrentLiabilities,
             netAssets:              statementMain?.netAssets,
             ibdTotal:               ibd.total,
-            pretaxIncome:           tax.pretaxIncome,
-            incomeTax:              tax.incomeTax,
-            effectiveTaxRate:       tax.effectiveTaxRate,
+            pretaxIncome:           pretax,
+            incomeTax:              incomeTax,
+            effectiveTaxRate:       taxRate,
             ppeTotal:               statementMain?.ppeTotal,
             capex:                  StatementNotesResolver.financialsCanonicalCapex(
                 xbrlDir: xbrlDir, accountingStandard: std),
@@ -193,7 +192,7 @@ import Foundation
             cashEq:                 statementMain?.cashEquivalents,
             interestExpense:        ie.current,
             cfTreasuryStock:        cfTs.current,
-            dividendSS:             divSS.current,
+            dividendSS:             statementMain?.dividendSS,
             dividendPaidCF:         statementMain?.dividendPaidCF,
             accountsReceivable:     statementMain?.accountsReceivable,
             inventory:              statementMain?.inventory,
@@ -204,7 +203,7 @@ import Foundation
     }
 
     /// financials 組立の本表水準値が statement 正本のみから取れることを smoke 11 社で回帰する
-    ///（タスク #5 / #5b-1。旧 Extractor フォールバックなし）。
+    ///（タスク #5 / #5b-1 / #5c。旧 Extractor フォールバックなし）。
     @Test func testFinancialsPassthroughMatchesStatementCanonical() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
@@ -297,9 +296,23 @@ import Foundation
                 "sga", expected: dbl((expected["sga"] as? [String: Any])?["current"]),
                 actual: statement.sga)
             assertRequired(
+                "cfo", expected: dbl((expected["cash_flow"] as? [String: Any])?["cfo"]),
+                actual: statement.cfo)
+            assertRequired(
+                "cfi", expected: dbl((expected["cash_flow"] as? [String: Any])?["cfi"]),
+                actual: statement.cfi)
+            assertRequired(
                 "pretax_income",
                 expected: dbl((expected["tax_expense"] as? [String: Any])?["pretax_income"]),
                 actual: statement.pretaxIncome)
+            assertRequired(
+                "income_tax",
+                expected: dbl((expected["tax_expense"] as? [String: Any])?["income_tax"]),
+                actual: statement.incomeTax)
+            assertRequired(
+                "dividend_ss",
+                expected: dbl((expected["dividend_ss"] as? [String: Any])?["current"]),
+                actual: statement.dividendSS)
             checked += 1
         }
 
