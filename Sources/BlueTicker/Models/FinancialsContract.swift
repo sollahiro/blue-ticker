@@ -494,30 +494,22 @@ extension FinancialsResponse {
         return result
     }
 
-    /// 指定 docID の年度エントリの売上高（円）。public: 内訳取り込み（BltServerCore）が事業別内訳の分母
-    /// （連結外部売上）を 財務取り込み の計算済み結果から再利用するために使う（自前で XBRL から
-    /// 再抽出しない。重複ロジック回避）。`years[].sales` は `unit`（百万円）建てのため、内訳取り込み の
-    /// 正規化器が期待する円単位へここで変換する。該当年度が無ければ nil。
+    /// 指定 docID の年度エントリの売上高（円）。`years[].sales` は `unit`（百万円）建てのため円へ変換。
     public func salesForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.sales.map { $0 * Financial.millionYen }
     }
 
     /// 当該 docID の年次エントリがあるか（売上の有無は問わない）。
-    /// 内訳取り込み が「財務取り込み 未計算」と「計算済みだが売上抽出不能」を分けるために使う。
     public func hasDoc(_ docID: String) -> Bool {
         years.contains { $0.docId == docID }
     }
 
-    /// 指定 docID の従業員数（全社合計・人）。内訳取り込み の employees 軸が分母（全社合計）として
-    /// 再利用するために使う（`salesForDoc` と同型、重複ロジック回避。2026-08-01 監査指摘対応）。
-    /// `years[].employees` は `Int?` のためここで `Double` へ変換する。
+    /// 指定 docID の従業員数（全社合計・人）。`years[].employees` は `Int?` のため `Double` へ変換。
     public func employeesForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.employees.map(Double.init)
     }
 
-    /// 指定 docID の研究開発費（円、連結・全社合計）。内訳取り込み research_and_development 軸の
-    /// 分母（全社合計＝当該軸の正本の合計側）として再利用する。
-    /// `years[].rd` は百万円建てのため円へ変換する。
+    /// 指定 docID の研究開発費（円、連結・全社合計）。`years[].rd` は百万円建てのため円へ変換。
     public func rdForDoc(_ docID: String) -> Double? {
         years.first { $0.docId == docID }?.rd.map { $0 * Financial.millionYen }
     }
