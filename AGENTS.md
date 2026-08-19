@@ -67,6 +67,19 @@ curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=1'
 - **接続**: 使い捨て＝`BLT_NEON_DISPOSABLE_DATABASE_URL`（手元では `DATABASE_URL` に束ねる）、本番 read＝`BLT_NEON_RO_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。`DATABASE_URL` はプロセスが読む接続スロットのみ。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
 - **訂正有報 (130)**: 自動マージしない。手動確認し、見た docID は原本準拠でも Git に残す（`.agents/rules/project/amendments.md`）。不審フラグと同じく手動 ingest（段階 3・8）。
 
+## 定期 ingest（ローカル Mac）
+
+Fly は read 専用。本番 write ingest は手元から Neon へ。**stage 分割・実行順・R2 温め**は `docs/ingest-policy.md`。
+
+| 種別 | 置き場 | Git |
+|---|---|---|
+| 正本ジョブ | `scripts/jp/edinet/ingest-common.sh` · `ingest-job-*.sh` · `ingest-run-cycle.sh` | 管理する |
+| 手元チューニング | `scripts/jp/edinet/ingest.local.env`（limit / skip / write / pause） | **ignore**（雛形 `ingest.local.env.example`） |
+| 手元ラッパー | `scripts/jp/edinet/*.local.sh` · `scripts/jp/edinet/local/` | **ignore**（雛形 `*.local.example.sh`） |
+| launchd | `scripts/launchd/` · `scripts/blt-scheduled-sync.sh` | **ignore** |
+
+**limit 変更は PR 不要**。件数・skip・write は `ingest.local.env` を手元で編集する（`ingest-common.sh` が自動 load）。ラッパーは `.env` 読込と exec のみ。launchd / cron は `.local.sh` を呼ぶ。
+
 ## 監査レビューとモデル分担
 
 大幅変更・リファクタ・効率化の後は、実装セッション以外の主体に監査させ是々非々で判断する（単一ファイルでも対象）。
