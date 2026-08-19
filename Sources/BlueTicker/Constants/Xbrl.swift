@@ -110,7 +110,9 @@ enum Xbrl {
     /// HTML ラベルは「１株当たり株主資本」）。IFRS企業の「1株当たり親会社株主持分」相当値は
     /// `EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名は誤りだが `unitRef=JPYPerShares`
     /// で実体が判別できる、実データ確認済み: 日立 S100QZT0「１株当たり親会社株主持分」ラベルと
-    /// 完全一致）に格納されており、別途 `unitRef` を見て判定する（`resolveEquityPerShareIFRS`）。
+    /// 完全一致）に格納されており、別途 `unitRef` を見て判定する（`resolveEquityPerShareIFRSMislabeled`）。
+    /// IFRS 移行年度は日本基準比較表に本タグの CurrentYearInstant が残るため、IFRS の
+    /// `JPYPerShares` fact があるときはそちらを先に取る（スズキ S100W4MT）。
     static let netAssetsPerShareTags: [String] = [
         "NetAssetsPerShareSummaryOfBusinessResults",
     ]

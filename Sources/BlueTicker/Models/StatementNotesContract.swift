@@ -53,7 +53,9 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
 /// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
-public let perShareInformationNoteCacheVersion = "notes-eps-v2"
+/// v2: EPS 抽出。v3（2026-08-19）: IFRS の `JPYPerShares` BPS を日本基準
+/// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
+public let perShareInformationNoteCacheVersion = "notes-eps-v3"
 public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
 public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"

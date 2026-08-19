@@ -309,8 +309,8 @@
       },
       {
         "tag": "bps",
-        "label": "１株当たり純資産額",
-        "value": 1404.09,
+        "label": "１株当たり親会社株主持分",
+        "value": 1539.78,
         "unit": "yen_per_share",
         "order": null,
         "section": null,
