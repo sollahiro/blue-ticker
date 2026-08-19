@@ -39,7 +39,7 @@ XBRL → statement / notes / breakdown（正本）
 | 組立 | statement → notes → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ** |
 | IBD | 有利子負債の**項目タグを合算**する。statement にある項目（内訳でも「社債及び借入金」のような集約でも、BS の粒度）を使う。その上に notes の内訳を足さない（二重計上）。statement に無い項目は notes のタグを足してよい（典型はリース帳簿。`borrowings_schedule` 区分 / `lease_liabilities`）。notes の合計行で IBD 全体を置き換えない。金融負債そのものは使わない（味の素: その他の金融負債 ≠ リース帳簿） |
 | employees / rd | breakdown 軸の分母。financials はパススルー。PL 行は使わない |
-| ingest 依存 | 順序変更は採らない。**同一 XBRL パスで resolver 直接呼び（#10b）** |
+| ingest 依存 | 順序変更は採らない。**同一 XBRL パスで resolver 直接呼び（#10b）**。正本 `cache_version` が変わったら `assembly_fingerprint` 不一致で financials を再組立する（#11。`fin-vN` は上げない） |
 
 正本の原則: 水準値は正本 resolver の結果。statement は XBRL タグ（US-GAAP 本表は `USGAAPStatementHtml`）。notes の表パースは notes 側。financials は選んで渡すだけ。
 
@@ -72,7 +72,6 @@ XBRL → statement / notes / breakdown（正本）
 
 | # | 内容 |
 |---|---|
-| 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
 | 13+ | 明細整理・Sankey・契約露出変更は後回し |
 
@@ -89,6 +88,7 @@ XBRL → statement / notes / breakdown（正本）
 | 用途 | パス |
 |---|---|
 | 正本索引 | `Models/FinancialsContract.swift`（`フィールド正本`） |
+| 組立指紋 | `financialsAssemblyFingerprint`（`company_financials.assembly_fingerprint`。#11） |
 | 組立 | `Services/IndividualAnalyzer.swift` |
 | statement パススルー | `Analysis/StatementFinancialsResolver.swift` |
 | IBD 組立 | `IBDExtractor.extractCanonical` |

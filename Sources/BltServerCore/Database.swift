@@ -42,6 +42,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyHalfFinancials())
     // 財務取り込み: high-water 鮮度トリガー列の追加（issue #26）。
     app.migrations.add(AddHighWaterToCompanyFinancials())
+    // 財務取り込み: 正本 cache_version 指紋（タスク #11。fin-vN 非連動の再組立トリガ）。
+    app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
     // 有報セクション取り込み: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
     // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。

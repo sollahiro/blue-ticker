@@ -24,6 +24,7 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     var response: FinancialsResponse
 
     /// 計算時の companyFinancialsCacheVersion。読込時に照合し、不一致なら再計算する（derived キャッシュ）。
+    /// 正本抽出世代のずれは `assemblyFingerprint` で見る（`fin-vN` とは独立）。
     @Field(key: "cache_version")
     var cacheVersion: String
 
@@ -36,6 +37,12 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     /// 既存行は NULL（マイグレーション後の初回 ingest で一度だけ再計算される）。
     @OptionalField(key: "high_water")
     var highWater: String?
+
+    /// 組立時の正本 `cache_version` 指紋（`financialsAssemblyFingerprint`）。
+    /// statement / notes / breakdown の抽出世代が変わったら `fin-vN` を上げなくても再組立する。
+    /// マイグレーションは既存行を現行指紋で埋める（この列追加だけでは全件再計算しない）。
+    @OptionalField(key: "assembly_fingerprint")
+    var assemblyFingerprint: String?
 
     /// 最終更新時刻（計算・upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)

@@ -20,6 +20,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         // AddHighWaterToCompanyFinancials は両テーブルを触るため、half 側も作っておく。
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
+        app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -100,7 +101,8 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             #expect(summary.skipped == 0)
             #expect(summary.failed == 0)
             #expect(try await CompanyFinancials.query(on: app.db).count() == 2)
-            #expect(try await CompanyFinancials.find("7203", on: app.db) != nil)
+            let toyota = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(toyota.assemblyFingerprint == financialsAssemblyFingerprint())
             #expect(try await CompanyFinancials.find("6758", on: app.db) != nil)
         }
     }
@@ -218,6 +220,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 6
             pre.highWater = "2025-06-20 09:00"  // seedDocument のデフォルト submitDateTime と一致
+            pre.assemblyFingerprint = financialsAssemblyFingerprint()
             try await pre.create(on: app.db)
 
             let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
@@ -244,6 +247,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-20 09:00"
+            pre.assemblyFingerprint = financialsAssemblyFingerprint()
             try await pre.create(on: app.db)
 
             let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
@@ -296,6 +300,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             pre.cacheVersion = companyFinancialsCacheVersion
             pre.requestedYears = 5
             pre.highWater = "2025-06-01 09:00"
+            pre.assemblyFingerprint = financialsAssemblyFingerprint()
             try await pre.create(on: app.db)
 
             // 四半期報告書(140)は 財務取り込み の消費種別（120/130）に含まれないため、
@@ -376,7 +381,94 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             #expect(summary.stored == 1)
             let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
             #expect(row.cacheVersion == companyFinancialsCacheVersion)
+            #expect(row.assemblyFingerprint == financialsAssemblyFingerprint())
             #expect(try await CompanyFinancials.query(on: app.db).count() == 1)
+        }
+    }
+
+    // MARK: - 正本組立指紋（タスク #11）
+
+    @Test func ingestRecomputesWhenAssemblyFingerprintMismatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            let stale = CompanyFinancials()
+            stale.id = "7203"
+            stale.response = try makeResponse(code: "7203", years: 6)
+            stale.cacheVersion = companyFinancialsCacheVersion
+            stale.requestedYears = 6
+            stale.highWater = "2025-06-20 09:00"
+            stale.assemblyFingerprint = "statement-v0|stale-canonical"
+            try await stale.create(on: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.assemblyFingerprint == financialsAssemblyFingerprint())
+        }
+    }
+
+    @Test func ingestRecomputesWhenAssemblyFingerprintIsMissing() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            let stale = CompanyFinancials()
+            stale.id = "7203"
+            stale.response = try makeResponse(code: "7203", years: 6)
+            stale.cacheVersion = companyFinancialsCacheVersion
+            stale.requestedYears = 6
+            stale.highWater = "2025-06-20 09:00"
+            try await stale.create(on: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.assemblyFingerprint == financialsAssemblyFingerprint())
+        }
+    }
+
+    @Test func ingestSkipsWhenAssemblyFingerprintMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = try makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-20 09:00"
+            pre.assemblyFingerprint = financialsAssemblyFingerprint()
+            try await pre.create(on: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run when assembly fingerprint matches")
+                return fakeSuccess(code: "x", years: 5)
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+        }
+    }
+
+    /// 正本指紋のずれは ingest 再組立対象だが、read 床は fin-vN のまま（再計算待ちでも 200）。
+    @Test func loadStoredFinancialsAcceptsStaleAssemblyFingerprint() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyFinancials()
+            row.id = "7203"
+            row.response = try makeResponse(code: "7203", years: 6)
+            row.cacheVersion = companyFinancialsCacheVersion
+            row.requestedYears = 6
+            row.assemblyFingerprint = "statement-v0|stale-canonical"
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredFinancials(code: "7203", years: 3, db: app.db))
+            #expect(json["code"] as? String == "7203")
         }
     }
 
@@ -424,6 +516,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             #expect(row.cacheVersion == companyFinancialsCacheVersion)
             #expect(row.requestedYears == 5)
             #expect(row.highWater == "2025-06-20 09:00")
+            #expect(row.assemblyFingerprint == financialsAssemblyFingerprint())
             #expect(row.response.yearCount == 0)
         }
     }

@@ -41,6 +41,31 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
     return n >= companyFinancialsMinServableVersion
 }
 
+// MARK: - 正本組立指紋（タスク #11）
+
+/// `company_financials` 組立が読む正本の現行 `cache_version` を固定順で連結した指紋。
+/// statement / notes / breakdown の抽出世代が変わったら `fin-vN` を上げなくても再組立する。
+/// IA 配線だけの変更では指紋も `fin-vN` も変えない。
+///
+/// 対象は Summary 水準値が実際に読む正本だけ（PPE / goodwill 明細、business / geography 軸は含めない）。
+public func financialsAssemblyFingerprint() -> String {
+    [
+        statementCacheVersion,
+        perShareInformationNoteCacheVersion,
+        issuedSharesAndCapitalNoteCacheVersion,
+        capitalExpendituresOverviewNoteCacheVersion,
+        borrowingsScheduleNoteCacheVersion,
+        leaseLiabilitiesNoteCacheVersion,
+        employeesBreakdownCacheVersion,
+        researchAndDevelopmentBreakdownCacheVersion,
+    ].joined(separator: "|")
+}
+
+/// 格納指紋が現行組立と一致するか。列導入前の NULL は不一致（再組立対象）。
+public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
+    stored == financialsAssemblyFingerprint()
+}
+
 // MARK: - フィールド正本（Summary 水準値の source 表、タスク #4）
 //
 // **正本抽出の原則**: Summary 生値は statement / notes / breakdown のみ。

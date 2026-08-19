@@ -75,6 +75,24 @@ import Testing
         #expect(Api.financialsSchemaVersion == 2)
     }
 
+    @Test func assemblyFingerprintJoinsCanonicalVersionsInFixedOrder() {
+        let fingerprint = financialsAssemblyFingerprint()
+        let parts = fingerprint.split(separator: "|").map(String.init)
+        #expect(parts == [
+            statementCacheVersion,
+            perShareInformationNoteCacheVersion,
+            issuedSharesAndCapitalNoteCacheVersion,
+            capitalExpendituresOverviewNoteCacheVersion,
+            borrowingsScheduleNoteCacheVersion,
+            leaseLiabilitiesNoteCacheVersion,
+            employeesBreakdownCacheVersion,
+            researchAndDevelopmentBreakdownCacheVersion,
+        ])
+        #expect(isCurrentFinancialsAssemblyFingerprint(fingerprint))
+        #expect(isCurrentFinancialsAssemblyFingerprint(nil) == false)
+        #expect(isCurrentFinancialsAssemblyFingerprint("statement-v0") == false)
+    }
+
     // MARK: - Summary / Waterfall の境界（docs/feature-tiers.md）
 
     private func twoYearResult() throws -> MetricsResult {
