@@ -64,6 +64,8 @@ import Testing
         #expect(y["fy_end"] as? String == "2025-03")
         #expect(y["financial_period"] as? String == "FY")
         #expect(y.keys.contains("sales"))
+        #expect(y.keys.contains("eps"))
+        #expect(y.keys.contains("bps"))
         #expect(y.keys.contains("roe"))
         #expect(y.keys.contains("ccc"))
         #expect(y["RawData"] == nil)  // ネスト構造ではない

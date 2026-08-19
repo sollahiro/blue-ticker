@@ -893,6 +893,15 @@ enum StatementNotesResolver {
         return payload.items?.first(where: { $0.tag == "eps" })?.value
     }
 
+    /// `company_financials` 組立が読む BPS。正本は `per_share_information` note（`tag == "bps"`）。
+    /// ingest 順序に依存せず、同一 XBRL パス内で `resolvePerShareInformation` を直接呼ぶ（#10b）。
+    static func financialsCanonicalBps(xbrlDir: URL) -> Double? {
+        guard case .resolved(let payload, _, _) = resolvePerShareInformation(xbrlDir: xbrlDir) else {
+            return nil
+        }
+        return payload.items?.first(where: { $0.tag == "bps" })?.value
+    }
+
     /// `company_financials` 組立が読む発行済株式数。正本は `issued_shares_and_capital` note の
     /// `as_of_period_end.issued_shares`（イベント表の期末残高ではない）。
     static func financialsCanonicalIssuedShares(xbrlDir: URL) -> Double? {

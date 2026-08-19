@@ -135,6 +135,7 @@ struct IndividualAnalyzer {
         raw.salesLabel = statementMain?.salesLabel
         raw.cashEq = statementMain?.cashEquivalents.map { $0 / millionYen }
         raw.eps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
+        raw.bps = StatementNotesResolver.financialsCanonicalBps(xbrlDir: xbrlDir)
         raw.shOutFY = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
 
         var calc = CalculatedData()
