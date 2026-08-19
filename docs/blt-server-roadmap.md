@@ -12,8 +12,8 @@
 | facts | スキーマあり・取り込み停止中（Neon 容量。`--with-facts` で再開可） |
 | financials / filing-sections | バックフィル継続。現行版・read 床は `versioning.md`。`fin-v6` は IBD の notes リース欠測埋め。`fin-v7` は US-GAAP 自己株式取得の絶対値。`fin-v8` は IFRS `TotalNetRevenuesIFRS` を売上候補に追加。`fin-v9` は Summary に BPS（notes `per_share_information`）。Summary 水準値は statement / notes / breakdown 組立へ IA 切替済（値不変の配線ではバンプなし） |
 | breakdowns | business/geography は上場全体（日経225は処理順優先）。employees/rd/goodwill は日経225。business/geography 公開済。employees/rd は軸あり未公開。goodwill は Stage1（ingest/REST 未配線） |
-| statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes はコード配線済・本番 ingest 未 |
-| 定期ジョブ | ローカル launchd。Fly は read 専用（ingest は OOM のためローカル） |
+| statements | 日経225。DB/ingest/REST/MCP 済（`statement-v1`）。notes は225で部分 ingest 済（詳細 `ingest-policy.md`） |
+| 定期ジョブ | ローカル launchd（`scripts/jp/edinet/ingest-job-*.sh`）。Fly は read 専用（ingest は OOM のためローカル） |
 | MCP | `POST /` 埋め込み。Managed OAuth は `mcp.*`（当面 Apps in ChatGPT 専用） |
 
 カバレッジ確認例: `SELECT cache_version, count(*) FROM company_financials GROUP BY 1`。
@@ -65,4 +65,4 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) facts 
 
 ## 関連
 
-`architecture.md` · `eu-esef-roadmap.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `operations.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `feature-tiers.md` · `.agents/rules/project/versioning.md`
+`architecture.md` · `eu-esef-roadmap.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `deploy.md` · `ingest-policy.md` · `operations.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `feature-tiers.md` · `.agents/rules/project/versioning.md`

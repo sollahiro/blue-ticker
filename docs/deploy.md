@@ -85,23 +85,21 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 ## 定期同期（ローカル）
 
-重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。
+重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。**ジョブ編成・実行順**は `ingest-policy.md`。**limit / skip / write** は `scripts/jp/edinet/ingest.local.env`（gitignore。PR 不要）。
 
 ```bash
-swift build -c release --product blt-server   # コード変更後は必須（旧バイナリは新 stage を黙って飛ばす）
-# .env は `.env.example` をコピー（Neon / EDINET / LLM / R2。正本の禁止事項は AGENTS.md「Neon Secrets」）
-set -a; . ./.env; set +a
-./.build/release/blt-server sync
-# 手元の既定は disposable（.env で DATABASE_URL に束ねる）。本番 WRITE へ書くときはコマンド単位で上書き（.env の DATABASE_URL は差し替えない）:
-# DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
-./.build/release/blt-server ingest --stages breakdowns,statements --limit 80
+swift build -c release --product blt-server
+cp scripts/jp/edinet/ingest.local.env.example scripts/jp/edinet/ingest.local.env
+cp scripts/jp/edinet/ingest-run-cycle.local.example.sh \
+   scripts/jp/edinet/ingest-run-cycle.local.sh
+chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
+# ingest.local.env で件数・skip を編集 → launchd / 手動
+./scripts/jp/edinet/ingest-run-cycle.local.sh
 ```
 
-件数・timeout・起動間隔は手元。完走優先で小さく。employees/rd/goodwill は ingest 側で 30・日経225固定。ジョブ末尾で `scripts/generate-status-page.sh`。NEON_* が揃っていれば `scripts/neon-reset-ro-from-parent.sh`（失敗しても ingest 成否には影響させない）。
+`.env` は秘密・接続先、`ingest.local.env` は運用チューニング。employees/rd/goodwill は ingest 側で 30/回・日経225固定。
 
-`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカル XBRL 展開済みを先に回す。
-
-ジョブ末尾で status ページ再生成（失敗しても ingest 成否に影響しない）。
+`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。
 
 ## EDINET マスタ CSV
 

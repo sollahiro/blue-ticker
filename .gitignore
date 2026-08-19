@@ -30,10 +30,14 @@ mebuki_startup.log
 .env.local
 .env.*.local
 
-# Machine-local ingest schedule (launchd). CLI が正本。
+# Machine-local ingest schedule and wrappers (launchd/cron が呼ぶ実体).
+# 正本ジョブは scripts/jp/edinet/ingest-job-*.sh（Git 管理）。雛形は *.local.example.sh。
 /scripts/blt-scheduled-sync.sh
 /scripts/install-launchd.sh
 /scripts/launchd/
+/scripts/jp/edinet/*.local.sh
+/scripts/jp/edinet/local/
+/scripts/jp/edinet/ingest.local.env
 
 # Temporary files
 *_dump_*.json
