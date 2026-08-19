@@ -389,6 +389,35 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
+    @Test func demoFinancialsHonorsYearsQueryLikeMainFinancialsRoute() async throws {
+        try await withApp(databases: true) { app in
+            let breakdown = CompanyBreakdown(docID: "S100VWVY", axis: breakdownAxisBusiness)
+            breakdown.code = "7203"
+            breakdown.submitDateTime = "2025-06-20 09:00"
+            breakdown.payload = BreakdownSnapshotPayload(
+                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+            breakdown.needsReview = false
+            breakdown.source = "xbrl_facts"
+            breakdown.contentHash = ""
+            breakdown.cacheVersion = businessBreakdownCacheVersion
+            try await breakdown.create(on: app.db)
+
+            let financials = CompanyFinancials()
+            financials.id = "7203"
+            financials.response = try makeDemoFinancialsResponse(code: "7203", years: 5)
+            financials.cacheVersion = companyFinancialsCacheVersion
+            financials.requestedYears = 5
+            financials.highWater = "2025-06-20 09:00"
+            try await financials.create(on: app.db)
+
+            let (status, json) = try await send(app, "/v1/demo/companies/7203/financials?years=1")
+            #expect(status == .ok)
+            let years = try #require(json?["years"] as? [[String: Any]])
+            #expect(years.count == 1)
+        }
+    }
+
     @Test func demoCompaniesReturnsEmptyArrayWhenQueryMissing() async throws {
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/demo/companies")

@@ -269,12 +269,13 @@ func registerRoutes(
         }
     }
 
-    // GET /v1/demo/companies/{code}/financials
+    // GET /v1/demo/companies/{code}/financials?years=5
     // sollahiro.com/demo の実データ検索専用。company_breakdowns に格納済みの銘柄（上記と同じ
     // 母集団）限定で通期財務サマリーを返す。半期は対象外。中身は既存 /v1/companies/{code}/financials
-    // と同じ格納データ・同じ既定年数（serveStoredFinancials を再利用、ロジックの二重化はしない）。
+    // と同じ格納データを返し、years クエリ（省略時既定値）にも対応する。
     demo.get("demo", "companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         guard dbAvailable else {
             return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
         }
@@ -287,7 +288,7 @@ func registerRoutes(
         }
         return makeStoredDataResponse(
             await serveStoredFinancials(
-                code: code, years: Api.financialsYearsDefault, db: req.db, logger: req.logger),
+                code: code, years: years, db: req.db, logger: req.logger),
             notFoundMessage: "財務データは未集計です")
     }
 }
