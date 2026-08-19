@@ -143,27 +143,8 @@ import Foundation
     private func extractFromXBRL(xbrlDir: URL) -> Extracted {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let std = detectAccountingStandard(allTags)
-        var durationFS = fieldSetFromDuration(allTags)
-        var instantFS = fieldSetFromInstant(allTags)
-
-        // US-GAAP: 未移行 Extractor（IBD / 利息 / buyback / cf_treasury_stock）用に USGAAPHtml 仮想タグを注入。
-        // 本表水準値（#5 / #5b-1 / #5c）は statement 正本のみ（旧 Extractor フォールバックなし）。
-        if std == "US-GAAP" {
-            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
-            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
-        }
-
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: std, xbrlDir: xbrlDir)
-        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags)
-        let ie  = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir)
-        let rd  = RDExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: std)
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTags)
-        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTags)
-        let buyback = ShareBuybackExtractor.extract(
-            fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS,
-            accountingStandard: std)
+        let ibd = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
         let pretax = statementMain?.pretaxIncome
         let incomeTax = statementMain?.incomeTax
         let taxRate: Double? = {
@@ -193,11 +174,12 @@ import Foundation
             ppeTotal:               statementMain?.ppeTotal,
             capex:                  StatementNotesResolver.financialsCanonicalCapex(
                 xbrlDir: xbrlDir, accountingStandard: std),
-            rd:                     rd.current,
-            employees:              emp.current,
+            rd:                     BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir),
+            employees:              BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir),
             cashEq:                 statementMain?.cashEquivalents,
-            interestExpense:        ie.current,
-            cfTreasuryStock:        cfTs.current,
+            interestExpense:        statementMain?.interestExpense
+                ?? StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir),
+            cfTreasuryStock:        statementMain?.cfTreasuryStock,
             dividendSS:             statementMain?.dividendSS,
             dividendPaidCF:         statementMain?.dividendPaidCF,
             accountsReceivable:     statementMain?.accountsReceivable,
@@ -205,12 +187,12 @@ import Foundation
             accountsPayable:        statementMain?.accountsPayable,
             eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
             issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir),
-            shareBuyback:           buyback.current
+            shareBuyback:           statementMain?.buyback
         )
     }
 
     /// financials 組立の本表水準値が statement 正本のみから取れることを smoke 11 社で回帰する
-    ///（タスク #5 / #5b-1 / #5c。旧 Extractor フォールバックなし）。
+    ///（タスク #5 / #5b-1 / #5c / #8。旧 Extractor フォールバックなし）。
     @Test func testFinancialsPassthroughMatchesStatementCanonical() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
@@ -320,6 +302,14 @@ import Foundation
                 "dividend_ss",
                 expected: dbl((expected["dividend_ss"] as? [String: Any])?["current"]),
                 actual: statement.dividendSS)
+            assertRequired(
+                "cf_treasury_stock",
+                expected: dbl((expected["cf_treasury_stock"] as? [String: Any])?["current"]),
+                actual: statement.cfTreasuryStock)
+            assertRequired(
+                "buyback",
+                expected: dbl((expected["share_buyback"] as? [String: Any])?["current"]),
+                actual: statement.buyback)
             checked += 1
         }
 
@@ -652,7 +642,7 @@ import Foundation
     }
 
     /// statement の有利子負債項目 ＋ statement に無い notes 項目（合計行は使わない）が
-    /// 既存 smoke IBD と揃うか。
+    /// 既存 smoke IBD と揃うか。`IBDExtractor.extractCanonical` が本番組立。
     @Test func testIbdItemTagsComposeVsSmoke() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
@@ -666,7 +656,7 @@ import Foundation
         var checked = 0
         var match = 0
         print("ibd item-tag compose vs smoke")
-        print("fixture | std | smoke | composed | extras | mark")
+        print("fixture | std | smoke | composed | method | mark")
 
         for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
             let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
@@ -678,13 +668,17 @@ import Foundation
             else { continue }
 
             let smoke = dbl((expected["interest_bearing_debt"] as? [String: Any])?["total"])
-            let composed = composeIbdFromItemTags(xbrlDir: xbrlDir)
+            let composed = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
             checked += 1
             if closeEnoughOptional(smoke, composed.total) { match += 1 }
+            let parts = composed.components.compactMap { c -> String? in
+                guard let v = c.current else { return nil }
+                return "\(c.label)=\(yen(v))"
+            }.joined(separator: ", ")
             print(
-                "\(fixtureID) | \(composed.std) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.extras) | \(statusMark(exp: smoke, act: composed.total))"
+                "\(fixtureID) | \(composed.accountingStandard) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.method) | \(statusMark(exp: smoke, act: composed.total))"
             )
-            print("  parts: \(composed.parts)")
+            print("  parts: \(parts)")
         }
         print("composed-vs-smoke: \(match)/\(checked)")
         guard checked > 0 else {
@@ -695,9 +689,9 @@ import Foundation
         #expect(match == checked, "item-tag IBD compose \(match)/\(checked) vs smoke")
     }
 
-    /// 未配線フィールドを statement → notes → breakdown で組み、smoke 期待値と突合する。
+    /// 未配線だったフィールドを statement → notes → breakdown で組み、smoke 期待値と突合する。
     /// employees / rd は breakdown 分母のみ（statement PL は使わない）。
-    /// IBD は `testIbdItemTagsComposeVsSmoke`。IndividualAnalyzer の差し替えはしない。
+    /// IBD は `testIbdItemTagsComposeVsSmoke`。IndividualAnalyzer は同組立へ切替済（#8）。
     @Test func testRemainingFieldsComposeVsSmoke() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
@@ -815,94 +809,6 @@ import Foundation
                 s.expected > 0 && s.composedOK == s.expected,
                 "\(field): composed \(s.composedOK)/\(s.expected)")
         }
-    }
-
-    private func ibdFamily(_ label: String) -> String {
-        if label.contains("リース") { return "lease" }
-        if label.contains("コマーシャル") { return "cp" }
-        if label.contains("預金") { return "deposits" }
-        let cl = label.contains("1年") || label.contains("１年") || label.contains("年内")
-        if label.contains("社債") { return cl ? "bonds_cl" : "bonds" }
-        if label.contains("借入") || label.contains("借用") {
-            if label.contains("短期") { return "st" }
-            if cl { return "lt_cl" }
-            return "borrowings"
-        }
-        return label
-    }
-
-    private func composeIbdFromItemTags(xbrlDir: URL) -> (
-        std: String, total: Double?, parts: String, extras: String
-    ) {
-        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let std = detectAccountingStandard(allTags)
-        var instantFS: FieldSet
-        if std == "US-GAAP" {
-            instantFS = [:]
-            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
-        } else if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
-            xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
-        ) {
-            let statementTags = Set(year.balanceSheet.map(\.tag))
-            instantFS = fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
-        } else {
-            instantFS = fieldSetFromInstant(allTags)
-        }
-
-        let statementIBD = IBDExtractor.extract(
-            fieldSet: instantFS, accountingStandard: std, xbrlDir: nil)
-        var families = Set(statementIBD.components.compactMap { c -> String? in
-            guard c.current != nil else { return nil }
-            return ibdFamily(c.label)
-        })
-        var total = statementIBD.components.reduce(0.0) { $0 + ($1.current ?? 0) }
-        var hasAny = statementIBD.components.contains { $0.current != nil }
-        var parts: [String] = statementIBD.components.compactMap { c in
-            guard let v = c.current else { return nil }
-            return "stmt:\(c.label)=\(yen(v))"
-        }
-        var extras: [String] = []
-
-        if !families.contains("lease") {
-            var leaseBook: Double?
-            if case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
-                leaseBook = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir).current
-            }
-            if leaseBook == nil, case .resolved(let payload, _, _) =
-                StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
-            {
-                let leaseRows = (payload.borrowingsComponents ?? []).filter {
-                    !$0.isTotal && ibdFamily($0.label) == "lease"
-                }
-                let sum = leaseRows.compactMap(\.currentBalance).reduce(0, +)
-                if !leaseRows.isEmpty { leaseBook = sum }
-            }
-            if let leaseBook {
-                total += leaseBook
-                hasAny = true
-                families.insert("lease")
-                parts.append("notes:lease=\(yen(leaseBook))")
-            }
-        }
-
-        if !hasAny, case .resolved(let payload, _, _) =
-            StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
-        {
-            for row in payload.borrowingsComponents ?? [] {
-                guard !row.isTotal, let value = row.currentBalance else { continue }
-                total += value
-                hasAny = true
-                extras.append("\(row.label)=\(yen(value))")
-                parts.append("notes:\(row.label)=\(yen(value))")
-            }
-        }
-
-        return (
-            std: std,
-            total: hasAny ? total : nil,
-            parts: parts.joined(separator: ", "),
-            extras: extras.isEmpty ? "-" : extras.joined(separator: ", ")
-        )
     }
 
     /// 味の素 statement IBD（4,554億）の内訳と、BS / notes / リースの抽出項目を全部出す。
@@ -1251,14 +1157,8 @@ import Foundation
             let sum = (payload.dividendEvents ?? []).compactMap(\.totalAmount).reduce(0, +)
             if sum != 0 { out["dividend_ss"] = sum }
         }
-        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let std = detectAccountingStandard(allTags)
-        if std == "IFRS" {
-            // 注記の支払利息タグ（InterestExpensesIFRS 等）と TextBlock。空 FieldSet だと
-            // 数値タグを逃して文章パターンだけになり、smoke 期待値と不一致になる。
-            let ie = InterestExpenseExtractor.extract(
-                fieldSet: fieldSetFromDuration(allTags), accountingStandard: std, xbrlDir: xbrlDir)
-            if let v = ie.current { out["interest_expense"] = v }
+        if let v = StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir) {
+            out["interest_expense"] = v
         }
         return out
     }

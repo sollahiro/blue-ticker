@@ -108,27 +108,12 @@ struct IndividualAnalyzer {
 
         let accountingStandard = detectAccountingStandard(allTagElements)
 
-        var durationFS = fieldSetFromDuration(allTagElements)
-        let ncDurationFS = fieldSetFromNonConsolidatedDuration(allTagElements)
-        let equityAttrFS = fieldSetFromIFRSEquityAttributable(allTagElements)
-        var instantFS = fieldSetFromInstant(allTagElements)
-
-        // US-GAAP: 未移行 Extractor（IBD / 利息 / buyback / cf_treasury_stock）用に HTML 仮想タグを注入。
-        // 本表水準値（#5 / #5b-1 / #5c）は StatementFinancialsResolver（USGAAPStatementHtml）。
-        if accountingStandard == "US-GAAP" {
-            for (tag, fv) in USGAAPHtml.parsePLFields(in: xbrlDir) { durationFS[tag] = fv }
-            for (tag, fv) in USGAAPHtml.parseBSFields(in: xbrlDir) { instantFS[tag] = fv }
-        }
-
-        // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c）。旧 Extractor へのフィールド単位フォールバックはしない。
+        // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c / #8）。旧 Extractor への
+        // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-
-        let ibd = IBDExtractor.extract(fieldSet: instantFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
-        let emp = EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTagElements)
-        let ie = InterestExpenseExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard, xbrlDir: xbrlDir)
-        let rd = RDExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
-        let bb = ShareBuybackExtractor.extract(fieldSet: durationFS, ncFieldSet: ncDurationFS, equityAttributableFieldSet: equityAttrFS, accountingStandard: accountingStandard)
-        let cfTs = CfTreasuryStockExtractor.extract(fieldSet: durationFS, accountingStandard: accountingStandard)
+        let ibd = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+        let interestExpense = statementMain?.interestExpense
+            ?? StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir)
 
         var raw = RawData()
         raw.curFYEn = fyEnd
@@ -144,8 +129,9 @@ struct IndividualAnalyzer {
         raw.capex = StatementNotesResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
         ).map { $0 / millionYen }
-        raw.rd = rd.current.map { $0 / millionYen }
-        raw.buyback = bb.current.map { $0 / millionYen }
+        raw.rd = BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir)
+            .map { $0 / millionYen }
+        raw.buyback = statementMain?.buyback.map { $0 / millionYen }
         raw.salesLabel = statementMain?.salesLabel
         raw.cashEq = statementMain?.cashEquivalents.map { $0 / millionYen }
         raw.eps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
@@ -173,7 +159,9 @@ struct IndividualAnalyzer {
         calc.interestBearingDebt = ibd.total.map { $0 / millionYen }
         calc.ibdAccountingStandard = ibd.accountingStandard
 
-        if let e = emp.current { calc.employees = Int(e) }
+        if let e = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir) {
+            calc.employees = Int(e)
+        }
 
         let pretax = statementMain?.pretaxIncome
         let incomeTax = statementMain?.incomeTax
@@ -184,13 +172,12 @@ struct IndividualAnalyzer {
         calc.pretaxIncome = pretax.map { $0 / millionYen }
         calc.incomeTax = incomeTax.map { $0 / millionYen }
         calc.effectiveTaxRate = taxRateFraction.map { $0 * percent }
-        calc.interestExpense = ie.current.map { $0 / millionYen }
+        calc.interestExpense = interestExpense.map { $0 / millionYen }
 
         calc.ppeTotal = statementMain?.ppeTotal.map { $0 / millionYen }
         calc.ppeAccountingStandard = accountingStandard
 
-        // CF自己株式は未移行（#8）。配当SS・運転資本・配当CF は statement のみ
-        calc.cfTreasuryStock = cfTs.current.map { $0 / millionYen }
+        calc.cfTreasuryStock = statementMain?.cfTreasuryStock.map { $0 / millionYen }
         calc.dividendSS = statementMain?.dividendSS.map { $0 / millionYen }
         calc.dividendPaidCF = statementMain?.dividendPaidCF.map { $0 / millionYen }
         calc.accountsReceivable = statementMain?.accountsReceivable.map { $0 / millionYen }

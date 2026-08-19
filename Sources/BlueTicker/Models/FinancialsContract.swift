@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v7"
+public let companyFinancialsCacheVersion = "fin-v8"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -71,11 +71,11 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
 // | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
-// | employees | breakdown `employees` 分母 | EmployeesExtractor（IA 未切替） | extractor |
-// | rd | breakdown `research_and_development` 分母 | RDExtractor（IA 未切替） | extractor |
-// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor | extractor |
-// | interest_expense | statement PL 行（US-GAAP は △ を絶対値）。無ければ IFRS notes の支払利息タグ / TextBlock（PL の FinanceCostsIFRS は使わない） | StatementFinancialsResolver / InterestExpenseExtractor | extractor |
-// | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver / Extractor | extractor |
+// | employees | breakdown `employees` 分母 | BreakdownFinancialsResolver.financialsCanonicalEmployees | done |
+// | rd | breakdown `research_and_development` 分母 | BreakdownFinancialsResolver.financialsCanonicalRd | done |
+// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor.extractCanonical | done |
+// | interest_expense | statement PL 行（US-GAAP は △ を絶対値）。無ければ IFRS notes の支払利息タグ / TextBlock（PL の FinanceCostsIFRS は使わない） | StatementFinancialsResolver / StatementNotesResolver.financialsCanonicalInterestExpense | done |
+// | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |

@@ -48,6 +48,7 @@ enum Xbrl {
 
     static let netSalesTags: [String] = [
         "NetSalesIFRS",
+        "TotalNetRevenuesIFRS",  // トヨタ等。本表の収益合計行
         "RevenueIFRS",
         "RevenueIFRSSummaryOfBusinessResults",
         "RevenueJMISSummaryOfBusinessResults",

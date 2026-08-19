@@ -140,6 +140,11 @@ import Foundation
         #expect(byTag["ProfitLossAttributableToOwnersOfParentIFRS"]?.value == 4_765_086_000_000)
         // 損益計算書には section を付けない（2026-07-30 合意）。
         #expect(byTag["TotalNetRevenuesIFRS"]?.section == nil)
+        // financials 組立の sales は本表の収益合計行を採用する。
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100VWVY_xbrl"))
+        #expect(financials?.sales == 48_036_704_000_000)
+        #expect(financials?.salesLabel == "売上収益")
         // 控除項目は weight=-1（例: 売上原価並びに販管費合計 = 売上原価 + 金融費用 + 販管費）。
         #expect(byTag["OperatingProfitLossIFRS"]?.isTotal == true)
     }

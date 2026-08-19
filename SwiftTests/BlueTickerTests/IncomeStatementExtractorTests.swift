@@ -54,6 +54,25 @@ import Foundation
         #expect(result.accountingStandard == "IFRS")
     }
 
+    @Test func testIfrsTotalNetRevenues() {
+        let fs = makeFieldSet(
+            ("TotalNetRevenuesIFRS", 48_036_704_000_000.0, 45_095_325_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 48_036_704_000_000.0)
+        #expect(result.salesPrior == 45_095_325_000_000.0)
+        #expect(result.salesLabel == "売上収益")
+    }
+
+    @Test func testNetSalesIfrsPreferredOverTotalNetRevenues() {
+        let fs = makeFieldSet(
+            ("NetSalesIFRS", 1_000.0, nil),
+            ("TotalNetRevenuesIFRS", 2_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 1_000.0)
+    }
+
     @Test func testSalesLabelOrdinaryRevenue() {
         let fs = makeFieldSet(("OrdinaryIncomeBNK", 500_000.0, nil))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
