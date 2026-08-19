@@ -74,7 +74,9 @@ func runFinancialsIngest(
             staleHighWater.append((code, highWater))
         } else if row.requestedYears < years {
             staleYears.append((code, highWater))
-        } else if row.cacheVersion != companyFinancialsCacheVersion {
+        } else if row.cacheVersion != companyFinancialsCacheVersion
+            || !isCurrentFinancialsAssemblyFingerprint(row.assemblyFingerprint)
+        {
             staleVersion.append((code, highWater))
         } else {
             skipped += 1
@@ -103,7 +105,9 @@ func runFinancialsIngest(
             try await CompanyFinancials.find(code, on: db)
         }
         if let row = existing, row.cacheVersion == companyFinancialsCacheVersion,
-            row.requestedYears >= years, row.highWater == highWater {
+            row.requestedYears >= years, row.highWater == highWater,
+            isCurrentFinancialsAssemblyFingerprint(row.assemblyFingerprint)
+        {
             skipped += 1
             continue
         }
@@ -174,7 +178,8 @@ func distinctCompanyCodesWithHighWater(
 
 /// 計算済みサマリを company_financials へ書き込む（既存行があれば更新、無ければ作成）。
 /// cache_version に現行 companyFinancialsCacheVersion、requested_years に計算年数、
-/// high_water に消費書類集合の現在の max(submitDateTime) を埋め込む。
+/// high_water に消費書類集合の現在の max(submitDateTime)、
+/// assembly_fingerprint に現行正本組立指紋を埋め込む。
 func storeCompanyFinancials(
     existing: CompanyFinancials?, code: String, years: Int,
     response: FinancialsResponse, highWater: String?, db: Database
@@ -184,6 +189,7 @@ func storeCompanyFinancials(
         row.cacheVersion = companyFinancialsCacheVersion
         row.requestedYears = years
         row.highWater = highWater
+        row.assemblyFingerprint = financialsAssemblyFingerprint()
     }
     if let row = existing {
         applyFields(row)
@@ -206,7 +212,7 @@ func storeCompanyFinancials(
 
 // MARK: - servable/unservable 集計
 
-/// `cache_version` のみを対象にした軽量射影（`response` の JSONB を転送しない）。
+/// `cache_version` / 年数 / high-water / 組立指紋を対象にした軽量射影（`response` の JSONB を転送しない）。
 /// company_financials 全件の servable/unservable 集計用（`EdinetMasterSnapshotUpdatedAt` と同型）。
 final class CompanyFinancialsCacheVersionOnly: Model, @unchecked Sendable {
     static let schema = CompanyFinancials.schema
@@ -222,6 +228,9 @@ final class CompanyFinancialsCacheVersionOnly: Model, @unchecked Sendable {
 
     @OptionalField(key: "high_water")
     var highWater: String?
+
+    @OptionalField(key: "assembly_fingerprint")
+    var assemblyFingerprint: String?
 
     init() {}
 }

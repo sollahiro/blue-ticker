@@ -53,7 +53,6 @@ facts 停止で Neon 512MB を先送り。(a) Neon プラン拡張 vs (b) facts 
 
 - [ ] financials / filing-sections の stale 消化継続
 - [ ] オンデマンド ingest（非同期・着手前確認）
-- [ ] Summary: Statement / Note / Breakdown → financials 組立の ingest 逆依存解消と再組立トリガ — `financials-summary-separation.md`
 - [ ] notes 本番 ingest、goodwill breakdown 配線、employees/rd 公開可否
 - [ ] statements 母集団拡大（銀行・保険等の実データ確認後）
 - [ ] Sankey（要求具体化後）— `feature-tiers.md`
