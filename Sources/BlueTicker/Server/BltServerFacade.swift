@@ -470,15 +470,11 @@ public extension BltServerContext {
 
     /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
     /// 決定論のみ、LLM なし。全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
-    /// `RDExtractor` が直接解決する（#9 / #10b）。セグメント dimension が無くても
+    /// `financialsCanonicalRd` が直接解決する（#9 / #10b）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
     func resolveResearchAndDevelopmentBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let rdItem = RDExtractor.extract(
-            fieldSet: fieldSetFromDuration(allTagElements),
-            accountingStandard: detectAccountingStandard(allTagElements))
-        let total = rdItem.current
+        let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: xbrlDir)
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
@@ -486,13 +482,13 @@ public extension BltServerContext {
         let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, totalTag: rdItem.tag,
+                facts: facts, total: rd.value, totalTag: rd.tag,
                 axis: breakdownAxisResearchAndDevelopment, labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: total)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)
@@ -508,17 +504,16 @@ public extension BltServerContext {
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
         let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        let goodwill = BreakdownFinancialsResolver.financialsCanonicalGoodwillItem(xbrlDir: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeGoodwill(
-                facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+                facts: facts, total: goodwill.value, totalTag: goodwill.tag,
                 axis: breakdownAxisGoodwill, labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: totalItem.current)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: goodwill.value)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)
