@@ -36,4 +36,13 @@ enum BreakdownFinancialsResolver {
         )
         return CanonicalValue(value: result.current, tag: result.tag)
     }
+
+    /// financials の `goodwill`。正本は breakdown `goodwill` 軸の分母。
+    /// `Xbrl.goodwillSegmentTags` の無dimension fact から決定論で解決する。
+    static func financialsCanonicalGoodwillItem(xbrlDir: URL) -> CanonicalValue {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let instantFS = fieldSetFromInstant(allTags)
+        let item = resolveItem(instantFS, tags: Xbrl.goodwillSegmentTags)
+        return CanonicalValue(value: item.current, tag: item.tag)
+    }
 }

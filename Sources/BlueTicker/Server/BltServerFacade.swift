@@ -504,17 +504,16 @@ public extension BltServerContext {
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
         let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let totalItem = resolveItem(fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        let goodwill = BreakdownFinancialsResolver.financialsCanonicalGoodwillItem(xbrlDir: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeGoodwill(
-                facts: facts, total: totalItem.current, totalTag: totalItem.tag,
+                facts: facts, total: goodwill.value, totalTag: goodwill.tag,
                 axis: breakdownAxisGoodwill, labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: totalItem.current)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: goodwill.value)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
             contentHash: hash, audit: nil)
