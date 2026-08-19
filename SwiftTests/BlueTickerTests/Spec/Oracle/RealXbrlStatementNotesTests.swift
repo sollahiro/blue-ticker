@@ -1599,15 +1599,19 @@ import Testing
     // MARK: - per_share_information golden（ユーザー実データ確認済み 2026-08-02、US-GAAP BPS 2026-08-11）
     //
     // EPS・潜在株式調整後EPS・BPSはいずれも「業績等の概要（SummaryOfBusinessResults）」の離散数値
-    // タグから決定論で取得する（注記本体のHTMLテーブルはパースしない）。BPSはJGAAPが
-    // `NetAssetsPerShareSummaryOfBusinessResults`、US-GAAPが
-    // `EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`（HTMLラベル
-    // 「１株当たり株主資本」、富士フイルム/キヤノンでユーザー確認済み）、IFRSは
+    // タグから決定論で取得する（注記本体のHTMLテーブルはパースしない）。BPSは現行会計基準の
+    // Summary を優先する。IFRSは
     // `EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名は「自己資本比率」の意味だが誤り。
     // `unitRef=JPYPerShares`の場合のみ実体は「１株当たり親会社株主持分」。日立 S100QZT0の実データ
     // でHTML本文ラベルと完全一致を確認済み。US-GAAP企業では同名タグが真の比率(`unitRef=pure`)
     // として使われるため`unitRef`を見ずタグ名だけで判定してはならない、小松製作所 S100QYNI で
-    // 確認済み）。希薄化後EPSの欠落は希薄化証券が無い企業では正当（2026-08-11 ユーザー確認）。
+    // 確認済み）。US-GAAPは
+    // `EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`（HTMLラベル
+    // 「１株当たり株主資本」、富士フイルム/キヤノンでユーザー確認済み）。JGAAPは
+    // `NetAssetsPerShareSummaryOfBusinessResults`。IFRS移行年度は日本基準比較表に
+    // `NetAssetsPerShare` の CurrentYearInstant が残る（スズキ S100W4MT、2026-08-19
+    // 開示HTML照合）ため、IFRS の `JPYPerShares` を先に取る。希薄化後EPSの欠落は希薄化証券が
+    // 無い企業では正当（2026-08-11 ユーザー確認）。
     //
     // IFRS企業のEPS/潜在株式調整後EPSはStatement取り込み（Statement、損益計算書）とタグ・値が完全一致する
     // （`jpigp_cor:BasicEarningsLossPerShareIFRS`はrole=ConsolidatedStatementOfProfitOrLossIFRSで

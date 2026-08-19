@@ -136,6 +136,7 @@ import Foundation
         var inventory: Double?
         var accountsPayable: Double?
         var eps: Double?
+        var bps: Double?
         var issuedShares: Double?
         var shareBuyback: Double?
     }
@@ -186,6 +187,7 @@ import Foundation
             inventory:              statementMain?.inventory,
             accountsPayable:        statementMain?.accountsPayable,
             eps:                    StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir),
+            bps:                    StatementNotesResolver.financialsCanonicalBps(xbrlDir: xbrlDir),
             issuedShares:           StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir),
             shareBuyback:           statementMain?.buyback
         )
@@ -322,7 +324,7 @@ import Foundation
             Comment(rawValue: "financials↔statement 正本不一致:\n" + failures.joined(separator: "\n")))
     }
 
-    /// financials 組立の EPS / 発行済株式が notes 正本（`per_share_information` /
+    /// financials 組立の EPS / BPS / 発行済株式が notes 正本（`per_share_information` /
     /// `issued_shares_and_capital`）と一致することを smoke 11 社で回帰する（タスク #3）。
     @Test func testFinancialsPassthroughMatchesNotesCanonical() async throws {
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -342,14 +344,18 @@ import Foundation
             guard FileManager.default.fileExists(atPath: xbrlDir.path) else { continue }
 
             let financialsEps = StatementNotesResolver.financialsCanonicalEps(xbrlDir: xbrlDir)
+            let financialsBps = StatementNotesResolver.financialsCanonicalBps(xbrlDir: xbrlDir)
             let financialsShares = StatementNotesResolver.financialsCanonicalIssuedShares(xbrlDir: xbrlDir)
 
             let notesEps: Double?
+            let notesBps: Double?
             switch StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir) {
             case .resolved(let payload, _, _):
                 notesEps = payload.items?.first(where: { $0.tag == "eps" })?.value
+                notesBps = payload.items?.first(where: { $0.tag == "bps" })?.value
             default:
                 notesEps = nil
+                notesBps = nil
             }
 
             let notesShares: Double?
@@ -362,6 +368,9 @@ import Foundation
 
             if financialsEps != notesEps {
                 failures.append("\(fixtureID) eps: financials=\(financialsEps.map { String($0) } ?? "nil"), notes=\(notesEps.map { String($0) } ?? "nil")")
+            }
+            if financialsBps != notesBps {
+                failures.append("\(fixtureID) bps: financials=\(financialsBps.map { String($0) } ?? "nil"), notes=\(notesBps.map { String($0) } ?? "nil")")
             }
             if financialsShares != notesShares {
                 failures.append("\(fixtureID) issuedShares: financials=\(financialsShares.map { String($0) } ?? "nil"), notes=\(notesShares.map { String($0) } ?? "nil")")
@@ -1096,6 +1105,7 @@ import Foundation
 
         let perShare = expected["per_share"] as? [String: Any] ?? [:]
         check("eps",          exp: dbl(perShare["eps"]),           act: actual.eps)
+        check("bps",          exp: dbl(perShare["bps"]),           act: actual.bps)
         check("issuedShares", exp: dbl(perShare["issued_shares"]), act: actual.issuedShares)
 
         return diffs

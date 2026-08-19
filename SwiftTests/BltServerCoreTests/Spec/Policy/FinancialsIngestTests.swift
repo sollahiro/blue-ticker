@@ -683,13 +683,13 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// 床判定は現行版との完全一致ではなく数値比較（n >= 床）。将来のバージョン（fin-v9）も 200。
+    /// 床判定は現行版との完全一致ではなく数値比較（n >= 床）。将来のバージョン（fin-v10）も 200。
     @Test func loadStoredFinancialsAcceptsVersionAboveCurrent() async throws {
         try await withMigratedApp { app in
             let row = CompanyFinancials()
             row.id = "7203"
             row.response = try makeResponse(code: "7203", years: 6)
-            row.cacheVersion = "fin-v9"
+            row.cacheVersion = "fin-v10"
             row.requestedYears = 6
             try await row.create(on: app.db)
 

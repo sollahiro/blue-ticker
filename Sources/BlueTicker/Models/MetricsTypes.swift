@@ -30,7 +30,7 @@ struct RawData: Codable {
     var buyback: Double?
     var rd: Double?
     var eps: Double?
-    // bps（1株当たり純資産）は未実装。将来のper-share拡張で produce 予定のため契約からは外しつつ内部フィールドを残す。
+    // bps（1株当たり純資産）。financials 組立は notes `per_share_information`（tag=bps）をパススルーする。
     var bps: Double?
     var shOutFY: Double?
     var cashEq: Double?

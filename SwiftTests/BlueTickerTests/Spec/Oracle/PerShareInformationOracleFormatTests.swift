@@ -3,7 +3,9 @@
 // - 試作2docID（レーザーテック J-GAAP / 日立 IFRS）: `RealXbrlStatementNotesTests` の既存golden
 //   （ユーザー実データ確認済み）を転記。analysis_cache 経路。このマシンにキャッシュが無い場合は SKIP。
 // - smoke 固定11社: 2026-08-11 にユーザーが数値確認済み（US-GAAP BPS 含む。diluted_eps 欠落は
-//   希薄化証券なしとして正当）。`SmokeCacheSupport` / `tmp_cache/edinet` 経路。
+//   希薄化証券なしとして正当）。スズキ S100W4MT の BPS は 2026-08-19 に IFRS 表
+//   （1,539.78）へ訂正（日本基準比較表 1,404.09 は使わない）。
+//   `SmokeCacheSupport` / `tmp_cache/edinet` 経路。
 //
 // 既存ハードコードgoldenテストを置き換えるものではなく併存させる。
 
@@ -97,6 +99,8 @@ import Testing
 
     @Test
     func smokePerShareSuzukiMatchesOracle() async throws {
+        // IFRS 移行年度。日本基準比較表の NetAssetsPerShare CurrentYearInstant=1404.09
+        // （第159期・未監査）ではなく、IFRS 表の 1株当たり親会社所有者帰属持分=1539.78。
         try await withSmokeCache("S100W4MT") {
             try assertMatchesOracle(docID: "S100W4MT", xbrlDir: $0)
         }

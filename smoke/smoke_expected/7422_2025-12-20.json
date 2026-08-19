@@ -90,6 +90,7 @@
   },
   "per_share": {
     "eps": 3.44,
+    "bps": 888.66,
     "issued_shares": 5120700
   }
 }

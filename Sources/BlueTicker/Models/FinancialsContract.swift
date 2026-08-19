@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v8"
+public let companyFinancialsCacheVersion = "fin-v9"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -68,6 +68,7 @@ public func isServableCompanyFinancialsCacheVersion(_ version: String) -> Bool {
 // | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver（#5c） | done |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
+// | bps | notes `per_share_information`（tag=bps） | StatementNotesResolver.financialsCanonicalBps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
 // | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
 // | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
@@ -136,6 +137,7 @@ struct FinancialsYear: Codable, Sendable {
     var dividendPaidCf: Double?
 
     var eps: Double?
+    var bps: Double?
     var issuedShares: Double?
     var employees: Int?
 
@@ -210,6 +212,7 @@ struct FinancialsYear: Codable, Sendable {
         case dividendSs = "dividend_ss"
         case dividendPaidCf = "dividend_paid_cf"
         case eps
+        case bps
         case issuedShares = "issued_shares"
         case employees
         case businessProfit = "business_profit"
@@ -291,6 +294,7 @@ extension FinancialsYear {
         dividendPaidCf = calc.dividendPaidCF
 
         eps = raw.eps
+        bps = raw.bps
         issuedShares = raw.shOutFY
         employees = calc.employees
 
@@ -332,6 +336,7 @@ extension FinancialsYear {
         raw.buyback = buyback
         raw.rd = rd
         raw.eps = eps
+        raw.bps = bps
         raw.shOutFY = issuedShares
         raw.cashEq = cashEquivalents
 
@@ -411,7 +416,7 @@ extension FinancialsYear {
     /// これらを外す。値自体は 財務取り込み ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
     /// 対象は Waterfall（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
     /// 注意: 「`SummaryRendering.levelMetrics` に無いフィールド」全般ではない
-    /// （`eps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
+    /// （`eps`/`bps`/`issuedShares`/`employees` 等はどちらの表示にも使われず対象外のまま）。
     static let analysisOnlyKeys: Set<String> = [
         "business_profit", "business_profit_margin",
         "business_profit_change", "sales_change_impact",

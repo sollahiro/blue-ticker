@@ -553,12 +553,15 @@ enum StatementNotesResolver {
     /// 実データ検証（2026-08-02）: EPS・潜在株式調整後EPS・BPSはいずれも「業績等の概要
     /// （SummaryOfBusinessResults）」の離散数値タグから決定論で取得できる（注記本体のHTML
     /// テーブルはパースしない）。EPSは既存 `PerShareExtractor.extract`（`Xbrl.basicEpsTags`）を
-    /// そのまま再利用する（重複ロジック回避）。BPSはJGAAPが`NetAssetsPerShareSummaryOfBusinessResults`、
-    /// US-GAAPが`EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`
+    /// そのまま再利用する（重複ロジック回避）。BPSは現行会計基準の Summary を優先する。
+    /// IFRSは`EquityToAssetRatioIFRSSummaryOfBusinessResults`（タグ名誤り、`unitRef=JPYPerShares`
+    /// で判別、日立 S100QZT0「１株当たり親会社株主持分」ラベルと完全一致を確認済み）を先に見る。
+    /// US-GAAPは`EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults`
     /// （2026-08-11 smoke確認: 富士フイルム S100W3XJ=2779.50・キヤノン S100XTLJ=3974.81、
-    /// HTMLラベル「１株当たり株主資本」）、IFRSは`EquityToAssetRatioIFRSSummaryOfBusinessResults`
-    /// （タグ名誤り、`unitRef=JPYPerShares`で判別、日立 S100QZT0「１株当たり親会社株主持分」
-    /// ラベルと完全一致を確認済み）。
+    /// HTMLラベル「１株当たり株主資本」）。JGAAPは`NetAssetsPerShareSummaryOfBusinessResults`。
+    /// IFRS移行年度は日本基準比較表に `NetAssetsPerShare` の CurrentYearInstant が残る
+    /// （スズキ S100W4MT: 日本基準第159期 1,404.09。連結の正本は IFRS 表の
+    /// 「１株当たり親会社所有者帰属持分」1,539.78。2026-08-19 開示HTML照合）。
     /// カバレッジ実測（キャッシュ144件）: EPS 144/144、BPS 142/144（US-GAAP連結BPSタグ未対応時）、
     /// 潜在株式調整後EPS 65/144（希薄化効果のある証券が無く注記自体に希薄化後EPSを持たない企業は欠落OK、
     /// 2026-08-11 ユーザー確認）。
@@ -583,17 +586,17 @@ enum StatementNotesResolver {
                     tag: "diluted_eps", label: "潜在株式調整後１株当たり当期純利益", value: diluted,
                     unit: "yen_per_share", order: nil))
         }
-        if let bps = resolveItem(instantFS, tags: Xbrl.netAssetsPerShareTags).current {
+        if let bps = resolveEquityPerShareIFRSMislabeled(xbrlDir: xbrlDir) {
             items.append(
-                StatementLineItem(tag: "bps", label: "１株当たり純資産額", value: bps, unit: "yen_per_share", order: nil))
+                StatementLineItem(
+                    tag: "bps", label: "１株当たり親会社株主持分", value: bps, unit: "yen_per_share", order: nil))
         } else if let bps = resolveItem(instantFS, tags: Xbrl.equityPerShareUSGAAPTags).current {
             items.append(
                 StatementLineItem(
                     tag: "bps", label: "１株当たり株主資本", value: bps, unit: "yen_per_share", order: nil))
-        } else if let bps = resolveEquityPerShareIFRSMislabeled(xbrlDir: xbrlDir) {
+        } else if let bps = resolveItem(instantFS, tags: Xbrl.netAssetsPerShareTags).current {
             items.append(
-                StatementLineItem(
-                    tag: "bps", label: "１株当たり親会社株主持分", value: bps, unit: "yen_per_share", order: nil))
+                StatementLineItem(tag: "bps", label: "１株当たり純資産額", value: bps, unit: "yen_per_share", order: nil))
         }
 
         guard !items.isEmpty else {
@@ -891,6 +894,15 @@ enum StatementNotesResolver {
             return nil
         }
         return payload.items?.first(where: { $0.tag == "eps" })?.value
+    }
+
+    /// `company_financials` 組立が読む BPS。正本は `per_share_information` note（`tag == "bps"`）。
+    /// ingest 順序に依存せず、同一 XBRL パス内で `resolvePerShareInformation` を直接呼ぶ（#10b）。
+    static func financialsCanonicalBps(xbrlDir: URL) -> Double? {
+        guard case .resolved(let payload, _, _) = resolvePerShareInformation(xbrlDir: xbrlDir) else {
+            return nil
+        }
+        return payload.items?.first(where: { $0.tag == "bps" })?.value
     }
 
     /// `company_financials` 組立が読む発行済株式数。正本は `issued_shares_and_capital` note の
