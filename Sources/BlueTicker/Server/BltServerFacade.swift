@@ -380,12 +380,11 @@ public extension BltServerContext {
     /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
-    /// `consolidatedSales` は呼び出し側（財務取り込み で計算済みの当該書類の連結売上高）が渡す
-    /// （内訳取り込み は自前で XBRL から売上を再抽出しない。重複ロジック回避）。
-    func resolveBusinessBreakdown(
-        docID: String, consolidatedSales: Double?
-    ) async -> BreakdownResolveResult {
+    /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。
+    /// 保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
+    func resolveBusinessBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let consolidatedSales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
         guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
         else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 
@@ -408,11 +407,13 @@ public extension BltServerContext {
     /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
     /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
     /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
-    /// `unknown`（要再試行）。
-    func resolveGeographyBreakdown(
-        docID: String, consolidatedSales: Double?
-    ) async -> BreakdownResolveResult {
+    /// `unknown`（要再試行）。売上分母は同一 XBRL パスで直接解決する（#9 / #10b）。
+    func resolveGeographyBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let consolidatedSales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+        if consolidatedSales == nil || consolidatedSales == 0 {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
         let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
         if geography.method == "not_found" {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
@@ -444,13 +445,11 @@ public extension BltServerContext {
 public extension BltServerContext {
     /// 内訳取り込み: 書類1件分の employees 軸内訳を解決する（2026-08-01追加）。`NumberOfEmployees` /
     /// `NumberOfGroupEmployees` のセグメント dimension 付き fact のみを対象にした決定論経路
-    /// （LLM フォールバックなし）。`total`（全社合計の従業員数）は 財務取り込み が既に計算済みの値を
-    /// 呼び出し側（`BreakdownIngest.swift`）が `company_financials` から引いて渡す（自前で XBRL から
-    /// 再抽出しない。重複ロジック回避、`resolveBusinessBreakdown` の `consolidatedSales` と同型）。
-    func resolveEmployeesBreakdown(
-        docID: String, total: Double?
-    ) async -> BreakdownResolveResult {
+    /// （LLM フォールバックなし）。全社合計は同一 XBRL パスで `BreakdownFinancialsResolver` が
+    /// 直接解決する（#9 / #10b）。
+    func resolveEmployeesBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
@@ -470,31 +469,25 @@ public extension BltServerContext {
     }
 
     /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
-    /// 決定論のみ、LLM なし。
-    /// `total` は財務取り込み計算済みの全社 R&D（分母）。セグメント dimension が無くても
+    /// 決定論のみ、LLM なし。全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
+    /// `RDExtractor` が直接解決する（#9 / #10b）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
-    /// denominatorTag には `total` を生んだ実タグ名を載せる（`RDExtractor` を同一書類のXBRLへ
-    /// 再適用して解決。company_financials は数値のみ保持しタグ provenance を持たないため、
-    /// ここで独立に再解決する。財務取り込みと同じ `fieldSetFromDuration`/`detectAccountingStandard`
-    /// を使うため値は一致する前提）。
-    func resolveResearchAndDevelopmentBreakdown(
-        docID: String, total: Double?
-    ) async -> BreakdownResolveResult {
+    func resolveResearchAndDevelopmentBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let rdItem = RDExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTagElements),
+            accountingStandard: detectAccountingStandard(allTagElements))
+        let total = rdItem.current
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
         let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let totalTag = RDExtractor.extract(
-            fieldSet: fieldSetFromDuration(allTagElements),
-            accountingStandard: detectAccountingStandard(allTagElements)
-        ).tag
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: total, totalTag: totalTag, axis: breakdownAxisResearchAndDevelopment,
-                labelsByTag: labelsByTag)
+                facts: facts, total: total, totalTag: rdItem.tag,
+                axis: breakdownAxisResearchAndDevelopment, labelsByTag: labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -507,9 +500,7 @@ public extension BltServerContext {
 
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
     ///
-    /// R&D/employees軸と異なり全社合計（denominator）を渡してくれる既存の計算パイプラインが無いため
-    /// （`goodwill_and_intangibles` note_typeはIFRS限定でJ-GAAPの値を持たない）、`Xbrl.goodwillSegmentTags`
-    /// の無dimension fact から本関数が独立に解決する（`resolveItem`、RDの`totalTag`独自解決と同型）。
+    /// `Xbrl.goodwillSegmentTags` の無dimension fact から本関数が独立に解決する（`resolveItem`）。
     func resolveGoodwillBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)

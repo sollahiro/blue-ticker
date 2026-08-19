@@ -51,69 +51,6 @@ private func seedDoc(
     model.docTypeCode = docType
     model.submitDateTime = submit
     try await model.create(on: db)
-
-    // 内訳取り込み は分母売上（財務取り込み）が無いと geography / employees / rd は解決に進まない
-    // （missing sales → skip / not_found）。business は保険等で売上欠測でも解決を試す。
-    // 有報候補の seed には対応する financials 行も添える。
-    if let secCode, docType == nil || docType == Api.docTypeAnnualReport {
-        try await seedSalesForDoc(code: String(secCode.prefix(4)), docID: docID, db: db)
-    }
-}
-
-/// 内訳取り込み テスト用: docID に紐づく売上を company_financials へ足す（同一 code は追記）。
-private func seedSalesForDoc(
-    code: String, docID: String, salesMillionYen: Double = 1_000_000, db: Database
-) async throws {
-    let yearJSON = """
-        {"fy_end":"2025-03-31","FinancialPeriod":"通期",
-         "RawData":{"Sales":\(Int(salesMillionYen))},"CalculatedData":{"DocID":"\(docID)"}}
-        """
-    let newYear = try JSONDecoder().decode(YearEntry.self, from: Data(yearJSON.utf8))
-
-    if let existing = try await CompanyFinancials.find(code, on: db) {
-        var result = existing.response.toMetricsResult()
-        var years = result.years ?? []
-        years.removeAll { $0.calculatedData.docID == docID }
-        years.append(newYear)
-        result.years = years
-        existing.response = FinancialsResponse(
-            code: code, name: existing.response.name, sector: existing.response.sector,
-            market: existing.response.market, result: result)
-        try await existing.update(on: db)
-        return
-    }
-
-    var result = MetricsResult.blank
-    result.code = code
-    result.years = [newYear]
-    let response = FinancialsResponse(
-        code: code, name: "テスト", sector: "", market: "", result: result)
-    let row = CompanyFinancials()
-    row.id = code
-    row.response = response
-    row.cacheVersion = companyFinancialsCacheVersion
-    row.requestedYears = 6
-    try await row.create(on: db)
-}
-
-/// 財務取り込み は当該書類を計算済みだが売上を持たない（保険の経常収益ラベルのみ等）。
-private func seedFinancialsDocWithoutSales(code: String, docID: String, db: Database) async throws {
-    let yearJSON = """
-        {"fy_end":"2025-03-31","FinancialPeriod":"通期",
-         "RawData":{},"CalculatedData":{"DocID":"\(docID)"}}
-        """
-    let newYear = try JSONDecoder().decode(YearEntry.self, from: Data(yearJSON.utf8))
-    var result = MetricsResult.blank
-    result.code = code
-    result.years = [newYear]
-    let response = FinancialsResponse(
-        code: code, name: "テスト", sector: "", market: "", result: result)
-    let row = CompanyFinancials()
-    row.id = code
-    row.response = response
-    row.cacheVersion = companyFinancialsCacheVersion
-    row.requestedYears = 6
-    try await row.create(on: db)
 }
 
 private func fakePayload(
@@ -175,7 +112,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -186,22 +123,14 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// 第一生命型: financials に書類はあるが売上がない。business は解決を試す。
-    @Test func ingestResolvesBusinessWhenFinancialsHasDocButNoSales() async throws {
+    /// business は company_financials 行が無くても resolve を試す（分母は resolve 側が XBRL から解決、#9）。
+    @Test func ingestAttemptsBusinessResolveWithoutFinancialsRow() async throws {
         try await withMigratedApp { app in
-            let model = EdinetDocument()
-            model.id = "S1"
-            model.edinetCode = "E00001"
-            model.secCode = "87500"
-            model.filerName = "第一生命ホールディングス株式会社"
-            model.docTypeCode = Api.docTypeAnnualReport
-            model.submitDateTime = "2025-06-20 09:00"
-            try await model.create(on: app.db)
-            try await seedFinancialsDocWithoutSales(code: "8750", docID: "S1", db: app.db)
+            try await seedDoc("S1", secCode: "87500", db: app.db)
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["8750"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(), source: breakdownSourceXbrlFacts,
                     contentHash: "h-ins", audit: nil)
@@ -209,40 +138,6 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
-            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
-            #expect(row.source == breakdownSourceXbrlFacts)
-        }
-    }
-
-    /// geography は売上なしのまま解決しない（business だけ保険フォールバック）。
-    @Test func ingestMarksGeographyNotFoundWhenFinancialsHasDocButNoSales() async throws {
-        try await withMigratedApp { app in
-            let model = EdinetDocument()
-            model.id = "S1"
-            model.edinetCode = "E00001"
-            model.secCode = "87500"
-            model.filerName = "第一生命ホールディングス株式会社"
-            model.docTypeCode = Api.docTypeAnnualReport
-            model.submitDateTime = "2025-06-20 09:00"
-            try await model.create(on: app.db)
-            try await seedFinancialsDocWithoutSales(code: "8750", docID: "S1", db: app.db)
-
-            let summary = try await runBreakdownIngest(
-                db: app.db, listedCodes: ["8750"], years: 3, limit: nil,
-                axis: breakdownAxisGeography
-            ) { _, _ in
-                .resolved(
-                    payload: fakePayload(axis: breakdownAxisGeography),
-                    source: breakdownSourceGeographyLLM, contentHash: "h-geo", audit: nil)
-            }
-
-            #expect(summary.notApplicable == 1)
-            #expect(summary.stored == 0)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
-            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
-            #expect(row.source == breakdownSourceNotApplicable)
-            #expect(row.notApplicableReason == breakdownNotApplicableNotFound)
         }
     }
 
@@ -253,7 +148,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
             let key2 = CompanyBreakdown.compositeID(docID: "S2", axis: "business")
@@ -268,7 +163,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
         }
@@ -282,7 +177,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableGeographyOnly) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableGeographyOnly) }
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
@@ -304,7 +199,7 @@ extension BreakdownLoadResult {
 
             _ = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
@@ -328,7 +223,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
@@ -354,7 +249,7 @@ extension BreakdownLoadResult {
 
             _ = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h9", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h9", audit: nil) }
 
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
@@ -375,7 +270,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
@@ -392,7 +287,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 Issue.record("resolver must not run for an up-to-date not_applicable row")
                 return .failed
             }
@@ -412,7 +307,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 Issue.record("resolver must not run for a current-version not_applicable row")
                 return .failed
             }
@@ -431,7 +326,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: nil
-            ) { docID, _ in
+            ) { docID in
                 switch docID {
                 case "S1": return .notApplicable(reason: breakdownNotApplicableGeographyOnly)
                 case "S2": return .notApplicable(reason: breakdownNotApplicableSingleSegmentDisclosed)
@@ -452,7 +347,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .failed }
+            ) { _ in .failed }
 
             #expect(summary.attempted == 1)
             #expect(summary.failed == 1)
@@ -467,7 +362,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 Issue.record("resolver must not run for an up-to-date row")
                 return .failed
             }
@@ -486,7 +381,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h2", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
@@ -508,7 +403,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 Issue.record("LLM-sourced row without needs_review must not be re-resolved on version bump")
                 return .failed
             }
@@ -528,7 +423,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(needsReview: false), source: breakdownSourceSegmentInfoLLM, contentHash: "h3", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(needsReview: false), source: breakdownSourceSegmentInfoLLM, contentHash: "h3", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
@@ -550,7 +445,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 Issue.record("resolver must not run for a current-version xbrl_facts row")
                 return .failed
             }
@@ -570,7 +465,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(needsReview: true), source: breakdownSourceXbrlFacts,
                     contentHash: "h-stale-review", audit: nil)
@@ -593,7 +488,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758", "9984"], years: 3, limit: 2
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
@@ -611,7 +506,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: nil,
                 candidateSets: sets
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1",
                     audit: nil)
@@ -633,7 +528,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 1,
                 cachedDocIDs: ["S2"]
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyBreakdown.find(
@@ -652,7 +547,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 2,
                 cachedDocIDs: ["PRIOR7203"]
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 2)
             #expect(try await CompanyBreakdown.find(
@@ -672,7 +567,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["9999", "7203"], years: 3, limit: 1,
                 priorityCodes: ["7203"], cachedDocIDs: ["S1"]
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyBreakdown.find(
@@ -692,7 +587,7 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.purged == 1)
             let key22 = CompanyBreakdown.compositeID(docID: "S22", axis: "business")
@@ -707,49 +602,9 @@ extension BreakdownLoadResult {
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
-            ) { _, _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
+            ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.purged == 0)
-        }
-    }
-
-    // MARK: - consolidatedSalesForDoc
-
-    @Test func consolidatedSalesForDocReturnsNilWhenNoFinancialsRow() async throws {
-        try await withMigratedApp { app in
-            let sales = try await consolidatedSalesForDoc(code: "7203", docID: "S1", db: app.db)
-            #expect(sales == nil)
-        }
-    }
-
-    @Test func consolidatedSalesForDocReturnsMatchingYearSalesConvertedToYen() async throws {
-        try await withMigratedApp { app in
-            let json = """
-                {"code":"7203","years":[
-                    {"fy_end":"2025-03-31","FinancialPeriod":"通期",
-                     "RawData":{"Sales":4624727},"CalculatedData":{"DocID":"S1"}},
-                    {"fy_end":"2024-03-31","FinancialPeriod":"通期",
-                     "RawData":{"Sales":4000000},"CalculatedData":{"DocID":"S0"}}
-                ]}
-                """
-            let result = try JSONDecoder().decode(MetricsResult.self, from: Data(json.utf8))
-            let response = FinancialsResponse(
-                code: "7203", name: "テスト", sector: "", market: "", result: result)
-            let row = CompanyFinancials()
-            row.id = "7203"
-            row.response = response
-            row.cacheVersion = companyFinancialsCacheVersion
-            row.requestedYears = 6
-            try await row.create(on: app.db)
-
-            // RawData.Sales は百万円建て（FinancialsResponse.unit）。consolidatedSalesForDoc は
-            // 内訳取り込み 正規化器が期待する円単位へ変換して返す。
-            let sales = try await consolidatedSalesForDoc(code: "7203", docID: "S1", db: app.db)
-            #expect(sales == 4_624_727 * Financial.millionYen)
-            let salesOtherYear = try await consolidatedSalesForDoc(code: "7203", docID: "S0", db: app.db)
-            #expect(salesOtherYear == 4_000_000 * Financial.millionYen)
-            let salesUnknownDoc = try await consolidatedSalesForDoc(code: "7203", docID: "S9", db: app.db)
-            #expect(salesUnknownDoc == nil)
         }
     }
 
@@ -1010,7 +865,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(axis: breakdownAxisGeography),
                     source: breakdownSourceGeographyLLM, contentHash: "hg1", audit: nil)
@@ -1035,7 +890,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
 
             #expect(summary.notApplicable == 1)
             #expect(summary.notApplicableUnknown == 0)
@@ -1055,7 +910,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
             #expect(summary.notApplicableUnknown == 1)
             let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
@@ -1079,7 +934,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 1, limit: nil,
                 axis: breakdownAxisGeography
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(axis: breakdownAxisGeography),
                     source: breakdownSourceGeographyLLM, contentHash: "hg", audit: nil)
@@ -1124,7 +979,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisBusiness
-            ) { _, _ in
+            ) { _ in
                 .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h-biz", audit: nil)
             }
 
@@ -1154,7 +1009,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGeography
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(axis: breakdownAxisGeography),
                     source: breakdownSourceXbrlFacts, contentHash: "h-geo", audit: nil)
@@ -1172,7 +1027,7 @@ extension BreakdownLoadResult {
 
     // MARK: - goodwill 軸（2026-08-13）
 
-    /// goodwill は financials 分母なしで解決に進む（XBRL から全社合計を自前解決）。
+    /// 全軸とも company_financials 分母なしで resolve に進む（#9）。
     @Test func goodwillIngestStoresResolvedWithoutFinancials() async throws {
         try await withMigratedApp { app in
             let model = EdinetDocument()
@@ -1187,7 +1042,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["6841"], years: 3, limit: nil,
                 axis: breakdownAxisGoodwill
-            ) { _, _ in
+            ) { _ in
                 .resolved(
                     payload: fakePayload(axis: breakdownAxisGoodwill),
                     source: breakdownSourceXbrlFacts, contentHash: "h-gw", audit: nil)
@@ -1216,7 +1071,7 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
                 axis: breakdownAxisGoodwill
-            ) { _, _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
+            ) { _ in .notApplicable(reason: breakdownNotApplicableNotFound) }
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)

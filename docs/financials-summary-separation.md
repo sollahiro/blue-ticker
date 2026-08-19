@@ -63,7 +63,6 @@ XBRL → statement / notes / breakdown（正本）
 
 ## 現状の逆依存・ギャップ
 
-- breakdown 売上分母が financials 経由。employees / rd の ingest 分母もまだ financials から渡している（正本は breakdown。IA の financials は分母パススルー済）。
 - US-GAAP 本表は `USGAAPStatementHtml`。`USGAAPHtml` は仮想タグヘルパと Extractor 単体テスト用。
 - goodwill / PPE **明細**は Summary 置換対象外（正本 API）。
 
@@ -71,7 +70,6 @@ XBRL → statement / notes / breakdown（正本）
 
 | # | 内容 |
 |---|---|
-| 9 | employees / rd の ingest はまだ financials → breakdown の逆依存。売上分母も financials 逆依存 |
 | 11 | 正本 cache_version 更新時の financials 再組立トリガ |
 | 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
 | 13+ | 明細整理・Sankey・契約露出変更は後回し |
@@ -94,7 +92,7 @@ XBRL → statement / notes / breakdown（正本）
 | IBD 組立 | `IBDExtractor.extractCanonical` |
 | remaining vs smoke | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift`（`testRemainingFieldsComposeVsSmoke`） |
 | notes | `Analysis/StatementNotesResolver.swift` |
-| breakdown 分母 | `Analysis/BreakdownFinancialsResolver.swift`（employees / rd）。売上は `BltServerCore/BreakdownIngest.swift` |
+| breakdown 分母 | `Analysis/BreakdownFinancialsResolver.swift`（sales / employees / rd）。ingest は resolve 側が同一 XBRL パスで直接解決（#9） |
 
 ## 関連
 

@@ -339,46 +339,39 @@ public func runFactsIngestCommand(
                 explicitCodes: codes, priorityCodes: priority,
                 cachedDocIDs: cachedDocIDs,
                 axis: breakdownAxisBusiness, candidateSets: publicBreakdownSets, logger: app.logger
-            ) { docID, consolidatedSales in
-                await context.resolveBusinessBreakdown(
-                    docID: docID, consolidatedSales: consolidatedSales)
+            ) { docID in
+                await context.resolveBusinessBreakdown(docID: docID)
             }
             let s6Geography = try await runBreakdownIngest(
                 db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, priorityCodes: priority,
                 cachedDocIDs: cachedDocIDs,
                 axis: breakdownAxisGeography, candidateSets: publicBreakdownSets, logger: app.logger
-            ) { docID, consolidatedSales in
-                await context.resolveGeographyBreakdown(
-                    docID: docID, consolidatedSales: consolidatedSales)
+            ) { docID in
+                await context.resolveGeographyBreakdown(docID: docID)
             }
-            // employees/research_and_development は連結売上ではなく 財務取り込み 計算済みの従業員数・
-            // 研究開発費合計を分母(全社合計)として使う(重複ロジック回避、2026-08-01 監査指摘対応)。
             let s6Employees = try await runBreakdownIngest(
                 db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
                 cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisEmployees, candidateSets: unpublishedSets, logger: app.logger,
-                denominatorForDoc: employeesForDocFromFinancials
-            ) { docID, total in
-                await context.resolveEmployeesBreakdown(docID: docID, total: total)
+                axis: breakdownAxisEmployees, candidateSets: unpublishedSets, logger: app.logger
+            ) { docID in
+                await context.resolveEmployeesBreakdown(docID: docID)
             }
             let s6RD = try await runBreakdownIngest(
                 db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
                 cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisResearchAndDevelopment, candidateSets: unpublishedSets, logger: app.logger,
-                denominatorForDoc: rdForDocFromFinancials
-            ) { docID, total in
-                await context.resolveResearchAndDevelopmentBreakdown(docID: docID, total: total)
+                axis: breakdownAxisResearchAndDevelopment, candidateSets: unpublishedSets, logger: app.logger
+            ) { docID in
+                await context.resolveResearchAndDevelopmentBreakdown(docID: docID)
             }
-            // goodwill は financials 分母を使わず XBRL から全社合計を自前解決（決定論のみ、LLM なし）。
             let s6Goodwill = try await runBreakdownIngest(
                 db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
                 explicitCodes: codes, priorityCodes: priority,
                 cachedDocIDs: cachedDocIDs,
                 axis: breakdownAxisGoodwill, candidateSets: unpublishedSets, logger: app.logger
-            ) { docID, _ in
+            ) { docID in
                 await context.resolveGoodwillBreakdown(docID: docID)
             }
             let coverage = try? await withDbRetry(

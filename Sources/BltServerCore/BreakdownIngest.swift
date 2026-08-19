@@ -52,10 +52,10 @@ public struct BreakdownIngestSummary: Sendable, Equatable {
     public let purged: Int
 }
 
-/// docID・consolidatedSales を受けて軸別内訳の解決結果を返す関数。
-/// 本番は `context.resolveBusinessBreakdown` / `resolveGeographyBreakdown`、テストはフェイクを注入する。
-public typealias BreakdownResolveFn =
-    @Sendable (String, Double?) async -> BreakdownResolveResult
+/// docID を受けて軸別内訳の解決結果を返す関数。
+/// 本番は `context.resolveBusinessBreakdown` 等、テストはフェイクを注入する。
+/// 分母（売上・employees・rd）は resolve 側が同一 XBRL パスで直接解決する（#9 / #10b）。
+public typealias BreakdownResolveFn = @Sendable (String) async -> BreakdownResolveResult
 
 /// `listedCodes`（呼び出し元は上場企業集合。`--codes` 時はその部分集合）の有報（直近 years 年ぶん）を
 /// 走査し、未解決 or 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
@@ -64,12 +64,6 @@ public typealias BreakdownResolveFn =
 /// `axis` は `business` / `geography` / `employees` / `research_and_development` / `goodwill`。
 /// `cachedDocIDs` はローカル XBRL 展開済みの書類。処理順は各社の最新有報 → 前年以降。同一年次内は
 /// 日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
-///
-/// `denominatorForDoc` は `resolve` に渡す第2引数（分母・全社合計値）を 財務取り込み
-/// （`company_financials`）から引く関数。business/geography は連結売上高（`consolidatedSalesForDoc`,
-/// 既定値）、employees/research_and_development は呼び出し元がそれぞれ従業員数・研究開発費の
-/// 合計取得関数を渡す（自前で XBRL から再抽出しない。重複ロジック回避）。値が nil/0 のときの
-/// 「財務取り込み未計算なら skip・計算済みだが値なしなら not_found」判定は軸に依らず共通。
 func runBreakdownIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
@@ -77,8 +71,6 @@ func runBreakdownIngest(
     axis: String = breakdownAxisBusiness,
     candidateSets: FilingSectionCandidateSets? = nil,
     logger: Logger? = nil,
-    denominatorForDoc: @escaping @Sendable (String, String, Database) async throws -> Double? =
-        consolidatedSalesForDoc,
     resolve: BreakdownResolveFn
 ) async throws -> BreakdownIngestSummary {
     let currentCacheVersion = breakdownCacheVersion(forAxis: axis)
@@ -167,62 +159,7 @@ func runBreakdownIngest(
         if let lim = limit, attempted >= lim { break }
         attempted += 1
 
-        let resolveResult: BreakdownResolveResult
-        if axis == breakdownAxisGoodwill {
-            // のれん軸は XBRL から分母（全社合計）を自前解決する。financials 分母は不要。
-            resolveResult = await resolve(cand.docID, nil)
-        } else {
-            let denominatorOrNil = try? await withDbRetry(
-                logger: logger, context: "docID=\(cand.docID) 分母参照", onRetry: { unhealthyRetries += 1 }
-            ) {
-                try await denominatorForDoc(cand.code, cand.docID, db)
-            }
-
-            // 分母なしで LLM に進むと nil→unknown になる。geography / employees / rd は
-            // 財務取り込み計算済みなら not_found 確定、未計算なら skip。
-            // business は保険等で sales が無くても xbrl_facts 決定論（第一生命型）が使えるので
-            // 解決を試す。即 not_found にすると新規銘柄が永久欠測になる。
-            if let denominator = denominatorOrNil, denominator != 0 {
-                resolveResult = await resolve(cand.docID, denominator)
-            } else {
-                let financialsHasDoc = try await withDbRetry(
-                    logger: logger, context: "docID=\(cand.docID) financials有無",
-                    onRetry: { unhealthyRetries += 1 }
-                ) {
-                    try await companyFinancialsHasDoc(code: cand.code, docID: cand.docID, db: db)
-                }
-                if axis == breakdownAxisBusiness, financialsHasDoc {
-                    resolveResult = await resolve(cand.docID, denominatorOrNil)
-                } else if financialsHasDoc {
-                    notApplicable += 1
-                    // not_found は決定的（カウンタ内訳には載せない＝正当欠測）
-                    if let existing, existing.source != breakdownSourceNotApplicable {
-                        logger?.warning(
-                            "内訳取り込み(\(axis)): 既存の実データ行を notApplicable(not_found/no_sales) で上書きしません: docID=\(cand.docID) code=\(cand.code)"
-                        )
-                    } else {
-                        let placeholder = BreakdownSnapshotPayload(
-                            axis: axis, denominator: 0, denominatorTag: "", rows: [],
-                            sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
-                        try await withDbRetry(
-                            logger: logger, context: "docID=\(cand.docID)",
-                            onRetry: { unhealthyRetries += 1 }
-                        ) {
-                            try await storeBreakdown(
-                                existing: existing, docID: cand.docID, axis: axis,
-                                code: cand.code, submitDateTime: cand.submitDateTime,
-                                payload: placeholder, source: breakdownSourceNotApplicable,
-                                contentHash: "", cacheVersion: currentCacheVersion, llmAudit: nil,
-                                notApplicableReason: breakdownNotApplicableNotFound, db: db)
-                        }
-                    }
-                    continue
-                } else {
-                    skipped += 1
-                    continue
-                }
-            }
-        }
+        let resolveResult = await resolve(cand.docID)
 
         switch resolveResult {
         case .resolved(let payload, let source, let contentHash, let audit):
@@ -245,9 +182,9 @@ func runBreakdownIngest(
             default: notApplicableUnknown += 1
             }
             // 既存行が実データ（source != not_applicable）を保持している場合は上書きしない。
-            // 再試行（needsReview=true や cache_version 不一致）の対象になった行が、LLM 一時停止・
-            // 財務取り込み 未計算等の一時的な理由で今回だけ notApplicable 判定された場合に、既存の
-            // 正しいデータを破壊してしまうため（Opus監査で指摘、issue #132）。`.failed` と同じ
+            // 再試行（needsReview=true や cache_version 不一致）の対象になった行が、LLM 一時停止等の
+            // 一時的な理由で今回だけ notApplicable 判定された場合に、既存の正しいデータを
+            // 破壊してしまうため（Opus監査で指摘、issue #132）。`.failed` と同じ
             // 「今回は進展なし、次回また再試行対象になる」扱いにする。
             if let existing, existing.source != breakdownSourceNotApplicable {
                 logger?.warning(
@@ -305,41 +242,6 @@ func runBreakdownIngest(
         notApplicableSingleSegmentDisclosed: notApplicableSingleSegmentDisclosed,
         notApplicableUnknown: notApplicableUnknown,
         failed: failed, skipped: skipped, purged: purged)
-}
-
-/// company_financials（財務取り込み）から当該書類（docID）の連結売上高を引く。内訳取り込みは自前で
-/// XBRL から売上を再抽出せず、既に計算済みの財務取り込みの値を再利用する（重複ロジック回避）。
-/// 財務取り込みが当該コード・当該書類をまだ計算していない場合は nil。`BreakdownNormalizer` /
-/// 両 LLM 正規化器はいずれも分母 nil（または 0）を許容せず即 nil を返す（=`.notApplicable`）ため、
-/// 財務取り込み未計算の間は当該書類が毎回 not_applicable になり、次回 ingest でも再試行され続ける
-/// （EDINET 側は EdinetCacheStore のキャッシュヒットのため実害は小さいが、財務取り込みが先に
-/// 計算済みであることが前提になる。デフォルトの `--stages` 実行順（financials→filing-sections→breakdowns）はこれを満たす）。
-func consolidatedSalesForDoc(code: String, docID: String, db: Database) async throws -> Double? {
-    guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
-    return financials.response.salesForDoc(docID)
-}
-
-/// company_financials（財務取り込み）から当該書類（docID）の従業員数（全社合計）を引く。
-/// `consolidatedSalesForDoc` と同型（`runBreakdownIngest` の `denominatorForDoc` に employees 軸から
-/// 渡す。自前で XBRL から再抽出しない。重複ロジック回避、2026-08-01 監査指摘対応）。
-func employeesForDocFromFinancials(code: String, docID: String, db: Database) async throws -> Double? {
-    guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
-    return financials.response.employeesForDoc(docID)
-}
-
-/// company_financials（財務取り込み）から当該書類（docID）の研究開発費（全社合計・円）を引く。
-/// `consolidatedSalesForDoc` と同型（`runBreakdownIngest` の `denominatorForDoc` に
-/// research_and_development 軸から渡す）。
-func rdForDocFromFinancials(code: String, docID: String, db: Database) async throws -> Double? {
-    guard let financials = try await CompanyFinancials.find(code, on: db) else { return nil }
-    return financials.response.rdForDoc(docID)
-}
-
-/// 財務取り込み が当該 code/docID の年次エントリを既に持っているか（売上の有無は問わない）。
-/// 分母売上なしの 内訳取り込み 判定で「未計算」と「計算済みだが売上抽出不能」を分けるために使う。
-func companyFinancialsHasDoc(code: String, docID: String, db: Database) async throws -> Bool {
-    guard let financials = try await CompanyFinancials.find(code, on: db) else { return false }
-    return financials.response.hasDoc(docID)
 }
 
 /// 解決済み内訳を company_breakdowns へ書き込む（既存行があれば更新、無ければ作成）。

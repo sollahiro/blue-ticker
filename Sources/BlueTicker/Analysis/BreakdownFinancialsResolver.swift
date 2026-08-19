@@ -6,6 +6,11 @@ import Foundation
 
 enum BreakdownFinancialsResolver {
 
+    /// business / geography 軸の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
+    static func financialsCanonicalSales(xbrlDir: URL) -> Double? {
+        StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
+    }
+
     /// financials の `employees`。正本は breakdown `employees` 軸の分母。
     static func financialsCanonicalEmployees(xbrlDir: URL) -> Double? {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
