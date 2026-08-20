@@ -484,11 +484,18 @@ enum BreakdownNormalizer {
     /// notes「設備投資等の概要」のCapex。報告セグメント表の資本的支出とは別軸。
     static func normalizeCapitalExpendituresOverview(
         facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpendituresOverview,
-        labelsByTag: [String: String] = [:]
+        total: Double? = nil, totalTag: String? = nil, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
-        normalizeSegmentMetric(
+        if let snapshot = normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.capexOverviewTags, axis: axis,
             warningPrefix: "capital_expenditures_overview", labelsByTag: labelsByTag)
+        {
+            return snapshot
+        }
+        guard let total, total > 0 else { return nil }
+        return BreakdownSnapshot(
+            axis: axis, denominator: total, denominatorTag: totalTag ?? "company_financials",
+            rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
     }
 
     /// 非流動性資産への追加額。

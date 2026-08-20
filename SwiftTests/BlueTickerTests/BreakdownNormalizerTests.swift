@@ -1460,4 +1460,15 @@ import Foundation
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 999)
     }
+
+    @Test func capexOverviewSupportsTotalOnlyDisclosure() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                facts: [], total: 510_000_000,
+                totalTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc"))
+        #expect(snapshot.denominator == 510_000_000)
+        #expect(snapshot.denominatorTag == "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
+        #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.needsReview == false)
+    }
 }

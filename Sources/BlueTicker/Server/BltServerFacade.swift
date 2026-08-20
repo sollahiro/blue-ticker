@@ -540,8 +540,11 @@ private extension BltServerContext {
             snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
                 facts: facts, labelsByTag: labelsByTag)
         case breakdownAxisCapitalExpendituresOverview:
+            let overview = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
+                xbrlDir: xbrlDir)
             snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
-                facts: facts, labelsByTag: labelsByTag)
+                facts: facts, total: overview.value, totalTag: overview.tag,
+                labelsByTag: labelsByTag)
         case breakdownAxisNoncurrentAssetAdditions:
             snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
                 facts: facts, labelsByTag: labelsByTag)
