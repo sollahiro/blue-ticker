@@ -545,6 +545,63 @@ enum Xbrl {
         "GoodwillBeforeOffsetting",
     ]
 
+    // MARK: - 報告セグメント別指標（breakdown 軸）
+    //
+    // 同じ日本語の表項目でも会計基準・タクソノミによりタグが分かれるため、
+    // 軸ごとに候補を優先順で持つ。`BreakdownNormalizer` は同一書類の当期 fact
+    // を持つ最初のタグを採用し、実タグ名を denominatorTag に残す。
+    static let segmentAssetsTags: [String] = [
+        "Assets",
+        "AssetsIFRS",
+        "AssetsUSGAAP",
+        // 銀行のセグメント情報では「固定資産」が NoncurrentAssets に載る
+        // （実データ: 三菱UFJ S100W4FB）。
+        "NoncurrentAssets",
+        "NonCurrentAssets",
+        "NoncurrentAssetsIFRS",
+        "NonCurrentAssetsIFRS",
+    ]
+
+    static let segmentDepreciationAndAmortizationTags: [String] = [
+        "DepreciationSegmentInformation",
+        "DepreciationAndAmortizationOperatingExpensesIFRS",
+        "DepreciationAndAmortization",
+    ]
+
+    static let segmentGoodwillAmortizationTags: [String] = [
+        "AmortizationOfGoodwillSGA",
+        "AmortizationOfGoodwill",
+        "AmortizationOfGoodwillIFRS",
+    ]
+
+    static let segmentImpairmentLossTags: [String] = [
+        "ImpairmentLossEL",
+        "ImpairmentLossesPLIFRS",
+        "ImpairmentLoss",
+        "ImpairmentLossIFRS",
+    ]
+
+    static let segmentEquityMethodInvestmentTags: [String] = [
+        "InvestmentsAccountedForUsingEquityMethodIFRS",
+        "InvestmentsAccountedForUsingEquityMethod",
+        "InvestmentsInEntitiesAccountedForUsingEquityMethod",
+        "InvestmentsInAssociatesAndJointVenturesIFRS",
+    ]
+
+    static let segmentCapitalExpenditureTags: [String] = [
+        "CapitalExpendituresIFRS",
+        "CapitalExpenditures",
+    ]
+
+    static let segmentNoncurrentAssetAdditionTags: [String] = [
+        "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+        // J-GAAP 銀行の「固定資産の増加額」（実データ: 三菱UFJ S100W4FB）。
+        "AdditionsOfFixedAssets",
+        "AdditionsToNoncurrentAssetsIFRS",
+        "AdditionsToNonCurrentAssetsIFRS",
+        "AdditionsToNonCurrentAssets",
+    ]
+
     // MARK: - 設備投資タグ
 
     static let capexOverviewTags: [String] = [

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Job 4: breakdowns（business/geography=上場、employees/rd/goodwill=225）
+# Job 4: breakdowns（business/geography=上場、決定論指標軸=225）
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"

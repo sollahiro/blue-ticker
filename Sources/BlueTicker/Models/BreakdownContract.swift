@@ -20,6 +20,44 @@ public let breakdownAxisResearchAndDevelopment = "research_and_development"
 /// ——本軸はJ-GAAP企業がBS/注記に持つ「のれん」単一タグをセグメントdimensionで内訳化する
 /// （実データ検証: オークマ・三井住友・三菱UFJ）。
 public let breakdownAxisGoodwill = "goodwill"
+/// 報告セグメント別の資産額（2026-08-20追加）。決定論のみ。
+public let breakdownAxisSegmentAssets = "segment_assets"
+/// 報告セグメント別の減価償却費及び償却費（2026-08-20追加）。決定論のみ。
+public let breakdownAxisDepreciationAndAmortization = "depreciation_and_amortization"
+/// 報告セグメント別ののれんの償却額（2026-08-20追加）。決定論のみ。
+public let breakdownAxisGoodwillAmortization = "goodwill_amortization"
+/// 報告セグメント別の減損損失（2026-08-20追加）。決定論のみ。
+public let breakdownAxisImpairmentLoss = "impairment_loss"
+/// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
+public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
+/// 報告セグメント別の資本的支出（2026-08-20追加）。決定論のみ。
+public let breakdownAxisCapitalExpenditures = "capital_expenditures"
+/// notes「設備投資等の概要」のセグメント別Capex（2026-08-20追加）。決定論のみ。
+/// `capital_expenditures`（報告セグメント表）とは同じ会社でも値が異なり得るため別軸。
+public let breakdownAxisCapitalExpendituresOverview = "capital_expenditures_overview"
+/// 報告セグメント別の非流動性資産への追加額（2026-08-20追加）。決定論のみ。
+public let breakdownAxisNoncurrentAssetAdditions = "noncurrent_asset_additions"
+
+/// business / geography を除く、報告セグメント別の決定論指標軸。
+public let breakdownSegmentMetricAxes = [
+    breakdownAxisEmployees,
+    breakdownAxisResearchAndDevelopment,
+    breakdownAxisGoodwill,
+    breakdownAxisSegmentAssets,
+    breakdownAxisDepreciationAndAmortization,
+    breakdownAxisGoodwillAmortization,
+    breakdownAxisImpairmentLoss,
+    breakdownAxisEquityMethodInvestments,
+    breakdownAxisCapitalExpenditures,
+    breakdownAxisCapitalExpendituresOverview,
+    breakdownAxisNoncurrentAssetAdditions,
+]
+
+/// `company_breakdowns.axis` として実装済みの軸か。
+public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
+    axis == breakdownAxisBusiness || axis == breakdownAxisGeography
+        || breakdownSegmentMetricAxes.contains(axis)
+}
 
 /// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
 /// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
@@ -34,6 +72,15 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v10"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
+/// v2: 分母を常に segment+reconciling に固定（表小計の閾値切替を廃止）。
+public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v2"
+public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v2"
+public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v2"
+public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v2"
+public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v2"
+public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v2"
+public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v2"
+public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v2"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -42,6 +89,14 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisEmployees: return employeesBreakdownCacheVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
     case breakdownAxisGoodwill: return goodwillBreakdownCacheVersion
+    case breakdownAxisSegmentAssets: return segmentAssetsBreakdownCacheVersion
+    case breakdownAxisDepreciationAndAmortization: return depreciationAndAmortizationBreakdownCacheVersion
+    case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
+    case breakdownAxisImpairmentLoss: return impairmentLossBreakdownCacheVersion
+    case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
+    case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownCacheVersion
+    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownCacheVersion
+    case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownCacheVersion
     default: return businessBreakdownCacheVersion
     }
 }
@@ -100,6 +155,14 @@ public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
 public let goodwillBreakdownMinServableVersion = 1
+public let segmentAssetsBreakdownMinServableVersion = 1
+public let depreciationAndAmortizationBreakdownMinServableVersion = 1
+public let goodwillAmortizationBreakdownMinServableVersion = 1
+public let impairmentLossBreakdownMinServableVersion = 1
+public let equityMethodInvestmentsBreakdownMinServableVersion = 1
+public let capitalExpendituresBreakdownMinServableVersion = 1
+public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
+public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -108,6 +171,14 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisEmployees: return employeesBreakdownMinServableVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
     case breakdownAxisGoodwill: return goodwillBreakdownMinServableVersion
+    case breakdownAxisSegmentAssets: return segmentAssetsBreakdownMinServableVersion
+    case breakdownAxisDepreciationAndAmortization: return depreciationAndAmortizationBreakdownMinServableVersion
+    case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
+    case breakdownAxisImpairmentLoss: return impairmentLossBreakdownMinServableVersion
+    case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
+    case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownMinServableVersion
+    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownMinServableVersion
+    case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownMinServableVersion
     default: return businessBreakdownMinServableVersion
     }
 }
@@ -118,7 +189,12 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     let prefixes = [
         "breakdown-business-v", "breakdown-geography-v", "breakdown-employees-v",
-        "breakdown-research-and-development-v", "breakdown-goodwill-v", "breakdown-v",
+        "breakdown-research-and-development-v", "breakdown-goodwill-v",
+        "breakdown-segment-assets-v", "breakdown-depreciation-and-amortization-v",
+        "breakdown-goodwill-amortization-v", "breakdown-impairment-loss-v",
+        "breakdown-equity-method-investments-v", "breakdown-capital-expenditures-v",
+        "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
+        "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
         let suffix = version.dropFirst(prefix.count)
@@ -154,17 +230,30 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var amount: Double
     public var profit: Double?
     public var rowKind: String
+    /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
+    public var description: String?
 
     private enum CodingKeys: String, CodingKey {
-        case labelRaw, label, amount, profit, rowKind
+        case labelRaw, label, amount, profit, rowKind, description
     }
 
-    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
+    public init(
+        labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
+        description: String? = nil
+    ) {
         self.labelRaw = labelRaw
         self.label = label
         self.amount = amount
         self.profit = profit
         self.rowKind = rowKind
+        self.description = description
+    }
+
+    /// 旧公開initializer。既存の呼び出し側・ビルド済みテストとの互換性を維持する。
+    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
+        self.init(
+            labelRaw: labelRaw, label: label, amount: amount, profit: profit, rowKind: rowKind,
+            description: nil)
     }
 
     /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
@@ -180,6 +269,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         amount = try container.decode(Double.self, forKey: .amount)
         profit = try container.decodeIfPresent(Double.self, forKey: .profit)
         rowKind = try container.decode(String.self, forKey: .rowKind)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
     }
 }
 
@@ -232,13 +322,18 @@ public extension BreakdownRowPayload {
     /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。欠損は NSNull（`FinancialsYear` の
     /// delta フィールドと同じ表現方針）。
     func jsonObject() -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "label_raw": labelRaw,
             "label": label,
             "amount": amount,
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,
         ]
+        // description は Capex Overview 等で値があるときだけ載せる（他軸に null を増やすのを避ける）。
+        if let description {
+            object["description"] = description
+        }
+        return object
     }
 }
 

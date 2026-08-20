@@ -53,7 +53,7 @@ public func financialsAssemblyFingerprint() -> String {
         statementCacheVersion,
         perShareInformationNoteCacheVersion,
         issuedSharesAndCapitalNoteCacheVersion,
-        capitalExpendituresOverviewNoteCacheVersion,
+        capitalExpendituresOverviewBreakdownCacheVersion,
         borrowingsScheduleNoteCacheVersion,
         leaseLiabilitiesNoteCacheVersion,
         employeesBreakdownCacheVersion,
@@ -95,7 +95,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | bps | notes `per_share_information`（tag=bps） | StatementNotesResolver.financialsCanonicalBps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
-// | capex | notes overview XBRL タグ → CF タグ | StatementNotesResolver.financialsCanonicalCapex | done |
+// | capex | breakdown overview XBRL タグ → CF タグ | BreakdownFinancialsResolver.financialsCanonicalCapex | done |
 // | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
 // | employees | breakdown `employees` 分母 | BreakdownFinancialsResolver.financialsCanonicalEmployees | done |
 // | rd | breakdown `research_and_development` 分母 | BreakdownFinancialsResolver.financialsCanonicalRd | done |

@@ -17,6 +17,8 @@ struct BreakdownRow: Equatable {
     var share: Double?
     var profit: Double?  // 対応する利益タグが無ければ nil（任意フィールド）
     var rowKind: String  // "segment" | "subtotal" | "reconciling"
+    /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
+    var description: String? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
@@ -400,13 +402,201 @@ enum BreakdownNormalizer {
             warningPrefix: "goodwill", labelsByTag: labelsByTag)
     }
 
+    /// 「報告セグメントごとの情報」に載る数値指標を、指標ごとの breakdown 軸へ正規化する。
+    ///
+    /// 分母は常に segment + reconciling の合計（会社間で同じ形の割合）。表の小計・無dimension
+    /// 全社合計（EntityTotal）は行として残し、分母選択には使わない。全社合計が分母から
+    /// 5%超ずれるときだけ `needs_review`（比較の床を会社ごとに切り替えない）。
+    /// `denominatorTag` には実際に採用した指標タグ名を残す。
+    private static func normalizeSegmentMetric(
+        facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
+        labelsByTag: [String: String]
+    ) -> BreakdownSnapshot? {
+        guard let amountTag = amountTags.first(where: { tag in
+            !resolvePerMember(facts: facts, tag: tag).isEmpty
+        }) else { return nil }
+        let perMember = withEntityTotal(
+            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
+        guard !perMember.isEmpty else { return nil }
+        let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
+        // 分母=segment+reconciling は本軸の正方針なので derived 警告は立てない。
+        // EntityTotal との乖離だけ needs_review にする。
+        return buildCountBasisSnapshot(
+            perMember: perMember, amountTag: amountTag, total: total, axis: axis,
+            warningPrefix: warningPrefix, labelsByTag: labelsByTag,
+            warnOnDerivedTotal: false, useEntityTotalAsDenominator: false)
+    }
+
+    /// セグメント資産。
+    static func normalizeSegmentAssets(
+        facts: [BreakdownFact], axis: String = breakdownAxisSegmentAssets,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
+            warningPrefix: "segment_assets", labelsByTag: labelsByTag)
+    }
+
+    /// 減価償却費及び償却費。
+    static func normalizeDepreciationAndAmortization(
+        facts: [BreakdownFact], axis: String = breakdownAxisDepreciationAndAmortization,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentDepreciationAndAmortizationTags, axis: axis,
+            warningPrefix: "depreciation_and_amortization", labelsByTag: labelsByTag)
+    }
+
+    /// のれんの償却額。
+    static func normalizeGoodwillAmortization(
+        facts: [BreakdownFact], axis: String = breakdownAxisGoodwillAmortization,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentGoodwillAmortizationTags, axis: axis,
+            warningPrefix: "goodwill_amortization", labelsByTag: labelsByTag)
+    }
+
+    /// 減損損失。
+    static func normalizeImpairmentLoss(
+        facts: [BreakdownFact], axis: String = breakdownAxisImpairmentLoss,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentImpairmentLossTags, axis: axis,
+            warningPrefix: "impairment_loss", labelsByTag: labelsByTag)
+    }
+
+    /// 持分法会計処理される投資。
+    static func normalizeEquityMethodInvestments(
+        facts: [BreakdownFact], axis: String = breakdownAxisEquityMethodInvestments,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentEquityMethodInvestmentTags, axis: axis,
+            warningPrefix: "equity_method_investments", labelsByTag: labelsByTag)
+    }
+
+    /// 資本的支出。
+    static func normalizeCapitalExpenditures(
+        facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpenditures,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentCapitalExpenditureTags, axis: axis,
+            warningPrefix: "capital_expenditures", labelsByTag: labelsByTag)
+    }
+
+    /// notes「設備投資等の概要」のCapex。報告セグメント表の資本的支出とは別軸。
+    static func normalizeCapitalExpendituresOverview(
+        facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpendituresOverview,
+        total: Double? = nil, totalTag: String? = nil, labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        if let snapshot = normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.capexOverviewTags, axis: axis,
+            warningPrefix: "capital_expenditures_overview", labelsByTag: labelsByTag)
+        {
+            return snapshot
+        }
+        guard let total, total > 0 else { return nil }
+        return BreakdownSnapshot(
+            axis: axis, denominator: total, denominatorTag: totalTag ?? "company_financials",
+            rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+    }
+
+    /// notes「設備投資等の概要」HTML表をbreakdown契約へ写す。
+    /// 前年度比は移さず、設備内容・目的だけを description として保持する。
+    static func normalizeCapitalExpendituresOverview(
+        segments: [CapexSegmentPayload],
+        axis: String = breakdownAxisCapitalExpendituresOverview
+    ) -> BreakdownSnapshot? {
+        guard !segments.isEmpty else { return nil }
+        // segmentName=nil の単一総額fallbackは XBRL Overview タグ由来（HTML表ではない）。
+        if segments.allSatisfy({ $0.segmentName == nil }) {
+            guard let total = segments.compactMap(\.investmentAmount).first, total > 0 else {
+                return nil
+            }
+            return BreakdownSnapshot(
+                axis: axis, denominator: total,
+                denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+                rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+        }
+
+        let rows = segments.compactMap { segment -> BreakdownRow? in
+            guard let name = segment.segmentName, let amount = segment.investmentAmount else {
+                return nil
+            }
+            let normalized = name.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            let rowKind: String
+            if segment.isTotal {
+                rowKind = "subtotal"
+            } else if normalized.contains("調整") || normalized == "全社"
+                || normalized == "全社(共通)" || normalized == "全社（共通）"
+            {
+                rowKind = "reconciling"
+            } else {
+                rowKind = "segment"
+            }
+            return BreakdownRow(
+                labelRaw: name, label: name, amount: amount, share: nil, profit: nil,
+                rowKind: rowKind, description: segment.description)
+        }
+        guard !rows.isEmpty else { return nil }
+        // 分母は segment+reconciling（xbrl_facts 経路と同形）。小計行は表示用に残す。
+        // 複数小計があるときは segment+reconciling に最も近いものを照合用に使い、5%超ずれなら
+        // needs_review（部分小計を分母に採用しない）。
+        let reconciledSum = rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        var warnings: [String] = []
+        let denominator: Double
+        if reconciledSum > 0 {
+            denominator = reconciledSum
+            let subtotals = rows.filter { $0.rowKind == "subtotal" }.map(\.amount)
+            if let nearest = subtotals.min(by: { abs($0 - reconciledSum) < abs($1 - reconciledSum) }),
+                nearest > 0
+            {
+                let scale = max(1.0, abs(nearest), abs(reconciledSum))
+                if abs(nearest - reconciledSum) / scale > 0.05 {
+                    warnings.append("capital_expenditures_overview_subtotal_differs_from_segment_sum")
+                }
+            }
+        } else if let total = rows.last(where: { $0.rowKind == "subtotal" })?.amount, total > 0 {
+            denominator = total
+            warnings.append("capital_expenditures_overview_denominator_from_subtotal_only")
+        } else {
+            return nil
+        }
+        var resolvedRows = rows
+        for index in resolvedRows.indices {
+            resolvedRows[index].share = resolvedRows[index].amount / denominator
+        }
+        return BreakdownSnapshot(
+            axis: axis, denominator: denominator,
+            denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+            rows: resolvedRows, sourceKind: "html_table",
+            needsReview: !warnings.isEmpty, warnings: warnings)
+    }
+
+    /// 非流動性資産への追加額。
+    static func normalizeNoncurrentAssetAdditions(
+        facts: [BreakdownFact], axis: String = breakdownAxisNoncurrentAssetAdditions,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentNoncurrentAssetAdditionTags, axis: axis,
+            warningPrefix: "noncurrent_asset_additions", labelsByTag: labelsByTag)
+    }
+
     /// `normalizeCountBasis`/`normalizeGoodwill` 共通の後処理（member 分類・分母解決・行組み立て）。
     /// `amountTag`（`denominatorTag`として使う）は呼び出し側がタグ選択方式ごとに解決済みの値を渡す
     /// （`normalizeGoodwill` は全社合計の実タグ名=`totalTag` を優先し、無ければセグメント側タグに
     /// フォールバックする——セグメント別内訳タグと全社合計タグが別物のケースがあるため）。
     private static func buildCountBasisSnapshot(
         perMember: [String: BreakdownFact], amountTag: String, total: Double?, axis: String,
-        warningPrefix: String, labelsByTag: [String: String]
+        warningPrefix: String, labelsByTag: [String: String], warnOnDerivedTotal: Bool = true,
+        useEntityTotalAsDenominator: Bool = true
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
@@ -434,7 +624,7 @@ enum BreakdownNormalizer {
 
         var warnings: [String] = []
         let denominator: Double
-        if let total, total > 0 {
+        if useEntityTotalAsDenominator, let total, total > 0 {
             denominator = total
             let segmentSum = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
                 .reduce(0.0) { $0 + amounts[$1]! }
@@ -442,10 +632,18 @@ enum BreakdownNormalizer {
                 warnings.append("\(warningPrefix)_segment_sum_far_from_total")
             }
         } else {
-            // 全社合計 fact が取れない場合のみ segment+reconciling 行合計にフォールバックする（要レビュー）。
-            denominator = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+            let value = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
                 .reduce(0.0) { $0 + amounts[$1]! }
-            warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
+            denominator = value
+            if warnOnDerivedTotal {
+                warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
+            }
+            if let entityTotal = amounts[Xbrl.entityTotalMemberName], denominator > 0 {
+                let scale = max(1.0, abs(entityTotal), abs(denominator))
+                if abs(entityTotal - denominator) / scale > 0.05 {
+                    warnings.append("\(warningPrefix)_entity_total_differs_from_table_total")
+                }
+            }
         }
         guard denominator > 0 else { return nil }
 

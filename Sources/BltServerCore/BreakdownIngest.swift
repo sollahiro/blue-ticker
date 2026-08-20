@@ -7,7 +7,7 @@
 // （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
 // 対象母集団は呼び出し元が `listedCodes` に渡す集合。business/geography は上場全体、
-// employees/rd/goodwill は日経225。日経225（`priorityCodes`）は処理順の先頭寄せにも使う。
+// 決定論指標軸は日経225。日経225（`priorityCodes`）は処理順の先頭寄せにも使う。
 // `--codes` 指定時はその集合に絞る。
 //
 // 候補選定ロジック自体は有報セクション取り込み（`filingSectionCandidates`、「対象 × 有報(120) × 直近 years 件」）を再利用する
@@ -61,7 +61,7 @@ public typealias BreakdownResolveFn = @Sendable (String) async -> BreakdownResol
 /// 走査し、未解決 or 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
 /// `limit` は新規解決件数の上限（LLM 呼び出しを含み重いためバッチ実行用。軸ごとの呼び出しで独立に適用）。
 /// `explicitCodes` / `priorityCodes` は 有報セクション取り込み と同じ意味（後者は処理順のみ）。
-/// `axis` は `business` / `geography` / `employees` / `research_and_development` / `goodwill`。
+/// `axis` は `isSupportedBreakdownAxis` が受け付ける軸。
 /// `cachedDocIDs` はローカル XBRL 展開済みの書類。処理順は各社の最新有報 → 前年以降。同一年次内は
 /// 日経225 → キャッシュ済み → 欠測/要再試行/版ずれのラウンドロビン。
 func runBreakdownIngest(
@@ -332,7 +332,7 @@ enum BreakdownLoadResult {
 }
 
 /// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
-/// axis は "business" / "geography" / "employees" / "research_and_development" / "goodwill" を受け付ける
+/// axis は `isSupportedBreakdownAxis` が受け付ける軸を受け付ける
 /// （geography は 2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ
 /// 解禁。employees/research_and_development/goodwill は決定論のみで LLM 非依存だが
 /// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
@@ -344,11 +344,7 @@ func loadStoredBreakdown(
 ) async throws -> BreakdownLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
-    guard
-        axis == breakdownAxisBusiness || axis == breakdownAxisGeography
-            || axis == breakdownAxisEmployees || axis == breakdownAxisResearchAndDevelopment
-            || axis == breakdownAxisGoodwill
-    else { return .absent }
+    guard isSupportedBreakdownAxis(axis) else { return .absent }
 
     let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {

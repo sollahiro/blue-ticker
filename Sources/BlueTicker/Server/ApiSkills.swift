@@ -330,17 +330,22 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             id: "get-breakdown",
             name: "事業別・地域別売上内訳",
             description: """
-                有価証券報告書から事業別/地域別売上高・従業員数・研究開発費・のれんの内訳を取得します（格納済みデータのみ）。
+                有価証券報告書から事業別/地域別売上高、従業員数、研究開発費、のれん、
+                報告セグメント別の資産・減価償却費及び償却費・のれんの償却額・減損損失・
+                持分法会計処理される投資・資本的支出・非流動性資産への追加額を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は business（既定）/ geography / employees / research_and_development / goodwill に対応。
-                employees・research_and_development・goodwill は決定論のみ（LLMフォールバックなし）で、
+                axis は business（既定）/ geography / employees / research_and_development / goodwill /
+                segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss /
+                equity_method_investments / capital_expenditures /
+                capital_expenditures_overview / noncurrent_asset_additions に対応。
+                これらの決定論軸は LLM フォールバックなしで、
                 報告セグメント別の内訳が開示されている企業のみ値が入ります。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 axis=business: geography_only（報告セグメントが地域別のみで事業別への変換不可）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
                 unknown（原因未特定・要再調査）。
                 axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
-                axis=employees / research_and_development / goodwill: not_found（セグメント別内訳が非開示）。
+                決定論軸: not_found（セグメント別内訳が非開示）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
@@ -365,13 +370,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill。省略時 business）",
+                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss / equity_method_investments / capital_expenditures / capital_expenditures_overview / noncurrent_asset_additions。省略時 business）",
                     required: false,
                     defaultValue: .string("business")
                 ),
             ],
             instructions: """
-                Breakdown（事業別/地域別売上・従業員数・研究開発費・のれんの構造化）。
+                Breakdown（事業別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標の構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=business
@@ -450,7 +455,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表注記",
             description: """
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数・設備投資概要・配当金・
+                （EPS・発行済株式数・配当金・
                 借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細・
                 リース負債）を
                 note_type 単位で取得します（格納済みデータのみ）。
@@ -483,7 +488,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .string,
                     description: """
                         注記種別: per_share_information / issued_shares_and_capital / \
-                        capital_expenditures_overview / dividends / \
+                        dividends / \
                         borrowings_schedule / policy_holding_securities / \
                         property_plant_equipment_schedule / goodwill_and_intangibles / \
                         lease_liabilities

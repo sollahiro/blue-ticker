@@ -20,6 +20,14 @@
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
 | `geography` | 地域別注記 |
+| `segment_assets` | 報告セグメントごとの資産（銀行の「固定資産」含む） |
+| `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費（J-GAAPは減価償却費） |
+| `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
+| `impairment_loss` | 報告セグメントごとの減損損失 |
+| `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
+| `capital_expenditures` | 報告セグメントごとの資本的支出 |
+| `capital_expenditures_overview` | notes「設備投資等の概要」のセグメント別Capex（`capital_expenditures`とは別値）。US-GAAP（富士フイルム・キヤノン）も Overview タグにセグメント dimension 付き fact があり決定論で再構成可能 |
+| `noncurrent_asset_additions` | 報告セグメントごとの非流動性資産／固定資産への追加額 |
 
 ## 再発防止（学びの要約）
 
@@ -44,12 +52,15 @@
 - 比較用スナップショット: `BreakdownSnapshot`（`BreakdownContract.swift` / `BreakdownNormalizer`）。
 - 保存: `company_breakdowns`（filing-sections とは別。LLM 行を filing バンプに巻き込まない）。主キー `doc_id#axis`。
 - `not_found` は行を作らない。business の E/F/unknown は `not_applicable` プレースホルダ。REST/MCP は 404＋ボディ `reason`（200 化しない）。
-- 対象母集団: business/geography は上場全体（日経225は処理順の優先のみ）。employees / rd / goodwill は日経225。read は Fly 専用（ingest 時に LLM 計算）。処理順は各社の最新有報 → 前年以降。同一年次内は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
+- 対象母集団: business/geography は上場全体（日経225は処理順の優先のみ）。employees / rd / goodwill および報告セグメント別指標軸は日経225。read は Fly 専用（ingest 時に LLM 計算）。処理順は各社の最新有報 → 前年以降。同一年次内は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決、#9）。
+- 報告セグメント別指標の分母は常に segment + reconciling（表の小計・EntityTotal は行として保持し、分母切替には使わない）。
 
 ## 残課題
 
-- employees / rd / goodwill 軸の公開・配線
+- employees / rd / goodwill / 報告セグメント別指標軸の正式公開ゲート（配線・read は決定論で可）
+- 報告セグメント別指標8軸の実データ母集団全体への展開
+- 決定論指標軸の doc 単位一括解決（軸ループ再パース削減の本丸。現状は docID メモで緩和）
 - geography の巨大注記内での見出し・表の意味関連性の限界
 - LLM 生ログ全文の別テーブル保持（任意）
 

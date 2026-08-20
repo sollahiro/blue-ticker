@@ -1304,4 +1304,253 @@ import Foundation
                 facts: [], total: 4_409_000_000, axis: breakdownAxisResearchAndDevelopment))
         #expect(snap.denominatorTag == "company_financials")
     }
+
+    /// 報告セグメントごとの情報に含まれる7指標を、smokeの実抽出factsから軸別に
+    /// 正規化する床。各指標の denominator_tag は固定プレースホルダーではなく、
+    /// fixture の実タグ候補のいずれかになることも確認する。
+    @Test func segmentMetricAxesNormalizeSmokeFacts() throws {
+        let golden = try Self.loadGolden()
+        func facts(_ docID: String) throws -> [BreakdownFact] {
+            let entry = try #require(golden[docID])
+            let segments = try #require(entry["segments"] as? [String: Any])
+            return ExtractedBreakdown(dictionary: segments).facts
+        }
+        func expectTag(_ snapshot: BreakdownSnapshot?, _ tags: [String]) throws {
+            let snapshot = try #require(snapshot)
+            #expect(tags.contains(snapshot.denominatorTag))
+            #expect(!snapshot.rows.isEmpty)
+        }
+
+        let ajinomoto = try facts("S100VXJA")
+        try expectTag(
+            BreakdownNormalizer.normalizeSegmentAssets(facts: ajinomoto),
+            Xbrl.segmentAssetsTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeDepreciationAndAmortization(facts: ajinomoto),
+            Xbrl.segmentDepreciationAndAmortizationTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeImpairmentLoss(facts: ajinomoto),
+            Xbrl.segmentImpairmentLossTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeEquityMethodInvestments(facts: ajinomoto),
+            Xbrl.segmentEquityMethodInvestmentTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeCapitalExpenditures(facts: ajinomoto),
+            Xbrl.segmentCapitalExpenditureTags)
+
+        let nichirei = try facts("S100VYA0")
+        try expectTag(
+            BreakdownNormalizer.normalizeGoodwillAmortization(facts: nichirei),
+            Xbrl.segmentGoodwillAmortizationTags)
+
+        let azPlanning = try facts("S100VU4O")
+        try expectTag(
+            BreakdownNormalizer.normalizeNoncurrentAssetAdditions(facts: azPlanning),
+            Xbrl.segmentNoncurrentAssetAdditionTags)
+    }
+
+    @Test func segmentMetricKeepsEntityTotalFactAsConsolidatedRow() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        let entityTotal = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entityTotal.amount == 100)
+        #expect(entityTotal.rowKind == "subtotal")
+    }
+
+    @Test func mufgFixedAssetRowsUseBankSpecificTagsAndTotals() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100W4FB"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+
+        let assets = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(assets.denominatorTag == "NoncurrentAssets")
+        let assetsTotal = try #require(assets.rows.first { $0.labelRaw == "TotalMember" })
+        #expect(assetsTotal.amount == 1_383_167_000_000)
+
+        let additions = try #require(
+            BreakdownNormalizer.normalizeNoncurrentAssetAdditions(facts: facts))
+        #expect(additions.denominatorTag == "AdditionsOfFixedAssets")
+        let additionsTotal = try #require(
+            additions.rows.first { $0.labelRaw == "TotalMember" })
+        #expect(additionsTotal.amount == 232_361_000_000)
+    }
+
+    @Test func nichireiUsesJgaapEquityMethodInvestmentTag() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100VYA0"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEquityMethodInvestments(facts: facts))
+        #expect(snapshot.denominatorTag == "InvestmentsInEntitiesAccountedForUsingEquityMethod")
+        let logistics = try #require(
+            snapshot.rows.first { $0.labelRaw == "LogisticsReportableSegmentsMember" })
+        #expect(logistics.amount == 3_888_000_000)
+        let subtotal = try #require(
+            snapshot.rows.first { $0.labelRaw == "TotalOfReportableSegmentsAndOthersMember" })
+        #expect(subtotal.amount == 5_615_000_000)
+    }
+
+    @Test func suzukiUsesSegmentCapexTagBeforeNotesOverviewTag() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100W4MT"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+        let snapshot = try #require(BreakdownNormalizer.normalizeCapitalExpenditures(facts: facts))
+        #expect(snapshot.denominatorTag == "CapitalExpendituresIFRS")
+        let subtotal = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(subtotal.amount == 419_699_000_000)
+
+        let overview = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(facts: facts))
+        #expect(overview.denominatorTag == "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
+        let overviewAutomobile = try #require(
+            overview.rows.first { $0.labelRaw == "AutomobileBusinessReportableSegmentMember" })
+        #expect(overviewAutomobile.amount == 343_238_000_000)
+    }
+
+    @Test func metricTagSelectionSkipsPriorOnlyPreferredCandidate() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "Prior1YearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 10, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 20, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominatorTag == "AssetsIFRS")
+        #expect(snapshot.rows.first?.amount == 20)
+    }
+
+    @Test func metricDenominatorUsesTableSubtotalAndReconcilingRows() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_ReconcilingItemsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReconcilingItemsMember"],
+                value: 20, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 999, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        // 分母は常に segment+reconciling（小計・EntityTotal は行のみ）。
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 999)
+    }
+
+    @Test func metricDenominatorKeepsSmallReconcilingInShareBase() throws {
+        // 調整が総額の5%未満でも、報告セグメント小計へ分母を落とさない。
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 95, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 95, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReconcilingItemsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReconcilingItemsMember"],
+                value: 3, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 98)
+        #expect(snapshot.needsReview == false)
+        let reconciling = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReconcilingItemsMember" })
+        #expect(abs((reconciling.share ?? 0) - 3.0 / 98.0) < 1e-9)
+    }
+
+    @Test func capexOverviewSupportsTotalOnlyDisclosure() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                facts: [], total: 510_000_000,
+                totalTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc"))
+        #expect(snapshot.denominator == 510_000_000)
+        #expect(snapshot.denominatorTag == "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
+        #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.sourceKind == "xbrl_facts")
+        #expect(snapshot.needsReview == false)
+    }
+
+    @Test func capexOverviewTotalOnlySegmentsUseXbrlFactsSourceKind() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: nil, investmentAmount: 510_000_000,
+                        yoyPercent: nil, description: nil),
+                ]))
+        #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.sourceKind == "xbrl_facts")
+        #expect(snapshot.denominator == 510_000_000)
+    }
+
+    @Test func capexOverviewPreservesDescriptionWithoutPriorYearChange() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "四輪事業", investmentAmount: 343_238_000_000,
+                        yoyPercent: 12.3, description: "生産設備・研究開発設備・販売設備等"),
+                    CapexSegmentPayload(
+                        segmentName: "全社", investmentAmount: 1_000_000,
+                        yoyPercent: nil, description: "全社共通"),
+                    CapexSegmentPayload(
+                        segmentName: "合計", investmentAmount: 344_238_000_000,
+                        yoyPercent: nil, description: nil, isTotal: true),
+                ]))
+        let segment = try #require(snapshot.rows.first { $0.labelRaw == "四輪事業" })
+        #expect(segment.description == "生産設備・研究開発設備・販売設備等")
+        #expect(segment.rowKind == "segment")
+        let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(snapshot.denominator == 343_239_000_000)
+        #expect(snapshot.rows.allSatisfy { $0.description != "12.3" })
+    }
+
+    @Test func capexOverviewTreatsFullwidthCorporateSharedAsReconciling() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "事業A", investmentAmount: 80, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "全社（共通）", investmentAmount: 20, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "合計", investmentAmount: 100, yoyPercent: nil,
+                        description: nil, isTotal: true),
+                ]))
+        let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社（共通）" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == false)
+    }
 }
