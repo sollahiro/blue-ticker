@@ -113,4 +113,9 @@ import Testing
         #expect(decoded.components?.map(\.tag) == ["CurrentAssetsIFRS", "NonCurrentAssetsIFRS"])
         #expect(decoded.components?.map(\.weight) == [1, 1])
     }
+
+    @Test func capitalExpendituresOverviewIsNotAStatementNoteType() {
+        #expect(isKnownStatementNoteType("capital_expenditures_overview") == false)
+        #expect(statementNoteCacheVersion(forType: "capital_expenditures_overview").isEmpty)
+    }
 }
