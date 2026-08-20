@@ -20,13 +20,13 @@
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
 | `geography` | 地域別注記 |
-| `segment_assets` | 報告セグメントごとのセグメント資産 |
-| `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費 |
+| `segment_assets` | 報告セグメントごとの資産（銀行の「固定資産」含む） |
+| `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費（J-GAAPは減価償却費） |
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
 | `impairment_loss` | 報告セグメントごとの減損損失 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capital_expenditures` | 報告セグメントごとの資本的支出 |
-| `noncurrent_asset_additions` | 報告セグメントごとの非流動性資産への追加額 |
+| `noncurrent_asset_additions` | 報告セグメントごとの非流動性資産／固定資産への追加額 |
 
 ## 再発防止（学びの要約）
 

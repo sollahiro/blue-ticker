@@ -554,6 +554,12 @@ enum Xbrl {
         "Assets",
         "AssetsIFRS",
         "AssetsUSGAAP",
+        // 銀行のセグメント情報では「固定資産」が NoncurrentAssets に載る
+        // （実データ: 三菱UFJ S100W4FB）。
+        "NoncurrentAssets",
+        "NonCurrentAssets",
+        "NoncurrentAssetsIFRS",
+        "NonCurrentAssetsIFRS",
     ]
 
     static let segmentDepreciationAndAmortizationTags: [String] = [
@@ -589,6 +595,8 @@ enum Xbrl {
 
     static let segmentNoncurrentAssetAdditionTags: [String] = [
         "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+        // J-GAAP 銀行の「固定資産の増加額」（実データ: 三菱UFJ S100W4FB）。
+        "AdditionsOfFixedAssets",
         "AdditionsToNoncurrentAssetsIFRS",
         "AdditionsToNonCurrentAssetsIFRS",
         "AdditionsToNonCurrentAssets",

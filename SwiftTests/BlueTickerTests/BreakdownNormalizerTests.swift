@@ -1364,4 +1364,23 @@ import Foundation
         #expect(entityTotal.amount == 100)
         #expect(entityTotal.rowKind == "subtotal")
     }
+
+    @Test func mufgFixedAssetRowsUseBankSpecificTagsAndTotals() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100W4FB"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+
+        let assets = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(assets.denominatorTag == "NoncurrentAssets")
+        let assetsTotal = try #require(assets.rows.first { $0.labelRaw == "TotalMember" })
+        #expect(assetsTotal.amount == 1_383_167_000_000)
+
+        let additions = try #require(
+            BreakdownNormalizer.normalizeNoncurrentAssetAdditions(facts: facts))
+        #expect(additions.denominatorTag == "AdditionsOfFixedAssets")
+        let additionsTotal = try #require(
+            additions.rows.first { $0.labelRaw == "TotalMember" })
+        #expect(additionsTotal.amount == 232_361_000_000)
+    }
 }
