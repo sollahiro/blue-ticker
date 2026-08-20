@@ -128,7 +128,7 @@ struct IndividualAnalyzer {
         // 設備投資: breakdown overview source → CF（#6）
         raw.capex = BreakdownFinancialsResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
-        ).map { $0 / millionYen }
+        ).value.map { $0 / millionYen }
         raw.rd = BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir)
             .map { $0 / millionYen }
         raw.buyback = statementMain?.buyback.map { $0 / millionYen }
