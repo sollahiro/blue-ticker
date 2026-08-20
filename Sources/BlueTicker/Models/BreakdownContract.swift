@@ -72,14 +72,15 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v10"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
-public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v1"
-public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v1"
-public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v1"
-public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v1"
-public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v1"
-public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v1"
-public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v1"
-public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v1"
+/// v2: 分母を常に segment+reconciling に固定（表小計の閾値切替を廃止）。
+public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v2"
+public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v2"
+public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v2"
+public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v2"
+public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v2"
+public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v2"
+public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v2"
+public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v2"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -321,14 +322,18 @@ public extension BreakdownRowPayload {
     /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。欠損は NSNull（`FinancialsYear` の
     /// delta フィールドと同じ表現方針）。
     func jsonObject() -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "label_raw": labelRaw,
             "label": label,
             "amount": amount,
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,
-            "description": description ?? NSNull(),
         ]
+        // description は Capex Overview 等で値があるときだけ載せる（他軸に null を増やすのを避ける）。
+        if let description {
+            object["description"] = description
+        }
+        return object
     }
 }
 

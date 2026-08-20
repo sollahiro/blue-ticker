@@ -1454,11 +1454,36 @@ import Foundation
                 dimensions: [:], value: 999, label: nil, unitRef: "JPY", decimals: "0"),
         ]
         let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        // 分母は常に segment+reconciling（小計・EntityTotal は行のみ）。
         #expect(snapshot.denominator == 100)
         #expect(snapshot.needsReview == true)
         #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 999)
+    }
+
+    @Test func metricDenominatorKeepsSmallReconcilingInShareBase() throws {
+        // 調整が総額の5%未満でも、報告セグメント小計へ分母を落とさない。
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 95, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 95, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReconcilingItemsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReconcilingItemsMember"],
+                value: 3, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 98)
+        #expect(snapshot.needsReview == false)
+        let reconciling = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReconcilingItemsMember" })
+        #expect(abs((reconciling.share ?? 0) - 3.0 / 98.0) < 1e-9)
     }
 
     @Test func capexOverviewSupportsTotalOnlyDisclosure() throws {
@@ -1469,7 +1494,21 @@ import Foundation
         #expect(snapshot.denominator == 510_000_000)
         #expect(snapshot.denominatorTag == "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
         #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.sourceKind == "xbrl_facts")
         #expect(snapshot.needsReview == false)
+    }
+
+    @Test func capexOverviewTotalOnlySegmentsUseXbrlFactsSourceKind() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: nil, investmentAmount: 510_000_000,
+                        yoyPercent: nil, description: nil),
+                ]))
+        #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.sourceKind == "xbrl_facts")
+        #expect(snapshot.denominator == 510_000_000)
     }
 
     @Test func capexOverviewPreservesDescriptionWithoutPriorYearChange() throws {
@@ -1491,6 +1530,27 @@ import Foundation
         #expect(segment.rowKind == "segment")
         let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社" })
         #expect(corporate.rowKind == "reconciling")
+        #expect(snapshot.denominator == 343_239_000_000)
         #expect(snapshot.rows.allSatisfy { $0.description != "12.3" })
+    }
+
+    @Test func capexOverviewTreatsFullwidthCorporateSharedAsReconciling() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "事業A", investmentAmount: 80, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "全社（共通）", investmentAmount: 20, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "合計", investmentAmount: 100, yoyPercent: nil,
+                        description: nil, isTotal: true),
+                ]))
+        let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社（共通）" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == false)
     }
 }
