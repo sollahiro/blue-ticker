@@ -174,7 +174,7 @@ import Foundation
             effectiveTaxRate:       taxRate,
             ppeTotal:               statementMain?.ppeTotal,
             capex:                  BreakdownFinancialsResolver.financialsCanonicalCapex(
-                xbrlDir: xbrlDir, accountingStandard: std),
+                xbrlDir: xbrlDir, accountingStandard: std).value,
             rd:                     BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir),
             employees:              BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir),
             cashEq:                 statementMain?.cashEquivalents,
