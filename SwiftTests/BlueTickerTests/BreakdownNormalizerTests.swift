@@ -1383,4 +1383,20 @@ import Foundation
             additions.rows.first { $0.labelRaw == "TotalMember" })
         #expect(additionsTotal.amount == 232_361_000_000)
     }
+
+    @Test func nichireiUsesJgaapEquityMethodInvestmentTag() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100VYA0"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEquityMethodInvestments(facts: facts))
+        #expect(snapshot.denominatorTag == "InvestmentsInEntitiesAccountedForUsingEquityMethod")
+        let logistics = try #require(
+            snapshot.rows.first { $0.labelRaw == "LogisticsReportableSegmentsMember" })
+        #expect(logistics.amount == 3_888_000_000)
+        let subtotal = try #require(
+            snapshot.rows.first { $0.labelRaw == "TotalOfReportableSegmentsAndOthersMember" })
+        #expect(subtotal.amount == 5_615_000_000)
+    }
 }

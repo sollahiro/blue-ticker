@@ -584,6 +584,7 @@ enum Xbrl {
     static let segmentEquityMethodInvestmentTags: [String] = [
         "InvestmentsAccountedForUsingEquityMethodIFRS",
         "InvestmentsAccountedForUsingEquityMethod",
+        "InvestmentsInEntitiesAccountedForUsingEquityMethod",
         "InvestmentsInAssociatesAndJointVenturesIFRS",
     ]
 
