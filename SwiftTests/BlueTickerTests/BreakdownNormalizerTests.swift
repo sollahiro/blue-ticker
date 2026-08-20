@@ -1410,6 +1410,13 @@ import Foundation
         let subtotal = try #require(
             snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
         #expect(subtotal.amount == 419_699_000_000)
+
+        let overview = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(facts: facts))
+        #expect(overview.denominatorTag == "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
+        let overviewAutomobile = try #require(
+            overview.rows.first { $0.labelRaw == "AutomobileBusinessReportableSegmentMember" })
+        #expect(overviewAutomobile.amount == 343_238_000_000)
     }
 
     @Test func metricTagSelectionSkipsPriorOnlyPreferredCandidate() throws {

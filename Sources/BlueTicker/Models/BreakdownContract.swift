@@ -32,6 +32,9 @@ public let breakdownAxisImpairmentLoss = "impairment_loss"
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
 /// 報告セグメント別の資本的支出（2026-08-20追加）。決定論のみ。
 public let breakdownAxisCapitalExpenditures = "capital_expenditures"
+/// notes「設備投資等の概要」のセグメント別Capex（2026-08-20追加）。決定論のみ。
+/// `capital_expenditures`（報告セグメント表）とは同じ会社でも値が異なり得るため別軸。
+public let breakdownAxisCapitalExpendituresOverview = "capital_expenditures_overview"
 /// 報告セグメント別の非流動性資産への追加額（2026-08-20追加）。決定論のみ。
 public let breakdownAxisNoncurrentAssetAdditions = "noncurrent_asset_additions"
 
@@ -46,6 +49,7 @@ public let breakdownSegmentMetricAxes = [
     breakdownAxisImpairmentLoss,
     breakdownAxisEquityMethodInvestments,
     breakdownAxisCapitalExpenditures,
+    breakdownAxisCapitalExpendituresOverview,
     breakdownAxisNoncurrentAssetAdditions,
 ]
 
@@ -74,6 +78,7 @@ public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amort
 public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v1"
 public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v1"
 public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v1"
+public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v1"
 public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
@@ -89,6 +94,7 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisImpairmentLoss: return impairmentLossBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
     case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownCacheVersion
+    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownCacheVersion
     case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownCacheVersion
     default: return businessBreakdownCacheVersion
     }
@@ -154,6 +160,7 @@ public let goodwillAmortizationBreakdownMinServableVersion = 1
 public let impairmentLossBreakdownMinServableVersion = 1
 public let equityMethodInvestmentsBreakdownMinServableVersion = 1
 public let capitalExpendituresBreakdownMinServableVersion = 1
+public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
 public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
@@ -169,6 +176,7 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisImpairmentLoss: return impairmentLossBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
     case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownMinServableVersion
+    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownMinServableVersion
     case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownMinServableVersion
     default: return businessBreakdownMinServableVersion
     }
@@ -184,7 +192,8 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
         "breakdown-segment-assets-v", "breakdown-depreciation-and-amortization-v",
         "breakdown-goodwill-amortization-v", "breakdown-impairment-loss-v",
         "breakdown-equity-method-investments-v", "breakdown-capital-expenditures-v",
-        "breakdown-noncurrent-asset-additions-v", "breakdown-v",
+        "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
+        "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
         let suffix = version.dropFirst(prefix.count)

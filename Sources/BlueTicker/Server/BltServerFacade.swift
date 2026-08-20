@@ -549,6 +549,9 @@ private extension BltServerContext {
         case breakdownAxisCapitalExpenditures:
             snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
                 facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisCapitalExpendituresOverview:
+            snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                facts: facts, labelsByTag: labelsByTag)
         case breakdownAxisNoncurrentAssetAdditions:
             snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
                 facts: facts, labelsByTag: labelsByTag)
@@ -596,6 +599,12 @@ public extension BltServerContext {
     /// 報告セグメント別の資本的支出を解決する。
     func resolveCapitalExpendituresBreakdown(docID: String) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisCapitalExpenditures)
+    }
+
+    /// notes「設備投資等の概要」のCapexをbreakdown軸として解決する。
+    func resolveCapitalExpendituresOverviewBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisCapitalExpendituresOverview)
     }
 
     /// 報告セグメント別の非流動性資産への追加額を解決する。

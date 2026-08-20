@@ -336,7 +336,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は business（既定）/ geography / employees / research_and_development / goodwill /
                 segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss /
-                equity_method_investments / capital_expenditures / noncurrent_asset_additions に対応。
+                equity_method_investments / capital_expenditures /
+                capital_expenditures_overview / noncurrent_asset_additions に対応。
                 これらの決定論軸は LLM フォールバックなしで、
                 報告セグメント別の内訳が開示されている企業のみ値が入ります。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
@@ -369,7 +370,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss / equity_method_investments / capital_expenditures / noncurrent_asset_additions。省略時 business）",
+                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss / equity_method_investments / capital_expenditures / capital_expenditures_overview / noncurrent_asset_additions。省略時 business）",
                     required: false,
                     defaultValue: .string("business")
                 ),

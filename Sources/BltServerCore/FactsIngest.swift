@@ -381,6 +381,7 @@ public func runFactsIngestCommand(
                 breakdownAxisImpairmentLoss,
                 breakdownAxisEquityMethodInvestments,
                 breakdownAxisCapitalExpenditures,
+                breakdownAxisCapitalExpendituresOverview,
                 breakdownAxisNoncurrentAssetAdditions,
             ]
             var segmentMetricSummaries: [(axis: String, summary: BreakdownIngestSummary)] = []
@@ -406,6 +407,10 @@ public func runFactsIngestCommand(
                 case breakdownAxisCapitalExpenditures:
                     resolver = { docID in
                         await context.resolveCapitalExpendituresBreakdown(docID: docID)
+                    }
+                case breakdownAxisCapitalExpendituresOverview:
+                    resolver = { docID in
+                        await context.resolveCapitalExpendituresOverviewBreakdown(docID: docID)
                     }
                 case breakdownAxisNoncurrentAssetAdditions:
                     resolver = { docID in
