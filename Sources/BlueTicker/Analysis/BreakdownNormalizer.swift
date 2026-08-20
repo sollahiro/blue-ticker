@@ -17,6 +17,8 @@ struct BreakdownRow: Equatable {
     var share: Double?
     var profit: Double?  // 対応する利益タグが無ければ nil（任意フィールド）
     var rowKind: String  // "segment" | "subtotal" | "reconciling"
+    /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
+    var description: String? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
@@ -496,6 +498,66 @@ enum BreakdownNormalizer {
         return BreakdownSnapshot(
             axis: axis, denominator: total, denominatorTag: totalTag ?? "company_financials",
             rows: [], sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+    }
+
+    /// notes「設備投資等の概要」HTML表をbreakdown契約へ写す。
+    /// 前年度比は移さず、設備内容・目的だけを description として保持する。
+    static func normalizeCapitalExpendituresOverview(
+        segments: [CapexSegmentPayload],
+        axis: String = breakdownAxisCapitalExpendituresOverview
+    ) -> BreakdownSnapshot? {
+        guard !segments.isEmpty else { return nil }
+        // segmentName=nil の単一総額fallbackは denominator-only とする。
+        if segments.allSatisfy({ $0.segmentName == nil }) {
+            guard let total = segments.compactMap(\.investmentAmount).first, total > 0 else {
+                return nil
+            }
+            return BreakdownSnapshot(
+                axis: axis, denominator: total,
+                denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+                rows: [], sourceKind: "html_table", needsReview: false, warnings: [])
+        }
+
+        let rows = segments.compactMap { segment -> BreakdownRow? in
+            guard let name = segment.segmentName, let amount = segment.investmentAmount else {
+                return nil
+            }
+            let normalized = name.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            let rowKind: String
+            if segment.isTotal {
+                rowKind = "subtotal"
+            } else if normalized.contains("調整") || normalized == "全社" || normalized == "全社(共通)" {
+                rowKind = "reconciling"
+            } else {
+                rowKind = "segment"
+            }
+            return BreakdownRow(
+                labelRaw: name, label: name, amount: amount, share: nil, profit: nil,
+                rowKind: rowKind, description: segment.description)
+        }
+        guard !rows.isEmpty else { return nil }
+        let totalRow = rows.last { $0.rowKind == "subtotal" }
+        let denominator: Double
+        var warnings: [String] = []
+        if let total = totalRow?.amount, total > 0 {
+            denominator = total
+        } else {
+            denominator = rows
+                .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+                .map(\.amount).reduce(0, +)
+            warnings.append("capital_expenditures_overview_denominator_derived_from_segment_sum")
+        }
+        guard denominator > 0 else { return nil }
+        var resolvedRows = rows
+        for index in resolvedRows.indices {
+            resolvedRows[index].share = resolvedRows[index].amount / denominator
+        }
+        return BreakdownSnapshot(
+            axis: axis, denominator: denominator,
+            denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+            rows: resolvedRows, sourceKind: "html_table",
+            needsReview: !warnings.isEmpty, warnings: warnings)
     }
 
     /// 非流動性資産への追加額。

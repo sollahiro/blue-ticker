@@ -1471,4 +1471,26 @@ import Foundation
         #expect(snapshot.rows.isEmpty)
         #expect(snapshot.needsReview == false)
     }
+
+    @Test func capexOverviewPreservesDescriptionWithoutPriorYearChange() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "四輪事業", investmentAmount: 343_238_000_000,
+                        yoyPercent: 12.3, description: "生産設備・研究開発設備・販売設備等"),
+                    CapexSegmentPayload(
+                        segmentName: "全社", investmentAmount: 1_000_000,
+                        yoyPercent: nil, description: "全社共通"),
+                    CapexSegmentPayload(
+                        segmentName: "合計", investmentAmount: 344_238_000_000,
+                        yoyPercent: nil, description: nil, isTotal: true),
+                ]))
+        let segment = try #require(snapshot.rows.first { $0.labelRaw == "四輪事業" })
+        #expect(segment.description == "生産設備・研究開発設備・販売設備等")
+        #expect(segment.rowKind == "segment")
+        let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(snapshot.rows.allSatisfy { $0.description != "12.3" })
+    }
 }

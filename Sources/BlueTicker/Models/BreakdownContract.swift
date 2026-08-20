@@ -229,17 +229,23 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var amount: Double
     public var profit: Double?
     public var rowKind: String
+    /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
+    public var description: String?
 
     private enum CodingKeys: String, CodingKey {
-        case labelRaw, label, amount, profit, rowKind
+        case labelRaw, label, amount, profit, rowKind, description
     }
 
-    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
+    public init(
+        labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
+        description: String? = nil
+    ) {
         self.labelRaw = labelRaw
         self.label = label
         self.amount = amount
         self.profit = profit
         self.rowKind = rowKind
+        self.description = description
     }
 
     /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
@@ -255,6 +261,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         amount = try container.decode(Double.self, forKey: .amount)
         profit = try container.decodeIfPresent(Double.self, forKey: .profit)
         rowKind = try container.decode(String.self, forKey: .rowKind)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
     }
 }
 
@@ -313,6 +320,7 @@ public extension BreakdownRowPayload {
             "amount": amount,
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,
+            "description": description ?? NSNull(),
         ]
     }
 }

@@ -540,11 +540,20 @@ private extension BltServerContext {
             snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
                 facts: facts, labelsByTag: labelsByTag)
         case breakdownAxisCapitalExpendituresOverview:
-            let overview = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
-                xbrlDir: xbrlDir)
-            snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
-                facts: facts, total: overview.value, totalTag: overview.tag,
-                labelsByTag: labelsByTag)
+            if case .resolved(let payload, _, _) =
+                StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
+                let segments = payload.capexSegments,
+                let htmlSnapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                    segments: segments)
+            {
+                snapshot = htmlSnapshot
+            } else {
+                let overview = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
+                    xbrlDir: xbrlDir)
+                snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                    facts: facts, total: overview.value, totalTag: overview.tag,
+                    labelsByTag: labelsByTag)
+            }
         case breakdownAxisNoncurrentAssetAdditions:
             snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
                 facts: facts, labelsByTag: labelsByTag)
@@ -615,7 +624,7 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
         rows: s.rows.map {
             BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
-                profit: $0.profit, rowKind: $0.rowKind)
+                profit: $0.profit, rowKind: $0.rowKind, description: $0.description)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
 }
