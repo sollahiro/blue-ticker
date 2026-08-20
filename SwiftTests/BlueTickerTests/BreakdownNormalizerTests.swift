@@ -1448,7 +1448,8 @@ import Foundation
         ]
         let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
         #expect(snapshot.denominator == 100)
-        #expect(snapshot.needsReview == false)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 999)
     }

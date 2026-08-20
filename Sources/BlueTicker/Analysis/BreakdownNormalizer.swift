@@ -547,6 +547,15 @@ enum BreakdownNormalizer {
             if warnOnDerivedTotal && !derived.corroborated {
                 warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
             }
+            if !useEntityTotalAsDenominator,
+                let entityTotal = amounts[Xbrl.entityTotalMemberName],
+                denominator > 0
+            {
+                let scale = max(1.0, abs(entityTotal), abs(denominator))
+                if abs(entityTotal - denominator) / scale > 0.05 {
+                    warnings.append("\(warningPrefix)_entity_total_differs_from_table_total")
+                }
+            }
         }
         guard denominator > 0 else { return nil }
 
