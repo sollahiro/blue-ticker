@@ -248,6 +248,13 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.description = description
     }
 
+    /// 旧公開initializer。既存の呼び出し側・ビルド済みテストとの互換性を維持する。
+    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
+        self.init(
+            labelRaw: labelRaw, label: label, amount: amount, profit: profit, rowKind: rowKind,
+            description: nil)
+    }
+
     /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
     /// 非 Optional のまま `decodeIfPresent` で読み、無ければ `labelRaw` にフォールバックする。
     /// `company_breakdowns.payload` は JSON カラムで Fluent が直接デコードするため、`label` 追加前に
