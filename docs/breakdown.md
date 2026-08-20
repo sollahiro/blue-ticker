@@ -26,7 +26,7 @@
 | `impairment_loss` | 報告セグメントごとの減損損失 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capital_expenditures` | 報告セグメントごとの資本的支出 |
-| `capital_expenditures_overview` | notes「設備投資等の概要」のセグメント別Capex（`capital_expenditures`とは別値） |
+| `capital_expenditures_overview` | notes「設備投資等の概要」のセグメント別Capex（`capital_expenditures`とは別値）。US-GAAP（富士フイルム・キヤノン）も Overview タグにセグメント dimension 付き fact があり決定論で再構成可能 |
 | `noncurrent_asset_additions` | 報告セグメントごとの非流動性資産／固定資産への追加額 |
 
 ## 再発防止（学びの要約）
