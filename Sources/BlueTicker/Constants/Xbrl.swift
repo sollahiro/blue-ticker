@@ -545,6 +545,55 @@ enum Xbrl {
         "GoodwillBeforeOffsetting",
     ]
 
+    // MARK: - 報告セグメント別指標（breakdown 軸）
+    //
+    // 同じ日本語の表項目でも会計基準・タクソノミによりタグが分かれるため、
+    // 軸ごとに候補を優先順で持つ。`BreakdownNormalizer` は同一書類の当期 fact
+    // を持つ最初のタグを採用し、実タグ名を denominatorTag に残す。
+    static let segmentAssetsTags: [String] = [
+        "Assets",
+        "AssetsIFRS",
+        "AssetsUSGAAP",
+    ]
+
+    static let segmentDepreciationAndAmortizationTags: [String] = [
+        "DepreciationSegmentInformation",
+        "DepreciationAndAmortizationOperatingExpensesIFRS",
+        "DepreciationAndAmortization",
+    ]
+
+    static let segmentGoodwillAmortizationTags: [String] = [
+        "AmortizationOfGoodwillSGA",
+        "AmortizationOfGoodwill",
+        "AmortizationOfGoodwillIFRS",
+    ]
+
+    static let segmentImpairmentLossTags: [String] = [
+        "ImpairmentLossEL",
+        "ImpairmentLossesPLIFRS",
+        "ImpairmentLoss",
+        "ImpairmentLossIFRS",
+    ]
+
+    static let segmentEquityMethodInvestmentTags: [String] = [
+        "InvestmentsAccountedForUsingEquityMethodIFRS",
+        "InvestmentsAccountedForUsingEquityMethod",
+        "InvestmentsInAssociatesAndJointVenturesIFRS",
+    ]
+
+    static let segmentCapitalExpenditureTags: [String] = [
+        "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+        "CapitalExpendituresIFRS",
+        "CapitalExpenditures",
+    ]
+
+    static let segmentNoncurrentAssetAdditionTags: [String] = [
+        "IncreaseInPropertyPlantAndEquipmentAndIntangibleAssets",
+        "AdditionsToNoncurrentAssetsIFRS",
+        "AdditionsToNonCurrentAssetsIFRS",
+        "AdditionsToNonCurrentAssets",
+    ]
+
     // MARK: - 設備投資タグ
 
     static let capexOverviewTags: [String] = [

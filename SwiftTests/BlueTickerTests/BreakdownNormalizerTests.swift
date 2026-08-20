@@ -1304,4 +1304,48 @@ import Foundation
                 facts: [], total: 4_409_000_000, axis: breakdownAxisResearchAndDevelopment))
         #expect(snap.denominatorTag == "company_financials")
     }
+
+    /// 報告セグメントごとの情報に含まれる7指標を、smokeの実抽出factsから軸別に
+    /// 正規化する床。各指標の denominator_tag は固定プレースホルダーではなく、
+    /// fixture の実タグ候補のいずれかになることも確認する。
+    @Test func segmentMetricAxesNormalizeSmokeFacts() throws {
+        let golden = try Self.loadGolden()
+        func facts(_ docID: String) throws -> [BreakdownFact] {
+            let entry = try #require(golden[docID])
+            let segments = try #require(entry["segments"] as? [String: Any])
+            return ExtractedBreakdown(dictionary: segments).facts
+        }
+        func expectTag(_ snapshot: BreakdownSnapshot?, _ tags: [String]) throws {
+            let snapshot = try #require(snapshot)
+            #expect(tags.contains(snapshot.denominatorTag))
+            #expect(!snapshot.rows.isEmpty)
+        }
+
+        let ajinomoto = try facts("S100VXJA")
+        try expectTag(
+            BreakdownNormalizer.normalizeSegmentAssets(facts: ajinomoto),
+            Xbrl.segmentAssetsTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeDepreciationAndAmortization(facts: ajinomoto),
+            Xbrl.segmentDepreciationAndAmortizationTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeImpairmentLoss(facts: ajinomoto),
+            Xbrl.segmentImpairmentLossTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeEquityMethodInvestments(facts: ajinomoto),
+            Xbrl.segmentEquityMethodInvestmentTags)
+        try expectTag(
+            BreakdownNormalizer.normalizeCapitalExpenditures(facts: ajinomoto),
+            Xbrl.segmentCapitalExpenditureTags)
+
+        let nichirei = try facts("S100VYA0")
+        try expectTag(
+            BreakdownNormalizer.normalizeGoodwillAmortization(facts: nichirei),
+            Xbrl.segmentGoodwillAmortizationTags)
+
+        let azPlanning = try facts("S100VU4O")
+        try expectTag(
+            BreakdownNormalizer.normalizeNoncurrentAssetAdditions(facts: azPlanning),
+            Xbrl.segmentNoncurrentAssetAdditionTags)
+    }
 }

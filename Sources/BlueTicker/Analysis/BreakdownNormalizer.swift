@@ -400,13 +400,101 @@ enum BreakdownNormalizer {
             warningPrefix: "goodwill", labelsByTag: labelsByTag)
     }
 
+    /// 「報告セグメントごとの情報」に載る数値指標を、指標ごとの breakdown 軸へ正規化する。
+    /// 全社合計 fact があればそれを分母に使い、無ければセグメント行＋調整行の合計を
+    /// 決定論で分母にする。いずれも `denominatorTag` には実際に採用したタグ名を残す。
+    private static func normalizeSegmentMetric(
+        facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
+        labelsByTag: [String: String]
+    ) -> BreakdownSnapshot? {
+        guard let amountTag = amountTags.first(where: { tag in
+            facts.contains { $0.tag == tag }
+        }) else { return nil }
+        let perMember = resolvePerMember(facts: facts, tag: amountTag)
+        guard !perMember.isEmpty else { return nil }
+        let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
+        return buildCountBasisSnapshot(
+            perMember: perMember, amountTag: amountTag, total: total, axis: axis,
+            warningPrefix: warningPrefix, labelsByTag: labelsByTag, warnOnDerivedTotal: false)
+    }
+
+    /// セグメント資産。
+    static func normalizeSegmentAssets(
+        facts: [BreakdownFact], axis: String = breakdownAxisSegmentAssets,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
+            warningPrefix: "segment_assets", labelsByTag: labelsByTag)
+    }
+
+    /// 減価償却費及び償却費。
+    static func normalizeDepreciationAndAmortization(
+        facts: [BreakdownFact], axis: String = breakdownAxisDepreciationAndAmortization,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentDepreciationAndAmortizationTags, axis: axis,
+            warningPrefix: "depreciation_and_amortization", labelsByTag: labelsByTag)
+    }
+
+    /// のれんの償却額。
+    static func normalizeGoodwillAmortization(
+        facts: [BreakdownFact], axis: String = breakdownAxisGoodwillAmortization,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentGoodwillAmortizationTags, axis: axis,
+            warningPrefix: "goodwill_amortization", labelsByTag: labelsByTag)
+    }
+
+    /// 減損損失。
+    static func normalizeImpairmentLoss(
+        facts: [BreakdownFact], axis: String = breakdownAxisImpairmentLoss,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentImpairmentLossTags, axis: axis,
+            warningPrefix: "impairment_loss", labelsByTag: labelsByTag)
+    }
+
+    /// 持分法会計処理される投資。
+    static func normalizeEquityMethodInvestments(
+        facts: [BreakdownFact], axis: String = breakdownAxisEquityMethodInvestments,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentEquityMethodInvestmentTags, axis: axis,
+            warningPrefix: "equity_method_investments", labelsByTag: labelsByTag)
+    }
+
+    /// 資本的支出。
+    static func normalizeCapitalExpenditures(
+        facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpenditures,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentCapitalExpenditureTags, axis: axis,
+            warningPrefix: "capital_expenditures", labelsByTag: labelsByTag)
+    }
+
+    /// 非流動性資産への追加額。
+    static func normalizeNoncurrentAssetAdditions(
+        facts: [BreakdownFact], axis: String = breakdownAxisNoncurrentAssetAdditions,
+        labelsByTag: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentNoncurrentAssetAdditionTags, axis: axis,
+            warningPrefix: "noncurrent_asset_additions", labelsByTag: labelsByTag)
+    }
+
     /// `normalizeCountBasis`/`normalizeGoodwill` 共通の後処理（member 分類・分母解決・行組み立て）。
     /// `amountTag`（`denominatorTag`として使う）は呼び出し側がタグ選択方式ごとに解決済みの値を渡す
     /// （`normalizeGoodwill` は全社合計の実タグ名=`totalTag` を優先し、無ければセグメント側タグに
     /// フォールバックする——セグメント別内訳タグと全社合計タグが別物のケースがあるため）。
     private static func buildCountBasisSnapshot(
         perMember: [String: BreakdownFact], amountTag: String, total: Double?, axis: String,
-        warningPrefix: String, labelsByTag: [String: String]
+        warningPrefix: String, labelsByTag: [String: String], warnOnDerivedTotal: Bool = true
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
@@ -445,7 +533,9 @@ enum BreakdownNormalizer {
             // 全社合計 fact が取れない場合のみ segment+reconciling 行合計にフォールバックする（要レビュー）。
             denominator = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
                 .reduce(0.0) { $0 + amounts[$1]! }
-            warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
+            if warnOnDerivedTotal {
+                warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
+            }
         }
         guard denominator > 0 else { return nil }
 

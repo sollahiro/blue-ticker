@@ -520,6 +520,91 @@ public extension BltServerContext {
     }
 }
 
+private extension BltServerContext {
+    /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
+    /// 指標の全社合計が無い提出書類では normalizer が segment subtotal/adjustment
+    /// から決定論で分母を組み立てる。
+    func resolveSegmentMetricBreakdown(docID: String, axis: String) async -> BreakdownResolveResult {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
+        let snapshot: BreakdownSnapshot?
+        switch axis {
+        case breakdownAxisSegmentAssets:
+            snapshot = BreakdownNormalizer.normalizeSegmentAssets(facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisDepreciationAndAmortization:
+            snapshot = BreakdownNormalizer.normalizeDepreciationAndAmortization(
+                facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisGoodwillAmortization:
+            snapshot = BreakdownNormalizer.normalizeGoodwillAmortization(
+                facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisImpairmentLoss:
+            snapshot = BreakdownNormalizer.normalizeImpairmentLoss(facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisEquityMethodInvestments:
+            snapshot = BreakdownNormalizer.normalizeEquityMethodInvestments(
+                facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisCapitalExpenditures:
+            snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
+                facts: facts, labelsByTag: labelsByTag)
+        case breakdownAxisNoncurrentAssetAdditions:
+            snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
+                facts: facts, labelsByTag: labelsByTag)
+        default:
+            snapshot = nil
+        }
+        guard let snapshot else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: snapshot.denominator)
+        return .resolved(
+            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+            contentHash: hash, audit: nil)
+    }
+}
+
+public extension BltServerContext {
+    /// 報告セグメント別のセグメント資産を解決する。
+    func resolveSegmentAssetsBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisSegmentAssets)
+    }
+
+    /// 報告セグメント別の減価償却費及び償却費を解決する。
+    func resolveDepreciationAndAmortizationBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisDepreciationAndAmortization)
+    }
+
+    /// 報告セグメント別ののれんの償却額を解決する。
+    func resolveGoodwillAmortizationBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisGoodwillAmortization)
+    }
+
+    /// 報告セグメント別の減損損失を解決する。
+    func resolveImpairmentLossBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisImpairmentLoss)
+    }
+
+    /// 報告セグメント別の持分法会計処理される投資を解決する。
+    func resolveEquityMethodInvestmentsBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisEquityMethodInvestments)
+    }
+
+    /// 報告セグメント別の資本的支出を解決する。
+    func resolveCapitalExpendituresBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisCapitalExpenditures)
+    }
+
+    /// 報告セグメント別の非流動性資産への追加額を解決する。
+    func resolveNoncurrentAssetAdditionsBreakdown(docID: String) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisNoncurrentAssetAdditions)
+    }
+}
+
 /// 内部型 BreakdownSnapshot を公開格納用 BreakdownSnapshotPayload へ写経する。
 
 private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSnapshotPayload {

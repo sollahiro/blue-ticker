@@ -171,8 +171,8 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
-    // axis は business / geography（省略時 business）。それ以外の軸は行が無く 404 になる。
-    // 内訳取り込み: business/geography は上場全体、employees/rd/goodwill は日経225（docs/breakdown.md）。
+    // axis は business / geography / 決定論指標軸（省略時 business）。
+    // 内訳取り込み: business/geography は上場全体、決定論指標軸は日経225（docs/breakdown.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
@@ -449,6 +449,13 @@ func breakdownNotFoundMessage(axis: String) -> String {
     case breakdownAxisEmployees: return "従業員数の内訳は未算出です"
     case breakdownAxisResearchAndDevelopment: return "研究開発費の内訳は未算出です"
     case breakdownAxisGoodwill: return "のれんのセグメント別内訳は未算出です"
+    case breakdownAxisSegmentAssets: return "セグメント資産の内訳は未算出です"
+    case breakdownAxisDepreciationAndAmortization: return "減価償却費及び償却費の内訳は未算出です"
+    case breakdownAxisGoodwillAmortization: return "のれんの償却額の内訳は未算出です"
+    case breakdownAxisImpairmentLoss: return "減損損失の内訳は未算出です"
+    case breakdownAxisEquityMethodInvestments: return "持分法会計処理される投資の内訳は未算出です"
+    case breakdownAxisCapitalExpenditures: return "資本的支出の内訳は未算出です"
+    case breakdownAxisNoncurrentAssetAdditions: return "非流動性資産への追加額の内訳は未算出です"
     default: return "事業別内訳は未算出です"
     }
 }

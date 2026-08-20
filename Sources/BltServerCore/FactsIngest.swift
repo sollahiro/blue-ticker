@@ -154,13 +154,13 @@ final class EdinetXbrlFactsCacheVersionOnly: Model, @unchecked Sendable {
 /// （REST の financials は years 既定 5。read 時に要求年数へ縮める）。
 let financialsIngestYears = 6
 
-/// employees / research_and_development / goodwill の1ジョブ上限。日経225限定・決定論のみ。
+/// 報告セグメント別の決定論指標軸の1ジョブ上限。日経225限定。
 /// business / geography の `--limit`（定期ジョブ既定 50）とは独立。`--codes` 時は無視して全件。
 let unpublishedBreakdownIngestLimit = 30
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
-/// 内訳取り込み（business/geography は上場全体、employees/rd/goodwill は日経225限定）を取り込む。
+/// 内訳取り込み（business/geography は上場全体、決定論指標軸は日経225限定）を取り込む。
 ///
 /// 数値 fact 取り込み（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
 /// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
@@ -178,7 +178,7 @@ let unpublishedBreakdownIngestLimit = 30
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
 /// 内訳取り込み: business/geography は `listed`（上場全体。日経225は処理順の先頭寄せ）、
-/// employees/rd/goodwill は `priority`（日経225）。`--codes` 指定時は全軸その集合。
+/// 決定論指標軸は `priority`（日経225）。`--codes` 指定時は全軸その集合。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
@@ -318,8 +318,8 @@ public func runFactsIngestCommand(
         }
         if targets.contains(.breakdowns) {
             // 内訳取り込み: business/geography は上場全体（`listed`。日経225は処理順の先頭寄せ）。
-            // employees/rd/goodwill は日経225（`priority`）限定。`--codes` 時は全軸その集合。
-            // `--limit` は business/geography に適用。未公開3軸は `unpublishedBreakdownIngestLimit`。
+            // 決定論指標軸は日経225（`priority`）限定。`--codes` 時は全軸その集合。
+            // `--limit` は business/geography に適用。決定論指標軸は `unpublishedBreakdownIngestLimit`。
             if publicBreakdownListed.isEmpty {
                 app.logger.warning(
                     "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping business/geography",
@@ -327,7 +327,7 @@ public func runFactsIngestCommand(
             }
             if nikkeiListed.isEmpty {
                 app.logger.warning(
-                    "内訳取り込み unpublished axes empty (nikkei225.csv missing and no --codes); skipping employees/rd/goodwill",
+                    "内訳取り込み unpublished axes empty (nikkei225.csv missing and no --codes); skipping deterministic metric axes",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_priority_codes"])
             }
             let unpublishedLimit = codes == nil ? unpublishedBreakdownIngestLimit : nil
@@ -373,6 +373,53 @@ public func runFactsIngestCommand(
                 axis: breakdownAxisGoodwill, candidateSets: unpublishedSets, logger: app.logger
             ) { docID in
                 await context.resolveGoodwillBreakdown(docID: docID)
+            }
+            let segmentMetricAxes = [
+                breakdownAxisSegmentAssets,
+                breakdownAxisDepreciationAndAmortization,
+                breakdownAxisGoodwillAmortization,
+                breakdownAxisImpairmentLoss,
+                breakdownAxisEquityMethodInvestments,
+                breakdownAxisCapitalExpenditures,
+                breakdownAxisNoncurrentAssetAdditions,
+            ]
+            var segmentMetricSummaries: [(axis: String, summary: BreakdownIngestSummary)] = []
+            for axis in segmentMetricAxes {
+                let resolver: BreakdownResolveFn
+                switch axis {
+                case breakdownAxisSegmentAssets:
+                    resolver = { docID in await context.resolveSegmentAssetsBreakdown(docID: docID) }
+                case breakdownAxisDepreciationAndAmortization:
+                    resolver = { docID in
+                        await context.resolveDepreciationAndAmortizationBreakdown(docID: docID)
+                    }
+                case breakdownAxisGoodwillAmortization:
+                    resolver = { docID in
+                        await context.resolveGoodwillAmortizationBreakdown(docID: docID)
+                    }
+                case breakdownAxisImpairmentLoss:
+                    resolver = { docID in await context.resolveImpairmentLossBreakdown(docID: docID) }
+                case breakdownAxisEquityMethodInvestments:
+                    resolver = { docID in
+                        await context.resolveEquityMethodInvestmentsBreakdown(docID: docID)
+                    }
+                case breakdownAxisCapitalExpenditures:
+                    resolver = { docID in
+                        await context.resolveCapitalExpendituresBreakdown(docID: docID)
+                    }
+                case breakdownAxisNoncurrentAssetAdditions:
+                    resolver = { docID in
+                        await context.resolveNoncurrentAssetAdditionsBreakdown(docID: docID)
+                    }
+                default:
+                    continue
+                }
+                let summary = try await runBreakdownIngest(
+                    db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears,
+                    limit: unpublishedLimit, explicitCodes: codes, priorityCodes: priority,
+                    cachedDocIDs: cachedDocIDs, axis: axis, candidateSets: unpublishedSets,
+                    logger: app.logger, resolve: resolver)
+                segmentMetricSummaries.append((axis: axis, summary: summary))
             }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
@@ -426,6 +473,19 @@ public func runFactsIngestCommand(
                 notApplicableSingleSegmentDisclosed: s6Goodwill.notApplicableSingleSegmentDisclosed,
                 notApplicableUnknown: s6Goodwill.notApplicableUnknown,
                 purged: s6Goodwill.purged)
+            for item in segmentMetricSummaries {
+                let summary = item.summary
+                logIngestSummary(
+                    app.logger, target: "breakdowns-\(item.axis)",
+                    attempted: summary.attempted, stored: summary.stored,
+                    failed: summary.failed, skipped: summary.skipped,
+                    servable: coverage?.servable, unservable: coverage?.unservable,
+                    notApplicable: summary.notApplicable,
+                    notApplicableGeographyOnly: summary.notApplicableGeographyOnly,
+                    notApplicableSingleSegmentDisclosed: summary.notApplicableSingleSegmentDisclosed,
+                    notApplicableUnknown: summary.notApplicableUnknown,
+                    purged: summary.purged)
+            }
         }
         if targets.contains(.statements) {
             // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
