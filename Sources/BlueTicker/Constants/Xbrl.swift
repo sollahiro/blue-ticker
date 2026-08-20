@@ -589,9 +589,11 @@ enum Xbrl {
     ]
 
     static let segmentCapitalExpenditureTags: [String] = [
-        "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
         "CapitalExpendituresIFRS",
         "CapitalExpenditures",
+        // J-GAAP の報告セグメント表で同じ概念に使われる場合の fallback。
+        // notes の `capital_expenditures_overview` は別経路で同じタグを読む。
+        "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
     ]
 
     static let segmentNoncurrentAssetAdditionTags: [String] = [

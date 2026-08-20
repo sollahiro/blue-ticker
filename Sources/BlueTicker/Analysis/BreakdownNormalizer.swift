@@ -408,7 +408,7 @@ enum BreakdownNormalizer {
         labelsByTag: [String: String]
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
-            facts.contains { $0.tag == tag }
+            !resolvePerMember(facts: facts, tag: tag).isEmpty
         }) else { return nil }
         let perMember = withEntityTotal(
             resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
@@ -416,7 +416,9 @@ enum BreakdownNormalizer {
         let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
-            warningPrefix: warningPrefix, labelsByTag: labelsByTag, warnOnDerivedTotal: false)
+            warningPrefix: warningPrefix, labelsByTag: labelsByTag,
+            warnOnDerivedTotal: true, useEntityTotalAsDenominator: false,
+            useTableSubtotalForDerivedTotal: true)
     }
 
     /// セグメント資産。
@@ -495,7 +497,9 @@ enum BreakdownNormalizer {
     /// フォールバックする——セグメント別内訳タグと全社合計タグが別物のケースがあるため）。
     private static func buildCountBasisSnapshot(
         perMember: [String: BreakdownFact], amountTag: String, total: Double?, axis: String,
-        warningPrefix: String, labelsByTag: [String: String], warnOnDerivedTotal: Bool = true
+        warningPrefix: String, labelsByTag: [String: String], warnOnDerivedTotal: Bool = true,
+        useEntityTotalAsDenominator: Bool = true,
+        useTableSubtotalForDerivedTotal: Bool = false
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
@@ -523,7 +527,7 @@ enum BreakdownNormalizer {
 
         var warnings: [String] = []
         let denominator: Double
-        if let total, total > 0 {
+        if useEntityTotalAsDenominator, let total, total > 0 {
             denominator = total
             let segmentSum = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
                 .reduce(0.0) { $0 + amounts[$1]! }
@@ -531,10 +535,16 @@ enum BreakdownNormalizer {
                 warnings.append("\(warningPrefix)_segment_sum_far_from_total")
             }
         } else {
-            // 全社合計 fact が取れない場合のみ segment+reconciling 行合計にフォールバックする（要レビュー）。
-            denominator = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
-                .reduce(0.0) { $0 + amounts[$1]! }
-            if warnOnDerivedTotal {
+            let derived: (value: Double, corroborated: Bool)
+            if useTableSubtotalForDerivedTotal {
+                derived = deriveTableMetricDenominator(kinds: kinds, amounts: amounts)
+            } else {
+                let value = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
+                    .reduce(0.0) { $0 + amounts[$1]! }
+                derived = (value: value, corroborated: false)
+            }
+            denominator = derived.value
+            if warnOnDerivedTotal && !derived.corroborated {
                 warnings.append("\(warningPrefix)_denominator_derived_from_segment_sum")
             }
         }
@@ -550,6 +560,38 @@ enum BreakdownNormalizer {
         return BreakdownSnapshot(
             axis: axis, denominator: denominator, denominatorTag: amountTag, rows: rows,
             sourceKind: "xbrl_facts", needsReview: !warnings.isEmpty, warnings: warnings)
+    }
+
+    /// 「計/合計」と調整行から、表示用の連結計上額相当値を決定する。
+    /// 抽出factを書き換えず、明示された subtotal/reconciling 行はそのまま保持する。
+    private static func deriveTableMetricDenominator(
+        kinds: [String: String], amounts: [String: Double]
+    ) -> (value: Double, corroborated: Bool) {
+        let segmentSum = amounts.keys
+            .filter { kinds[$0] == "segment" }
+            .reduce(0.0) { $0 + amounts[$1]! }
+        let reconcilingSum = amounts.keys
+            .filter { kinds[$0] == "reconciling" }
+            .reduce(0.0) { $0 + amounts[$1]! }
+        let reconciledSum = segmentSum + reconcilingSum
+        let subtotalValues = amounts.keys
+            .filter { kinds[$0] == "subtotal" }
+            .map { amounts[$0]! }
+        guard let subtotal = subtotalValues.min(by: {
+            abs($0 - reconciledSum) < abs($1 - reconciledSum)
+        }) else {
+            return (reconciledSum, false)
+        }
+
+        let reconciledScale = max(1.0, abs(subtotal), abs(reconciledSum))
+        if abs(subtotal - reconciledSum) / reconciledScale <= 0.05 {
+            return (subtotal, true)
+        }
+        let segmentScale = max(1.0, abs(subtotal), abs(segmentSum))
+        if abs(subtotal - segmentSum) / segmentScale <= 0.05 {
+            return (subtotal + reconcilingSum, true)
+        }
+        return (reconciledSum, false)
     }
 
     /// 報告セグメント fact が `ReportableSegmentsMember` 親だけ（子 member の人数・費用が無く、
