@@ -411,7 +411,8 @@ enum BreakdownNormalizer {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains { $0.tag == tag }
         }) else { return nil }
-        let perMember = resolvePerMember(facts: facts, tag: amountTag)
+        let perMember = withEntityTotal(
+            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
         guard !perMember.isEmpty else { return nil }
         let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
         return buildCountBasisSnapshot(
