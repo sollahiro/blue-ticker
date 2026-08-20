@@ -520,7 +520,7 @@ public func runFactsIngestCommand(
         }
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: Statement 取り込み と同じ日経225限定母集団。
-            // EPS/発行済株式・資本金/設備投資概要/配当金/borrowings_schedule/PPE・のれん/
+            // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
             let statementNotesListed = codes ?? priority
             if statementNotesListed.isEmpty {
@@ -537,10 +537,6 @@ public func runFactsIngestCommand(
                     (
                         statementNoteTypeIssuedSharesAndCapital,
                         { docID, _ in await context.resolveIssuedSharesAndCapitalNote(docID: docID) }
-                    ),
-                    (
-                        statementNoteTypeCapitalExpendituresOverview,
-                        { docID, _ in await context.resolveCapitalExpendituresOverviewNote(docID: docID) }
                     ),
                     (
                         statementNoteTypeDividends,

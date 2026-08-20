@@ -19,7 +19,6 @@ import Foundation
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
 public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
-public let statementNoteTypeCapitalExpendituresOverview = "capital_expenditures_overview"
 public let statementNoteTypeDividends = "dividends"
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 /// 決定論（EDINET標準タクソノミの銘柄別構造化タグ、`StatementNotesResolver.resolvePolicyHoldingSecurities`
@@ -36,7 +35,6 @@ public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 public let allStatementNoteTypes: [String] = [
     statementNoteTypePerShareInformation,
     statementNoteTypeIssuedSharesAndCapital,
-    statementNoteTypeCapitalExpendituresOverview,
     statementNoteTypeDividends,
     statementNoteTypeBorrowingsSchedule,
     statementNoteTypePropertyPlantEquipmentSchedule,
@@ -57,7 +55,6 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 /// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v3"
 public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
-public let capitalExpendituresOverviewNoteCacheVersion = "notes-capex-overview-v1"
 public let dividendsNoteCacheVersion = "notes-dividends-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
@@ -86,7 +83,6 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     switch noteType {
     case statementNoteTypePerShareInformation: return perShareInformationNoteCacheVersion
     case statementNoteTypeIssuedSharesAndCapital: return issuedSharesAndCapitalNoteCacheVersion
-    case statementNoteTypeCapitalExpendituresOverview: return capitalExpendituresOverviewNoteCacheVersion
     case statementNoteTypeDividends: return dividendsNoteCacheVersion
     case statementNoteTypeBorrowingsSchedule: return borrowingsScheduleNoteCacheVersion
     case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion

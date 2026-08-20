@@ -455,7 +455,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表注記",
             description: """
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数・設備投資概要・配当金・
+                （EPS・発行済株式数・配当金・
                 借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細・
                 リース負債）を
                 note_type 単位で取得します（格納済みデータのみ）。
@@ -488,7 +488,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .string,
                     description: """
                         注記種別: per_share_information / issued_shares_and_capital / \
-                        capital_expenditures_overview / dividends / \
+                        dividends / \
                         borrowings_schedule / policy_holding_securities / \
                         property_plant_equipment_schedule / goodwill_and_intangibles / \
                         lease_liabilities

@@ -37,6 +37,19 @@ enum BreakdownFinancialsResolver {
         return CanonicalValue(value: result.current, tag: result.tag)
     }
 
+    /// financials の `capex`。正本は breakdown の
+    /// `capital_expenditures_overview` と同じ Overview XBRL タグ→CFタグフォールバック。
+    /// company_breakdowns の格納順には依存せず、financials と breakdown が同じ低レベル
+    /// XBRL解決経路を共有する。
+    static func financialsCanonicalCapex(
+        xbrlDir: URL, accountingStandard: String
+    ) -> CanonicalValue {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let result = CapexExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTags), accountingStandard: accountingStandard)
+        return CanonicalValue(value: result.current, tag: result.tag)
+    }
+
     /// financials の `goodwill`。正本は breakdown `goodwill` 軸の分母。
     /// `Xbrl.goodwillSegmentTags` の無dimension fact から決定論で解決する。
     static func financialsCanonicalGoodwillItem(xbrlDir: URL) -> CanonicalValue {

@@ -125,8 +125,8 @@ struct IndividualAnalyzer {
         raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
         raw.cfo = statementMain?.cfo.map { $0 / millionYen }
         raw.cfi = statementMain?.cfi.map { $0 / millionYen }
-        // 設備投資: notes overview → CF（#6）
-        raw.capex = StatementNotesResolver.financialsCanonicalCapex(
+        // 設備投資: breakdown overview source → CF（#6）
+        raw.capex = BreakdownFinancialsResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
         ).map { $0 / millionYen }
         raw.rd = BreakdownFinancialsResolver.financialsCanonicalRd(xbrlDir: xbrlDir)

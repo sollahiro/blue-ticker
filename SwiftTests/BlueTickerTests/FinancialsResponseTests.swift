@@ -82,7 +82,7 @@ import Testing
             statementCacheVersion,
             perShareInformationNoteCacheVersion,
             issuedSharesAndCapitalNoteCacheVersion,
-            capitalExpendituresOverviewNoteCacheVersion,
+            capitalExpendituresOverviewBreakdownCacheVersion,
             borrowingsScheduleNoteCacheVersion,
             leaseLiabilitiesNoteCacheVersion,
             employeesBreakdownCacheVersion,

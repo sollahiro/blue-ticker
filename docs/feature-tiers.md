@@ -54,7 +54,6 @@ Meta → Struct → Norm → Viz
 |---|---|
 | `per_share_information` | 1 株当たり情報 |
 | `issued_shares_and_capital` | 発行済株式・資本金等 |
-| `capital_expenditures_overview` | 設備投資等の概要 |
 | `dividends` | 配当 |
 | `borrowings_schedule` | 借入金等明細 |
 | `property_plant_equipment_schedule` | 有形固定資産明細 |
