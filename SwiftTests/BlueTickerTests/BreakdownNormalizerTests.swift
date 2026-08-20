@@ -1348,4 +1348,20 @@ import Foundation
             BreakdownNormalizer.normalizeNoncurrentAssetAdditions(facts: azPlanning),
             Xbrl.segmentNoncurrentAssetAdditionTags)
     }
+
+    @Test func segmentMetricKeepsEntityTotalFactAsConsolidatedRow() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        let entityTotal = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entityTotal.amount == 100)
+        #expect(entityTotal.rowKind == "subtotal")
+    }
 }
