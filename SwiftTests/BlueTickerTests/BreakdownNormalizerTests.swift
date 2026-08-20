@@ -1399,4 +1399,57 @@ import Foundation
             snapshot.rows.first { $0.labelRaw == "TotalOfReportableSegmentsAndOthersMember" })
         #expect(subtotal.amount == 5_615_000_000)
     }
+
+    @Test func suzukiUsesSegmentCapexTagBeforeNotesOverviewTag() throws {
+        let golden = try Self.loadGolden()
+        let entry = try #require(golden["S100W4MT"])
+        let segments = try #require(entry["segments"] as? [String: Any])
+        let facts = ExtractedBreakdown(dictionary: segments).facts
+        let snapshot = try #require(BreakdownNormalizer.normalizeCapitalExpenditures(facts: facts))
+        #expect(snapshot.denominatorTag == "CapitalExpendituresIFRS")
+        let subtotal = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(subtotal.amount == 419_699_000_000)
+    }
+
+    @Test func metricTagSelectionSkipsPriorOnlyPreferredCandidate() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "Prior1YearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 10, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 20, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominatorTag == "AssetsIFRS")
+        #expect(snapshot.rows.first?.amount == 20)
+    }
+
+    @Test func metricDenominatorUsesTableSubtotalAndReconcilingRows() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 80, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant_ReconcilingItemsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReconcilingItemsMember"],
+                value: 20, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "AssetsIFRS", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 999, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == false)
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 999)
+    }
 }
