@@ -68,14 +68,9 @@ XBRL → statement / notes / breakdown（正本）
 - US-GAAP 本表は `USGAAPStatementHtml`。`USGAAPHtml` は仮想タグヘルパと Extractor 単体テスト用。
 - goodwill / PPE **明細**は Summary 置換対象外（正本 API）。
 
-## 残タスク（未完のみ）
+## 残タスク
 
-| # | 内容 |
-|---|---|
-| 12 | notes 本番 ingest（DB 参照組立を採る場合。#10b なら後回し可） |
-| 13+ | 明細整理・Sankey・契約露出変更は後回し |
-
-完了済み（EPS/issued_shares/本表パススルー/利息・buyback・IBD の IA 切替等）の経緯は Git。
+notes 本番 ingest・Sankey・契約露出は Linear（[BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes) / [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)）。完了済み（EPS/issued_shares/本表パススルー/利息・buyback・IBD の IA 切替等）の経緯は Git。
 
 ## 落とし穴
 

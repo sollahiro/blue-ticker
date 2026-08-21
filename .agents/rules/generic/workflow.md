@@ -9,3 +9,13 @@
 - 不要と判断したものは削除せず候補として提示する。新規追加時は同等以上の削除も検討する。
 - レビューは事実のみ。問題がなければ「問題なし」。無理に指摘を作らない。
 - 品質ゲートはブランチと統合／配布で別。「ブランチ緑 ≠ 統合緑 ≠ 配布緑」。
+
+## トラッカー
+
+| 置くもの | 場所 |
+|---|---|
+| 抽出バグ・契約欠陥・テスト欠陥など、コード上の不具合 | GitHub Issue |
+| コード変更 | GitHub PR（単一経路） |
+| 実装サイクル段階・本番 ingest・公開ゲート・needs_review・訂正有報キュー | Linear Team `blue-ticker` |
+
+GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開判断・サイクル「現在地」は Git の docs に書かず Linear を更新する（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）。仕様の正本（Feature 一覧・ジョブ編成・Contract・サイクル定義）は Git のまま。本番 ingest 後の件数は `scripts/post-ingest-linear.sh` が Project の status update へ載せる（Issue コメントはしない）。日付付きスナップショットは作らない。

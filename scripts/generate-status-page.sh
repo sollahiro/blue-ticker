@@ -141,6 +141,10 @@ for key in "${STAGE_KEYS[@]}"; do
   docs_target="$(echo "$stage_json" | jq -r '.docs_target')"
   servable_covered="$(echo "$stage_json" | jq -r '.servable_covered')"
   servable_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.servable_pct')")"
+  latest_target="$(echo "$stage_json" | jq -r '.latest_target')"
+  latest_covered="$(echo "$stage_json" | jq -r '.latest_covered')"
+  latest_coverage_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.latest_coverage_pct')")"
+  latest_current_pct="$(printf '%.1f' "$(echo "$stage_json" | jq -r '.latest_current_pct')")"
   stale="$(echo "$stage_json" | jq -r '.stale')"
 
   # servable_covered/servable_pct の分母単位（docs_target があれば書類件数、無ければ対象社数）。
@@ -174,6 +178,15 @@ for key in "${STAGE_KEYS[@]}"; do
     echo "          </div>"
     echo "          <p class=\"stage-line\">対象社数のうち <span class=\"num\">${companies_covered}</span> 社に反映済み（<span class=\"num\">${coverage_pct}</span>%）</p>"
     echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${coverage_pct}%\"></div></div>"
+    if [ "$latest_target" != "null" ] && [ "$latest_target" != "0" ]; then
+      if [ "$docs_target" != "null" ]; then
+        latest_unit="件"
+      else
+        latest_unit="社"
+      fi
+      echo "          <p class=\"stage-line\">最新の有価証券報告書: <span class=\"num\">${latest_covered}</span>/<span class=\"num\">${latest_target}</span>${latest_unit}（<span class=\"num\">${latest_coverage_pct}</span>%）・現行ロジック <span class=\"num\">${latest_current_pct}</span>%</p>"
+      echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${latest_coverage_pct}%\"></div></div>"
+    fi
     echo "          <p class=\"stage-line\">対象${servable_unit}数あたりの格納済み（serviceable）: <span class=\"num\">${servable_covered}</span>/<span class=\"num\">${servable_target}</span>${servable_unit}（<span class=\"num\">${servable_pct}</span>%）</p>"
     echo "          <div class=\"stage-meter\"><div class=\"stage-meter-fill\" style=\"width:${servable_pct}%\"></div></div>"
     # docs_target がある（financials 以外）ステージのみ、書類ベースの補助行を出す。

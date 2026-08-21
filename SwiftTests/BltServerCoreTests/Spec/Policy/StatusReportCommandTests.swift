@@ -60,13 +60,14 @@ private func makeFinancialsResponse(code: String) throws -> FinancialsResponse {
 }
 
 private func seedFinancials(
-    code: String, version: String, db: Database
+    code: String, version: String, highWater: String? = nil, db: Database
 ) async throws {
     let row = CompanyFinancials()
     row.id = code
     row.response = try makeFinancialsResponse(code: code)
     row.cacheVersion = version
     row.requestedYears = 1
+    row.highWater = highWater
     try await row.create(on: db)
 }
 
@@ -127,6 +128,10 @@ private func seedBreakdown(
                 #expect(stage.servablePct == 0.0)
                 #expect(stage.lastUpdated == nil)
                 #expect(stage.stale == true)
+                #expect(stage.latestTarget == 0)
+                #expect(stage.latestCovered == 0)
+                #expect(stage.latestCoveragePct == 0.0)
+                #expect(stage.latestCurrentPct == 0.0)
             }
         }
     }
@@ -150,6 +155,7 @@ private func seedBreakdown(
             #expect(financials.servablePct == 100.0)
             #expect(financials.docsCovered == nil)
             #expect(financials.docsTarget == nil)
+            #expect(financials.latestTarget == 0)  // 有報が無いので最新年度スライスは空
         }
     }
 
@@ -188,6 +194,10 @@ private func seedBreakdown(
             #expect(sections.docsTarget == 2)
             #expect(sections.coveragePct == 100.0)
             #expect(sections.currentVersionPct == 50.0)
+            #expect(sections.latestTarget == 2)  // 各社 1 件ずつが最新有報
+            #expect(sections.latestCovered == 2)
+            #expect(sections.latestCoveragePct == 100.0)
+            #expect(sections.latestCurrentPct == 50.0)
         }
     }
 
@@ -369,6 +379,124 @@ private func seedBreakdown(
 
             #expect(financials.stale == false)
             #expect(financials.lastUpdated != nil)
+        }
+    }
+
+    // MARK: - 最新有報（yearRank 0）スライスは全窓カバレッジと独立
+
+    @Test func filingSectionsLatestYearIgnoresPriorYearRows() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "P1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "L2", secCode: "67580", submit: "2026-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "P2", secCode: "67580", submit: "2025-06-20 09:00", db: app.db)
+            // 7203 は前年のみ、6758 は最新のみ。
+            try await seedFilingSections(
+                docID: "P1", code: "7203", version: filingSectionsCacheVersion, db: app.db)
+            try await seedFilingSections(
+                docID: "L2", code: "6758", version: filingSectionsCacheVersion, db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
+            let sections = try #require(report.stages.first { $0.key == "filing_sections" })
+
+            #expect(sections.docsCovered == 2)
+            #expect(sections.docsTarget == 4)
+            #expect(sections.coveragePct == 100.0)  // 社カバーは両社とも行がある
+            #expect(sections.latestTarget == 2)
+            #expect(sections.latestCovered == 1)  // L2 のみ
+            #expect(sections.latestCoveragePct == 50.0)
+            #expect(sections.latestCurrentPct == 50.0)
+        }
+    }
+
+    @Test func financialsLatestYearRequiresHighWaterAtLeastLatestAnnualSubmit() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "L2", secCode: "67580", submit: "2026-06-20 09:00", db: app.db)
+            try await seedFinancials(
+                code: "7203", version: companyFinancialsCacheVersion,
+                highWater: "2026-06-20 09:00", db: app.db)
+            try await seedFinancials(
+                code: "6758", version: companyFinancialsCacheVersion,
+                highWater: "2025-01-01 09:00", db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203", "6758", "9984"], priorityCodes: [])
+            let financials = try #require(report.stages.first { $0.key == "financials" })
+
+            #expect(financials.companiesTarget == 3)
+            #expect(financials.coveragePct == 66.7)  // 9984 は行なし。120 も無い
+            #expect(financials.latestTarget == 2)  // 120 がある社だけが分母
+            #expect(financials.latestCovered == 1)
+            #expect(financials.latestCoveragePct == 50.0)
+            #expect(financials.latestCurrentPct == 50.0)
+        }
+    }
+
+    @Test func financialsLatestYearCountsHighWaterNewerThanLatestAnnual() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            // 訂正有報などで high_water が最新 120 より新しい。
+            try await seedFinancials(
+                code: "7203", version: companyFinancialsCacheVersion,
+                highWater: "2026-07-01 09:00", db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
+            let financials = try #require(report.stages.first { $0.key == "financials" })
+
+            #expect(financials.latestTarget == 1)
+            #expect(financials.latestCovered == 1)
+            #expect(financials.latestCoveragePct == 100.0)
+            #expect(financials.latestCurrentPct == 100.0)
+        }
+    }
+
+    @Test func financialsLatestYearTreatsNilHighWaterAsUncovered() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedFinancials(
+                code: "7203", version: companyFinancialsCacheVersion, db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
+            let financials = try #require(report.stages.first { $0.key == "financials" })
+
+            #expect(financials.coveragePct == 100.0)
+            #expect(financials.latestTarget == 1)
+            #expect(financials.latestCovered == 0)
+            #expect(financials.latestCoveragePct == 0.0)
+        }
+    }
+
+    @Test func breakdownLatestYearMatchesDocIDNotAnyRowForTheCompany() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "P1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedBreakdown(
+                docID: "P1", axis: breakdownAxisBusiness, code: "7203",
+                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
+            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+
+            #expect(business.docsCovered == 1)
+            #expect(business.companiesCovered == 1)
+            #expect(business.latestTarget == 1)
+            #expect(business.latestCovered == 0)
+            #expect(business.latestCoveragePct == 0.0)
         }
     }
 

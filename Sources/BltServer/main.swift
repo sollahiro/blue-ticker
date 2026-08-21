@@ -21,8 +21,9 @@
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
 //   blt-server status-report                                4 ステージ（financials/
 //                                                            filing_sections/breakdown_business/
-//                                                            breakdown_geography）のカバレッジ・鮮度を
-//                                                            JSON で stdout へ出力（DB read-only）。
+//                                                            breakdown_geography）のカバレッジ・鮮度・
+//                                                            最新有報スライスを JSON で stdout へ出力
+//                                                            （DB read-only）。
 //                                                            assets/apex-site/status.html 生成用
 //                                                            （scripts/generate-status-page.sh が呼ぶ）。
 //

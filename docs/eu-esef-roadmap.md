@@ -1,6 +1,6 @@
 # EU / ESEF ロードマップ
 
-**Region `EU` · Source `ESEF` の進捗・未決・次**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP 全体の進捗は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。
+**Region `EU` · Source `ESEF` の方針・フェーズ・未決**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP の方針は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。進捗の現在地は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 モノレポ前提（JP↔EU / EDINET↔ESEF）。リポジトリ分割はしない。
 
@@ -35,16 +35,7 @@ Statement / Statement-Notes / Breakdown
 
 探索モックの「直 Summary」は **技術スパイク**（ESEF 事実が取れることの実証）であり、製品の正本経路ではない。
 
-## 現在地
-
-| 項目 | 状態 |
-|---|---|
-| 探索モック | `scripts/eu/esef/pipeline_mock.py`（直 Summary スパイク） |
-| **Meta Search** | REST preview `GET /v1/eu/companies`（skills/MCP **未掲載**）。Icon 保留 |
-| **entity index** | **保留** — ESAP（European Single Access Point）一般公開（目安 **2027-07**）まで、全件マスター構築・運用はしない |
-| Struct / Norm / Viz ingest | 未着手（JP/EDINET のみ） |
-| identity | 当面は LEI/`identifier`・`fxo_id`・**名称の完全一致**（live）。部分一致名称は index 依存のため ESAP 後 |
-| 正本経路 | 未。Spike ≠ Filing/Statement/Notes/Breakdown 組立 |
+進捗・次アクションの現在地は Linear Team `blue-ticker`（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。本ファイルは方針・フェーズ定義・非ゴール・未決。
 
 ## 方針
 
@@ -110,12 +101,6 @@ Struct / Breakdown 正本が無い段階で Summary を本番公開しない。�
 | Filing | セクション切るか全文+アンカーか |
 | 言語 | 多言語パッケージの優先・保存 |
 | Summary 組立 | JP の `FinancialsContract` / resolver をどこまで共有するか |
-
-## 次（すぐ）
-
-1. Meta Search preview は **LEI / fxo_id / 名称完全一致** に寄せて契約を磨く（部分一致・全件 index は ESAP 後）
-2. **Struct**: 固定 LEI smoke と Statement 境界。Filing 方針のたたき台
-3. スパイク Summary は参照データに留め、正式 Summary は Filing/Statement/Notes/Breakdown 組立として設計する
 
 ## 関連
 
