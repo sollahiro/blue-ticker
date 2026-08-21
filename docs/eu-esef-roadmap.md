@@ -1,6 +1,6 @@
 # EU / ESEF ロードマップ
 
-**Region `EU` · Source `ESEF` の方針・フェーズ・未決**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP の方針は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。進捗の現在地は Linear Project「EU / ESEF」。
+**Region `EU` · Source `ESEF` の方針・フェーズ・未決**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP の方針は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。進捗の現在地は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 モノレポ前提（JP↔EU / EDINET↔ESEF）。リポジトリ分割はしない。
 

@@ -2,7 +2,7 @@
 
 **方針・ゴール・非ゴールの索引**。構成は `architecture.md`、手順は `deploy.md` / `operations.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
 
-サイクル段階・本番件数・公開ゲート・残作業の現在地は Linear Team [`blue-ticker`](https://linear.app/sollahiro/team/BLT/docs)（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。Git に件数や TODO チェックリストを置かない。
+サイクル段階・本番件数・公開ゲート・残作業の現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）。Git に件数や TODO チェックリストを置かない。
 
 ## 方針
 

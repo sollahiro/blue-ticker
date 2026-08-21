@@ -7,7 +7,7 @@
 - **機能単位の有料／無料分けはしない**（全機能を同一条件で提供）。
 - **段階 B（第三者 REST）と x402 は残す**（機械課金・レート制限。顧客アカウントは持たない）。
 - **MCP は当面 Apps in ChatGPT 専用**（他 MCP クライアント向けの案内・サポート対象外）。
-- 公開規約（どの Feature をいつ外に出すか）は **実装サイクル**（`AGENTS.md`：smoke → golden → 限定投入 → 公開）に準拠する。サイクル段階・本番件数・公開ゲートの現在地は Linear Team `blue-ticker`（本表の「実装」はコード有無）。
+- 公開規約（どの Feature をいつ外に出すか）は **実装サイクル**（`AGENTS.md`：smoke → golden → 限定投入 → 公開）に準拠する。サイクル段階・本番件数・公開ゲートの現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。本表の「実装」はコード有無。
 - client 表の **All** は **実装済み Feature の全部**（未実装・構想は含めない）。
 
 ## Class 依存
