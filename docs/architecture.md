@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-**現構成の正本**（箱・依存・エンドポイント）。進捗は `blt-server-roadmap.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
+**現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
 
 ## Region × Source（モノレポ命名）
 
@@ -17,7 +17,7 @@
 | 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
 | cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
 
-規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の進捗・未決・次は `eu-esef-roadmap.md`。
+規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針・未決は `eu-esef-roadmap.md`、進捗は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 ## デプロイモード
 
@@ -112,7 +112,7 @@ flowchart LR
 
 ## データパイプライン（構成）
 
-取り込み対象と保存先の**構成**のみ。進捗・停止理由は `blt-server-roadmap.md`。床定数は `versioning.md`。
+取り込み対象と保存先の**構成**のみ。進捗は Linear。床定数は `versioning.md`。
 
 | 対象 | 保存先 |
 |---|---|
