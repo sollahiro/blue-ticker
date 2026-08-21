@@ -62,7 +62,7 @@ set -a; . ./.env; set +a
 | 変数 | 意味 |
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
-| `BLT_INGEST_SKIP_POST` | `1` で status ページ・RO reset をスキップ |
+| `BLT_INGEST_SKIP_POST` | `1` で status ページ・Linear 投稿・RO reset をスキップ |
 | `BLT_INGEST_SKIP_00` … `05` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
@@ -113,7 +113,8 @@ financials               … fin-v9 + assembly_fingerprint 再組立
 ジョブ末尾（`ingest-common.sh`、skip 可）:
 
 1. `scripts/generate-status-page.sh` — 失敗しても ingest 成否に影響させない
-2. `scripts/neon-reset-ro-from-parent.sh` — `NEON_*` 4 変数が揃うときのみ（WRITE 後）
+2. `scripts/post-ingest-linear.sh` — `LINEAR_API_KEY` かつ `BLT_INGEST_WRITE=1` のとき、`status-report` を Linear Project「JP 機能サイクル」の status update へ投稿（Issue コメントはしない。未設定なら skip）
+3. `scripts/neon-reset-ro-from-parent.sh` — `NEON_*` 4 変数が揃うときのみ（WRITE 後）
 
 鮮度監視: `scripts/check-ingest-freshness.sh`。
 
