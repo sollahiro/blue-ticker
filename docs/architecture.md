@@ -118,13 +118,13 @@ flowchart LR
 |---|---|
 | sync | `edinet_documents` / `edinet_sync_state` |
 | 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、`BLT_R2_XBRL_BUCKET` 未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
-| facts | `edinet_xbrl_facts`（非公開 RAW） |
+| facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない（BLT-23） |
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル |
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`.agents/rules/project/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。facts は全書類の提出日時順、icons は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/project/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 

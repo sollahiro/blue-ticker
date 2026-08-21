@@ -17,11 +17,7 @@ read 床・バンプ規則は `versioning.md` のみ（ここへ値を書かな�
 
 **ゴール**: ユーザー向け実行を blt-server（remote）へ集約（達成）。
 
-**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化。
-
-## 未決
-
-facts 停止に伴うストレージ選定は Linear [BLT-23](https://linear.app/sollahiro/issue/BLT-23/facts-停止-ストレージ選定)。方針が決まったら `architecture.md` / `operations.md` へ定着する。
+**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化、数値 facts の Neon / R2 永続（生 XBRL L2 から再導出する。Linear [BLT-23](https://linear.app/sollahiro/issue/BLT-23/facts-停止-ストレージ選定)）。
 
 ## 関連
 

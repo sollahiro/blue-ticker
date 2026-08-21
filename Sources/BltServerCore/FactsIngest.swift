@@ -162,17 +162,15 @@ let unpublishedBreakdownIngestLimit = 30
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
 /// 内訳取り込み（business/geography は上場全体、決定論指標軸は日経225限定）を取り込む。
 ///
-/// 数値 fact 取り込み（`edinet_xbrl_facts`・XBRL 数値 fact）は **既定でスキップ**する（issue #22）。
-/// facts は現状どこからも消費されない RAW アーカイブで、全件投影 ~800MB は Neon の
-/// branch logical size 上限 512MB を超える。消費者（タグ系抽出の facts 化＝目標 A）が
-/// できるまで蓄積を止める。停止は可逆で、`includeFacts: true`（CLI: `--with-facts`）で
-/// 再開できる。財務取り込みの `computeFinancials` は自前で生 XBRL を DL するため、数値 fact 取り込みを
-/// 飛ばしても financials は自足する（機能影響なし）。判断の詳細は blt-server-roadmap.md。
+/// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**（BLT-23）。生 XBRL の R2 L2 から
+/// 再導出できるパース済み投影で、配信も他 stage も読まない。全件投影は Neon 512MB を超える。
+/// `--with-facts`（`includeFacts`）は残存 CLI で製品経路ではない。財務取り込みの
+/// `computeFinancials` は自前で生 XBRL を読むため、facts 行が無くても自足する。
 ///
 /// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons の集合
 /// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
-/// 数値 fact 取り込みは `targets` に含めず、従来どおり `includeFacts` で別制御する。
+/// 数値 fact 取り込みは `targets` に含めない。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
@@ -279,7 +277,7 @@ public func runFactsIngestCommand(
         } else {
             app.logger.notice(
                 "facts ingest disabled",
-                metadata: ["event": "ingest_skipped", "target": "facts", "reason": "issue_22"])
+                metadata: ["event": "ingest_skipped", "target": "facts", "reason": "blt_23"])
         }
         if targets.contains(.financials) {
             let s4 = try await runFinancialsIngest(
