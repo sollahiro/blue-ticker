@@ -128,6 +128,6 @@ flowchart LR
 
 ## コンテナ責務
 
-Linux 検証・テスト Postgres・OCI ビルドは Docker。本番実行は Fly。選択機構の常設はしない（2つ目の実装が常用になってから）。
+Linux 検証・テスト Postgres・手元の OCI ビルドは Apple `container`。本番実行は Fly（Dockerfile をリモートビルド）。選択機構の常設はしない。
 
 詳細: `deploy.md` · `operations.md` · `xbrl-parsing.md` · `blt-server-roadmap.md`

@@ -1,4 +1,4 @@
-// 実 Postgres（Neon / ローカル Docker）に対する統合テスト。
+// 実 Postgres（Neon / ローカル Apple container）に対する統合テスト。
 // 既存テストはインメモリ SQLite までのため、SQLite では現れない Postgres 固有の振る舞い
 // （.json → JSONB カラム型・索引作成・String PK・@Timestamp・JSONB round-trip）を実 DB で検証する。
 //
@@ -6,7 +6,7 @@
 // swift-linux ジョブでは常に設定される。EDINET ネットワークは不要で、
 // 数値 fact 取り込みは runFactsIngest にフェイクパーサを注入して DB 書き込み経路だけを通す。
 //
-//   docker run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine
+//   container run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine
 //   BLT_TEST_POSTGRES_URL='postgres://postgres:blt@localhost:55432/blt?sslmode=disable' \
 //     swift test --filter PostgresIntegrationTests
 

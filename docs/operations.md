@@ -18,7 +18,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Fly.io（代替容易）
 
-結合は `fly.toml` / Volume / secrets / deploy。アプリは素の Docker。方式A（Tunnel）のため Fly LB 非依存。切替: 新ホストで同イメージ＋secrets＋Tunnel トークン。
+結合は `fly.toml` / Volume / secrets / deploy。アプリは素の OCI イメージ（Dockerfile）。方式A（Tunnel）のため Fly LB 非依存。切替: 新ホストで同イメージ＋secrets＋Tunnel トークン。
 
 ### Cloudflare（撤退経路なし・SSO）
 
