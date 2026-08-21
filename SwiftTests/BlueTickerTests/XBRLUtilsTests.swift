@@ -169,6 +169,43 @@ import Foundation
         #expect(firstAgain["NetSales"] == "売上高")
     }
 
+    // MARK: - Numeric fact index (bounded FIFO) behavior
+
+    private static func numericFactInstance() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xmlns:test="http://example.com/test">
+          <test:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">100</test:NetSales>
+          <test:EmptySales contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6" xsi:nil="true"></test:EmptySales>
+        </xbrli:xbrl>
+        """
+    }
+
+    /// 同一 dir × nilAsZero への再収集は同じ値を返す（cache hit でも正しさは不変）。
+    @Test func collectAllNumericFactsReturnsSameResultOnRepeatedCalls() throws {
+        try XBRLTestSupport.withXbrlDir(Self.numericFactInstance()) { dir in
+            let first = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+            let second = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+            #expect(first == second)
+            #expect(first["NetSales"]?["CurrentYearDuration"] == 100)
+            #expect(first["EmptySales"] == nil)
+        }
+    }
+
+    /// `nilAsZero` が違うと結果が違う（キャッシュキーが分かれている）。
+    @Test func collectAllNumericFactsNilAsZeroIsDistinctFromDroppingNil() throws {
+        try XBRLTestSupport.withXbrlDir(Self.numericFactInstance()) { dir in
+            let dropped = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+            let asZero = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: true)
+            #expect(dropped["EmptySales"] == nil)
+            #expect(asZero["EmptySales"]?["CurrentYearDuration"] == 0)
+            #expect(dropped["NetSales"]?["CurrentYearDuration"] == 100)
+            #expect(asZero["NetSales"]?["CurrentYearDuration"] == 100)
+        }
+    }
+
     // MARK: - Presentation linkbase 表示順（loadPresentationOrder）
 
     private static let incomeStatementRole =

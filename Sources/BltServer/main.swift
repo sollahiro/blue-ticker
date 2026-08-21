@@ -10,7 +10,7 @@
 //                                                            employees/rd/goodwill は日経225（1ジョブ 30）。
 //                                                            statements/statement-notes は日経225構成銘柄限定。
 //                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
-//                                                            --with-facts で XBRL 数値 fact も取り込む。既定は停止。issue #22。
+//                                                            --with-facts は残存（数値 facts 永続は閉じた。BLT-23）。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。

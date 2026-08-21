@@ -13,6 +13,7 @@ import ZIPFoundation
 // 発生しない（doc ごとに distinct な新規 dir が積み上がるだけ）。上限を設けないと ingest 1 プロセス内で
 // 処理 document 数に比例してメモリが純増し OOM する。同一社の並列 doc 処理数は最大 6 のため、
 // 16 あれば doc 内再利用（同一 dir への複数回アクセス）の効能を潰さずに頭打ちにできる。
+// 数値 fact 索引も同じ容量・同じ前提（展開 dir は不変。ジョブ跨ぎの永続化はしない）。
 private let _labelRoleCacheCapacity = 16
 
 /// 挿入順 FIFO で evict する固定容量キャッシュ。スレッド安全性は呼び出し側の _cacheLock が担保する
@@ -57,6 +58,14 @@ nonisolated(unsafe) private var _presentationPeriodEndOrderCache = BoundedFIFOCa
 nonisolated(unsafe) private var _presentationParentsCache = BoundedFIFOCache<URL, [String: [String: Set<String>]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _preferredLabelRolesCache = BoundedFIFOCache<URL, [String: [String: String]]>(capacity: _labelRoleCacheCapacity)
 nonisolated(unsafe) private var _calculationComponentsCache = BoundedFIFOCache<URL, [String: [String: [CalcComponent]]]>(
+    capacity: _labelRoleCacheCapacity)
+
+private struct NumericFactCacheKey: Hashable {
+    let dir: URL
+    let nilAsZero: Bool
+}
+
+nonisolated(unsafe) private var _numericFactCache = BoundedFIFOCache<NumericFactCacheKey, XbrlFactIndex>(
     capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
 
@@ -636,7 +645,17 @@ enum XBRLUtils {
     }
 
     /// XBRLディレクトリ内の全数値 fact をメタ情報付きで返す。
+    /// 同一 `dir` × `nilAsZero` はプロセス内 FIFO に載せる（financials 組立や notes が
+    /// 同じ展開パスへ何度も収集するため。ラベルキャッシュと同容量・同前提）。
     static func collectAllNumericFacts(in dir: URL, nilAsZero: Bool = true) -> XbrlFactIndex {
+        let key = NumericFactCacheKey(dir: dir, nilAsZero: nilAsZero)
+        _cacheLock.lock()
+        if let hit = _numericFactCache[key] {
+            _cacheLock.unlock()
+            return hit
+        }
+        _cacheLock.unlock()
+
         var allFacts: XbrlFactIndex = [:]
         let labelsByTag = loadLabelsByTag(in: dir)
         let rolesByTag = loadRolesByTag(in: dir)
@@ -657,6 +676,9 @@ enum XBRLUtils {
                 }
             }
         }
+        _cacheLock.lock()
+        _numericFactCache.insert(allFacts, forKey: key)
+        _cacheLock.unlock()
         return allFacts
     }
 

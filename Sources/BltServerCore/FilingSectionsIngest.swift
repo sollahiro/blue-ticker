@@ -9,7 +9,8 @@
 // 対象は「東証上場（EDINET 上場区分）× 有報(120) × 直近 years 件（≈ years 年。有報は通常年1件）」。
 // 直近 years 件を超えた過去書類は既存行があれば purge（削除）し、無期限累積を防ぐ。窓は財務取り込み
 // （financials 6年）と揃え、トレンド分析と同じ期間分の本文を読めるようにする。
-// 容量（Neon 512MB）のため上限を設ける。ストレージ強化＝issue #22 決定後に緩められる。
+// 容量（Neon 512MB）のため上限を設ける。数値 facts 永続はしない（BLT-23）。窓を緩めるなら
+// filing-sections 自身の容量を見て決める。
 
 import BlueTickerCore
 import Fluent
@@ -17,7 +18,7 @@ import Foundation
 import Logging
 
 /// 有報セクション取り込みで保持する有報の件数（1社あたり直近 N 件。有報は通常年1件のため ≈ N 年）。
-/// 財務取り込みの financials 計算年数（6年）と揃える。ストレージ強化後に緩められる。
+/// 財務取り込みの financials 計算年数（6年）と揃える。
 let filingSectionsIngestYears = 6
 
 /// 有報セクション取り込み結果のサマリ。
