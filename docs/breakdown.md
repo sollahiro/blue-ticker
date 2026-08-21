@@ -56,13 +56,7 @@
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決、#9）。
 - 報告セグメント別指標の分母は常に segment + reconciling（表の小計・EntityTotal は行として保持し、分母切替には使わない）。
 
-## 残課題
-
-- employees / rd / goodwill / 報告セグメント別指標軸の正式公開ゲート（配線・read は決定論で可）
-- 報告セグメント別指標8軸の実データ母集団全体への展開
-- 決定論指標軸の doc 単位一括解決（軸ループ再パース削減の本丸。現状は docID メモで緩和）
-- geography の巨大注記内での見出し・表の意味関連性の限界
-- LLM 生ログ全文の別テーブル保持（任意）
+公開ゲート・母集団展開・残作業の現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。
 
 ## 非目標
 

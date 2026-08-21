@@ -36,9 +36,9 @@ Meta → Struct → Norm → Viz
 | Meta | Icon | 会社アイコン取得 | 済 | R2 公開 URL（設定時） |
 | Struct | Filing | 有報のテキスト抽出 | 済 | filing-sections |
 | Struct | Statement | 財務諸表の構造化 | 済（日経225） | BS/PL/CF/SS |
-| Struct | Statement-Notes | 財務諸表注記の構造化 | 済 | 日経225。ingest / 公開の現在地は Linear |
+| Struct | Statement-Notes | 財務諸表注記の構造化 | 済 | 日経225。ingest の現在地は Linear |
 | Norm | Summary | 正規化済み財務データ | 済 | financials 水準値 |
-| Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開ゲートは Linear。軸は下表・`breakdown.md` |
+| Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開判断は Linear。軸は下表・`breakdown.md` |
 | Viz | Waterfall | 事業利益・ROIC・ROE の分解 | 済 | financials 同行の分析投影 |
 | Viz | Sankey | 地域別・製品別・利益構造・投資構造（項目入替可） | 未 | 旧称 Allocation。要求具体化後 |
 | Feed | Trend | 検索数の多い銘柄・検索トレンド | 未 | |
@@ -63,14 +63,16 @@ Meta → Struct → Norm → Viz
 
 ### Breakdown（軸）
 
-| axis | 内容 | 公開 |
-|---|---|---|
-| `business` | 事業別売上 | 済 |
-| `geography` | 地域別売上 | 済 |
-| `employees` | 従業員内訳 | 公開ゲートは Linear |
-| `research_and_development` | 研究開発費内訳 | 公開ゲートは Linear |
-| `goodwill` | のれん | 公開ゲートは Linear |
-| `segment_assets` 他7指標 | 報告セグメント別指標 | 公開ゲートは Linear |
+公開判断の現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。本表は軸の意味。
+
+| axis | 内容 |
+|---|---|
+| `business` | 事業別売上 |
+| `geography` | 地域別売上 |
+| `employees` | 従業員内訳 |
+| `research_and_development` | 研究開発費内訳 |
+| `goodwill` | のれん |
+| `segment_assets` 他7指標 | 報告セグメント別指標 |
 
 ## Client × Feature
 
@@ -86,11 +88,11 @@ Meta → Struct → Norm → Viz
 - 対象は **REST**（機械課金＝x402。払済みレシートが識別子）。
 - MCP は段階 B の x402 対象にしない（Apps in ChatGPT は課金なし）。
 - 機能単位の有料マスクは採らない。制御は認証・レート・段階 B の契約で行う。
-- 着手順・定義は `public-api.md`。
+- 着手順・公開判断は Linear [BLT-25](https://linear.app/sollahiro/issue/BLT-25/rest-段階-b-x402)。定義は `public-api.md`。
 
-## Sankey（未実装）
+## Sankey
 
-サーバーは分解済み数値のみ返し、描画はクライアント。材料は geography / business / Statement PL+SS / notes（capex·dividends）+ rd 等。複数観点の合成・JSON・エンドポイントは要求具体化まで設計しない。
+サーバーは分解済み数値のみ返し、描画はクライアント。材料は geography / business / Statement PL+SS / notes（capex·dividends）+ rd 等。複数観点の合成・JSON・エンドポイントは要求具体化まで設計しない。現在地は Linear [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)。
 
 ## 関連
 

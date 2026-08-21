@@ -48,20 +48,21 @@ Statement / Statement-Notes / Breakdown
 
 ## 機能カバレッジ（Class 順）
 
-| Class | Feature | EU | 依存・メモ |
-|---|---|---|---|
-| Meta | Search | REST preview | `GET /v1/eu/companies?q=`。skills/MCP 未掲載。**index 保留（ESAP まで）**。Icon 保留 |
-| Meta | Icon | 保留 | — |
-| Struct | Filing | 未 | 正本の一つ。セクション方針は要設計 |
-| Struct | Statement | 未 | 正本。presentation/calc・拡張・anchoring |
-| Struct | Statement-Notes | 未 | 正本。EU note_type を再定義 |
-| Norm | Breakdown | 未 | 内訳正本。Summary 組立の入力にもなる |
-| Norm | Summary | スパイクのみ | **組立ビュー**。Filing/Statement/Notes/Breakdown 後に正式配置 |
-| Viz | Waterfall | 未 | Summary 行（組立結果）の投影。計算は流用可 |
-| Viz | Sankey | 未（JP も未） | Breakdown + Statement 等の材料後 |
-| Feed | Update | 未 | filings.xbrl.org sync |
-| Feed | Status | 未 | 母集団定義後 |
-| Feed | Trend / Report | — | 未実装 / 構想 |
+Feature 一覧の正本は `feature-tiers.md`。ここは EU 固有の方針のみ。進捗は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
+
+| Class | Feature | EU 固有の方針 |
+|---|---|---|
+| Meta | Search | identity は LEI / `identifier` / `fxo_id` / 名称の完全一致。部分一致・全件 index は ESAP 後 |
+| Meta | Icon | 当面保留 |
+| Struct | Filing | セクション方針は要設計（未決） |
+| Struct | Statement | presentation/calc・拡張・anchoring |
+| Struct | Statement-Notes | EU note_type を再定義（JP と無理に共通化しない） |
+| Norm | Breakdown | 内訳正本。Summary 組立の入力にもなる |
+| Norm | Summary | **組立ビュー**。Filing/Statement/Notes/Breakdown 後に正式配置。直 extract は正にしない |
+| Viz | Waterfall | Summary 行（組立結果）の投影。計算は流用可 |
+| Viz | Sankey | Breakdown + Statement 等の材料後。要求具体化まで設計しない |
+| Feed | Update / Status | Meta〜Norm の母集団ができた段で足す |
+| Feed | Trend / Report | 構想。Report は本来クライアント責務 |
 
 ## フェーズ（Class 依存に沿う）
 

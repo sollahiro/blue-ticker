@@ -42,7 +42,7 @@
 
 ## notes
 
-決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。ingest の現在地は Linear [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)。
+決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。ingest の現在地は Linear（親 [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)）。
 
 REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
 
@@ -53,13 +53,13 @@ REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `rea
 | `available_via_notes` | 本 note_type 対象外だが同等値は他 note_type（例: `borrowings_schedule`）から取得可 |
 | `us_gaap_unsupported` | US-GAAP 連結で本 note_type の構造化タグ判定ができない |
 
-## 残課題
+## 非ゴール（当面）
 
-- 銀行・保険等を含む母集団拡大前の追加実データ確認
 - 企業拡張タグの識別フラグ（需要が出てから）
-- 半期報告書
-- PL 利益段階ラベリング（科目統一に当たるため非ゴール）
-- `assets/taxonomy` を本番配置するか（配置時は cache バンプ要否を再検討）
+- 半期報告書（通期のみ）
+- PL 利益段階ラベリング（科目統一に当たるため）
+
+母集団拡大は Linear [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大銀行保険)。`assets/taxonomy` の本番配置は [BLT-37](https://linear.app/sollahiro/issue/BLT-37/運用-assetstaxonomy-本番配置)。
 
 ## 関連
 

@@ -19,11 +19,4 @@
 
 機能単位の有料マスクは採らない（`feature-tiers.md`）。**段階 B の対象は REST（x402）**。MCP は当面 Apps in ChatGPT 専用で、段階 B の x402 対象外（課金なし）。
 
-## 着手順（暫定）
-
-1. 課金面への x402（識別子＝払済み）
-2. レート制限
-3. CORS（必要なら）
-4. 外部向け OpenAPI 等
-
-土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。索引は `blt-server-roadmap.md`。
+土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断は Linear [BLT-25](https://linear.app/sollahiro/issue/BLT-25/rest-段階-b-x402)。定義の索引は `blt-server-roadmap.md`。

@@ -1,6 +1,6 @@
 # financials（Summary）と正本の分離
 
-`company_financials`（公開面は Summary / Waterfall）を、正本（statement / notes / breakdown）からの組立ビューへ寄せる**進行中の設計**。ドメイン個別の仕様は `statement.md` / `breakdown.md`。
+`company_financials`（公開面は Summary / Waterfall）を、正本（statement / notes / breakdown）からの組立ビューへ寄せる**現行の設計**。ドメイン個別の仕様は `statement.md` / `breakdown.md`。
 
 ## 用語
 
@@ -67,10 +67,6 @@ XBRL → statement / notes / breakdown（正本）
 
 - US-GAAP 本表は `USGAAPStatementHtml`。`USGAAPHtml` は仮想タグヘルパと Extractor 単体テスト用。
 - goodwill / PPE **明細**は Summary 置換対象外（正本 API）。
-
-## 残タスク
-
-notes 本番 ingest・Sankey・契約露出は Linear（[BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes) / [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)）。完了済み（EPS/issued_shares/本表パススルー/利息・buyback・IBD の IA 切替等）の経緯は Git。
 
 ## 落とし穴
 
