@@ -75,36 +75,24 @@ set -a; . ./.env; set +a
 ## 実行順（1サイクル内）
 
 ```text
-sync + filing-sections   … R2/L1 温め、sections-v6 stale 消化
+sync + filing-sections   … R2/L1 温め + 本文抽出
         ↓
-statements               … 225 正本（statement-v1）
+statements               … 225 正本
         ↓
-notes-core               … fin-v9 の BPS/EPS 供給源を優先
+notes-core               … BPS/EPS 供給源を優先
         ↓
 notes-heavy              … 重い note_type（borrowings / lease / PPE 等）
         ↓
 breakdowns               … LLM 軸は時間がかかるため financials と分離
         ↓
-financials               … fin-v9 + assembly_fingerprint 再組立
+financials               … 組立スナップショット再計算
         ↓
-（任意）status ページ / RO reset
+（任意）status ページ / Linear 投稿 / RO reset
 ```
 
 `notes-heavy` と `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。
 
-## 開発サイクルとの対応（現在地の目安）
-
-| 対象 | サイクル | 本番 ingest の進め方 |
-|---|---|---|
-| financials | 9 の stale 消化 | job-05 を回して fin-v9 へ。床以上の旧行はそのまま servable だが現行版ではない |
-| filing-sections | 9 途中 | job-00 で sections-v6 を優先消化 |
-| statements | 6 済・8 残 | job-01 で 225 最新年度（2026 残） |
-| notes core | 3–6 | job-02（per_share v3、issued_shares） |
-| notes heavy | 3 試行→225 へ | job-03。3社試しは拡げず 225 最新年度一括 |
-| breakdowns business/geo | 6 済・9 未 | job-04（上場拡張） |
-| breakdowns employees | 6 直前 | job-04（225・needs_review 少） |
-| breakdowns rd | 4–8 | job-04 継続。222 needs_review は手動／ロジック改善と分離 |
-| breakdowns goodwill | Stage1 データあり | 公開判断前。ingest は job-04 で 225 のみ |
+サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)。ingest 後は `post-ingest-linear.sh` が status update に件数を載せる）。Git に件数や段階番号を書かない。
 
 コード変更後は `swift build -c release --product blt-server` を先に実行（旧バイナリは新 stage を黙って飛ばす）。
 

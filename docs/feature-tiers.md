@@ -36,9 +36,9 @@ Meta → Struct → Norm → Viz
 | Meta | Icon | 会社アイコン取得 | 済 | R2 公開 URL（設定時） |
 | Struct | Filing | 有報のテキスト抽出 | 済 | filing-sections |
 | Struct | Statement | 財務諸表の構造化 | 済（日経225） | BS/PL/CF/SS |
-| Struct | Statement-Notes | 財務諸表注記の構造化 | コード配線済・本番 ingest 未（日経225） | 下表 note_type |
+| Struct | Statement-Notes | 財務諸表注記の構造化 | 済 | 日経225。ingest / 公開の現在地は Linear |
 | Norm | Summary | 正規化済み財務データ | 済 | financials 水準値 |
-| Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 売上 business/geography 公開済。employees/rd/goodwill・報告セグメント指標は軸あり・**公開予定** | `breakdown.md` |
+| Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開ゲートは Linear。軸は下表・`breakdown.md` |
 | Viz | Waterfall | 事業利益・ROIC・ROE の分解 | 済 | financials 同行の分析投影 |
 | Viz | Sankey | 地域別・製品別・利益構造・投資構造（項目入替可） | 未 | 旧称 Allocation。要求具体化後 |
 | Feed | Trend | 検索数の多い銘柄・検索トレンド | 未 | |
@@ -65,12 +65,12 @@ Meta → Struct → Norm → Viz
 
 | axis | 内容 | 公開 |
 |---|---|---|
-| `business` | 事業別売上 | 済（上場 ingest） |
-| `geography` | 地域別売上 | 済（上場 ingest） |
-| `employees` | 従業員内訳 | 公開予定（日経225・軸あり） |
-| `research_and_development` | 研究開発費内訳 | 公開予定（日経225・軸あり） |
-| `goodwill` | のれん | 公開予定（日経225・軸あり） |
-| `segment_assets` 他7指標 | 報告セグメント別指標 | Stage1（日経225・決定論。正式公開ゲートは都度） |
+| `business` | 事業別売上 | 済 |
+| `geography` | 地域別売上 | 済 |
+| `employees` | 従業員内訳 | 公開ゲートは Linear |
+| `research_and_development` | 研究開発費内訳 | 公開ゲートは Linear |
+| `goodwill` | のれん | 公開ゲートは Linear |
+| `segment_assets` 他7指標 | 報告セグメント別指標 | 公開ゲートは Linear |
 
 ## Client × Feature
 

@@ -42,7 +42,7 @@
 
 ## notes
 
-決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。本番 `company_statement_notes` の ingest は未実施の場合あり（現在地は roadmap）。
+決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。ingest の現在地は Linear [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)。
 
 REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
 

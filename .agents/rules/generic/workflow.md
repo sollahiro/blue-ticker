@@ -18,4 +18,4 @@
 | コード変更 | GitHub PR（単一経路） |
 | 実装サイクル段階・本番 ingest・公開ゲート・needs_review・訂正有報キュー | Linear Team `blue-ticker` |
 
-GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開判断は Git に書かず Linear を更新する。仕様の正本（Feature 一覧・ジョブ編成・Contract）は Git のまま。本番 ingest 後の件数は `scripts/post-ingest-linear.sh` が Project の status update へ載せる（Issue コメントはしない）。
+GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開判断・サイクル「現在地」は Git の docs に書かず Linear を更新する。仕様の正本（Feature 一覧・ジョブ編成・Contract・サイクル定義）は Git のまま。本番 ingest 後の件数は `scripts/post-ingest-linear.sh` が Project の status update へ載せる（Issue コメントはしない）。

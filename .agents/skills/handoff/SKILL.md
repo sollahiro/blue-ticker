@@ -17,7 +17,7 @@ description: 現在のセッションの途中状態を別セッションへ引�
    - `git diff --stat`（差分規模）
 
 2. **durable / 一時を振り分ける**（重要）:
-   - **恒久的な残作業・決定**（次セッション以降も生きる方針・残タスク）は、引き継ぎ文ではなく `docs/blt-server-roadmap.md` の `## TODO` または memory（`project_*` / `feedback_*`）へ流す。これは既存規約（`documentation.md`：履歴は Git、現在地はドキュメント、一時メモは Git に残さない）。
+   - **恒久的な残作業・決定**（次セッション以降も生きる方針・残タスク）は、引き継ぎ文ではなく Linear Team `blue-ticker` へ流す。方針が固まったら Git の architecture / Contract。roadmap に TODO チェックリストを置かない（`documentation.md`：履歴は Git、現在地は Linear、一時メモは Git に残さない）。
    - **セッション固有の途中状態のみ**を引き継ぎ文に残す（どこまで書いたか・次の一手・落とし穴）。
 
 3. **`.Codex/handoff.local.md` を下記テンプレで上書きする**（Write で全置換。追記しない）。
