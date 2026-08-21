@@ -222,7 +222,8 @@ enum StatementNotesResolver {
     private static func resolveIFRSCategorySchedule(
         xbrlDir: URL, roleName: String
     ) -> StatementNoteResolveResult {
-        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
+        // 正味帳簿価額は nil を 0 にしない（`nilAsZero: false`）。ラベル走査も同じ索引を使う。
+        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
 
         // 表示順は presentation linkbase の並び順（`XbrlFact.orderByRole`、Statement 本体の
         // `StatementClassifier` と同じ仕組み）を使う。取得できないタグはタグ名のアルファベット順に
@@ -245,7 +246,7 @@ enum StatementNotesResolver {
         }
 
         // 正味帳簿価額は連結 Instant コンテキスト（実データ検証: CurrentYearInstant、member接尾辞なし）。
-        let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let allTagElements = XBRLUtils.factIndexToNumericElements(facts)
         let instantFS = fieldSetFromInstant(allTagElements)
 
         var items: [StatementLineItem] = []
