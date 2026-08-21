@@ -76,20 +76,23 @@ fi
 
 stage_rows="$(echo "$report_json" | jq -r '
   .stages[] |
-  "| \(.key) | \(.companies_covered)/\(.companies_target) (\(.coverage_pct)%) | \(.current_version_pct)% | \(.servable_covered) (\(.servable_pct)%) | \(if .stale then "stale" else "ok" end) |"
+  "| \(.key) | \(.companies_covered)/\(.companies_target) (\(.coverage_pct)%) | \(.latest_covered)/\(.latest_target) (\(.latest_coverage_pct)%) | \(.latest_current_pct)% | \(.current_version_pct)% | \(.servable_covered) (\(.servable_pct)%) | \(if .stale then "stale" else "ok" end) |"
 ')"
 
 body="$(cat <<EOF
-ingest 後スナップショット（${generated_at}）。\`blt-server status-report\` と同じ集計。カバレッジは「行がある社」であり最新年度 100% ではない。
+ingest 後スナップショット（${generated_at}）。\`blt-server status-report\` と同じ集計。
 
-| stage | 社カバー | 現行版 | servable | 鮮度 |
-|---|---|---|---|---|
+| stage | 社カバー（全窓） | 最新年度 | 最新・現行版 | 全窓・現行版 | servable | 鮮度 |
+|---|---|---|---|---|---|---|
 ${stage_rows}
 
-- 社カバー: 対象母集団のうち行がある社
-- 現行版: いまの Contract \`cache_version\` 一致率（financials は社、他は書類）
+- 社カバー（全窓）: 保持窓内で行がある社（前年だけの行でも 100% になりうる）
+- 最新年度: 各社の最新有報（yearRank 0）。financials は \`high_water >=\` その提出日時。母数は最新 120 がある社／件（120 が無い上場社は含めない）
+- 最新・現行版: 最新有報スライスのうち、いまの Contract \`cache_version\` 一致率
+- 全窓・現行版: 保持窓全体の現行版一致率（financials は社、他は書類）
 - servable: read 床以上（現行より古いが配信可能な行を含む）
 - 鮮度 stale: 最終更新が閾値より古い（版ずれとは別）
+- statements / notes / unpublished 軸は本表に含めない（日経225母集団。件数は下の histogram）
 EOF
 )"
 
