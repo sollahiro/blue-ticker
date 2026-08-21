@@ -1,6 +1,6 @@
 # blt-server デプロイ手順
 
-同一 Docker イメージを Fly と self-host で使う。構成は `architecture.md`、認証方針は `api-auth.md`。
+同一 OCI イメージを Fly と self-host で使う。手元のビルド・実行は Apple `container`。構成は `architecture.md`、認証方針は `api-auth.md`。
 
 ## 環境変数
 
@@ -42,12 +42,13 @@ repo secrets: `BLT_EDINET_API_KEY`（CI smoke）· `FLY_API_TOKEN` · `BLT_API_D
 ## self-host
 
 ```bash
-docker build -t blt-server .
-docker run -d --name blt-server -p 8080:8080 \
+container system start   # 未起動なら
+container build -t blt-server .
+container run -d --name blt-server -p 8080:8080 \
   -e BLT_EDINET_API_KEY=xxxxx -e DATABASE_URL='postgres://...' \
   -v blt_data:/data blt-server
-docker exec blt-server /app/blt-server sync --from 2024-01-01
-docker exec blt-server /app/blt-server ingest --limit 50
+container exec blt-server /app/blt-server sync --from 2024-01-01
+container exec blt-server /app/blt-server ingest --limit 50
 ```
 
 公開するなら Cloudflare Tunnel + Access を前段に置く。

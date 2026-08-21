@@ -11,7 +11,7 @@
 - **Git First**: Git が唯一の Source of Truth。永続判断は Git か memory、一時情報は残さない。履歴詳細は Git に委ねる。
 - **責務分離**: ロジック／サービスは入れ替え可能なモジュールに。Core は Vapor/Fluent 非依存、Web/DB は `BltServerCore` に閉じる（詳細は下記「ターゲット構成と依存ルール」）。
 - **Region × Source**: モノレポ。市場は `JP`↔`EU`、開示系は `EDINET`↔`ESEF`（同階層の対）。パス・新規モジュールはこの対応で命名する（`.agents/rules/project/regions.md`、`docs/architecture.md`）。
-- **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。
+- **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。手元の Linux コンテナが必要なら Apple `container`（`docker` / Docker Desktop は使わない）。Dockerfile は Fly 向け OCI 契約として残す。
 - **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden（深さ）と smoke（床）の役割・固定企業・対象 note_type / breakdown 軸は `docs/xbrl-parsing.md` §6。新規 note_type 追加時は床を広げる。言語非依存の資産と実装紐づきの分けは `docs/test-spec-assets.md`。
 - **トラッカー**: コード欠陥は GitHub Issue、コード変更は GitHub PR、サイクル／本番 ingest／公開ゲートは Linear Team `blue-ticker`（`.agents/rules/generic/workflow.md`）。
 
