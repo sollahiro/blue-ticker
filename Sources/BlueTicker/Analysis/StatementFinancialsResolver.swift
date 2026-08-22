@@ -174,7 +174,7 @@ enum StatementFinancialsResolver {
             if stripped == "固定負債合計" || stripped == "固定負債" || stripped == "非流動負債合計" {
                 assignIfAbsent(&instantFS, "USGAAP_HTML_NonCurrentLiabilities", item.value)
             }
-            if stripped == "純資産合計" || stripped == "純資産" {
+            if stripped == "純資産合計" || stripped == "純資産" || stripped == "資本合計" {
                 assignIfAbsent(&instantFS, "USGAAP_HTML_NetAssets", item.value)
             }
             if stripped == "負債合計" {
