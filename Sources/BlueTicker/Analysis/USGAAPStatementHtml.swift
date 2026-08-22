@@ -677,6 +677,16 @@ enum USGAAPStatementHtml {
         return false
     }
 
+    /// 営業/投資/財務の区分合計。通常は「〜によるキャッシュ・フロー」。
+    /// 野村/オリックスは「営業活動に使用された現金（純額）」型。
+    private static func isCashFlowActivityTotalLabel(_ s: String) -> Bool {
+        let isActivity =
+            s.contains("営業活動") || s.contains("投資活動") || s.contains("財務活動")
+        guard isActivity else { return false }
+        if s.contains("キャッシュ・フロー") { return true }
+        return s.contains("現金") && s.contains("純額")
+    }
+
     private static func cfSection(for label: String) -> StatementLineSection? {
         if label.contains("営業活動によるキャッシュ・フロー") { return .operating }
         if label.contains("投資活動によるキャッシュ・フロー") { return .investing }
@@ -708,7 +718,8 @@ enum USGAAPStatementHtml {
             return s == "営業利益" || s == "売上総利益" || s.contains("当期純利益")
                 || s.contains("税引前") || s.contains("税金等調整前")
         case .cashFlow:
-            return s.contains("キャッシュ・フロー") || s.contains("期首残高") || s.contains("期末残高")
+            return isCashFlowActivityTotalLabel(s)
+                || s.contains("期首残高") || s.contains("期末残高")
                 || s.contains("純減少") || s.contains("純増減")
         case .changesInEquity:
             return isEquityBalanceRowLabel(s) || s == "包括利益" || s.contains("当期包括利益")

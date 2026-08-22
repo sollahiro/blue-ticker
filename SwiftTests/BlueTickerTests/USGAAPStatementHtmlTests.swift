@@ -829,17 +829,17 @@ import Foundation
         #expect(
             extracted.cashFlow.contains {
                 $0.label == "営業活動に使用された現金（純額）" && $0.value == -20_000_000
-                    && $0.section == .operating
+                    && $0.section == .operating && $0.isTotal
             })
         #expect(
             extracted.cashFlow.contains {
                 $0.label == "投資活動に使用された現金（純額）" && $0.value == -8_000_000
-                    && $0.section == .investing
+                    && $0.section == .investing && $0.isTotal
             })
         #expect(
             extracted.cashFlow.contains {
                 $0.label == "財務活動から得た現金（純額）" && $0.value == 25_000_000
-                    && $0.section == .financing
+                    && $0.section == .financing && $0.isTotal
             })
         let open = extracted.cashFlow.first { ($0.label ?? "").contains("期首残高") }
         let close = extracted.cashFlow.first { ($0.label ?? "").contains("期末残高") }

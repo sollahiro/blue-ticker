@@ -208,7 +208,7 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 `StatementLineItem` 化する（summary の仮想タグ経路とは別）。
 `order` は presentation が無いため HTML 読み順の 0 始まり通し番号（CF/SS の期首→期末もこの順）。
 金額は当期半分を優先（富士フイルム入れ子は当期左＝当該科目、キヤノンは金額列／構成比列の左）。
-`－`/`-` は 0。`is_total` はラベル規則（「合計」、1文字の「計」、「費用計」）。表示ラベルは項番・括弧番号を落とす。
+`－`/`-` は 0。`is_total` はラベル規則（「合計」、1文字の「計」、「費用計」、営業/投資/財務CF合計）。表示ラベルは項番・括弧番号を落とす。
 `components` は calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が親金額と
 一致）のときだけ合成 tag・weight=+1 で付与する。足し算だけの空番号親は行にしない。
 golden: `RealXbrlStatementTests`（S100W3XJ / S100XTLJ）と `USGAAPStatementHtmlTests`。

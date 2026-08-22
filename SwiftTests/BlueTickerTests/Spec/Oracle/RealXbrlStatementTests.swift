@@ -987,14 +987,17 @@ import Foundation
         #expect(
             year.cashFlow.contains {
                 $0.label == "営業活動に使用された現金（純額）" && $0.section == .operating
+                    && $0.isTotal && $0.value == -842_960_000_000
             })
         #expect(
             year.cashFlow.contains {
                 ($0.label ?? "").contains("投資活動に使用された現金") && $0.section == .investing
+                    && $0.isTotal && $0.value == -1_498_923_000_000
             })
         #expect(
             year.cashFlow.contains {
                 ($0.label ?? "").contains("財務活動から得た現金") && $0.section == .financing
+                    && $0.isTotal && $0.value == 2_095_851_000_000
             })
         let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
         let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
