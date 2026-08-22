@@ -16,7 +16,7 @@ public let bltMcpServerTitle = "Blue Ticker"
 /// `Server(instructions:)` / `Initialize.Result(instructions:)` に渡す固定文。
 /// MCPRoute.swift の initialize 再送シムでも同じ値を使うため公開する。
 public let bltMcpServerInstructions =
-    "日本株の財務データ基盤（EDINET 有価証券報告書由来）。銘柄コードが不明な場合は必ず先に search_companies で確定し、返却された code を他ツールの code 引数に使うこと。get_filings=書類一覧と doc_id、get_financial_summary=水準値サマリー、get_waterfall=前年差・要因分解、get_statement=BS/PL/CF/SS 全項目、get_statement_notes=注記（note_type 必須）、get_filing_content=有報本文セクション、get_breakdown=事業別・地域別等の内訳。全ツールは格納済みデータのみを返し、未集計時は isError のエラー応答になる。金額単位は百万円、比率は %。本サーバーで取得できない・未算出の情報を他の情報源（Web検索等）で補うかどうかは、ユーザーに確認してから判断すること。"
+    "日本株の財務データ基盤（EDINET 有価証券報告書由来）。銘柄コードが不明な場合は必ず先に search_companies で確定し、返却された code を他ツールの code 引数に使うこと。get_filings=書類一覧と doc_id、get_financial_summary=水準値サマリー、get_waterfall=前年差・要因分解、get_statement=BS/PL/CF/SS 全項目、get_statement_notes=注記（note_type 必須）、get_filing_content=有報本文セクション、get_breakdown=事業別・地域別等の内訳、get_feed_updates=銘柄横断の直近提出書類、get_feed_trend=直近の開示件数が多い銘柄。全ツールは格納済みデータのみを返し、未集計時は isError のエラー応答になる。金額単位は百万円、比率は %。本サーバーで取得できない・未算出の情報を他の情報源（Web検索等）で補うかどうかは、ユーザーに確認してから判断すること。"
 
 /// Vapor の MCP ルート（ルートパス `POST /`）に埋め込むための、ソケットを持たない HTTP トランスポートを組み立てる。
 /// 返す `StatelessHTTPServerTransport` の `handleRequest(_:)` を Vapor ルートから直接呼ぶ。

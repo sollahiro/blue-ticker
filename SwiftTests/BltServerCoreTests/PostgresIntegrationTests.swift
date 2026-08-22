@@ -32,6 +32,7 @@ import Vapor
             app.migrations.add(CreateEdinetDocument())
             app.migrations.add(CreateEdinetSyncState())
             app.migrations.add(CreateEdinetXbrlFacts())
+            app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
             try? await app.autoRevert()  // 前回の残骸を掃除（初回は no-op）
             try await app.autoMigrate()
             try await body(app)
@@ -69,6 +70,7 @@ import Vapor
             let indexNames = try indexRows.map { try $0.decode(column: "indexname", as: String.self) }
             #expect(indexNames.contains("idx_edinet_documents_edinet_code"))
             #expect(indexNames.contains("idx_edinet_documents_sec_code"))
+            #expect(indexNames.contains("idx_edinet_documents_doc_type_submit"))
         }
     }
 

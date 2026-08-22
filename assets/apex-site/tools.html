@@ -381,6 +381,40 @@
 
   <section>
     <div class="page">
+      <h2>更新とトレンドを見る</h2>
+      <p class="section-lead"><span class="feature-badge">feed</span> 銘柄横断の直近提出と、開示件数の多い銘柄。</p>
+      <div class="tool-grid cols-2">
+
+        <div class="light-card catalog-card">
+          <div class="catalog-head">
+            <div class="catalog-name">開示更新フィード<span class="id">get-feed-updates</span></div>
+            <span class="mcp-badge">get_feed_updates</span>
+          </div>
+          <p class="catalog-desc">直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します。1社の書類一覧は get_filings。</p>
+          <div class="catalog-meta">
+            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/updates?limit=20</span></div>
+            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/feed/updates?doc_type=120,160</span></div>
+          </div>
+        </div>
+
+        <div class="light-card catalog-card">
+          <div class="catalog-head">
+            <div class="catalog-name">開示トレンド<span class="id">get-feed-trend</span></div>
+            <span class="mcp-badge">get_feed_trend</span>
+          </div>
+          <p class="catalog-desc">直近の開示件数が多い上場銘柄を返します（既定は直近7日の有報）。顧客の検索数ではなく、sync された提出件数です。</p>
+          <div class="catalog-meta">
+            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/trend?days=7&amp;limit=20</span></div>
+            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/feed/trend?days=30&amp;doc_type=120,160</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="page">
       <div class="light-card auth-note">
         認証について: 通常の API は Cloudflare Access 経由の認可が必要です。MCP コネクタとしての接続方法は<a href="mcp.html">MCPページ</a>を参照してください。<code>summary.html</code> の実データ検索は、この一覧を試すための認証不要の限定公開エンドポイントです。
       </div>

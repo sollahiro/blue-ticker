@@ -521,6 +521,109 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 "note":{"type":"object"}}}
                 """
         ),
+        ApiSkill(
+            id: "get-feed-updates",
+            name: "開示更新フィード",
+            description: """
+                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します。
+                銘柄横断の更新情報です。1 社の書類一覧は get_filings を使ってください。
+                """,
+            method: "GET",
+            path: "/v1/feed/updates",
+            mcpTool: "get_feed_updates",
+            feature: "feed",
+            parameters: [
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "返却件数（最大 \(Api.feedLimitMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedLimitDefault)
+                ),
+                ApiSkillParameter(
+                    name: "doc_type",
+                    location: .query,
+                    type: .string,
+                    description: "書類種別（カンマ区切り。120 有報 / 130 訂正有報 / 140 四半期 / 160 半期。省略時 120）",
+                    required: false,
+                    defaultValue: .string(Api.docTypeAnnualReport)
+                ),
+            ],
+            instructions: """
+                Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0）のみ。
+                空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
+                RSS は未提供（REST が契約の正。MCP は追従）。
+                例: GET /v1/feed/updates?limit=20
+                例: GET /v1/feed/updates?doc_type=120,160
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","items"],"properties":{"schema_version":\
+                {"type":"integer"},"doc_types":{"type":"array","items":{"type":"string"}},"items":\
+                {"type":"array","items":{"type":"object","required":["code","name","doc_id","doc_type",\
+                "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
+                "name":{"type":"string"},"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
+                "doc_type_label":{"type":"string"},"fy_end":{"type":"string"},\
+                "submitted_at":{"type":"string"}}}}}}
+                """
+        ),
+        ApiSkill(
+            id: "get-feed-trend",
+            name: "開示トレンド",
+            description: """
+                直近の開示件数が多い上場銘柄を返します（既定は直近7日の有報）。
+                顧客の検索数ではなく、EDINET へ提出され sync された書類の件数です。
+                """,
+            method: "GET",
+            path: "/v1/feed/trend",
+            mcpTool: "get_feed_trend",
+            feature: "feed",
+            parameters: [
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "返却件数（最大 \(Api.feedLimitMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedLimitDefault)
+                ),
+                ApiSkillParameter(
+                    name: "days",
+                    location: .query,
+                    type: .integer,
+                    description: "集計窓（日。最大 \(Api.feedTrendDaysMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedTrendDaysDefault)
+                ),
+                ApiSkillParameter(
+                    name: "doc_type",
+                    location: .query,
+                    type: .string,
+                    description: "書類種別（カンマ区切り。120 / 130 / 140 / 160。省略時 120）",
+                    required: false,
+                    defaultValue: .string(Api.docTypeAnnualReport)
+                ),
+            ],
+            instructions: """
+                Feed Trend。窓内の提出件数が多い順。同数なら最新提出が新しい順。
+                顧客検索ログは未接続（Fly の serving は DB 読み取り専用のため、リクエスト件数は集計しない）。
+                空でも 200。DB 非接続は 503。
+                例: GET /v1/feed/trend?days=7&limit=20
+                例: GET /v1/feed/trend?days=30&doc_type=120,160
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","days","items"],"properties":\
+                {"schema_version":{"type":"integer"},"days":{"type":"integer"},"doc_types":\
+                {"type":"array","items":{"type":"string"}},"items":{"type":"array","items":\
+                {"type":"object","required":["code","name","filing_count","doc_id","doc_type",\
+                "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
+                "name":{"type":"string"},"filing_count":{"type":"integer"},"doc_id":{"type":"string"},\
+                "doc_type":{"type":"string"},"doc_type_label":{"type":"string"},\
+                "fy_end":{"type":"string"},"submitted_at":{"type":"string"}}}}}}
+                """
+        ),
     ]
 }
 

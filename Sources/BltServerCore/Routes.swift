@@ -216,6 +216,31 @@ func registerRoutes(
             notFoundMessage: "指定された note_type の注記は未算出です")
     }
 
+    // GET /v1/feed/updates?limit=50&doc_type=120
+    // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
+    v1.get("feed", "updates") { req async -> Response in
+        let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
+        let docTypes = parseFeedDocTypes(req.query[String.self, at: "doc_type"])
+        return await feedJSONResponse(
+            await serveFeedUpdates(
+                limit: limit, docTypes: docTypes, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            db: dbAvailable ? req.db : nil)
+    }
+
+    // GET /v1/feed/trend?limit=50&days=7&doc_type=120
+    // 窓内の開示件数が多い上場銘柄。顧客検索数ではない。
+    v1.get("feed", "trend") { req async -> Response in
+        let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
+        let days = parseFeedDays(req.query[Int.self, at: "days"])
+        let docTypes = parseFeedDocTypes(req.query[String.self, at: "doc_type"])
+        return await feedJSONResponse(
+            await serveFeedTrend(
+                limit: limit, days: days, docTypes: docTypes, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
+            db: dbAvailable ? req.db : nil)
+    }
+
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
@@ -308,6 +333,28 @@ private func demoEligibleCodes(among candidates: [String], db: Database) async t
 /// 単一の銘柄コードが company_breakdowns に格納済みか判定する。
 private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bool {
     try await CompanyBreakdown.query(on: db).filter(\.$code == code).first() != nil
+}
+
+/// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成。MCP には出さない）。
+private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) async -> Response {
+    switch result {
+    case .ok(var body):
+        if let db, var items = body["items"] as? [[String: Any]] {
+            let codes = items.compactMap { $0["code"] as? String }
+            let icons = await iconURLs(for: codes, db: db)
+            items = items.map { row in
+                var next = row
+                next["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
+                return next
+            }
+            body["items"] = items
+        }
+        return jsonResponse(body, status: .ok)
+    case .notFound:
+        return errorResponse(.notFound, message: "フィードを組み立てできません")
+    case .dbUnavailable:
+        return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+    }
 }
 
 /// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_PUBLIC_BASE_URL` 未設定・

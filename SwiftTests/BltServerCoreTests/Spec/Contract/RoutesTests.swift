@@ -633,4 +633,95 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(result["6758"] == nil)
         }
     }
+
+    // MARK: - Feed Update / Trend
+
+    @Test func feedEndpointsReturn503WithoutDatabase() async throws {
+        try await withApp { app in
+            for path in ["/v1/feed/updates", "/v1/feed/trend"] {
+                let (status, json) = try await send(app, path)
+                #expect(status == .serviceUnavailable)
+                #expect(json?["error"] as? String == "財務データベースに接続できません")
+            }
+        }
+    }
+
+    @Test func feedUpdatesReturnsEmptyItemsWhenNoDocuments() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/feed/updates")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
+            #expect(json?["doc_types"] as? [String] == ["120"])
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.isEmpty == true)
+        }
+    }
+
+    @Test func feedUpdatesReturnsListedFilingsNewestFirst() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFeedDocument(
+                app, id: "S-old", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2026-06-01 09:00")
+            try await seedFeedDocument(
+                app, id: "S-new", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "2026-06-20 09:00")
+            try await seedFeedDocument(
+                app, id: "S-unlisted", secCode: nil, filer: "某ファンド",
+                type: "120", submit: "2026-06-21 09:00")
+            try await seedFeedDocument(
+                app, id: "S-half", secCode: "99840", filer: "ソフトバンクグループ株式会社",
+                type: "160", submit: "2026-06-22 09:00")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.compactMap { $0["doc_id"] as? String } == ["S-new", "S-old"])
+            #expect(items?.first?["code"] as? String == "6758")
+            #expect(items?.first?["icon_url"] is NSNull)
+
+            let filtered = try await send(app, "/v1/feed/updates?doc_type=160")
+            let half = filtered.json?["items"] as? [[String: Any]]
+            #expect(half?.compactMap { $0["doc_id"] as? String } == ["S-half"])
+        }
+    }
+
+    @Test func feedTrendRanksByFilingCountInWindow() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFeedDocument(
+                app, id: "S-1", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "2099-01-02 09:00")
+            try await seedFeedDocument(
+                app, id: "S-2", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "2099-01-03 09:00")
+            try await seedFeedDocument(
+                app, id: "T-1", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2099-01-04 09:00")
+            try await seedFeedDocument(
+                app, id: "OLD", secCode: "99840", filer: "ソフトバンクグループ株式会社",
+                type: "120", submit: "2000-01-01 09:00")
+
+            let (status, json) = try await send(app, "/v1/feed/trend?days=7")
+            #expect(status == .ok)
+            #expect(json?["days"] as? Int == 7)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.compactMap { $0["code"] as? String } == ["6758", "7203"])
+            #expect(items?.first?["filing_count"] as? Int == 2)
+            #expect(items?.first?["doc_id"] as? String == "S-2")
+            #expect(items?.contains { $0["code"] as? String == "9984" } == false)
+        }
+    }
+}
+
+private func seedFeedDocument(
+    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String
+) async throws {
+    let doc = EdinetDocument()
+    doc.id = id
+    doc.edinetCode = "E00001"
+    doc.secCode = secCode
+    doc.filerName = filer
+    doc.docTypeCode = type
+    doc.periodEnd = "2025-03-31"
+    doc.submitDateTime = submit
+    try await doc.create(on: app.db)
 }

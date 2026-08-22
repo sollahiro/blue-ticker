@@ -36,6 +36,20 @@ public enum Api {
     // 値は既存の直書きと同一（挙動不変）。
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
+    /// Feed Update / Trend の返却件数省略時。
+    public static let feedLimitDefault = 50
+    /// Feed Update / Trend の返却件数上限。
+    public static let feedLimitMax = 100
+    /// Feed Trend の集計窓（日）省略時。
+    public static let feedTrendDaysDefault = 7
+    /// Feed Trend の集計窓（日）上限。
+    public static let feedTrendDaysMax = 90
+    /// Feed 応答の公開契約バージョン。形を破壊的に変えたときのみ +1。
+    public static let feedSchemaVersion = 1
+    /// Update は上場フィルタ前に余裕を持って読む（非上場提出者を落とすため）。
+    public static let feedUpdateOverfetchFactor = 4
+    /// Trend 集計の走査上限（窓内の書類）。件数ランキングはメモリ集計。
+    public static let feedTrendScanLimit = 5000
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
     public static let statementYearsDefault = 5
 
@@ -153,6 +167,11 @@ public enum Api {
         docTypeQuarterlyReport,
         docTypeHalfYearReport,
     ]
+
+    /// Feed が受け付ける書類種別。sync 済み集合と一致（DB に無い種別は返らない）。
+    public static var feedAllowedDocTypes: Set<String> { documentSyncDocTypes }
+    /// Feed の `doc_type` 省略時。有報のみ。
+    public static let feedDefaultDocTypes = [docTypeAnnualReport]
 
     /// 財務取り込み（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
     /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（有報＋訂正有報）とだけ

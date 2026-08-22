@@ -476,4 +476,68 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         let json = try #require(decodeJSON(response))
         #expect(json["id"] is NSNull)
     }
+
+    @Test func getFeedUpdatesReturnsEmptyItemsWithoutErrorWhenDatabaseEmpty() async throws {
+        try await withMcpApp(databases: true) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_feed_updates", arguments: [:]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool != true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            #expect(body?["schema_version"] as? Int == Api.feedSchemaVersion)
+            let items = body?["items"] as? [[String: Any]]
+            #expect(items?.isEmpty == true)
+        }
+    }
+
+    @Test func getFeedUpdatesReturnsListedFilings() async throws {
+        try await withMcpApp(databases: true) { app in
+            try await seedMcpFeedDocument(
+                app, id: "S1", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2026-06-20 09:00")
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_feed_updates", arguments: ["limit": 10]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool != true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            let items = body?["items"] as? [[String: Any]]
+            #expect(items?.first?["code"] as? String == "7203")
+            #expect(items?.first?["doc_id"] as? String == "S1")
+        }
+    }
+
+    @Test func getFeedTrendReturnsErrorWhenDatabaseUnavailable() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_feed_trend", arguments: [:]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("データベース") == true)
+        }
+    }
+}
+
+private func seedMcpFeedDocument(
+    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String
+) async throws {
+    let doc = EdinetDocument()
+    doc.id = id
+    doc.edinetCode = "E00001"
+    doc.secCode = secCode
+    doc.filerName = filer
+    doc.docTypeCode = type
+    doc.periodEnd = "2025-03-31"
+    doc.submitDateTime = submit
+    try await doc.create(on: app.db)
 }

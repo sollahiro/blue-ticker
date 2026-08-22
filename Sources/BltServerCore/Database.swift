@@ -62,6 +62,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(DropCompanyHalfFinancials())
     // 会社アイコン取り込み: favicon の R2 格納先メタデータ（company_icons、会社単位）。
     app.migrations.add(CreateCompanyIcons())
+    // Feed Update / Trend: 提出日時の読み取り索引。
+    app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,
