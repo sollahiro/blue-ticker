@@ -813,6 +813,11 @@ import Foundation
         #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 && $0.section == .assets })
         #expect(extracted.balanceSheet.contains { $0.label == "資本金" && $0.section == .netAssets })
         #expect(extracted.balanceSheet.contains { $0.label == "資本合計" && $0.value == 740_000_000 && $0.section == .netAssets })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "負債および資本合計" && $0.value == 800_000_000 && $0.isTotal
+                    && $0.section == nil
+            })
         #expect(extracted.incomeStatement.contains { $0.label == "収益合計" && $0.value == 150_000_000 })
         #expect(extracted.incomeStatement.contains { $0.label == "当社株主に帰属する当期純利益" && $0.value == 40_000_000 })
         #expect(

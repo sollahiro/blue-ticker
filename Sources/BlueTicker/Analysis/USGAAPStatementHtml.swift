@@ -336,7 +336,7 @@ enum USGAAPStatementHtml {
                     value: yen,
                     unit: "JPY",
                     order: itemOrder,
-                    section: section,
+                    section: isLiabilitiesAndEquityTotalLabel(label) ? nil : section,
                     isTotal: isTotalLabel(label, sectionType: .balanceSheet),
                     components: nil))
         }
@@ -623,7 +623,18 @@ enum USGAAPStatementHtml {
 
     private static func isLiabilitiesSectionHeader(_ label: String) -> Bool {
         let t = stripHeaderDecorations(label)
+        // 「負債および資本合計」はグランドトータル行。部見出しではない。
+        if t.contains("合計") { return false }
         return t.contains("負債の部") || t.contains("負債および資本") || t.contains("負債及び資本")
+    }
+
+    /// 負債と資本を束ねるグランドトータル。複数区分にまたがるので section は付けない。
+    private static func isLiabilitiesAndEquityTotalLabel(_ label: String) -> Bool {
+        let t = stripHeaderDecorations(label)
+        guard t.contains("合計") else { return false }
+        let hasLiabilities = t.contains("負債")
+        let hasEquity = t.contains("資本") || t.contains("純資産")
+        return hasLiabilities && hasEquity
     }
 
     private static func isNetAssetsSectionHeader(_ label: String) -> Bool {
@@ -690,6 +701,7 @@ enum USGAAPStatementHtml {
 
     private static func isTotalLabel(_ label: String, sectionType: StatementSectionType) -> Bool {
         let s = USGAAPHtml.stripSectionPrefix(label)
+        // 野村の区分小計はラベルが「計」1文字。語尾の「〜計」は科目名になり得るので見ない。
         if s.contains("合計") || s == "計" { return true }
         switch sectionType {
         case .incomeStatement:

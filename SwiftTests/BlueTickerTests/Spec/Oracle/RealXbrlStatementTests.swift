@@ -966,6 +966,11 @@ import Foundation
         #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
         #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
         #expect(year.balanceSheet.contains { $0.label == "資本合計" && $0.section == .netAssets })
+        #expect(
+            year.balanceSheet.contains {
+                $0.label == "負債および資本合計" && $0.value == 62_645_925_000_000
+                    && $0.isTotal && $0.section == nil
+            })
 
         #expect(Self.exactLabelValue(year.incomeStatement, "収益合計") == 4_758_486_000_000)
         #expect(
