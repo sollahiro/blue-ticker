@@ -919,6 +919,28 @@ import Foundation
         let komatsuSS = try extractFromHTML(komatsu, types: [.changesInEquity]).changesInEquity
         #expect(komatsuSS.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
         #expect(komatsuSS.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
+
+        // 小松実データ: 科目横の前期表＋当期表。年次列が無いので最後の表だけ残す。
+        let komatsuYears = """
+        <html><body>
+        <table>
+          <tr><td></td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>期首残高</td><td>70,336</td><td>3,198,452</td></tr>
+          <tr><td>当期純利益</td><td></td><td>468,732</td></tr>
+          <tr><td>期末残高</td><td>70,336</td><td>3,344,853</td></tr>
+        </table>
+        <table>
+          <tr><td></td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>期首残高</td><td>70,336</td><td>3,344,853</td></tr>
+          <tr><td>当期純利益</td><td></td><td>401,688</td></tr>
+          <tr><td>期末残高</td><td>70,336</td><td>3,708,427</td></tr>
+        </table>
+        </body></html>
+        """
+        let komatsuLatest = try extractFromHTML(komatsuYears, types: [.changesInEquity]).changesInEquity
+        #expect(!komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_344_853_000_000 })
+        #expect(komatsuLatest.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
+        #expect(komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
     }
 
     @Test
@@ -931,30 +953,32 @@ import Foundation
         <table>
           <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
           <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
-          <tr><td>資本金</td><td></td><td></td></tr>
-          <tr><td>　期首残高</td><td>594,493</td><td>594,493</td></tr>
-          <tr><td>　期末残高</td><td>594,493</td><td>594,493</td></tr>
-          <tr><td>累積的その他の包括利益</td><td></td><td></td></tr>
-          <tr><td>　為替換算調整額</td><td></td><td></td></tr>
-          <tr><td>　　期首残高</td><td>407,977</td><td>407,977</td></tr>
-          <tr><td>　　当期純変動額</td><td>△36,094</td><td>142,524</td></tr>
-          <tr><td>　　期末残高</td><td>407,977</td><td>550,501</td></tr>
-          <tr><td>　自己クレジット調整額</td><td></td><td></td></tr>
-          <tr><td>　　期首残高</td><td>48,083</td><td>48,083</td></tr>
-          <tr><td>　　自己クレジット調整額</td><td>12,658</td><td>△46,879</td></tr>
-          <tr><td>　　期末残高</td><td>48,083</td><td>1,204</td></tr>
-          <tr><td>　期末残高</td><td>447,808</td><td>548,221</td></tr>
-          <tr><td>当社株主資本合計</td><td></td><td></td></tr>
-          <tr><td>　期末残高</td><td>3,470,879</td><td>3,707,868</td></tr>
+          <tr><td><p>資本金</p></td><td></td><td></td></tr>
+          <tr><td><p>　期首残高</p></td><td>594,493</td><td>594,493</td></tr>
+          <tr><td><p>　期末残高</p></td><td>594,493</td><td>594,493</td></tr>
+          <tr><td><p>累積的その他の包括利益</p></td><td></td><td></td></tr>
+          <tr><td><p>　為替換算調整額</p></td><td></td><td></td></tr>
+          <tr><td><p>　　期首残高</p></td><td>407,977</td><td>407,977</td></tr>
+          <tr><td><p>　　当期純変動額</p></td><td>△36,094</td><td>142,524</td></tr>
+          <tr><td><p>　　期末残高</p></td><td>407,977</td><td>550,501</td></tr>
+          <tr><td><p>　自己クレジット調整額</p></td><td></td><td></td></tr>
+          <tr><td><p>　　期首残高</p></td><td>48,083</td><td>48,083</td></tr>
+          <tr><td><p>　　自己クレジット調整額</p></td><td>12,658</td><td>△46,879</td></tr>
+          <tr><td><p>　　期末残高</p></td><td>48,083</td><td>1,204</td></tr>
+          <tr><td><p>　期末残高</p></td><td>447,808</td><td>548,221</td></tr>
+          <tr><td><p>当社株主資本合計</p></td><td></td><td></td></tr>
+          <tr><td><p>　期末残高</p></td><td>3,470,879</td><td>3,707,868</td></tr>
         </table>
         <table>
           <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
           <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
-          <tr><td>非支配持分</td><td></td><td></td></tr>
-          <tr><td>　期首残高</td><td>110,120</td><td>110,120</td></tr>
-          <tr><td>　期末残高</td><td>110,120</td><td>147,047</td></tr>
-          <tr><td>資本合計</td><td></td><td></td></tr>
-          <tr><td>　期末残高</td><td>3,580,999</td><td>3,854,915</td></tr>
+          <tr><td><p>非支配持分</p></td><td></td><td></td></tr>
+          <tr><td><p>　期首残高</p></td><td>110,120</td><td>110,120</td></tr>
+          <tr><td><p>　非支配持分に帰属する累積的その他の包括利益</p></td><td></td><td></td></tr>
+          <tr><td><p>　　為替換算調整額</p></td><td>1,243</td><td>5,214</td></tr>
+          <tr><td><p>　期末残高</p></td><td>110,120</td><td>147,047</td></tr>
+          <tr><td><p>資本合計</p></td><td></td><td></td></tr>
+          <tr><td><p>　期末残高</p></td><td>3,580,999</td><td>3,854,915</td></tr>
         </table>
         </body></html>
         """

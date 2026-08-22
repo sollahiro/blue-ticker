@@ -45,7 +45,7 @@ enum USGAAPStatementHtml {
         var sawPL = false
         var sawCF = false
         var pendingSS: [StatementLineItem] = []
-        var pendingSSIsComponentMajor = false
+        var pendingSSYearColumns: String?
 
         for table in tables.array() {
             let parsedRows = parsedTableRows(table)
@@ -70,17 +70,17 @@ enum USGAAPStatementHtml {
                     rows, sectionType: .incomeStatement, sectionForRow: { _ in nil })
                 sawPL = true
             case .changesInEquity:
-                // キヤノン: 前期表＋当期表が連続 → 最後の表を採用。
+                // キヤノン/小松: 前期表＋当期表が連続 → 最後の表を採用。
                 // 野村 連結資本勘定変動表: 科目縦・年次は列で、改ページで株主資本と
-                // 非支配持分が別表になる → 同じ科目縦の続きは追記する。
+                // 非支配持分が別表になる → 同じ年次列の続きだけ追記する。
                 guard statementTypes.contains(.changesInEquity), !sawCF else { continue }
                 let parsed = parseEquityStatementRows(parsedRows)
-                let componentMajor = isComponentMajorEquityTable(rows)
-                if componentMajor && pendingSSIsComponentMajor && !pendingSS.isEmpty {
+                let yearCols = equityYearColumnFingerprint(rows)
+                if let yearCols, yearCols == pendingSSYearColumns, !pendingSS.isEmpty {
                     pendingSS = concatenatingEquityItems(pendingSS, parsed)
                 } else {
                     pendingSS = parsed
-                    pendingSSIsComponentMajor = componentMajor
+                    pendingSSYearColumns = yearCols
                 }
             case .cashFlow:
                 // 野村: 営業CFと投資/財務CFが別表。最初のCF表で SS を確定し、
@@ -311,10 +311,26 @@ enum USGAAPStatementHtml {
                 let text = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
                 return text.replacingOccurrences(of: "\u{00A0}", with: " ")
             }
-            let firstRaw = ((try? cellEls[0].text(trimAndNormaliseWhitespace: false)) ?? "")
-                .replacingOccurrences(of: "\u{00A0}", with: " ")
-            return ParsedHtmlRow(indent: equityIndent(firstRaw), cells: texts)
+            return ParsedHtmlRow(indent: equityIndent(firstCellRawText(cellEls[0])), cells: texts)
         }
+    }
+
+    /// 先頭セルの生テキスト。実開示は `<p>　期末残高</p>` のため、p の inner HTML
+    /// から全角スペースを拾う（`text(trim:)` は段を落とす）。
+    private static func firstCellRawText(_ cell: Element) -> String {
+        let raw: String
+        if let p = try? cell.select("p").first() {
+            let inner = (try? p.html()) ?? ""
+            raw = inner.contains("<")
+                ? ((try? p.text(trimAndNormaliseWhitespace: false)) ?? inner)
+                : inner
+        } else {
+            raw = (try? cell.text(trimAndNormaliseWhitespace: false)) ?? ""
+        }
+        return raw
+            .replacingOccurrences(of: "&#160;", with: " ")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
     }
 
     /// 野村 連結資本勘定変動表のインデント。全角スペースの段数。
@@ -491,6 +507,9 @@ enum USGAAPStatementHtml {
             }
             let display: String
             if componentMajor {
+                while let top = headerStack.last, top.level >= row.indent {
+                    headerStack.removeLast()
+                }
                 display = qualifyComponentMajorEquityLabel(
                     label, headers: headerStack, indent: row.indent)
             } else {
@@ -548,12 +567,22 @@ enum USGAAPStatementHtml {
         return combined
     }
 
-    /// 科目縦・年次は列（野村 連結資本勘定変動表）。時系列マーカーが無い。
+    /// 科目縦・年次は列（野村 連結資本勘定変動表）。時系列マーカーが無く、
+    /// 列見出しが年度（2026年３月期）になっている。小松の科目横・年次別表は除外。
     private static func isComponentMajorEquityTable(_ rows: [[String]]) -> Bool {
         let labels = rows.map { normalizeLabel(rowLabel($0)) }.filter { !$0.isEmpty }
         let hasOpenClose = labels.contains { isBareEquityOpenCloseLabel($0) }
         let hasChrono = labels.contains { isEquityChronologicalBalanceLabel($0) }
-        return hasOpenClose && !hasChrono
+        return hasOpenClose && !hasChrono && equityYearColumnFingerprint(rows) != nil
+    }
+
+    /// 年次が列になっている SS 表の列指紋。一致する続き表だけ追記する。
+    private static func equityYearColumnFingerprint(_ rows: [[String]]) -> String? {
+        let periods = rows.prefix(4).flatMap { $0 }.map { normalizeLabel($0) }.filter {
+            $0.contains("年") && $0.contains("期") && !$0.contains("資本")
+        }
+        guard periods.count >= 2 else { return nil }
+        return periods.joined(separator: "|")
     }
 
     /// 科目区分の見出し行。先頭セルがラベルで、残りは空（列見出しや年次ヘッダは除外）。
