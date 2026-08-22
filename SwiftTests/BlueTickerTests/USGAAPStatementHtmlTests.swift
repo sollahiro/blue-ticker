@@ -779,6 +779,8 @@ import Foundation
           <tr><td>区分</td><td>前期</td><td>当期</td></tr>
           <tr><td>委託・投信募集手数料</td><td>10</td><td>20</td></tr>
           <tr><td>収益合計</td><td>100</td><td>150</td></tr>
+          <tr><td>人件費</td><td>30</td><td>40</td></tr>
+          <tr><td>金融費用以外の費用計</td><td>60</td><td>80</td></tr>
           <tr><td>税引前当期純利益</td><td>40</td><td>50</td></tr>
           <tr><td>当社株主に帰属する当期純利益</td><td>30</td><td>40</td></tr>
         </table>
@@ -819,6 +821,10 @@ import Foundation
                     && $0.section == nil
             })
         #expect(extracted.incomeStatement.contains { $0.label == "収益合計" && $0.value == 150_000_000 })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "金融費用以外の費用計" && $0.value == 80_000_000 && $0.isTotal
+            })
         #expect(extracted.incomeStatement.contains { $0.label == "当社株主に帰属する当期純利益" && $0.value == 40_000_000 })
         #expect(
             extracted.cashFlow.contains {

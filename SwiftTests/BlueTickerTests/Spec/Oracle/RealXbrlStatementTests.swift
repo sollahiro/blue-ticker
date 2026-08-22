@@ -974,6 +974,10 @@ import Foundation
 
         #expect(Self.exactLabelValue(year.incomeStatement, "収益合計") == 4_758_486_000_000)
         #expect(
+            year.incomeStatement.contains {
+                $0.label == "金融費用以外の費用計" && $0.value == 1_627_892_000_000 && $0.isTotal
+            })
+        #expect(
             Self.exactLabelValue(year.incomeStatement, "当社株主に帰属する当期純利益")
                 == 362_129_000_000)
 
