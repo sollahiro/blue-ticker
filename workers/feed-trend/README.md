@@ -16,6 +16,18 @@
 
 ## デプロイ
 
+初回はリポジトリルートから:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...          # Workers Scripts Edit + Account Analytics Read
+export AE_SQL_TOKEN="$CLOUDFLARE_API_TOKEN"
+./scripts/feed-trend-ship.sh
+```
+
+`main` では `.github/workflows/feed-trend-worker.yml` が Worker を出し、Fly に `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` を載せる。
+
+手動:
+
 ```bash
 cd workers/feed-trend
 npx wrangler@4 deploy

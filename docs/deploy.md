@@ -36,9 +36,11 @@ fly ssh console -C "/app/blt-server sync --from 2024-01-01"
 |---|---|
 | `ci.yml` | macOS/Linux test・product/serviceless ガード |
 | `deploy.yml` | CI 成功後の Fly 自動デプロイ（`v*` タグでは起動しない） |
+| `feed-trend-worker.yml` | Feed Trend Worker デプロイ + Fly origin の URL/token |
 | `edge-security-smoke.yml` | Access / serviceless 外形監視 |
 
 repo secrets: `BLT_EDINET_API_KEY`（CI smoke）· `FLY_API_TOKEN` · `BLT_API_DOMAIN`。
+Feed Trend Worker 追加: `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID` · `BLT_FEED_TREND_TOKEN` · `AE_SQL_TOKEN`。
 
 ## self-host
 
@@ -66,7 +68,20 @@ container exec blt-server /app/blt-server ingest --limit 50
 
 ### Feed Trend Worker
 
-匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。
+匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+
+初回（手元 Mac。`.env` の `BLT_R2_ACCOUNT_ID` を流用可）:
+
+```bash
+# Cloudflare API token: Workers Scripts Edit + Account Analytics Read
+export CLOUDFLARE_API_TOKEN=...
+export AE_SQL_TOKEN="$CLOUDFLARE_API_TOKEN"   # 分けるなら Analytics:Read 専用
+./scripts/feed-trend-ship.sh
+```
+
+以降の Worker コード変更は `main` への push で `.github/workflows/feed-trend-worker.yml` がデプロイし、同じ token で Fly secrets も更新する。GitHub secrets は `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID` · `BLT_FEED_TREND_TOKEN` · `AE_SQL_TOKEN`（`FLY_API_TOKEN` は既存）。
+
+手動の内訳:
 
 ```bash
 cd workers/feed-trend
@@ -77,8 +92,6 @@ npx wrangler@4 secret put AE_SQL_TOKEN
 fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev' \
   BLT_FEED_TREND_TOKEN='...'
 ```
-
-この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。
 
 ### REST Service Token
 
