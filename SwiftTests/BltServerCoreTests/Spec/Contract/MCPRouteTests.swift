@@ -490,7 +490,10 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             #expect(body?["schema_version"] as? Int == Api.feedSchemaVersion)
             #expect(body?["days"] as? Int == 7)
-            #expect(body?["total"] as? Int == 0)
+            #expect(body?["date"] as? String == feedDateString())
+            let total = body?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 0)
+            #expect(total?["week"] as? Int == 0)
             let items = body?["items"] as? [[String: Any]]
             #expect(items?.isEmpty == true)
         }

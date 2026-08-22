@@ -652,7 +652,10 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(status == .ok)
             #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
             #expect(json?["days"] as? Int == 7)
-            #expect(json?["total"] as? Int == 0)
+            #expect(json?["date"] as? String == feedDateString())
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 0)
+            #expect(total?["week"] as? Int == 0)
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.isEmpty == true)
         }
@@ -681,13 +684,56 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(json?["days"] as? Int == 7)
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.compactMap { $0["doc_id"] as? String } == ["S-new", "S-old"])
-            #expect(json?["total"] as? Int == 2)
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 0)
+            #expect(total?["week"] as? Int == 2)
             #expect(items?.first?["code"] as? String == "6758")
             #expect(items?.first?["icon_url"] is NSNull)
 
             let filtered = try await send(app, "/v1/feed/updates?doc_type=160")
             let half = filtered.json?["items"] as? [[String: Any]]
             #expect(half?.compactMap { $0["doc_id"] as? String } == ["S-half"])
+        }
+    }
+
+    @Test func feedUpdatesTotalsCountTodayAndPastWeek() async throws {
+        try await withApp(databases: true) { app in
+            let now = Date()
+            let today = feedDateString(now)
+            let yesterday = feedDateString(
+                utcCalendar.date(byAdding: .day, value: -1, to: now)!)
+            let inWeek = feedInclusiveCutoffDateString(days: Api.feedUpdateWeekDays, now: now)
+            let outside = feedDateString(
+                utcCalendar.date(byAdding: .day, value: -8, to: now)!)
+            try await seedFeedDocument(
+                app, id: "D-today-1", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "\(today) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-today-2", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "\(today) 11:00")
+            try await seedFeedDocument(
+                app, id: "D-yday", secCode: "99840", filer: "ソフトバンクグループ株式会社",
+                type: "120", submit: "\(yesterday) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-week", secCode: "80350", filer: "東京エレクトロン株式会社",
+                type: "120", submit: "\(inWeek) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-old", secCode: "68610", filer: "キーエンス",
+                type: "120", submit: "\(outside) 09:00")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            #expect(json?["date"] as? String == today)
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 2)
+            #expect(total?["week"] as? Int == 4)
+            let items = json?["items"] as? [[String: Any]]
+            let ids = items?.compactMap { $0["doc_id"] as? String } ?? []
+            #expect(ids.contains("D-today-1"))
+            #expect(ids.contains("D-today-2"))
+            #expect(ids.contains("D-yday"))
+            #expect(ids.contains("D-week"))
+            #expect(ids.contains("D-old") == false)
         }
     }
 

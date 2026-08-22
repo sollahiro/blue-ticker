@@ -12,7 +12,8 @@ func serveFeedUpdates(
     now: Date = Date()
 ) async -> StoredDataServeResult {
     guard let db else { return .dbUnavailable }
-    let cutoff = feedCutoffDateString(days: days, now: now)
+    let scanDays = max(days, Api.feedUpdateWeekDays)
+    let cutoff = feedInclusiveCutoffDateString(days: scanDays, now: now)
     do {
         let records = try await withDbRetry(
             maxAttempts: Api.dbReadRetryMaxAttempts,
@@ -23,7 +24,7 @@ func serveFeedUpdates(
                 db: db, docTypes: docTypes, since: cutoff, limit: Api.feedTrendScanLimit)
         }
         return .ok(assembleFeedUpdates(
-            from: records, limit: limit, days: days, docTypes: docTypes))
+            from: records, limit: limit, days: days, docTypes: docTypes, now: now))
     } catch {
         logger.warning("Feed updates の DB 読み取りに失敗: \(error)")
         return .dbUnavailable

@@ -526,7 +526,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "開示更新フィード",
             description: """
                 直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近7日）。
-                銘柄横断の更新情報です。1 社の書類一覧は get_filings を使ってください。
+                件数は当日（total.day）と直近1週間（total.week）。銘柄横断の更新情報です。
+                1 社の書類一覧は get_filings を使ってください。
                 """,
             method: "GET",
             path: "/v1/feed/updates",
@@ -545,7 +546,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "days",
                     location: .query,
                     type: .integer,
-                    description: "集計窓（日。最大 \(Api.feedTrendDaysMax)）",
+                    description: "items の窓（日。最大 \(Api.feedTrendDaysMax)。total.week は常に直近7日）",
                     required: false,
                     defaultValue: .int(Api.feedTrendDaysDefault)
                 ),
@@ -560,7 +561,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0）のみ。
-                窓内の提出日時降順。`total` は窓内の上場提出件数（limit で切る前）。
+                items はクエリ days 窓の提出日時降順（既定 7 日）。
+                `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
                 RSS は未提供（REST が契約の正。MCP は追従）。
                 例: GET /v1/feed/updates?days=7&limit=20
@@ -568,9 +570,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             mcpOutputSchema:
                 """
-                {"type":"object","required":["schema_version","days","total","items"],"properties":\
-                {"schema_version":{"type":"integer"},"days":{"type":"integer"},"total":{"type":"integer"},\
-                "doc_types":{"type":"array","items":{"type":"string"}},"items":\
+                {"type":"object","required":["schema_version","date","days","total","items"],"properties":\
+                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
+                "total":{"type":"object","required":["day","week"],"properties":{"day":{"type":"integer"},\
+                "week":{"type":"integer"}}},"doc_types":{"type":"array","items":{"type":"string"}},"items":\
                 {"type":"array","items":{"type":"object","required":["code","name","doc_id","doc_type",\
                 "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
                 "name":{"type":"string"},"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
