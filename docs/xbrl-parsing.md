@@ -211,7 +211,7 @@ US-GAAP 採用企業（例: 富士フイルム 4901、キヤノン 7751）では
 `－`/`-` は 0。`is_total` はラベル規則（「合計」、1文字の「計」、「費用計」、営業/投資/財務CF合計）。表示ラベルは項番・括弧番号を落とす。
 `components` は calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が親金額と
 一致）のときだけ合成 tag・weight=+1 で付与する。足し算だけの空番号親は行にしない。
-golden: `RealXbrlStatementTests`（S100W3XJ / S100XTLJ）と `USGAAPStatementHtmlTests`。
+golden: `RealXbrlStatementTests`（S100W3XJ / S100XTLJ / S100YC5C / S100YG81 / S100YD25 / S100YG5L）と `USGAAPStatementHtmlTests`。
 
 ### 5.2 仮想タグアーキテクチャ（`USGAAP_HTML_*`）
 
@@ -301,7 +301,7 @@ smoke/
 | セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
 | 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
-| Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外（詳細は `docs/statement.md` / `docs/test-spec-assets.md`） |
+| Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外。US-GAAP HTML は富士フイルム/キヤノンに加え野村（連結資本勘定変動表の全行＋`section` 見出し）・オムロン/小松/オリックス（残高ラベル）。詳細は `docs/statement.md` / `docs/test-spec-assets.md` |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
 | 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は巨大注記 HTML から内訳。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(per_share_information)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PerShareInformationOracleFormatTests.swift` | `smoke/statement_notes_per_share_information_expected.json`（試作2docID + smoke固定11社。US-GAAP BPS含む。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |

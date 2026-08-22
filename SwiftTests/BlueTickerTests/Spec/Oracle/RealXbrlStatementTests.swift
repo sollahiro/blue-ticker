@@ -29,6 +29,7 @@
         // 富士フイルムは内訳→合計型のため同規則では `components` なし。
         // 2026-08-22、最新年度で HTML 本表が空/部分欠測だった US-GAAP 4社を追加
         // （野村 S100YC5C、オムロン S100YG81、小松 S100YD25、オリックス S100YG5L）。
+        // 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -740,6 +741,22 @@ import Foundation
         #expect(zip(orders, orders.dropFirst()).allSatisfy { $0 < $1 })
     }
 
+    /// US-GAAP HTML SS の golden 行（label / section / 円 / is_total）。
+    private struct EquityGoldenRow: Equatable {
+        var label: String
+        var section: String
+        var value: Double
+        var isTotal: Bool
+    }
+
+    private static func equityGoldenRows(_ items: [StatementLineItem]) -> [EquityGoldenRow] {
+        items.map {
+            EquityGoldenRow(
+                label: $0.label ?? "", section: $0.section?.rawValue ?? "",
+                value: $0.value, isTotal: $0.isTotal)
+        }
+    }
+
     @Test
     func fujifilmUSGAAPStatementMatchesSmokeTotals() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
@@ -1006,39 +1023,54 @@ import Foundation
         #expect(cfOpen!.order! < cfClose!.order!)
 
         Self.expectHTMLReadingOrder(year.changesInEquity)
-        #expect(
-            year.changesInEquity.contains {
-                $0.label == "期末残高" && $0.value == 594_493_000_000 && $0.isTotal
-                    && $0.section == .group("資本金")
-            })
-        #expect(
-            year.changesInEquity.contains {
-                $0.label == "期末残高" && $0.value == 548_221_000_000 && $0.isTotal
-                    && $0.section == .group("累積的その他の包括利益")
-            })
-        #expect(
-            year.changesInEquity.contains {
-                $0.label == "期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal
-                    && $0.section == .group("当社株主資本合計")
-            })
-        #expect(
-            year.changesInEquity.contains {
-                $0.label == "期末残高" && $0.value == 147_047_000_000 && $0.isTotal
-                    && $0.section == .group("非支配持分")
-            })
-        #expect(
-            year.changesInEquity.contains {
-                $0.label == "期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal
-                    && $0.section == .group("資本合計")
-            })
-        let ssOpen = year.changesInEquity.first { $0.label == "期首残高" }
-        let ssClose = year.changesInEquity.last { $0.label == "期末残高" }
-        #expect(ssOpen?.value == 594_493_000_000)
-        #expect(ssOpen?.section == .group("資本金"))
-        #expect(ssClose?.value == 3_854_915_000_000)
-        #expect(ssClose?.section == .group("資本合計"))
-        #expect(ssOpen?.order != nil && ssClose?.order != nil)
-        #expect(ssOpen!.order! < ssClose!.order!)
+        let expectedSS: [EquityGoldenRow] = [
+            .init(label: "期首残高", section: "資本金", value: 594_493_000_000, isTotal: true),
+            .init(label: "期末残高", section: "資本金", value: 594_493_000_000, isTotal: true),
+            .init(label: "期首残高", section: "資本剰余金", value: 704_877_000_000, isTotal: true),
+            .init(label: "株式に基づく報酬取引", section: "資本剰余金", value: 1_400_000_000, isTotal: false),
+            .init(label: "子会社に対する持分変動", section: "資本剰余金", value: 0, isTotal: false),
+            .init(label: "関連会社に対する持分変動", section: "資本剰余金", value: -16_000_000, isTotal: false),
+            .init(label: "期末残高", section: "資本剰余金", value: 706_261_000_000, isTotal: true),
+            .init(label: "期首残高", section: "利益剰余金", value: 1_867_379_000_000, isTotal: true),
+            .init(label: "当社株主に帰属する当期純利益", section: "利益剰余金", value: 362_129_000_000, isTotal: false),
+            .init(label: "現金配当金", section: "利益剰余金", value: -148_840_000_000, isTotal: false),
+            .init(label: "自己株式処分損益", section: "利益剰余金", value: -9_016_000_000, isTotal: false),
+            .init(label: "自己株式の消却", section: "利益剰余金", value: -57_666_000_000, isTotal: false),
+            .init(label: "期末残高", section: "利益剰余金", value: 2_013_986_000_000, isTotal: true),
+            .init(label: "期首残高", section: "為替換算調整額", value: 407_977_000_000, isTotal: true),
+            .init(label: "当期純変動額", section: "為替換算調整額", value: 142_524_000_000, isTotal: false),
+            .init(label: "期末残高", section: "為替換算調整額", value: 550_501_000_000, isTotal: true),
+            .init(label: "期首残高", section: "確定給付年金制度", value: -7_105_000_000, isTotal: true),
+            .init(label: "年金債務調整額", section: "確定給付年金制度", value: 6_983_000_000, isTotal: false),
+            .init(label: "期末残高", section: "確定給付年金制度", value: -122_000_000, isTotal: true),
+            .init(label: "期首残高", section: "トレーディング目的以外の負債証券", value: -1_147_000_000, isTotal: true),
+            .init(
+                label: "トレーディング目的以外の負債証券の未実現損益",
+                section: "トレーディング目的以外の負債証券", value: -2_215_000_000, isTotal: false),
+            .init(label: "期末残高", section: "トレーディング目的以外の負債証券", value: -3_362_000_000, isTotal: true),
+            .init(label: "期首残高", section: "自己クレジット調整額", value: 48_083_000_000, isTotal: true),
+            .init(label: "自己クレジット調整額", section: "自己クレジット調整額", value: -46_879_000_000, isTotal: false),
+            .init(label: "期末残高", section: "自己クレジット調整額", value: 1_204_000_000, isTotal: true),
+            .init(label: "期末残高", section: "累積的その他の包括利益", value: 548_221_000_000, isTotal: true),
+            .init(label: "期首残高", section: "自己株式", value: -143_678_000_000, isTotal: true),
+            .init(label: "取得", section: "自己株式", value: -101_499_000_000, isTotal: false),
+            .init(label: "売却", section: "自己株式", value: 0, isTotal: false),
+            .init(label: "従業員に対する発行株式", section: "自己株式", value: 32_418_000_000, isTotal: false),
+            .init(label: "消却", section: "自己株式", value: 57_666_000_000, isTotal: false),
+            .init(label: "期末残高", section: "自己株式", value: -155_093_000_000, isTotal: true),
+            .init(label: "期末残高", section: "当社株主資本合計", value: 3_707_868_000_000, isTotal: true),
+            .init(label: "期首残高", section: "非支配持分", value: 110_120_000_000, isTotal: true),
+            .init(label: "現金配当金", section: "非支配持分", value: -21_056_000_000, isTotal: false),
+            .init(label: "非支配持分に帰属する当期純利益", section: "非支配持分", value: 12_253_000_000, isTotal: false),
+            .init(
+                label: "為替換算調整額", section: "非支配持分に帰属する累積的その他の包括利益",
+                value: 5_214_000_000, isTotal: false),
+            .init(label: "非支配持分保有者との取引(純額)", section: "非支配持分", value: 44_694_000_000, isTotal: false),
+            .init(label: "その他の増減（純額）", section: "非支配持分", value: -4_178_000_000, isTotal: false),
+            .init(label: "期末残高", section: "非支配持分", value: 147_047_000_000, isTotal: true),
+            .init(label: "期末残高", section: "資本合計", value: 3_854_915_000_000, isTotal: true),
+        ]
+        #expect(Self.equityGoldenRows(year.changesInEquity) == expectedSS)
     }
 
     @Test
