@@ -25,8 +25,10 @@
 // - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
 // smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
 // 「US-GAAP（HTML 経路）」で golden 化（0105010 HTML→行。`USGAAPStatementHtml`）。
-// 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
-// 富士フイルムは内訳→合計型のため同規則では `components` なし。
+        // 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
+        // 富士フイルムは内訳→合計型のため同規則では `components` なし。
+        // 2026-08-22、最新年度で HTML 本表が空/部分欠測だった US-GAAP 4社を追加
+        // （野村 S100YC5C、オムロン S100YG81、小松 S100YD25、オリックス S100YG5L）。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -930,5 +932,111 @@ import Foundation
         #expect(year.changesInEquity.allSatisfy { $0.components == nil })
         // 内訳が前に来るセクション合計はキヤノン型対象外
         #expect(year.balanceSheet.first { $0.label == "流動資産合計" }?.components == nil)
+    }
+
+    @Test
+    func nomuraUSGAAPStatementExtractsBrokerDealerPrimaryStatements() async throws {
+        guard await Self.ensureAvailable("S100YC5C") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100YC5C",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 62_645_925_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "資本合計") == 3_854_915_000_000)
+        #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
+        #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
+        #expect(year.balanceSheet.contains { $0.label == "資本合計" && $0.section == .netAssets })
+
+        #expect(Self.exactLabelValue(year.incomeStatement, "収益合計") == 4_758_486_000_000)
+        #expect(
+            Self.exactLabelValue(year.incomeStatement, "当社株主に帰属する当期純利益")
+                == 362_129_000_000)
+
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "営業活動に使用された現金（純額）")
+                == -842_960_000_000)
+        #expect(
+            year.cashFlow.contains {
+                $0.label == "営業活動に使用された現金（純額）" && $0.section == .operating
+            })
+        #expect(
+            year.cashFlow.contains {
+                ($0.label ?? "").contains("投資活動に使用された現金") && $0.section == .investing
+            })
+        #expect(
+            year.cashFlow.contains {
+                ($0.label ?? "").contains("財務活動から得た現金") && $0.section == .financing
+            })
+        let cfOpen = year.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let cfClose = year.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(cfOpen?.section == nil && cfClose?.section == nil)
+        #expect(cfOpen?.order != nil && cfClose?.order != nil)
+        #expect(cfOpen!.order! < cfClose!.order!)
+    }
+
+    @Test
+    func omronUSGAAPStatementExtractsIncomeAndEquityWithoutOperatingProfitLine() async throws {
+        guard await Self.ensureAvailable("S100YG81") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100YG81",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 1_516_263_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "売上高") == 767_351_000_000)
+        #expect(
+            Self.exactLabelValue(year.incomeStatement, "当社株主に帰属する当期純利益")
+                == 28_487_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                ($0.label ?? "").contains("第89期末現在") && $0.value == 1_000_562_000_000
+            })
+    }
+
+    @Test
+    func komatsuUSGAAPStatementExtractsEquityOpenAndCloseBalances() async throws {
+        guard await Self.ensureAvailable("S100YD25") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100YD25",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 6_423_941_000_000)
+        #expect(Self.exactLabelValue(year.changesInEquity, "期末残高") == 3_708_427_000_000)
+        let ssOpen = year.changesInEquity.first { $0.label == "期首残高" }
+        let ssClose = year.changesInEquity.first { $0.label == "期末残高" }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
+    }
+
+    @Test
+    func orixUSGAAPStatementExtractsDatedEquityBalances() async throws {
+        guard await Self.ensureAvailable("S100YG5L") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100YG5L",
+                statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
+
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 18_002_776_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                ($0.label ?? "").contains("2026年３月31日") && $0.value == 4_573_068_000_000
+            })
+        let ssOpen = year.changesInEquity.first { ($0.label ?? "").contains("2025年３月31日") }
+        let ssClose = year.changesInEquity.first { ($0.label ?? "").contains("2026年３月31日") }
+        #expect(ssOpen?.order != nil && ssClose?.order != nil)
+        #expect(ssOpen!.order! < ssClose!.order!)
     }
 }

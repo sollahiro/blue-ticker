@@ -70,13 +70,19 @@ enum USGAAPStatementHtml {
                 guard statementTypes.contains(.changesInEquity), !sawCF else { continue }
                 pendingSS = parseEquityStatementRows(rows)
             case .cashFlow:
-                guard !sawCF else { continue }
-                if statementTypes.contains(.changesInEquity) {
+                // 野村: 営業CFと投資/財務CFが別表。最初のCF表で SS を確定し、
+                // 投資・財務が揃うまで後続の CF 表を追記する（注記内の同名表は揃った後は無視）。
+                let hasInvesting = cashFlow.contains { $0.section == .investing }
+                let hasFinancing = cashFlow.contains { $0.section == .financing }
+                if sawCF && hasInvesting && hasFinancing { continue }
+                if !sawCF && statementTypes.contains(.changesInEquity) {
                     changesInEquity = pendingSS
                 }
                 if statementTypes.contains(.cashFlow) {
-                    cashFlow = parseSimpleStatementRows(
-                        rows, sectionType: .cashFlow, sectionForRow: cfSection(for:))
+                    let parsed = parseSimpleStatementRows(
+                        rows, sectionType: .cashFlow, sectionForRow: cfSection(for:),
+                        startingOrder: cashFlow.count)
+                    cashFlow.append(contentsOf: parsed)
                 }
                 sawCF = true
             }
@@ -113,31 +119,24 @@ enum USGAAPStatementHtml {
     }
 
     /// 本表は 0105010 先頭付近に現れ、注記内の同名語を含む表より先に来る前提で
-    /// 「最初の一致のみ採用」する（呼び出し側）。ここでの分類は表のラベル集合のヒューリスティック。
+    /// 「最初の一致のみ採用」する（呼び出し側。CF の分割表だけは追記）。
+    /// ここでの分類は表のラベル集合のヒューリスティック。
     private static func classifyTable(_ rows: [[String]]) -> TableKind? {
         let labels = rows.map { rowLabel($0) }.filter { !$0.isEmpty }
         let allCells = rows.flatMap { $0 }.joined(separator: "\n")
 
         if labels.contains(where: { $0.contains("営業活動によるキャッシュ・フロー") })
-            && labels.contains(where: { $0.contains("投資活動によるキャッシュ・フロー") })
+            || (labels.contains(where: { $0.contains("投資活動によるキャッシュ・フロー") })
+                && labels.contains(where: { $0.contains("財務活動によるキャッシュ・フロー") }))
         {
             return .cashFlow
         }
 
-        // SS: 複数資本構成員列＋「現在残高」。合計列のみ使う。
-        // 「純資産」はヘッダ行の列名に出ることが多く、先頭ラベル列だけだと見えない。
-        if labels.contains(where: { $0.contains("現在残高") })
-            && (allCells.contains("純資産") || allCells.contains("株主資本"))
-            && labels.contains(where: { $0 == "区分" || $0.hasPrefix("区分") })
-        {
-            let header = rows.first { rowLabel($0) == "区分" || rowLabel($0).hasPrefix("区分") }
-                ?? rows.first ?? []
-            let headerJoined = header.joined()
-            if headerJoined.contains("資本金") || headerJoined.contains("利益剰余金")
-                || headerJoined.contains("自己株式") || headerJoined.contains("純資産")
-            {
-                return .changesInEquity
-            }
+        // SS: 合計列のみ。キヤノン/富士フイルムは「現在残高」、オムロンは「第N期末現在」、
+        // 小松/オリックスは「期首残高」「期末残高」/「YYYY年M月DD日残高」。
+        // 信用損失引当金の増減表も期首/期末残高を持つため資本文脈を要求する。
+        if isEquityStatementTable(labels: labels, allCells: allCells) {
+            return .changesInEquity
         }
 
         if labels.contains(where: { isAssetsSectionHeader($0) })
@@ -154,14 +153,39 @@ enum USGAAPStatementHtml {
             return .bsLiabilitiesAndEquity
         }
 
-        // PL: 売上高＋営業利益。包括利益計算書（当期純利益から始まる OCI 表）は除外。
-        if labels.contains(where: { isSalesLabel($0) })
-            && labels.contains(where: { $0.contains("営業利益") })
-        {
+        // PL: 売上高＋営業利益（キヤノン型）。オムロンは営業利益行が無く売上高＋当期純利益。
+        // 野村（証券）は売上高が無く収益合計＋当期純利益。包括利益計算書は除外。
+        if isIncomeStatementTable(labels) {
             return .incomeStatement
         }
 
         return nil
+    }
+
+    /// 持分変動計算書か。資本文脈があり、残高マーカーが期首/期末（または日付残高）として揃う。
+    private static func isEquityStatementTable(labels: [String], allCells: String) -> Bool {
+        let equityContext =
+            allCells.contains("純資産") || allCells.contains("株主資本") || allCells.contains("資本合計")
+            || allCells.contains("資本金")
+        guard equityContext else { return false }
+        if allCells.contains("信用損失") { return false }
+        return labels.contains { isEquityBalanceRowLabel($0) }
+    }
+
+    /// PL 本表か。OCI（その他の包括利益）表は売上高/収益合計を持たない。
+    private static func isIncomeStatementTable(_ labels: [String]) -> Bool {
+        let hasSales = labels.contains { isSalesLabel($0) }
+        let hasRevenueTotal = labels.contains {
+            $0 == "収益合計" || ($0.hasPrefix("収益合計") && !$0.contains("控除"))
+        }
+        let hasOperatingProfit = labels.contains { $0.contains("営業利益") }
+        let hasNetIncome =
+            labels.contains { $0.contains("当期純利益") } || labels.contains { $0.contains("税引前当期純利益") }
+        let hasOCI = labels.contains { $0.contains("その他の包括利益") }
+        if hasOCI && !hasSales && !hasRevenueTotal { return false }
+        if hasSales && (hasOperatingProfit || hasNetIncome) { return true }
+        if hasRevenueTotal && hasNetIncome { return true }
+        return false
     }
 
     private static func isSalesLabel(_ label: String) -> Bool {
@@ -237,9 +261,10 @@ enum USGAAPStatementHtml {
     private static func parseSimpleStatementRows(
         _ rows: [[String]],
         sectionType: StatementSectionType,
-        sectionForRow: (String) -> StatementLineSection?
+        sectionForRow: (String) -> StatementLineSection?,
+        startingOrder: Int = 0
     ) -> [StatementLineItem] {
-        var order = 0
+        var order = startingOrder
         var items: [StatementLineItem] = []
         var currentCFSection: StatementLineSection? =
             sectionType == .cashFlow ? .operating : nil
@@ -321,7 +346,7 @@ enum USGAAPStatementHtml {
             raw.append((label, million * Financial.millionYen))
         }
 
-        let balanceIndices = raw.indices.filter { raw[$0].label.contains("現在残高") }
+        let balanceIndices = raw.indices.filter { isEquityBalanceRowLabel(raw[$0].label) }
         let startIndex = balanceIndices.count >= 2 ? balanceIndices[balanceIndices.count - 2] : 0
 
         var order = 0
@@ -488,27 +513,41 @@ enum USGAAPStatementHtml {
     }
 
     private static func isAssetsSectionHeader(_ label: String) -> Bool {
-        let t = label.replacingOccurrences(of: "（", with: "")
-            .replacingOccurrences(of: "）", with: "")
-            .replacingOccurrences(of: "(", with: "")
-            .replacingOccurrences(of: ")", with: "")
+        let t = stripHeaderDecorations(label)
         // 「純資産の部」は "資産の部" を部分文字列に持つため先に除外する
-        return t.contains("資産の部") && !t.contains("純資産") && !t.contains("負債")
+        if t.contains("純資産") || t.contains("負債") { return false }
+        return t.contains("資産の部") || t == "資産"
     }
 
     private static func isLiabilitiesSectionHeader(_ label: String) -> Bool {
-        let t = label.replacingOccurrences(of: "（", with: "")
-            .replacingOccurrences(of: "）", with: "")
-        return t.contains("負債の部")
+        let t = stripHeaderDecorations(label)
+        return t.contains("負債の部") || t.contains("負債および資本") || t.contains("負債及び資本")
     }
 
     private static func isNetAssetsSectionHeader(_ label: String) -> Bool {
-        let t = label.replacingOccurrences(of: "（", with: "")
-            .replacingOccurrences(of: "）", with: "")
+        let t = stripHeaderDecorations(label)
         if t.contains("純資産の部") { return true }
         // 「Ⅰ 株主資本」は部ヘッダ（金額なし）として区分切替に使う
         let stripped = USGAAPHtml.stripSectionPrefix(t)
-        return stripped == "株主資本"
+        if stripped == "株主資本" { return true }
+        // 野村: 「資本：」（純資産の部の別名。資本金とは一致させない）
+        let withoutColon = stripped.trimmingCharacters(in: CharacterSet(charactersIn: "：:"))
+        return withoutColon == "資本"
+    }
+
+    private static func stripHeaderDecorations(_ label: String) -> String {
+        label.replacingOccurrences(of: "（", with: "")
+            .replacingOccurrences(of: "）", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+    }
+
+    /// SS の期首/期末（または日付）残高行。年次切り出しと is_total 判定で共用する。
+    private static func isEquityBalanceRowLabel(_ label: String) -> Bool {
+        if label.contains("現在残高") || label.contains("期末現在") { return true }
+        if label.contains("日") && label.contains("残高") { return true }
+        let s = USGAAPHtml.stripSectionPrefix(label)
+        return s == "期首残高" || s.hasPrefix("期首残高") || s == "期末残高" || s.hasPrefix("期末残高")
     }
 
     private static func shouldSkipMetaRow(_ label: String) -> Bool {
@@ -540,7 +579,9 @@ enum USGAAPStatementHtml {
     /// この語句を含むため、期首/期末残高・純増減・為替変動を表す語（`isTotalLabel` の
     /// CF 語彙と同型）を併せて要求する（実データ確認済み）。
     private static func isCashAndEquivalentsTailRow(_ label: String) -> Bool {
-        guard label.contains("現金及び現金同等物") else { return false }
+        let hasCash =
+            label.contains("現金及び現金同等物") || label.contains("現金および現金同等物")
+        guard hasCash else { return false }
         return label.contains("期首残高") || label.contains("期末残高")
             || label.contains("純増減") || label.contains("純減少") || label.contains("為替")
     }
@@ -556,7 +597,7 @@ enum USGAAPStatementHtml {
             return s.contains("キャッシュ・フロー") || s.contains("期首残高") || s.contains("期末残高")
                 || s.contains("純減少") || s.contains("純増減")
         case .changesInEquity:
-            return s.contains("現在残高") || s == "包括利益" || s.contains("当期包括利益")
+            return isEquityBalanceRowLabel(s) || s == "包括利益" || s.contains("当期包括利益")
         case .balanceSheet:
             return false
         }

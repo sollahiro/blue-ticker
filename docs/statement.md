@@ -38,7 +38,7 @@
 7. **ラベル**: 提出パッケージ＋ `assets/taxonomy` 補完。`preferredLabel` 対応。期首/期末ラベル差し替えは **CF（と SS）限定**（BS 合計行を巻き込まない）。ロール選択は標準 XBRL ロール優先で決定的に。
 8. **CF Instant**: 期首/期末現金は Instant。CF に限り前期 Instant も受理。
 9. **`is_total`/`components`**: calculation linkbase（`summation-item`）。presentation の親子では二重計上を防げない。
-10. **US-GAAP**: fact 経路不可 → `USGAAPStatementHtml`（当期優先・キヤノン型 components）。Summary 用 `USGAAPHtml` と混同しない。取れないときだけ `us_gaap_unsupported`。
+10. **US-GAAP**: fact 経路不可 → `USGAAPStatementHtml`（当期優先・キヤノン型 components）。見出しゆれ: `（資産）`/`資本：`（証券）、営業利益行なし PL、CF 分割表、SS の `期末現在`/`期首残高`/`YYYY年M月DD日残高`。Summary 用 `USGAAPHtml` と混同しない。取れないときだけ `us_gaap_unsupported`。
 
 ## notes
 
