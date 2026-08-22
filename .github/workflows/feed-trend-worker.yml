@@ -31,6 +31,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: GitHub secrets の有無
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BLT_FEED_TREND_TOKEN: ${{ secrets.BLT_FEED_TREND_TOKEN }}
+        run: |
+          missing=
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$BLT_FEED_TREND_TOKEN" ] || missing="$missing BLT_FEED_TREND_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "未設定の GitHub secrets:$missing" >&2
+            exit 1
+          fi
+
       - name: Deploy Worker
         id: deploy
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
@@ -46,7 +61,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.BLT_FEED_TREND_TOKEN }}
           ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          AE_SQL_TOKEN: ${{ secrets.AE_SQL_TOKEN }}
+          AE_SQL_TOKEN: ${{ secrets.AE_SQL_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
 
       - uses: superfly/flyctl-actions/setup-flyctl@dfdfedc86b296f5e5384f755a18bf400409a15d0 # v1.4
 
