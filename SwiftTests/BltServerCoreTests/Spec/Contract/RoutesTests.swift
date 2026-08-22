@@ -39,6 +39,8 @@ private func makeContext() -> BltServerContext {
 private func withApp(
     databases: Bool = false,
     cfAccessTeamDomain: String? = nil,
+    feedTrendSink: (any FeedTrendSink)? = nil,
+    feedTrendQuery: (any FeedTrendQueryClient)? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -56,6 +58,12 @@ private func withApp(
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             app.migrations.add(CreateCompanyIcons())
             try await app.autoMigrate()
+        }
+        if feedTrendSink != nil || feedTrendQuery != nil {
+            setFeedTrendServices(
+                app,
+                sink: feedTrendSink ?? NoopFeedTrendSink(),
+                query: feedTrendQuery ?? UnconfiguredFeedTrendQueryClient())
         }
         try await registerRoutes(
             app, context: makeContext(), cfAccessTeamDomain: cfAccessTeamDomain)
@@ -633,4 +641,194 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(result["6758"] == nil)
         }
     }
+
+    // MARK: - Feed Update
+
+    @Test func feedUpdatesReturn503WithoutDatabase() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/feed/updates")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "財務データベースに接続できません")
+        }
+    }
+
+    @Test func feedUpdatesReturnsEmptyItemsWhenNoDocuments() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/feed/updates")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
+            #expect(json?["days"] as? Int == 7)
+            #expect(json?["date"] as? String == feedDateString())
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 0)
+            #expect(total?["week"] as? Int == 0)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.isEmpty == true)
+        }
+    }
+
+    @Test func feedUpdatesReturnsListedFilingsNewestFirst() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFeedDocument(
+                app, id: "S-old", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2099-01-01 09:00")
+            try await seedFeedDocument(
+                app, id: "S-new", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "2099-01-20 09:00")
+            try await seedFeedDocument(
+                app, id: "S-unlisted", secCode: nil, filer: "某ファンド",
+                type: "120", submit: "2099-01-21 09:00")
+            try await seedFeedDocument(
+                app, id: "S-half", secCode: "99840", filer: "ソフトバンクグループ株式会社",
+                type: "160", submit: "2099-01-22 09:00")
+            try await seedFeedDocument(
+                app, id: "S-ancient", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2000-01-01 09:00")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            #expect(json?["days"] as? Int == 7)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.compactMap { $0["doc_id"] as? String } == ["S-new", "S-old"])
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 0)
+            #expect(total?["week"] as? Int == 2)
+            #expect(items?.first?["code"] as? String == "6758")
+            #expect(items?.first?["icon_url"] is NSNull)
+
+            let filtered = try await send(app, "/v1/feed/updates?doc_type=160")
+            let half = filtered.json?["items"] as? [[String: Any]]
+            #expect(half?.compactMap { $0["doc_id"] as? String } == ["S-half"])
+        }
+    }
+
+    @Test func feedUpdatesTotalsCountTodayAndPastWeek() async throws {
+        try await withApp(databases: true) { app in
+            let now = Date()
+            let today = feedDateString(now)
+            let yesterday = feedDateString(
+                utcCalendar.date(byAdding: .day, value: -1, to: now)!)
+            let inWeek = feedInclusiveCutoffDateString(days: Api.feedUpdateWeekDays, now: now)
+            let outside = feedDateString(
+                utcCalendar.date(byAdding: .day, value: -8, to: now)!)
+            try await seedFeedDocument(
+                app, id: "D-today-1", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "\(today) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-today-2", secCode: "67580", filer: "ソニーグループ株式会社",
+                type: "120", submit: "\(today) 11:00")
+            try await seedFeedDocument(
+                app, id: "D-yday", secCode: "99840", filer: "ソフトバンクグループ株式会社",
+                type: "120", submit: "\(yesterday) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-week", secCode: "80350", filer: "東京エレクトロン株式会社",
+                type: "120", submit: "\(inWeek) 09:00")
+            try await seedFeedDocument(
+                app, id: "D-old", secCode: "68610", filer: "キーエンス",
+                type: "120", submit: "\(outside) 09:00")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            #expect(json?["date"] as? String == today)
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 2)
+            #expect(total?["week"] as? Int == 4)
+            let items = json?["items"] as? [[String: Any]]
+            let ids = items?.compactMap { $0["doc_id"] as? String } ?? []
+            #expect(ids.contains("D-today-1"))
+            #expect(ids.contains("D-today-2"))
+            #expect(ids.contains("D-yday"))
+            #expect(ids.contains("D-week"))
+            #expect(ids.contains("D-old") == false)
+        }
+    }
+
+    // MARK: - Feed Trend
+
+    @Test func feedTrendReturns503WhenUnconfigured() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/feed/trend")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == feedTrendUnavailableMessage)
+        }
+    }
+
+    @Test func feedTrendReturnsRankingFromStubWithoutHittingNetwork() async throws {
+        let stub = StubFeedTrendQueryClient(
+            ranking: FeedTrendRanking(items: [
+                FeedTrendBucket(code: "7203", count: 9),
+                FeedTrendBucket(code: "6758", count: 2),
+            ]))
+        try await withApp(feedTrendQuery: stub) { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?limit=10")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == Api.feedTrendSchemaVersion)
+            #expect(json?["days"] as? Int == 7)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.compactMap { $0["code"] as? String } == ["7203", "6758"])
+            #expect(items?.first?["count"] as? Int == 9)
+            #expect(items?.first?["icon_url"] is NSNull)
+            #expect(json?["by_tool"] == nil)
+        }
+    }
+
+    @Test func feedTrendCodeFilterIncludesBreakdowns() async throws {
+        let stub = StubFeedTrendQueryClient(
+            ranking: FeedTrendRanking(
+                items: [FeedTrendBucket(code: "7203", count: 4)],
+                byTool: [FeedTrendLabelCount(label: "search_companies", count: 3)],
+                bySurface: [FeedTrendLabelCount(label: "rest", count: 4)],
+                byQuery: [FeedTrendLabelCount(label: "トヨタ", count: 3)]
+            ))
+        try await withApp(feedTrendQuery: stub) { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?code=7203")
+            #expect(status == .ok)
+            #expect(json?["code"] as? String == "7203")
+            let byTool = json?["by_tool"] as? [[String: Any]]
+            #expect(byTool?.first?["tool"] as? String == "search_companies")
+        }
+    }
+
+    @Test func feedTrendRejectsInvalidCode() async throws {
+        try await withApp(feedTrendQuery: StubFeedTrendQueryClient(ranking: FeedTrendRanking(items: [])))
+        { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?code=72030")
+            #expect(status == .badRequest)
+            #expect(json?["error"] as? String == "code は4桁の銘柄コードです")
+        }
+    }
+
+    @Test func restSearchAndFinancialsRecordTrendButFeedDoesNot() async throws {
+        let sink = RecordingFeedTrendSink()
+        try await withApp(feedTrendSink: sink) { app in
+            _ = try await send(app, "/v1/companies?q=7203")
+            _ = try await send(app, "/v1/companies/6758/financials")
+            _ = try await send(app, "/v1/feed/updates")
+            _ = try await send(app, "/healthz")
+        }
+        let tools = sink.events.map(\.tool)
+        #expect(tools.contains("search_companies"))
+        #expect(tools.contains("get_financial_summary"))
+        #expect(tools.contains("get_feed_updates") == false)
+        let search = try #require(sink.events.first { $0.tool == "search_companies" })
+        #expect(search.surface == "rest")
+        #expect(search.code == "7203")
+        let financials = try #require(sink.events.first { $0.tool == "get_financial_summary" })
+        #expect(financials.code == "6758")
+        #expect(financials.q == nil)
+    }
+}
+
+private func seedFeedDocument(
+    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String
+) async throws {
+    let doc = EdinetDocument()
+    doc.id = id
+    doc.edinetCode = "E00001"
+    doc.secCode = secCode
+    doc.filerName = filer
+    doc.docTypeCode = type
+    doc.periodEnd = "2025-03-31"
+    doc.submitDateTime = submit
+    try await doc.create(on: app.db)
 }

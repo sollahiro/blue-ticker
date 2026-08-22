@@ -1,0 +1,85 @@
+name: Feed Trend Worker
+
+# 匿名カウンター Worker（workers/feed-trend）を Cloudflare へ出し、
+# Fly origin に BLT_FEED_TREND_URL / BLT_FEED_TREND_TOKEN を載せる。
+# api.* / mcp.* の前段には置かない。
+#
+# GitHub secrets（未設定ならジョブは失敗する）:
+#   CLOUDFLARE_API_TOKEN  Workers Scripts Edit（+ Account Analytics:Read なら AE_SQL_TOKEN 流用可）
+#   CLOUDFLARE_ACCOUNT_ID
+#   BLT_FEED_TREND_TOKEN  origin と Worker TOKEN の共有値
+#   AE_SQL_TOKEN          Account Analytics:Read（CLOUDFLARE_API_TOKEN と分けられるとき）
+#   FLY_API_TOKEN         既存の Fly デプロイと同じ
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/feed-trend/**'
+      - '.github/workflows/feed-trend-worker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: feed-trend-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GitHub secrets の有無
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BLT_FEED_TREND_TOKEN: ${{ secrets.BLT_FEED_TREND_TOKEN }}
+        run: |
+          missing=
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$BLT_FEED_TREND_TOKEN" ] || missing="$missing BLT_FEED_TREND_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "未設定の GitHub secrets:$missing" >&2
+            exit 1
+          fi
+
+      - name: Deploy Worker
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/feed-trend
+          wranglerVersion: "4"
+          secrets: |
+            TOKEN
+            ACCOUNT_ID
+            AE_SQL_TOKEN
+        env:
+          TOKEN: ${{ secrets.BLT_FEED_TREND_TOKEN }}
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AE_SQL_TOKEN: ${{ secrets.AE_SQL_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@dfdfedc86b296f5e5384f755a18bf400409a15d0 # v1.4
+
+      - name: Fly origin に URL と token を載せる
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          BLT_FEED_TREND_TOKEN: ${{ secrets.BLT_FEED_TREND_TOKEN }}
+          TREND_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          if [ -z "$TREND_URL" ]; then
+            echo "wrangler-action が deployment-url を返しませんでした" >&2
+            exit 1
+          fi
+          if [ -z "$BLT_FEED_TREND_TOKEN" ]; then
+            echo "GitHub secret BLT_FEED_TREND_TOKEN が未設定です" >&2
+            exit 1
+          fi
+          flyctl secrets set \
+            BLT_FEED_TREND_URL="$TREND_URL" \
+            BLT_FEED_TREND_TOKEN="$BLT_FEED_TREND_TOKEN" \
+            --app blt-server

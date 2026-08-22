@@ -521,6 +521,122 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 "note":{"type":"object"}}}
                 """
         ),
+        ApiSkill(
+            id: "get-feed-updates",
+            name: "開示更新フィード",
+            description: """
+                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近7日）。
+                件数は当日（total.day）と直近1週間（total.week）。銘柄横断の更新情報です。
+                1 社の書類一覧は get_filings を使ってください。
+                """,
+            method: "GET",
+            path: "/v1/feed/updates",
+            mcpTool: "get_feed_updates",
+            feature: "feed",
+            parameters: [
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "返却件数（最大 \(Api.feedLimitMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedLimitDefault)
+                ),
+                ApiSkillParameter(
+                    name: "days",
+                    location: .query,
+                    type: .integer,
+                    description: "items の窓（日。最大 \(Api.feedTrendDaysMax)。total.week は常に直近7日）",
+                    required: false,
+                    defaultValue: .int(Api.feedTrendDaysDefault)
+                ),
+                ApiSkillParameter(
+                    name: "doc_type",
+                    location: .query,
+                    type: .string,
+                    description: "書類種別（カンマ区切り。120 有報 / 130 訂正有報 / 140 四半期 / 160 半期。省略時 120）",
+                    required: false,
+                    defaultValue: .string(Api.docTypeAnnualReport)
+                ),
+            ],
+            instructions: """
+                Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0）のみ。
+                items はクエリ days 窓の提出日時降順（既定 7 日）。
+                `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
+                空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
+                RSS は未提供（REST が契約の正。MCP は追従）。
+                例: GET /v1/feed/updates?days=7&limit=20
+                例: GET /v1/feed/updates?doc_type=120,160
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","date","days","total","items"],"properties":\
+                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
+                "total":{"type":"object","required":["day","week"],"properties":{"day":{"type":"integer"},\
+                "week":{"type":"integer"}}},"doc_types":{"type":"array","items":{"type":"string"}},"items":\
+                {"type":"array","items":{"type":"object","required":["code","name","doc_id","doc_type",\
+                "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
+                "name":{"type":"string"},"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
+                "doc_type_label":{"type":"string"},"fy_end":{"type":"string"},\
+                "submitted_at":{"type":"string"}}}}}}
+                """
+        ),
+        ApiSkill(
+            id: "get-feed-trend",
+            name: "検索トレンド",
+            description: """
+                直近に検索・参照された銘柄を件数の多い順で返します（匿名のコマンド回数。提出書類の件数ではありません）。
+                銘柄の直近提出は get_feed_updates、1社の書類一覧は get_filings を使ってください。
+                """,
+            method: "GET",
+            path: "/v1/feed/trend",
+            mcpTool: "get_feed_trend",
+            feature: "feed",
+            parameters: [
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "返却件数（最大 \(Api.feedLimitMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedLimitDefault)
+                ),
+                ApiSkillParameter(
+                    name: "days",
+                    location: .query,
+                    type: .integer,
+                    description: "集計窓（日。直近 N×24h。最大 \(Api.feedTrendDaysMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedTrendDaysDefault)
+                ),
+                ApiSkillParameter(
+                    name: "code",
+                    location: .query,
+                    type: .string,
+                    description: "4桁コード。指定するとその銘柄のツール別・面別・検索クエリ内訳",
+                    required: false
+                ),
+            ],
+            instructions: """
+                Feed Trend。匿名の search_companies および各ツールヒット回数（MCP と REST を区別）。
+                顧客アカウントや IP は持たない。書き込みは origin からカウンターへ fire-and-forget（失敗しても本 API は 200/404/503 のまま）。
+                items は code ごとの件数降順。空でも 200（items=[]）。カウンター未設定・取得失敗は 503。
+                提出件数ランキングは出さない（それは get_feed_updates）。
+                RSS は未提供（REST が契約の正。MCP は追従）。
+                例: GET /v1/feed/trend?days=7&limit=20
+                例: GET /v1/feed/trend?code=7203
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","date","days","items"],"properties":\
+                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
+                "code":{"type":"string"},"items":{"type":"array","items":{"type":"object","required":\
+                ["code","name","count"],"properties":{"code":{"type":"string"},"name":{"type":"string"},\
+                "count":{"type":"integer"}}}},"by_tool":{"type":"array","items":{"type":"object"}},\
+                "by_surface":{"type":"array","items":{"type":"object"}},\
+                "by_query":{"type":"array","items":{"type":"object"}}}}
+                """
+        ),
     ]
 }
 

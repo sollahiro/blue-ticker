@@ -39,6 +39,11 @@ mebuki_startup.log
 /scripts/jp/edinet/local/
 /scripts/jp/edinet/ingest.local.env
 
+# Cloudflare Wrangler (Feed Trend Worker)
+workers/**/.wrangler/
+workers/**/node_modules/
+workers/**/.dev.vars
+
 # Temporary files
 *_dump_*.json
 *.tmp

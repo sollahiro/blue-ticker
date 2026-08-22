@@ -12,6 +12,9 @@ import Testing
         #expect(ids.contains("search-companies"))
         #expect(ids.contains("get-breakdown"))
         #expect(ids.contains("get-statement"))
+        #expect(ids.contains("get-feed-updates"))
+        #expect(ids.contains("get-feed-trend"))
+        #expect(ids.contains("get-feed-trend"))
     }
 
     @Test func mcpToolNamesMatchExpectedSet() {
@@ -22,6 +25,7 @@ import Testing
                 "get_financial_summary",
                 "get_waterfall", "get_filing_content",
                 "get_breakdown", "get_statement", "get_statement_notes",
+                "get_feed_updates", "get_feed_trend",
             ])
     }
 

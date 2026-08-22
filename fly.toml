@@ -4,7 +4,8 @@
 #
 # 機密は fly secrets で注入する（イメージ・このファイルに焼かない）:
 #   fly secrets set BLT_EDINET_API_KEY=... CF_ACCESS_TEAM_DOMAIN=... CLOUDFLARE_TUNNEL_TOKEN=... DATABASE_URL=...
-# 手順は docs/deploy.md を参照。
+#   fly secrets set BLT_FEED_TREND_URL=... BLT_FEED_TREND_TOKEN=...
+# 手順は docs/deploy.md を参照。Feed Trend 初回は scripts/feed-trend-ship.sh。
 #
 # 本番認証は Cloudflare Access（方式A・エッジ信頼）。到達は Cloudflare Tunnel 一本に絞る。
 # そのため [http_service]（公開 LB・ポート 80/443）は置かない。公開ポートが開いていると
