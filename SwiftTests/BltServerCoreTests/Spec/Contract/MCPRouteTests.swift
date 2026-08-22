@@ -489,6 +489,8 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let body = text.flatMap { $0.data(using: .utf8) }
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             #expect(body?["schema_version"] as? Int == Api.feedSchemaVersion)
+            #expect(body?["days"] as? Int == 7)
+            #expect(body?["total"] as? Int == 0)
             let items = body?["items"] as? [[String: Any]]
             #expect(items?.isEmpty == true)
         }
@@ -498,7 +500,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         try await withMcpApp(databases: true) { app in
             try await seedMcpFeedDocument(
                 app, id: "S1", secCode: "72030", filer: "トヨタ自動車株式会社",
-                type: "120", submit: "2026-06-20 09:00")
+                type: "120", submit: "2099-01-20 09:00")
             let (status, json) = try await postMcp(
                 app, toolCallBody(name: "get_feed_updates", arguments: ["limit": 10]))
             #expect(status == .ok)

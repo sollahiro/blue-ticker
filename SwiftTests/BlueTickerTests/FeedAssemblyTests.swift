@@ -57,8 +57,10 @@ private func rec(
             rec("S2", secCode: nil, filerName: "某ファンド", submit: "2026-06-21 10:00"),
             rec("S3", secCode: "67580", filerName: "ソニーグループ株式会社", submit: "2026-06-19 08:00"),
         ]
-        let json = assembleFeedUpdates(from: records, limit: 10, docTypes: ["120"])
+        let json = assembleFeedUpdates(from: records, limit: 10, days: 7, docTypes: ["120"])
         #expect(json["schema_version"] as? Int == Api.feedSchemaVersion)
+        #expect(json["days"] as? Int == 7)
+        #expect(json["total"] as? Int == 2)
         #expect(json["doc_types"] as? [String] == ["120"])
         let items = json["items"] as? [[String: Any]]
         #expect(items?.compactMap { $0["doc_id"] as? String } == ["S1", "S3"])
@@ -71,9 +73,10 @@ private func rec(
 
     @Test func updatesRespectLimit() {
         let records = (0..<8).map { rec("S\($0)", submit: "2026-06-2\(7 - $0) 09:00") }
-        let json = assembleFeedUpdates(from: records, limit: 3, docTypes: ["120"])
+        let json = assembleFeedUpdates(from: records, limit: 3, days: 7, docTypes: ["120"])
         let items = json["items"] as? [[String: Any]]
         #expect(items?.count == 3)
+        #expect(json["total"] as? Int == 8)
         #expect(items?.compactMap { $0["doc_id"] as? String } == ["S0", "S1", "S2"])
     }
 

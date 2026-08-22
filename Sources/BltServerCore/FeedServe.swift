@@ -8,10 +8,11 @@ import Logging
 
 /// `GET /v1/feed/updates` の DB 読み取り。
 func serveFeedUpdates(
-    limit: Int, docTypes: [String], db: Database?, logger: Logger
+    limit: Int, days: Int, docTypes: [String], db: Database?, logger: Logger,
+    now: Date = Date()
 ) async -> StoredDataServeResult {
     guard let db else { return .dbUnavailable }
-    let scanLimit = min(limit * Api.feedUpdateOverfetchFactor, Api.feedTrendScanLimit)
+    let cutoff = feedCutoffDateString(days: days, now: now)
     do {
         let records = try await withDbRetry(
             maxAttempts: Api.dbReadRetryMaxAttempts,
@@ -19,9 +20,10 @@ func serveFeedUpdates(
             logger: logger
         ) {
             try await loadFeedRecords(
-                db: db, docTypes: docTypes, since: nil, limit: scanLimit)
+                db: db, docTypes: docTypes, since: cutoff, limit: Api.feedTrendScanLimit)
         }
-        return .ok(assembleFeedUpdates(from: records, limit: limit, docTypes: docTypes))
+        return .ok(assembleFeedUpdates(
+            from: records, limit: limit, days: days, docTypes: docTypes))
     } catch {
         logger.warning("Feed updates の DB 読み取りに失敗: \(error)")
         return .dbUnavailable

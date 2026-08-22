@@ -220,10 +220,11 @@ func registerRoutes(
     // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
     v1.get("feed", "updates") { req async -> Response in
         let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
+        let days = parseFeedDays(req.query[Int.self, at: "days"])
         let docTypes = parseFeedDocTypes(req.query[String.self, at: "doc_type"])
         return await feedJSONResponse(
             await serveFeedUpdates(
-                limit: limit, docTypes: docTypes, db: dbAvailable ? req.db : nil,
+                limit: limit, days: days, docTypes: docTypes, db: dbAvailable ? req.db : nil,
                 logger: req.logger),
             db: dbAvailable ? req.db : nil)
     }

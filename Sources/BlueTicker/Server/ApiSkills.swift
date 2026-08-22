@@ -525,7 +525,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             id: "get-feed-updates",
             name: "開示更新フィード",
             description: """
-                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します。
+                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近7日）。
                 銘柄横断の更新情報です。1 社の書類一覧は get_filings を使ってください。
                 """,
             method: "GET",
@@ -542,6 +542,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     defaultValue: .int(Api.feedLimitDefault)
                 ),
                 ApiSkillParameter(
+                    name: "days",
+                    location: .query,
+                    type: .integer,
+                    description: "集計窓（日。最大 \(Api.feedTrendDaysMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedTrendDaysDefault)
+                ),
+                ApiSkillParameter(
                     name: "doc_type",
                     location: .query,
                     type: .string,
@@ -552,15 +560,17 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0）のみ。
+                窓内の提出日時降順。`total` は窓内の上場提出件数（limit で切る前）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
                 RSS は未提供（REST が契約の正。MCP は追従）。
-                例: GET /v1/feed/updates?limit=20
+                例: GET /v1/feed/updates?days=7&limit=20
                 例: GET /v1/feed/updates?doc_type=120,160
                 """,
             mcpOutputSchema:
                 """
-                {"type":"object","required":["schema_version","items"],"properties":{"schema_version":\
-                {"type":"integer"},"doc_types":{"type":"array","items":{"type":"string"}},"items":\
+                {"type":"object","required":["schema_version","days","total","items"],"properties":\
+                {"schema_version":{"type":"integer"},"days":{"type":"integer"},"total":{"type":"integer"},\
+                "doc_types":{"type":"array","items":{"type":"string"}},"items":\
                 {"type":"array","items":{"type":"object","required":["code","name","doc_id","doc_type",\
                 "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
                 "name":{"type":"string"},"doc_id":{"type":"string"},"doc_type":{"type":"string"},\

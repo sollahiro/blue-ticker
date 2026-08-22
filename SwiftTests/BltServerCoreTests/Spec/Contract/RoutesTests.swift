@@ -651,7 +651,8 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             let (status, json) = try await send(app, "/v1/feed/updates")
             #expect(status == .ok)
             #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
-            #expect(json?["doc_types"] as? [String] == ["120"])
+            #expect(json?["days"] as? Int == 7)
+            #expect(json?["total"] as? Int == 0)
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.isEmpty == true)
         }
@@ -661,21 +662,26 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         try await withApp(databases: true) { app in
             try await seedFeedDocument(
                 app, id: "S-old", secCode: "72030", filer: "トヨタ自動車株式会社",
-                type: "120", submit: "2026-06-01 09:00")
+                type: "120", submit: "2099-01-01 09:00")
             try await seedFeedDocument(
                 app, id: "S-new", secCode: "67580", filer: "ソニーグループ株式会社",
-                type: "120", submit: "2026-06-20 09:00")
+                type: "120", submit: "2099-01-20 09:00")
             try await seedFeedDocument(
                 app, id: "S-unlisted", secCode: nil, filer: "某ファンド",
-                type: "120", submit: "2026-06-21 09:00")
+                type: "120", submit: "2099-01-21 09:00")
             try await seedFeedDocument(
                 app, id: "S-half", secCode: "99840", filer: "ソフトバンクグループ株式会社",
-                type: "160", submit: "2026-06-22 09:00")
+                type: "160", submit: "2099-01-22 09:00")
+            try await seedFeedDocument(
+                app, id: "S-ancient", secCode: "72030", filer: "トヨタ自動車株式会社",
+                type: "120", submit: "2000-01-01 09:00")
 
             let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
             #expect(status == .ok)
+            #expect(json?["days"] as? Int == 7)
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.compactMap { $0["doc_id"] as? String } == ["S-new", "S-old"])
+            #expect(json?["total"] as? Int == 2)
             #expect(items?.first?["code"] as? String == "6758")
             #expect(items?.first?["icon_url"] is NSNull)
 

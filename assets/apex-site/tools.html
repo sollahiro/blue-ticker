@@ -390,9 +390,9 @@
             <div class="catalog-name">開示更新フィード<span class="id">get-feed-updates</span></div>
             <span class="mcp-badge">get_feed_updates</span>
           </div>
-          <p class="catalog-desc">直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します。1社の書類一覧は get_filings。</p>
+          <p class="catalog-desc">直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近7日）。1社の書類一覧は get_filings。</p>
           <div class="catalog-meta">
-            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/updates?limit=20</span></div>
+            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/updates?days=7&amp;limit=20</span></div>
             <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/feed/updates?doc_type=120,160</span></div>
           </div>
         </div>

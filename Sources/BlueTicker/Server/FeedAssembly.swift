@@ -49,17 +49,24 @@ public func listedTickerCode(fromSecCode secCode: String?) -> String? {
 }
 
 /// Feed Update: 提出日時降順の書類ストリーム（1 行 = 1 書類）。
+/// `records` は呼び出し側が窓・種別で絞り、提出日時降順にして渡す。
+/// `total` は窓内の上場提出件数（`limit` で切る前）。
 public func assembleFeedUpdates(
-    from records: [EdinetDocumentRecord], limit: Int, docTypes: [String]
+    from records: [EdinetDocumentRecord], limit: Int, days: Int, docTypes: [String]
 ) -> [String: Any] {
     var items: [[String: Any]] = []
+    var total = 0
     for record in records {
         guard let item = feedFilingItem(from: record) else { continue }
-        items.append(item)
-        if items.count >= limit { break }
+        total += 1
+        if items.count < limit {
+            items.append(item)
+        }
     }
     return [
         "schema_version": Api.feedSchemaVersion,
+        "days": days,
+        "total": total,
         "doc_types": docTypes,
         "items": items,
     ]

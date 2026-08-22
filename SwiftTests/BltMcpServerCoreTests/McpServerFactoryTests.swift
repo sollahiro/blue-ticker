@@ -231,7 +231,7 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
                 == ["code", "doc_id", "note_type", "note"])
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_feed_updates"]))
-                == ["schema_version", "items"])
+                == ["schema_version", "days", "total", "items"])
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_feed_trend"]))
                 == ["schema_version", "days", "items"])

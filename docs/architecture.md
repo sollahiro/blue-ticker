@@ -103,7 +103,7 @@ flowchart LR
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |
 | `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（日経225） |
-| `GET /v1/feed/updates` | Feed Update（直近提出書類。上場・sync 済み） |
+| `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 7 日・上場・sync 済み） |
 | `GET /v1/feed/trend` | Feed Trend（直近の開示件数。顧客検索数ではない） |
 
 エラー封筒: `{"error":...,"status":N}`。
