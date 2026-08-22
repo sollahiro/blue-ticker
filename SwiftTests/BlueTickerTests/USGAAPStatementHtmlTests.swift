@@ -761,6 +761,8 @@ import Foundation
           <tr><td>区分</td><td>前期</td><td>当期</td></tr>
           <tr><td>（資産）</td><td></td><td></td></tr>
           <tr><td>現金および現金同等物</td><td>100</td><td>200</td></tr>
+          <tr><td>定期預金</td><td>50</td><td>80</td></tr>
+          <tr><td>計</td><td>150</td><td>280</td></tr>
           <tr><td>資産合計</td><td>500</td><td>800</td></tr>
         </table>
         <table>
@@ -803,6 +805,11 @@ import Foundation
             html,
             types: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity])
 
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "計" && $0.value == 280_000_000 && $0.isTotal && $0.section == .assets
+                    && $0.components == nil
+            })
         #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 && $0.section == .assets })
         #expect(extracted.balanceSheet.contains { $0.label == "資本金" && $0.section == .netAssets })
         #expect(extracted.balanceSheet.contains { $0.label == "資本合計" && $0.value == 740_000_000 && $0.section == .netAssets })

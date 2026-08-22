@@ -953,6 +953,12 @@ import Foundation
         Self.expectHTMLReadingOrder(year.incomeStatement)
         Self.expectHTMLReadingOrder(year.cashFlow)
 
+        let cashGroup = try #require(year.balanceSheet.first { $0.label == "計" })
+        #expect(cashGroup.value == 5_648_974_000_000)
+        #expect(cashGroup.isTotal == true)
+        #expect(cashGroup.section == .assets)
+        #expect(cashGroup.components == nil)
+        #expect(year.balanceSheet.filter { $0.label == "計" }.allSatisfy(\.isTotal))
         #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 62_645_925_000_000)
         #expect(Self.exactLabelValue(year.balanceSheet, "資本合計") == 3_854_915_000_000)
         #expect(year.balanceSheet.contains { $0.label == "資産合計" && $0.section == .assets })
