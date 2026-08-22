@@ -706,7 +706,7 @@ import Foundation
         #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
     }
 
-    // MARK: - US-GAAP（HTML 経路。結果は要確認）
+    // MARK: - US-GAAP（HTML 経路。富士フイルム S100W3XJ は 2026-08-22 目視済み）
 
     private static func labelValue(
         _ items: [StatementLineItem], containing: String
@@ -760,8 +760,7 @@ import Foundation
         #expect(year.balanceSheet.contains { $0.label == "負債合計" && $0.section == .liabilities })
         #expect(year.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
 
-        #expect(Self.exactLabelValue(year.incomeStatement, "Ⅰ 売上高") == 3_195_828_000_000
-            || Self.labelValue(year.incomeStatement, containing: "売上高") == 3_195_828_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "売上高") == 3_195_828_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "営業利益") == 330_155_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "当社株主帰属当期純利益") == 260_951_000_000)
 
@@ -796,27 +795,26 @@ import Foundation
                 .contains(-72_289_000_000))
 
         // 2026-08-10 レビュー指摘: 入れ子行は当該科目（左）を取り、親小計（右）を取らない。
-        // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。
-        #expect(Self.exactLabelValue(year.balanceSheet, "(4)信用損失引当金") == -15_841_000_000)
-        #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
-        // 空の番号親は末子右セル（内訳合計）から復元する。
-        let receivables = try #require(year.balanceSheet.first { $0.label == "２ 受取債権" })
-        #expect(receivables.value == 699_986_000_000)
-        #expect(receivables.isTotal == true)
-        #expect(receivables.components?.count == 4)
-        let payables = try #require(year.balanceSheet.first { $0.label == "２ 支払債務" })
-        #expect(payables.value == 390_577_000_000)
-        #expect(payables.isTotal == true)
-        #expect(payables.components?.count == 3)
-        #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
-        #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
+        // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。足し算だけの空番号親は行にしない。
+        #expect(
+            year.balanceSheet.contains {
+                $0.label == "信用損失引当金" && $0.value == -15_841_000_000
+            })
+        #expect(Self.exactLabelValue(year.balanceSheet, "関連会社等に対する債務") == 1_672_000_000)
+        #expect(!year.balanceSheet.contains { $0.label == "受取債権" })
+        #expect(!year.balanceSheet.contains { $0.label == "支払債務" })
+        #expect(
+            year.balanceSheet.contains { $0.label == "営業債権" && $0.value == 680_635_000_000 })
+        #expect(Self.exactLabelValue(year.incomeStatement, "研究開発費") == 163_399_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "その他損益・純額") == 12_827_000_000)
         // 法人税等の合計行は無く、当期税＋繰延が親合計（77,595）になる（入れ子右セルは行値にしない）。
-        #expect(Self.exactLabelValue(year.incomeStatement, "１ 法人税・住民税及び事業税") == 81_809_000_000)
-        #expect(Self.exactLabelValue(year.incomeStatement, "２ 法人税等調整額") == -4_214_000_000)
-        #expect(Self.exactLabelValue(year.cashFlow, "(6) その他") == -21_377_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "法人税・住民税及び事業税") == 81_809_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "法人税等調整額") == -4_214_000_000)
+        #expect(
+            year.cashFlow.contains { $0.label == "その他" && $0.value == -21_377_000_000 })
         #expect(
             Self.labelValue(year.cashFlow, containing: "関連会社投融資") == -42_000_000)
-        #expect(Self.labelValue(year.cashFlow, containing: "９ 事業の売却") == 0)
+        #expect(Self.labelValue(year.cashFlow, containing: "事業の売却") == 0)
         // 2026-08-10 監査指摘: 「現金及び現金同等物」を含む投資区分の明細行が誤って
         // section=nil（期首/期末残高等の tail 扱い）にならないことを実データで固定する。
         #expect(Self.labelValue(year.cashFlow, containing: "事業の買収") == -3_873_000_000)
@@ -836,12 +834,10 @@ import Foundation
         // 「Ⅸ 利益剰余金から...」は前期(2023/4→2024/3)分の行のため、SS年度分離修正
         // （2026-08-10）後は year.changesInEquity（当期のみ）に含まれない。
         #expect(
-            Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
+            Self.labelValue(year.changesInEquity, containing: "資本剰余金から") == 0)
 
-        // 富士フイルムのキヤノン型（合計直後の内訳）は無い。空番号親の復元行だけ components を持つ。
-        #expect(
-            Set(year.balanceSheet.filter { $0.components != nil }.compactMap(\.label))
-                == ["２ 受取債権", "２ 支払債務"])
+        // 富士フイルムは内訳→合計型。キヤノン型 components も空番号親の復元も無い。
+        #expect(year.balanceSheet.allSatisfy { $0.components == nil })
         #expect(year.incomeStatement.allSatisfy { $0.components == nil })
         #expect(year.cashFlow.allSatisfy { $0.components == nil })
     }
@@ -871,7 +867,7 @@ import Foundation
             Self.labelValue(year.incomeStatement, containing: "当社株主に帰属する")
                 == 332_053_000_000)
         // 当期「-」→ 0（前期 165,100 百万円を拾わない）
-        #expect(Self.exactLabelValue(year.incomeStatement, "３ のれんの減損損失") == 0)
+        #expect(Self.exactLabelValue(year.incomeStatement, "のれんの減損損失") == 0)
         // 2026-08-10 監査指摘: EPS 行（実データ確認: 367.48円/367.25円）が円建てのまま
         // （百万円換算されず）unit=JPYPerShares・isTotal=false で出ることを実データで固定する。
         #expect(

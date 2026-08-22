@@ -8,6 +8,23 @@ import Foundation
 @Suite struct USGAAPStatementHtmlTests {
 
     @Test
+    func displayLabelStripsOutlineNumbersButKeepsYearsAndPerShare() {
+        #expect(USGAAPStatementHtml.displayLabel("１ 資本金") == "資本金")
+        #expect(USGAAPStatementHtml.displayLabel("(4)信用損失引当金") == "信用損失引当金")
+        #expect(USGAAPStatementHtml.displayLabel("(3) 関連会社等に対する債務") == "関連会社等に対する債務")
+        #expect(USGAAPStatementHtml.displayLabel("Ⅰ 売上高") == "売上高")
+        #expect(USGAAPStatementHtml.displayLabel("ⅩⅧ 資本剰余金から") == "資本剰余金から")
+        #expect(USGAAPStatementHtml.displayLabel("①営業債権") == "営業債権")
+        #expect(USGAAPStatementHtml.displayLabel("１０その他") == "その他")
+        #expect(USGAAPStatementHtml.displayLabel("１.当期純利益") == "当期純利益")
+        #expect(
+            USGAAPStatementHtml.displayLabel("１株当たり当社株主帰属当期純利益")
+                == "１株当たり当社株主帰属当期純利益")
+        #expect(USGAAPStatementHtml.displayLabel("2024年３月31日現在残高") == "2024年３月31日現在残高")
+        #expect(USGAAPStatementHtml.displayLabel("３ヶ月以内") == "３ヶ月以内")
+    }
+
+    @Test
     func extractsBalanceSheetIncomeAndCashFlowFromMinimalHtml() throws {
         let html = """
         <html><body>
@@ -86,7 +103,7 @@ import Foundation
 
         #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 })
         #expect(extracted.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
-        #expect(extracted.balanceSheet.contains { $0.label == "１ 資本金" && $0.section == .netAssets })
+        #expect(extracted.balanceSheet.contains { $0.label == "資本金" && $0.section == .netAssets })
         #expect(extracted.incomeStatement.contains { $0.label?.contains("売上高") == true && $0.value == 1_200_000_000 })
         #expect(extracted.incomeStatement.contains { $0.label == "営業利益" && $0.value == 150_000_000 })
         #expect(
@@ -170,18 +187,18 @@ import Foundation
                     .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
                 ]))
 
-        #expect(extracted.balanceSheet.contains { $0.label == "(4)信用損失引当金" && $0.value == -15_841_000_000 })
-        #expect(extracted.balanceSheet.contains { $0.label == "(3) 関連会社等に対する債務" && $0.value == 1_672_000_000 })
-        #expect(extracted.incomeStatement.contains { $0.label == "２ 研究開発費" && $0.value == 163_399_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "(6) その他" && $0.value == -21_377_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "７ 関連会社投融資" && $0.value == -42_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "９ 事業の売却" && $0.value == 0 })
+        #expect(extracted.balanceSheet.contains { $0.label == "信用損失引当金" && $0.value == -15_841_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "関連会社等に対する債務" && $0.value == 1_672_000_000 })
+        #expect(extracted.incomeStatement.contains { $0.label == "研究開発費" && $0.value == 163_399_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "その他" && $0.value == -21_377_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "関連会社投融資" && $0.value == -42_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "事業の売却" && $0.value == 0 })
         #expect(extracted.changesInEquity.contains { $0.label == "振替" && $0.value == 0 })
     }
 
     @Test
-    func emptyArabParentIsRestoredFromLastChildRightSubtotal() throws {
-        // 富士フイルム: 「２ 受取債権」は金額なし。小計 699,986 は末子の当期右セル。
+    func emptyArabParentIsOmittedChildrenKeepLineAmounts() throws {
+        // 富士フイルム: 「２ 受取債権」は金額なし。小計は末子の右セルだが、足し算親は行にしない。
         let html = """
         <html><body>
         <table>
@@ -231,19 +248,11 @@ import Foundation
                     .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
                 ]))
 
-        let parent = try #require(extracted.balanceSheet.first { $0.label == "２ 受取債権" })
-        #expect(parent.value == 699_986_000_000)
-        #expect(parent.isTotal == true)
-        #expect(parent.section == .assets)
-        let comps = try #require(parent.components)
-        #expect(comps.count == 4)
-        #expect(comps.allSatisfy { $0.weight == 1 })
-
-        let labels = extracted.balanceSheet.map(\.label)
-        #expect(labels.firstIndex(of: "２ 受取債権")! < labels.firstIndex(of: "(1)営業債権")!)
-        #expect(extracted.balanceSheet.contains { $0.label == "(1)営業債権" && $0.value == 680_635_000_000 })
-        #expect(extracted.balanceSheet.contains { $0.label == "(4)信用損失引当金" && $0.value == -15_841_000_000 })
-        #expect(extracted.balanceSheet.contains { $0.label == "３ 棚卸資産" && $0.value == 543_976_000_000 })
+        #expect(!extracted.balanceSheet.contains { $0.label == "受取債権" })
+        #expect(extracted.balanceSheet.allSatisfy { $0.components == nil })
+        #expect(extracted.balanceSheet.contains { $0.label == "営業債権" && $0.value == 680_635_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "信用損失引当金" && $0.value == -15_841_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "棚卸資産" && $0.value == 543_976_000_000 })
     }
 
     @Test
@@ -370,7 +379,7 @@ import Foundation
                     .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
                 ]))
 
-        #expect(extracted.incomeStatement.contains { $0.label == "３ のれんの減損損失" && $0.value == 0 })
+        #expect(extracted.incomeStatement.contains { $0.label == "のれんの減損損失" && $0.value == 0 })
         #expect(extracted.cashFlow.contains { $0.label == "のれんの減損損失" && $0.value == 0 })
         #expect(extracted.changesInEquity.contains { $0.label == "利益準備金への振替" && $0.value == 0 })
     }

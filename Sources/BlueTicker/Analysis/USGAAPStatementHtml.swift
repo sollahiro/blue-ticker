@@ -11,9 +11,10 @@
 // 0 始まりの通し番号で付与する（`XBRLUtils.loadPresentationOrder` の DFS 通し番号と同型）。
 // 金額の無い区分見出し行は行にしないため、番号は出力行だけで密になる。
 //
-// `components`: calculation linkbase が無いため、次の2型だけ合成 tag で付与する。
-// キヤノン型（「…合計」の直後内訳が親金額と一致）。富士フイルム型（空の番号親＋`(1)` 内訳、
-// 末子の当期右セルが内訳合計と一致 → 親行を復元）。それ以外の「内訳→合計」は対象外。
+// `components`: calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が
+// 親金額と一致）のときだけ合成 tag で付与する。内訳が合計の前に来る型（富士フイルムの
+// 空番号親＋右セル小計）は、足し算で復元できる親なので行にしない。
+// 表示ラベルは項番・括弧番号を落とす（分類・is_total は元ラベル）。
 
 import Foundation
 import SwiftSoup
@@ -100,7 +101,91 @@ enum USGAAPStatementHtml {
             || (statementTypes.contains(.cashFlow) && !cashFlow.isEmpty)
             || (statementTypes.contains(.changesInEquity) && !changesInEquity.isEmpty)
         guard any else { return nil }
+        polishDisplayLabels(&balanceSheet)
+        polishDisplayLabels(&incomeStatement)
+        polishDisplayLabels(&cashFlow)
+        polishDisplayLabels(&changesInEquity)
         return (balanceSheet, incomeStatement, cashFlow, changesInEquity)
+    }
+
+    /// components 結線のあとで項番だけ落とす（キヤノン型の番号打ち切りを壊さない）。
+    private static func polishDisplayLabels(_ items: inout [StatementLineItem]) {
+        for i in items.indices {
+            if let label = items[i].label {
+                items[i].label = displayLabel(label)
+            }
+        }
+    }
+
+    /// 項番・括弧番号・丸数字を先頭から落とす。西暦と「１株当たり」は残す。
+    static func displayLabel(_ label: String) -> String {
+        var s = label
+        var previous = ""
+        while s != previous {
+            previous = s
+            s = stripOneOutlinePrefix(s)
+        }
+        return s
+    }
+
+    private static let circledNumbers: Set<Unicode.Scalar> = [
+        "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
+        "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳",
+    ]
+
+    private static let parenOutlineRegex = try! NSRegularExpression(
+        pattern: #"^[\(（]\s*[0-9０-９]{1,2}\s*[\)）]\s*"#
+    )
+
+    private static func stripOneOutlinePrefix(_ label: String) -> String {
+        let s = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let full = NSRange(s.startIndex..., in: s)
+        if let match = parenOutlineRegex.firstMatch(in: s, range: full),
+           let range = Range(match.range, in: s)
+        {
+            return s[range.upperBound...].trimmingCharacters(in: .whitespaces)
+        }
+        if let first = s.unicodeScalars.first, circledNumbers.contains(first) {
+            var rest = String(s.unicodeScalars.dropFirst())
+            if rest.first == " " || rest.first == "　" { rest = String(rest.dropFirst()) }
+            let trimmed = rest.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        let afterRoman = USGAAPHtml.stripSectionPrefix(s)
+        if afterRoman != s, !afterRoman.isEmpty { return afterRoman }
+        return stripArabOutline(s) ?? s
+    }
+
+    private static func isArabDigit(_ u: Unicode.Scalar) -> Bool {
+        ("0"..."9").contains(u) || ("０"..."９").contains(u)
+    }
+
+    private static func stripArabOutline(_ label: String) -> String? {
+        let scalars = Array(label.unicodeScalars)
+        var i = 0
+        while i < scalars.count, i < 2, isArabDigit(scalars[i]) { i += 1 }
+        guard (i == 1 || i == 2), i < scalars.count else { return nil }
+        let next = scalars[i]
+        if next == " " || next == "　" {
+            return String(String.UnicodeScalarView(scalars[(i + 1)...]))
+                .trimmingCharacters(in: .whitespaces)
+        }
+        if next == "." || next == "．" {
+            var j = i + 1
+            while j < scalars.count, scalars[j] == " " || scalars[j] == "　" { j += 1 }
+            guard j < scalars.count, scalars[j] != "株" else { return nil }
+            return String(String.UnicodeScalarView(scalars[j...]))
+                .trimmingCharacters(in: .whitespaces)
+        }
+        // 「１株当たり」「2024年…」「３ヶ月以内」は項番ではない。
+        if next == "株" || next == "年" || next == "月"
+            || next == "ヶ" || next == "か" || next == "カ" || next == "箇"
+            || next == "," || next == "，"
+        {
+            return nil
+        }
+        if isArabDigit(next) { return nil }
+        return String(String.UnicodeScalarView(scalars[i...])).trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - File discovery
@@ -221,53 +306,6 @@ enum USGAAPStatementHtml {
         var section = startingSection
         var order = startingOrder
         var items: [StatementLineItem] = []
-        var pendingArabParent: (label: String, section: StatementLineSection)?
-        var groupChildren: [(item: StatementLineItem, groupSubtotal: Double?)] = []
-
-        func flushGroupedChildren() {
-            defer {
-                pendingArabParent = nil
-                groupChildren = []
-            }
-            let children = groupChildren.map(\.item)
-            let childSum = children.reduce(0.0) { $0 + $1.value }
-            if let parent = pendingArabParent,
-               let subtotal = groupChildren.last?.groupSubtotal,
-               !children.isEmpty,
-               abs(childSum - subtotal) < 0.5
-            {
-                let parentOrder = order
-                order += 1
-                let childComponents = children.indices.map { i in
-                    StatementLineComponent(
-                        tag: syntheticTag(.balanceSheet, order: parentOrder + 1 + i), weight: 1)
-                }
-                items.append(
-                    StatementLineItem(
-                        tag: syntheticTag(.balanceSheet, order: parentOrder),
-                        label: parent.label,
-                        value: subtotal,
-                        unit: "JPY",
-                        order: parentOrder,
-                        section: parent.section,
-                        isTotal: true,
-                        components: childComponents))
-            }
-            for child in children {
-                let itemOrder = order
-                order += 1
-                items.append(
-                    StatementLineItem(
-                        tag: syntheticTag(.balanceSheet, order: itemOrder),
-                        label: child.label,
-                        value: child.value,
-                        unit: child.unit,
-                        order: itemOrder,
-                        section: child.section,
-                        isTotal: child.isTotal,
-                        components: child.components))
-            }
-        }
 
         for row in rows {
             let raw = rowLabel(row)
@@ -275,58 +313,33 @@ enum USGAAPStatementHtml {
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
 
             if isAssetsSectionHeader(label) {
-                flushGroupedChildren()
                 section = .assets
                 continue
             }
             if isLiabilitiesSectionHeader(label) {
-                flushGroupedChildren()
                 section = .liabilities
                 continue
             }
             if isNetAssetsSectionHeader(label) {
-                flushGroupedChildren()
                 section = .netAssets
                 continue
             }
             if shouldSkipMetaRow(label) { continue }
 
-            if let parsed = currentLineAndGroupSubtotal(from: row) {
-                if pendingArabParent != nil, isParentheticalChildLabel(label) {
-                    let draft = StatementLineItem(
-                        tag: "",
-                        label: label,
-                        value: parsed.line,
-                        unit: "JPY",
-                        order: nil,
-                        section: section,
-                        isTotal: isTotalLabel(label, sectionType: .balanceSheet),
-                        components: nil)
-                    groupChildren.append((draft, parsed.groupSubtotal))
-                    continue
-                }
-                flushGroupedChildren()
-                let itemOrder = order
-                order += 1
-                items.append(
-                    StatementLineItem(
-                        tag: syntheticTag(.balanceSheet, order: itemOrder),
-                        label: label,
-                        value: parsed.line,
-                        unit: "JPY",
-                        order: itemOrder,
-                        section: section,
-                        isTotal: isTotalLabel(label, sectionType: .balanceSheet),
-                        components: nil))
-                continue
-            }
-
-            if isArabNumberedLabel(label) {
-                flushGroupedChildren()
-                pendingArabParent = (label, section)
-            }
+            guard let yen = currentYenValue(row) else { continue }
+            let itemOrder = order
+            order += 1
+            items.append(
+                StatementLineItem(
+                    tag: syntheticTag(.balanceSheet, order: itemOrder),
+                    label: label,
+                    value: yen,
+                    unit: "JPY",
+                    order: itemOrder,
+                    section: section,
+                    isTotal: isTotalLabel(label, sectionType: .balanceSheet),
+                    components: nil))
         }
-        flushGroupedChildren()
         attachCanonStyleFollowingComponents(&items)
         return items
     }
@@ -564,20 +577,6 @@ enum USGAAPStatementHtml {
         guard let line = filled.first else { return nil }
         let group = filled.count >= 2 ? filled[1] : nil
         return (line, group)
-    }
-
-    /// `２ 受取債権` のようなアラビア数字の本表行。`Ⅰ 流動資産` は対象外。
-    private static func isArabNumberedLabel(_ label: String) -> Bool {
-        guard let marker = leadingMajorMarker(label), let first = marker.unicodeScalars.first else {
-            return false
-        }
-        return ("0"..."9").contains(first) || ("０"..."９").contains(first)
-    }
-
-    /// `(1)営業債権` / `（1）` の内訳行。
-    private static func isParentheticalChildLabel(_ label: String) -> Bool {
-        let t = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.hasPrefix("(") || t.hasPrefix("（")
     }
 
     /// セルを金額スロットにする。`－` 類は 0、空・注記・非数値は nil。

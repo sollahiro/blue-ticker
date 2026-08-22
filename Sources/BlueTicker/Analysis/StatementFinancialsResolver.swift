@@ -451,15 +451,12 @@ enum StatementFinancialsResolver {
         return last.map { -$0 }
     }
 
-    /// US-GAAP 売掛相当。単一行（受取債権 / 売上債権）を優先し、無ければ流動資産内の
-    /// 債権内訳を合算する。富士フイルムは空の「２ 受取債権」を末子右セルから復元する。
+    /// US-GAAP 売掛相当。単一行（受取債権合計 / 売上債権）を優先し、無ければ流動資産内の
+    /// 債権内訳を合算する（富士フイルム型。足し算親は行にしない）。
     private static func resolveUSGAAPAccountsReceivable(_ items: [StatementLineItem]) -> Double? {
         for item in items {
             guard let label = item.label else { continue }
             if label.contains("受取債権合計") { return item.value }
-            if item.isTotal && label.contains("受取債権") && !label.contains("長期") {
-                return item.value
-            }
         }
         for item in items {
             guard let label = item.label else { continue }
@@ -477,9 +474,7 @@ enum StatementFinancialsResolver {
         for item in items {
             guard let label = item.label else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
-            if stripped == "買入債務" || stripped.hasSuffix("買入債務") || label.contains("買入債務合計")
-                || (item.isTotal && label.contains("支払債務"))
-            {
+            if stripped == "買入債務" || stripped.hasSuffix("買入債務") || label.contains("買入債務合計") {
                 return item.value
             }
         }
@@ -538,7 +533,7 @@ enum StatementFinancialsResolver {
         }
     }
 
-    /// 富士フイルム型「Ⅰ 売上高」を優先し、キヤノン型（製品/サービス内訳の後の「合計」）へフォールバック。
+    /// 富士フイルム型「売上高」を優先し、キヤノン型（製品/サービス内訳の後の「合計」）へフォールバック。
     private static func resolveUSGAAPSales(_ items: [StatementLineItem]) -> Double? {
         for item in items {
             guard let label = item.label, item.unit != "JPYPerShares" else { continue }
