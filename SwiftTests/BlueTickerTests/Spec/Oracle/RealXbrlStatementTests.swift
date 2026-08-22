@@ -1390,6 +1390,19 @@ import Foundation
                 $0.label == "資本金" && $0.value == 221_111_000_000 && $0.section == .netAssets
             })
         #expect(
+            year.balanceSheet.contains {
+                $0.label == "その他の包括利益累計額 小計" && $0.value == 605_110_000_000
+                    && $0.section == .netAssets && $0.isTotal
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.label == "営業収益 計" && $0.value == 3_330_831_000_000 && $0.isTotal
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.label == "営業費用 計" && $0.value == 2_874_583_000_000 && $0.isTotal
+            })
+        #expect(
             year.changesInEquity.contains {
                 ($0.label ?? "").contains("2026年３月31日") && $0.value == 4_573_068_000_000
             })

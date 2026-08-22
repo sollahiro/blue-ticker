@@ -889,8 +889,14 @@ enum USGAAPStatementHtml {
 
     private static func isTotalLabel(_ label: String, sectionType: StatementSectionType) -> Bool {
         let s = USGAAPHtml.stripSectionPrefix(label)
-        // 野村: 区分小計は「計」1文字、PL の費用小計は「費用計」。それ以外の語尾「〜計」は見ない。
-        if s.contains("合計") || s == "計" || s.hasSuffix("費用計") { return true }
+        // 野村: 区分小計は「計」1文字、PL の費用小計は「費用計」。
+        // オリックス: 「営業収益 計」「その他の包括利益累計額 小計」（空白+計 / 小計）。
+        // 語尾「〜計」一般（累計額 等）は見ない。
+        if s.contains("合計") || s.contains("小計") || s == "計" || s.hasSuffix("費用計")
+            || s.hasSuffix(" 計")
+        {
+            return true
+        }
         switch sectionType {
         case .incomeStatement:
             return s == "営業利益" || s == "売上総利益" || s.contains("当期純利益")

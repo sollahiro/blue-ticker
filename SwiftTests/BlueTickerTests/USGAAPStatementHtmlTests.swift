@@ -655,6 +655,7 @@ import Foundation
           <tr><td>負債合計</td><td></td><td>12,691,036</td><td>13,378,965</td></tr>
           <tr><td>資本の部</td><td></td><td></td><td></td></tr>
           <tr><td>資本金</td><td>23</td><td>221,111</td><td>221,111</td></tr>
+          <tr><td>その他の包括利益累計額 小計</td><td></td><td>341,298</td><td>605,110</td></tr>
           <tr><td>資本合計</td><td></td><td>4,171,783</td><td>4,573,068</td></tr>
         </table>
         </body></html>
@@ -669,7 +670,43 @@ import Foundation
             })
         #expect(bs.contains { $0.label == "その他" && $0.value == 60_000_000 })
         #expect(bs.contains { $0.label == "資本金" && $0.value == 221_111_000_000 && $0.section == .netAssets })
+        #expect(
+            bs.contains {
+                $0.label == "その他の包括利益累計額 小計" && $0.value == 605_110_000_000
+                    && $0.section == .netAssets && $0.isTotal
+            })
         #expect(bs.contains { $0.label == "資本合計" && $0.value == 4_573_068_000_000 && $0.section == .netAssets })
+    }
+
+    @Test
+    func spacedKeiAndShokeiLabelsAreTotals() throws {
+        // 実データ確認（オリックス）: 「営業収益 計」「営業費用 計」は空白+「計」、
+        // 「その他の包括利益累計額 小計」は「小計」。1文字の「計」や「費用計」には一致しない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>金融収益</td><td>300,000</td><td>365,570</td></tr>
+          <tr><td>商品および不動産売上高</td><td>400,000</td><td>442,586</td></tr>
+          <tr><td>サービス収入</td><td>1,000,000</td><td>1,112,383</td></tr>
+          <tr><td>営業収益 計</td><td>3,000,000</td><td>3,330,831</td></tr>
+          <tr><td>支払利息</td><td>180,000</td><td>193,889</td></tr>
+          <tr><td>営業費用 計</td><td>2,700,000</td><td>2,874,583</td></tr>
+          <tr><td>営業利益</td><td>400,000</td><td>456,248</td></tr>
+          <tr><td>当期純利益</td><td>400,000</td><td>458,328</td></tr>
+        </table>
+        </body></html>
+        """
+        let pl = try extractFromHTML(html, types: [.incomeStatement]).incomeStatement
+        #expect(
+            pl.contains {
+                $0.label == "営業収益 計" && $0.value == 3_330_831_000_000 && $0.isTotal
+            })
+        #expect(
+            pl.contains {
+                $0.label == "営業費用 計" && $0.value == 2_874_583_000_000 && $0.isTotal
+            })
+        #expect(pl.contains { $0.label == "金融収益" && $0.isTotal == false })
     }
 
     @Test
