@@ -729,10 +729,12 @@ import Foundation
         </table>
         <table>
           <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>負債の部</td><td></td><td></td></tr>
           <tr><td>短期借入債務</td><td>500,000</td><td>572,235</td></tr>
           <tr><td>預金</td><td>2,000,000</td><td>2,625,556</td></tr>
           <tr><td>負債合計</td><td>10,000,000</td><td>13,378,965</td></tr>
-          <tr><td>資産合計</td><td>15,000,000</td><td>18,002,776</td></tr>
+          <tr><td>資本の部</td><td></td><td></td></tr>
+          <tr><td>資本合計</td><td>4,000,000</td><td>4,573,068</td></tr>
         </table>
         </body></html>
         """
