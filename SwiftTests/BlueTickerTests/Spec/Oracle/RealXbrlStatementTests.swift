@@ -25,12 +25,14 @@
 // - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
 // smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
 // 「US-GAAP（HTML 経路）」で golden 化（0105010 HTML→行。`USGAAPStatementHtml`）。
-        // 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
-        // 富士フイルムは内訳→合計型のため同規則では `components` なし。
-        // 2026-08-22、最新年度で HTML 本表が空/部分欠測だった US-GAAP 4社を追加
-        // （野村 S100YC5C、オムロン S100YG81、小松 S100YD25、オリックス S100YG5L）。
-        // 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
-        // オムロンは BS/PL/CF/SS 全行（CF は operating/investing/financing、SS は科目横で section=nil）。
+// 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
+// 富士フイルムは内訳→合計型のため同規則では `components` なし。
+// 2026-08-22、最新年度で HTML 本表が空/部分欠測だった US-GAAP 4社を追加
+// （野村 S100YC5C、オムロン S100YG81、小松 S100YD25、オリックス S100YG5L）。
+// 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
+// オムロンは BS/PL/CF/SS 全行（CF は operating/investing/financing、SS は科目横で section=nil）。
+// 小松は BS 39 / PL 21 / CF 31 / SS 12 行。オリックスは残高ラベルに加え
+// BS の短期借入債務・預金（注記番号「15,32」等が金額化して行落ちしていた）。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -1233,20 +1235,136 @@ import Foundation
     }
 
     @Test
-    func komatsuUSGAAPStatementExtractsEquityOpenAndCloseBalances() async throws {
+    func komatsuUSGAAPStatementExtractsIncomeAndEquityRows() async throws {
         guard await Self.ensureAvailable("S100YD25") else { return }
         let year = try Self.requireResolved(
             await Self.analyzer().extract(
                 docID: "S100YD25",
                 statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]))
 
+        Self.expectHTMLReadingOrder(year.balanceSheet)
+        Self.expectHTMLReadingOrder(year.incomeStatement)
+        Self.expectHTMLReadingOrder(year.cashFlow)
         Self.expectHTMLReadingOrder(year.changesInEquity)
-        #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 6_423_941_000_000)
-        #expect(Self.exactLabelValue(year.changesInEquity, "期末残高") == 3_708_427_000_000)
-        let ssOpen = year.changesInEquity.first { $0.label == "期首残高" }
-        let ssClose = year.changesInEquity.first { $0.label == "期末残高" }
-        #expect(ssOpen?.order != nil && ssClose?.order != nil)
-        #expect(ssOpen!.order! < ssClose!.order!)
+
+        let expectedBS: [StatementGoldenRow] = [
+            .init(label: "現金及び現金同等物", section: "assets", value: 439_701_000_000, isTotal: false),
+            .init(label: "受取手形及び売掛金", section: "assets", value: 1_406_411_000_000, isTotal: false),
+            .init(label: "棚卸資産", section: "assets", value: 1_601_883_000_000, isTotal: false),
+            .init(label: "その他の流動資産", section: "assets", value: 240_203_000_000, isTotal: false),
+            .init(label: "流動資産合計", section: "assets", value: 3_688_198_000_000, isTotal: true),
+            .init(label: "長期売上債権", section: "assets", value: 930_412_000_000, isTotal: false),
+            .init(label: "関連会社に対する投資及び貸付金", section: "assets", value: 91_349_000_000, isTotal: false),
+            .init(label: "投資有価証券", section: "assets", value: 12_906_000_000, isTotal: false),
+            .init(label: "その他", section: "assets", value: 60_000_000, isTotal: false),
+            .init(label: "投資合計", section: "assets", value: 104_315_000_000, isTotal: true),
+            .init(label: "有形固定資産 －減価償却累計額控除後", section: "assets", value: 982_429_000_000, isTotal: false),
+            .init(label: "オペレーティングリース使用権資産", section: "assets", value: 75_566_000_000, isTotal: false),
+            .init(label: "営業権", section: "assets", value: 272_823_000_000, isTotal: false),
+            .init(label: "その他の無形固定資産", section: "assets", value: 169_345_000_000, isTotal: false),
+            .init(label: "繰延税金及びその他の資産", section: "assets", value: 200_853_000_000, isTotal: false),
+            .init(label: "資産合計", section: "assets", value: 6_423_941_000_000, isTotal: true),
+            .init(label: "短期債務", section: "liabilities", value: 553_550_000_000, isTotal: false),
+            .init(label: "長期債務 －１年以内期限到来分", section: "liabilities", value: 136_050_000_000, isTotal: false),
+            .init(label: "支払手形及び買掛金", section: "liabilities", value: 355_475_000_000, isTotal: false),
+            .init(label: "未払法人税等", section: "liabilities", value: 62_229_000_000, isTotal: false),
+            .init(label: "短期オペレーティングリース負債", section: "liabilities", value: 22_563_000_000, isTotal: false),
+            .init(label: "その他の流動負債", section: "liabilities", value: 617_550_000_000, isTotal: false),
+            .init(label: "流動負債合計", section: "liabilities", value: 1_747_417_000_000, isTotal: true),
+            .init(label: "長期債務", section: "liabilities", value: 651_431_000_000, isTotal: false),
+            .init(label: "退職給付債務", section: "liabilities", value: 62_766_000_000, isTotal: false),
+            .init(label: "長期オペレーティングリース負債", section: "liabilities", value: 55_959_000_000, isTotal: false),
+            .init(label: "繰延税金及びその他の負債", section: "liabilities", value: 197_941_000_000, isTotal: false),
+            .init(label: "固定負債合計", section: "liabilities", value: 968_097_000_000, isTotal: true),
+            .init(label: "負債合計", section: "liabilities", value: 2_715_514_000_000, isTotal: true),
+            .init(label: "資本金", section: "net_assets", value: 70_317_000_000, isTotal: false),
+            .init(label: "資本剰余金", section: "net_assets", value: 137_424_000_000, isTotal: false),
+            .init(label: "利益準備金", section: "net_assets", value: 49_711_000_000, isTotal: false),
+            .init(label: "その他の剰余金", section: "net_assets", value: 2_685_736_000_000, isTotal: false),
+            .init(label: "その他の包括利益（△損失）累計額", section: "net_assets", value: 678_310_000_000, isTotal: false),
+            .init(label: "自己株式", section: "net_assets", value: -110_730_000_000, isTotal: false),
+            .init(label: "株主資本合計", section: "net_assets", value: 3_510_768_000_000, isTotal: true),
+            .init(label: "非支配持分", section: "net_assets", value: 197_659_000_000, isTotal: false),
+            .init(label: "純資産合計", section: "net_assets", value: 3_708_427_000_000, isTotal: true),
+            .init(label: "負債及び純資産合計", section: nil, value: 6_423_941_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.balanceSheet) == expectedBS)
+
+        let expectedPL: [StatementGoldenRow] = [
+            .init(label: "売上高", section: nil, value: 4_132_751_000_000, isTotal: false),
+            .init(label: "売上原価", section: nil, value: 2_872_897_000_000, isTotal: false),
+            .init(label: "販売費及び一般管理費", section: nil, value: 688_688_000_000, isTotal: false),
+            .init(label: "長期性資産等の減損", section: nil, value: 3_852_000_000, isTotal: false),
+            .init(label: "その他の営業収益（△費用）", section: nil, value: 9_000_000, isTotal: false),
+            .init(label: "営業利益", section: nil, value: 567_323_000_000, isTotal: true),
+            .init(label: "受取利息及び配当金", section: nil, value: 24_850_000_000, isTotal: false),
+            .init(label: "支払利息", section: nil, value: -53_334_000_000, isTotal: false),
+            .init(label: "その他（純額）", section: nil, value: -1_581_000_000, isTotal: false),
+            .init(label: "合計", section: nil, value: -30_065_000_000, isTotal: true),
+            .init(label: "税引前当期純利益", section: nil, value: 537_258_000_000, isTotal: true),
+            .init(label: "当期分", section: nil, value: 142_549_000_000, isTotal: false),
+            .init(label: "繰延分", section: nil, value: 3_060_000_000, isTotal: false),
+            .init(label: "合計", section: nil, value: 145_609_000_000, isTotal: true),
+            .init(label: "持分法投資損益調整前当期純利益", section: nil, value: 391_649_000_000, isTotal: true),
+            .init(label: "持分法投資損益", section: nil, value: 10_039_000_000, isTotal: false),
+            .init(label: "当期純利益", section: nil, value: 401_688_000_000, isTotal: true),
+            .init(label: "控除：非支配持分に帰属する当期純利益", section: nil, value: 25_297_000_000, isTotal: true),
+            .init(label: "当社株主に帰属する当期純利益", section: nil, value: 376_391_000_000, isTotal: true),
+            .init(label: "基本的", section: nil, value: 413.9, isTotal: false),
+            .init(label: "希薄化後", section: nil, value: 413.9, isTotal: false),
+        ]
+        #expect(Self.statementGoldenRows(year.incomeStatement) == expectedPL)
+
+        let expectedCF: [StatementGoldenRow] = [
+            .init(label: "当期純利益", section: "operating", value: 401_688_000_000, isTotal: false),
+            .init(label: "減価償却費等", section: "operating", value: 161_830_000_000, isTotal: false),
+            .init(label: "法人税等繰延分", section: "operating", value: 3_060_000_000, isTotal: false),
+            .init(label: "投資有価証券評価損益及び減損", section: "operating", value: -1_176_000_000, isTotal: false),
+            .init(label: "固定資産売却損益", section: "operating", value: -2_561_000_000, isTotal: false),
+            .init(label: "固定資産廃却損", section: "operating", value: 3_517_000_000, isTotal: false),
+            .init(label: "長期性資産等の減損", section: "operating", value: 3_852_000_000, isTotal: false),
+            .init(label: "未払退職金及び退職給付債務の増減", section: "operating", value: 217_000_000, isTotal: false),
+            .init(label: "受取手形及び売掛金の増加", section: "operating", value: -83_140_000_000, isTotal: false),
+            .init(label: "棚卸資産の増減", section: "operating", value: -49_360_000_000, isTotal: false),
+            .init(label: "支払手形及び買掛金の増加", section: "operating", value: 143_000_000, isTotal: false),
+            .init(label: "未払法人税等の増減", section: "operating", value: -26_795_000_000, isTotal: false),
+            .init(label: "その他（純額）", section: "operating", value: 37_688_000_000, isTotal: false),
+            .init(label: "営業活動による現金及び現金同等物の増加（純額）", section: "operating", value: 448_963_000_000, isTotal: true),
+            .init(label: "固定資産の購入", section: "investing", value: -212_261_000_000, isTotal: false),
+            .init(label: "固定資産の売却", section: "investing", value: 18_778_000_000, isTotal: false),
+            .init(label: "投資有価証券等の購入", section: "investing", value: -1_082_000_000, isTotal: false),
+            .init(label: "子会社株式及び事業等の取得（現金取得額との純額）", section: "investing", value: -13_424_000_000, isTotal: false),
+            .init(label: "その他（純額）", section: "investing", value: 8_757_000_000, isTotal: false),
+            .init(label: "投資活動による現金及び現金同等物の減少（純額）", section: "investing", value: -199_232_000_000, isTotal: true),
+            .init(label: "満期日が３カ月超の借入債務による調達", section: "financing", value: 905_072_000_000, isTotal: false),
+            .init(label: "満期日が３カ月超の借入債務の返済", section: "financing", value: -884_071_000_000, isTotal: false),
+            .init(label: "満期日が３カ月以内の借入債務の増減（純額）", section: "financing", value: 81_214_000_000, isTotal: false),
+            .init(label: "自己株式の売却及び取得（純額）", section: "financing", value: -105_720_000_000, isTotal: false),
+            .init(label: "配当金支払", section: "financing", value: -185_142_000_000, isTotal: false),
+            .init(label: "その他（純額）", section: "financing", value: -19_889_000_000, isTotal: false),
+            .init(label: "財務活動による現金及び現金同等物の減少（純額）", section: "financing", value: -208_536_000_000, isTotal: true),
+            .init(label: "為替変動による現金及び現金同等物への影響額", section: nil, value: 12_937_000_000, isTotal: false),
+            .init(label: "現金及び現金同等物純増加（減少）額", section: nil, value: 54_132_000_000, isTotal: false),
+            .init(label: "現金及び現金同等物期首残高", section: nil, value: 385_569_000_000, isTotal: true),
+            .init(label: "現金及び現金同等物期末残高", section: nil, value: 439_701_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.cashFlow) == expectedCF)
+
+        let expectedSS: [StatementGoldenRow] = [
+            .init(label: "期首残高", section: nil, value: 3_344_853_000_000, isTotal: true),
+            .init(label: "現金配当", section: nil, value: -202_267_000_000, isTotal: false),
+            .init(label: "利益準備金への振替", section: nil, value: 0, isTotal: false),
+            .init(label: "持分変動", section: nil, value: -12_000_000, isTotal: false),
+            .init(label: "当期純利益", section: nil, value: 401_688_000_000, isTotal: false),
+            .init(label: "その他の包括利益 （△損失）－税控除後", section: nil, value: 268_714_000_000, isTotal: false),
+            .init(label: "新株予約権の行使", section: nil, value: -29_000_000, isTotal: false),
+            .init(label: "自己株式の購入等", section: nil, value: -106_010_000_000, isTotal: false),
+            .init(label: "自己株式の売却等", section: nil, value: 177_000_000, isTotal: false),
+            .init(label: "自己株式の消却", section: nil, value: 0, isTotal: false),
+            .init(label: "株式に基づく報酬", section: nil, value: 1_313_000_000, isTotal: false),
+            .init(label: "期末残高", section: nil, value: 3_708_427_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
     }
 
     @Test
@@ -1259,6 +1377,18 @@ import Foundation
 
         Self.expectHTMLReadingOrder(year.changesInEquity)
         #expect(Self.exactLabelValue(year.balanceSheet, "資産合計") == 18_002_776_000_000)
+        #expect(
+            year.balanceSheet.contains {
+                $0.label == "短期借入債務" && $0.value == 572_235_000_000 && $0.section == .liabilities
+            })
+        #expect(
+            year.balanceSheet.contains {
+                $0.label == "預金" && $0.value == 2_625_556_000_000 && $0.section == .liabilities
+            })
+        #expect(
+            year.balanceSheet.contains {
+                $0.label == "資本金" && $0.value == 221_111_000_000 && $0.section == .netAssets
+            })
         #expect(
             year.changesInEquity.contains {
                 ($0.label ?? "").contains("2026年３月31日") && $0.value == 4_573_068_000_000
