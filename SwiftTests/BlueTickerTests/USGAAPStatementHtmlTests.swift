@@ -718,8 +718,8 @@ import Foundation
           <tr><td>財務活動によるキャッシュ・フロー：</td><td></td><td></td></tr>
           <tr><td>長期借入の実行による収入</td><td>15</td><td>25</td></tr>
           <tr><td>財務活動から得た現金（純額）</td><td>15</td><td>25</td></tr>
-          <tr><td>現金、現金同等物、制限付き現金および現金同等物の期首残高</td><td>90</td><td>100</td></tr>
-          <tr><td>現金、現金同等物、制限付き現金および現金同等物の期末残高</td><td>100</td><td>97</td></tr>
+          <tr><td>現金、現金同等物、制限付き現金および制限付き現金同等物の期首残高</td><td>90</td><td>100</td></tr>
+          <tr><td>現金、現金同等物、制限付き現金および制限付き現金同等物の期末残高</td><td>100</td><td>97</td></tr>
         </table>
         </body></html>
         """
@@ -759,11 +759,11 @@ import Foundation
         let html = """
         <html><body>
         <table>
-          <tr><td>区分</td><td></td><td>715,379</td><td>100.0</td><td></td><td>767,351</td><td>100.0</td></tr>
-          <tr><td>売上高</td><td></td><td>715,379</td><td>100.0</td><td></td><td>767,351</td><td>100.0</td></tr>
-          <tr><td>売上原価</td><td></td><td>385,092</td><td></td><td></td><td>416,350</td><td></td></tr>
-          <tr><td>販売費及び一般管理費</td><td></td><td>236,881</td><td></td><td></td><td>245,398</td><td></td></tr>
-          <tr><td>当社株主に帰属する当期純利益</td><td></td><td>16,271</td><td>2.3</td><td></td><td>28,487</td><td>3.7</td></tr>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td>％</td><td></td><td>金額</td><td>％</td></tr>
+          <tr><td>売上高</td><td>（注記Ⅰ）</td><td></td><td>715,379</td><td>100.0</td><td></td><td>767,351</td><td>100.0</td></tr>
+          <tr><td>売上原価</td><td></td><td></td><td>385,092</td><td></td><td></td><td>416,350</td><td></td></tr>
+          <tr><td>販売費及び一般管理費</td><td></td><td></td><td>236,881</td><td></td><td></td><td>245,398</td><td></td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td></td><td></td><td>16,271</td><td>2.3</td><td></td><td>28,487</td><td>3.7</td></tr>
         </table>
         </body></html>
         """

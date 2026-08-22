@@ -578,10 +578,10 @@ enum USGAAPStatementHtml {
     /// （例: 富士フイルム「事業の買収 (買収資産に含まれる現金及び現金同等物控除後)」）も
     /// この語句を含むため、期首/期末残高・純増減・為替変動を表す語（`isTotalLabel` の
     /// CF 語彙と同型）を併せて要求する（実データ確認済み）。
+    /// 野村は「現金、現金同等物、制限付き現金および制限付き現金同等物の期首残高」と
+    /// 並ぶため、連続する「現金及び現金同等物」だけに依存しない。
     private static func isCashAndEquivalentsTailRow(_ label: String) -> Bool {
-        let hasCash =
-            label.contains("現金及び現金同等物") || label.contains("現金および現金同等物")
-        guard hasCash else { return false }
+        guard label.contains("現金同等物") else { return false }
         return label.contains("期首残高") || label.contains("期末残高")
             || label.contains("純増減") || label.contains("純減少") || label.contains("為替")
     }
