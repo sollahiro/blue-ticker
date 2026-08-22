@@ -10,8 +10,11 @@ import Foundation
     @Test
     func displayLabelStripsOutlineNumbersButKeepsYearsAndPerShare() {
         #expect(USGAAPStatementHtml.displayLabel("１ 資本金") == "資本金")
+        #expect(USGAAPStatementHtml.displayLabel("１　当期純利益") == "当期純利益")
+        #expect(USGAAPStatementHtml.displayLabel("(1）減価償却費") == "減価償却費")
         #expect(USGAAPStatementHtml.displayLabel("(4)信用損失引当金") == "信用損失引当金")
         #expect(USGAAPStatementHtml.displayLabel("(3) 関連会社等に対する債務") == "関連会社等に対する債務")
+        #expect(USGAAPStatementHtml.displayLabel("①　受取手形及び売掛金の増加") == "受取手形及び売掛金の増加")
         #expect(USGAAPStatementHtml.displayLabel("Ⅰ 売上高") == "売上高")
         #expect(USGAAPStatementHtml.displayLabel("ⅩⅧ 資本剰余金から") == "資本剰余金から")
         #expect(USGAAPStatementHtml.displayLabel("①営業債権") == "営業債権")

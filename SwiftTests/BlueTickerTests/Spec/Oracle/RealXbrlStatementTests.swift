@@ -1096,6 +1096,11 @@ import Foundation
         #expect(year.cashFlow.contains {
             $0.label == "当期純利益" && $0.section == .operating && $0.value == 31_277_000_000
         })
+        #expect(year.cashFlow.prefix(3).map { $0.label ?? "" } == ["当期純利益", "減価償却費", "株式報酬費用"])
+        #expect(
+            year.cashFlow.allSatisfy {
+                USGAAPStatementHtml.displayLabel($0.label ?? "") == $0.label
+            })
         #expect(
             Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
                 == 60_919_000_000)
