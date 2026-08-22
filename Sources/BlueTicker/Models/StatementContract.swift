@@ -50,8 +50,9 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// SS（持分変動計算書）追加も v1 のまま拡張（2026-08-09。本番 `company_statements` は 0 行のため
 /// 移行コスト実質ゼロ。旧 payload は `changes_in_equity` キー欠落を空配列として読む）。
 /// US-GAAP HTML 経路（`USGAAPStatementHtml`、2026-08-10）も当初は v1 のまま拡張した。
-/// 2026-08-22: 野村（証券本表の見出し）・オムロン（営業利益行なし）・小松/オリックス（SS 残高ラベル）
-/// を HTML 経路で拾えるようにしたため v2。旧 notApplicable プレースホルダと部分欠測行を再抽出する。
+/// 2026-08-22: 野村（証券本表の見出し・連結資本勘定変動表）・オムロン（営業利益行なし）・
+/// 小松/オリックス（SS 残高ラベル）を HTML 経路で拾えるようにしたため v2。
+/// 旧 notApplicable プレースホルダと部分欠測行を再抽出する。
 public let statementCacheVersion = "statement-v2"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。

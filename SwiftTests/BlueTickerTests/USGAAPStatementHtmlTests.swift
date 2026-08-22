@@ -921,6 +921,74 @@ import Foundation
         #expect(komatsuSS.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
     }
 
+    @Test
+    func componentMajorEquityStatementKeepsGroupsAndContinuationTable() throws {
+        // 野村 連結資本勘定変動表: 科目縦・年次は列。株主資本と非支配持分が改ページで別表。
+        // 期首/期末の繰り返しは年次切り出しに使わず、区分見出しで修飾する。
+        // OCI の科目合計「期末残高」は直前の内訳名ではなく累積的その他の包括利益。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>資本金</td><td></td><td></td></tr>
+          <tr><td>　期首残高</td><td>594,493</td><td>594,493</td></tr>
+          <tr><td>　期末残高</td><td>594,493</td><td>594,493</td></tr>
+          <tr><td>累積的その他の包括利益</td><td></td><td></td></tr>
+          <tr><td>　為替換算調整額</td><td></td><td></td></tr>
+          <tr><td>　　期首残高</td><td>407,977</td><td>407,977</td></tr>
+          <tr><td>　　当期純変動額</td><td>△36,094</td><td>142,524</td></tr>
+          <tr><td>　　期末残高</td><td>407,977</td><td>550,501</td></tr>
+          <tr><td>　自己クレジット調整額</td><td></td><td></td></tr>
+          <tr><td>　　期首残高</td><td>48,083</td><td>48,083</td></tr>
+          <tr><td>　　自己クレジット調整額</td><td>12,658</td><td>△46,879</td></tr>
+          <tr><td>　　期末残高</td><td>48,083</td><td>1,204</td></tr>
+          <tr><td>　期末残高</td><td>447,808</td><td>548,221</td></tr>
+          <tr><td>当社株主資本合計</td><td></td><td></td></tr>
+          <tr><td>　期末残高</td><td>3,470,879</td><td>3,707,868</td></tr>
+        </table>
+        <table>
+          <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>非支配持分</td><td></td><td></td></tr>
+          <tr><td>　期首残高</td><td>110,120</td><td>110,120</td></tr>
+          <tr><td>　期末残高</td><td>110,120</td><td>147,047</td></tr>
+          <tr><td>資本合計</td><td></td><td></td></tr>
+          <tr><td>　期末残高</td><td>3,580,999</td><td>3,854,915</td></tr>
+        </table>
+        </body></html>
+        """
+        let ss = try extractFromHTML(html, types: [.changesInEquity]).changesInEquity
+
+        #expect(ss.contains { $0.label == "資本金 期末残高" && $0.value == 594_493_000_000 && $0.isTotal })
+        #expect(
+            ss.contains {
+                $0.label == "為替換算調整額 期末残高" && $0.value == 550_501_000_000 && $0.isTotal
+            })
+        #expect(
+            ss.contains {
+                $0.label == "累積的その他の包括利益 期末残高" && $0.value == 548_221_000_000
+                    && $0.isTotal
+            })
+        #expect(!ss.contains { $0.label == "自己クレジット調整額 期末残高" && $0.value == 548_221_000_000 })
+        #expect(
+            ss.contains {
+                $0.label == "当社株主資本合計 期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal
+            })
+        #expect(
+            ss.contains {
+                $0.label == "非支配持分 期末残高" && $0.value == 147_047_000_000 && $0.isTotal
+            })
+        #expect(
+            ss.contains {
+                $0.label == "資本合計 期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal
+            })
+        let capitalOpen = ss.first { $0.label == "資本金 期首残高" }
+        let equityClose = ss.first { $0.label == "資本合計 期末残高" }
+        #expect(capitalOpen?.order != nil && equityClose?.order != nil)
+        #expect(capitalOpen!.order! < equityClose!.order!)
+    }
+
     private func extractFromHTML(
         _ html: String, types: Set<StatementSectionType>
     ) throws -> (
