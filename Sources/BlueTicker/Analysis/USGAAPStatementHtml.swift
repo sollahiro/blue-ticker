@@ -294,7 +294,11 @@ enum USGAAPStatementHtml {
     // MARK: - Row parsing
 
     private static func tableRows(_ table: Element) -> [[String]] {
-        parsedTableRows(table).map(\.cells)
+        guard let trs = try? table.select("tr") else { return [] }
+        return trs.array().compactMap { tr -> [String]? in
+            guard let cells = try? tr.select("td, th"), !cells.isEmpty else { return nil }
+            return cells.array().map(cellDisplayText)
+        }
     }
 
     private struct ParsedHtmlRow {
@@ -310,7 +314,7 @@ enum USGAAPStatementHtml {
     /// `cell.text(trim:)` は先頭の全角空白を落とす。実 HTML の字下げは `<p>　期末残高</p>` にある。
     private static func firstCellRawText(_ cell: Element) -> String {
         if let p = try? cell.select("p").first(), let html = try? p.html() {
-            return html
+            return String(html)
                 .replacingOccurrences(of: "&nbsp;", with: "\u{00A0}")
                 .replacingOccurrences(of: "&#160;", with: "\u{00A0}")
         }

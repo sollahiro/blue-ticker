@@ -85,49 +85,22 @@ public let statementSchemaVersion = 1
 /// `financing`（presentation 祖先。PL は常に nil）。
 /// US-GAAP HTML の科目縦 SS（連結資本勘定変動表）では、区分見出し（資本金 等）を
 /// `group` として同じキーに載せる。label は開示どおり（期首残高 等）。
-public enum StatementLineSection: Sendable, Equatable, Hashable {
-    case assets
-    case liabilities
-    case netAssets
-    case operating
-    case investing
-    case financing
-    case group(String)
-
-    public var rawValue: String {
-        switch self {
-        case .assets: return "assets"
-        case .liabilities: return "liabilities"
-        case .netAssets: return "net_assets"
-        case .operating: return "operating"
-        case .investing: return "investing"
-        case .financing: return "financing"
-        case .group(let name): return name
-        }
-    }
+public struct StatementLineSection: RawRepresentable, Codable, Sendable, Equatable, Hashable {
+    public let rawValue: String
 
     public init(rawValue: String) {
-        switch rawValue {
-        case "assets": self = .assets
-        case "liabilities": self = .liabilities
-        case "net_assets": self = .netAssets
-        case "operating": self = .operating
-        case "investing": self = .investing
-        case "financing": self = .financing
-        default: self = .group(rawValue)
-        }
-    }
-}
-
-extension StatementLineSection: Codable {
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self.init(rawValue: raw)
+        self.rawValue = rawValue
     }
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+    public static let assets = StatementLineSection(rawValue: "assets")
+    public static let liabilities = StatementLineSection(rawValue: "liabilities")
+    public static let netAssets = StatementLineSection(rawValue: "net_assets")
+    public static let operating = StatementLineSection(rawValue: "operating")
+    public static let investing = StatementLineSection(rawValue: "investing")
+    public static let financing = StatementLineSection(rawValue: "financing")
+
+    public static func group(_ name: String) -> StatementLineSection {
+        StatementLineSection(rawValue: name)
     }
 }
 
