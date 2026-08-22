@@ -761,6 +761,7 @@ import Foundation
         let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
         #expect(values.sales == 3_330_831_000_000)
         #expect(values.salesLabel == "営業収益 計")
+        #expect(values.netAssets == 4_573_068_000_000)
 
         let extracted = try #require(
             USGAAPStatementHtml.extractLineItems(

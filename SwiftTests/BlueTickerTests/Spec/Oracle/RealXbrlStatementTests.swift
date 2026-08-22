@@ -1459,6 +1459,7 @@ import Foundation
             xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YG5L_xbrl"))
         #expect(financials?.sales == 3_330_831_000_000)
         #expect(financials?.salesLabel == "営業収益 計")
+        #expect(financials?.netAssets == 4_573_068_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "販売費および一般管理費") == 711_775_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "生命保険費用") == 479_937_000_000)
         #expect(Self.exactLabelValue(year.balanceSheet, "短期借入債務") == 572_235_000_000)
