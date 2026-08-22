@@ -799,6 +799,15 @@ import Foundation
         // 前期のみの値や SS 合計列の「－」も当期に持ち込まない。
         #expect(Self.exactLabelValue(year.balanceSheet, "(4)信用損失引当金") == -15_841_000_000)
         #expect(Self.exactLabelValue(year.balanceSheet, "(3) 関連会社等に対する債務") == 1_672_000_000)
+        // 空の番号親は末子右セル（内訳合計）から復元する。
+        let receivables = try #require(year.balanceSheet.first { $0.label == "２ 受取債権" })
+        #expect(receivables.value == 699_986_000_000)
+        #expect(receivables.isTotal == true)
+        #expect(receivables.components?.count == 4)
+        let payables = try #require(year.balanceSheet.first { $0.label == "２ 支払債務" })
+        #expect(payables.value == 390_577_000_000)
+        #expect(payables.isTotal == true)
+        #expect(payables.components?.count == 3)
         #expect(Self.exactLabelValue(year.incomeStatement, "２ 研究開発費") == 163_399_000_000)
         #expect(Self.exactLabelValue(year.incomeStatement, "５ その他損益・純額") == 12_827_000_000)
         // 法人税等の合計行は無く、当期税＋繰延が親合計（77,595）になる（入れ子右セルは行値にしない）。
@@ -829,8 +838,10 @@ import Foundation
         #expect(
             Self.labelValue(year.changesInEquity, containing: "ⅩⅧ 資本剰余金から") == 0)
 
-        // 富士フイルムは内訳→合計型のため、キヤノン型（合計直後の内訳）components は付かない。
-        #expect(year.balanceSheet.allSatisfy { $0.components == nil })
+        // 富士フイルムのキヤノン型（合計直後の内訳）は無い。空番号親の復元行だけ components を持つ。
+        #expect(
+            Set(year.balanceSheet.filter { $0.components != nil }.compactMap(\.label))
+                == ["２ 受取債権", "２ 支払債務"])
         #expect(year.incomeStatement.allSatisfy { $0.components == nil })
         #expect(year.cashFlow.allSatisfy { $0.components == nil })
     }

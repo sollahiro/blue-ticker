@@ -11,8 +11,9 @@
 // 0 始まりの通し番号で付与する（`XBRLUtils.loadPresentationOrder` の DFS 通し番号と同型）。
 // 金額の無い区分見出し行は行にしないため、番号は出力行だけで密になる。
 //
-// `components`: calculation linkbase が無いため、キヤノン型（「…合計」の直後内訳が
-// 親金額と一致）のときだけ合成 tag で付与する。内訳が合計の前に来る型は対象外。
+// `components`: calculation linkbase が無いため、次の2型だけ合成 tag で付与する。
+// キヤノン型（「…合計」の直後内訳が親金額と一致）。富士フイルム型（空の番号親＋`(1)` 内訳、
+// 末子の当期右セルが内訳合計と一致 → 親行を復元）。それ以外の「内訳→合計」は対象外。
 
 import Foundation
 import SwiftSoup
@@ -220,6 +221,53 @@ enum USGAAPStatementHtml {
         var section = startingSection
         var order = startingOrder
         var items: [StatementLineItem] = []
+        var pendingArabParent: (label: String, section: StatementLineSection)?
+        var groupChildren: [(item: StatementLineItem, groupSubtotal: Double?)] = []
+
+        func flushGroupedChildren() {
+            defer {
+                pendingArabParent = nil
+                groupChildren = []
+            }
+            let children = groupChildren.map(\.item)
+            let childSum = children.reduce(0.0) { $0 + $1.value }
+            if let parent = pendingArabParent,
+               let subtotal = groupChildren.last?.groupSubtotal,
+               !children.isEmpty,
+               abs(childSum - subtotal) < 0.5
+            {
+                let parentOrder = order
+                order += 1
+                let childComponents = children.indices.map { i in
+                    StatementLineComponent(
+                        tag: syntheticTag(.balanceSheet, order: parentOrder + 1 + i), weight: 1)
+                }
+                items.append(
+                    StatementLineItem(
+                        tag: syntheticTag(.balanceSheet, order: parentOrder),
+                        label: parent.label,
+                        value: subtotal,
+                        unit: "JPY",
+                        order: parentOrder,
+                        section: parent.section,
+                        isTotal: true,
+                        components: childComponents))
+            }
+            for child in children {
+                let itemOrder = order
+                order += 1
+                items.append(
+                    StatementLineItem(
+                        tag: syntheticTag(.balanceSheet, order: itemOrder),
+                        label: child.label,
+                        value: child.value,
+                        unit: child.unit,
+                        order: itemOrder,
+                        section: child.section,
+                        isTotal: child.isTotal,
+                        components: child.components))
+            }
+        }
 
         for row in rows {
             let raw = rowLabel(row)
@@ -227,33 +275,58 @@ enum USGAAPStatementHtml {
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
 
             if isAssetsSectionHeader(label) {
+                flushGroupedChildren()
                 section = .assets
                 continue
             }
             if isLiabilitiesSectionHeader(label) {
+                flushGroupedChildren()
                 section = .liabilities
                 continue
             }
             if isNetAssetsSectionHeader(label) {
+                flushGroupedChildren()
                 section = .netAssets
                 continue
             }
             if shouldSkipMetaRow(label) { continue }
 
-            guard let yen = currentYenValue(row) else { continue }
-            let itemOrder = order
-            order += 1
-            items.append(
-                StatementLineItem(
-                    tag: syntheticTag(.balanceSheet, order: itemOrder),
-                    label: label,
-                    value: yen,
-                    unit: "JPY",
-                    order: itemOrder,
-                    section: section,
-                    isTotal: isTotalLabel(label, sectionType: .balanceSheet),
-                    components: nil))
+            if let parsed = currentLineAndGroupSubtotal(from: row) {
+                if pendingArabParent != nil, isParentheticalChildLabel(label) {
+                    let draft = StatementLineItem(
+                        tag: "",
+                        label: label,
+                        value: parsed.line,
+                        unit: "JPY",
+                        order: nil,
+                        section: section,
+                        isTotal: isTotalLabel(label, sectionType: .balanceSheet),
+                        components: nil)
+                    groupChildren.append((draft, parsed.groupSubtotal))
+                    continue
+                }
+                flushGroupedChildren()
+                let itemOrder = order
+                order += 1
+                items.append(
+                    StatementLineItem(
+                        tag: syntheticTag(.balanceSheet, order: itemOrder),
+                        label: label,
+                        value: parsed.line,
+                        unit: "JPY",
+                        order: itemOrder,
+                        section: section,
+                        isTotal: isTotalLabel(label, sectionType: .balanceSheet),
+                        components: nil))
+                continue
+            }
+
+            if isArabNumberedLabel(label) {
+                flushGroupedChildren()
+                pendingArabParent = (label, section)
+            }
         }
+        flushGroupedChildren()
         attachCanonStyleFollowingComponents(&items)
         return items
     }
@@ -441,11 +514,27 @@ enum USGAAPStatementHtml {
     /// 単純行は右だけに金額が入る。キヤノン形式の構成比列も「左=金額・右=%」のため同じ優先で良い。
     /// `－` は 0。空欄はスキップ。`filterFinancialTableAmounts` は使わない（小さい当期額が落ちるため）。
     private static func currentYenValue(_ row: [String]) -> Double? {
-        guard let million = currentMillionYen(from: row) else { return nil }
-        return million * Financial.millionYen
+        currentLineAndGroupSubtotal(from: row)?.line
+    }
+
+    /// 当期左＝当該科目。当期半分に2つ目の値があれば親小計（富士フイルム入れ子の右セル）。
+    private static func currentLineAndGroupSubtotal(from row: [String]) -> (
+        line: Double, groupSubtotal: Double?
+    )? {
+        guard let million = currentMillionYenSlots(from: row) else { return nil }
+        return (
+            million.line * Financial.millionYen,
+            million.groupSubtotal.map { $0 * Financial.millionYen }
+        )
     }
 
     private static func currentMillionYen(from row: [String]) -> Double? {
+        currentMillionYenSlots(from: row)?.line
+    }
+
+    private static func currentMillionYenSlots(from row: [String]) -> (
+        line: Double, groupSubtotal: Double?
+    )? {
         guard let labelIdx = row.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
         else { return nil }
         var rest = Array(row[(labelIdx + 1)...])
@@ -471,10 +560,24 @@ enum USGAAPStatementHtml {
         // 前期半分 | 当期半分。
         let mid = slots.count / 2
         let currentHalf = Array(slots[mid...])
-        for slot in currentHalf {
-            if let v = slot { return v }
+        let filled = currentHalf.compactMap { $0 }
+        guard let line = filled.first else { return nil }
+        let group = filled.count >= 2 ? filled[1] : nil
+        return (line, group)
+    }
+
+    /// `２ 受取債権` のようなアラビア数字の本表行。`Ⅰ 流動資産` は対象外。
+    private static func isArabNumberedLabel(_ label: String) -> Bool {
+        guard let marker = leadingMajorMarker(label), let first = marker.unicodeScalars.first else {
+            return false
         }
-        return nil
+        return ("0"..."9").contains(first) || ("０"..."９").contains(first)
+    }
+
+    /// `(1)営業債権` / `（1）` の内訳行。
+    private static func isParentheticalChildLabel(_ label: String) -> Bool {
+        let t = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.hasPrefix("(") || t.hasPrefix("（")
     }
 
     /// セルを金額スロットにする。`－` 類は 0、空・注記・非数値は nil。

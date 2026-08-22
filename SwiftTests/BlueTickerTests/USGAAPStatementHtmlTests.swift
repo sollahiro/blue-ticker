@@ -180,6 +180,73 @@ import Foundation
     }
 
     @Test
+    func emptyArabParentIsRestoredFromLastChildRightSubtotal() throws {
+        // 富士フイルム: 「２ 受取債権」は金額なし。小計 699,986 は末子の当期右セル。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>２ 受取債権</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>(1)営業債権</td><td>注20</td><td>674,112</td><td></td><td>680,635</td><td></td></tr>
+          <tr><td>(2)リース債権</td><td>注４</td><td>39,248</td><td></td><td>32,821</td><td></td></tr>
+          <tr><td>(3)関連会社等に対する債権</td><td></td><td>2,397</td><td></td><td>2,371</td><td></td></tr>
+          <tr><td>(4)信用損失引当金</td><td>注４</td><td>△19,172</td><td>696,585</td><td>△15,841</td><td>699,986</td></tr>
+          <tr><td>３ 棚卸資産</td><td>注６</td><td></td><td>547,803</td><td></td><td>543,976</td></tr>
+          <tr><td>資産合計</td><td></td><td></td><td>100</td><td></td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td></td><td></td><td>50</td><td></td><td>80</td></tr>
+          <tr><td>負債・純資産合計</td><td></td><td></td><td>100</td><td></td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>Ⅰ 売上高</td><td></td><td></td><td>1,000</td><td></td><td>1,200</td></tr>
+          <tr><td>営業利益</td><td></td><td></td><td>100</td><td></td><td>150</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td></td><td>10</td><td></td><td>20</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td></td><td></td><td>-5</td><td></td><td>-4</td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td></td><td></td><td>-1</td><td></td><td>-2</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-parent-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir,
+                statementTypes: [
+                    .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
+                ]))
+
+        let parent = try #require(extracted.balanceSheet.first { $0.label == "２ 受取債権" })
+        #expect(parent.value == 699_986_000_000)
+        #expect(parent.isTotal == true)
+        #expect(parent.section == .assets)
+        let comps = try #require(parent.components)
+        #expect(comps.count == 4)
+        #expect(comps.allSatisfy { $0.weight == 1 })
+
+        let labels = extracted.balanceSheet.map(\.label)
+        #expect(labels.firstIndex(of: "２ 受取債権")! < labels.firstIndex(of: "(1)営業債権")!)
+        #expect(extracted.balanceSheet.contains { $0.label == "(1)営業債権" && $0.value == 680_635_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "(4)信用損失引当金" && $0.value == -15_841_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "３ 棚卸資産" && $0.value == 543_976_000_000 })
+    }
+
+    @Test
     func canonStyleFollowingDetailsBecomeComponents() throws {
         // 合計行の直後に内訳が続き、合計一致 → components。次の番号付き行で打ち切り。
         let html = """
