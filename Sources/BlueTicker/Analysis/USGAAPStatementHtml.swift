@@ -148,6 +148,12 @@ enum USGAAPStatementHtml {
         pattern: #"^[\(（]\s*[0-9０-９]{1,2}\s*[\)）]\s*"#
     )
 
+    /// 注記番号セル（「23」「15,32」「３,26,32」）。カンマ区切りの1〜2桁は
+    /// `parseHtmlNumber` が金額（15,32 → 1532）に化けるため、金額スロットの前に除外する。
+    private static let footnoteRefRegex = try! NSRegularExpression(
+        pattern: #"^[0-9０-９]{1,2}([,，、][0-9０-９]{1,2})*$"#
+    )
+
     private static func stripOneOutlinePrefix(_ label: String) -> String {
         let s = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let full = NSRange(s.startIndex..., in: s)
@@ -734,8 +740,23 @@ enum USGAAPStatementHtml {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { return true }
         if t.contains("注") { return true }
+        if isFootnoteRefCell(t) { return true }
         if parseAmountSlot(t) != nil { return false }
         return true
+    }
+
+    /// 注記番号列の「15,32」や単独の「23」。空白を潰してから照合する。
+    private static func isFootnoteRefCell(_ text: String) -> Bool {
+        let collapsed = text
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{00A0}", with: "")
+            .replacingOccurrences(of: "　", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+        guard !collapsed.isEmpty else { return false }
+        let full = NSRange(collapsed.startIndex..., in: collapsed)
+        return footnoteRefRegex.firstMatch(in: collapsed, range: full) != nil
     }
 
     // MARK: - Label / section helpers
@@ -783,6 +804,9 @@ enum USGAAPStatementHtml {
     private static func isNetAssetsSectionHeader(_ label: String) -> Bool {
         let t = stripHeaderDecorations(label)
         if t.contains("純資産の部") { return true }
+        // オリックス: 「資本の部」（純資産の部の別名）。「負債及び資本の部」は
+        // `isLiabilitiesSectionHeader` が先に拾うのでここには来ない。
+        if t.contains("資本の部") { return true }
         // 「Ⅰ 株主資本」は部ヘッダ（金額なし）として区分切替に使う
         let stripped = USGAAPHtml.stripSectionPrefix(t)
         if stripped == "株主資本" { return true }

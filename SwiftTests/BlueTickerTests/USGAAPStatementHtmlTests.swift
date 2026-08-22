@@ -638,6 +638,41 @@ import Foundation
     }
 
     @Test
+    func commaSeparatedFootnoteNumbersAreNotAmountSlots() throws {
+        // 実データ確認（オリックス BS）: 注記番号「15,32」「16,32」「23」は
+        // parseHtmlNumber がカンマを潰して 1532/23 の金額になる。残スロットが奇数になり
+        // 短期借入債務・預金・資本金が行ごと落ちる。1〜2桁の注記番号セルは金額にしない。
+        // 「その他 | 40 | 60」は先頭が2桁に見えても剥がすと奇数なので残し、当期 60 を取る。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記番号</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td></tr>
+          <tr><td>短期借入債務</td><td>15,32</td><td>549,680</td><td>572,235</td></tr>
+          <tr><td>預金</td><td>16,32</td><td>2,449,812</td><td>2,625,556</td></tr>
+          <tr><td>支払手形、買掛金および未払金</td><td>３,32</td><td>339,787</td><td>356,008</td></tr>
+          <tr><td>その他</td><td>40</td><td>60</td></tr>
+          <tr><td>負債合計</td><td></td><td>12,691,036</td><td>13,378,965</td></tr>
+          <tr><td>資本の部</td><td></td><td></td><td></td></tr>
+          <tr><td>資本金</td><td>23</td><td>221,111</td><td>221,111</td></tr>
+          <tr><td>資本合計</td><td></td><td>4,171,783</td><td>4,573,068</td></tr>
+        </table>
+        </body></html>
+        """
+        let bs = try extractFromHTML(html, types: [.balanceSheet]).balanceSheet
+
+        #expect(bs.contains { $0.label == "短期借入債務" && $0.value == 572_235_000_000 && $0.section == .liabilities })
+        #expect(bs.contains { $0.label == "預金" && $0.value == 2_625_556_000_000 && $0.section == .liabilities })
+        #expect(
+            bs.contains {
+                $0.label == "支払手形、買掛金および未払金" && $0.value == 356_008_000_000
+            })
+        #expect(bs.contains { $0.label == "その他" && $0.value == 60_000_000 })
+        #expect(bs.contains { $0.label == "資本金" && $0.value == 221_111_000_000 && $0.section == .netAssets })
+        #expect(bs.contains { $0.label == "資本合計" && $0.value == 4_573_068_000_000 && $0.section == .netAssets })
+    }
+
+    @Test
     func fourSlotRowWithEmptyLeftCellsKeepsCurrentRightAmount() throws {
         // 実データ確認（オムロン CF「１　当期純利益」）: 前期/当期それぞれ左空・右金額の
         // 4スロット。先頭の空をスペーサとして剥がすと奇数になり行ごと落ちるため残す。
