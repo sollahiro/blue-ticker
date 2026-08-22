@@ -48,8 +48,7 @@ enum USGAAPStatementHtml {
         var pendingSSYearColumns: String?
 
         for table in tables.array() {
-            let parsedRows = parsedTableRows(table)
-            let rows = parsedRows.map(\.cells)
+            let rows = tableRows(table)
             guard let kind = classifyTable(rows) else { continue }
 
             switch kind {
@@ -74,7 +73,7 @@ enum USGAAPStatementHtml {
                 // 野村 連結資本勘定変動表: 科目縦・年次は列で、改ページで株主資本と
                 // 非支配持分が別表になる → 同じ年次列の続きだけ追記する。
                 guard statementTypes.contains(.changesInEquity), !sawCF else { continue }
-                let parsed = parseEquityStatementRows(parsedRows)
+                let parsed = parseEquityStatementRows(rows)
                 let yearCols = equityYearColumnFingerprint(rows)
                 if let yearCols, yearCols == pendingSSYearColumns, !pendingSS.isEmpty {
                     pendingSS = concatenatingEquityItems(pendingSS, parsed)
@@ -293,65 +292,15 @@ enum USGAAPStatementHtml {
 
     // MARK: - Row parsing
 
-    private struct ParsedHtmlRow {
-        var indent: Int
-        var cells: [String]
-    }
-
     private static func tableRows(_ table: Element) -> [[String]] {
-        parsedTableRows(table).map(\.cells)
-    }
-
-    private static func parsedTableRows(_ table: Element) -> [ParsedHtmlRow] {
         guard let trs = try? table.select("tr") else { return [] }
-        return trs.array().compactMap { tr -> ParsedHtmlRow? in
+        return trs.array().compactMap { tr -> [String]? in
             guard let cells = try? tr.select("td, th"), !cells.isEmpty else { return nil }
-            let cellEls = cells.array()
-            let texts = cellEls.map { cell in
+            return cells.array().map { cell in
                 let text = (try? cell.text(trimAndNormaliseWhitespace: true)) ?? ""
                 return text.replacingOccurrences(of: "\u{00A0}", with: " ")
             }
-            return ParsedHtmlRow(indent: equityIndent(firstCellRawText(cellEls[0])), cells: texts)
         }
-    }
-
-    /// 先頭セルの生テキスト。実開示は `<p>　期末残高</p>` のため、p の inner HTML
-    /// から全角スペースを拾う（`text(trim:)` は段を落とす）。
-    private static func firstCellRawText(_ cell: Element) -> String {
-        let raw: String
-        if let p = try? cell.select("p").first() {
-            let inner = (try? p.html()) ?? ""
-            raw = inner.contains("<")
-                ? ((try? p.text(trimAndNormaliseWhitespace: false)) ?? inner)
-                : inner
-        } else {
-            raw = (try? cell.text(trimAndNormaliseWhitespace: false)) ?? ""
-        }
-        return raw
-            .replacingOccurrences(of: "&#160;", with: " ")
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "\u{00A0}", with: " ")
-    }
-
-    /// 野村 連結資本勘定変動表のインデント。全角スペースの段数。
-    /// `&#160;` + 半角だけ（「消却」行）は1段とみなす。
-    private static func equityIndent(_ raw: String) -> Int {
-        var ideographic = 0
-        var sawAsciiSpace = false
-        for ch in raw {
-            if ch == "　" {
-                ideographic += 1
-                continue
-            }
-            if ch == " " || ch == "\t" {
-                sawAsciiSpace = true
-                continue
-            }
-            if ch == "\n" || ch == "\r" { continue }
-            break
-        }
-        if ideographic > 0 { return ideographic }
-        return sawAsciiSpace ? 1 : 0
     }
 
     private static func rowLabel(_ row: [String]) -> String {
@@ -487,37 +436,15 @@ enum USGAAPStatementHtml {
     /// 2年分が1表に混在する場合は3回以上現れるため、最後から2番目の時系列残高行
     /// （＝当期の期首）より前（前期分）を切り捨てて当期のみを返す。1年度のみの表
     /// （時系列残高2回）では最後から2番目＝期首そのものなので何も切り捨てない。
-    private static func parseEquityStatementRows(_ rows: [ParsedHtmlRow]) -> [StatementLineItem] {
-        let componentMajor = isComponentMajorEquityTable(rows.map(\.cells))
-        var headerStack: [(level: Int, name: String)] = []
-        var raw: [(label: String, value: Double, isTotal: Bool)] = []
+    private static func parseEquityStatementRows(_ rows: [[String]]) -> [StatementLineItem] {
+        var raw: [(label: String, value: Double)] = []
         for row in rows {
-            let rawLabel = rowLabel(row.cells)
+            let rawLabel = rowLabel(row)
             let label = normalizeLabel(rawLabel)
             guard !label.isEmpty, !isHeaderLabel(label) else { continue }
             if shouldSkipMetaRow(label) { continue }
-            guard let last = row.cells.last, let million = parseAmountSlot(last) else {
-                if componentMajor, isEquityGroupHeaderRow(row.cells) {
-                    while let top = headerStack.last, top.level >= row.indent {
-                        headerStack.removeLast()
-                    }
-                    headerStack.append((row.indent, label))
-                }
-                continue
-            }
-            let display: String
-            if componentMajor {
-                while let top = headerStack.last, top.level >= row.indent {
-                    headerStack.removeLast()
-                }
-                display = qualifyComponentMajorEquityLabel(
-                    label, headers: headerStack, indent: row.indent)
-            } else {
-                display = label
-            }
-            raw.append(
-                (display, million * Financial.millionYen,
-                 isTotalLabel(label, sectionType: .changesInEquity)))
+            guard let last = row.last, let million = parseAmountSlot(last) else { continue }
+            raw.append((label, million * Financial.millionYen))
         }
 
         let chronoIndices = raw.indices.filter { isEquityChronologicalBalanceLabel(raw[$0].label) }
@@ -536,23 +463,11 @@ enum USGAAPStatementHtml {
                     unit: "JPY",
                     order: itemOrder,
                     section: nil,
-                    isTotal: entry.isTotal,
+                    isTotal: isTotalLabel(entry.label, sectionType: .changesInEquity),
                     components: nil))
         }
         attachCanonStyleFollowingComponents(&items)
         return items
-    }
-
-    /// 科目縦 SS の繰り返し科目（期首残高など）に直近の区分見出しを付ける。
-    /// インデントが浅い見出しだけを親にする（OCI 内訳のあとにある OCI 期末残高を
-    /// 直前の内訳名で誤って修飾しない）。
-    private static func qualifyComponentMajorEquityLabel(
-        _ label: String, headers: [(level: Int, name: String)], indent: Int
-    ) -> String {
-        let header = headers.last(where: { $0.level < indent }) ?? headers.last
-        guard let header else { return label }
-        if label.contains(header.name) { return label }
-        return "\(header.name) \(label)"
     }
 
     private static func concatenatingEquityItems(
@@ -567,15 +482,6 @@ enum USGAAPStatementHtml {
         return combined
     }
 
-    /// 科目縦・年次は列（野村 連結資本勘定変動表）。時系列マーカーが無く、
-    /// 列見出しが年度（2026年３月期）になっている。小松の科目横・年次別表は除外。
-    private static func isComponentMajorEquityTable(_ rows: [[String]]) -> Bool {
-        let labels = rows.map { normalizeLabel(rowLabel($0)) }.filter { !$0.isEmpty }
-        let hasOpenClose = labels.contains { isBareEquityOpenCloseLabel($0) }
-        let hasChrono = labels.contains { isEquityChronologicalBalanceLabel($0) }
-        return hasOpenClose && !hasChrono && equityYearColumnFingerprint(rows) != nil
-    }
-
     /// 年次が列になっている SS 表の列指紋。一致する続き表だけ追記する。
     private static func equityYearColumnFingerprint(_ rows: [[String]]) -> String? {
         let periods = rows.prefix(4).flatMap { $0 }.map { normalizeLabel($0) }.filter {
@@ -583,15 +489,6 @@ enum USGAAPStatementHtml {
         }
         guard periods.count >= 2 else { return nil }
         return periods.joined(separator: "|")
-    }
-
-    /// 科目区分の見出し行。先頭セルがラベルで、残りは空（列見出しや年次ヘッダは除外）。
-    private static func isEquityGroupHeaderRow(_ cells: [String]) -> Bool {
-        guard let first = cells.first else { return false }
-        if first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
-        return cells.dropFirst().allSatisfy {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
     }
 
     /// キヤノン型: 「…合計」行の直後に内訳が続き、その合計が親と一致するとき `components` を付与する。
@@ -798,9 +695,7 @@ enum USGAAPStatementHtml {
     /// 年次切り出しは `isEquityChronologicalBalanceLabel` のみ（科目縦の繰り返し
     /// 期首/期末は年次ではない）。
     private static func isEquityBalanceRowLabel(_ label: String) -> Bool {
-        if isEquityChronologicalBalanceLabel(label) { return true }
-        return isBareEquityOpenCloseLabel(label) || label.hasSuffix("期首残高")
-            || label.hasSuffix("期末残高")
+        isEquityChronologicalBalanceLabel(label) || isBareEquityOpenCloseLabel(label)
     }
 
     /// 1表に前期・当期が連続するときの切り出しマーカー。日付や「現在」が付く行だけ。
