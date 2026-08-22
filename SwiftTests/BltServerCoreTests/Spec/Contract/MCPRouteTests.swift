@@ -519,10 +519,10 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
-    @Test func getFeedTrendReturnsErrorWhenDatabaseUnavailable() async throws {
+    @Test func getFeedUpdatesReturnsErrorWhenDatabaseUnavailable() async throws {
         try await withMcpApp { app in
             let (status, json) = try await postMcp(
-                app, toolCallBody(name: "get_feed_trend", arguments: [:]))
+                app, toolCallBody(name: "get_feed_updates", arguments: [:]))
             #expect(status == .ok)
             let result = json?["result"] as? [String: Any]
             #expect(result?["isError"] as? Bool == true)

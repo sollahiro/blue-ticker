@@ -634,15 +634,13 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
         }
     }
 
-    // MARK: - Feed Update / Trend
+    // MARK: - Feed Update
 
-    @Test func feedEndpointsReturn503WithoutDatabase() async throws {
+    @Test func feedUpdatesReturn503WithoutDatabase() async throws {
         try await withApp { app in
-            for path in ["/v1/feed/updates", "/v1/feed/trend"] {
-                let (status, json) = try await send(app, path)
-                #expect(status == .serviceUnavailable)
-                #expect(json?["error"] as? String == "財務データベースに接続できません")
-            }
+            let (status, json) = try await send(app, "/v1/feed/updates")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "財務データベースに接続できません")
         }
     }
 
@@ -734,32 +732,6 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(ids.contains("D-yday"))
             #expect(ids.contains("D-week"))
             #expect(ids.contains("D-old") == false)
-        }
-    }
-
-    @Test func feedTrendRanksByFilingCountInWindow() async throws {
-        try await withApp(databases: true) { app in
-            try await seedFeedDocument(
-                app, id: "S-1", secCode: "67580", filer: "ソニーグループ株式会社",
-                type: "120", submit: "2099-01-02 09:00")
-            try await seedFeedDocument(
-                app, id: "S-2", secCode: "67580", filer: "ソニーグループ株式会社",
-                type: "120", submit: "2099-01-03 09:00")
-            try await seedFeedDocument(
-                app, id: "T-1", secCode: "72030", filer: "トヨタ自動車株式会社",
-                type: "120", submit: "2099-01-04 09:00")
-            try await seedFeedDocument(
-                app, id: "OLD", secCode: "99840", filer: "ソフトバンクグループ株式会社",
-                type: "120", submit: "2000-01-01 09:00")
-
-            let (status, json) = try await send(app, "/v1/feed/trend?days=7")
-            #expect(status == .ok)
-            #expect(json?["days"] as? Int == 7)
-            let items = json?["items"] as? [[String: Any]]
-            #expect(items?.compactMap { $0["code"] as? String } == ["6758", "7203"])
-            #expect(items?.first?["filing_count"] as? Int == 2)
-            #expect(items?.first?["doc_id"] as? String == "S-2")
-            #expect(items?.contains { $0["code"] as? String == "9984" } == false)
         }
     }
 }

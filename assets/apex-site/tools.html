@@ -381,9 +381,9 @@
 
   <section>
     <div class="page">
-      <h2>更新とトレンドを見る</h2>
-      <p class="section-lead"><span class="feature-badge">feed</span> 銘柄横断の直近提出と、開示件数の多い銘柄。</p>
-      <div class="tool-grid cols-2">
+      <h2>更新を見る</h2>
+      <p class="section-lead"><span class="feature-badge">feed</span> 銘柄横断の直近提出。</p>
+      <div class="tool-grid">
 
         <div class="light-card catalog-card">
           <div class="catalog-head">
@@ -394,18 +394,6 @@
           <div class="catalog-meta">
             <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/updates?days=7&amp;limit=20</span></div>
             <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/feed/updates?doc_type=120,160</span></div>
-          </div>
-        </div>
-
-        <div class="light-card catalog-card">
-          <div class="catalog-head">
-            <div class="catalog-name">開示トレンド<span class="id">get-feed-trend</span></div>
-            <span class="mcp-badge">get_feed_trend</span>
-          </div>
-          <p class="catalog-desc">直近の開示件数が多い上場銘柄を返します（既定は直近7日の有報）。顧客の検索数ではなく、sync された提出件数です。</p>
-          <div class="catalog-meta">
-            <div class="meta-row"><span class="meta-label">REST</span><span class="endpoint-code"><span class="method">GET</span>/v1/feed/trend?days=7&amp;limit=20</span></div>
-            <div class="meta-row"><span class="meta-label">例</span><span class="example-code">GET /v1/feed/trend?days=30&amp;doc_type=120,160</span></div>
           </div>
         </div>
 

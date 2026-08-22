@@ -581,62 +581,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 "submitted_at":{"type":"string"}}}}}}
                 """
         ),
-        ApiSkill(
-            id: "get-feed-trend",
-            name: "開示トレンド",
-            description: """
-                直近の開示件数が多い上場銘柄を返します（既定は直近7日の有報）。
-                顧客の検索数ではなく、EDINET へ提出され sync された書類の件数です。
-                """,
-            method: "GET",
-            path: "/v1/feed/trend",
-            mcpTool: "get_feed_trend",
-            feature: "feed",
-            parameters: [
-                ApiSkillParameter(
-                    name: "limit",
-                    location: .query,
-                    type: .integer,
-                    description: "返却件数（最大 \(Api.feedLimitMax)）",
-                    required: false,
-                    defaultValue: .int(Api.feedLimitDefault)
-                ),
-                ApiSkillParameter(
-                    name: "days",
-                    location: .query,
-                    type: .integer,
-                    description: "集計窓（日。最大 \(Api.feedTrendDaysMax)）",
-                    required: false,
-                    defaultValue: .int(Api.feedTrendDaysDefault)
-                ),
-                ApiSkillParameter(
-                    name: "doc_type",
-                    location: .query,
-                    type: .string,
-                    description: "書類種別（カンマ区切り。120 / 130 / 140 / 160。省略時 120）",
-                    required: false,
-                    defaultValue: .string(Api.docTypeAnnualReport)
-                ),
-            ],
-            instructions: """
-                Feed Trend。窓内の提出件数が多い順。同数なら最新提出が新しい順。
-                顧客検索ログは未接続（Fly の serving は DB 読み取り専用のため、リクエスト件数は集計しない）。
-                空でも 200。DB 非接続は 503。
-                例: GET /v1/feed/trend?days=7&limit=20
-                例: GET /v1/feed/trend?days=30&doc_type=120,160
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["schema_version","days","items"],"properties":\
-                {"schema_version":{"type":"integer"},"days":{"type":"integer"},"doc_types":\
-                {"type":"array","items":{"type":"string"}},"items":{"type":"array","items":\
-                {"type":"object","required":["code","name","filing_count","doc_id","doc_type",\
-                "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
-                "name":{"type":"string"},"filing_count":{"type":"integer"},"doc_id":{"type":"string"},\
-                "doc_type":{"type":"string"},"doc_type_label":{"type":"string"},\
-                "fy_end":{"type":"string"},"submitted_at":{"type":"string"}}}}}}
-                """
-        ),
     ]
 }
 

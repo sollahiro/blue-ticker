@@ -1,5 +1,5 @@
-// Feed Update / Trend の提出日時索引。
-// `GET /v1/feed/updates` と `/v1/feed/trend` が doc_type + submit_date_time 降順で読む。
+// Feed Update の提出日時索引。
+// `GET /v1/feed/updates` が doc_type + submit_date_time 降順で読む。
 
 import Fluent
 import SQLKit

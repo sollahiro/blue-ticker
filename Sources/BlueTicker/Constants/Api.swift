@@ -36,19 +36,19 @@ public enum Api {
     // 値は既存の直書きと同一（挙動不変）。
     public static let filingsMaxYearsDefault = 5
     public static let financialsYearsDefault = 5
-    /// Feed Update / Trend の返却件数省略時。
+    /// Feed Update の返却件数省略時。
     public static let feedLimitDefault = 50
-    /// Feed Update / Trend の返却件数上限。
+    /// Feed Update の返却件数上限。
     public static let feedLimitMax = 100
-    /// Feed Update / Trend の集計窓（日）省略時。
+    /// Feed Update の items 窓（日）省略時。
     public static let feedTrendDaysDefault = 7
-    /// Feed Update / Trend の集計窓（日）上限。
+    /// Feed Update の items 窓（日）上限。
     public static let feedTrendDaysMax = 90
     /// Update の `total.week` 窓（日）。クエリ `days`（items の窓）とは独立。
     public static let feedUpdateWeekDays = 7
     /// Feed 応答の公開契約バージョン。形を破壊的に変えたときのみ +1。
     public static let feedSchemaVersion = 2
-    /// 窓内書類の走査上限。Update の `total` と Trend の件数ランキングはメモリ集計。
+    /// 窓内書類の走査上限。Update の `total` はメモリ集計。
     public static let feedTrendScanLimit = 5000
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
     public static let statementYearsDefault = 5

@@ -1,4 +1,4 @@
-// Feed Update / Trend の公開 JSON 組み立て（ネットワーク・DB 非依存）。
+// Feed Update の公開 JSON 組み立て（ネットワーク・DB 非依存）。
 // 書類は `edinet_documents` 由来の正規化レコード。上場（5 桁 secCode 末尾 0）のみ載せる。
 
 import Foundation
@@ -37,13 +37,6 @@ public func feedDateString(_ date: Date = Date()) -> String {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = TimeZone(secondsFromGMT: 0)
     return formatter.string(from: date)
-}
-
-/// 集計窓の下限（UTC の YYYY-MM-DD）。`submit_date_time` の辞書順比較に使う。
-/// `days` 日前の暦日（Trend の走査。含む日数は days+1 になりうる）。
-public func feedCutoffDateString(days: Int, now: Date = Date()) -> String {
-    let cutoff = utcCalendar.date(byAdding: .day, value: -days, to: now) ?? now
-    return feedDateString(cutoff)
 }
 
 /// 今日を含む UTC 暦日数の下限。`days=1` はその日、`days=7` は直近1週間。
@@ -96,39 +89,6 @@ public func assembleFeedUpdates(
         "date": today,
         "days": days,
         "total": ["day": dayTotal, "week": weekTotal] as [String: Any],
-        "doc_types": docTypes,
-        "items": items,
-    ]
-}
-
-/// Feed Trend: 窓内の開示件数が多い上場銘柄。同数なら最新提出が新しい順。
-/// `records` は呼び出し側が窓・種別で絞り、提出日時降順にして渡す。
-public func assembleFeedTrend(
-    from records: [EdinetDocumentRecord], limit: Int, days: Int, docTypes: [String]
-) -> [String: Any] {
-    var counts: [String: Int] = [:]
-    var latest: [String: EdinetDocumentRecord] = [:]
-    for record in records {
-        guard let code = listedTickerCode(fromSecCode: record.secCode) else { continue }
-        counts[code, default: 0] += 1
-        if latest[code] == nil {
-            latest[code] = record
-        }
-    }
-    let ranked = latest.keys.sorted { left, right in
-        let leftCount = counts[left] ?? 0
-        let rightCount = counts[right] ?? 0
-        if leftCount != rightCount { return leftCount > rightCount }
-        return (latest[left]?.submitDateTime ?? "") > (latest[right]?.submitDateTime ?? "")
-    }
-    let items: [[String: Any]] = ranked.prefix(limit).compactMap { code in
-        guard var item = latest[code].flatMap(feedFilingItem) else { return nil }
-        item["filing_count"] = counts[code] ?? 0
-        return item
-    }
-    return [
-        "schema_version": Api.feedSchemaVersion,
-        "days": days,
         "doc_types": docTypes,
         "items": items,
     ]

@@ -14,7 +14,7 @@ private let expectedToolNames: Set<String> = [
     "get_financial_summary",
     "get_waterfall", "get_filing_content",
     "get_breakdown", "get_statement", "get_statement_notes",
-    "get_feed_updates", "get_feed_trend",
+    "get_feed_updates",
 ]
 
 private func makeTransport(
@@ -232,9 +232,6 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_feed_updates"]))
                 == ["schema_version", "date", "days", "total", "items"])
-        #expect(
-            outputSchemaRequiredKeys(try #require(byName["get_feed_trend"]))
-                == ["schema_version", "days", "items"])
     }
 
     /// outputSchema 文字列は全ツールで MCP.Value へデコードできる（壊れた schema はツールを落とさない）。

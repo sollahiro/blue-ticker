@@ -314,14 +314,6 @@ private func dispatchMcpTool(
                 limit: limit, days: days, docTypes: docTypes, db: db, logger: logger),
             notFoundMessage: "フィードを組み立てできません")
 
-    case "get_feed_trend":
-        let limit = parseFeedLimit(args["limit"]?.intValue)
-        let days = parseFeedDays(args["days"]?.intValue)
-        let docTypes = parseFeedDocTypes(args["doc_type"]?.stringValue)
-        return mapStoredResult(
-            await serveFeedTrend(limit: limit, days: days, docTypes: docTypes, db: db, logger: logger),
-            notFoundMessage: "フィードを組み立てできません")
-
     default:
         return errorToolResult("Unknown tool: \(params.name)")
     }

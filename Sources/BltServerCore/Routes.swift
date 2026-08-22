@@ -229,19 +229,6 @@ func registerRoutes(
             db: dbAvailable ? req.db : nil)
     }
 
-    // GET /v1/feed/trend?limit=50&days=7&doc_type=120
-    // 窓内の開示件数が多い上場銘柄。顧客検索数ではない。
-    v1.get("feed", "trend") { req async -> Response in
-        let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
-        let days = parseFeedDays(req.query[Int.self, at: "days"])
-        let docTypes = parseFeedDocTypes(req.query[String.self, at: "doc_type"])
-        return await feedJSONResponse(
-            await serveFeedTrend(
-                limit: limit, days: days, docTypes: docTypes, db: dbAvailable ? req.db : nil,
-                logger: req.logger),
-            db: dbAvailable ? req.db : nil)
-    }
-
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)

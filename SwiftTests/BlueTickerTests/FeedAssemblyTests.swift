@@ -1,4 +1,4 @@
-// Feed Update / Trend の公開 JSON 組み立て（DB 非依存）。
+// Feed Update の公開 JSON 組み立て（DB 非依存）。
 
 import Foundation
 import Testing
@@ -108,28 +108,9 @@ private func rec(
         #expect(items?.compactMap { $0["doc_id"] as? String } == ["TODAY"])
     }
 
-    @Test func trendRanksByCountThenRecency() {
-        let records = [
-            rec("T-late", submit: "2026-08-20 18:00"),
-            rec("S-2", secCode: "67580", filerName: "ソニーグループ株式会社", submit: "2026-08-19 12:00"),
-            rec("S-1", secCode: "67580", filerName: "ソニーグループ株式会社", docType: "160",
-                periodEnd: "2025-09-30", submit: "2026-08-18 09:00"),
-            rec("U-1", secCode: "99840", filerName: "ソフトバンクグループ株式会社", submit: "2026-08-10 09:00"),
-        ]
-        let json = assembleFeedTrend(from: records, limit: 10, days: 30, docTypes: ["120", "160"])
-        #expect(json["days"] as? Int == 30)
-        let items = json["items"] as? [[String: Any]]
-        #expect(items?.compactMap { $0["code"] as? String } == ["6758", "7203", "9984"])
-        #expect(items?.first?["filing_count"] as? Int == 2)
-        #expect(items?.first?["doc_id"] as? String == "S-2")
-        #expect(items?[1]["filing_count"] as? Int == 1)
-        #expect(items?[1]["doc_id"] as? String == "T-late")
-    }
-
-    @Test func feedCutoffDateStringIsUTCHyphenated() {
+    @Test func feedInclusiveCutoffDateStringIsUTCHyphenated() {
         let now = utcCalendar.date(from: DateComponents(year: 2026, month: 8, day: 22, hour: 7))!
         #expect(feedDateString(now) == "2026-08-22")
-        #expect(feedCutoffDateString(days: 7, now: now) == "2026-08-15")
         #expect(feedInclusiveCutoffDateString(days: 1, now: now) == "2026-08-22")
         #expect(feedInclusiveCutoffDateString(days: 7, now: now) == "2026-08-16")
         #expect(feedSubmitDatePrefix("2026-08-22 09:00") == "2026-08-22")
