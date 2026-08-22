@@ -41,7 +41,7 @@ Meta → Struct → Norm → Viz
 | Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開判断は Linear。軸は下表・`breakdown.md` |
 | Viz | Waterfall | 事業利益・ROIC・ROE の分解 | 済 | financials 同行の分析投影 |
 | Viz | Sankey | 地域別・製品別・利益構造・投資構造（項目入替可） | 未 | 旧称 Allocation。要求具体化後 |
-| Feed | Trend | 検索数の多い銘柄・検索トレンド | 未 | 顧客ログの置き場・集計単位が決まってから。提出件数ランキングは出さない |
+| Feed | Trend | 検索数の多い銘柄・検索トレンド | 済 | 匿名コマンド回数（Workers Analytics Engine）。提出件数ランキングは出さない |
 | Feed | Update | 新規取得・公開された有報などの更新情報 | 済 | REST/MCP。RSS は未提供 |
 | Feed | Status | データの新鮮度・カバー率 | 一部（運用 `status-report` / 既存 HTML） | Web HTML は抜本見直し予定 |
 | Feed | Report | LLM による銘柄分析レポート | 構想 | **本来はクライアント責務** |

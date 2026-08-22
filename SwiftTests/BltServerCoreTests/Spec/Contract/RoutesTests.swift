@@ -39,6 +39,8 @@ private func makeContext() -> BltServerContext {
 private func withApp(
     databases: Bool = false,
     cfAccessTeamDomain: String? = nil,
+    feedTrendSink: (any FeedTrendSink)? = nil,
+    feedTrendQuery: (any FeedTrendQueryClient)? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -56,6 +58,12 @@ private func withApp(
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             app.migrations.add(CreateCompanyIcons())
             try await app.autoMigrate()
+        }
+        if feedTrendSink != nil || feedTrendQuery != nil {
+            setFeedTrendServices(
+                app,
+                sink: feedTrendSink ?? NoopFeedTrendSink(),
+                query: feedTrendQuery ?? UnconfiguredFeedTrendQueryClient())
         }
         try await registerRoutes(
             app, context: makeContext(), cfAccessTeamDomain: cfAccessTeamDomain)
@@ -733,6 +741,81 @@ private func makeDemoFinancialsResponse(code: String, years: Int) throws -> Fina
             #expect(ids.contains("D-week"))
             #expect(ids.contains("D-old") == false)
         }
+    }
+
+    // MARK: - Feed Trend
+
+    @Test func feedTrendReturns503WhenUnconfigured() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/feed/trend")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == feedTrendUnavailableMessage)
+        }
+    }
+
+    @Test func feedTrendReturnsRankingFromStubWithoutHittingNetwork() async throws {
+        let stub = StubFeedTrendQueryClient(
+            ranking: FeedTrendRanking(items: [
+                FeedTrendBucket(code: "7203", count: 9),
+                FeedTrendBucket(code: "6758", count: 2),
+            ]))
+        try await withApp(feedTrendQuery: stub) { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?limit=10")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == Api.feedTrendSchemaVersion)
+            #expect(json?["days"] as? Int == 7)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.compactMap { $0["code"] as? String } == ["7203", "6758"])
+            #expect(items?.first?["count"] as? Int == 9)
+            #expect(items?.first?["icon_url"] is NSNull)
+            #expect(json?["by_tool"] == nil)
+        }
+    }
+
+    @Test func feedTrendCodeFilterIncludesBreakdowns() async throws {
+        let stub = StubFeedTrendQueryClient(
+            ranking: FeedTrendRanking(
+                items: [FeedTrendBucket(code: "7203", count: 4)],
+                byTool: [FeedTrendLabelCount(label: "search_companies", count: 3)],
+                bySurface: [FeedTrendLabelCount(label: "rest", count: 4)],
+                byQuery: [FeedTrendLabelCount(label: "トヨタ", count: 3)]
+            ))
+        try await withApp(feedTrendQuery: stub) { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?code=7203")
+            #expect(status == .ok)
+            #expect(json?["code"] as? String == "7203")
+            let byTool = json?["by_tool"] as? [[String: Any]]
+            #expect(byTool?.first?["tool"] as? String == "search_companies")
+        }
+    }
+
+    @Test func feedTrendRejectsInvalidCode() async throws {
+        try await withApp(feedTrendQuery: StubFeedTrendQueryClient(ranking: FeedTrendRanking(items: [])))
+        { app in
+            let (status, json) = try await send(app, "/v1/feed/trend?code=72030")
+            #expect(status == .badRequest)
+            #expect(json?["error"] as? String == "code は4桁の銘柄コードです")
+        }
+    }
+
+    @Test func restSearchAndFinancialsRecordTrendButFeedDoesNot() async throws {
+        let sink = RecordingFeedTrendSink()
+        try await withApp(feedTrendSink: sink) { app in
+            _ = try await send(app, "/v1/companies?q=7203")
+            _ = try await send(app, "/v1/companies/6758/financials")
+            _ = try await send(app, "/v1/feed/updates")
+            _ = try await send(app, "/healthz")
+        }
+        let tools = sink.events.map(\.tool)
+        #expect(tools.contains("search_companies"))
+        #expect(tools.contains("get_financial_summary"))
+        #expect(tools.contains("get_feed_updates") == false)
+        let search = try #require(sink.events.first { $0.tool == "search_companies" })
+        #expect(search.surface == "rest")
+        #expect(search.code == "7203")
+        let financials = try #require(sink.events.first { $0.tool == "get_financial_summary" })
+        #expect(financials.code == "6758")
+        #expect(financials.q == nil)
     }
 }
 

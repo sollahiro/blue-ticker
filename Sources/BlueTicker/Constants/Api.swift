@@ -46,8 +46,12 @@ public enum Api {
     public static let feedTrendDaysMax = 90
     /// Update の `total.week` 窓（日）。クエリ `days`（items の窓）とは独立。
     public static let feedUpdateWeekDays = 7
-    /// Feed 応答の公開契約バージョン。形を破壊的に変えたときのみ +1。
+    /// Feed Update 応答の公開契約バージョン。形を破壊的に変えたときのみ +1。
     public static let feedSchemaVersion = 2
+    /// Feed Trend 応答の公開契約バージョン（Update とは別リソース）。
+    public static let feedTrendSchemaVersion = 1
+    /// 検索クエリ `q` の蓄積上限（文字）。超えた分は切る。
+    public static let feedTrendQueryMaxLength = 128
     /// 窓内書類の走査上限。Update の `total` はメモリ集計。
     public static let feedTrendScanLimit = 5000
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。

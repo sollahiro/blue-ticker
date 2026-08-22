@@ -25,11 +25,14 @@ func registerMcpRoute(
     // 一度だけ取得する（三項演算子は選択されない分岐を評価しない）。
     let db: Database? = dbAvailable ? app.db : nil
     let logger = app.logger
+    let trends = feedTrendBox(for: app)
 
     let transport = try await makeBltMcpTransport(
         version: blueTickerVersion,
         callTool: { params in
-            await dispatchMcpTool(params, context: context, db: db, logger: logger)
+            await dispatchMcpTool(
+                params, context: context, db: db, logger: logger,
+                trendSink: trends.sink, trendQuery: trends.query)
         }
     )
 
@@ -240,9 +243,16 @@ private func vaporResponse(from httpResponse: MCP.HTTPResponse) -> Vapor.Respons
 /// ツール名と引数から REST と共通の内部処理を呼び、結果を `CallTool.Result` へ変換する。
 /// REST（Routes.swift）と同じ意味論（financials 系はライブ計算へフォールバックしない等）を踏襲する。
 private func dispatchMcpTool(
-    _ params: CallTool.Parameters, context: BltServerContext, db: Database?, logger: Logger
+    _ params: CallTool.Parameters, context: BltServerContext, db: Database?, logger: Logger,
+    trendSink: any FeedTrendSink, trendQuery: any FeedTrendQueryClient
 ) async -> CallTool.Result {
     let args = params.arguments ?? [:]
+    if let event = makeFeedTrendEvent(
+        surface: "mcp", tool: params.name,
+        code: args["code"]?.stringValue, q: args["query"]?.stringValue)
+    {
+        trendSink.record(event)
+    }
 
     switch params.name {
     case "search_companies":
@@ -314,6 +324,15 @@ private func dispatchMcpTool(
                 limit: limit, days: days, docTypes: docTypes, db: db, logger: logger),
             notFoundMessage: "フィードを組み立てできません")
 
+    case "get_feed_trend":
+        let limit = parseFeedLimit(args["limit"]?.intValue)
+        let days = parseFeedDays(args["days"]?.intValue)
+        let codeParam = parseFeedTrendCodeParam(args["code"]?.stringValue)
+        return mapFeedTrendResult(
+            await serveFeedTrend(
+                limit: limit, days: days, codeParam: codeParam, client: trendQuery,
+                logger: logger))
+
     default:
         return errorToolResult("Unknown tool: \(params.name)")
     }
@@ -340,6 +359,17 @@ private func mapStoredResult(
         return errorToolResult(notFoundMessage)
     case .dbUnavailable:
         return errorToolResult("財務データベースに接続できません")
+    }
+}
+
+private func mapFeedTrendResult(_ result: FeedTrendServeResult) -> CallTool.Result {
+    switch result {
+    case .ok(let value):
+        return jsonToolResult(value)
+    case .badRequest(let message):
+        return errorToolResult(message)
+    case .unavailable:
+        return errorToolResult(feedTrendUnavailableMessage)
     }
 }
 

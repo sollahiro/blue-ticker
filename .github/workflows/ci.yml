@@ -169,3 +169,6 @@ jobs:
 
           print("OK: fly.toml は serviceless を維持しています")
           PYEOF
+
+      - name: Feed Trend Worker の入力正規化
+        run: node --test workers/feed-trend/src/validate.test.js

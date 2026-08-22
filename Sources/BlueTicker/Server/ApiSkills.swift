@@ -581,6 +581,62 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 "submitted_at":{"type":"string"}}}}}}
                 """
         ),
+        ApiSkill(
+            id: "get-feed-trend",
+            name: "検索トレンド",
+            description: """
+                直近に検索・参照された銘柄を件数の多い順で返します（匿名のコマンド回数。提出書類の件数ではありません）。
+                銘柄の直近提出は get_feed_updates、1社の書類一覧は get_filings を使ってください。
+                """,
+            method: "GET",
+            path: "/v1/feed/trend",
+            mcpTool: "get_feed_trend",
+            feature: "feed",
+            parameters: [
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "返却件数（最大 \(Api.feedLimitMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedLimitDefault)
+                ),
+                ApiSkillParameter(
+                    name: "days",
+                    location: .query,
+                    type: .integer,
+                    description: "集計窓（日。直近 N×24h。最大 \(Api.feedTrendDaysMax)）",
+                    required: false,
+                    defaultValue: .int(Api.feedTrendDaysDefault)
+                ),
+                ApiSkillParameter(
+                    name: "code",
+                    location: .query,
+                    type: .string,
+                    description: "4桁コード。指定するとその銘柄のツール別・面別・検索クエリ内訳",
+                    required: false
+                ),
+            ],
+            instructions: """
+                Feed Trend。匿名の search_companies および各ツールヒット回数（MCP と REST を区別）。
+                顧客アカウントや IP は持たない。書き込みは origin からカウンターへ fire-and-forget（失敗しても本 API は 200/404/503 のまま）。
+                items は code ごとの件数降順。空でも 200（items=[]）。カウンター未設定・取得失敗は 503。
+                提出件数ランキングは出さない（それは get_feed_updates）。
+                RSS は未提供（REST が契約の正。MCP は追従）。
+                例: GET /v1/feed/trend?days=7&limit=20
+                例: GET /v1/feed/trend?code=7203
+                """,
+            mcpOutputSchema:
+                """
+                {"type":"object","required":["schema_version","date","days","items"],"properties":\
+                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
+                "code":{"type":"string"},"items":{"type":"array","items":{"type":"object","required":\
+                ["code","name","count"],"properties":{"code":{"type":"string"},"name":{"type":"string"},\
+                "count":{"type":"integer"}}}},"by_tool":{"type":"array","items":{"type":"object"}},\
+                "by_surface":{"type":"array","items":{"type":"object"}},\
+                "by_query":{"type":"array","items":{"type":"object"}}}}
+                """
+        ),
     ]
 }
 

@@ -1,0 +1,13 @@
+{
+  "name": "blt-feed-trend",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-22",
+  // Analytics Engine への write は Worker binding からのみ。origin は POST /ingest する。
+  // この Worker を api.* / mcp.* の前段に置かない（Tunnel + Access はそのまま）。
+  "analytics_engine_datasets": [
+    {
+      "binding": "TREND",
+      "dataset": "feed_trend"
+    }
+  ]
+}

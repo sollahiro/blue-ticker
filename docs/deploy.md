@@ -13,6 +13,7 @@
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード。公開デプロイでは**必須**（未設定＝無認証） |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
 | `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
+| `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
@@ -62,6 +63,22 @@ container exec blt-server /app/blt-server ingest --limit 50
 3. Fly secrets: `CF_ACCESS_TEAM_DOMAIN` · `CLOUDFLARE_TUNNEL_TOKEN`
 4. cloudflared は Dockerfile に同梱（版固定＋sha256）。トークン未設定なら blt-server のみ
 5. `fly.toml` に `[http_service]` を戻さない（直アクセス経路が開く）
+
+### Feed Trend Worker
+
+匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。
+
+```bash
+cd workers/feed-trend
+npx wrangler@4 deploy
+npx wrangler@4 secret put TOKEN
+npx wrangler@4 secret put ACCOUNT_ID
+npx wrangler@4 secret put AE_SQL_TOKEN
+fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev' \
+  BLT_FEED_TREND_TOKEN='...'
+```
+
+この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。
 
 ### REST Service Token
 

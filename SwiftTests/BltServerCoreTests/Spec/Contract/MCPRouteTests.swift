@@ -24,6 +24,8 @@ private func makeMcpContext() -> BltServerContext {
 
 private func withMcpApp(
     databases: Bool = false,
+    feedTrendSink: (any FeedTrendSink)? = nil,
+    feedTrendQuery: (any FeedTrendQueryClient)? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -41,6 +43,12 @@ private func withMcpApp(
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             app.migrations.add(CreateCompanyStatements())
             try await app.autoMigrate()
+        }
+        if feedTrendSink != nil || feedTrendQuery != nil {
+            setFeedTrendServices(
+                app,
+                sink: feedTrendSink ?? NoopFeedTrendSink(),
+                query: feedTrendQuery ?? UnconfiguredFeedTrendQueryClient())
         }
         try await registerRoutes(app, context: makeMcpContext())
         try await body(app)
@@ -530,6 +538,55 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let text = content?.first?["text"] as? String
             #expect(text?.contains("データベース") == true)
         }
+    }
+
+    @Test func getFeedTrendReturnsErrorWhenUnconfigured() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_feed_trend", arguments: [:]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("検索トレンド") == true)
+        }
+    }
+
+    @Test func getFeedTrendReturnsRankingFromStub() async throws {
+        let stub = StubFeedTrendQueryClient(
+            ranking: FeedTrendRanking(items: [FeedTrendBucket(code: "7203", count: 5)]))
+        try await withMcpApp(feedTrendQuery: stub) { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_feed_trend", arguments: ["limit": 10]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool != true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            #expect(body?["schema_version"] as? Int == Api.feedTrendSchemaVersion)
+            let items = body?["items"] as? [[String: Any]]
+            #expect(items?.first?["code"] as? String == "7203")
+            #expect(items?.first?["icon_url"] == nil)
+        }
+    }
+
+    @Test func mcpSearchRecordsTrendButFeedToolsDoNot() async throws {
+        let sink = RecordingFeedTrendSink()
+        try await withMcpApp(feedTrendSink: sink) { app in
+            _ = try await postMcp(
+                app, toolCallBody(name: "search_companies", arguments: ["query": "トヨタ"]))
+            _ = try await postMcp(
+                app, toolCallBody(name: "get_feed_updates", arguments: [:]))
+            _ = try await postMcp(
+                app, toolCallBody(name: "get_feed_trend", arguments: [:]))
+        }
+        #expect(sink.events.map(\.tool) == ["search_companies"])
+        #expect(sink.events.first?.surface == "mcp")
+        #expect(sink.events.first?.q == "トヨタ")
+        #expect(sink.events.first?.code == nil)
     }
 }
 

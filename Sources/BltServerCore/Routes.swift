@@ -69,6 +69,7 @@ func registerRoutes(
     // 未接続なら 503・未格納なら 404 とする（ライブ計算へは落とさない＝OOM 回避）。
     // filings は軽量な EDINET 一覧取得のため未格納時のライブ取得を許容する。
     let dbAvailable = !app.databases.ids().isEmpty
+    installFeedTrendDefaults(app)
 
     // GET /v1/companies?q={query}
     // icon_url は company_icons（R2格納済み favicon）のバッチ lookup で合成する（未格納・R2未設定・
@@ -76,6 +77,7 @@ func registerRoutes(
     // ここ（BltServerCore・DB 接続を持つ層）で合成する。
     v1.get("companies") { req async -> Response in
         let q = req.query[String.self, at: "q"] ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "search_companies", q: q)
         let response = await context.searchCompanies(q: q)
         guard case .ok(let results as [[String: Any]]) = response else {
             return makeResponse(response)
@@ -119,6 +121,7 @@ func registerRoutes(
     // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_filings", code: code)
         let maxYears = req.query[Int.self, at: "max_years"] ?? Api.filingsMaxYearsDefault
         return makeResponse(
             await serveFilings(
@@ -133,6 +136,7 @@ func registerRoutes(
     // ライブ計算へはフォールバックしない（1リクエストでサーバー全体を OOM 落ちさせる地雷を断つ）。
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_financial_summary", code: code)
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         return makeStoredDataResponse(
             await serveStoredFinancials(
@@ -146,6 +150,7 @@ func registerRoutes(
     // ネットキャッシュ差分・運転資本/CCC差分）を含めて返す。未格納・古い・年数不足は 404。
     v1.get("companies", ":code", "waterfall") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_waterfall", code: code)
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         return makeStoredDataResponse(
             await serveStoredAnalysis(
@@ -159,6 +164,7 @@ func registerRoutes(
     // ingest（有報セクション取り込み）へ閉じ込めた。未抽出は 404・DB 非接続は 503（financials と同型・フォールバックなし）。
     v1.get("companies", ":code", "filing-content") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_filing_content", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let sections = req.query[String.self, at: "sections"]
             .map { $0.split(separator: ",").map(String.init) }
@@ -175,6 +181,7 @@ func registerRoutes(
     // 内訳取り込み: business/geography は上場全体、決定論指標軸は日経225（docs/breakdown.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let axis = req.query[String.self, at: "axis"] ?? breakdownAxisBusiness
         return makeBreakdownResponse(
@@ -190,6 +197,7 @@ func registerRoutes(
     // docs/statement.md）。
     v1.get("companies", ":code", "statement") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_statement", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let years = req.query[Int.self, at: "years"] ?? Api.statementYearsDefault
         return makeStoredDataResponse(
@@ -205,6 +213,7 @@ func registerRoutes(
     // 財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
     v1.get("companies", ":code", "statement", "notes") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
+        recordFeedTrend(req.application, surface: "rest", tool: "get_statement_notes", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         guard let noteType = req.query[String.self, at: "note_type"], !noteType.isEmpty else {
             return errorResponse(.badRequest, message: "note_type は必須です")
@@ -226,6 +235,19 @@ func registerRoutes(
             await serveFeedUpdates(
                 limit: limit, days: days, docTypes: docTypes, db: dbAvailable ? req.db : nil,
                 logger: req.logger),
+            db: dbAvailable ? req.db : nil)
+    }
+
+    // GET /v1/feed/trend?limit=50&days=7&code=
+    // 匿名の検索・ツールヒット件数ランキング（Cloudflare Analytics Engine）。書類件数ではない。
+    v1.get("feed", "trend") { req async -> Response in
+        let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
+        let days = parseFeedDays(req.query[Int.self, at: "days"])
+        let codeParam = parseFeedTrendCodeParam(req.query[String.self, at: "code"])
+        return await feedTrendJSONResponse(
+            await serveFeedTrend(
+                limit: limit, days: days, codeParam: codeParam,
+                client: feedTrendBox(for: req.application).query, logger: req.logger),
             db: dbAvailable ? req.db : nil)
     }
 
@@ -342,6 +364,35 @@ private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) as
         return errorResponse(.notFound, message: "フィードを組み立てできません")
     case .dbUnavailable:
         return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+    }
+}
+
+/// Trend 応答。未設定・Worker 失敗は 503（財務 DB とは別メッセージ）。空ランキングは 200。
+private func feedTrendJSONResponse(_ result: FeedTrendServeResult, db: Database?) async -> Response {
+    switch result {
+    case .ok(var body):
+        if let db, var items = body["items"] as? [[String: Any]] {
+            let codes = items.compactMap { $0["code"] as? String }
+            let icons = await iconURLs(for: codes, db: db)
+            items = items.map { row in
+                var next = row
+                next["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
+                return next
+            }
+            body["items"] = items
+        } else if var items = body["items"] as? [[String: Any]] {
+            items = items.map { row in
+                var next = row
+                next["icon_url"] = NSNull()
+                return next
+            }
+            body["items"] = items
+        }
+        return jsonResponse(body, status: .ok)
+    case .badRequest(let message):
+        return errorResponse(.badRequest, message: message)
+    case .unavailable:
+        return errorResponse(.serviceUnavailable, message: feedTrendUnavailableMessage)
     }
 }
 
