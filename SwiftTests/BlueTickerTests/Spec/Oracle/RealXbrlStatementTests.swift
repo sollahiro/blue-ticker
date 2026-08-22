@@ -1006,31 +1006,37 @@ import Foundation
         #expect(cfOpen!.order! < cfClose!.order!)
 
         Self.expectHTMLReadingOrder(year.changesInEquity)
-        #expect(year.changesInEquity.allSatisfy { $0.section == nil })
         #expect(
             year.changesInEquity.contains {
                 $0.label == "期末残高" && $0.value == 594_493_000_000 && $0.isTotal
+                    && $0.section == .group("資本金")
             })
         #expect(
             year.changesInEquity.contains {
                 $0.label == "期末残高" && $0.value == 548_221_000_000 && $0.isTotal
+                    && $0.section == .group("累積的その他の包括利益")
             })
         #expect(
             year.changesInEquity.contains {
                 $0.label == "期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal
+                    && $0.section == .group("当社株主資本合計")
             })
         #expect(
             year.changesInEquity.contains {
                 $0.label == "期末残高" && $0.value == 147_047_000_000 && $0.isTotal
+                    && $0.section == .group("非支配持分")
             })
         #expect(
             year.changesInEquity.contains {
                 $0.label == "期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal
+                    && $0.section == .group("資本合計")
             })
         let ssOpen = year.changesInEquity.first { $0.label == "期首残高" }
         let ssClose = year.changesInEquity.last { $0.label == "期末残高" }
         #expect(ssOpen?.value == 594_493_000_000)
+        #expect(ssOpen?.section == .group("資本金"))
         #expect(ssClose?.value == 3_854_915_000_000)
+        #expect(ssClose?.section == .group("資本合計"))
         #expect(ssOpen?.order != nil && ssClose?.order != nil)
         #expect(ssOpen!.order! < ssClose!.order!)
     }

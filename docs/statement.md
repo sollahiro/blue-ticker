@@ -33,12 +33,12 @@
 2. **連結/非連結**: contextRef で判定。非連結は `isPureNonConsolidatedContext`（セグメント軸付きを拾わない）。
 3. **表示順 `order`**: 同一 presentation role 内でのみ比較。代表 role は**出現頻度ではなく採用タグ集合のカバレッジ**。取れないタグはアルファベット順フォールバック。
 4. **SS**: 別名 loc をマージし期首→変動→期末の order。連結で個別 SS 由来の stray `ProfitLoss` を除外（個別のみ企業は正当行として残す）。
-5. **`section`（BS/CF）**: presentation 祖先キーワード。BS 判定順は 純資産→負債→資産（`NetAssets` が `Asset` を部分一致するため）。複数区分に同時一致する祖先は曖昧として上へ。タグ自身名へのフォールバックは単一区分に曖昧さなく一致する場合のみ。
+5. **`section`（BS/CF、科目縦 SS）**: BS/CF は presentation 祖先キーワード。BS 判定順は 純資産→負債→資産（`NetAssets` が `Asset` を部分一致するため）。複数区分に同時一致する祖先は曖昧として上へ。タグ自身名へのフォールバックは単一区分に曖昧さなく一致する場合のみ。US-GAAP 科目縦 SS は区分見出し（資本金 等）を同じキーに載せる（JSON 文字列）。label は開示どおり。
 6. **同一タグの二重 loc**: 親候補を集合で持ち BFS。
 7. **ラベル**: 提出パッケージ＋ `assets/taxonomy` 補完。`preferredLabel` 対応。期首/期末ラベル差し替えは **CF（と SS）限定**（BS 合計行を巻き込まない）。ロール選択は標準 XBRL ロール優先で決定的に。
 8. **CF Instant**: 期首/期末現金は Instant。CF に限り前期 Instant も受理。
 9. **`is_total`/`components`**: calculation linkbase（`summation-item`）。presentation の親子では二重計上を防げない。
-10. **US-GAAP**: fact 経路不可 → `USGAAPStatementHtml`（当期優先・キヤノン型 components）。見出しゆれ: `（資産）`/`資本：`（証券）、営業利益行なし PL、CF 分割表、SS の `期末現在`/`期首残高`/`YYYY年M月DD日残高`、野村の連結資本勘定変動表（科目縦・年次は列。改ページ分割は追記。label は開示どおりで区分名は足さない。`section` は SS では nil）。年次切り出しは時系列マーカーだけ（科目縦の期首/期末は切らない）。`is_total` は「合計」、1文字の「計」、「費用計」、および営業/投資/財務CF合計（「キャッシュ・フロー」または「現金（純額）」型）。`負債および資本合計` は部見出しではなくグランドトータル（section=nil）。表示ラベルは項番・括弧番号を落とす。足し算だけの空番号親は行にしない。Summary 用 `USGAAPHtml` と混同しない。取れないときだけ `us_gaap_unsupported`。
+10. **US-GAAP**: fact 経路不可 → `USGAAPStatementHtml`（当期優先・キヤノン型 components）。見出しゆれ: `（資産）`/`資本：`（証券）、営業利益行なし PL、CF 分割表、SS の `期末現在`/`期首残高`/`YYYY年M月DD日残高`、野村の連結資本勘定変動表（科目縦・年次は列。改ページ分割は追記。label は開示どおり。区分見出しは `section`（`group`）へ載せる。科目横 SS の `section` は nil）。年次切り出しは時系列マーカーだけ（科目縦の期首/期末は切らない）。`is_total` は「合計」、1文字の「計」、「費用計」、および営業/投資/財務CF合計（「キャッシュ・フロー」または「現金（純額）」型）。`負債および資本合計` は部見出しではなくグランドトータル（section=nil）。表示ラベルは項番・括弧番号を落とす。足し算だけの空番号親は行にしない。Summary 用 `USGAAPHtml` と混同しない。取れないときだけ `us_gaap_unsupported`。
 
 ## notes
 

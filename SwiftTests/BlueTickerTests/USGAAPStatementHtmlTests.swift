@@ -888,6 +888,7 @@ import Foundation
         #expect(!omronSS.contains { ($0.label ?? "").contains("第87期") })
         #expect(omronSS.contains { ($0.label ?? "").contains("第88期末現在") && $0.value == 934_432_000_000 })
         #expect(omronSS.contains { ($0.label ?? "").contains("第89期末現在") && $0.value == 1_000_562_000_000 })
+        #expect(omronSS.allSatisfy { $0.section == nil })
 
         let orix = """
         <html><body>
@@ -905,6 +906,7 @@ import Foundation
         #expect(!orixSS.contains { ($0.label ?? "").contains("2024年") })
         #expect(orixSS.contains { ($0.label ?? "").contains("2025年３月31日") && $0.value == 4_171_783_000_000 })
         #expect(orixSS.contains { ($0.label ?? "").contains("2026年３月31日") && $0.value == 4_573_068_000_000 })
+        #expect(orixSS.allSatisfy { $0.section == nil })
 
         let komatsu = """
         <html><body>
@@ -919,6 +921,7 @@ import Foundation
         let komatsuSS = try extractFromHTML(komatsu, types: [.changesInEquity]).changesInEquity
         #expect(komatsuSS.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
         #expect(komatsuSS.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
+        #expect(komatsuSS.allSatisfy { $0.section == nil })
 
         // 小松実データ: 科目横の前期表＋当期表。年次列が無いので最後の表だけ残す。
         let komatsuYears = """
@@ -941,12 +944,13 @@ import Foundation
         #expect(!komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_344_853_000_000 })
         #expect(komatsuLatest.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
         #expect(komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
+        #expect(komatsuLatest.allSatisfy { $0.section == nil })
     }
 
     @Test
     func componentMajorEquityStatementKeepsGroupsAndContinuationTable() throws {
         // 野村 連結資本勘定変動表: 科目縦・年次は列。株主資本と非支配持分が改ページで別表。
-        // 期首/期末の繰り返しは年次切り出しに使わない。label は開示どおり（区分名は足さない）。
+        // 期首/期末の繰り返しは年次切り出しに使わない。label は開示どおり。区分見出しは section。
         let html = """
         <html><body>
         <table>
@@ -983,18 +987,19 @@ import Foundation
         """
         let ss = try extractFromHTML(html, types: [.changesInEquity]).changesInEquity
 
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 594_493_000_000 && $0.isTotal })
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 550_501_000_000 && $0.isTotal })
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 548_221_000_000 && $0.isTotal })
-        #expect(ss.contains { $0.label == "自己クレジット調整額" && $0.value == -46_879_000_000 })
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal })
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 147_047_000_000 && $0.isTotal })
-        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal })
-        #expect(ss.allSatisfy { $0.section == nil })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 594_493_000_000 && $0.isTotal && $0.section == .group("資本金") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 550_501_000_000 && $0.isTotal && $0.section == .group("為替換算調整額") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 548_221_000_000 && $0.isTotal && $0.section == .group("累積的その他の包括利益") })
+        #expect(ss.contains { $0.label == "自己クレジット調整額" && $0.value == -46_879_000_000 && $0.section == .group("自己クレジット調整額") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal && $0.section == .group("当社株主資本合計") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 147_047_000_000 && $0.isTotal && $0.section == .group("非支配持分") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal && $0.section == .group("資本合計") })
         let capitalOpen = ss.first { $0.label == "期首残高" }
         let equityClose = ss.last { $0.label == "期末残高" }
         #expect(capitalOpen?.value == 594_493_000_000)
+        #expect(capitalOpen?.section == .group("資本金"))
         #expect(equityClose?.value == 3_854_915_000_000)
+        #expect(equityClose?.section == .group("資本合計"))
         #expect(capitalOpen?.order != nil && equityClose?.order != nil)
         #expect(capitalOpen!.order! < equityClose!.order!)
     }
