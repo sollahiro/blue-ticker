@@ -690,7 +690,7 @@ enum USGAAPStatementHtml {
 
     private static func isTotalLabel(_ label: String, sectionType: StatementSectionType) -> Bool {
         let s = USGAAPHtml.stripSectionPrefix(label)
-        if s.contains("合計") || isKeiTotalLabel(s) { return true }
+        if s.contains("合計") || s == "計" { return true }
         switch sectionType {
         case .incomeStatement:
             return s == "営業利益" || s == "売上総利益" || s.contains("当期純利益")
@@ -703,14 +703,6 @@ enum USGAAPStatementHtml {
         case .balanceSheet:
             return false
         }
-    }
-
-    /// 野村の区分小計「計」、オリックスの「営業収益 計」/「小計」。
-    /// 「会計」「設計」など語尾が偶然「計」の科目は除外する。
-    private static func isKeiTotalLabel(_ s: String) -> Bool {
-        if s == "計" { return true }
-        guard s.hasSuffix("計") else { return false }
-        return !["会計", "設計", "統計", "家計", "生計"].contains { s.hasSuffix($0) }
     }
 
     private static func syntheticTag(_ section: StatementSectionType, order: Int) -> String {
