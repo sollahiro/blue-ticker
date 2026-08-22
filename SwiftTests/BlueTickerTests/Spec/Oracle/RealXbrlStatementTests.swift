@@ -1454,6 +1454,16 @@ import Foundation
         ]
         #expect(Self.statementGoldenRows(year.incomeStatement) == expectedPL)
 
+        // Summary 売上は中間の「商品および不動産売上高」ではなく「営業収益 計」。
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YG5L_xbrl"))
+        #expect(financials?.sales == 3_330_831_000_000)
+        #expect(financials?.salesLabel == "営業収益 計")
+        #expect(Self.exactLabelValue(year.incomeStatement, "販売費および一般管理費") == 711_775_000_000)
+        #expect(Self.exactLabelValue(year.incomeStatement, "生命保険費用") == 479_937_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "短期借入債務") == 572_235_000_000)
+        #expect(Self.exactLabelValue(year.balanceSheet, "預金") == 2_625_556_000_000)
+
         let expectedCF: [StatementGoldenRow] = [
             .init(label: "当期純利益", section: "operating", value: 458_328_000_000, isTotal: false),
             .init(label: "減価償却費・その他償却費", section: "operating", value: 404_791_000_000, isTotal: false),

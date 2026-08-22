@@ -204,8 +204,10 @@ enum StatementFinancialsResolver {
                 assignIfAbsent(&durationFS, vtag, item.value)
             }
         }
+        var salesLabelOverride: String?
         if let sales = resolveUSGAAPSales(year.incomeStatement) {
-            durationFS["NetSales"] = FieldValue(current: sales, prior: nil)
+            durationFS["NetSales"] = FieldValue(current: sales.value, prior: nil)
+            salesLabelOverride = sales.labelOverride
         }
         if let np = resolveUSGAAPNetProfit(year.incomeStatement) {
             durationFS["NetIncomeLossAttributableToOwnersOfParentUSGAAP"] = FieldValue(
@@ -241,7 +243,7 @@ enum StatementFinancialsResolver {
 
         return StatementFinancialsValues(
             sales: is_.sales,
-            salesLabel: is_.salesLabel ?? "売上高",
+            salesLabel: salesLabelOverride ?? is_.salesLabel ?? "売上高",
             operatingProfit: op.operatingProfit ?? is_.operatingProfit,
             operatingProfitLabel: op.operatingProfit != nil ? op.label : nil,
             netProfit: is_.netProfit,
@@ -533,15 +535,33 @@ enum StatementFinancialsResolver {
         }
     }
 
-    /// 富士フイルム型「売上高」を優先し、キヤノン型（製品/サービス内訳の後の「合計」）へフォールバック。
-    private static func resolveUSGAAPSales(_ items: [StatementLineItem]) -> Double? {
+    /// Summary 売上の正本行。営業収益計 / 収益合計を、中間の「〜売上高」内訳より優先する
+    /// （オリックス: 商品および不動産売上高 442,586 ≠ 営業収益 計 3,330,831）。
+    /// 富士フイルム型の単独「売上高」、キヤノン型（製品/サービス内訳の後の「合計」）はフォールバック。
+    private static func resolveUSGAAPSales(
+        _ items: [StatementLineItem]
+    ) -> (value: Double, labelOverride: String?)? {
         for item in items {
             guard let label = item.label, item.unit != "JPYPerShares" else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
-            if stripped == "売上高" || (stripped.hasSuffix("売上高")
-                && !stripped.contains("製品") && !stripped.contains("サービス"))
+            if isUSGAAPRevenueTotalLabel(stripped) {
+                return (item.value, stripped)
+            }
+        }
+        for item in items {
+            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped == "売上高" {
+                return (item.value, nil)
+            }
+        }
+        for item in items {
+            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped.hasSuffix("売上高")
+                && !stripped.contains("製品") && !stripped.contains("サービス")
             {
-                return item.value
+                return (item.value, nil)
             }
         }
         // キヤノン: 営業利益より前にある最初の「合計」（売上ブロックの合計）
@@ -551,11 +571,22 @@ enum StatementFinancialsResolver {
             for item in items.prefix(opIndex) {
                 guard let label = item.label, item.unit != "JPYPerShares" else { continue }
                 if USGAAPHtml.stripSectionPrefix(label) == "合計" {
-                    return item.value
+                    return (item.value, nil)
                 }
             }
         }
         return nil
+    }
+
+    /// オリックス「営業収益 計」/「営業収益計」、野村「収益合計」。控除後の収益合計は除外。
+    private static func isUSGAAPRevenueTotalLabel(_ stripped: String) -> Bool {
+        if stripped == "収益合計" || (stripped.hasPrefix("収益合計") && !stripped.contains("控除")) {
+            return true
+        }
+        let compact = stripped
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+        return compact == "営業収益計" || compact == "営業収益合計"
     }
 
     private static func resolveUSGAAPNetProfit(_ items: [StatementLineItem]) -> Double? {

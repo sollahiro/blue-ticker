@@ -710,6 +710,79 @@ import Foundation
     }
 
     @Test
+    func orixStyleRevenueTotalPreferredOverComponentSalesForSummary() throws {
+        // メンテ PDF（ORIX 8591 / S100YG5L）: Summary 売上は中間の
+        // 「商品および不動産売上高」442,586 ではなく「営業収益 計」3,330,831。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>金融収益</td><td>300,000</td><td>365,570</td></tr>
+          <tr><td>商品および不動産売上高</td><td>400,000</td><td>442,586</td></tr>
+          <tr><td>サービス収入</td><td>1,000,000</td><td>1,112,383</td></tr>
+          <tr><td>営業収益 計</td><td>3,000,000</td><td>3,330,831</td></tr>
+          <tr><td>生命保険費用</td><td>400,000</td><td>479,937</td></tr>
+          <tr><td>販売費および一般管理費</td><td>700,000</td><td>711,775</td></tr>
+          <tr><td>営業費用 計</td><td>2,700,000</td><td>2,874,583</td></tr>
+          <tr><td>営業利益</td><td>400,000</td><td>456,248</td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td>400,000</td><td>447,265</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>短期借入債務</td><td>500,000</td><td>572,235</td></tr>
+          <tr><td>預金</td><td>2,000,000</td><td>2,625,556</td></tr>
+          <tr><td>負債合計</td><td>10,000,000</td><td>13,378,965</td></tr>
+          <tr><td>資産合計</td><td>15,000,000</td><td>18,002,776</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-orix-sales-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        let xbrl = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrl xmlns="http://www.xbrl.org/2003/instance"
+              xmlns:jppfs="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor">
+          <context id="CurrentYearDuration"><period><startDate>2024-04-01</startDate><endDate>2025-03-31</endDate></period></context>
+          <jppfs:NetSalesUSGAAPSummaryOfBusinessResults contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs:NetSalesUSGAAPSummaryOfBusinessResults>
+        </xbrl>
+        """
+        try xbrl.write(
+            to: pub.appendingPathComponent("test.xbrl"), atomically: true, encoding: .utf8)
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(values.sales == 3_330_831_000_000)
+        #expect(values.salesLabel == "営業収益 計")
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir,
+                statementTypes: [.balanceSheet, .incomeStatement]))
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "販売費および一般管理費" && $0.value == 711_775_000_000
+            })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "生命保険費用" && $0.value == 479_937_000_000
+            })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "短期借入債務" && $0.value == 572_235_000_000
+            })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "預金" && $0.value == 2_625_556_000_000
+            })
+    }
+
+    @Test
     func fourSlotRowWithEmptyLeftCellsKeepsCurrentRightAmount() throws {
         // 実データ確認（オムロン CF「１　当期純利益」）: 前期/当期それぞれ左空・右金額の
         // 4スロット。先頭の空をスペーサとして剥がすと奇数になり行ごと落ちるため残す。
