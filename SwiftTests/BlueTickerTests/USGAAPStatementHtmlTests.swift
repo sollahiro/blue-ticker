@@ -635,16 +635,49 @@ import Foundation
     }
 
     @Test
+    func fourSlotRowWithEmptyLeftCellsKeepsCurrentRightAmount() throws {
+        // 実データ確認（オムロン CF「１　当期純利益」）: 前期/当期それぞれ左空・右金額の
+        // 4スロット。先頭の空をスペーサとして剥がすと奇数になり行ごと落ちるため残す。
+        // 明細行（減価償却費）は左に金額・右が空でも従来どおり当期左を取る。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>Ⅰ　営業活動によるキャッシュ・フロー</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>１　当期純利益</td><td></td><td>14,873</td><td></td><td>31,277</td></tr>
+          <tr><td>２　営業活動によるキャッシュ・フローと当期純利益の調整</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>(1）減価償却費</td><td>33,450</td><td></td><td>33,778</td><td></td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td>55,784</td><td></td><td>60,919</td></tr>
+        </table>
+        </body></html>
+        """
+        let cf = try extractFromHTML(html, types: [.cashFlow]).cashFlow
+
+        #expect(cf.first?.label == "当期純利益")
+        #expect(
+            cf.contains {
+                $0.label == "当期純利益" && $0.value == 31_277_000_000 && $0.section == .operating
+            })
+        #expect(cf.contains { $0.label == "減価償却費" && $0.value == 33_778_000_000 })
+        #expect(
+            cf.contains {
+                $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 60_919_000_000
+            })
+        #expect(!cf.contains { ($0.label ?? "").contains("調整") })
+    }
+
+    @Test
     func rowWithUnbalancedSlotCountIsDroppedRatherThanGuessed() throws {
         // 前期/当期のスロット数が偶数に揃わない（想定外の列構成）行は、誤った期の値を
-        // 静かに返すより行ごと落とす（他の行の抽出は継続する）。
+        // 静かに返すより行ごと落とす（他の行の抽出は継続する）。先頭スペーサ無しの
+        // 3スロットで、偶数ガード自体を検証する。
         let html = """
         <html><body>
         <table>
           <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
           <tr><td>資産の部</td><td></td><td></td><td></td></tr>
           <tr><td>現金及び預金</td><td></td><td>10</td><td>20</td></tr>
-          <tr><td>資産合計</td><td></td><td>100</td><td>abc</td><td>200</td></tr>
+          <tr><td>資産合計</td><td>100</td><td>abc</td><td>200</td></tr>
         </table>
         </body></html>
         """

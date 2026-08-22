@@ -688,20 +688,7 @@ enum USGAAPStatementHtml {
     )? {
         guard let labelIdx = row.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
         else { return nil }
-        var rest = Array(row[(labelIdx + 1)...])
-        // ラベル直後の空スペーサ列を1個剥がす。空スペーサの直後に注記番号セル
-        // （「注５」等、「注」を含む）が続くことがあるため、その場合だけ追加でもう1個
-        // 剥がす（実データ確認: 富士フイルム「５ 短期オペレーティング・リース負債」＝
-        // 空セル+「注５」セルの2連続）。ただし2個目以降が「空」なだけなら前期/当期
-        // グリッド内の正当な空スロット（値なしを表す）の可能性があるため剥がさない
-        // （実データ確認: 富士フイルム「流動資産合計」＝空セルが2連続し、2個目は
-        // 前期側の値なしスロット）。「注」を含むかどうかだけが曖昧さのない判定基準。
-        if let first = rest.first, isNoteOrNonAmountCell(first) {
-            rest.removeFirst()
-            if let second = rest.first, second.contains("注") {
-                rest.removeFirst()
-            }
-        }
+        let rest = stripLeadingNoteSpacersKeepingEvenCount(Array(row[(labelIdx + 1)...]))
         let slots = rest.map { parseAmountSlot($0) }
         guard !slots.isEmpty else { return nil }
         // 前期/当期のスロット数が揃わない（想定外の列構成）場合は前期/当期の
@@ -715,6 +702,24 @@ enum USGAAPStatementHtml {
         guard let line = filled.first else { return nil }
         let group = filled.count >= 2 ? filled[1] : nil
         return (line, group)
+    }
+
+    /// ラベル直後の空スペーサ／注記番号セルを、前期/当期の偶数スロットが残る範囲でのみ剥がす。
+    ///
+    /// 富士フイルム「５ 短期オペレーティング・リース負債」は空+「注５」の2連続。
+    /// オムロン CF「１　当期純利益」は4スロットの左が空（値は右セル）で、空1個を剥がすと
+    /// 奇数になり行ごと落ちる。空をスペーサとみなすのは、剥がしたあと偶数が残るときに限る。
+    /// 2個目以降が「空」なだけなら前期/当期グリッド内の正当な空スロットのため剥がさない
+    /// （実データ確認: 富士フイルム「流動資産合計」）。
+    private static func stripLeadingNoteSpacersKeepingEvenCount(_ cells: [String]) -> [String] {
+        guard let first = cells.first, isNoteOrNonAmountCell(first) else { return cells }
+        if cells.count >= 2, cells[1].contains("注") {
+            let afterNote = Array(cells.dropFirst(2))
+            if afterNote.count % 2 == 0 { return afterNote }
+        }
+        let afterOne = Array(cells.dropFirst())
+        if afterOne.count % 2 == 0 { return afterOne }
+        return cells
     }
 
     /// セルを金額スロットにする。`－` 類は 0、空・注記・非数値は nil。

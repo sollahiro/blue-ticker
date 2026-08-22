@@ -1091,6 +1091,14 @@ import Foundation
         #expect(
             Self.exactLabelValue(year.incomeStatement, "当社株主に帰属する当期純利益")
                 == 28_487_000_000)
+        #expect(year.cashFlow.first?.label == "当期純利益")
+        #expect(Self.exactLabelValue(year.cashFlow, "当期純利益") == 31_277_000_000)
+        #expect(year.cashFlow.contains {
+            $0.label == "当期純利益" && $0.section == .operating && $0.value == 31_277_000_000
+        })
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "営業活動によるキャッシュ・フロー")
+                == 60_919_000_000)
         #expect(
             year.changesInEquity.contains {
                 ($0.label ?? "").contains("第89期末現在") && $0.value == 1_000_562_000_000
