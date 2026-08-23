@@ -23,6 +23,7 @@
 // - 8306 三菱UFJフィナンシャル・グループ S100W4FB（J-GAAP連結・銀行、2025-03期。流動/非流動の
 //   区分を持たない銀行特有のBS構造の回帰対象）
 // - 8316 三井住友フィナンシャルグループ S100W0S7（J-GAAP連結・銀行、2025-03期）
+// - 9432 NTT S100YCP3（IFRS連結。本表 `OperatingRevenuesIFRS`＝営業収益を Summary sales に載せる回帰）
 // smoke の US-GAAP2社（4901 富士フイルム S100W3XJ、7751 キヤノン S100XTLJ）は下記
 // 「US-GAAP（HTML 経路）」で golden 化（0105010 HTML→行。`USGAAPStatementHtml`）。
 // 金額は当期優先・「－」=0、キヤノン型 `components`（合計直後の内訳が親と一致）を含む。
@@ -330,6 +331,25 @@ import Foundation
             return
         }
         #expect(abs(assets.value - (liabilities.value + netAssets.value)) <= 2_000_000)
+    }
+
+    // MARK: - NTT S100YCP3
+
+    @Test
+    func nttSummarySalesUsesOperatingRevenuesIFRS() async throws {
+        // 回帰: Summary 売上候補に本表 `OperatingRevenuesIFRS`（営業収益）が無いと sales=nil になる。
+        // 実データ: 9432 NTT S100YCP3（2026-03期）営業収益 14,409,121 百万円。
+        guard await Self.ensureAvailable("S100YCP3") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YCP3", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenuesIFRS" }?.value
+                == 14_409_121_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YCP3_xbrl"))
+        #expect(financials?.sales == 14_409_121_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.operatingProfit == 1_706_221_000_000)
     }
 
     // MARK: - 味の素 S100VXJA
