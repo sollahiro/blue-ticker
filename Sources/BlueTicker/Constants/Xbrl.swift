@@ -53,6 +53,7 @@ enum Xbrl {
         "RevenueIFRSSummaryOfBusinessResults",
         "RevenueJMISSummaryOfBusinessResults",
         "Revenue",
+        "OperatingRevenuesIFRS",  // NTT 等。本表の単独「営業収益」（SummaryOfBusinessResults 系は本表許可リスト外）
         "OperatingRevenuesIFRSKeyFinancialData",
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "Revenues",

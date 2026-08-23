@@ -537,7 +537,7 @@ enum StatementFinancialsResolver {
 
     /// Summary 売上の正本行。営業収益 / 営業収益計 / 収益合計を、中間の「〜売上高」内訳より優先する
     /// （オリックス: 商品および不動産売上高 442,586 ≠ 営業収益 計 3,330,831。
-    ///  NTT: 単独「営業収益」14,409,121。contains は使わず exact のみ＝「○○営業収益」内訳を拾わない）。
+    ///  exact のみ＝「○○営業収益」内訳を拾わない。NTT の IFRS 本表は OperatingRevenuesIFRS 側）。
     /// 富士フイルム型の単独「売上高」、キヤノン型（製品/サービス内訳の後の「合計」）はフォールバック。
     private static func resolveUSGAAPSales(
         _ items: [StatementLineItem]
@@ -579,7 +579,7 @@ enum StatementFinancialsResolver {
         return nil
     }
 
-    /// NTT「営業収益」、オリックス「営業収益 計」/「営業収益計」、野村「収益合計」。
+    /// オリックス「営業収益 計」/「営業収益計」、野村「収益合計」、および単独「営業収益」。
     /// 空白除去後の exact のみ（「○○営業収益」内訳は含まない）。控除後の収益合計は除外。
     private static func isUSGAAPRevenueTotalLabel(_ stripped: String) -> Bool {
         if stripped == "収益合計" || (stripped.hasPrefix("収益合計") && !stripped.contains("控除")) {

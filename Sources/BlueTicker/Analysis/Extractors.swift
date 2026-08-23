@@ -171,6 +171,10 @@ enum IncomeStatementExtractor {
         case "NetSalesIFRS", "TotalNetRevenuesIFRS", "RevenueIFRS",
             "RevenueIFRSSummaryOfBusinessResults", "Revenue":
             return "売上収益"
+        case "OperatingRevenuesIFRS",
+            "OperatingRevenuesIFRSKeyFinancialData",
+            "OperatingRevenuesIFRSSummaryOfBusinessResults":
+            return "営業収益"
         case "NetSalesOfCompletedConstructionContractsCNS",
              "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults":
             return "完成工事高"

@@ -32,7 +32,7 @@
 // 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
 // オムロンは BS 45 / PL 21 / CF 50 / SS 11 行。小松は BS 39 / PL 21 / CF 31 / SS 12 行。
 // オリックスは BS 39 / PL 28 / CF 51 / SS 18 行（注記番号セル・資本の部・小計/空白+計）。
-// 2026-08-23、NTT S100YCP3: Summary 売上が単独「営業収益」（計/合計なし）を採用する回帰。
+// 2026-08-23、NTT S100YCP3（IFRS）: Summary 売上が本表タグ OperatingRevenuesIFRS（ラベル「営業収益」）を採用する回帰。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -1545,9 +1545,9 @@ import Foundation
     }
 
     @Test
-    func nttUSGAAPSummarySalesUsesExactOperatingRevenueLabel() async throws {
-        // NTT 9432 / S100YCP3: PL の単独「営業収益」14,409,121 百万円が Summary sales。
-        // 「営業収益計」「営業収益合計」以外の exact「営業収益」も revenue-total として優先する。
+    func nttSummarySalesUsesOperatingRevenuesIFRS() async throws {
+        // NTT 9432 / S100YCP3（IFRS）: 本表 OperatingRevenuesIFRS（営業収益）14,409,121 百万円が Summary sales。
+        // SummaryOfBusinessResults 系は本表許可リスト外のため、本表タグ自体を netSalesTags に載せる。
         guard await Self.ensureAvailable("S100YCP3") else { return }
         let financials = StatementFinancialsResolver.resolve(
             xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YCP3_xbrl"))
