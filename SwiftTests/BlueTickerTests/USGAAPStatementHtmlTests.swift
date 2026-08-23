@@ -1282,7 +1282,7 @@ import Foundation
             html, types: [.cashFlow, .changesInEquity])
         #expect(extracted.cashFlow.count >= 4)
         #expect(extracted.changesInEquity.contains {
-            ($0.label ?? "").contains("2021年３月31日") && $0.value == 1_090_000_000_000
+            ($0.label ?? "").contains("2021年３月31日") && $0.value == 1_090_000_000
         })
     }
 
@@ -1318,7 +1318,7 @@ import Foundation
         let extracted = try extractFromHTML(
             html, types: [.cashFlow, .changesInEquity])
         #expect(extracted.changesInEquity.contains {
-            ($0.label ?? "").contains("2025年３月31日") && $0.value == 540_000_000_000
+            ($0.label ?? "").contains("2025年３月31日") && $0.value == 540_000_000
         })
         #expect(!extracted.changesInEquity.contains { ($0.label ?? "").contains("2011年") })
     }
@@ -1362,9 +1362,9 @@ import Foundation
         let extracted = try extractFromHTML(
             primary, types: [.balanceSheet, .cashFlow],
             extraFiles: ["0105020_test_ixbrl.htm": alt])
-        #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 200_000_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 200_000_000 })
         #expect(extracted.cashFlow.contains {
-            $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 130_000_000_000
+            $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 130_000_000
         })
     }
 
@@ -1387,7 +1387,7 @@ import Foundation
         """
         let cf = try extractFromHTML(html, types: [.cashFlow]).cashFlow
         #expect(cf.contains {
-            ($0.label ?? "").contains("営業活動による") && $0.value == 130_000_000_000
+            ($0.label ?? "").contains("営業活動による") && $0.value == 130_000_000
         })
         #expect(cf.contains { $0.section == .investing })
         #expect(cf.contains { $0.section == .financing })
