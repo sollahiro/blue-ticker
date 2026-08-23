@@ -41,11 +41,22 @@ import Testing
             StatementClassifier.classify(role: role("ConsolidatedStatementOfProfitOrLossIFRS"))
                 == .incomeStatement)
         #expect(
+            StatementClassifier.classify(
+                role: role("ConsolidatedStatementOfComprehensiveIncomeSingleStatementIFRS"))
+                == .incomeStatement)
+        #expect(
             StatementClassifier.classify(role: role("ConsolidatedStatementOfCashFlowsIFRS"))
                 == .cashFlow)
         #expect(
             StatementClassifier.classify(
                 role: role("ConsolidatedStatementOfChangesInEquityIFRS")) == .changesInEquity)
+    }
+
+    @Test func doesNotClassifyTwoStatementOciOnlyAsIncomeStatement() {
+        // 2計算書方式の包括利益計算書は PL 本体ではない（SingleStatement のみ PL 扱い）。
+        #expect(
+            StatementClassifier.classify(
+                role: role("ConsolidatedStatementOfComprehensiveIncomeIFRS")) == nil)
     }
 
     @Test func excludesNotesPrefixedRolesEvenWhenKeywordMatches() {

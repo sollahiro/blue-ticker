@@ -1120,10 +1120,18 @@ enum Xbrl {
 
     /// 損益計算書（Duration）と判定する role セクション名の部分一致キーワード。
     /// J-GAAP は `StatementOfIncome`/`ConsolidatedStatementOfIncome`、IFRS は
-    /// `ConsolidatedStatementOfProfitOrLossIFRS`。
+    /// `ConsolidatedStatementOfProfitOrLossIFRS`（2計算書方式）および
+    /// `ConsolidatedStatementOfComprehensiveIncomeSingleStatementIFRS`（1計算書方式）。
+    /// 後者は `StatementOfProfitOrLoss` を含まないため専用キーワードが必要
+    /// （実データ: 野村総研 S100YBM8・エプソン S100YJ6A・HOYA S100Y90T・JAL S100YFIO・
+    /// 伊藤忠 S100YA6H。欠落すると個別 `StatementOfIncome` の NetSales だけが採用され、
+    /// Summary sales/OP が nil になる）。
+    /// 注: 2計算書方式の包括利益計算書（`…ComprehensiveIncomeIFRS`、PL 本体ではない）には
+    /// 一致させないよう `SingleStatement` に限定する。
     static let incomeStatementRoleKeywords: [String] = [
         "StatementOfIncome",
         "StatementOfProfitOrLoss",
+        "StatementOfComprehensiveIncomeSingleStatement",
     ]
 
     /// キャッシュ・フロー計算書（Duration）と判定する role セクション名の部分一致キーワード。
