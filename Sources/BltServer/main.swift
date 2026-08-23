@@ -25,8 +25,9 @@
 //                                                            breakdown_geography）のカバレッジ・鮮度・
 //                                                            最新有報スライスを JSON で stdout へ出力
 //                                                            （DB read-only）。
-//                                                            assets/apex-site/status.html 生成用
-//                                                            （scripts/generate-status-page.sh が呼ぶ）。
+//                                                            status.html 生成用
+//                                                            （scripts/generate-status-page.sh が呼ぶ。
+//                                                            パスは BLT_STATUS_HTML）。
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。

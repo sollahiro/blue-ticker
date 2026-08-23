@@ -1,8 +1,8 @@
 // `blt-server status-report`: 4 ステージ（financials / filing_sections /
 // breakdown_business / breakdown_geography）のカバレッジ・鮮度・最新有報スライスを集計し、
 // JSON を stdout へ出す。
-// 出力は `assets/apex-site/status.html`（静的公開ページ）を生成するシェルスクリプト
-// （`scripts/generate-status-page.sh`）が読む契約。ここでは日経225構成銘柄の実コードは一切
+// 出力は静的公開ページ（`scripts/generate-status-page.sh`、パスは `BLT_STATUS_HTML`）
+// が読む契約。ここでは日経225構成銘柄の実コードは一切
 // 出力しない（集計件数のみ。Routes.swift 既存方針と同じく銘柄一覧の公開はしない）。
 //
 // 集計は `response`/`payload` の JSONB 本体を転送しない軽量射影モデル（各 Stage の
@@ -86,7 +86,7 @@ final class CompanyBreakdownStatusProjection: Model, @unchecked Sendable {
 
 // MARK: - 集計結果の公開契約
 
-/// 1 ステージ分の集計結果。`assets/apex-site/status.html` 生成スクリプトが読む JSON の要素。
+/// 1 ステージ分の集計結果。`generate-status-page.sh` が読む JSON の要素。
 public struct IngestStageStatus: Codable, Sendable, Equatable {
     public let key: String
     public let label: String
