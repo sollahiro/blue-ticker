@@ -37,6 +37,9 @@ enum Xbrl {
     // MARK: - 売上高タグ
 
     static let operatingRevenueTags: [String] = [
+        "OperatingRevenuesIFRS",  // NTT。本表の営業収益（Summary/KeyFinancialData とは別タグ）
+        "OperatingRevenuesIFRSKeyFinancialData",
+        "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
     ]
@@ -53,6 +56,7 @@ enum Xbrl {
         "RevenueIFRSSummaryOfBusinessResults",
         "RevenueJMISSummaryOfBusinessResults",
         "Revenue",
+        "OperatingRevenuesIFRS",  // NTT。本表の営業収益
         "OperatingRevenuesIFRSKeyFinancialData",
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "Revenues",

@@ -85,6 +85,17 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
+    @Test func testIfrsOperatingRevenues() {
+        // NTT: 本表は OperatingRevenuesIFRS（Summary/KeyFinancialData 接尾辞なし）
+        let fs = makeFieldSet(
+            ("OperatingRevenuesIFRS", 14_409_121_000_000.0, 13_374_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 14_409_121_000_000.0)
+        #expect(result.salesPrior == 13_374_619_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
     @Test func testSalesLabelDefaultNetSales() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, nil))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
