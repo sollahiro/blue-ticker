@@ -28,4 +28,4 @@ GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開�
 
 理由: [BLT-41](https://linear.app/sollahiro/issue/BLT-41)（US-GAAP 表分類・語彙のデータ化）は完了。BLT-4 は BLT-5（Statement-Notes）・BLT-3（Filing）・BLT-40（Breakdown 親）を block する。BLT-4 の残（statement-v2 の job-01／サイクル）を閉じる前に Notes / Breakdown 側へ逸れない。
 
-Cloud Agent に残作業を渡す既定プロンプトがリポジトリに無い間は、起動文に上記一行（「着手は Blocked by の先頭。今は BLT-4。」）を必ず含める。プロンプト雛形を後から置く場合も同じ一行を載せる。
+Cloud Agent に残作業を渡す既定プロンプトがリポジトリに無い間は、起動文に上記一行（「着手は Blocked by の先頭。今は BLT-28。」）を必ず含める。プロンプト雛形を後から置く場合も同じ一行を載せる。
