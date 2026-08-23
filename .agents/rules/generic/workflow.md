@@ -22,7 +22,7 @@ GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開�
 
 ### 残作業の着手（Blocked by の先頭）
 
-**着手は Blocked by の先頭。今は BLT-4（BLT-41 解除後）。**
+**着手は Blocked by の先頭。今は BLT-28（上場全体の statements 母集団。BLT-4 は公開空表が無いので Done。全件 v2/v3 置き換えは残さない。Notes・Filing・Breakdown は BLT-28 Done まで先に拾わない）。**
 
 残作業・Cloud Agent 起動は、Linear の親 Feature や Statement / Notes / Filing / Breakdown の子を先に拾わない。依存鎖の **Blocked by 先頭**（いまは [BLT-4](https://linear.app/sollahiro/issue/BLT-4) 自体が先頭。BLT-41 は語彙データ化で閉じた）を次の実装単位とする。先頭が動いたら `AGENTS.md` のトラッカー一行と本節の「今は …」を同じ ID に更新する。
 
