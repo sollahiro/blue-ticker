@@ -42,6 +42,10 @@ enum Xbrl {
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
+        "OperatingRevenueRWY",  // 鉄道業（東急 S100YE63）
+        "OperatingRevenueELE",  // 電気事業（東電HD S100YIHR）
+        "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益（S100YA84）
+        "OperatingRevenueSEC",  // 証券業の営業収益計（大和証券G S100YCMP）
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -67,6 +71,11 @@ enum Xbrl {
         "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
+        "OperatingRevenueRWY",
+        "OperatingRevenueELE",
+        "OperatingRevenueRevenue2IFRS",
+        "OperatingRevenueSEC",
+        "InsuranceRevenueIFRS",  // 損保等（東京海上HD S100YLS8）
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
     ]

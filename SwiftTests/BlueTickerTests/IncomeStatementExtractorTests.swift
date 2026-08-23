@@ -96,6 +96,20 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
+    @Test func testJgaapOperatingRevenueRWY() {
+        let fs = makeFieldSet(("OperatingRevenueRWY", 1_086_179_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_086_179_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    @Test func testSalesLabelInsuranceRevenueIFRS() {
+        let fs = makeFieldSet(("InsuranceRevenueIFRS", 7_693_560_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 7_693_560_000_000.0)
+        #expect(result.salesLabel == "保険収益")
+    }
+
     @Test func testSalesLabelDefaultNetSales() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, nil))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")

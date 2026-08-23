@@ -352,6 +352,87 @@ import Foundation
         #expect(financials?.operatingProfit == 1_706_221_000_000)
     }
 
+    // MARK: - 業種別本表売上タグ（fin-v14）
+
+    /// 東急: 本表行は `OperatingRevenueRWY`（`OperatingRevenue1` は本表行に出ない）。
+    @Test
+    func tokyuSummarySalesUsesOperatingRevenueRWY() async throws {
+        guard await Self.ensureAvailable("S100YE63") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YE63", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenueRWY" }?.value
+                == 1_086_179_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YE63_xbrl"))
+        #expect(financials?.sales == 1_086_179_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.operatingProfit == 103_193_000_000)
+    }
+
+    /// 東京電力HD: 本表行は `OperatingRevenueELE`。
+    @Test
+    func tepcoSummarySalesUsesOperatingRevenueELE() async throws {
+        guard await Self.ensureAvailable("S100YIHR") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YIHR", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenueELE" }?.value
+                == 6_328_574_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YIHR_xbrl"))
+        #expect(financials?.sales == 6_328_574_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.operatingProfit == 337_689_000_000)
+    }
+
+    /// 大和証券G: 本表行は `OperatingRevenueSEC`。
+    @Test
+    func daiwaSummarySalesUsesOperatingRevenueSEC() async throws {
+        guard await Self.ensureAvailable("S100YCMP") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YCMP", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenueSEC" }?.value
+                == 1_467_983_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YCMP_xbrl"))
+        #expect(financials?.sales == 1_467_983_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.operatingProfit == 207_333_000_000)
+    }
+
+    /// JPX: 営業収益は `OperatingRevenueRevenue2IFRS`（`Revenue2IFRS` は収益計＝営業収益+その他）。
+    @Test
+    func jpxSummarySalesUsesOperatingRevenueRevenue2IFRS() async throws {
+        guard await Self.ensureAvailable("S100YA84") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YA84", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenueRevenue2IFRS" }?.value
+                == 198_735_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YA84_xbrl"))
+        #expect(financials?.sales == 198_735_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.operatingProfit == 116_289_000_000)
+    }
+
+    /// 東京海上HD: 本表行は `InsuranceRevenueIFRS`（保険収益）。
+    @Test
+    func tokioMarineSummarySalesUsesInsuranceRevenueIFRS() async throws {
+        guard await Self.ensureAvailable("S100YLS8") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YLS8", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "InsuranceRevenueIFRS" }?.value
+                == 7_693_560_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YLS8_xbrl"))
+        #expect(financials?.sales == 7_693_560_000_000)
+        #expect(financials?.salesLabel == "保険収益")
+    }
+
     // MARK: - 味の素 S100VXJA
 
     @Test
