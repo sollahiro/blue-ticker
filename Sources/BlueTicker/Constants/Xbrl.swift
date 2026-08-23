@@ -37,8 +37,17 @@ enum Xbrl {
     // MARK: - 売上高タグ
 
     static let operatingRevenueTags: [String] = [
+        "OperatingRevenuesIFRS",  // NTT 等。本表の営業収益（Summary/KeyFinancialData とは別タグ）
+        "OperatingRevenuesIFRSKeyFinancialData",
+        "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
+        "OperatingRevenueRWY",  // 鉄道業
+        "OperatingRevenueELE",  // 電気事業
+        "OperatingRevenue2",  // 興行等の営業収入
+        "OperatingRevenueRevenue2IFRS",  // 日本取引所グループ等
+        "OperatingRevenueSEC",  // 証券業の営業収益計
+        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",  // 海運業
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -53,6 +62,8 @@ enum Xbrl {
         "RevenueIFRSSummaryOfBusinessResults",
         "RevenueJMISSummaryOfBusinessResults",
         "Revenue",
+        "Revenue2IFRS",  // 商社・電通等。本表の収益行（セグメント Revenue2IFRS と同名）
+        "OperatingRevenuesIFRS",  // NTT 等。本表の営業収益
         "OperatingRevenuesIFRSKeyFinancialData",
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "Revenues",
@@ -63,6 +74,15 @@ enum Xbrl {
         "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
+        "OperatingRevenueRWY",
+        "OperatingRevenueELE",
+        "OperatingRevenue2",
+        "OperatingRevenueRevenue2IFRS",
+        "OperatingRevenueSEC",
+        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",
+        "SalesOfGoodsIFRS",
+        "SalesOfGoodsRevenue2IFRS",
+        "ProductSalesRevenueIFRS",
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
     ]
