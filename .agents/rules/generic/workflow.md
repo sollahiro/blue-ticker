@@ -22,10 +22,10 @@ GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開�
 
 ### 残作業の着手（Blocked by の先頭）
 
-**着手は Blocked by の先頭。今は BLT-41。**
+**着手は Blocked by の先頭。今は BLT-4（BLT-41 解除後）。**
 
-残作業・Cloud Agent 起動は、Linear の親 Feature や Statement / Notes / Filing / Breakdown の子を先に拾わない。依存鎖の **Blocked by 先頭**（いまは [BLT-41](https://linear.app/sollahiro/issue/BLT-41)）を次の実装単位とする。先頭が動いたら `AGENTS.md` のトラッカー一行と本節の「今は …」を同じ ID に更新する。
+残作業・Cloud Agent 起動は、Linear の親 Feature や Statement / Notes / Filing / Breakdown の子を先に拾わない。依存鎖の **Blocked by 先頭**（いまは [BLT-4](https://linear.app/sollahiro/issue/BLT-4) 自体が先頭。BLT-41 は語彙データ化で閉じた）を次の実装単位とする。先頭が動いたら `AGENTS.md` のトラッカー一行と本節の「今は …」を同じ ID に更新する。
 
-理由: BLT-41（US-GAAP 表分類・語彙のデータ化。PR #267 を社名 `contains` で閉じない）は BLT-4 の子かつ BLT-4 を block する。BLT-4 は BLT-5（Statement-Notes）・BLT-3（Filing）・BLT-40（Breakdown 親）を block する。先頭を名指しせずに着手するとエージェントが Notes / Breakdown 側へ逸れ、Maintainer の有報突合で Statement がまだ 4 社（Nomura / Omron / Komatsu / ORIX）の `contains` 分岐を前提にしている状態が見える。
+理由: [BLT-41](https://linear.app/sollahiro/issue/BLT-41)（US-GAAP 表分類・語彙のデータ化）は完了。BLT-4 は BLT-5（Statement-Notes）・BLT-3（Filing）・BLT-40（Breakdown 親）を block する。BLT-4 の残（statement-v2 の job-01／サイクル）を閉じる前に Notes / Breakdown 側へ逸れない。
 
-Cloud Agent に残作業を渡す既定プロンプトがリポジトリに無い間は、起動文に上記一行（「着手は Blocked by の先頭。今は BLT-41。」）を必ず含める。プロンプト雛形を後から置く場合も同じ一行を載せる。
+Cloud Agent に残作業を渡す既定プロンプトがリポジトリに無い間は、起動文に上記一行（「着手は Blocked by の先頭。今は BLT-4。」）を必ず含める。プロンプト雛形を後から置く場合も同じ一行を載せる。
