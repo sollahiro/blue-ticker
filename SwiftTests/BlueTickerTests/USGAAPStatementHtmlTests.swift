@@ -32,10 +32,16 @@ import Foundation
     func vocabularyCoversTableClassificationAndTotalMarkers() {
         let v = USGAAPStatementHtmlVocabulary.self
         #expect(v.isCashFlowTable(labels: ["営業活動によるキャッシュ・フロー"]))
+        #expect(v.isCashFlowTable(labels: ["営業活動による キャッシュ・フロー"]))
         #expect(v.isCashFlowTable(labels: [
             "投資活動によるキャッシュ・フロー", "財務活動によるキャッシュ・フロー",
         ]))
+        #expect(v.isCashFlowTable(labels: [
+            "投資活動による キャッシュ・フロー", "財務活動による キャッシュ・フロー",
+        ]))
         #expect(v.hasEquityContext("株主資本\n資本金"))
+        #expect(v.hasEquityContext("④【連結株主持分計算書】"))
+        #expect(v.hasCashFlowStatementHeading("⑤【連結キャッシュ・フロー計算書】"))
         #expect(v.isExcludedEquityTable("信用損失引当金の増減"))
         #expect(v.isAssetsSectionHeader("（資産の部）"))
         #expect(v.isAssetsTotalLabel("流動資産合計"))
@@ -48,6 +54,8 @@ import Foundation
         #expect(!v.isIncomeStatementTable(labels: ["その他の包括利益", "当期包括利益"]))
         #expect(v.isEquityChronologicalBalanceLabel("2024年３月31日現在残高"))
         #expect(v.isEquityChronologicalBalanceLabel("第79期末現在"))
+        #expect(v.isEquityChronologicalBalanceLabel("第83期末 現在"))
+        #expect(v.isEquityChronologicalBalanceLabel("第83期末　現在"))
         #expect(v.isBareEquityOpenCloseLabel("期首残高"))
         #expect(v.isBareEquityOpenCloseLabel("期末残高（注）"))
         #expect(v.isEquityBalanceRowLabel("2025年3月31日残高"))
@@ -61,6 +69,7 @@ import Foundation
         #expect(v.isNetAssetsSectionHeader("資本の部"))
         #expect(v.isLiabilitiesAndEquityTotalLabel("負債および資本合計"))
         #expect(v.cfSection(for: "投資活動によるキャッシュ・フロー") == .investing)
+        #expect(v.cfSection(for: "投資活動による キャッシュ・フロー") == .investing)
     }
 
     @Test
@@ -1110,6 +1119,28 @@ import Foundation
         #expect(omronSS.contains { ($0.label ?? "").contains("第89期末現在") && $0.value == 1_000_562_000_000 })
         #expect(omronSS.allSatisfy { $0.section == nil })
 
+        // 旧年オムロン: 残高ラベルが「第N期末　現在」（空白あり）。
+        let omronSpaced = """
+        <html><body>
+        <table>
+          <tr><td>項目</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>第83期末　現在</td><td>64,100</td><td>500,000</td></tr>
+          <tr><td>当期純利益</td><td></td><td>10,000</td></tr>
+          <tr><td>第84期末　現在</td><td>64,100</td><td>510,000</td></tr>
+          <tr><td>当期純利益</td><td></td><td>20,000</td></tr>
+          <tr><td>第85期末　現在</td><td>64,100</td><td>530,000</td></tr>
+        </table>
+        </body></html>
+        """
+        let omronSpacedSS = try extractFromHTML(omronSpaced, types: [.changesInEquity]).changesInEquity
+        #expect(!omronSpacedSS.contains { ($0.label ?? "").contains("第83期") })
+        #expect(omronSpacedSS.contains {
+            ($0.label ?? "").contains("第84期末") && $0.value == 510_000_000_000
+        })
+        #expect(omronSpacedSS.contains {
+            ($0.label ?? "").contains("第85期末") && $0.value == 530_000_000_000
+        })
+
         let orix = """
         <html><body>
         <table>
@@ -1224,8 +1255,147 @@ import Foundation
         #expect(capitalOpen!.order! < equityClose!.order!)
     }
 
+    /// ソニー旧年: CF 本表のあとに連結資本変動表が来る。CF 確定後でも空の SS は埋める。
+    @Test
+    func changesInEquityAfterCashFlowIsKeptWhenStillEmpty() throws {
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>Ⅰ 営業活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>当期純利益</td><td>80</td><td>90</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td>120</td><td>130</td></tr>
+          <tr><td>Ⅱ 投資活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td>-50</td><td>-40</td></tr>
+          <tr><td>Ⅲ 財務活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td>-10</td><td>-20</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>2020年３月31日現在残高</td><td>400</td><td>1,000</td></tr>
+          <tr><td>当期純利益</td><td></td><td>90</td></tr>
+          <tr><td>2021年３月31日現在残高</td><td>400</td><td>1,090</td></tr>
+        </table>
+        </body></html>
+        """
+        let extracted = try extractFromHTML(
+            html, types: [.cashFlow, .changesInEquity])
+        #expect(extracted.cashFlow.count >= 4)
+        #expect(extracted.changesInEquity.contains {
+            ($0.label ?? "").contains("2021年３月31日") && $0.value == 1_090_000_000_000
+        })
+    }
+
+    /// CF 前で SS が確定済みなら、CF 後の類似表は拾わない（二重拾い防止）。
+    @Test
+    func changesInEquityAfterCashFlowIgnoredWhenAlreadyFilled() throws {
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>2024年３月31日現在残高</td><td>400</td><td>450</td></tr>
+          <tr><td>当期純利益</td><td></td><td>90</td></tr>
+          <tr><td>2025年３月31日現在残高</td><td>400</td><td>540</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>Ⅰ 営業活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>当期純利益</td><td>80</td><td>90</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td>120</td><td>130</td></tr>
+          <tr><td>Ⅱ 投資活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td>-50</td><td>-40</td></tr>
+          <tr><td>Ⅲ 財務活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td>-10</td><td>-20</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>2010年３月31日現在残高</td><td>1</td><td>10</td></tr>
+          <tr><td>当期純利益</td><td></td><td>1</td></tr>
+          <tr><td>2011年３月31日現在残高</td><td>1</td><td>11</td></tr>
+        </table>
+        </body></html>
+        """
+        let extracted = try extractFromHTML(
+            html, types: [.cashFlow, .changesInEquity])
+        #expect(extracted.changesInEquity.contains {
+            ($0.label ?? "").contains("2025年３月31日") && $0.value == 540_000_000_000
+        })
+        #expect(!extracted.changesInEquity.contains { ($0.label ?? "").contains("2011年") })
+    }
+
+    /// ORIX 旧年: 連結CF 見出しが 0105020 にだけあるとき、CF のみフォールバックする。
+    @Test
+    func cashFlowFallsBackTo0105020WhenPrimaryHasNone() throws {
+        let primary = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>資産の部</td><td></td><td></td></tr>
+          <tr><td>現金及び現金同等物</td><td>100</td><td>200</td></tr>
+          <tr><td>資産合計</td><td>100</td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>負債の部</td><td></td><td></td></tr>
+          <tr><td>流動負債合計</td><td>40</td><td>50</td></tr>
+          <tr><td>純資産の部</td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td>60</td><td>150</td></tr>
+          <tr><td>負債・純資産合計</td><td>100</td><td>200</td></tr>
+        </table>
+        </body></html>
+        """
+        let alt = """
+        <html><body>
+        <p>⑤【連結キャッシュ・フロー計算書】</p>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>Ⅰ 営業活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>当期純利益</td><td>80</td><td>90</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td>120</td><td>130</td></tr>
+          <tr><td>Ⅱ 投資活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td>-50</td><td>-40</td></tr>
+          <tr><td>Ⅲ 財務活動によるキャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td>-10</td><td>-20</td></tr>
+        </table>
+        </body></html>
+        """
+        let extracted = try extractFromHTML(
+            primary, types: [.balanceSheet, .cashFlow],
+            extraFiles: ["0105020_test_ixbrl.htm": alt])
+        #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 200_000_000_000 })
+        #expect(extracted.cashFlow.contains {
+            $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 130_000_000_000
+        })
+    }
+
+    /// 村田: 活動見出しが改行で空白入りでも CF 表に分類する。
+    @Test
+    func cashFlowClassifiesWhenActivityHeadingHasInternalSpace() throws {
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額(百万円)</td><td>金額(百万円)</td></tr>
+          <tr><td>Ⅰ 営業活動による キャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>当期純利益</td><td>80</td><td>90</td></tr>
+          <tr><td>営業活動による キャッシュ・フロー</td><td>120</td><td>130</td></tr>
+          <tr><td>Ⅱ 投資活動による キャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>投資活動による キャッシュ・フロー</td><td>-50</td><td>-40</td></tr>
+          <tr><td>Ⅲ 財務活動による キャッシュ・フロー</td><td></td><td></td></tr>
+          <tr><td>財務活動による キャッシュ・フロー</td><td>-10</td><td>-20</td></tr>
+        </table>
+        </body></html>
+        """
+        let cf = try extractFromHTML(html, types: [.cashFlow]).cashFlow
+        #expect(cf.contains {
+            ($0.label ?? "").contains("営業活動による") && $0.value == 130_000_000_000
+        })
+        #expect(cf.contains { $0.section == .investing })
+        #expect(cf.contains { $0.section == .financing })
+    }
+
     private func extractFromHTML(
-        _ html: String, types: Set<StatementSectionType>
+        _ html: String, types: Set<StatementSectionType>,
+        extraFiles: [String: String] = [:]
     ) throws -> (
         balanceSheet: [StatementLineItem], incomeStatement: [StatementLineItem],
         cashFlow: [StatementLineItem], changesInEquity: [StatementLineItem]
@@ -1237,6 +1407,9 @@ import Foundation
         defer { try? FileManager.default.removeItem(at: dir) }
         try html.write(
             to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        for (name, content) in extraFiles {
+            try content.write(to: pub.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
         return try #require(USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: types))
     }
 }

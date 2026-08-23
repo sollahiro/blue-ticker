@@ -33,6 +33,10 @@
 // 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
 // オムロンは BS 45 / PL 21 / CF 50 / SS 11 行。小松は BS 39 / PL 21 / CF 31 / SS 12 行。
 // オリックスは BS 39 / PL 28 / CF 51 / SS 18 行（注記番号セル・資本の部・小計/空白+計）。
+// 2026-08-23、BLT-43: 保持窓内の旧年 US-GAAP で SS/CF が length-0 だった穴を golden 化。
+// オムロン S100OEI0/S100LLFL（`第N期末 現在`）、ソニー S100LM4N（CF 後の連結資本変動表）、
+// 村田 S100R773/S100OJOR/S100LPV9（活動見出しの空白）、ORIX S100R3ZX/S100OKI8/S100LU21
+// （連結CF が 0105020）。7203 S100IUNR は保持窓外で対象外。
 //
 // smoke 由来の9社は `ensureAvailable`（`BLT_EDINET_API_KEY` があれば自動取得）で、
 // Toyota/Denso/Nintendo 他の既存分は `.enabled(if:)` で自動 SKIP（`swift test` は鍵なしでも緑）。
@@ -1642,5 +1646,164 @@ import Foundation
             .init(label: "2026年３月31日残高", section: nil, value: 4_573_068_000_000, isTotal: true),
         ]
         #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
+    }
+
+    // MARK: - BLT-43 旧年 US-GAAP（保持窓内の SS/CF length-0）
+
+    @Test
+    func omronS100OEI0HistoricalSSWithSpacedPeriodEndLabels() async throws {
+        guard await Self.ensureAvailable("S100OEI0") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100OEI0", statementTypes: [.changesInEquity]))
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+        let expectedSS: [StatementGoldenRow] = [
+            .init(label: "第84期末 現在", section: nil, value: 609_358_000_000, isTotal: true),
+            .init(label: "当期純利益", section: nil, value: 62_044_000_000, isTotal: false),
+            .init(label: "当社株主への 配当金(１株当たり 92円00銭)", section: nil, value: -18_447_000_000, isTotal: false),
+            .init(label: "非支配株主への配当金", section: nil, value: -503_000_000, isTotal: false),
+            .init(label: "株式に基づく 報酬（注）２", section: nil, value: 888_000_000, isTotal: false),
+            .init(label: "利益準備金繰入", section: nil, value: 0, isTotal: false),
+            .init(label: "その他の包括利益（△損失）", section: nil, value: 46_061_000_000, isTotal: false),
+            .init(label: "自己株式の取得およびその他", section: nil, value: -31_430_000_000, isTotal: false),
+            .init(label: "第85期末 現在", section: nil, value: 667_971_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
+    }
+
+    @Test
+    func omronS100LLFLHistoricalSSWithSpacedPeriodEndLabels() async throws {
+        guard await Self.ensureAvailable("S100LLFL") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100LLFL", statementTypes: [.changesInEquity]))
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+        let expectedSS: [StatementGoldenRow] = [
+            .init(label: "第83期末 現在", section: nil, value: 532_589_000_000, isTotal: true),
+            .init(label: "当期純利益", section: nil, value: 43_898_000_000, isTotal: false),
+            .init(label: "当社株主への 配当金(１株当たり 84円00銭)", section: nil, value: -16_940_000_000, isTotal: false),
+            .init(label: "非支配株主への配当金", section: nil, value: -401_000_000, isTotal: false),
+            .init(label: "非支配株主との資本取引等", section: nil, value: 0, isTotal: false),
+            .init(label: "株式に基づく 報酬（注）２", section: nil, value: 882_000_000, isTotal: false),
+            .init(label: "利益準備金繰入", section: nil, value: 0, isTotal: false),
+            .init(label: "その他の包括利益（△損失）", section: nil, value: 50_797_000_000, isTotal: false),
+            .init(label: "自己株式の取得", section: nil, value: -1_467_000_000, isTotal: false),
+            .init(label: "第84期末 現在", section: nil, value: 609_358_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
+    }
+
+    @Test
+    func sonyS100LM4NKeepsEquityStatementAfterCashFlow() async throws {
+        guard await Self.ensureAvailable("S100LM4N") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(
+                docID: "S100LM4N", statementTypes: [.cashFlow, .changesInEquity]))
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        Self.expectHTMLReadingOrder(year.changesInEquity)
+        #expect(year.cashFlow.count == 49)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "営業活動から得た")
+                == 1_350_150_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "現金・預金及び現金同等物期末残高")
+                == 1_786_982_000_000)
+
+        let expectedSS: [StatementGoldenRow] = [
+            .init(label: "2020年３月31日現在残高", section: nil, value: 4_789_535_000_000, isTotal: true),
+            .init(label: "新会計基準適用による累積的 影響額", section: nil, value: -5_055_000_000, isTotal: false),
+            .init(label: "新株予約権の行使", section: nil, value: 16_985_000_000, isTotal: false),
+            .init(label: "転換社債型新株予約権付社債 の株式への転換", section: nil, value: 78_342_000_000, isTotal: false),
+            .init(label: "株式にもとづく報酬", section: nil, value: 1_577_000_000, isTotal: false),
+            .init(label: "当期純利益", section: nil, value: 1_191_375_000_000, isTotal: false),
+            .init(label: "未実現有価証券評価損", section: nil, value: -102_492_000_000, isTotal: false),
+            .init(label: "未実現デリバティブ評価益", section: nil, value: 1_513_000_000, isTotal: false),
+            .init(label: "年金債務調整額", section: nil, value: 12_965_000_000, isTotal: false),
+            .init(label: "外貨換算調整額", section: nil, value: 106_826_000_000, isTotal: false),
+            .init(label: "金融負債評価調整額", section: nil, value: -3_120_000_000, isTotal: false),
+            .init(label: "包括利益合計", section: nil, value: 1_207_067_000_000, isTotal: true),
+            .init(label: "配当金（１株当たり55.00円）", section: nil, value: -81_012_000_000, isTotal: false),
+            .init(label: "自己株式の取得", section: nil, value: -366_000_000, isTotal: false),
+            .init(label: "自己株式の売却", section: nil, value: 1_519_000_000, isTotal: false),
+            .init(label: "非支配持分株主との取引及びその他", section: nil, value: -387_116_000_000, isTotal: false),
+            .init(label: "2021年３月31日現在残高", section: nil, value: 5_621_476_000_000, isTotal: true),
+        ]
+        #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
+    }
+
+    @Test
+    func murataS100R773HistoricalCFWithSpacedActivityHeadings() async throws {
+        guard await Self.ensureAvailable("S100R773") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100R773", statementTypes: [.cashFlow]))
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        #expect(year.cashFlow.count == 43)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "営業活動による")
+                == 276_278_000_000)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "投資活動による")
+                == -157_850_000_000)
+        #expect(
+            Self.labelValue(year.cashFlow, containing: "財務活動による")
+                == -173_708_000_000)
+        #expect(
+            year.cashFlow.filter { ($0.label ?? "").contains("現金及び現金同等物の期末残高") }
+                .map(\.value) == [469_406_000_000, 469_406_000_000])
+    }
+
+    @Test
+    func murataHistoricalCFSiblingDocsFillOperatingTotals() async throws {
+        for (doc, operating) in [
+            ("S100OJOR", 421_458_000_000.0),
+            ("S100LPV9", 373_571_000_000.0),
+        ] {
+            guard await Self.ensureAvailable(doc) else { return }
+            let year = try Self.requireResolved(
+                await Self.analyzer().extract(docID: doc, statementTypes: [.cashFlow]))
+            Self.expectHTMLReadingOrder(year.cashFlow)
+            #expect(year.cashFlow.count >= 40)
+            #expect(Self.labelValue(year.cashFlow, containing: "営業活動による") == operating)
+            #expect(year.cashFlow.contains { $0.section == .investing })
+            #expect(year.cashFlow.contains { $0.section == .financing })
+        }
+    }
+
+    @Test
+    func orixS100R3ZXHistoricalCFFrom0105020() async throws {
+        guard await Self.ensureAvailable("S100R3ZX") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100R3ZX", statementTypes: [.cashFlow]))
+        Self.expectHTMLReadingOrder(year.cashFlow)
+        #expect(year.cashFlow.count == 51)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "営業活動から得た現金（純額）")
+                == 913_088_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "投資活動に使用した現金（純額）")
+                == -1_098_478_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "財務活動から得た(に使用した)現金（純額）")
+                == 438_308_000_000)
+        #expect(
+            Self.exactLabelValue(year.cashFlow, "現金、現金等価物および使途制限付現金期末残高")
+                == 1_366_908_000_000)
+    }
+
+    @Test
+    func orixHistoricalCFSiblingDocsFrom0105020() async throws {
+        for (doc, operating, closing) in [
+            ("S100OKI8", 1_103_370_000_000.0, 1_091_812_000_000.0),
+            ("S100LU21", 1_095_676_000_000.0, 1_079_575_000_000.0),
+        ] {
+            guard await Self.ensureAvailable(doc) else { return }
+            let year = try Self.requireResolved(
+                await Self.analyzer().extract(docID: doc, statementTypes: [.cashFlow]))
+            Self.expectHTMLReadingOrder(year.cashFlow)
+            #expect(year.cashFlow.count >= 50)
+            #expect(
+                Self.exactLabelValue(year.cashFlow, "営業活動から得た現金（純額）") == operating)
+            #expect(
+                Self.exactLabelValue(
+                    year.cashFlow, "現金、現金等価物および使途制限付現金期末残高") == closing)
+        }
     }
 }

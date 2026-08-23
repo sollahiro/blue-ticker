@@ -9,8 +9,24 @@ enum USGAAPStatementHtmlVocabulary {
 
     // MARK: - Generic matchers
 
+    /// 分類・残高・活動見出しの照合用。開示 HTML は `期末 現在` / 改行分割の
+    /// `営業活動による`+`キャッシュ・フロー` のように空白が入る（BLT-43）。
+    static func compactWhitespace(_ s: String) -> String {
+        var out = String()
+        out.reserveCapacity(s.count)
+        for ch in s {
+            if ch.isWhitespace || ch == "\u{00A0}" || ch == "\u{3000}" { continue }
+            out.append(ch)
+        }
+        return out
+    }
+
     static func containsAny(_ haystack: String, _ needles: [String]) -> Bool {
-        needles.contains { haystack.contains($0) }
+        let h = compactWhitespace(haystack)
+        return needles.contains { needle in
+            let n = compactWhitespace(needle)
+            return !n.isEmpty && h.contains(n)
+        }
     }
 
     static func hasAnyPrefix(_ haystack: String, _ prefixes: [String]) -> Bool {
@@ -28,10 +44,20 @@ enum USGAAPStatementHtmlVocabulary {
     static let cashFlowInvestingContains = ["投資活動によるキャッシュ・フロー"]
     static let cashFlowFinancingContains = ["財務活動によるキャッシュ・フロー"]
 
+    /// CF 本表タイトル（0105020 フォールバック判定など。表内ラベルではない）。
+    static let cashFlowStatementHeadingContains = ["連結キャッシュ・フロー計算書"]
+
+    /// SS 本表タイトルのゆれ（「連結持分変動計算書」系。資本文脈の補強）。
+    static let equityStatementHeadingContains = [
+        "連結株主持分計算書",
+        "連結資本変動表",
+        "連結資本変動計算書",
+        "連結持分変動計算書",
+    ]
+
     /// SS 表の資本文脈（セル全文）。信用損失引当金の増減表を除外するための否定語もここ。
     static let equityContextContains = ["純資産", "株主資本", "資本合計", "資本金"]
     static let equityTableExcludeContains = ["信用損失"]
-
     /// BS 資産表: 部見出し。
     static let assetsSectionContains = ["資産の部"]
     static let assetsSectionExact = ["資産"]
@@ -133,6 +159,11 @@ enum USGAAPStatementHtmlVocabulary {
 
     static func hasEquityContext(_ allCells: String) -> Bool {
         containsAny(allCells, equityContextContains)
+            || containsAny(allCells, equityStatementHeadingContains)
+    }
+
+    static func hasCashFlowStatementHeading(_ text: String) -> Bool {
+        containsAny(text, cashFlowStatementHeadingContains)
     }
 
     static func isExcludedEquityTable(_ allCells: String) -> Bool {
