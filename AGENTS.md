@@ -13,7 +13,7 @@
 - **Region × Source**: モノレポ。市場は `JP`↔`EU`、開示系は `EDINET`↔`ESEF`（同階層の対）。パス・新規モジュールはこの対応で命名する（`.agents/rules/project/regions.md`、`docs/architecture.md`）。
 - **開発**: 機能追加 → 抽象化 → 単純化。抽象化は重複が実際に出てから。コードは少なく、必要振る舞いは満たす。要求前の拡張機構は作らない。手元の Linux コンテナが必要なら Apple `container`（`docker` / Docker Desktop は使わない）。Dockerfile は Fly 向け OCI 契約として残す。
 - **テスト**: 仕様＝振る舞いを検証する。境界値・異常系を重視し、呼び出し順や内部構造は見ない。golden（深さ）と smoke（床）の役割・固定企業・対象 note_type / breakdown 軸は `docs/xbrl-parsing.md` §6。新規 note_type 追加時は床を広げる。言語非依存の資産と実装紐づきの分けは `docs/test-spec-assets.md`。
-- **トラッカー**: コード欠陥は GitHub Issue、コード変更は GitHub PR、サイクル／本番 ingest／公開ゲートは Linear Team `blue-ticker`（`.agents/rules/generic/workflow.md`）。着手は Blocked by の先頭。今は BLT-41。
+- **トラッカー**: コード欠陥は GitHub Issue、コード変更は GitHub PR、サイクル／本番 ingest／公開ゲートは Linear Team `blue-ticker`（`.agents/rules/generic/workflow.md`）。着手は Blocked by の先頭。今は BLT-4（BLT-41 解除後。statement-v2 の job-01／サイクル残。Notes・Filing・Breakdown 子は BLT-4 Done まで先に拾わない）。
 
 ## ビルド・テスト
 
