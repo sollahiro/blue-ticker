@@ -166,16 +166,11 @@ enum IncomeStatementExtractor {
     private static func salesLabelForTag(_ tag: String?) -> String {
         guard let tag = tag else { return "売上高" }
         if Xbrl.ordinaryRevenueTags.contains(tag) { return "経常収益" }
-        if tag == "OperatingRevenue2" { return "営業収入" }
         if Xbrl.operatingRevenueTags.contains(tag) { return "営業収益" }
         switch tag {
         case "NetSalesIFRS", "TotalNetRevenuesIFRS", "RevenueIFRS",
             "RevenueIFRSSummaryOfBusinessResults", "Revenue":
             return "売上収益"
-        case "Revenue2IFRS", "SalesOfGoodsIFRS", "SalesOfGoodsRevenue2IFRS":
-            return "収益"
-        case "ProductSalesRevenueIFRS":
-            return "製品売上高"
         case "NetSalesOfCompletedConstructionContractsCNS",
              "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults":
             return "完成工事高"
