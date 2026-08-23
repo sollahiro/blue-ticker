@@ -43,4 +43,4 @@ Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。
 | Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット） | `deploy.md` で再作成。ZIP は EDINET 再取得可 |
 | ローカル Mac | 手元スケジュール・`.env` | `deploy.md` 定期同期 |
 | Fly Volume `/data` | EDINET キャッシュ（L1） | 再取得または R2 L2 |
-| Cloudflare Pages（apex） | Git 連携 `assets/apex-site` | ダッシュボードで再接続 |
+| Cloudflare Pages（apex） | Git 連携は切断済み（作り直し中。`assets/apex-site` はリポジトリから削除） | 新サイトを置く場所が決まってから再接続 |

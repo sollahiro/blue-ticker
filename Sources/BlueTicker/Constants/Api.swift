@@ -89,7 +89,7 @@ public enum Api {
     /// 閾値超で早期中断し、残りは次回スケジュールに委ねる。
     public static let ingestDbUnhealthyRetryThreshold = 10
 
-    /// `blt-server status-report`（`assets/apex-site/status.html` 生成用）が各ステージを
+    /// `blt-server status-report`（status.html 生成用。パスは `BLT_STATUS_HTML`）が各ステージを
     /// 「更新遅延中」と判定するまでの経過時間（時間）。`scripts/check-ingest-freshness.sh` の
     /// `BLT_FRESHNESS_MAX_AGE_HOURS` 既定値（36）と揃えている。値を変える場合は両方を見直すこと
     /// （2つの独立した仕組みのため自動同期はしない）。
