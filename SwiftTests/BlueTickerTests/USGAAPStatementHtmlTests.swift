@@ -27,6 +27,42 @@ import Foundation
         #expect(USGAAPStatementHtml.displayLabel("３ヶ月以内") == "３ヶ月以内")
     }
 
+    /// 表分類・残高・合計は Vocabulary の語で閉じる（社名 contains は使わない）。
+    @Test
+    func vocabularyCoversTableClassificationAndTotalMarkers() {
+        let v = USGAAPStatementHtmlVocabulary.self
+        #expect(v.isCashFlowTable(labels: ["営業活動によるキャッシュ・フロー"]))
+        #expect(v.isCashFlowTable(labels: [
+            "投資活動によるキャッシュ・フロー", "財務活動によるキャッシュ・フロー",
+        ]))
+        #expect(v.hasEquityContext("株主資本\n資本金"))
+        #expect(v.isExcludedEquityTable("信用損失引当金の増減"))
+        #expect(v.isAssetsSectionHeader("（資産の部）"))
+        #expect(v.isAssetsTotalLabel("流動資産合計"))
+        #expect(!v.isAssetsTotalLabel("純資産合計"))
+        #expect(v.isLiabilitiesSectionHeader("負債および資本"))
+        #expect(!v.isLiabilitiesSectionHeader("負債および資本合計"))
+        #expect(v.isIncomeStatementTable(labels: ["売上高", "営業利益"]))
+        #expect(v.isIncomeStatementTable(labels: ["売上高", "当期純利益"]))
+        #expect(v.isIncomeStatementTable(labels: ["収益合計", "当期純利益"]))
+        #expect(!v.isIncomeStatementTable(labels: ["その他の包括利益", "当期包括利益"]))
+        #expect(v.isEquityChronologicalBalanceLabel("2024年３月31日現在残高"))
+        #expect(v.isEquityChronologicalBalanceLabel("第79期末現在"))
+        #expect(v.isBareEquityOpenCloseLabel("期首残高"))
+        #expect(v.isBareEquityOpenCloseLabel("期末残高（注）"))
+        #expect(v.isEquityBalanceRowLabel("2025年3月31日残高"))
+        #expect(v.isTotalLabel("計", sectionType: .incomeStatement))
+        #expect(v.isTotalLabel("費用計", sectionType: .incomeStatement))
+        #expect(v.isTotalLabel("営業収益 計", sectionType: .incomeStatement))
+        #expect(v.isTotalLabel("営業活動に使用された現金（純額）", sectionType: .cashFlow))
+        #expect(v.isCashAndEquivalentsTailRow("現金及び現金同等物の期首残高"))
+        #expect(!v.isCashAndEquivalentsTailRow("買収資産に含まれる現金及び現金同等物控除後"))
+        #expect(v.isNetAssetsSectionHeader("資本："))
+        #expect(v.isNetAssetsSectionHeader("資本の部"))
+        #expect(v.isLiabilitiesAndEquityTotalLabel("負債および資本合計"))
+        #expect(v.cfSection(for: "投資活動によるキャッシュ・フロー") == .investing)
+    }
+
     @Test
     func extractsBalanceSheetIncomeAndCashFlowFromMinimalHtml() throws {
         let html = """
