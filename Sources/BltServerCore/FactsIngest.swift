@@ -220,9 +220,9 @@ public func runFactsIngestCommand(
         let nikkeiListed = codes ?? priority
         let needsListedFilings =
             targets.contains(.filingSections) || targets.contains(.breakdowns)
+            || targets.contains(.statements)
         let needsNikkeiFilings =
-            targets.contains(.statements) || targets.contains(.notes)
-            || targets.contains(.breakdowns)
+            targets.contains(.notes) || targets.contains(.breakdowns)
 
         func loadCandidateSets(_ listedCodes: Set<String>) async throws -> FilingSectionCandidateSets {
             if listedCodes.isEmpty {
@@ -491,18 +491,18 @@ public func runFactsIngestCommand(
             }
         }
         if targets.contains(.statements) {
-            // Statement 取り込み: 既定は日経225（`priority`）限定。`--codes` 指定時はその集合を母集団にする
-            // （内訳取り込み と同型。CSV 未配置でも手動再ingest可能）。
-            let statementListed = codes ?? priority
+            // Statement 取り込み: 既定は上場全体（`listed`）。日経225（`priority`）は処理順の先頭寄せのみ。
+            // `--codes` 指定時はその集合を母集団にする（filing-sections / financials と同型）。
+            let statementListed = codes ?? listed
             if statementListed.isEmpty {
                 app.logger.warning(
-                    "Statement 取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    "Statement 取り込み listed codes empty (listed universe empty and no --codes); skipping",
                     metadata: ["event": "ingest_skipped", "target": "statements", "reason": "empty_listed_codes"])
             }
             let s7 = try await runStatementIngest(
                 db: app.db, listedCodes: statementListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, cachedDocIDs: cachedDocIDs,
-                candidateSets: nikkeiFilingSets,
+                explicitCodes: codes, priorityCodes: priority, cachedDocIDs: cachedDocIDs,
+                candidateSets: listedFilingSets,
                 logger: app.logger
             ) { docID in
                 await context.extractStatement(docID: docID)
@@ -517,7 +517,7 @@ public func runFactsIngestCommand(
                 notApplicable: s7.notApplicable, purged: s7.purged)
         }
         if targets.contains(.notes) {
-            // 財務諸表注記取り込み: Statement 取り込み と同じ日経225限定母集団。
+            // 財務諸表注記取り込み: 日経225（`priority`）限定のまま（statements の上場拡大とは独立）。
             // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
             let statementNotesListed = codes ?? priority

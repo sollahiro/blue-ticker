@@ -103,7 +103,7 @@ flowchart LR
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |
-| `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（日経225） |
+| `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement（上場） / Notes（日経225） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 7 日。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
 

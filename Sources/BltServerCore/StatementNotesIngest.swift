@@ -4,7 +4,7 @@
 // （ネットワーク非依存でテスト可能）。内訳取り込み（`BreakdownIngest.swift`）の axis 別構造をそのまま
 // note_type 別に踏襲する。呼び出し元（`FactsIngest.swift`）が note_type ごとに本関数を呼ぶ。
 //
-// 対象は Statement 取り込み と同じ日経225構成銘柄に限定する（呼び出し元
+// 対象は日経225構成銘柄に限定する（statements の上場拡大とは独立。呼び出し元
 // `FactsIngest.swift` が `priorityIngestCodes()` を `filingSectionCandidates` の `listedCodes`
 // 引数として渡すことで実現する）。候補選定ロジックは 有報セクション取り込み・内訳取り込み・
 // Statement 取り込み と同じ `filingSectionCandidates` を再利用する。

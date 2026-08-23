@@ -35,7 +35,7 @@ Meta → Struct → Norm → Viz
 | Meta | Search | 銘柄コード・書類 ID の検索 | 済 | `GET /v1/companies` 等 |
 | Meta | Icon | 会社アイコン取得 | 済 | R2 公開 URL（設定時） |
 | Struct | Filing | 有報のテキスト抽出 | 済 | filing-sections |
-| Struct | Statement | 財務諸表の構造化 | 済（日経225） | BS/PL/CF/SS |
+| Struct | Statement | 財務諸表の構造化 | 済（上場） | BS/PL/CF/SS。日経225は処理順の優先のみ |
 | Struct | Statement-Notes | 財務諸表注記の構造化 | 済 | 日経225。ingest の現在地は Linear |
 | Norm | Summary | 正規化済み財務データ | 済 | financials 水準値 |
 | Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開判断は Linear。軸は下表・`breakdown.md` |
