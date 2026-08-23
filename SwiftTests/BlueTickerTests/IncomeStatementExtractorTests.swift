@@ -96,6 +96,33 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
+    @Test func testJgaapOperatingRevenueRWY() {
+        let fs = makeFieldSet(("OperatingRevenueRWY", 1_086_179_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_086_179_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    @Test func testJgaapOperatingRevenueELE() {
+        let fs = makeFieldSet(("OperatingRevenueELE", 6_328_574_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 6_328_574_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    @Test func testSalesLabelOperatingRevenue2() {
+        let fs = makeFieldSet(("OperatingRevenue2", 300_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.salesLabel == "営業収入")
+    }
+
+    @Test func testIfrsRevenue2() {
+        let fs = makeFieldSet(("Revenue2IFRS", 14_000_000_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 14_000_000_000_000.0)
+        #expect(result.salesLabel == "収益")
+    }
+
     @Test func testSalesLabelDefaultNetSales() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, nil))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
