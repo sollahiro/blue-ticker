@@ -42,12 +42,10 @@ enum Xbrl {
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenue1",
         "OperatingRevenue1SummaryOfBusinessResults",
-        "OperatingRevenueRWY",  // 鉄道業
-        "OperatingRevenueELE",  // 電気事業
-        "OperatingRevenue2",  // 興行等の営業収入
-        "OperatingRevenueRevenue2IFRS",  // 日本取引所グループ等
-        "OperatingRevenueSEC",  // 証券業の営業収益計
-        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",  // 海運業
+        "OperatingRevenueRWY",  // 鉄道業（東急 S100YE63）
+        "OperatingRevenueELE",  // 電気事業（東電HD S100YIHR）
+        "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益（S100YA84）
+        "OperatingRevenueSEC",  // 証券業の営業収益計（大和証券G S100YCMP）
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -62,8 +60,6 @@ enum Xbrl {
         "RevenueIFRSSummaryOfBusinessResults",
         "RevenueJMISSummaryOfBusinessResults",
         "Revenue",
-        "Revenue2",  // 丸紅等
-        "Revenue2IFRS",  // 商社・電通等。本表の収益行
         "OperatingRevenuesIFRS",  // NTT。本表の営業収益
         "OperatingRevenuesIFRSKeyFinancialData",
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
@@ -77,14 +73,9 @@ enum Xbrl {
         "OperatingRevenue1SummaryOfBusinessResults",
         "OperatingRevenueRWY",
         "OperatingRevenueELE",
-        "OperatingRevenue2",
         "OperatingRevenueRevenue2IFRS",
         "OperatingRevenueSEC",
-        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",
-        "SalesOfGoodsIFRS",
-        "SalesOfGoodsRevenue2IFRS",
-        "ProductSalesRevenueIFRS",
-        "InsuranceRevenueIFRS",  // 損保等
+        "InsuranceRevenueIFRS",  // 損保等（東京海上HD S100YLS8）
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
     ]
