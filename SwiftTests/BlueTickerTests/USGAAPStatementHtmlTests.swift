@@ -786,6 +786,92 @@ import Foundation
     }
 
     @Test
+    func exactOperatingRevenuePreferredOverPrefixedDetailAndComponentSales() throws {
+        // NTT 9432 / S100YCP3: Summary 売上は exact「営業収益」。
+        // 「固定電話営業収益」等の内訳や「売上高」コンポーネントより優先し、contains は使わない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>固定電話営業収益</td><td>1,000,000</td><td>1,234,567</td></tr>
+          <tr><td>移動通信営業収益</td><td>2,000,000</td><td>2,345,678</td></tr>
+          <tr><td>売上高</td><td>3,000,000</td><td>3,000,000</td></tr>
+          <tr><td>営業収益</td><td>10,000,000</td><td>14,409,121</td></tr>
+          <tr><td>営業費用</td><td>8,000,000</td><td>12,000,000</td></tr>
+          <tr><td>営業利益</td><td>2,000,000</td><td>2,409,121</td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td>1,000,000</td><td>1,000,000</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-ntt-sales-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        let xbrl = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrl xmlns="http://www.xbrl.org/2003/instance"
+              xmlns:jppfs="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor">
+          <context id="CurrentYearDuration"><period><startDate>2024-04-01</startDate><endDate>2025-03-31</endDate></period></context>
+          <jppfs:NetSalesUSGAAPSummaryOfBusinessResults contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs:NetSalesUSGAAPSummaryOfBusinessResults>
+        </xbrl>
+        """
+        try xbrl.write(
+            to: pub.appendingPathComponent("test.xbrl"), atomically: true, encoding: .utf8)
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(values.sales == 14_409_121_000_000)
+        #expect(values.salesLabel == "営業収益")
+    }
+
+    @Test
+    func prefixedOperatingRevenueDetailDoesNotWinAsRevenueTotal() throws {
+        // exact「営業収益」が無いとき、「○○営業収益」内訳を revenue-total 扱いしない。
+        // フォールバックの単独「売上高」を採用する。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>固定電話営業収益</td><td>1,000,000</td><td>1,234,567</td></tr>
+          <tr><td>移動通信営業収益</td><td>2,000,000</td><td>2,345,678</td></tr>
+          <tr><td>売上高</td><td>3,000,000</td><td>3,456,789</td></tr>
+          <tr><td>営業利益</td><td>500,000</td><td>500,000</td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td>400,000</td><td>400,000</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-prefixed-eigyo-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        let xbrl = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrl xmlns="http://www.xbrl.org/2003/instance"
+              xmlns:jppfs="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor">
+          <context id="CurrentYearDuration"><period><startDate>2024-04-01</startDate><endDate>2025-03-31</endDate></period></context>
+          <jppfs:NetSalesUSGAAPSummaryOfBusinessResults contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs:NetSalesUSGAAPSummaryOfBusinessResults>
+        </xbrl>
+        """
+        try xbrl.write(
+            to: pub.appendingPathComponent("test.xbrl"), atomically: true, encoding: .utf8)
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(values.sales == 3_456_789_000_000)
+        // 「○○営業収益」を total 扱いしていないこと（売上高フォールバック）。
+        #expect(values.salesLabel != "固定電話営業収益")
+        #expect(values.salesLabel != "移動通信営業収益")
+    }
+
+    @Test
     func fourSlotRowWithEmptyLeftCellsKeepsCurrentRightAmount() throws {
         // 実データ確認（オムロン CF「１　当期純利益」）: 前期/当期それぞれ左空・右金額の
         // 4スロット。先頭の空をスペーサとして剥がすと奇数になり行ごと落ちるため残す。
