@@ -64,7 +64,7 @@ curl -s 'http://127.0.0.1:3000/v1/companies/7203/financials?years=1'
 | 9 | 225 全体で問題なければ全銘柄へ拡張 | 本番 write | しない |
 | 10 | 全銘柄展開に伴うロジック定着 | 本番 write | **する** |
 
-- **母集団**: statements と breakdowns の employees/rd/goodwill は `assets/nikkei225.csv` / `priorityIngestCodes()` で対象限定。breakdowns の business/geography と financials/filing-sections は上場全体（同 CSV は処理順の優先のみ）→ 225 に閉じるなら `--codes` 等で明示。
+- **母集団**: statements と breakdowns の business/geography と financials/filing-sections は上場全体（`assets/nikkei225.csv` / `priorityIngestCodes()` は処理順の優先のみ）。notes と breakdowns の employees/rd/goodwill は同 CSV で対象限定 → 225 に閉じるなら `--codes` 等で明示。
 - **接続**: 使い捨て＝`BLT_NEON_DISPOSABLE_DATABASE_URL`（手元では `DATABASE_URL` に束ねる）、本番 read＝`BLT_NEON_RO_DATABASE_URL`（SELECT のみ）、本番 write＝`DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" blt-server ...`（コマンド単位。既定の差し替え禁止）。`DATABASE_URL` はプロセスが読む接続スロットのみ。RO は WRITE 親ブランチの子（自動同期なし）→ ingest 後は `scripts/neon-reset-ro-from-parent.sh` で揃える。
 - **訂正有報 (130)**: 自動マージしない。手動確認し、見た docID は原本準拠でも Git に残す（`.agents/rules/project/amendments.md`）。不審フラグと同じく手動 ingest（段階 3・8）。
 

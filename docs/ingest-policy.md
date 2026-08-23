@@ -15,7 +15,7 @@
 | # | スクリプト | 内容 | 母集団 | 既定 limit | 周期の目安 |
 |---|---|---|---|---|---|
 | 0 | `scripts/jp/edinet/ingest-job-00-sync-foundation.sh` | `sync` → `filing-sections` | 上場 | 80 | 日次（軽） |
-| 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 日経225 | 80 | 6h |
+| 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 上場（225は処理順） | 80 | 6h |
 | 2 | `scripts/jp/edinet/ingest-job-02-notes-core.sh` | `statement-notes`（per_share, issued_shares） | 225 | 80 | 6h |
 | 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（残り7種） | 225 | 80 | 日次 |
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全5軸） | business/geo=上場、他=225 | 50 | 6h |
@@ -77,7 +77,7 @@ set -a; . ./.env; set +a
 ```text
 sync + filing-sections   … R2/L1 温め + 本文抽出
         ↓
-statements               … 225 正本
+statements               … 上場正本（225は処理順）
         ↓
 notes-core               … BPS/EPS 供給源を優先
         ↓

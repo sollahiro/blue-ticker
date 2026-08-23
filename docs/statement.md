@@ -21,7 +21,7 @@
 | Statement | `GET /v1/companies/{code}/statement` | `get_statement` |
 | Notes | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` |
 
-対象母集団は日経225スタート。1書類=1行（ingest が候補 docID を反復）。通期のみ。
+対象母集団は上場全体（日経225は処理順の優先のみ。Notes は当面225）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
 
 ## 契約（骨組み）
 
@@ -59,7 +59,7 @@ REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `rea
 - 半期報告書（通期のみ）
 - PL 利益段階ラベリング（科目統一に当たるため）
 
-母集団拡大は Linear [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大銀行保険)。`assets/taxonomy` の本番配置は [BLT-37](https://linear.app/sollahiro/issue/BLT-37/運用-assetstaxonomy-本番配置)。
+母集団拡大（上場）は Linear [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)。`assets/taxonomy` の本番配置は [BLT-37](https://linear.app/sollahiro/issue/BLT-37/運用-assetstaxonomy-本番配置)。
 
 ## 関連
 

@@ -130,7 +130,7 @@ chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
 
 `.env` は秘密・接続先、`ingest.local.env` は運用チューニング。employees/rd/goodwill は ingest 側で 30/回・日経225固定。
 
-`assets/nikkei225.csv`（gitignore）: financials/filing-sections と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statements は対象母集団そのもの（未配置なら当該軸 0 件）。business/geography の対象は上場全体。
+`assets/nikkei225.csv`（gitignore）: financials/filing-sections/statements と breakdowns の business/geography は処理順の優先。employees/rd/goodwill と statement-notes は対象母集団そのもの（未配置なら当該軸 0 件）。statements / business/geography の対象は上場全体。
 
 ## EDINET マスタ CSV
 

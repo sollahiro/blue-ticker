@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Job 1: statements（日経225・通期 BS/PL/CF/SS）
+# Job 1: statements（上場全体・通期 BS/PL/CF/SS。日経225は処理順の優先のみ）
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"

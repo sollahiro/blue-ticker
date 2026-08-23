@@ -1,4 +1,4 @@
-// Statement 取り込み: 日経225構成銘柄の有報について BS/PL/CF/SS を抽出し company_statements へ upsert する。
+// Statement 取り込み: 上場企業の有報について BS/PL/CF/SS を抽出し company_statements へ upsert する。
 // 抽出は BlueTickerCore のファサード（extractStatement）に委譲し、ここでは対象選定・staleness 判定・
 // DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
@@ -8,10 +8,8 @@
 // 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
 // （docs/statement.md）。
 //
-// 対象母集団は日経225限定でスタートする。Statement 取り込みは LLM 不要でコスト制約は
-// 無いが、実データ検証（158社）が銀行・保険等の特殊タクソノミを網羅していないため、まず
-// 母集団を絞って様子を見る（呼び出し元が `listedCodes` に `priorityIngestCodes()` を渡すことで
-// 実現する。同docs/statement.md）。
+// 対象母集団は上場全体（呼び出し元が `listedCodes` に `listedCompanyCodes()` を渡す）。
+// 日経225（`priorityIngestCodes()`）は処理順の先頭寄せのみ（membership ではない）。
 //
 // staleness 判定は決定論のみ（LLM 不要）のため内訳取り込みより単純: cache_version 不一致のみで
 // 再抽出対象にする（company_breakdowns の needs_review 相当の概念は無い）。
@@ -41,8 +39,8 @@ public struct StatementIngestSummary: Sendable, Equatable {
 /// 本番は `context.extractStatement`、テストはフェイクを注入する。
 public typealias StatementExtractor = @Sendable (String) async -> StatementDocResolveResult
 
-/// `listedCodes`（呼び出し元は日経225構成銘柄集合を渡す想定）の有報（直近 years 年ぶん）を走査し、
-/// 未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
+/// `listedCodes`（呼び出し元は上場全体を渡す想定。日経225は `priorityCodes` で処理順のみ）の有報
+/// （直近 years 年ぶん）を走査し、未抽出 or バージョン不一致のものを抽出・格納する。`limit` は新規抽出件数の上限（バッチ実行用）。
 /// `explicitCodes` / `priorityCodes` は filing-sections/breakdowns と同じ意味。
 /// `cachedDocIDs` はローカル XBRL 展開済み。処理順は各社の最新有報 → 前年以降。同一年次内は
 /// 日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
