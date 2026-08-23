@@ -65,6 +65,29 @@ import Testing
         #expect(decoded.years.first?.changesInEquity.isEmpty == true)
     }
 
+    @Test func groupSectionRoundTripsAsJsonString() throws {
+        let item = StatementLineItem(
+            tag: "jpcrp_cor:ConsolidatedStatementOfEquityUSGAAPTextBlock",
+            label: "期末残高", value: 594_493, unit: "JPY", order: 0,
+            section: .group("資本金"), isTotal: false)
+        let json = try JSONEncoder().encode(item)
+        let object = try #require(try JSONSerialization.jsonObject(with: json) as? [String: Any])
+        #expect(object["section"] as? String == "資本金")
+        #expect(object["label"] as? String == "期末残高")
+        let decoded = try JSONDecoder().decode(StatementLineItem.self, from: json)
+        #expect(decoded.section == .group("資本金"))
+        #expect(decoded.label == "期末残高")
+
+        let assets = StatementLineItem(
+            tag: "Assets", label: "資産合計", value: 1, unit: "JPY", order: 0,
+            section: .assets, isTotal: true)
+        let assetsJSON = try JSONEncoder().encode(assets)
+        let assetsObject = try #require(try JSONSerialization.jsonObject(with: assetsJSON) as? [String: Any])
+        #expect(assetsObject["section"] as? String == "assets")
+        let decodedAssets = try JSONDecoder().decode(StatementLineItem.self, from: assetsJSON)
+        #expect(decodedAssets.section == .assets)
+    }
+
     @Test func decodesStatementYearJsonMissingChangesInEquityKeyAsEmpty() throws {
         // 回帰: SS 追加前の格納行は `changes_in_equity` キーを持たない。
         let json = Data(

@@ -49,10 +49,11 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// US-GAAP 明示 notApplicable（個別 BS silent fallback 廃止）は v1 のまま拡張（2026-08-09）。
 /// SS（持分変動計算書）追加も v1 のまま拡張（2026-08-09。本番 `company_statements` は 0 行のため
 /// 移行コスト実質ゼロ。旧 payload は `changes_in_equity` キー欠落を空配列として読む）。
-/// US-GAAP HTML 経路（`USGAAPStatementHtml`、2026-08-10）も v1 のまま拡張。本番
-/// `company_statements` はこの時点でも 0 行のため、旧 `.notApplicable(us_gaap_unsupported)`
-/// プレースホルダが残っていても実害はない（意図的にバンプしない。要バンプならユーザー指示）。
-public let statementCacheVersion = "statement-v1"
+/// US-GAAP HTML 経路（`USGAAPStatementHtml`、2026-08-10）も当初は v1 のまま拡張した。
+/// 2026-08-22: 野村（証券本表の見出し・連結資本勘定変動表）・オムロン（営業利益行なし）・
+/// 小松/オリックス（SS 残高ラベル）を HTML 経路で拾えるようにしたため v2。
+/// 旧 notApplicable プレースホルダと部分欠測行を再抽出する。
+public let statementCacheVersion = "statement-v2"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。
 /// **明示指定**であり、「現行から N つ前」のような機械オフセットではない。
@@ -78,17 +79,29 @@ public let statementSchemaVersion = 1
 
 // MARK: - 契約型
 
-/// BS/CF 行の区分。貸借対照表は資産/負債/純資産、キャッシュ・フロー計算書は営業/投資/財務活動を表す。
-/// 損益計算書には適用しない（`StatementLineItem.section` は常に nil）。presentation linkbase の
-/// 祖先タグから判定する（`StatementClassifier` 参照）。複数区分にまたがる合計行（例: 資産合計＋
-/// 負債純資産合計）は該当する祖先を持たないため nil になる。
-public enum StatementLineSection: String, Codable, Sendable {
-    case assets
-    case liabilities
-    case netAssets = "net_assets"
-    case operating
-    case investing
-    case financing
+/// 行の区分。JSON は文字列。
+///
+/// BS/CF は固定値 `assets` / `liabilities` / `net_assets` / `operating` / `investing` /
+/// `financing`（presentation 祖先。PL は常に nil）。
+/// US-GAAP HTML の科目縦 SS（連結資本勘定変動表）では、区分見出し（資本金 等）を
+/// `group` として同じキーに載せる。label は開示どおり（期首残高 等）。
+public struct StatementLineSection: RawRepresentable, Codable, Sendable, Equatable, Hashable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public static let assets = StatementLineSection(rawValue: "assets")
+    public static let liabilities = StatementLineSection(rawValue: "liabilities")
+    public static let netAssets = StatementLineSection(rawValue: "net_assets")
+    public static let operating = StatementLineSection(rawValue: "operating")
+    public static let investing = StatementLineSection(rawValue: "investing")
+    public static let financing = StatementLineSection(rawValue: "financing")
+
+    public static func group(_ name: String) -> StatementLineSection {
+        StatementLineSection(rawValue: name)
+    }
 }
 
 /// 合計行（`StatementLineItem.isTotal == true`）を構成する要素1件。計算リンクベース
@@ -115,7 +128,8 @@ public struct StatementLineComponent: Codable, Sendable {
 /// こちらでのみ決定的に判断できる。企業拡張タグの区別は `docs/statement.md` 参照（v1では未対応）。
 /// US-GAAP HTML 経路（`USGAAPStatementHtml`）のみ例外: calculation linkbase が無いため
 /// `is_total` はラベル規則、`components` はキヤノン型（合計直後の内訳が親と一致）の推定。
-/// SS は合計列のみ（資本構成員次元は含めない）。
+/// SS は合計列のみ（資本構成員次元は列にしない）。科目縦 HTML では区分見出しを `section`
+/// （`group`）へ載せる。
 public struct StatementLineItem: Codable, Sendable {
     public var tag: String
     public var label: String?
@@ -169,8 +183,8 @@ public struct StatementLineItem: Codable, Sendable {
     }
 
     /// REST/MCP 応答用 JSON オブジェクト。`order` は presentation linkbase から取得できた場合のみ
-    /// 非 nil（`docs/statement.md`）。`section` は BS/CF のみ、
-    /// 該当する祖先が判定できた行のみ非 nil。`components` は `is_total` が true かつ構成要素が
+    /// 非 nil（`docs/statement.md`）。`section` は BS/CF の固定区分、または科目縦 SS の
+    /// 区分見出し。該当しない行は nil。`components` は `is_total` が true かつ構成要素が
     /// 解決できた場合のみ非 nil。
     public func jsonObject() -> [String: Any] {
         [

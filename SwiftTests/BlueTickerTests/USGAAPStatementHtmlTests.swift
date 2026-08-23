@@ -8,6 +8,26 @@ import Foundation
 @Suite struct USGAAPStatementHtmlTests {
 
     @Test
+    func displayLabelStripsOutlineNumbersButKeepsYearsAndPerShare() {
+        #expect(USGAAPStatementHtml.displayLabel("１ 資本金") == "資本金")
+        #expect(USGAAPStatementHtml.displayLabel("１　当期純利益") == "当期純利益")
+        #expect(USGAAPStatementHtml.displayLabel("(1）減価償却費") == "減価償却費")
+        #expect(USGAAPStatementHtml.displayLabel("(4)信用損失引当金") == "信用損失引当金")
+        #expect(USGAAPStatementHtml.displayLabel("(3) 関連会社等に対する債務") == "関連会社等に対する債務")
+        #expect(USGAAPStatementHtml.displayLabel("①　受取手形及び売掛金の増加") == "受取手形及び売掛金の増加")
+        #expect(USGAAPStatementHtml.displayLabel("Ⅰ 売上高") == "売上高")
+        #expect(USGAAPStatementHtml.displayLabel("ⅩⅧ 資本剰余金から") == "資本剰余金から")
+        #expect(USGAAPStatementHtml.displayLabel("①営業債権") == "営業債権")
+        #expect(USGAAPStatementHtml.displayLabel("１０その他") == "その他")
+        #expect(USGAAPStatementHtml.displayLabel("１.当期純利益") == "当期純利益")
+        #expect(
+            USGAAPStatementHtml.displayLabel("１株当たり当社株主帰属当期純利益")
+                == "１株当たり当社株主帰属当期純利益")
+        #expect(USGAAPStatementHtml.displayLabel("2024年３月31日現在残高") == "2024年３月31日現在残高")
+        #expect(USGAAPStatementHtml.displayLabel("３ヶ月以内") == "３ヶ月以内")
+    }
+
+    @Test
     func extractsBalanceSheetIncomeAndCashFlowFromMinimalHtml() throws {
         let html = """
         <html><body>
@@ -86,7 +106,7 @@ import Foundation
 
         #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 })
         #expect(extracted.balanceSheet.contains { $0.label == "純資産合計" && $0.section == .netAssets })
-        #expect(extracted.balanceSheet.contains { $0.label == "１ 資本金" && $0.section == .netAssets })
+        #expect(extracted.balanceSheet.contains { $0.label == "資本金" && $0.section == .netAssets })
         #expect(extracted.incomeStatement.contains { $0.label?.contains("売上高") == true && $0.value == 1_200_000_000 })
         #expect(extracted.incomeStatement.contains { $0.label == "営業利益" && $0.value == 150_000_000 })
         #expect(
@@ -170,13 +190,72 @@ import Foundation
                     .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
                 ]))
 
-        #expect(extracted.balanceSheet.contains { $0.label == "(4)信用損失引当金" && $0.value == -15_841_000_000 })
-        #expect(extracted.balanceSheet.contains { $0.label == "(3) 関連会社等に対する債務" && $0.value == 1_672_000_000 })
-        #expect(extracted.incomeStatement.contains { $0.label == "２ 研究開発費" && $0.value == 163_399_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "(6) その他" && $0.value == -21_377_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "７ 関連会社投融資" && $0.value == -42_000_000 })
-        #expect(extracted.cashFlow.contains { $0.label == "９ 事業の売却" && $0.value == 0 })
+        #expect(extracted.balanceSheet.contains { $0.label == "信用損失引当金" && $0.value == -15_841_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "関連会社等に対する債務" && $0.value == 1_672_000_000 })
+        #expect(extracted.incomeStatement.contains { $0.label == "研究開発費" && $0.value == 163_399_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "その他" && $0.value == -21_377_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "関連会社投融資" && $0.value == -42_000_000 })
+        #expect(extracted.cashFlow.contains { $0.label == "事業の売却" && $0.value == 0 })
         #expect(extracted.changesInEquity.contains { $0.label == "振替" && $0.value == 0 })
+    }
+
+    @Test
+    func emptyArabParentIsOmittedChildrenKeepLineAmounts() throws {
+        // 富士フイルム: 「２ 受取債権」は金額なし。小計は末子の右セルだが、足し算親は行にしない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>２ 受取債権</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>(1)営業債権</td><td>注20</td><td>674,112</td><td></td><td>680,635</td><td></td></tr>
+          <tr><td>(2)リース債権</td><td>注４</td><td>39,248</td><td></td><td>32,821</td><td></td></tr>
+          <tr><td>(3)関連会社等に対する債権</td><td></td><td>2,397</td><td></td><td>2,371</td><td></td></tr>
+          <tr><td>(4)信用損失引当金</td><td>注４</td><td>△19,172</td><td>696,585</td><td>△15,841</td><td>699,986</td></tr>
+          <tr><td>３ 棚卸資産</td><td>注６</td><td></td><td>547,803</td><td></td><td>543,976</td></tr>
+          <tr><td>資産合計</td><td></td><td></td><td>100</td><td></td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産の部</td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>純資産合計</td><td></td><td></td><td>50</td><td></td><td>80</td></tr>
+          <tr><td>負債・純資産合計</td><td></td><td></td><td>100</td><td></td><td>200</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>Ⅰ 売上高</td><td></td><td></td><td>1,000</td><td></td><td>1,200</td></tr>
+          <tr><td>営業利益</td><td></td><td></td><td>100</td><td></td><td>150</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td></td><td>10</td><td></td><td>20</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー</td><td></td><td></td><td>-5</td><td></td><td>-4</td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー</td><td></td><td></td><td>-1</td><td></td><td>-2</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-parent-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir,
+                statementTypes: [
+                    .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
+                ]))
+
+        #expect(!extracted.balanceSheet.contains { $0.label == "受取債権" })
+        #expect(extracted.balanceSheet.allSatisfy { $0.components == nil })
+        #expect(extracted.balanceSheet.contains { $0.label == "営業債権" && $0.value == 680_635_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "信用損失引当金" && $0.value == -15_841_000_000 })
+        #expect(extracted.balanceSheet.contains { $0.label == "棚卸資産" && $0.value == 543_976_000_000 })
     }
 
     @Test
@@ -303,7 +382,7 @@ import Foundation
                     .balanceSheet, .incomeStatement, .cashFlow, .changesInEquity,
                 ]))
 
-        #expect(extracted.incomeStatement.contains { $0.label == "３ のれんの減損損失" && $0.value == 0 })
+        #expect(extracted.incomeStatement.contains { $0.label == "のれんの減損損失" && $0.value == 0 })
         #expect(extracted.cashFlow.contains { $0.label == "のれんの減損損失" && $0.value == 0 })
         #expect(extracted.changesInEquity.contains { $0.label == "利益準備金への振替" && $0.value == 0 })
     }
@@ -559,16 +638,197 @@ import Foundation
     }
 
     @Test
+    func commaSeparatedFootnoteNumbersAreNotAmountSlots() throws {
+        // 実データ確認（オリックス BS）: 注記番号「15,32」「16,32」「23」は
+        // parseHtmlNumber がカンマを潰して 1532/23 の金額になる。残スロットが奇数になり
+        // 短期借入債務・預金・資本金が行ごと落ちる。1〜2桁の注記番号セルは金額にしない。
+        // 「その他 | 40 | 60」は先頭が2桁に見えても剥がすと奇数なので残し、当期 60 を取る。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記番号</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>負債の部</td><td></td><td></td><td></td></tr>
+          <tr><td>短期借入債務</td><td>15,32</td><td>549,680</td><td>572,235</td></tr>
+          <tr><td>預金</td><td>16,32</td><td>2,449,812</td><td>2,625,556</td></tr>
+          <tr><td>支払手形、買掛金および未払金</td><td>３,32</td><td>339,787</td><td>356,008</td></tr>
+          <tr><td>その他</td><td>40</td><td>60</td></tr>
+          <tr><td>負債合計</td><td></td><td>12,691,036</td><td>13,378,965</td></tr>
+          <tr><td>資本の部</td><td></td><td></td><td></td></tr>
+          <tr><td>資本金</td><td>23</td><td>221,111</td><td>221,111</td></tr>
+          <tr><td>その他の包括利益累計額 小計</td><td></td><td>341,298</td><td>605,110</td></tr>
+          <tr><td>資本合計</td><td></td><td>4,171,783</td><td>4,573,068</td></tr>
+        </table>
+        </body></html>
+        """
+        let bs = try extractFromHTML(html, types: [.balanceSheet]).balanceSheet
+
+        #expect(bs.contains { $0.label == "短期借入債務" && $0.value == 572_235_000_000 && $0.section == .liabilities })
+        #expect(bs.contains { $0.label == "預金" && $0.value == 2_625_556_000_000 && $0.section == .liabilities })
+        #expect(
+            bs.contains {
+                $0.label == "支払手形、買掛金および未払金" && $0.value == 356_008_000_000
+            })
+        #expect(bs.contains { $0.label == "その他" && $0.value == 60_000_000 })
+        #expect(bs.contains { $0.label == "資本金" && $0.value == 221_111_000_000 && $0.section == .netAssets })
+        #expect(
+            bs.contains {
+                $0.label == "その他の包括利益累計額 小計" && $0.value == 605_110_000_000
+                    && $0.section == .netAssets && $0.isTotal
+            })
+        #expect(bs.contains { $0.label == "資本合計" && $0.value == 4_573_068_000_000 && $0.section == .netAssets })
+    }
+
+    @Test
+    func spacedKeiAndShokeiLabelsAreTotals() throws {
+        // 実データ確認（オリックス）: 「営業収益 計」「営業費用 計」は空白+「計」、
+        // 「その他の包括利益累計額 小計」は「小計」。1文字の「計」や「費用計」には一致しない。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>金融収益</td><td>300,000</td><td>365,570</td></tr>
+          <tr><td>商品および不動産売上高</td><td>400,000</td><td>442,586</td></tr>
+          <tr><td>サービス収入</td><td>1,000,000</td><td>1,112,383</td></tr>
+          <tr><td>営業収益 計</td><td>3,000,000</td><td>3,330,831</td></tr>
+          <tr><td>支払利息</td><td>180,000</td><td>193,889</td></tr>
+          <tr><td>営業費用 計</td><td>2,700,000</td><td>2,874,583</td></tr>
+          <tr><td>営業利益</td><td>400,000</td><td>456,248</td></tr>
+          <tr><td>当期純利益</td><td>400,000</td><td>458,328</td></tr>
+        </table>
+        </body></html>
+        """
+        let pl = try extractFromHTML(html, types: [.incomeStatement]).incomeStatement
+        #expect(
+            pl.contains {
+                $0.label == "営業収益 計" && $0.value == 3_330_831_000_000 && $0.isTotal
+            })
+        #expect(
+            pl.contains {
+                $0.label == "営業費用 計" && $0.value == 2_874_583_000_000 && $0.isTotal
+            })
+        #expect(pl.contains { $0.label == "金融収益" && $0.isTotal == false })
+    }
+
+    @Test
+    func orixStyleRevenueTotalPreferredOverComponentSalesForSummary() throws {
+        // メンテ PDF（ORIX 8591 / S100YG5L）: Summary 売上は中間の
+        // 「商品および不動産売上高」442,586 ではなく「営業収益 計」3,330,831。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>金融収益</td><td>300,000</td><td>365,570</td></tr>
+          <tr><td>商品および不動産売上高</td><td>400,000</td><td>442,586</td></tr>
+          <tr><td>サービス収入</td><td>1,000,000</td><td>1,112,383</td></tr>
+          <tr><td>営業収益 計</td><td>3,000,000</td><td>3,330,831</td></tr>
+          <tr><td>生命保険費用</td><td>400,000</td><td>479,937</td></tr>
+          <tr><td>販売費および一般管理費</td><td>700,000</td><td>711,775</td></tr>
+          <tr><td>営業費用 計</td><td>2,700,000</td><td>2,874,583</td></tr>
+          <tr><td>営業利益</td><td>400,000</td><td>456,248</td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td>400,000</td><td>447,265</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td>負債の部</td><td></td><td></td></tr>
+          <tr><td>短期借入債務</td><td>500,000</td><td>572,235</td></tr>
+          <tr><td>預金</td><td>2,000,000</td><td>2,625,556</td></tr>
+          <tr><td>負債合計</td><td>10,000,000</td><td>13,378,965</td></tr>
+          <tr><td>資本の部</td><td></td><td></td></tr>
+          <tr><td>資本合計</td><td>4,000,000</td><td>4,573,068</td></tr>
+        </table>
+        </body></html>
+        """
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-orix-sales-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        let xbrl = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xbrl xmlns="http://www.xbrl.org/2003/instance"
+              xmlns:jppfs="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor">
+          <context id="CurrentYearDuration"><period><startDate>2024-04-01</startDate><endDate>2025-03-31</endDate></period></context>
+          <jppfs:NetSalesUSGAAPSummaryOfBusinessResults contextRef="CurrentYearDuration" unitRef="JPY" decimals="-6">1000000</jppfs:NetSalesUSGAAPSummaryOfBusinessResults>
+        </xbrl>
+        """
+        try xbrl.write(
+            to: pub.appendingPathComponent("test.xbrl"), atomically: true, encoding: .utf8)
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(values.sales == 3_330_831_000_000)
+        #expect(values.salesLabel == "営業収益 計")
+        #expect(values.netAssets == 4_573_068_000_000)
+
+        let extracted = try #require(
+            USGAAPStatementHtml.extractLineItems(
+                in: dir,
+                statementTypes: [.balanceSheet, .incomeStatement]))
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "販売費および一般管理費" && $0.value == 711_775_000_000
+            })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "生命保険費用" && $0.value == 479_937_000_000
+            })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "短期借入債務" && $0.value == 572_235_000_000
+            })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "預金" && $0.value == 2_625_556_000_000
+            })
+    }
+
+    @Test
+    func fourSlotRowWithEmptyLeftCellsKeepsCurrentRightAmount() throws {
+        // 実データ確認（オムロン CF「１　当期純利益」）: 前期/当期それぞれ左空・右金額の
+        // 4スロット。先頭の空をスペーサとして剥がすと奇数になり行ごと落ちるため残す。
+        // 明細行（減価償却費）は左に金額・右が空でも従来どおり当期左を取る。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td></td><td>金額</td><td></td><td>金額</td></tr>
+          <tr><td>Ⅰ　営業活動によるキャッシュ・フロー</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>１　当期純利益</td><td></td><td>14,873</td><td></td><td>31,277</td></tr>
+          <tr><td>２　営業活動によるキャッシュ・フローと当期純利益の調整</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>(1）減価償却費</td><td>33,450</td><td></td><td>33,778</td><td></td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー</td><td></td><td>55,784</td><td></td><td>60,919</td></tr>
+        </table>
+        </body></html>
+        """
+        let cf = try extractFromHTML(html, types: [.cashFlow]).cashFlow
+
+        #expect(cf.first?.label == "当期純利益")
+        #expect(
+            cf.contains {
+                $0.label == "当期純利益" && $0.value == 31_277_000_000 && $0.section == .operating
+            })
+        #expect(cf.contains { $0.label == "減価償却費" && $0.value == 33_778_000_000 })
+        #expect(
+            cf.contains {
+                $0.label == "営業活動によるキャッシュ・フロー" && $0.value == 60_919_000_000
+            })
+        #expect(!cf.contains { ($0.label ?? "").contains("調整") })
+    }
+
+    @Test
     func rowWithUnbalancedSlotCountIsDroppedRatherThanGuessed() throws {
         // 前期/当期のスロット数が偶数に揃わない（想定外の列構成）行は、誤った期の値を
-        // 静かに返すより行ごと落とす（他の行の抽出は継続する）。
+        // 静かに返すより行ごと落とす（他の行の抽出は継続する）。先頭スペーサ無しの
+        // 3スロットで、偶数ガード自体を検証する。
         let html = """
         <html><body>
         <table>
           <tr><td>区分</td><td>注記</td><td>金額</td><td>金額</td></tr>
           <tr><td>資産の部</td><td></td><td></td><td></td></tr>
           <tr><td>現金及び預金</td><td></td><td>10</td><td>20</td></tr>
-          <tr><td>資産合計</td><td></td><td>100</td><td>abc</td><td>200</td></tr>
+          <tr><td>資産合計</td><td>100</td><td>abc</td><td>200</td></tr>
         </table>
         </body></html>
         """
@@ -674,5 +934,273 @@ import Foundation
         #expect(values.interestExpense == 8_752_000_000)
         #expect(values.cfTreasuryStock == 16_000_000)
         #expect(values.buyback == 16_000_000)
+    }
+
+    @Test
+    func brokerDealerHeadingsAndSplitCashFlowExtract() throws {
+        // 野村: （資産）/（負債および資本）/資本：、売上高なしの収益合計、営業CFと投資/財務CFが別表。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>前期</td><td>当期</td></tr>
+          <tr><td>（資産）</td><td></td><td></td></tr>
+          <tr><td>現金および現金同等物</td><td>100</td><td>200</td></tr>
+          <tr><td>定期預金</td><td>50</td><td>80</td></tr>
+          <tr><td>計</td><td>150</td><td>280</td></tr>
+          <tr><td>資産合計</td><td>500</td><td>800</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>前期</td><td>当期</td></tr>
+          <tr><td>（負債および資本）</td><td></td><td></td></tr>
+          <tr><td>短期借入</td><td>50</td><td>60</td></tr>
+          <tr><td>負債合計</td><td>50</td><td>60</td></tr>
+          <tr><td>資本：</td><td></td><td></td></tr>
+          <tr><td>資本金</td><td>400</td><td>700</td></tr>
+          <tr><td>資本合計</td><td>450</td><td>740</td></tr>
+          <tr><td>負債および資本合計</td><td>500</td><td>800</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>前期</td><td>当期</td></tr>
+          <tr><td>委託・投信募集手数料</td><td>10</td><td>20</td></tr>
+          <tr><td>収益合計</td><td>100</td><td>150</td></tr>
+          <tr><td>人件費</td><td>30</td><td>40</td></tr>
+          <tr><td>金融費用以外の費用計</td><td>60</td><td>80</td></tr>
+          <tr><td>税引前当期純利益</td><td>40</td><td>50</td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td>30</td><td>40</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>前期</td><td>当期</td></tr>
+          <tr><td>営業活動によるキャッシュ・フロー：</td><td></td><td></td></tr>
+          <tr><td>当期純利益</td><td>30</td><td>40</td></tr>
+          <tr><td>営業活動に使用された現金（純額）</td><td>-10</td><td>-20</td></tr>
+        </table>
+        <table>
+          <tr><td>区分</td><td>前期</td><td>当期</td></tr>
+          <tr><td>投資活動によるキャッシュ・フロー：</td><td></td><td></td></tr>
+          <tr><td>設備の購入</td><td>-5</td><td>-8</td></tr>
+          <tr><td>投資活動に使用された現金（純額）</td><td>-5</td><td>-8</td></tr>
+          <tr><td>財務活動によるキャッシュ・フロー：</td><td></td><td></td></tr>
+          <tr><td>長期借入の実行による収入</td><td>15</td><td>25</td></tr>
+          <tr><td>財務活動から得た現金（純額）</td><td>15</td><td>25</td></tr>
+          <tr><td>現金、現金同等物、制限付き現金および制限付き現金同等物の期首残高</td><td>90</td><td>100</td></tr>
+          <tr><td>現金、現金同等物、制限付き現金および制限付き現金同等物の期末残高</td><td>100</td><td>97</td></tr>
+        </table>
+        </body></html>
+        """
+        let extracted = try extractFromHTML(
+            html,
+            types: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity])
+
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "計" && $0.value == 280_000_000 && $0.isTotal && $0.section == .assets
+                    && $0.components == nil
+            })
+        #expect(extracted.balanceSheet.contains { $0.label == "資産合計" && $0.value == 800_000_000 && $0.section == .assets })
+        #expect(extracted.balanceSheet.contains { $0.label == "資本金" && $0.section == .netAssets })
+        #expect(extracted.balanceSheet.contains { $0.label == "資本合計" && $0.value == 740_000_000 && $0.section == .netAssets })
+        #expect(
+            extracted.balanceSheet.contains {
+                $0.label == "負債および資本合計" && $0.value == 800_000_000 && $0.isTotal
+                    && $0.section == nil
+            })
+        #expect(extracted.incomeStatement.contains { $0.label == "収益合計" && $0.value == 150_000_000 })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "金融費用以外の費用計" && $0.value == 80_000_000 && $0.isTotal
+            })
+        #expect(extracted.incomeStatement.contains { $0.label == "当社株主に帰属する当期純利益" && $0.value == 40_000_000 })
+        #expect(
+            extracted.cashFlow.contains {
+                $0.label == "営業活動に使用された現金（純額）" && $0.value == -20_000_000
+                    && $0.section == .operating && $0.isTotal
+            })
+        #expect(
+            extracted.cashFlow.contains {
+                $0.label == "投資活動に使用された現金（純額）" && $0.value == -8_000_000
+                    && $0.section == .investing && $0.isTotal
+            })
+        #expect(
+            extracted.cashFlow.contains {
+                $0.label == "財務活動から得た現金（純額）" && $0.value == 25_000_000
+                    && $0.section == .financing && $0.isTotal
+            })
+        let open = extracted.cashFlow.first { ($0.label ?? "").contains("期首残高") }
+        let close = extracted.cashFlow.first { ($0.label ?? "").contains("期末残高") }
+        #expect(open?.section == nil && close?.section == nil)
+        #expect(open?.order != nil && close?.order != nil && open!.order! < close!.order!)
+    }
+
+    @Test
+    func incomeStatementWithoutOperatingProfitStillExtracts() throws {
+        // オムロン: 売上高はあるが営業利益行が無く、税引前の長いラベルへ飛ぶ。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td>区分</td><td>注記</td><td></td><td>金額</td><td>％</td><td></td><td>金額</td><td>％</td></tr>
+          <tr><td>売上高</td><td>（注記Ⅰ）</td><td></td><td>715,379</td><td>100.0</td><td></td><td>767,351</td><td>100.0</td></tr>
+          <tr><td>売上原価</td><td></td><td></td><td>385,092</td><td></td><td></td><td>416,350</td><td></td></tr>
+          <tr><td>販売費及び一般管理費</td><td></td><td></td><td>236,881</td><td></td><td></td><td>245,398</td><td></td></tr>
+          <tr><td>当社株主に帰属する当期純利益</td><td></td><td></td><td>16,271</td><td>2.3</td><td></td><td>28,487</td><td>3.7</td></tr>
+        </table>
+        </body></html>
+        """
+        let extracted = try extractFromHTML(html, types: [.incomeStatement])
+        #expect(extracted.incomeStatement.contains { $0.label == "売上高" && $0.value == 767_351_000_000 })
+        #expect(
+            extracted.incomeStatement.contains {
+                $0.label == "当社株主に帰属する当期純利益" && $0.value == 28_487_000_000
+            })
+    }
+
+    @Test
+    func equityStatementAcceptsPeriodEndAndDateBalanceLabels() throws {
+        // オムロン「第N期末現在」、オリックス「YYYY年M月DD日残高」、小松「期首残高/期末残高」。
+        let omron = """
+        <html><body>
+        <table>
+          <tr><td>項目</td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>第87期末現在</td><td>64,100</td><td>950,993</td></tr>
+          <tr><td>当期純利益</td><td></td><td>16,271</td></tr>
+          <tr><td>第88期末現在</td><td>64,100</td><td>934,432</td></tr>
+          <tr><td>当期純利益</td><td></td><td>28,487</td></tr>
+          <tr><td>第89期末現在</td><td>64,100</td><td>1,000,562</td></tr>
+        </table>
+        </body></html>
+        """
+        let omronSS = try extractFromHTML(omron, types: [.changesInEquity]).changesInEquity
+        #expect(!omronSS.contains { ($0.label ?? "").contains("第87期") })
+        #expect(omronSS.contains { ($0.label ?? "").contains("第88期末現在") && $0.value == 934_432_000_000 })
+        #expect(omronSS.contains { ($0.label ?? "").contains("第89期末現在") && $0.value == 1_000_562_000_000 })
+        #expect(omronSS.allSatisfy { $0.section == nil })
+
+        let orix = """
+        <html><body>
+        <table>
+          <tr><td></td><td>資本金</td><td>資本合計</td></tr>
+          <tr><td>2024年３月31日残高</td><td>221,111</td><td>4,021,965</td></tr>
+          <tr><td>当期純利益</td><td></td><td>351,630</td></tr>
+          <tr><td>2025年３月31日残高</td><td>221,111</td><td>4,171,783</td></tr>
+          <tr><td>当期純利益</td><td></td><td>447,265</td></tr>
+          <tr><td>2026年３月31日残高</td><td>221,111</td><td>4,573,068</td></tr>
+        </table>
+        </body></html>
+        """
+        let orixSS = try extractFromHTML(orix, types: [.changesInEquity]).changesInEquity
+        #expect(!orixSS.contains { ($0.label ?? "").contains("2024年") })
+        #expect(orixSS.contains { ($0.label ?? "").contains("2025年３月31日") && $0.value == 4_171_783_000_000 })
+        #expect(orixSS.contains { ($0.label ?? "").contains("2026年３月31日") && $0.value == 4_573_068_000_000 })
+        #expect(orixSS.allSatisfy { $0.section == nil })
+
+        let komatsu = """
+        <html><body>
+        <table>
+          <tr><td></td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>期首残高</td><td>70,336</td><td>3,344,853</td></tr>
+          <tr><td>当期純利益</td><td></td><td>401,688</td></tr>
+          <tr><td>期末残高</td><td>70,336</td><td>3,708,427</td></tr>
+        </table>
+        </body></html>
+        """
+        let komatsuSS = try extractFromHTML(komatsu, types: [.changesInEquity]).changesInEquity
+        #expect(komatsuSS.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
+        #expect(komatsuSS.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
+        #expect(komatsuSS.allSatisfy { $0.section == nil })
+
+        // 小松実データ: 科目横の前期表＋当期表。年次列が無いので最後の表だけ残す。
+        let komatsuYears = """
+        <html><body>
+        <table>
+          <tr><td></td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>期首残高</td><td>70,336</td><td>3,198,452</td></tr>
+          <tr><td>当期純利益</td><td></td><td>468,732</td></tr>
+          <tr><td>期末残高</td><td>70,336</td><td>3,344,853</td></tr>
+        </table>
+        <table>
+          <tr><td></td><td>資本金</td><td>純資産 合計</td></tr>
+          <tr><td>期首残高</td><td>70,336</td><td>3,344,853</td></tr>
+          <tr><td>当期純利益</td><td></td><td>401,688</td></tr>
+          <tr><td>期末残高</td><td>70,336</td><td>3,708,427</td></tr>
+        </table>
+        </body></html>
+        """
+        let komatsuLatest = try extractFromHTML(komatsuYears, types: [.changesInEquity]).changesInEquity
+        #expect(!komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_344_853_000_000 })
+        #expect(komatsuLatest.contains { $0.label == "期首残高" && $0.value == 3_344_853_000_000 })
+        #expect(komatsuLatest.contains { $0.label == "期末残高" && $0.value == 3_708_427_000_000 })
+        #expect(komatsuLatest.allSatisfy { $0.section == nil })
+    }
+
+    @Test
+    func componentMajorEquityStatementKeepsGroupsAndContinuationTable() throws {
+        // 野村 連結資本勘定変動表: 科目縦・年次は列。株主資本と非支配持分が改ページで別表。
+        // 期首/期末の繰り返しは年次切り出しに使わない。label は開示どおり。区分見出しは section。
+        let html = """
+        <html><body>
+        <table>
+          <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td><p>資本金</p></td><td></td><td></td></tr>
+          <tr><td><p>　期首残高</p></td><td>594,493</td><td>594,493</td></tr>
+          <tr><td><p>　期末残高</p></td><td>594,493</td><td>594,493</td></tr>
+          <tr><td><p>累積的その他の包括利益</p></td><td></td><td></td></tr>
+          <tr><td><p>　為替換算調整額</p></td><td></td><td></td></tr>
+          <tr><td><p>　　期首残高</p></td><td>407,977</td><td>407,977</td></tr>
+          <tr><td><p>　　当期純変動額</p></td><td>△36,094</td><td>142,524</td></tr>
+          <tr><td><p>　　期末残高</p></td><td>407,977</td><td>550,501</td></tr>
+          <tr><td><p>　自己クレジット調整額</p></td><td></td><td></td></tr>
+          <tr><td><p>　　期首残高</p></td><td>48,083</td><td>48,083</td></tr>
+          <tr><td><p>　　自己クレジット調整額</p></td><td>12,658</td><td>△46,879</td></tr>
+          <tr><td><p>　　期末残高</p></td><td>48,083</td><td>1,204</td></tr>
+          <tr><td><p>　期末残高</p></td><td>447,808</td><td>548,221</td></tr>
+          <tr><td><p>当社株主資本合計</p></td><td></td><td></td></tr>
+          <tr><td><p>　期末残高</p></td><td>3,470,879</td><td>3,707,868</td></tr>
+        </table>
+        <table>
+          <tr><td></td><td>2025年３月期</td><td>2026年３月期</td></tr>
+          <tr><td>区分</td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+          <tr><td><p>非支配持分</p></td><td></td><td></td></tr>
+          <tr><td><p>　期首残高</p></td><td>110,120</td><td>110,120</td></tr>
+          <tr><td><p>　非支配持分に帰属する累積的その他の包括利益</p></td><td></td><td></td></tr>
+          <tr><td><p>　　為替換算調整額</p></td><td>1,243</td><td>5,214</td></tr>
+          <tr><td><p>　期末残高</p></td><td>110,120</td><td>147,047</td></tr>
+          <tr><td><p>資本合計</p></td><td></td><td></td></tr>
+          <tr><td><p>　期末残高</p></td><td>3,580,999</td><td>3,854,915</td></tr>
+        </table>
+        </body></html>
+        """
+        let ss = try extractFromHTML(html, types: [.changesInEquity]).changesInEquity
+
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 594_493_000_000 && $0.isTotal && $0.section == .group("資本金") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 550_501_000_000 && $0.isTotal && $0.section == .group("為替換算調整額") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 548_221_000_000 && $0.isTotal && $0.section == .group("累積的その他の包括利益") })
+        #expect(ss.contains { $0.label == "自己クレジット調整額" && $0.value == -46_879_000_000 && $0.section == .group("自己クレジット調整額") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_707_868_000_000 && $0.isTotal && $0.section == .group("当社株主資本合計") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 147_047_000_000 && $0.isTotal && $0.section == .group("非支配持分") })
+        #expect(ss.contains { $0.label == "期末残高" && $0.value == 3_854_915_000_000 && $0.isTotal && $0.section == .group("資本合計") })
+        let capitalOpen = ss.first { $0.label == "期首残高" }
+        let equityClose = ss.last { $0.label == "期末残高" }
+        #expect(capitalOpen?.value == 594_493_000_000)
+        #expect(capitalOpen?.section == .group("資本金"))
+        #expect(equityClose?.value == 3_854_915_000_000)
+        #expect(equityClose?.section == .group("資本合計"))
+        #expect(capitalOpen?.order != nil && equityClose?.order != nil)
+        #expect(capitalOpen!.order! < equityClose!.order!)
+    }
+
+    private func extractFromHTML(
+        _ html: String, types: Set<StatementSectionType>
+    ) throws -> (
+        balanceSheet: [StatementLineItem], incomeStatement: [StatementLineItem],
+        cashFlow: [StatementLineItem], changesInEquity: [StatementLineItem]
+    ) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usgaap-\(UUID().uuidString)", isDirectory: true)
+        let pub = dir.appendingPathComponent("XBRL/PublicDoc", isDirectory: true)
+        try FileManager.default.createDirectory(at: pub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try html.write(
+            to: pub.appendingPathComponent("0105010_test_ixbrl.htm"), atomically: true, encoding: .utf8)
+        return try #require(USGAAPStatementHtml.extractLineItems(in: dir, statementTypes: types))
     }
 }
