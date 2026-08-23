@@ -24,6 +24,8 @@ import SwiftSoup
 enum USGAAPStatementHtml {
 
     /// 0105010（無ければ 0104010）から要求セクションの行を抽出する。単位は円。
+    /// CF だけ 0105010 に無く 0105020 に連結CFがある年次（ORIX 旧年）は、CF のみ
+    /// 0105020 を追加スキャンする（BLT-43）。
     /// HTML が無い・行が1つも取れない場合は nil（呼び出し側で notApplicable 等へ倒す）。
     static func extractLineItems(
         in xbrlDir: URL, statementTypes: Set<StatementSectionType>
@@ -31,8 +33,40 @@ enum USGAAPStatementHtml {
         balanceSheet: [StatementLineItem], incomeStatement: [StatementLineItem],
         cashFlow: [StatementLineItem], changesInEquity: [StatementLineItem]
     )? {
-        guard let htmlURL = findStatementHtml(in: xbrlDir),
-              let content = try? String(contentsOf: htmlURL, encoding: .utf8),
+        guard let primaryURL = findStatementHtml(in: xbrlDir) else { return nil }
+        var extracted = extractLineItems(fromHtml: primaryURL, statementTypes: statementTypes)
+
+        if statementTypes.contains(.cashFlow),
+           extracted?.cashFlow.isEmpty ?? true,
+           let altURL = XBRLUtils.findHtmlByPrefix(in: xbrlDir, prefix: "0105020"),
+           altURL != primaryURL,
+           htmlHasCashFlowStatementHeading(altURL)
+        {
+            if let altCF = extractLineItems(fromHtml: altURL, statementTypes: [.cashFlow]),
+               !altCF.cashFlow.isEmpty
+            {
+                if let e = extracted {
+                    extracted = (e.balanceSheet, e.incomeStatement, altCF.cashFlow, e.changesInEquity)
+                } else {
+                    extracted = altCF
+                }
+            }
+        }
+        return extracted
+    }
+
+    private static func htmlHasCashFlowStatementHeading(_ htmlURL: URL) -> Bool {
+        guard let content = try? String(contentsOf: htmlURL, encoding: .utf8) else { return false }
+        return USGAAPStatementHtmlVocabulary.hasCashFlowStatementHeading(content)
+    }
+
+    private static func extractLineItems(
+        fromHtml htmlURL: URL, statementTypes: Set<StatementSectionType>
+    ) -> (
+        balanceSheet: [StatementLineItem], incomeStatement: [StatementLineItem],
+        cashFlow: [StatementLineItem], changesInEquity: [StatementLineItem]
+    )? {
+        guard let content = try? String(contentsOf: htmlURL, encoding: .utf8),
               let soup = try? SwiftSoup.parse(content),
               let tables = try? soup.select("table")
         else { return nil }
@@ -74,7 +108,10 @@ enum USGAAPStatementHtml {
                 // キヤノン/小松: 前期表＋当期表が連続 → 最後の表を採用。
                 // 野村 連結資本勘定変動表: 科目縦・年次は列で、改ページで株主資本と
                 // 非支配持分が別表になる → 同じ年次列の続きだけ追記する。
-                guard statementTypes.contains(.changesInEquity), !sawCF else { continue }
+                // ソニー旧年: CF の後に連結資本変動表が来る。CF 前で SS が既に確定
+                // していれば注記内の類似表は拾わない（!sawCF の二重拾い防止を残す）。
+                guard statementTypes.contains(.changesInEquity) else { continue }
+                if sawCF && !changesInEquity.isEmpty { continue }
                 let parsed = parseEquityStatementRows(table)
                 let yearCols = equityYearColumnFingerprint(rows)
                 if let yearCols, yearCols == pendingSSYearColumns, !pendingSS.isEmpty {
@@ -103,6 +140,7 @@ enum USGAAPStatementHtml {
         }
 
         // CF が無い書類でも、溜めた SS を返す。
+        // CF 後に初めて SS が来た場合（ソニー）もここで確定する。
         if statementTypes.contains(.changesInEquity), changesInEquity.isEmpty, !pendingSS.isEmpty {
             changesInEquity = pendingSS
         }
