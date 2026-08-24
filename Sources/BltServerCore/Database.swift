@@ -20,6 +20,13 @@ func configureDatabase(_ app: Application) async throws {
         return
     }
 
+    // sslmode の明示がない接続文字列は警告を出す（Neon は TLS 必須のため実害は小さいが、
+    // 設定ミスの早期検出のため。`disable` 指定は意図的な場合のみ許容する）。
+    if !urlString.contains("sslmode=") {
+        app.logger.warning(
+            "DATABASE_URL に sslmode の指定がありません。本番接続は `?sslmode=require` を明示してください。")
+    }
+
     let configuration = try SQLPostgresConfiguration(url: urlString)
     app.databases.use(
         .postgres(

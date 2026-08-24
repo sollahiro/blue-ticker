@@ -247,8 +247,26 @@ final class EdinetCacheStore: Sendable {
     private func extractZip(at zipURL: URL, to destURL: URL) throws {
         // ZIPFoundation を使う
         try fm.createDirectory(at: destURL, withIntermediateDirectories: true)
-        // パストラバーサル防止チェックは ZIPFoundation が行う
+        // ZIP 爆弾対策（非圧縮サイズ・エントリ数の上限）は展開前に自前で検査する。
+        // パストラバーサル防止チェックは ZIPFoundation が行う。
+        try validateZipSafety(at: zipURL)
         try fm.unzipItem(at: zipURL, to: destURL)
+    }
+
+    /// 展開前にエントリ数・非圧縮サイズ合計が上限内か検査する。超過時は `XbrlZipError.tooLarge`。
+    private func validateZipSafety(at zipURL: URL) throws {
+        guard let archive = Archive(url: zipURL, accessMode: .read) else {
+            throw XbrlZipError.invalidArchive
+        }
+        var totalBytes: Int64 = 0
+        var entryCount = 0
+        for entry in archive {
+            entryCount += 1
+            totalBytes += Int64(entry.uncompressedSize)
+            if entryCount > Api.xbrlZipMaxEntryCount || totalBytes > Api.xbrlZipMaxUncompressedBytes {
+                throw XbrlZipError.tooLarge(entries: entryCount, uncompressedBytes: totalBytes)
+            }
+        }
     }
 
     private func evictXbrlIfNeeded(root: URL) {
@@ -284,4 +302,12 @@ final class EdinetCacheStore: Sendable {
 enum LockError: Error {
     case busy
     case timeout(String)
+}
+
+/// XBRL ZIP の安全性検査エラー（展開前の事前チェック。ZIP 爆弾対策）。
+enum XbrlZipError: Error {
+    /// ZIP として開けない（中央ディレクトリが読めない等）。
+    case invalidArchive
+    /// エントリ数または非圧縮サイズ合計が上限超過。
+    case tooLarge(entries: Int, uncompressedBytes: Int64)
 }

@@ -4,7 +4,25 @@
 
 import Testing
 import Foundation
+import ZIPFoundation
 @testable import BlueTickerCore
+
+/// 指定エントリ数の最小 ZIP を生成する（ZIP 爆弾対策の上限検査テスト用）。
+private func makeZipWithEntryCount(_ count: Int) throws -> Data {
+    let fm = FileManager.default
+    let workDir = try ServiceTestSupport.makeTempDir()
+    defer { try? fm.removeItem(at: workDir) }
+    let zipURL = workDir.appendingPathComponent("many.zip")
+    let archive = try Archive(url: zipURL, accessMode: .create)
+    // provider のオーバーロード（Int / Int64）のあいまいさを型注釈で解決する
+    let provider: (Int, Int) throws -> Data = { _, _ in Data("x".utf8) }
+    for i in 0..<count {
+        try archive.addEntry(
+            with: "f\(i).txt", type: .file, uncompressedSize: 1,
+            provider: provider)
+    }
+    return try Data(contentsOf: zipURL)
+}
 
 @Suite final class EdinetCacheStoreTests {
     private let tmpDir: URL
@@ -229,6 +247,27 @@ import Foundation
         #expect(store.hasXbrlDir("DOC1"))
         #expect(store.hasXbrlDir("DOC2"))
         #expect(store.hasXbrlDir("DOC3"))
+    }
+
+    @Test func testStoreXbrlZipRejectsInvalidArchive() throws {
+        let store = makeStore()
+
+        #expect(throws: XbrlZipError.self) {
+            _ = try store.storeXbrlZip("DOC_BAD", content: Data("not a zip".utf8))
+        }
+        // 展開失敗の残骸は残さない（キャッシュ汚染防止）
+        #expect(!(store.hasXbrlDir("DOC_BAD")))
+    }
+
+    @Test func testStoreXbrlZipRejectsExcessiveEntryCount() throws {
+        let store = makeStore()
+        // エントリ数上限超過の ZIP は展開前に拒否する（ZIP 爆弾対策）
+        let zip = try makeZipWithEntryCount(Api.xbrlZipMaxEntryCount + 1)
+
+        #expect(throws: XbrlZipError.self) {
+            _ = try store.storeXbrlZip("DOC_MANY", content: zip)
+        }
+        #expect(!(store.hasXbrlDir("DOC_MANY")))
     }
 
     @Test func testHasXbrlDirRejectsEmptyDirectory() throws {

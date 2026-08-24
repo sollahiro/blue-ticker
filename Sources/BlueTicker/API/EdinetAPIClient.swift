@@ -270,8 +270,9 @@ actor EdinetAPIClient {
                 lastError = e
                 if !isRetryable(e) { throw e }
             } catch {
-                lastError = error
-                if !isRetryable(error) { throw error }
+                let sanitized = sanitizeNetworkError(error)
+                lastError = sanitized
+                if !isRetryable(error) { throw sanitized }
             }
         }
         throw lastError ?? EdinetError.maxRetriesExceeded
@@ -295,11 +296,23 @@ actor EdinetAPIClient {
                 else { throw URLError(.badServerResponse) }
                 return data
             } catch {
-                lastError = error
-                if !isRetryable(error) { throw error }
+                let sanitized = sanitizeNetworkError(error)
+                lastError = sanitized
+                if !isRetryable(error) { throw sanitized }
             }
         }
         throw lastError ?? EdinetError.maxRetriesExceeded
+    }
+
+    /// URLError の userInfo にはクエリ（`Subscription-Key`）入りの失敗 URL が含まれており、
+    /// `\(error)` でログへ出すと API キーが漏洩する。コードと説明文のみの NSError に置き換える
+    /// （`localizedDescription` は "The request timed out." 等で URL を含まない）。
+    /// リトライ判定（`isRetryable`）は元の URLError で行ってから呼ぶこと。
+    private func sanitizeNetworkError(_ error: Error) -> Error {
+        guard let urlErr = error as? URLError else { return error }
+        return NSError(
+            domain: NSURLErrorDomain, code: urlErr.errorCode,
+            userInfo: [NSLocalizedDescriptionKey: urlErr.localizedDescription])
     }
 
     private func buildURL(_ endpoint: String, params: [String: String]) throws -> URL {
