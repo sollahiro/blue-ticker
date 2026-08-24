@@ -1,6 +1,6 @@
-// `blt-server status-report`: 4 ステージ（financials / filing_sections /
+// `blt-server status-report`: 5 ステージ（financials / statements / filing_sections /
 // breakdown_business / breakdown_geography）のカバレッジ・鮮度・最新有報スライスを集計し、
-// JSON を stdout へ出す。
+// JSON を stdout へ出す。notes 等は含めない（上場正本の主要ステージのみ。全 ingest ではない）。
 // 出力は静的公開ページ（`scripts/generate-status-page.sh`、パスは `BLT_STATUS_HTML`）
 // が読む契約。ここでは日経225構成銘柄の実コードは一切
 // 出力しない（集計件数のみ。Routes.swift 既存方針と同じく銘柄一覧の公開はしない）。
@@ -40,6 +40,25 @@ final class CompanyFinancialsStatusProjection: Model, @unchecked Sendable {
 /// company_filing_sections の doc_id / code / cache_version / updated_at のみを対象にした軽量射影。
 final class CompanyFilingSectionsStatusProjection: Model, @unchecked Sendable {
     static let schema = CompanyFilingSections.schema
+
+    @ID(custom: "doc_id", generatedBy: .user)
+    var id: String?
+
+    @Field(key: "code")
+    var code: String
+
+    @Field(key: "cache_version")
+    var cacheVersion: String
+
+    @Timestamp(key: "updated_at", on: .update)
+    var updatedAt: Date?
+
+    init() {}
+}
+
+/// company_statements の doc_id / code / cache_version / updated_at のみを対象にした軽量射影。
+final class CompanyStatementStatusProjection: Model, @unchecked Sendable {
+    static let schema = CompanyStatement.schema
 
     @ID(custom: "doc_id", generatedBy: .user)
     var id: String?
@@ -294,15 +313,15 @@ private func buildDocumentLevelStage(
         latestCoveragePct: latest.coveragePct, latestCurrentPct: latest.currentPct)
 }
 
-/// 4 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
-/// `listedCodes` は financials/filing_sections/breakdown_business/breakdown_geography の対象母集団。
-/// `priorityCodes`（`assets/nikkei225.csv`）は処理順の優先に使い、breakdown の母集団そのものではない。
+/// 5 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
+/// `listedCodes` は financials/statements/filing_sections/breakdown_business/breakdown_geography
+/// の対象母集団。`priorityCodes`（`assets/nikkei225.csv`）は処理順の優先に使い、母集団そのものではない。
 public func buildIngestStatusReport(
     db: Database, listedCodes: Set<String>, priorityCodes: Set<String>, now: Date = Date()
 ) async throws -> IngestStatusReport {
     // 日経225 は ingest の処理順のみ。カバレッジ分母は listedCodes（引数は呼び出し互換のため残す）。
     _ = priorityCodes
-    // 最新有報スライスは financials / sections / breakdown で共有する（候補集合は 1 回）。
+    // 最新有報スライスは financials / statements / sections / breakdown で共有する（候補集合は 1 回）。
     let candidates = try await filingSectionCandidates(
         db: db, listedCodes: listedCodes, years: filingSectionsIngestYears)
     let latestDocs = candidates.keep.filter { $0.yearRank == 0 }
@@ -320,6 +339,19 @@ public func buildIngestStatusReport(
                 updatedAt: $0.updatedAt, highWater: $0.highWater)
         },
         targetCodes: listedCodes, latestDocs: latestDocs, now: now)
+
+    // statements（対象母集団: listedCodes。filing_sections と同じ keep 窓・doc 単位）
+    let statementRows = try await CompanyStatementStatusProjection.query(on: db).all()
+    let statements = buildDocumentLevelStage(
+        key: "statements", label: "財務諸表（BS/PL/CF/SS）",
+        rows: statementRows.map {
+            StatusRow(
+                code: $0.code, docID: $0.id,
+                isCurrentVersion: $0.cacheVersion == statementCacheVersion,
+                isServable: isServableStatementCacheVersion($0.cacheVersion),
+                updatedAt: $0.updatedAt, highWater: nil)
+        },
+        targetCodes: listedCodes, docsTarget: docsTarget, latestDocs: latestDocs, now: now)
 
     // filing_sections（対象母集団: listedCodes）
     let sectionRows = try await CompanyFilingSectionsStatusProjection.query(on: db).all()
@@ -374,7 +406,7 @@ public func buildIngestStatusReport(
 
     return IngestStatusReport(
         generatedAt: isoString(from: now),
-        stages: [financials, filingSections, breakdownBusiness, breakdownGeography])
+        stages: [financials, statements, filingSections, breakdownBusiness, breakdownGeography])
 }
 
 // MARK: - CLI エントリ
