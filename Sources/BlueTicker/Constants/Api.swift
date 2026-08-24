@@ -52,6 +52,10 @@ public enum Api {
     public static let feedTrendSchemaVersion = 1
     /// 検索クエリ `q` の蓄積上限（文字）。超えた分は切る。
     public static let feedTrendQueryMaxLength = 128
+
+    /// filings のライブ EDINET 探索フォールバック（DB 未同期銘柄）の応答待ち上限（秒）。
+    /// URLSession 既定（60s）より長めに取りつつ、リクエストが無期限に待たないようにする。
+    public static let filingsLiveTimeoutSeconds: Double = 90
     /// 窓内書類の走査上限。Update の `total` はメモリ集計。
     public static let feedTrendScanLimit = 5000
     /// Statement 取り込み（Statement）read の既定年数。`filingSectionsIngestYears`（6年保持）以下に収める。
@@ -64,6 +68,10 @@ public enum Api {
     /// company_breakdowns 格納銘柄に絞ったうえでの表示件数（検索窓の下の候補用）。
     /// BltServerCore（Routes.swift）から参照するため public。
     public static let demoSearchResultLimit = 8
+
+    /// `/v1/demo/companies` の検索クエリ `q` の受理上限（文字）。超過分は切り詰める。
+    /// 無認証公開（Cloudflare Bypass）想定のため、アプリ側でも入力をクランプする。
+    public static let demoQueryMaxLength = 100
 
     /// `/v1/demo/*` に CORS で許可するオリジン。summary.html が同一オリジンでない
     /// api.sollahiro.com へ fetch するため必要（ブラウザは Access-Control-Allow-Origin が
@@ -116,6 +124,12 @@ public enum Api {
     /// 通常の `dbOperationTimeoutSeconds` より長く取り、cold start 直後の migrate を許容する。
     /// いずれも `dbConnectionPoolTimeoutSeconds` より長く保つこと。
     public static let dbBootstrapOperationTimeoutSeconds: Double = 75
+
+    /// XBRL ZIP 展開の安全上限（ZIP 爆弾対策）。信頼ソース（EDINET/R2）前提だが、
+    /// キャッシュ汚染・誤格納への防御として展開前に検査する。実測の有報 ZIP は
+    /// 非圧縮でも数百 MB に届かないため、1 GiB / 1 万エントリは十分な余裕を持つ上限。
+    static let xbrlZipMaxUncompressedBytes: Int64 = 1_073_741_824
+    static let xbrlZipMaxEntryCount = 10_000
 
     /// MCP ルート（`POST /`）1リクエストあたりの HTTP 応答待ち上限（秒）。
     /// 依存 `modelcontextprotocol/swift-sdk`（0.12.1）の `StatelessHTTPServerTransport` に

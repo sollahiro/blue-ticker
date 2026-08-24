@@ -44,7 +44,12 @@ func registerMcpRoute(
         // これを JSON-RPC パースエラー（400）として扱うが、ChatGPT はこの1件が失敗すると後続の
         // initialize/tools_list が成功してもコネクタ全体を失敗表示する。副作用のない疎通確認とみなし、
         // JSON-RPC パイプラインへは渡さず 200 を返す。
-        guard let requestBody, !requestBody.isEmpty, !isConnectivityProbeBody(requestBody) else {
+        guard let requestBody, !requestBody.isEmpty else {
+            return Vapor.Response(status: .ok)
+        }
+        // ボディの JSON パースは 1 回だけ行い、疎通確認判定・initialize 整形・再 initialize shim に使い回す。
+        let parsedBody = try? JSONSerialization.jsonObject(with: requestBody)
+        guard !isConnectivityProbeBody(parsedBody) else {
             return Vapor.Response(status: .ok)
         }
 
@@ -66,7 +71,12 @@ func registerMcpRoute(
         // swift-sdk の `Client.Capabilities.experimental` は `[String: String]?` に固定されており、
         // このデコードに失敗すると initialize 全体が `-32603 Internal error` になる
         // （実測 2026-08-11）。本サーバーはクライアント capabilities を利用しないため対象外。
-        let dispatchedBody = sanitizeInitializeCapabilities(requestBody) ?? requestBody
+        var dispatchedBody = requestBody
+        var dispatchedParsed = parsedBody as? [String: Any]
+        if let sanitized = sanitizeInitializeCapabilities(parsed: dispatchedParsed) {
+            dispatchedBody = sanitized.data
+            dispatchedParsed = sanitized.json
+        }
 
         // dispatchedBody が元の requestBody と異なる長さになる場合（initialize の
         // capabilities.experimental 除去等）、元リクエストの Content-Length ヘッダーをそのまま
@@ -86,7 +96,8 @@ func registerMcpRoute(
                 await transport.handleRequest(httpRequest)
             }
             let response =
-                reinitializeShimResponse(requestBody: dispatchedBody, response: httpResponse, version: blueTickerVersion)
+                reinitializeShimResponse(
+                    parsedRequest: dispatchedParsed, response: httpResponse, version: blueTickerVersion)
                 ?? httpResponse
             return vaporResponse(from: response)
         } catch {
@@ -126,9 +137,11 @@ private func dispatchedHeaders(from headers: HTTPHeaders, bodyByteCount: Int) ->
 /// `Client.Capabilities.experimental: [String: String]?` はこれをデコードできず initialize
 /// 全体が失敗する。本サーバーはクライアント capabilities を利用しないため、デコードできない
 /// 形のときは experimental キーごと落として転送する。整形不要（対象外・既に妥当）なら nil を返す
-/// （呼び出し側で元のボディへフォールバックする）。
-private func sanitizeInitializeCapabilities(_ data: Data) -> Data? {
-    guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+/// （呼び出し側で元のボディへフォールバックする）。入力はパース済み JSON（ハンドラで1回だけパースする）。
+private func sanitizeInitializeCapabilities(
+    parsed request: [String: Any]?
+) -> (data: Data, json: [String: Any])? {
+    guard var json = request,
         json["method"] as? String == Initialize.name,
         var params = json["params"] as? [String: Any],
         var capabilities = params["capabilities"] as? [String: Any],
@@ -139,14 +152,17 @@ private func sanitizeInitializeCapabilities(_ data: Data) -> Data? {
     capabilities.removeValue(forKey: "experimental")
     params["capabilities"] = capabilities
     json["params"] = params
-    return try? JSONSerialization.data(withJSONObject: json)
+    guard let data = try? JSONSerialization.data(withJSONObject: json) else { return nil }
+    return (data, json)
 }
 
-/// JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして成立しない）ボディを
-/// 疎通確認とみなす。`{}` はオブジェクトとして method 欠落、`[]` は要素なしのバッチとして判定する。
-/// JSON として解釈できないボディ（真に壊れたリクエスト）は対象外とし、従来どおり JSON-RPC パースエラーを返す。
-private func isConnectivityProbeBody(_ data: Data) -> Bool {
-    guard let json = try? JSONSerialization.jsonObject(with: data) else { return false }
+/// パース済み JSON が「JSON としては解釈できるが JSON-RPC の `method` を持たない（＝呼び出しとして
+/// 成立しない）ボディ」かを判定し、疎通確認とみなす。`{}` はオブジェクトとして method 欠落、
+/// `[]` は要素なしのバッチとして判定する。
+/// JSON として解釈できないボディ（真に壊れたリクエスト。パース結果 nil）は対象外とし、
+/// 従来どおり JSON-RPC パースエラーを返す。
+private func isConnectivityProbeBody(_ json: Any?) -> Bool {
+    guard let json else { return false }
     if let object = json as? [String: Any] { return object["method"] == nil }
     if let array = json as? [Any] { return array.isEmpty }
     return false
@@ -182,10 +198,9 @@ func mcpTimeoutResponse(requestBody: Data?) -> Vapor.Response {
 /// capabilities/serverInfo/title/instructions が固定・protocolVersion もネゴシエーションのみで
 /// 決定的なため、このケースに限り成功レスポンスへ差し替える。
 private func reinitializeShimResponse(
-    requestBody: Data?, response: MCP.HTTPResponse, version: String
+    parsedRequest: [String: Any]?, response: MCP.HTTPResponse, version: String
 ) -> MCP.HTTPResponse? {
-    guard let requestBody,
-        let request = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any],
+    guard let request = parsedRequest,
         request["method"] as? String == Initialize.name,
         let id = request["id"]
     else { return nil }
@@ -293,8 +308,8 @@ private func dispatchMcpTool(
         let code = args["code"]?.stringValue ?? ""
         let docId = args["doc_id"]?.stringValue
         let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
-        return mapBreakdownResult(
-            await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
+        return mapReasonedResult(
+            await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger).reasoned,
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
 
     case "get_statement":
@@ -311,8 +326,8 @@ private func dispatchMcpTool(
         guard let noteType = args["note_type"]?.stringValue, !noteType.isEmpty else {
             return errorToolResult("note_type は必須です")
         }
-        return mapStatementNoteResult(
-            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger),
+        return mapReasonedResult(
+            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger).reasoned,
             notFoundMessage: "指定された note_type の注記は未算出です")
 
     case "get_feed_updates":
@@ -373,25 +388,10 @@ private func mapFeedTrendResult(_ result: FeedTrendServeResult) -> CallTool.Resu
     }
 }
 
-/// `BreakdownServeResult` → `CallTool.Result`。REST の `makeBreakdownResponse` と同型
-/// （notApplicable のときのみエラー本文に `reason` を添える。issue #132）。
-private func mapBreakdownResult(
-    _ result: BreakdownServeResult, notFoundMessage: String
-) -> CallTool.Result {
-    switch result {
-    case .ok(let value):
-        return jsonToolResult(value)
-    case .notApplicable(let reason):
-        return errorToolResult(notFoundMessage, reason: reason)
-    case .notFound:
-        return errorToolResult(notFoundMessage)
-    case .dbUnavailable:
-        return errorToolResult("財務データベースに接続できません")
-    }
-}
-
-private func mapStatementNoteResult(
-    _ result: StatementNoteServeResult, notFoundMessage: String
+/// `ReasonedServeResult` → `CallTool.Result`（breakdown / statement-notes 共通）。
+/// REST の `makeReasonedResponse` と同型（notApplicable のときのみエラー本文に `reason` を添える。issue #132）。
+private func mapReasonedResult(
+    _ result: ReasonedServeResult, notFoundMessage: String
 ) -> CallTool.Result {
     switch result {
     case .ok(let value):

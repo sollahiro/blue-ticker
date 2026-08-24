@@ -82,13 +82,7 @@ func registerRoutes(
         guard case .ok(let results as [[String: Any]]) = response else {
             return makeResponse(response)
         }
-        let codes = results.compactMap { $0["code"] as? String }
-        let icons = dbAvailable ? await iconURLs(for: codes, db: req.db) : [:]
-        let merged = results.map { row -> [String: Any] in
-            var r = row
-            r["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
-            return r
-        }
+        let merged = await attachIconURLs(to: results, db: dbAvailable ? req.db : nil)
         return jsonResponse(merged, status: .ok)
     }
 
@@ -184,10 +178,11 @@ func registerRoutes(
         recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let axis = req.query[String.self, at: "axis"] ?? breakdownAxisBusiness
-        return makeBreakdownResponse(
+        return makeReasonedResponse(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
-                logger: req.logger),
+                logger: req.logger
+            ).reasoned,
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
     }
 
@@ -218,10 +213,11 @@ func registerRoutes(
         guard let noteType = req.query[String.self, at: "note_type"], !noteType.isEmpty else {
             return errorResponse(.badRequest, message: "note_type は必須です")
         }
-        return makeStatementNoteResponse(
+        return makeReasonedResponse(
             await serveStoredStatementNote(
                 code: code, docId: docId, noteType: noteType, db: dbAvailable ? req.db : nil,
-                logger: req.logger),
+                logger: req.logger
+            ).reasoned,
             notFoundMessage: "指定された note_type の注記は未算出です")
     }
 
@@ -272,7 +268,9 @@ func registerRoutes(
     // 全件列挙エンドポイントを設けず、クエリ必須にして検索窓の候補に留める。
     // このパスは Cloudflare Access の対象外（Bypass ポリシー）にして無認証公開する想定。
     demo.get("demo", "companies") { req async -> Response in
-        let q = (req.query[String.self, at: "q"] ?? "").trimmingCharacters(in: .whitespaces)
+        // 無認証公開（Cloudflare Bypass）想定のため、クエリ長はアプリ側でもクランプする。
+        let raw = (req.query[String.self, at: "q"] ?? "").trimmingCharacters(in: .whitespaces)
+        let q = String(raw.prefix(Api.demoQueryMaxLength))
         guard !q.isEmpty else {
             return jsonResponse(["companies": []], status: .ok)
         }
@@ -332,32 +330,32 @@ func registerRoutes(
 
 /// 候補コード集合のうち company_breakdowns に格納済みの銘柄コードを返す。
 /// 対象母集団を単独で全件列挙できるエンドポイントは設けない。
+/// 存在確認に payload（JSONB スナップショット）は不要なため、code 列だけを DISTINCT で読む
+/// （全列取得だと軸・年度分の行 × 大きな JSONB が毎リクエスト転送される）。
 private func demoEligibleCodes(among candidates: [String], db: Database) async throws -> Set<String> {
     guard !candidates.isEmpty else { return [] }
     let rows = try await CompanyBreakdown.query(on: db)
         .filter(\.$code ~~ candidates)
+        .field(\.$code)
+        .unique()
         .all()
     return Set(rows.map { $0.code })
 }
 
-/// 単一の銘柄コードが company_breakdowns に格納済みか判定する。
+/// 単一の銘柄コードが company_breakdowns に格納済みか判定する（code 列のみ取得。理由は上記）。
 private func isDemoEligibleCode(_ code: String, db: Database) async throws -> Bool {
-    try await CompanyBreakdown.query(on: db).filter(\.$code == code).first() != nil
+    try await CompanyBreakdown.query(on: db)
+        .filter(\.$code == code)
+        .field(\.$code)
+        .first() != nil
 }
 
 /// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成。MCP には出さない）。
 private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) async -> Response {
     switch result {
     case .ok(var body):
-        if let db, var items = body["items"] as? [[String: Any]] {
-            let codes = items.compactMap { $0["code"] as? String }
-            let icons = await iconURLs(for: codes, db: db)
-            items = items.map { row in
-                var next = row
-                next["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
-                return next
-            }
-            body["items"] = items
+        if let db, let items = body["items"] as? [[String: Any]] {
+            body["items"] = await attachIconURLs(to: items, db: db)
         }
         return jsonResponse(body, status: .ok)
     case .notFound:
@@ -371,28 +369,33 @@ private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) as
 private func feedTrendJSONResponse(_ result: FeedTrendServeResult, db: Database?) async -> Response {
     switch result {
     case .ok(var body):
-        if let db, var items = body["items"] as? [[String: Any]] {
-            let codes = items.compactMap { $0["code"] as? String }
-            let icons = await iconURLs(for: codes, db: db)
-            items = items.map { row in
-                var next = row
-                next["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
-                return next
-            }
-            body["items"] = items
-        } else if var items = body["items"] as? [[String: Any]] {
-            items = items.map { row in
-                var next = row
-                next["icon_url"] = NSNull()
-                return next
-            }
-            body["items"] = items
+        if let items = body["items"] as? [[String: Any]] {
+            body["items"] = await attachIconURLs(to: items, db: db)
         }
         return jsonResponse(body, status: .ok)
     case .badRequest(let message):
         return errorResponse(.badRequest, message: message)
     case .unavailable:
         return errorResponse(.serviceUnavailable, message: feedTrendUnavailableMessage)
+    }
+}
+
+/// items（`"code"` を持つ JSON 行）へ `icon_url` を合成して返す。
+/// companies 検索 / feed updates / feed trend の REST 応答で共通利用する（MCP には出さない）。
+/// `db` が nil のときは全行 `icon_url: null`（companies 検索の従来挙動と同一）。
+private func attachIconURLs(to items: [[String: Any]], db: Database?) async -> [[String: Any]] {
+    guard let db else {
+        return items.map { row in
+            var next = row
+            next["icon_url"] = NSNull()
+            return next
+        }
+    }
+    let icons = await iconURLs(for: items.compactMap { $0["code"] as? String }, db: db)
+    return items.map { row in
+        var next = row
+        next["icon_url"] = icons[row["code"] as? String ?? ""] ?? NSNull()
+        return next
     }
 }
 
@@ -584,6 +587,37 @@ enum StatementNoteServeResult {
     case dbUnavailable
 }
 
+/// notApplicable の reason を持つ read 結果の共通形。
+/// `BreakdownServeResult` / `StatementNoteServeResult` の応答変換（REST/MCP）を共通化するための型。
+enum ReasonedServeResult {
+    case ok([String: Any])
+    case notApplicable(reason: String)
+    case notFound
+    case dbUnavailable
+}
+
+extension BreakdownServeResult {
+    var reasoned: ReasonedServeResult {
+        switch self {
+        case .ok(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .notFound: return .notFound
+        case .dbUnavailable: return .dbUnavailable
+        }
+    }
+}
+
+extension StatementNoteServeResult {
+    var reasoned: ReasonedServeResult {
+        switch self {
+        case .ok(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .notFound: return .notFound
+        case .dbUnavailable: return .dbUnavailable
+        }
+    }
+}
+
 /// `statement/notes` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 /// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
 func serveStoredStatementNote(
@@ -630,7 +664,17 @@ func serveFilings(
             logger.warning("DB からの filing 取得に失敗、ライブ探索へフォールバック: \(error)")
         }
     }
-    return await context.getFilings(code: code, maxYears: maxYears)
+    // ライブ探索には応答待ち上限を設ける（URLSession 既定の 60s 以上・無限待ち防止）。
+    do {
+        return try await withOperationTimeout(
+            label: "filings ライブ探索", seconds: Api.filingsLiveTimeoutSeconds
+        ) {
+            await context.getFilings(code: code, maxYears: maxYears)
+        }
+    } catch {
+        logger.warning("filings ライブ探索がタイムアウト: \(error)")
+        return .upstreamFailure("書類一覧の取得がタイムアウトしました")
+    }
 }
 
 // MARK: - アクセスログミドルウェア
@@ -703,11 +747,11 @@ private func makeStoredDataResponse(
     }
 }
 
-/// `BreakdownServeResult` を HTTP レスポンスへ変換する。ステータスは 404 のまま維持し
-/// （エッジ課金がステータス単位でメーターするため、issue #132 のコメント参照）、notApplicable の
-/// ときのみ 404 ボディへ `reason` を追加する。
-private func makeBreakdownResponse(
-    _ result: BreakdownServeResult, notFoundMessage: String
+/// `ReasonedServeResult` を HTTP レスポンスへ変換する（breakdown / statement-notes 共通）。
+/// ステータスは 404 のまま維持し（エッジ課金がステータス単位でメーターするため、issue #132 のコメント参照）、
+/// notApplicable のときのみ 404 ボディへ `reason` を追加する。
+private func makeReasonedResponse(
+    _ result: ReasonedServeResult, notFoundMessage: String
 ) -> Response {
     switch result {
     case .ok(let value):
@@ -721,28 +765,17 @@ private func makeBreakdownResponse(
     }
 }
 
-/// `StatementNoteServeResult` を HTTP レスポンスへ変換する。`makeBreakdownResponse` と同型
-/// （ステータスは 404 のまま維持し、notApplicable のときのみ 404 ボディへ `reason` を追加する）。
-private func makeStatementNoteResponse(
-    _ result: StatementNoteServeResult, notFoundMessage: String
-) -> Response {
-    switch result {
-    case .ok(let value):
-        return jsonResponse(value, status: .ok)
-    case .notApplicable(let reason):
-        return errorResponse(.notFound, message: notFoundMessage, reason: reason)
-    case .notFound:
-        return errorResponse(.notFound, message: notFoundMessage)
-    case .dbUnavailable:
-        return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-    }
-}
+/// デバッグ用の整形 JSON 出力。`BLT_JSON_PRETTY=1` のときだけ有効（既定は compact＝帯域節約）。
+private let jsonPrettyPrintEnabled: Bool =
+    ProcessInfo.processInfo.environment["BLT_JSON_PRETTY"] == "1"
 
 /// JSON-serializable な値（`[String: Any]` / `[[String: Any]]`）を JSON レスポンスにする。
 private func jsonResponse(_ value: Any, status: HTTPResponseStatus) -> Response {
+    let options: JSONSerialization.WritingOptions =
+        jsonPrettyPrintEnabled ? [.sortedKeys, .prettyPrinted] : [.sortedKeys]
     guard JSONSerialization.isValidJSONObject(value),
         let data = try? JSONSerialization.data(
-            withJSONObject: value, options: [.sortedKeys, .prettyPrinted])
+            withJSONObject: value, options: options)
     else {
         return errorResponse(.internalServerError, message: "JSON serialization failed")
     }
