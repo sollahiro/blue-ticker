@@ -92,7 +92,7 @@ ${stage_rows}
 - 全窓・現行版: 保持窓全体の現行版一致率（financials は社、他は書類）
 - servable: read 床以上（現行より古いが配信可能な行を含む）
 - 鮮度 stale: 最終更新が閾値より古い（版ずれとは別）
-- statements / notes / unpublished 軸は本表に含めない（日経225母集団。件数は下の histogram）
+- statements（上場）/ notes・unpublished 軸（日経225）は本表に含めない（件数は下の histogram）
 EOF
 )"
 
