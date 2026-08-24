@@ -100,7 +100,7 @@ financials               … 組立スナップショット再計算
 
 ジョブ末尾（`ingest-common.sh`、skip 可）:
 
-1. `scripts/generate-status-page.sh` — `BLT_STATUS_HTML` またはリポジトリ内 `assets/apex-site/status.html`。どちらも無ければ skip。失敗しても ingest 成否に影響させない
+1. `scripts/generate-status-page.sh` — `BLT_STATUS_HTML` が指すファイルがあればマーカー置換（無ければ skip。git は触らない）。失敗しても ingest 成否に影響させない
 2. `scripts/post-ingest-linear.sh` — `LINEAR_API_KEY` かつ `BLT_INGEST_WRITE=1` のとき、`status-report` を Linear Project「JP 機能サイクル」の status update へ投稿（Issue コメントはしない。未設定なら skip）
 3. `scripts/neon-reset-ro-from-parent.sh` — `NEON_*` 4 変数が揃うときのみ（WRITE 後）
 

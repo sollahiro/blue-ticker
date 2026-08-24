@@ -1,62 +1,50 @@
 #!/bin/zsh
 # 公開ステータスページの HTML コメントマーカー間を、最新の ingest 状況で書き換える。
 #
-# 手元の定期ジョブ末尾（全ステージ完了後）から呼ばれる想定。4ステージ
-# （financials/filing_sections/breakdown_business/breakdown_geography）の
+# 手元の定期ジョブ末尾（全ステージ完了後）から呼ばれる想定。5ステージ
+# （financials/statements/filing_sections/breakdown_business/breakdown_geography）の
 # カバレッジ・鮮度を「blt-server status-report」（DB read-only、銘柄コード一覧そのものは
-# 出力しない）で取得する。
+# 出力しない）で取得する。notes や unpublished 軸は含めない（本スクリプトは
+# status-report が返すステージのみを反映する）。
 #
 # HTML の置き場:
-#   BLT_STATUS_HTML（絶対または相対パス）。未設定ならリポジトリ内
-#   assets/apex-site/status.html があればそれを使う。どちらも無ければ skip
-#   （サイトをリポジトリ外で作る／まだ置いていない場合）。
-# リポジトリ内のファイルだけ、差分があればそのファイルのみ commit・push する。
-# リポジトリ外は書き込みだけ（git は触らない）。
+#   BLT_STATUS_HTML（絶対または相対パス）のみ。未設定、またはパスのファイルが無ければ
+#   skip（git は触らない。サイトをまだ置いていない／リポジトリ外で別管理の場合）。
+# 書き込みのみ。git commit / git push はしない。
 #
-# 「最終更新」表示は毎回 blt-server status-report 実行時刻（JST）に更新するため、
-# リポジトリ内なら数値が変わらなくても diff はほぼ毎回発生し、commit される
-# （呼び出し元は6時間おき）。巡回ジョブが生きていることも伝えるため。
+# 「最終更新」表示は毎回 blt-server status-report 実行時刻（JST）に更新する。
 #
 # 使い方:
 #   set -a; . ./.env; set +a
-#   ./scripts/generate-status-page.sh
 #   BLT_STATUS_HTML=/path/to/status.html ./scripts/generate-status-page.sh
 #
 # 環境変数:
 #   DATABASE_URL（必須。呼び出し側が .env から読み込み済みの前提。ここでは再読込しない）
-#   BLT_STATUS_HTML（任意。status.html のパス。リポジトリ外可）
+#   BLT_STATUS_HTML（必須でファイルが存在するときだけ生成。未設定／欠落は skip）
 #
-# 終了コード: 0=成功または skip（コミット有無を問わず）/ 1=致命的失敗
-#             （binary無し・DATABASE_URL未設定・jq無し・出力がJSONでない・マーカー未検出・
-#              明示パスのファイル無し・git commit/push 失敗）。呼び出し側は
-#              ingest 本体が既に成功している前提のため、このスクリプトの失敗で
-#              全体を止めない設計にすること（呼び出し側で exit code を無視してログするだけに留める）。
+# 終了コード: 0=成功または skip / 1=致命的失敗
+#             （binary無し・DATABASE_URL未設定・jq無し・出力がJSONでない・マーカー未検出）。
+#             呼び出し側は ingest 本体が既に成功している前提のため、このスクリプトの失敗で
+#             全体を止めない設計にすること（呼び出し側で exit code を無視してログするだけに留める）。
 
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-IN_REPO_DEFAULT="$REPO/assets/apex-site/status.html"
 BLT_SERVER="$REPO/.build/release/blt-server"
 
-if [ -n "${BLT_STATUS_HTML:-}" ]; then
-  STATUS_HTML="$BLT_STATUS_HTML"
-  if [ ! -f "$STATUS_HTML" ]; then
-    echo "ERROR: BLT_STATUS_HTML=$STATUS_HTML が見つかりません" >&2
-    exit 1
-  fi
-elif [ -f "$IN_REPO_DEFAULT" ]; then
-  STATUS_HTML="$IN_REPO_DEFAULT"
-else
-  echo "status-page: skip (BLT_STATUS_HTML 未設定、リポジトリ内 status.html も無し)"
+if [ -z "${BLT_STATUS_HTML:-}" ]; then
+  echo "status-page: skip (BLT_STATUS_HTML unset)"
   exit 0
 fi
 
-# 以降の git pathspec と「リポジトリ内か」判定は絶対パスで揃える。
-STATUS_HTML="$(cd "$(dirname "$STATUS_HTML")" && pwd)/$(basename "$STATUS_HTML")"
+STATUS_HTML="$BLT_STATUS_HTML"
+if [ ! -f "$STATUS_HTML" ]; then
+  echo "status-page: skip (BLT_STATUS_HTML=$STATUS_HTML が見つかりません)"
+  exit 0
+fi
 
-status_html_is_in_repo() {
-  [[ "$STATUS_HTML" == "$REPO"/* ]]
-}
+# 以降は絶対パスで揃える。
+STATUS_HTML="$(cd "$(dirname "$STATUS_HTML")" && pwd)/$(basename "$STATUS_HTML")"
 
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "ERROR: DATABASE_URL が未設定です" >&2
@@ -143,8 +131,9 @@ printf '<!-- STATUS_GENERATED_AT -->%s<!-- /STATUS_GENERATED_AT -->' "$generated
 replace_marker "STATUS_GENERATED_AT" "$gen_tmp"
 rm -f "$gen_tmp"
 
-# 固定順（financials / filing_sections / breakdown_business / breakdown_geography）。
-STAGE_KEYS=(financials filing_sections breakdown_business breakdown_geography)
+# 固定順（financials / statements / filing_sections / breakdown_business / breakdown_geography）。
+# notes 等は status-report に含めない（本表は上場正本の主要ステージのみ）。
+STAGE_KEYS=(financials statements filing_sections breakdown_business breakdown_geography)
 
 for key in "${STAGE_KEYS[@]}"; do
   stage_json="$(echo "$report_json" | jq -c --arg k "$key" '.stages[] | select(.key == $k)')"
@@ -228,46 +217,5 @@ for key in "${STAGE_KEYS[@]}"; do
   rm -f "$stage_tmp"
 done
 
-if ! status_html_is_in_repo; then
-  echo "status-page: wrote $STATUS_HTML (outside repo, skip git)"
-  exit 0
-fi
-
-STATUS_REL="${STATUS_HTML#"$REPO"/}"
-cd "$REPO" || exit 1
-
-if git diff --quiet -- "$STATUS_REL"; then
-  echo "status-page: no change, skipping commit"
-  exit 0
-fi
-
-git add -- "$STATUS_REL"
-# パスを明示して commit する（他に何かがステージされていても status.html 以外を巻き込まない。
-# `git add` だけでは index 全体が commit 対象になるため、pathspec で明示的に絞る）。
-if ! git commit -m "chore: refresh ingest status page" -- "$STATUS_REL" >/dev/null; then
-  echo "ERROR: git commit に失敗しました" >&2
-  exit 1
-fi
-
-if git push origin main; then
-  echo "status-page: committed and pushed"
-  exit 0
-fi
-
-# push が non-fast-forward で失敗するケース（他 worktree の PR マージ等で origin/main が
-# 進んでいた場合）を1回だけ自動リカバリする。--autostash は、たまたま実行タイミングで
-# ユーザーが他ファイルを編集中だった場合に rebase が中断しないための保険。
-# rebase 自体が失敗する（= status.html 側で本当のコンフリクト）場合は abort して
-# ローカルコミットを保持したまま従来どおりエラー終了する。
-echo "git push が失敗しました。fetch + rebase して再試行します" >&2
-if git fetch origin main --quiet && git rebase --autostash origin/main; then
-  if git push origin main; then
-    echo "status-page: committed and pushed (rebase retry)"
-    exit 0
-  fi
-else
-  git rebase --abort >/dev/null 2>&1
-fi
-
-echo "ERROR: git push に失敗しました（コミットはローカルに残っています。次回実行時に確認してください）" >&2
-exit 1
+echo "status-page: wrote $STATUS_HTML (no git)"
+exit 0

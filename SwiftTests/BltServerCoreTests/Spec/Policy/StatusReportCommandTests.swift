@@ -23,6 +23,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(DropCompanyHalfFinancials())
         app.migrations.add(CreateCompanyFilingSections())
+        app.migrations.add(CreateCompanyStatements())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
         app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
@@ -90,6 +91,29 @@ private func seedFilingSections(
     try await row.create(on: db)
 }
 
+private func fakeStatementYear(docID: String) -> StatementYear {
+    StatementYear(
+        fyEnd: "2025-03-31", financialPeriod: "通期", docId: docID,
+        balanceSheet: [
+            StatementLineItem(
+                tag: "TotalAssets", label: "資産合計", value: 1_000, unit: "JPY", order: nil,
+                isTotal: true)
+        ],
+        incomeStatement: [], cashFlow: [])
+}
+
+private func seedStatement(
+    docID: String, code: String, version: String, db: Database
+) async throws {
+    let row = CompanyStatement()
+    row.id = docID
+    row.code = code
+    row.submitDateTime = "2025-06-20 09:00"
+    row.payload = fakeStatementYear(docID: docID)
+    row.cacheVersion = version
+    try await row.create(on: db)
+}
+
 private func fakeBreakdownPayload() -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
         axis: breakdownAxisBusiness, denominator: 100, denominatorTag: "income_statement.sales",
@@ -119,7 +143,11 @@ private func seedBreakdown(
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203", "6758"], priorityCodes: ["7203"])
 
-            #expect(report.stages.count == 4)
+            #expect(report.stages.count == 5)
+            #expect(report.stages.map(\.key) == [
+                "financials", "statements", "filing_sections",
+                "breakdown_business", "breakdown_geography",
+            ])
             for stage in report.stages {
                 #expect(stage.companiesCovered == 0)
                 #expect(stage.coveragePct == 0.0)
@@ -198,6 +226,55 @@ private func seedBreakdown(
             #expect(sections.latestCovered == 2)
             #expect(sections.latestCoveragePct == 100.0)
             #expect(sections.latestCurrentPct == 50.0)
+        }
+    }
+
+    // MARK: - statements（doc 単位・上場母集団）
+
+    @Test func statementsCurrentVersionPctReflectsDocLevelStaleness() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
+            try await seedAnnualReportDoc("S2", secCode: "67580", db: app.db)
+            try await seedStatement(
+                docID: "S1", code: "7203", version: statementCacheVersion, db: app.db)
+            try await seedStatement(docID: "S2", code: "6758", version: "statement-v1", db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
+            let statements = try #require(report.stages.first { $0.key == "statements" })
+
+            #expect(statements.companiesCovered == 2)
+            #expect(statements.docsCovered == 2)
+            #expect(statements.docsTarget == 2)
+            #expect(statements.coveragePct == 100.0)
+            #expect(statements.currentVersionPct == 50.0)
+            #expect(statements.servableCovered == 2)
+            #expect(statements.servablePct == 100.0)
+            #expect(statements.latestTarget == 2)
+            #expect(statements.latestCovered == 2)
+            #expect(statements.latestCoveragePct == 100.0)
+            #expect(statements.latestCurrentPct == 50.0)
+        }
+    }
+
+    @Test func statementsLatestYearMatchesDocIDNotAnyRowForTheCompany() async throws {
+        try await withMigratedApp { app in
+            try await seedAnnualReportDoc(
+                "L1", secCode: "72030", submit: "2026-06-20 09:00", db: app.db)
+            try await seedAnnualReportDoc(
+                "P1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedStatement(
+                docID: "P1", code: "7203", version: statementCacheVersion, db: app.db)
+
+            let report = try await buildIngestStatusReport(
+                db: app.db, listedCodes: ["7203"], priorityCodes: [])
+            let statements = try #require(report.stages.first { $0.key == "statements" })
+
+            #expect(statements.docsCovered == 1)
+            #expect(statements.companiesCovered == 1)
+            #expect(statements.latestTarget == 1)
+            #expect(statements.latestCovered == 0)
+            #expect(statements.latestCoveragePct == 0.0)
         }
     }
 

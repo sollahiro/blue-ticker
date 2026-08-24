@@ -20,11 +20,11 @@
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
-//   blt-server status-report                                4 ステージ（financials/
+//   blt-server status-report                                5 ステージ（financials/statements/
 //                                                            filing_sections/breakdown_business/
 //                                                            breakdown_geography）のカバレッジ・鮮度・
 //                                                            最新有報スライスを JSON で stdout へ出力
-//                                                            （DB read-only）。
+//                                                            （DB read-only。notes 等は含めない）。
 //                                                            status.html 生成用
 //                                                            （scripts/generate-status-page.sh が呼ぶ。
 //                                                            パスは BLT_STATUS_HTML）。
