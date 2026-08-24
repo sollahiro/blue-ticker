@@ -22,10 +22,10 @@ GitHub Issue を ingest 進捗や機能ボードにしない。件数・公開�
 
 ### 残作業の着手（Blocked by の先頭）
 
-**着手は Blocked by の先頭。今は BLT-28（上場全体の statements 母集団。BLT-4 は公開空表が無いので Done。全件 v2/v3 置き換えは残さない。Notes・Filing・Breakdown は BLT-28 Done まで先に拾わない）。**
+**着手は Blocked by の先頭。今は BLT-28（上場全体の statements 母集団。BLT-4 は公開空表が無いので Done。全件 v2/v3 置き換えは残さない。BLT-28 は listed statements が貯まるまで Open＝未ingest 空はバックログ。Notes・Filing・Breakdown＝BLT-5/3/40 は先に拾わない）。**
 
 残作業・Cloud Agent 起動は、Linear の親 Feature や Statement / Notes / Filing / Breakdown の子を先に拾わない。依存鎖の **Blocked by 先頭**（いまは [BLT-28](https://linear.app/sollahiro/issue/BLT-28)。[BLT-4](https://linear.app/sollahiro/issue/BLT-4) は公開空表が無いので Done。全件 v2/v3 置き換えは残さない）を次の実装単位とする。先頭が動いたら `AGENTS.md` のトラッカー一行と本節の「今は …」を同じ ID に更新する。
 
-理由: [BLT-4](https://linear.app/sollahiro/issue/BLT-4)（statement-v2）は公開空表が無いので Done。全件 v2/v3 置き換えは残さない。次は [BLT-28](https://linear.app/sollahiro/issue/BLT-28)（上場全体の statements 母集団）。Notes（BLT-5）・Filing（BLT-3）・Breakdown（BLT-40）は BLT-28 Done まで先に拾わない。
+理由: [BLT-4](https://linear.app/sollahiro/issue/BLT-4)（statement-v2）は公開空表が無いので Done。全件 v2/v3 置き換えは残さない。次は [BLT-28](https://linear.app/sollahiro/issue/BLT-28)（上場全体の statements 母集団）。**BLT-28 は listed drain 完了まで Close しない（Linear の誤 Done でも BLT-5 / BLT-3 / BLT-40 は着手しない）。**
 
 Cloud Agent に残作業を渡す既定プロンプトがリポジトリに無い間は、起動文に上記一行（「着手は Blocked by の先頭。今は BLT-28。」）を必ず含める。プロンプト雛形を後から置く場合も同じ一行を載せる。
