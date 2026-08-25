@@ -103,7 +103,7 @@ import Testing
         #expect(try value(ajinomotoMetrics, key: "dividends") == value(dividends, key: "current"))
         #expect(try value(ajinomotoMetrics, key: "opening_equity") == 884_448_000_000)
         #expect(try value(rd, key: "total") == 30_921_000_000)
-        #expect(items(rd).filter { $0["tag"] is String }.count == 5)
+        #expect(try items(rd).filter { $0["tag"] is String }.count == 5)
 
         let canon = try caseWithID("sales_7751_2025")
         let canonSmoke = try loadObject("smoke/smoke_expected/7751_2025-12-31.json")
