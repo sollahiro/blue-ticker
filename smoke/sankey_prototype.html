@@ -130,13 +130,13 @@
         <div class="empty">JSONを読み込んでいます…</div>
       </div>
       <p class="notice">
-        軸間の帯は合計値の一致だけを示します。地域×事業など、開示されていない配賦リンクは生成しません。
+        地域別と右側の内訳は売上高ハブにのみ接続します。開示されていない地域×事業の配賦は生成しません。
       </p>
     </section>
   </main>
 
   <script>
-    const state = { cases: [], selected: null, axes: [] };
+    const state = { cases: [], selected: null, rightAxisMode: "business" };
     const colors = ["#4277e6", "#59a6a6", "#ef9b45", "#9b72cf", "#db6574", "#6f9f50"];
     const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
 
@@ -164,34 +164,93 @@
     function renderAxisControls() {
       const list = document.querySelector("#axis-list");
       list.replaceChildren();
-      state.axes.forEach((axis, index) => {
-        const picker = document.createElement("label");
-        picker.className = "axis-picker";
-        const slot = document.createElement("span");
-        slot.textContent = `軸 ${index + 1}`;
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", `分解軸 ${index + 1}`);
-        state.selected.axes.forEach(candidate => {
-          const option = document.createElement("option");
-          option.value = candidate.id;
-          option.textContent = candidate.label;
-          option.selected = candidate.id === axis.id;
-          option.disabled = state.axes.some(
-            (selectedAxis, selectedIndex) => selectedIndex !== index && selectedAxis.id === candidate.id
-          );
-          select.append(option);
-        });
-        select.addEventListener("change", event => replaceAxis(index, event.target.value));
-        picker.append(slot, select);
-        list.append(picker);
+      if (state.selected?.metric !== "sales") {
+        const description = document.createElement("div");
+        description.className = "axis-picker";
+        description.innerHTML = "<span>表示</span><strong>資産 → 総資産 → 負債・純資産</strong>";
+        list.append(description);
+        return;
+      }
+      const picker = document.createElement("label");
+      picker.className = "axis-picker";
+      const slot = document.createElement("span");
+      slot.textContent = "右側の分解";
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "売上高の右側を分解する軸");
+      [
+        ["business", "事業別"],
+        ["pl_gross", "PL構成（粗利益階層）"],
+        ["pl_operating", "PL構成（営業利益階層）"]
+      ].forEach(([id, label]) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = label;
+        option.selected = id === state.rightAxisMode;
+        select.append(option);
       });
+      select.addEventListener("change", event => {
+        state.rightAxisMode = event.target.value;
+        render();
+      });
+      picker.append(slot, select);
+      list.append(picker);
     }
 
-    function replaceAxis(index, axisID) {
-      const replacement = state.selected.axes.find(axis => axis.id === axisID);
-      if (!replacement) return;
-      state.axes[index] = { ...replacement };
-      render();
+    function buildFlow() {
+      const axis = id => state.selected.axes.find(item => item.id === id);
+      if (state.selected.metric === "total_assets") {
+        const assets = axis("assets");
+        const funding = axis("liabilities_and_equity");
+        const total = assets.total;
+        return {
+          total,
+          stages: [
+            { label: assets.label, nodes: assets.items.map((item, index) => ({ ...item, color: colors[index] })) },
+            { label: "総資産", nodes: [{ id: "total_assets", label: "総資産", value: total, color: "#53627a" }] },
+            { label: funding.label, nodes: funding.items.map((item, index) => ({ ...item, color: colors[index + 2] })) }
+          ],
+          links: [
+            ...assets.items.map(item => ({ from: [0, item.id], to: [1, "total_assets"], value: item.value })),
+            ...funding.items.map(item => ({ from: [1, "total_assets"], to: [2, item.id], value: item.value }))
+          ]
+        };
+      }
+
+      const geography = axis("geography");
+      const business = axis("business");
+      const pl = axis("pl");
+      const leaves = Object.fromEntries(pl.items.map(item => [item.id, item]));
+      const grossProfit = leaves.sga.value + leaves.research_and_development.value
+        + leaves.operating_profit.value;
+      let rightLabel = business.label;
+      let rightNodes = business.items.map((item, index) => ({ ...item, color: colors[index] }));
+      if (state.rightAxisMode === "pl_gross") {
+        rightLabel = "PL構成（粗利益階層）";
+        rightNodes = [
+          { ...leaves.cost_of_sales, color: "#ca4b58" },
+          { id: "gross_profit", label: "粗利益", value: grossProfit, color: "#42a846" }
+        ];
+      } else if (state.rightAxisMode === "pl_operating") {
+        rightLabel = "PL構成（営業利益階層）";
+        rightNodes = [
+          { ...leaves.cost_of_sales, color: "#ca4b58" },
+          { ...leaves.sga, color: "#d66a72" },
+          { ...leaves.research_and_development, color: "#e69273" },
+          { ...leaves.operating_profit, color: "#42a846" }
+        ];
+      }
+      return {
+        total: geography.total,
+        stages: [
+          { label: geography.label, nodes: geography.items.map((item, index) => ({ ...item, color: colors[index] })) },
+          { label: "売上高", nodes: [{ id: "sales", label: "売上高", value: geography.total, color: "#53627a" }] },
+          { label: rightLabel, nodes: rightNodes }
+        ],
+        links: [
+          ...geography.items.map(item => ({ from: [0, item.id], to: [1, "sales"], value: item.value })),
+          ...rightNodes.map(item => ({ from: [1, "sales"], to: [2, item.id], value: item.value }))
+        ]
+      };
     }
 
     function renderChart() {
@@ -205,59 +264,87 @@
         return;
       }
 
-      const width = Math.max(760, state.axes.length * 300 + 100);
-      const height = 570;
-      const columnTop = 96;
-      const columnHeight = 390;
-      const columnWidth = 170;
-      const edge = 70;
-      const gap = state.axes.length === 1 ? 0 : (width - edge * 2 - columnWidth) / (state.axes.length - 1);
+      const flow = buildFlow();
+      const width = Math.max(820, flow.stages.length * 280);
+      const height = 590;
+      const columnTop = 92;
+      const columnHeight = 420;
+      const columnWidth = 112;
+      const nodeGap = 10;
+      const edge = 50;
+      const stageGap = (width - edge * 2 - columnWidth) / (flow.stages.length - 1);
+      const maxGaps = Math.max(...flow.stages.map(stage => Math.max(0, stage.nodes.length - 1)));
+      const scale = (columnHeight - maxGaps * nodeGap) / flow.total;
       const svg = svgElement("svg", {
         viewBox: `0 0 ${width} ${height}`,
         role: "img",
-        "aria-label": `${state.selected.name} ${state.selected.metric} の軸別グラフ`
+        "aria-label": `${state.selected.name} ${state.selected.metric} のSankeyグラフ`
       });
 
-      for (let index = 0; index < state.axes.length - 1; index++) {
-        const x1 = edge + index * gap + columnWidth;
-        const x2 = edge + (index + 1) * gap;
-        const path = svgElement("path", {
-          d: `M ${x1} ${columnTop} C ${(x1 + x2) / 2} ${columnTop}, ${(x1 + x2) / 2} ${columnTop}, ${x2} ${columnTop}
-              L ${x2} ${columnTop + columnHeight}
-              C ${(x1 + x2) / 2} ${columnTop + columnHeight}, ${(x1 + x2) / 2} ${columnTop + columnHeight}, ${x1} ${columnTop + columnHeight} Z`,
-          fill: "#e8edf6",
-          opacity: ".72"
+      const layouts = flow.stages.map((stage, stageIndex) => {
+        const stageHeight = stage.nodes.reduce((sum, node) => sum + node.value * scale, 0)
+          + Math.max(0, stage.nodes.length - 1) * nodeGap;
+        let y = columnTop + (columnHeight - stageHeight) / 2;
+        const nodes = stage.nodes.map(node => {
+          const layout = {
+            ...node, x: edge + stageIndex * stageGap, y,
+            height: node.value * scale, sourceOffset: 0, targetOffset: 0
+          };
+          y += layout.height + nodeGap;
+          return layout;
         });
+        return { ...stage, nodes };
+      });
+
+      const findNode = ([stageIndex, id]) =>
+        layouts[stageIndex].nodes.find(node => node.id === id);
+
+      flow.links.forEach(link => {
+        const source = findNode(link.from);
+        const target = findNode(link.to);
+        const thickness = link.value * scale;
+        const sourceY = source.y + source.sourceOffset;
+        const targetY = target.y + target.targetOffset;
+        const sourceX = source.x + columnWidth;
+        const targetX = target.x;
+        const middleX = (sourceX + targetX) / 2;
+        source.sourceOffset += thickness;
+        target.targetOffset += thickness;
+        const path = svgElement("path", {
+          d: `M ${sourceX} ${sourceY}
+              C ${middleX} ${sourceY}, ${middleX} ${targetY}, ${targetX} ${targetY}
+              L ${targetX} ${targetY + thickness}
+              C ${middleX} ${targetY + thickness}, ${middleX} ${sourceY + thickness}, ${sourceX} ${sourceY + thickness} Z`,
+          fill: target.color ?? source.color,
+          opacity: ".38"
+        });
+        const title = svgElement("title");
+        title.textContent = `${source.label} → ${target.label}: ${number.format(link.value)}円`;
+        path.append(title);
         svg.append(path);
-        addText(svg, (x1 + x2) / 2, columnTop + columnHeight / 2, "合計のみ", "axis-total", "middle");
-      }
+      });
 
-      state.axes.forEach((axis, axisIndex) => {
-        const x = edge + axisIndex * gap;
-        addText(svg, x + columnWidth / 2, 32, axis.label, "axis-title", "middle");
-        addText(svg, x + columnWidth / 2, 52, formatValue(axis.total), "axis-total", "middle");
-
-        let y = columnTop;
-        axis.items.forEach((item, itemIndex) => {
-          const rawHeight = axis.total === 0 ? 0 : columnHeight * item.value / axis.total;
-          const itemHeight = itemIndex === axis.items.length - 1
-            ? columnTop + columnHeight - y
-            : rawHeight;
+      layouts.forEach((stage, stageIndex) => {
+        const x = edge + stageIndex * stageGap;
+        addText(svg, x + columnWidth / 2, 30, stage.label, "axis-title", "middle");
+        stage.nodes.forEach(item => {
           const rect = svgElement("rect", {
-            x, y, width: columnWidth, height: Math.max(0, itemHeight),
-            fill: colors[itemIndex % colors.length],
-            stroke: "#fff", "stroke-width": 2, rx: 4
+            x: item.x, y: item.y, width: columnWidth, height: Math.max(1, item.height),
+            fill: item.color, stroke: "#fff", "stroke-width": 1.5, rx: 3
           });
           const title = svgElement("title");
           title.textContent = `${item.label}: ${number.format(item.value)}円`;
           rect.append(title);
           svg.append(rect);
 
-          if (itemHeight >= 34) {
-            addText(svg, x + 9, y + 16, item.label, "item-label");
-            if (itemHeight >= 51) addText(svg, x + 9, y + 32, formatValue(item.value), "item-value");
+          if (item.height >= 34) {
+            addText(svg, item.x + 7, item.y + 15, item.label, "item-label");
+            if (item.height >= 52) {
+              addText(svg, item.x + 7, item.y + 30, formatValue(item.value), "item-value");
+            }
+          } else {
+            addText(svg, item.x + columnWidth + 6, item.y + item.height / 2 + 4, item.label, "item-value");
           }
-          y += itemHeight;
         });
       });
 
@@ -271,11 +358,16 @@
 
     function selectCase(id) {
       state.selected = state.cases.find(item => item.id === id) ?? state.cases[0] ?? null;
-      state.axes = state.selected ? state.selected.axes.map(axis => ({ ...axis })) : [];
+      state.rightAxisMode = "business";
       const meta = document.querySelector("#case-meta");
-      meta.innerHTML = state.selected
-        ? `<strong>${state.selected.name}（${state.selected.code}）</strong><span>${state.selected.fy_end}・${state.selected.unit}</span>`
-        : "";
+      meta.replaceChildren();
+      if (state.selected) {
+        const company = document.createElement("strong");
+        company.textContent = `${state.selected.name}（${state.selected.code}）`;
+        const period = document.createElement("span");
+        period.textContent = `${state.selected.fy_end}・${state.selected.unit}`;
+        meta.append(company, period);
+      }
       render();
     }
 
@@ -296,7 +388,10 @@
         selectCase(select.value);
       } catch (error) {
         const host = document.querySelector("#chart");
-        host.innerHTML = `<div class="empty error">JSONを読み込めませんでした。HTTPサーバー経由で開いてください。<br>${error.message}</div>`;
+        const message = document.createElement("div");
+        message.className = "empty error";
+        message.textContent = `JSONを読み込めませんでした。HTTPサーバー経由で開いてください。${error.message}`;
+        host.replaceChildren(message);
       }
     }
 
