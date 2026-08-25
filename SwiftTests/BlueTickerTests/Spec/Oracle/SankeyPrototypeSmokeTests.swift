@@ -100,6 +100,9 @@ import Testing
         let businessSource = try #require(
             (businessFixture["S100XTLJ"] as? [String: Any])?["rows"] as? [[String: Any]])
         let incomeStatement = try #require(financials["income_statement"] as? [String: Any])
+        let grossProfit = try #require(financials["gross_profit"] as? [String: Any])
+        let sga = try #require(financials["sga"] as? [String: Any])
+        let researchDevelopment = try #require(financials["research_development"] as? [String: Any])
 
         let geography = try axisWithID("geography", in: prototypeCase)
         let business = try axisWithID("business", in: prototypeCase)
@@ -110,6 +113,15 @@ import Testing
         #expect(try rowsByLabel(items(business), valueKey: "value")
             == rowsByLabel(businessSource, valueKey: "sales"))
         #expect(try value(pl, key: "total") == value(incomeStatement, key: "sales"))
+        let plItems = try Dictionary(uniqueKeysWithValues: items(pl).map {
+            (try #require($0["id"] as? String), try value($0, key: "value"))
+        })
+        let sales = try value(incomeStatement, key: "sales")
+        let gross = try value(grossProfit, key: "gross_profit")
+        #expect(plItems["cost_of_sales"] == sales - gross)
+        #expect(plItems["sga"] == (try value(sga, key: "current")))
+        #expect(plItems["research_and_development"] == (try value(researchDevelopment, key: "current")))
+        #expect(plItems["operating_profit"] == (try value(incomeStatement, key: "operating_profit")))
     }
 
     @Test func operatingProfitThreeAxesAreBlockedByMissingGeographyProfit() throws {

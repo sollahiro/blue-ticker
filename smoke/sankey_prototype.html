@@ -57,31 +57,23 @@
     }
     .axis-controls h2 { margin: 0; font-size: 14px; }
     .axis-controls small { color: #7a8497; }
-    #axis-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .axis-chip {
-      display: flex;
+    #axis-list { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; }
+    .axis-picker {
+      display: grid;
+      grid-template-columns: auto 1fr;
       align-items: center;
-      gap: 8px;
-      padding: 7px 8px 7px 12px;
+      gap: 10px;
+      padding: 10px 12px;
       border: 1px solid #d8deea;
-      border-radius: 999px;
+      border-radius: 12px;
       background: #fff;
-      font-size: 13px;
+    }
+    .axis-picker span {
+      color: #697386;
+      font-size: 12px;
       font-weight: 700;
     }
-    .axis-chip button {
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      border: 0;
-      border-radius: 50%;
-      background: #edf1f7;
-      color: #33405a;
-      cursor: pointer;
-    }
-    .axis-chip button:hover:not(:disabled) { background: #dce5f5; }
-    .axis-chip button:focus-visible { outline: 3px solid #8bb4ff; outline-offset: 2px; }
-    .axis-chip button:disabled { opacity: .3; cursor: default; }
+    .axis-picker select { width: 100%; min-width: 0; }
     .chart-wrap { overflow-x: auto; padding: 18px 12px 8px; }
     svg { display: block; min-width: 760px; width: 100%; height: auto; }
     .axis-title { font-size: 15px; font-weight: 750; fill: #1c2940; }
@@ -109,13 +101,14 @@
       .toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
       select { width: 100%; min-width: 0; }
       .meta { margin-left: 0; text-align: left; }
+      #axis-list { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <main>
     <h1>Sankey smoke prototype</h1>
-    <p class="lede">開示値を軸ごとに可視化します。グラフ生成と軸順はクライアント側で変更できます。</p>
+    <p class="lede">同じ合計値を地域別・事業別・PL構成など、選択した観点で分解します。</p>
 
     <section class="toolbar" aria-label="表示設定">
       <label>
@@ -128,8 +121,8 @@
     <section class="panel">
       <div class="axis-controls">
         <header>
-          <h2>軸の順序</h2>
-          <small>矢印で左右を入れ替え</small>
+          <h2>分解軸</h2>
+          <small>同じ合計値をどの観点で分解するか選択</small>
         </header>
         <div id="axis-list"></div>
       </div>
@@ -172,33 +165,32 @@
       const list = document.querySelector("#axis-list");
       list.replaceChildren();
       state.axes.forEach((axis, index) => {
-        const chip = document.createElement("div");
-        chip.className = "axis-chip";
-        const label = document.createElement("span");
-        label.textContent = axis.label;
-        chip.append(label);
-
-        [["←", index - 1, "左へ移動"], ["→", index + 1, "右へ移動"]].forEach(
-          ([symbol, destination, action]) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.textContent = symbol;
-            button.title = `${axis.label}を${action}`;
-            button.setAttribute("aria-label", button.title);
-            button.disabled = destination < 0 || destination >= state.axes.length;
-            button.addEventListener("click", () => moveAxis(index, destination));
-            chip.append(button);
-          }
-        );
-        list.append(chip);
+        const picker = document.createElement("label");
+        picker.className = "axis-picker";
+        const slot = document.createElement("span");
+        slot.textContent = `軸 ${index + 1}`;
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `分解軸 ${index + 1}`);
+        state.selected.axes.forEach(candidate => {
+          const option = document.createElement("option");
+          option.value = candidate.id;
+          option.textContent = candidate.label;
+          option.selected = candidate.id === axis.id;
+          option.disabled = state.axes.some(
+            (selectedAxis, selectedIndex) => selectedIndex !== index && selectedAxis.id === candidate.id
+          );
+          select.append(option);
+        });
+        select.addEventListener("change", event => replaceAxis(index, event.target.value));
+        picker.append(slot, select);
+        list.append(picker);
       });
     }
 
-    function moveAxis(from, to) {
-      if (to < 0 || to >= state.axes.length) return;
-      const next = [...state.axes];
-      [next[from], next[to]] = [next[to], next[from]];
-      state.axes = next;
+    function replaceAxis(index, axisID) {
+      const replacement = state.selected.axes.find(axis => axis.id === axisID);
+      if (!replacement) return;
+      state.axes[index] = { ...replacement };
       render();
     }
 

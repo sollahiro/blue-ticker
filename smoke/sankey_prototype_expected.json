@@ -129,13 +129,28 @@
         },
         {
           "id": "pl",
-          "label": "損益計算書",
+          "label": "PL構成",
           "total": 4624727000000,
           "items": [
             {
-              "id": "sales",
-              "label": "売上高",
-              "value": 4624727000000
+              "id": "cost_of_sales",
+              "label": "売上原価",
+              "value": 2462772000000
+            },
+            {
+              "id": "sga",
+              "label": "販売費及び一般管理費",
+              "value": 1367277000000
+            },
+            {
+              "id": "research_and_development",
+              "label": "研究開発費",
+              "value": 339288000000
+            },
+            {
+              "id": "operating_profit",
+              "label": "営業利益",
+              "value": 455390000000
             }
           ]
         }
