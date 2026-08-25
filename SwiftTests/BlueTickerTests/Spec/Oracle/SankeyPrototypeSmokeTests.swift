@@ -62,8 +62,6 @@ import Testing
                 #expect(itemTotal == (try value(axis, key: "total")))
             }
 
-            let totals = try caseAxes.map { try value($0, key: "total") }
-            #expect(Set(totals).count == 1)
         }
     }
 
@@ -87,6 +85,44 @@ import Testing
         #expect(fundingItems["current_liabilities"] == (try value(balanceSheet, key: "current_liabilities")))
         #expect(fundingItems["non_current_liabilities"] == (try value(balanceSheet, key: "non_current_liabilities")))
         #expect(fundingItems["equity"] == (try value(balanceSheet, key: "net_assets")))
+    }
+
+    @Test func deepDiveMetricsMatchSmokeValuesAndRDBreakdown() throws {
+        let ajinomoto = try caseWithID("assets_2802_2025")
+        let ajinomotoSmoke = try loadObject("smoke/smoke_expected/2802_2025-03-31.json")
+        let ajinomotoMetrics = try #require(ajinomoto["metrics"] as? [String: Any])
+        let ajinomotoIncome = try #require(ajinomotoSmoke["income_statement"] as? [String: Any])
+        let ajinomotoBalance = try #require(ajinomotoSmoke["balance_sheet"] as? [String: Any])
+        let buyback = try #require(ajinomotoSmoke["share_buyback"] as? [String: Any])
+        let dividends = try #require(ajinomotoSmoke["dividend_ss"] as? [String: Any])
+        let rd = try axisWithID("research_and_development", in: ajinomoto)
+
+        #expect(try value(ajinomotoMetrics, key: "net_profit") == value(ajinomotoIncome, key: "net_profit"))
+        #expect(try value(ajinomotoMetrics, key: "closing_equity") == value(ajinomotoBalance, key: "net_assets"))
+        #expect(try value(ajinomotoMetrics, key: "share_buyback") == value(buyback, key: "current"))
+        #expect(try value(ajinomotoMetrics, key: "dividends") == value(dividends, key: "current"))
+        #expect(try value(ajinomotoMetrics, key: "opening_equity") == 884_448_000_000)
+        #expect(try value(rd, key: "total") == 30_921_000_000)
+        #expect(items(rd).filter { $0["tag"] is String }.count == 5)
+
+        let canon = try caseWithID("sales_7751_2025")
+        let canonSmoke = try loadObject("smoke/smoke_expected/7751_2025-12-31.json")
+        let canonMetrics = try #require(canon["metrics"] as? [String: Any])
+        let canonIncome = try #require(canonSmoke["income_statement"] as? [String: Any])
+        let grossProfit = try #require(canonSmoke["gross_profit"] as? [String: Any])
+        let sga = try #require(canonSmoke["sga"] as? [String: Any])
+        let researchDevelopment = try #require(canonSmoke["research_development"] as? [String: Any])
+        let taxExpense = try #require(canonSmoke["tax_expense"] as? [String: Any])
+
+        #expect(try value(canonMetrics, key: "gross_profit") == value(grossProfit, key: "gross_profit"))
+        #expect(try value(canonMetrics, key: "sga") == value(sga, key: "current"))
+        #expect(try value(canonMetrics, key: "research_and_development")
+            == value(researchDevelopment, key: "current"))
+        #expect(try value(canonMetrics, key: "operating_profit")
+            == value(canonIncome, key: "operating_profit"))
+        #expect(try value(canonMetrics, key: "pretax_income") == value(taxExpense, key: "pretax_income"))
+        #expect(try value(canonMetrics, key: "income_tax") == value(taxExpense, key: "income_tax"))
+        #expect(try value(canonMetrics, key: "net_profit") == value(canonIncome, key: "net_profit"))
     }
 
     @Test func salesAxesMatchGeographyBusinessAndPLSmokeValues() throws {

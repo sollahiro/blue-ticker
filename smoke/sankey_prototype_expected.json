@@ -11,6 +11,13 @@
       "metric": "total_assets",
       "unit": "JPY",
       "cross_axis_links_available": false,
+      "metrics": {
+        "opening_equity": 884448000000,
+        "net_profit": 70272000000,
+        "closing_equity": 813273000000,
+        "dividends": 39119000000,
+        "share_buyback": 90695000000
+      },
       "axes": [
         {
           "id": "assets",
@@ -55,6 +62,48 @@
               "tag": "EquityIFRS"
             }
           ]
+        },
+        {
+          "id": "research_and_development",
+          "label": "研究開発費",
+          "total": 30921000000,
+          "items": [
+            {
+              "id": "seasonings_and_foods",
+              "label": "調味料・食品",
+              "value": 8032000000,
+              "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
+            },
+            {
+              "id": "frozen_foods",
+              "label": "冷凍食品",
+              "value": 1855000000,
+              "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
+            },
+            {
+              "id": "healthcare_and_others",
+              "label": "ヘルスケア等",
+              "value": 11212000000,
+              "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
+            },
+            {
+              "id": "other_segments",
+              "label": "その他セグメント",
+              "value": 258000000,
+              "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
+            },
+            {
+              "id": "unallocated_and_elimination",
+              "label": "全社・消去",
+              "value": 9562000000,
+              "tag": "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
+            },
+            {
+              "id": "rounding_difference",
+              "label": "丸め差",
+              "value": 2000000
+            }
+          ]
         }
       ]
     },
@@ -67,6 +116,15 @@
       "metric": "sales",
       "unit": "JPY",
       "cross_axis_links_available": false,
+      "metrics": {
+        "gross_profit": 2161955000000,
+        "sga": 1367277000000,
+        "research_and_development": 339288000000,
+        "operating_profit": 455390000000,
+        "pretax_income": 482059000000,
+        "income_tax": 123906000000,
+        "net_profit": 332053000000
+      },
       "axes": [
         {
           "id": "geography",

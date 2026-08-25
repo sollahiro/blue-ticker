@@ -112,8 +112,12 @@
 
     <section class="toolbar" aria-label="表示設定">
       <label>
-        表示するデータ
+        会社
         <select id="case-select"></select>
+      </label>
+      <label>
+        深掘り
+        <select id="flow-select"></select>
       </label>
       <div class="meta" id="case-meta" aria-live="polite"></div>
     </section>
@@ -136,7 +140,7 @@
   </main>
 
   <script>
-    const state = { cases: [], selected: null, rightAxisMode: "business" };
+    const state = { cases: [], selected: null, flowMode: "assets", rightAxisMode: "business" };
     const colors = ["#4277e6", "#59a6a6", "#ef9b45", "#9b72cf", "#db6574", "#6f9f50"];
     const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
     const compactNumber = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 6 });
@@ -168,13 +172,26 @@
       const title = document.querySelector("#axis-control-title");
       const help = document.querySelector("#axis-control-help");
       const notice = document.querySelector("#chart-notice");
-      if (state.selected?.metric !== "sales") {
+      if (state.flowMode !== "sales") {
         title.textContent = "表示する流れ";
-        help.textContent = "貸借対照表の左右を総資産ハブで接続";
-        notice.textContent = "資産と負債・純資産は総資産ハブにのみ接続し、項目間の配賦は生成しません。";
+        help.textContent = "会計上保存する単位ごとに独立したSankeyを表示";
+        const labels = {
+          assets: "資産 → 総資産 → 負債・純資産",
+          equity: "期首資本・当期利益 → 資本変動 → 期末資本・配当・自己株式取得",
+          rd: "研究開発費 → セグメント別研究開発費",
+          gross_profit: "粗利益 → 販管費・研究開発費・営業利益",
+          pretax_profit: "営業利益・営業外純益 → 税引前利益 → 税金・帰属差・純利益"
+        };
+        notice.textContent = state.flowMode === "equity"
+          ? "純利益から配当・自己株式取得へ直接配賦せず、期首資本とともに資本変動ハブへ接続します。"
+          : "各帯は同じ会計ブリッジ内で値が保存するよう、差額を明示して接続します。";
         const description = document.createElement("div");
         description.className = "axis-picker";
-        description.innerHTML = "<span>表示</span><strong>資産 → 総資産 → 負債・純資産</strong>";
+        const prefix = document.createElement("span");
+        prefix.textContent = "表示";
+        const value = document.createElement("strong");
+        value.textContent = labels[state.flowMode] ?? "";
+        description.append(prefix, value);
         list.append(description);
         return;
       }
@@ -208,7 +225,92 @@
 
     function buildFlow() {
       const axis = id => state.selected.axes.find(item => item.id === id);
-      if (state.selected.metric === "total_assets") {
+      const metrics = state.selected.metrics ?? {};
+
+      if (state.flowMode === "equity") {
+        const total = metrics.opening_equity + metrics.net_profit;
+        const otherDecrease = total - metrics.closing_equity - metrics.dividends - metrics.share_buyback;
+        const inputs = [
+          { id: "opening_equity", label: "期首資本", value: metrics.opening_equity, color: "#53627a" },
+          { id: "net_profit", label: "当期純利益", value: metrics.net_profit, color: "#42a846" }
+        ];
+        const outputs = [
+          { id: "closing_equity", label: "期末資本", value: metrics.closing_equity, color: "#53627a" },
+          { id: "dividends", label: "配当金", value: metrics.dividends, color: "#d66a72" },
+          { id: "share_buyback", label: "自己株式取得", value: metrics.share_buyback, color: "#ca4b58" },
+          { id: "other_decrease", label: "その他資本減少", value: otherDecrease, color: "#e69273" }
+        ];
+        return {
+          total,
+          stages: [
+            { label: "資本への流入", nodes: inputs },
+            { label: "資本変動", nodes: [{ id: "equity_bridge", label: "資本変動", value: total, color: "#70648f" }] },
+            { label: "資本の着地・流出", nodes: outputs }
+          ],
+          links: [
+            ...inputs.map(item => ({ from: [0, item.id], to: [1, "equity_bridge"], value: item.value })),
+            ...outputs.map(item => ({ from: [1, "equity_bridge"], to: [2, item.id], value: item.value }))
+          ]
+        };
+      }
+
+      if (state.flowMode === "rd") {
+        const rd = axis("research_and_development");
+        const totalNode = { id: "rd_total", label: "研究開発費", value: rd.total, color: "#53627a" };
+        const segments = rd.items.map((item, index) => ({ ...item, color: colors[index % colors.length] }));
+        return {
+          total: rd.total,
+          stages: [
+            { label: "PL研究開発費", nodes: [totalNode] },
+            { label: "セグメント別研究開発費", nodes: segments }
+          ],
+          links: segments.map(item => ({ from: [0, "rd_total"], to: [1, item.id], value: item.value }))
+        };
+      }
+
+      if (state.flowMode === "gross_profit") {
+        const outputs = [
+          { id: "sga", label: "販売費及び一般管理費", value: metrics.sga, color: "#d66a72" },
+          { id: "rd", label: "研究開発費", value: metrics.research_and_development, color: "#e69273" },
+          { id: "operating_profit", label: "営業利益", value: metrics.operating_profit, color: "#42a846" }
+        ];
+        return {
+          total: metrics.gross_profit,
+          stages: [
+            { label: "粗利益", nodes: [{ id: "gross_profit", label: "粗利益", value: metrics.gross_profit, color: "#53627a" }] },
+            { label: "営業利益への分解", nodes: outputs }
+          ],
+          links: outputs.map(item => ({ from: [0, "gross_profit"], to: [1, item.id], value: item.value }))
+        };
+      }
+
+      if (state.flowMode === "pretax_profit") {
+        const nonOperatingGain = metrics.pretax_income - metrics.operating_profit;
+        const attributionDifference = metrics.pretax_income - metrics.income_tax - metrics.net_profit;
+        const inputs = [
+          { id: "operating_profit", label: "営業利益", value: metrics.operating_profit, color: "#42a846" },
+          { id: "non_operating_gain", label: "営業外純益", value: nonOperatingGain, color: "#59a6a6" }
+        ];
+        const outputs = [
+          { id: "income_tax", label: "法人税等", value: metrics.income_tax, color: "#ca4b58" },
+          { id: "attribution_difference", label: "帰属差・その他", value: attributionDifference, color: "#e69273" },
+          { id: "net_profit", label: "当期純利益", value: metrics.net_profit, color: "#42a846" }
+        ];
+        return {
+          total: metrics.pretax_income,
+          stages: [
+            { label: "税引前利益への流入", nodes: inputs },
+            { label: "税引前利益", nodes: [{ id: "pretax", label: "税引前利益", value: metrics.pretax_income, color: "#53627a" }] },
+            { label: "純利益への分解", nodes: outputs }
+          ],
+          links: [
+            ...inputs.map(item => ({ from: [0, item.id], to: [1, "pretax"], value: item.value })),
+            ...outputs.map(item => ({ from: [1, "pretax"], to: [2, item.id], value: item.value }))
+          ]
+        };
+      }
+
+      if (state.flowMode === "assets") {
         const assets = axis("assets");
         const funding = axis("liabilities_and_equity");
         const total = assets.total;
@@ -367,9 +469,32 @@
       renderChart();
     }
 
+    function flowOptions(prototypeCase) {
+      return prototypeCase.metric === "sales"
+        ? [
+            ["sales", "売上分解"],
+            ["gross_profit", "粗利益 → 営業利益"],
+            ["pretax_profit", "営業利益 → 税引前利益 → 純利益"]
+          ]
+        : [
+            ["assets", "資産 → 負債・純資産"],
+            ["equity", "純利益 → SS資本変動"],
+            ["rd", "研究開発費 → セグメント"]
+          ];
+    }
+
     function selectCase(id) {
       state.selected = state.cases.find(item => item.id === id) ?? state.cases[0] ?? null;
       state.rightAxisMode = "business";
+      const flowSelect = document.querySelector("#flow-select");
+      flowSelect.replaceChildren();
+      flowOptions(state.selected).forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        flowSelect.append(option);
+      });
+      state.flowMode = flowSelect.value;
       const meta = document.querySelector("#case-meta");
       meta.replaceChildren();
       if (state.selected) {
@@ -392,10 +517,14 @@
         state.cases.forEach(item => {
           const option = document.createElement("option");
           option.value = item.id;
-          option.textContent = `${item.name} — ${item.metric === "sales" ? "売上高" : "総資産"}`;
+          option.textContent = item.name;
           select.append(option);
         });
         select.addEventListener("change", event => selectCase(event.target.value));
+        document.querySelector("#flow-select").addEventListener("change", event => {
+          state.flowMode = event.target.value;
+          render();
+        });
         selectCase(select.value);
       } catch (error) {
         const host = document.querySelector("#chart");
