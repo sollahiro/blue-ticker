@@ -23,8 +23,9 @@ smoke の言語非依存プロトタイプは `smoke/sankey_prototype_expected.j
 
 ### 売上高
 
-軸ごとの独立した構成比として実現可能。キヤノン（7751、S100XTLJ）では geography、business、PL の
-各軸がすべて売上高 `4,624,727,000,000` 円に一致する。材料は既存の次の JSON。
+軸ごとの独立した構成比として実現可能。キヤノン（7751、S100XTLJ）の正規化後 spot fixture では
+geography、business、PL の各軸がすべて売上高 `4,624,727,000,000` 円に一致する。材料は既存の
+次の JSON。
 
 - `GET /v1/companies/{code}/breakdown?axis=geography`
 - `GET /v1/companies/{code}/breakdown?axis=business`
@@ -34,11 +35,15 @@ smoke の言語非依存プロトタイプは `smoke/sankey_prototype_expected.j
 「地域→事業→PL」の真の逐次 Sankey は生成できない。クライアントは各軸を独立した分解として表示するか、
 全社売上のハブを介して表示する必要がある。
 
+キヤノンの business / geography は公式 smoke 床では LLM に渡す前の表までを固定しており、
+正規化後の金額は spot 監査資産である。公開契約の可用性確認は disposable Neon への ingest 後に行う。
+
 ### 営業利益
 
-現状の3軸では実現不可。smoke の geography 行に利益がなく、business のセグメント利益合計
-`454,479,000,000` 円と PL 営業利益 `455,390,000,000` 円の間にも `911,000,000` 円の調整差がある。
-対応するには、地域別利益の新しい抽出元と、事業別の消去・全社調整行が必要。
+現状の3軸では実現不可。smoke の geography 行に利益がない。business のセグメント利益合計
+`454,479,000,000` 円と PL 営業利益 `455,390,000,000` 円の差 `911,000,000` 円は、元の開示表に
+「消去」として存在するため、これを抽出すれば business→PL は保存できる。3軸化に残る必須要件は
+地域別利益の開示・抽出元であり、開示がない会社では生成できない。
 
 ## プロトタイプ境界
 

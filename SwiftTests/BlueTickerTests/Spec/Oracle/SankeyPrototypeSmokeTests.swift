@@ -112,7 +112,7 @@ import Testing
         #expect(try value(pl, key: "total") == value(incomeStatement, key: "sales"))
     }
 
-    @Test func operatingProfitCannotYetUseTheSameThreeAxes() throws {
+    @Test func operatingProfitThreeAxesAreBlockedByMissingGeographyProfit() throws {
         let geographyFixture = try loadObject("smoke/breakdown_geography_expected.json")
         let businessFixture = try loadObject("smoke/breakdown_business_expected.json")
         let financials = try loadObject("smoke/smoke_expected/7751_2025-12-31.json")
@@ -129,6 +129,8 @@ import Testing
         let operatingProfit = try value(incomeStatement, key: "operating_profit")
         #expect(segmentProfit == 454_479_000_000)
         #expect(operatingProfit == 455_390_000_000)
-        #expect(segmentProfit != operatingProfit)
+        // 開示表の「消去」911百万円を足すと事業別→PLは保存する。未抽出なのは地域別利益。
+        let disclosedElimination = 911_000_000.0
+        #expect(segmentProfit + disclosedElimination == operatingProfit)
     }
 }
