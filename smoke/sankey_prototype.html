@@ -238,7 +238,7 @@
           { id: "closing_equity", label: "期末資本", value: metrics.closing_equity, color: "#53627a" },
           { id: "dividends", label: "配当金", value: metrics.dividends, color: "#d66a72" },
           { id: "share_buyback", label: "自己株式取得", value: metrics.share_buyback, color: "#ca4b58" },
-          { id: "other_decrease", label: "その他資本減少", value: otherDecrease, color: "#e69273" }
+          { id: "other_decrease", label: "OCI等を含む差額（純減）", value: otherDecrease, color: "#e69273" }
         ];
         return {
           total,
@@ -255,7 +255,7 @@
       }
 
       if (state.flowMode === "rd") {
-        const rd = axis("research_and_development");
+        const rd = state.selected.drilldowns.research_and_development;
         const totalNode = { id: "rd_total", label: "研究開発費", value: rd.total, color: "#53627a" };
         const segments = rd.items.map((item, index) => ({ ...item, color: colors[index % colors.length] }));
         return {
@@ -478,7 +478,7 @@
           ]
         : [
             ["assets", "資産 → 負債・純資産"],
-            ["equity", "純利益 → SS資本変動"],
+            ["equity", "期首資本・純利益 → SS資本変動"],
             ["rd", "研究開発費 → セグメント"]
           ];
     }

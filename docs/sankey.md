@@ -8,7 +8,8 @@
 
 smoke の言語非依存プロトタイプは `smoke/sankey_prototype_expected.json`。各軸を同じ
 `{ id, label, total, items: [{ id, label, value, tag? }] }` 形に揃えているため、クライアントは
-`axes` の並びを差し替えられる。`tag` は XBRL タグを解決できる Statement 値にだけ載せる。
+同一 `axes` 内の同じ合計を持つ分解軸を差し替えられる。異なる合計を持つR&D等は `drilldowns` に分離し、
+独立した会計ブリッジとして表示する。`tag` は実際の XBRL タグを解決できる値にだけ載せる。
 
 ## smoke 結果
 
@@ -60,7 +61,7 @@ geography、business、PL の各軸がすべて売上高 `4,624,727,000,000` 円
 
 - キヤノン: 粗利益 → 販管費・研究開発費・営業利益
 - キヤノン: 営業利益 + 営業外純益 → 税引前利益 → 法人税・帰属差等・当期純利益
-- 味の素: 期首資本 + 当期純利益 → 資本変動 → 期末資本・配当・自己株式取得・その他減少
+- 味の素: 期首資本 + 当期純利益 → 資本変動 → 期末資本・配当・自己株式取得・OCI等を含む差額（純減）
 - 味の素: PL 研究開発費 → セグメント別研究開発費（XBRLタグ行 + 丸め差）
 
 配当・自己株式取得を当期純利益から直接配賦せず、期首資本を含む SS 資本ブリッジとして表示する。
@@ -72,4 +73,4 @@ python3 -m http.server 8765
 # http://127.0.0.1:8765/sankey_prototype.html
 ```
 
-HTML 側の3表示モードとハブ前後の値保存は `node smoke/sankey_prototype_test.mjs` で検証する。
+HTML 側の6表示モードと各ステージ間の値保存は `node smoke/sankey_prototype_test.mjs` で検証する。

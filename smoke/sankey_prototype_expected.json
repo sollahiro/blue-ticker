@@ -62,8 +62,10 @@
               "tag": "EquityIFRS"
             }
           ]
-        },
-        {
+        }
+      ],
+      "drilldowns": {
+        "research_and_development": {
           "id": "research_and_development",
           "label": "研究開発費",
           "total": 30921000000,
@@ -105,7 +107,7 @@
             }
           ]
         }
-      ]
+      }
     },
     {
       "id": "sales_7751_2025",

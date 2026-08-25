@@ -35,6 +35,11 @@ import Testing
         try #require(axes(prototypeCase).first { $0["id"] as? String == id })
     }
 
+    private func drilldownWithID(_ id: String, in prototypeCase: [String: Any]) throws -> [String: Any] {
+        let drilldowns = try #require(prototypeCase["drilldowns"] as? [String: [String: Any]])
+        return try #require(drilldowns[id])
+    }
+
     private func rowsByLabel(_ rows: [[String: Any]], valueKey: String) throws -> [String: Double] {
         try Dictionary(uniqueKeysWithValues: rows.map {
             (try #require($0["label"] as? String), try value($0, key: valueKey))
@@ -62,6 +67,8 @@ import Testing
                 #expect(itemTotal == (try value(axis, key: "total")))
             }
 
+            let totals = try caseAxes.map { try value($0, key: "total") }
+            #expect(Set(totals).count == 1)
         }
     }
 
@@ -95,7 +102,7 @@ import Testing
         let ajinomotoBalance = try #require(ajinomotoSmoke["balance_sheet"] as? [String: Any])
         let buyback = try #require(ajinomotoSmoke["share_buyback"] as? [String: Any])
         let dividends = try #require(ajinomotoSmoke["dividend_ss"] as? [String: Any])
-        let rd = try axisWithID("research_and_development", in: ajinomoto)
+        let rd = try drilldownWithID("research_and_development", in: ajinomoto)
 
         #expect(try value(ajinomotoMetrics, key: "net_profit") == value(ajinomotoIncome, key: "net_profit"))
         #expect(try value(ajinomotoMetrics, key: "closing_equity") == value(ajinomotoBalance, key: "net_assets"))
@@ -104,6 +111,15 @@ import Testing
         #expect(try value(ajinomotoMetrics, key: "opening_equity") == 884_448_000_000)
         #expect(try value(rd, key: "total") == 30_921_000_000)
         #expect(try items(rd).filter { $0["tag"] is String }.count == 5)
+        let rdValues = try Dictionary(uniqueKeysWithValues: items(rd).map {
+            (try #require($0["id"] as? String), try value($0, key: "value"))
+        })
+        #expect(rdValues["seasonings_and_foods"] == 8_032_000_000)
+        #expect(rdValues["frozen_foods"] == 1_855_000_000)
+        #expect(rdValues["healthcare_and_others"] == 11_212_000_000)
+        #expect(rdValues["other_segments"] == 258_000_000)
+        #expect(rdValues["unallocated_and_elimination"] == 9_562_000_000)
+        #expect(rdValues["rounding_difference"] == 2_000_000)
 
         let canon = try caseWithID("sales_7751_2025")
         let canonSmoke = try loadObject("smoke/smoke_expected/7751_2025-12-31.json")

@@ -93,8 +93,8 @@ Meta → Struct → Norm → Viz
 ## Sankey
 
 サーバーは分解済み数値のみ返し、描画はクライアント。総資産2軸と売上高3軸の
-言語非依存プロトタイプを smoke で検証する。地域×事業の交差値は既存データにないため、
-開示にないリンクは生成しない。詳細は `sankey.md`。現在地は Linear
+言語非依存プロトタイプに加え、PL利益・SS資本変動・R&Dセグメントの独立した深掘りを smoke で検証する。
+地域×事業の交差値は既存データにないため、開示にないリンクは生成しない。詳細は `sankey.md`。現在地は Linear
 [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)。
 
 ## 関連
