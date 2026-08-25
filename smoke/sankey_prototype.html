@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sankey smoke prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "Noto Sans JP", system-ui, sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1240px; margin: 0 auto; padding: 32px 24px 48px; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 36px); letter-spacing: -.03em; }
+    .lede { margin: 8px 0 24px; color: #5d6678; }
+    .toolbar, .panel {
+      border: 1px solid #dfe5ef;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 12px 36px rgb(31 46 77 / 7%);
+    }
+    .toolbar {
+      display: flex;
+      align-items: end;
+      gap: 20px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: #697386; }
+    select {
+      min-width: 270px;
+      padding: 9px 36px 9px 12px;
+      border: 1px solid #cbd3df;
+      border-radius: 9px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+    }
+    .meta { margin-left: auto; text-align: right; }
+    .meta strong { display: block; font-size: 18px; }
+    .meta span { color: #697386; font-size: 12px; }
+    .panel { overflow: hidden; }
+    .axis-controls {
+      display: grid;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e7ebf2;
+      background: #fbfcfe;
+    }
+    .axis-controls header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .axis-controls h2 { margin: 0; font-size: 14px; }
+    .axis-controls small { color: #7a8497; }
+    #axis-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .axis-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px 7px 12px;
+      border: 1px solid #d8deea;
+      border-radius: 999px;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .axis-chip button {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: #edf1f7;
+      color: #33405a;
+      cursor: pointer;
+    }
+    .axis-chip button:hover:not(:disabled) { background: #dce5f5; }
+    .axis-chip button:focus-visible { outline: 3px solid #8bb4ff; outline-offset: 2px; }
+    .axis-chip button:disabled { opacity: .3; cursor: default; }
+    .chart-wrap { overflow-x: auto; padding: 18px 12px 8px; }
+    svg { display: block; min-width: 760px; width: 100%; height: auto; }
+    .axis-title { font-size: 15px; font-weight: 750; fill: #1c2940; }
+    .axis-total { font-size: 11px; fill: #778196; }
+    .item-label { font-size: 11px; font-weight: 650; fill: #172033; pointer-events: none; }
+    .item-value { font-size: 10px; fill: #667085; pointer-events: none; }
+    .empty {
+      padding: 80px 24px;
+      text-align: center;
+      color: #697386;
+    }
+    .notice {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 0;
+      padding: 14px 20px 18px;
+      color: #697386;
+      font-size: 12px;
+    }
+    .notice::before { content: "ⓘ"; color: #3867d6; }
+    .error { color: #a12626; }
+    @media (max-width: 700px) {
+      main { padding: 22px 12px 32px; }
+      .toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
+      select { width: 100%; min-width: 0; }
+      .meta { margin-left: 0; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sankey smoke prototype</h1>
+    <p class="lede">開示値を軸ごとに可視化します。グラフ生成と軸順はクライアント側で変更できます。</p>
+
+    <section class="toolbar" aria-label="表示設定">
+      <label>
+        表示するデータ
+        <select id="case-select"></select>
+      </label>
+      <div class="meta" id="case-meta" aria-live="polite"></div>
+    </section>
+
+    <section class="panel">
+      <div class="axis-controls">
+        <header>
+          <h2>軸の順序</h2>
+          <small>矢印で左右を入れ替え</small>
+        </header>
+        <div id="axis-list"></div>
+      </div>
+      <div class="chart-wrap" id="chart" aria-live="polite">
+        <div class="empty">JSONを読み込んでいます…</div>
+      </div>
+      <p class="notice">
+        軸間の帯は合計値の一致だけを示します。地域×事業など、開示されていない配賦リンクは生成しません。
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const state = { cases: [], selected: null, axes: [] };
+    const colors = ["#4277e6", "#59a6a6", "#ef9b45", "#9b72cf", "#db6574", "#6f9f50"];
+    const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
+
+    function formatValue(value) {
+      const absolute = Math.abs(value);
+      if (absolute >= 1e12) return `${number.format(value / 1e12)}兆円`;
+      if (absolute >= 1e8) return `${number.format(value / 1e8)}億円`;
+      if (absolute >= 1e4) return `${number.format(value / 1e4)}万円`;
+      return `${number.format(value)}円`;
+    }
+
+    function svgElement(name, attributes = {}) {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
+      return node;
+    }
+
+    function addText(svg, x, y, text, className, anchor = "start") {
+      const node = svgElement("text", { x, y, class: className, "text-anchor": anchor });
+      node.textContent = text;
+      svg.appendChild(node);
+      return node;
+    }
+
+    function renderAxisControls() {
+      const list = document.querySelector("#axis-list");
+      list.replaceChildren();
+      state.axes.forEach((axis, index) => {
+        const chip = document.createElement("div");
+        chip.className = "axis-chip";
+        const label = document.createElement("span");
+        label.textContent = axis.label;
+        chip.append(label);
+
+        [["←", index - 1, "左へ移動"], ["→", index + 1, "右へ移動"]].forEach(
+          ([symbol, destination, action]) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = symbol;
+            button.title = `${axis.label}を${action}`;
+            button.setAttribute("aria-label", button.title);
+            button.disabled = destination < 0 || destination >= state.axes.length;
+            button.addEventListener("click", () => moveAxis(index, destination));
+            chip.append(button);
+          }
+        );
+        list.append(chip);
+      });
+    }
+
+    function moveAxis(from, to) {
+      if (to < 0 || to >= state.axes.length) return;
+      const next = [...state.axes];
+      [next[from], next[to]] = [next[to], next[from]];
+      state.axes = next;
+      render();
+    }
+
+    function renderChart() {
+      const host = document.querySelector("#chart");
+      host.replaceChildren();
+      if (!state.selected) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "表示できるデータがありません。";
+        host.append(empty);
+        return;
+      }
+
+      const width = Math.max(760, state.axes.length * 300 + 100);
+      const height = 570;
+      const columnTop = 96;
+      const columnHeight = 390;
+      const columnWidth = 170;
+      const edge = 70;
+      const gap = state.axes.length === 1 ? 0 : (width - edge * 2 - columnWidth) / (state.axes.length - 1);
+      const svg = svgElement("svg", {
+        viewBox: `0 0 ${width} ${height}`,
+        role: "img",
+        "aria-label": `${state.selected.name} ${state.selected.metric} の軸別グラフ`
+      });
+
+      for (let index = 0; index < state.axes.length - 1; index++) {
+        const x1 = edge + index * gap + columnWidth;
+        const x2 = edge + (index + 1) * gap;
+        const path = svgElement("path", {
+          d: `M ${x1} ${columnTop} C ${(x1 + x2) / 2} ${columnTop}, ${(x1 + x2) / 2} ${columnTop}, ${x2} ${columnTop}
+              L ${x2} ${columnTop + columnHeight}
+              C ${(x1 + x2) / 2} ${columnTop + columnHeight}, ${(x1 + x2) / 2} ${columnTop + columnHeight}, ${x1} ${columnTop + columnHeight} Z`,
+          fill: "#e8edf6",
+          opacity: ".72"
+        });
+        svg.append(path);
+        addText(svg, (x1 + x2) / 2, columnTop + columnHeight / 2, "合計のみ", "axis-total", "middle");
+      }
+
+      state.axes.forEach((axis, axisIndex) => {
+        const x = edge + axisIndex * gap;
+        addText(svg, x + columnWidth / 2, 32, axis.label, "axis-title", "middle");
+        addText(svg, x + columnWidth / 2, 52, formatValue(axis.total), "axis-total", "middle");
+
+        let y = columnTop;
+        axis.items.forEach((item, itemIndex) => {
+          const rawHeight = axis.total === 0 ? 0 : columnHeight * item.value / axis.total;
+          const itemHeight = itemIndex === axis.items.length - 1
+            ? columnTop + columnHeight - y
+            : rawHeight;
+          const rect = svgElement("rect", {
+            x, y, width: columnWidth, height: Math.max(0, itemHeight),
+            fill: colors[itemIndex % colors.length],
+            stroke: "#fff", "stroke-width": 2, rx: 4
+          });
+          const title = svgElement("title");
+          title.textContent = `${item.label}: ${number.format(item.value)}円`;
+          rect.append(title);
+          svg.append(rect);
+
+          if (itemHeight >= 34) {
+            addText(svg, x + 9, y + 16, item.label, "item-label");
+            if (itemHeight >= 51) addText(svg, x + 9, y + 32, formatValue(item.value), "item-value");
+          }
+          y += itemHeight;
+        });
+      });
+
+      host.append(svg);
+    }
+
+    function render() {
+      renderAxisControls();
+      renderChart();
+    }
+
+    function selectCase(id) {
+      state.selected = state.cases.find(item => item.id === id) ?? state.cases[0] ?? null;
+      state.axes = state.selected ? state.selected.axes.map(axis => ({ ...axis })) : [];
+      const meta = document.querySelector("#case-meta");
+      meta.innerHTML = state.selected
+        ? `<strong>${state.selected.name}（${state.selected.code}）</strong><span>${state.selected.fy_end}・${state.selected.unit}</span>`
+        : "";
+      render();
+    }
+
+    async function initialize() {
+      try {
+        const response = await fetch("./sankey_prototype_expected.json");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        state.cases = payload.cases ?? [];
+        const select = document.querySelector("#case-select");
+        state.cases.forEach(item => {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = `${item.name} — ${item.metric === "sales" ? "売上高" : "総資産"}`;
+          select.append(option);
+        });
+        select.addEventListener("change", event => selectCase(event.target.value));
+        selectCase(select.value);
+      } catch (error) {
+        const host = document.querySelector("#chart");
+        host.innerHTML = `<div class="empty error">JSONを読み込めませんでした。HTTPサーバー経由で開いてください。<br>${error.message}</div>`;
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>

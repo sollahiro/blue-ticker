@@ -49,3 +49,12 @@ geography、business、PL の各軸がすべて売上高 `4,624,727,000,000` 円
 
 `smoke/sankey_prototype_expected.json` は値の受け渡し形と実現可能性を固定するテスト資産であり、
 公開 REST/MCP 契約ではない。smoke 段階では `/sankey` エンドポイントや `nodes` / `links` を追加しない。
+
+簡易表示は `smoke/sankey_prototype.html`。外部ライブラリを使わず同 JSON を読み、軸ごとの積み上げ列と
+合計帯を描画する。軸名横の矢印で表示順を変更できる。開示にない軸間配賦は描かない。
+
+```bash
+cd smoke
+python3 -m http.server 8765
+# http://127.0.0.1:8765/sankey_prototype.html
+```
