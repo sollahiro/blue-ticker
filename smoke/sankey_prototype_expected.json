@@ -1,0 +1,145 @@
+{
+  "_comment": "Sankey smoke prototype. Values are JPY. Axes contain independent marginals; cross-axis links are intentionally not fabricated.",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "assets_2802_2025",
+      "code": "2802",
+      "name": "味の素",
+      "doc_id": "S100VXJA",
+      "fy_end": "2025-03-31",
+      "metric": "total_assets",
+      "unit": "JPY",
+      "cross_axis_links_available": false,
+      "axes": [
+        {
+          "id": "assets",
+          "label": "資産",
+          "total": 1721131000000,
+          "items": [
+            {
+              "id": "current_assets",
+              "label": "流動資産",
+              "value": 701298000000,
+              "tag": "CurrentAssetsIFRS"
+            },
+            {
+              "id": "non_current_assets",
+              "label": "非流動資産",
+              "value": 1019833000000,
+              "tag": "NonCurrentAssetsIFRS"
+            }
+          ]
+        },
+        {
+          "id": "liabilities_and_equity",
+          "label": "負債・純資産",
+          "total": 1721131000000,
+          "items": [
+            {
+              "id": "current_liabilities",
+              "label": "流動負債",
+              "value": 384588000000,
+              "tag": "CurrentLiabilitiesIFRS"
+            },
+            {
+              "id": "non_current_liabilities",
+              "label": "非流動負債",
+              "value": 523270000000,
+              "tag": "NonCurrentLiabilitiesIFRS"
+            },
+            {
+              "id": "equity",
+              "label": "資本",
+              "value": 813273000000,
+              "tag": "EquityIFRS"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sales_7751_2025",
+      "code": "7751",
+      "name": "キヤノン",
+      "doc_id": "S100XTLJ",
+      "fy_end": "2025-12-31",
+      "metric": "sales",
+      "unit": "JPY",
+      "cross_axis_links_available": false,
+      "axes": [
+        {
+          "id": "geography",
+          "label": "地域別",
+          "total": 4624727000000,
+          "items": [
+            {
+              "id": "日本",
+              "label": "日本",
+              "value": 961480000000
+            },
+            {
+              "id": "米州",
+              "label": "米州",
+              "value": 1489639000000
+            },
+            {
+              "id": "欧州",
+              "label": "欧州",
+              "value": 1225475000000
+            },
+            {
+              "id": "アジア・　オセアニア",
+              "label": "アジア・　オセアニア",
+              "value": 948133000000
+            }
+          ]
+        },
+        {
+          "id": "business",
+          "label": "事業別",
+          "total": 4624727000000,
+          "items": [
+            {
+              "id": "プリンティング",
+              "label": "プリンティング",
+              "value": 2487885000000
+            },
+            {
+              "id": "メディカル",
+              "label": "メディカル",
+              "value": 579723000000
+            },
+            {
+              "id": "イメージング",
+              "label": "イメージング",
+              "value": 1054513000000
+            },
+            {
+              "id": "インダストリアル",
+              "label": "インダストリアル",
+              "value": 357924000000
+            },
+            {
+              "id": "その他及び全社",
+              "label": "その他及び全社",
+              "value": 144682000000
+            }
+          ]
+        },
+        {
+          "id": "pl",
+          "label": "損益計算書",
+          "total": 4624727000000,
+          "items": [
+            {
+              "id": "sales",
+              "label": "売上高",
+              "value": 4624727000000
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
