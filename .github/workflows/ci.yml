@@ -172,3 +172,6 @@ jobs:
 
       - name: Feed Trend Worker の入力正規化
         run: node --test workers/feed-trend/src/validate.test.js
+
+      - name: Sankey smoke HTML のフロー保存
+        run: node smoke/sankey_prototype_test.mjs

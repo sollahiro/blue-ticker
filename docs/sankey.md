@@ -61,3 +61,5 @@ cd smoke
 python3 -m http.server 8765
 # http://127.0.0.1:8765/sankey_prototype.html
 ```
+
+HTML 側の3表示モードとハブ前後の値保存は `node smoke/sankey_prototype_test.mjs` で検証する。

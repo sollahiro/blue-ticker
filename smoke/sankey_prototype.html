@@ -121,15 +121,15 @@
     <section class="panel">
       <div class="axis-controls">
         <header>
-          <h2>分解軸</h2>
-          <small>同じ合計値をどの観点で分解するか選択</small>
+          <h2 id="axis-control-title">右側の分解</h2>
+          <small id="axis-control-help">左側は地域別、右側を選択</small>
         </header>
         <div id="axis-list"></div>
       </div>
       <div class="chart-wrap" id="chart" aria-live="polite">
         <div class="empty">JSONを読み込んでいます…</div>
       </div>
-      <p class="notice">
+      <p class="notice" id="chart-notice">
         地域別と右側の内訳は売上高ハブにのみ接続します。開示されていない地域×事業の配賦は生成しません。
       </p>
     </section>
@@ -139,12 +139,13 @@
     const state = { cases: [], selected: null, rightAxisMode: "business" };
     const colors = ["#4277e6", "#59a6a6", "#ef9b45", "#9b72cf", "#db6574", "#6f9f50"];
     const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
+    const compactNumber = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 6 });
 
     function formatValue(value) {
       const absolute = Math.abs(value);
-      if (absolute >= 1e12) return `${number.format(value / 1e12)}兆円`;
-      if (absolute >= 1e8) return `${number.format(value / 1e8)}億円`;
-      if (absolute >= 1e4) return `${number.format(value / 1e4)}万円`;
+      if (absolute >= 1e12) return `${compactNumber.format(value / 1e12)}兆円`;
+      if (absolute >= 1e8) return `${compactNumber.format(value / 1e8)}億円`;
+      if (absolute >= 1e4) return `${compactNumber.format(value / 1e4)}万円`;
       return `${number.format(value)}円`;
     }
 
@@ -164,13 +165,22 @@
     function renderAxisControls() {
       const list = document.querySelector("#axis-list");
       list.replaceChildren();
+      const title = document.querySelector("#axis-control-title");
+      const help = document.querySelector("#axis-control-help");
+      const notice = document.querySelector("#chart-notice");
       if (state.selected?.metric !== "sales") {
+        title.textContent = "表示する流れ";
+        help.textContent = "貸借対照表の左右を総資産ハブで接続";
+        notice.textContent = "資産と負債・純資産は総資産ハブにのみ接続し、項目間の配賦は生成しません。";
         const description = document.createElement("div");
         description.className = "axis-picker";
         description.innerHTML = "<span>表示</span><strong>資産 → 総資産 → 負債・純資産</strong>";
         list.append(description);
         return;
       }
+      title.textContent = "右側の分解";
+      help.textContent = "左側は地域別、右側を選択";
+      notice.textContent = "地域別と右側の内訳は売上高ハブにのみ接続します。開示されていない地域×事業の配賦は生成しません。";
       const picker = document.createElement("label");
       picker.className = "axis-picker";
       const slot = document.createElement("span");
@@ -272,7 +282,8 @@
       const columnWidth = 112;
       const nodeGap = 10;
       const edge = 50;
-      const stageGap = (width - edge * 2 - columnWidth) / (flow.stages.length - 1);
+      const rightEdge = 190;
+      const stageGap = (width - edge - rightEdge - columnWidth) / (flow.stages.length - 1);
       const maxGaps = Math.max(...flow.stages.map(stage => Math.max(0, stage.nodes.length - 1)));
       const scale = (columnHeight - maxGaps * nodeGap) / flow.total;
       const svg = svgElement("svg", {
