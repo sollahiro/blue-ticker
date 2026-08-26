@@ -101,6 +101,21 @@ import Foundation
         #expect(result.netProfit == 1_588_000_000.0)
     }
 
+    @Test func testIncomeStatementPrefersJgaapParentAttributableSummaryOverNetIncomeLossSummary() {
+        // Alps Alpine 6770 S100YB8V 同型: 連結の親会社帰属 Summary を、個別の
+        // NetIncomeLossSummaryOfBusinessResults より優先する。
+        let (result, std) = incomeStatement([
+            "NetSalesSummaryOfBusinessResults": ["CurrentYearDuration": 1_019_459_000_000.0],
+            "ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults": [
+                "CurrentYearDuration": 26_879_000_000.0
+            ],
+            "NetIncomeLossSummaryOfBusinessResults": ["CurrentYearDuration": 46_471_000_000.0],
+        ])
+        #expect(std == "J-GAAP")
+        #expect(result.sales == 1_019_459_000_000.0)
+        #expect(result.netProfit == 26_879_000_000.0)
+    }
+
     @Test func testCashFlowReadsUsgaapSummaryValues() {
         let (result, std) = cashFlow([
             "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults": ["CurrentYearDuration": 428_162_000_000.0],

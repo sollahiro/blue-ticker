@@ -129,6 +129,27 @@ import Foundation
         #expect(result.method == "not_found")
     }
 
+    @Test func testJgaapSummaryParentAttributableNetProfit() {
+        // 本表タグが無く、主要な経営指標等の親会社帰属純利益だけがある場合
+        // （Alps Alpine 6770 S100YB8V と同型の J-GAAP Summary タグ）。
+        let fs = makeFieldSet(
+            ("ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults", 26_879_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.netProfit == 26_879_000_000.0)
+    }
+
+    @Test func testJgaapSummaryParentAttributableBeatsNonconsolidatedNetIncomeLoss() {
+        // NetIncomeLossSummaryOfBusinessResults は個別（NonConsolidated）になりがち。
+        // 連結の親会社帰属 Summary を優先する。
+        let fs = makeFieldSet(
+            ("ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults", 26_879_000_000.0, nil),
+            ("NetIncomeLossSummaryOfBusinessResults", 46_471_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.netProfit == 26_879_000_000.0)
+    }
+
     @Test func testMethodIncludesFoundFields() {
         let fs = makeFieldSet(
             ("NetSales", 1_000_000.0, nil),

@@ -90,6 +90,9 @@ enum Xbrl {
         "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
         "NetIncomeLoss",
         "ProfitLossAttributableToOwnersOfParent",
+        // J-GAAP 主要な経営指標等。IFRS/JMIS/US-GAAP の Summary 接尾辞タグと同列
+        // （実データ: Alps Alpine 6770 S100YB8V CurrentYearDuration = 26,879,000,000）。
+        "ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults",
         "ProfitLoss",
         "NetIncomeLossSummaryOfBusinessResults",
     ]
