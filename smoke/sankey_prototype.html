@@ -108,7 +108,10 @@
 <body>
   <main>
     <h1>Sankey smoke prototype</h1>
-    <p class="lede">同じ合計値を地域別・事業別・PL構成など、選択した観点で分解します。</p>
+    <p class="lede">
+      smoke JSON は metric / dimensions / bridges の材料のみ。下図はクライアントが取り得る描画の一例であり、
+      レイアウト契約ではない。
+    </p>
 
     <section class="toolbar" aria-label="表示設定">
       <label>
@@ -125,8 +128,8 @@
     <section class="panel">
       <div class="axis-controls">
         <header>
-          <h2 id="axis-control-title">右側の分解</h2>
-          <small id="axis-control-help">左側は地域別、右側を選択</small>
+          <h2 id="axis-control-title">デモ描画</h2>
+          <small id="axis-control-help">材料から組み立てた一例</small>
         </header>
         <div id="axis-list"></div>
       </div>
@@ -134,13 +137,19 @@
         <div class="empty">JSONを読み込んでいます…</div>
       </div>
       <p class="notice" id="chart-notice">
-        地域別と右側の内訳は売上高ハブにのみ接続します。開示されていない地域×事業の配賦は生成しません。
+        開示されていない軸間配賦は生成しません。交差リンクは materials に含まれません。
       </p>
     </section>
   </main>
 
   <script>
-    const state = { cases: [], selected: null, flowMode: "assets", rightAxisMode: "business" };
+    const state = {
+      cases: [],
+      selected: null,
+      flowMode: "assets",
+      earningDimensionId: "business",
+      bridgeView: "operating"
+    };
     const colors = ["#4277e6", "#59a6a6", "#ef9b45", "#9b72cf", "#db6574", "#6f9f50"];
     const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
     const compactNumber = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 6 });
@@ -166,6 +175,52 @@
       return node;
     }
 
+    function dimensionsOf(prototypeCase) {
+      return prototypeCase?.dimensions ?? [];
+    }
+
+    function dimension(id) {
+      return dimensionsOf(state.selected).find(item => item.id === id);
+    }
+
+    function availableEarningDimensions() {
+      return dimensionsOf(state.selected).filter(item => item.available !== false);
+    }
+
+    function plBridge() {
+      return (state.selected?.bridges ?? []).find(item => item.id === "profit_and_loss");
+    }
+
+    function bridgeStage(id) {
+      return plBridge()?.stages?.find(stage => stage.id === id);
+    }
+
+    function bridgeItem(stageId, itemId) {
+      return bridgeStage(stageId)?.items?.find(item => item.id === itemId);
+    }
+
+    function salesOperatingNodes() {
+      const cost = bridgeItem("to_gross_profit", "cost_of_sales");
+      const sga = bridgeItem("to_operating_profit", "sga");
+      const rd = bridgeItem("to_operating_profit", "research_and_development");
+      const op = bridgeItem("to_operating_profit", "operating_profit");
+      return [
+        { ...cost, color: "#ca4b58" },
+        { ...sga, color: "#d66a72" },
+        { ...rd, color: "#e29573" },
+        { ...op, color: "#42a846" }
+      ];
+    }
+
+    function salesGrossNodes() {
+      const cost = bridgeItem("to_gross_profit", "cost_of_sales");
+      const gross = bridgeItem("to_gross_profit", "gross_profit");
+      return [
+        { ...cost, color: "#ca4b58" },
+        { ...gross, color: "#42a846" }
+      ];
+    }
+
     function renderAxisControls() {
       const list = document.querySelector("#axis-list");
       list.replaceChildren();
@@ -174,13 +229,13 @@
       const notice = document.querySelector("#chart-notice");
       if (state.flowMode !== "sales") {
         title.textContent = "表示する流れ";
-        help.textContent = "会計上保存する単位ごとに独立したSankeyを表示";
+        help.textContent = "会計上保存する単位ごとに独立したSankeyを表示（デモ）";
         const labels = {
           assets: "資産 → 総資産 → 負債・純資産",
           equity: "期首資本・当期利益 → 資本変動 → 期末資本・配当・自己株式取得・OCI等を含む差額",
           rd: "研究開発費 → セグメント別研究開発費",
           gross_profit: "粗利益 → 販管費・研究開発費・営業利益",
-          pretax_profit: "営業利益・営業外純益 → 税引前利益 → 税金・帰属差・純利益"
+          pretax_profit: "営業利益・その他純益 → 税引前利益 → 税金・帰属差・純利益"
         };
         notice.textContent = state.flowMode === "equity"
           ? "純利益から配当・自己株式取得へ直接配賦せず、期首資本とともに資本変動ハブへ接続します。"
@@ -195,36 +250,58 @@
         list.append(description);
         return;
       }
-      title.textContent = "右側の分解";
-      help.textContent = "左側は地域別、右側を選択";
-      notice.textContent = "地域別と右側の内訳は売上高ハブにのみ接続します。開示されていない地域×事業の配賦は生成しません。";
-      const picker = document.createElement("label");
-      picker.className = "axis-picker";
-      const slot = document.createElement("span");
-      slot.textContent = "右側の分解";
-      const select = document.createElement("select");
-      select.setAttribute("aria-label", "売上高の右側を分解する軸");
+
+      title.textContent = "デモ描画（クライアント一例）";
+      help.textContent = "材料の earning dimension と PL bridge を組み合わせた描画例";
+      notice.textContent =
+        "earn / use の左右配置はクライアント選択。JSON は layout を規定しない。"
+        + " 開示のない geography×business 配賦は描かない。";
+
+      const earningPicker = document.createElement("label");
+      earningPicker.className = "axis-picker";
+      const earningSlot = document.createElement("span");
+      earningSlot.textContent = "稼得 dimension";
+      const earningSelect = document.createElement("select");
+      earningSelect.setAttribute("aria-label", "稼得側に使う dimension");
+      availableEarningDimensions().forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = item.label;
+        option.selected = item.id === state.earningDimensionId;
+        earningSelect.append(option);
+      });
+      earningSelect.addEventListener("change", event => {
+        state.earningDimensionId = event.target.value;
+        render();
+      });
+      earningPicker.append(earningSlot, earningSelect);
+
+      const bridgePicker = document.createElement("label");
+      bridgePicker.className = "axis-picker";
+      const bridgeSlot = document.createElement("span");
+      bridgeSlot.textContent = "PL bridge 表示";
+      const bridgeSelect = document.createElement("select");
+      bridgeSelect.setAttribute("aria-label", "PL bridge の表示段階");
       [
-        ["business", "事業別"],
-        ["pl_gross", "PL構成（粗利益階層）"],
-        ["pl_operating", "PL構成（営業利益階層）"]
+        ["operating", "営業利益まで（売上保存）"],
+        ["gross", "売上総利益まで（売上保存）"]
       ].forEach(([id, label]) => {
         const option = document.createElement("option");
         option.value = id;
         option.textContent = label;
-        option.selected = id === state.rightAxisMode;
-        select.append(option);
+        option.selected = id === state.bridgeView;
+        bridgeSelect.append(option);
       });
-      select.addEventListener("change", event => {
-        state.rightAxisMode = event.target.value;
+      bridgeSelect.addEventListener("change", event => {
+        state.bridgeView = event.target.value;
         render();
       });
-      picker.append(slot, select);
-      list.append(picker);
+      bridgePicker.append(bridgeSlot, bridgeSelect);
+
+      list.append(earningPicker, bridgePicker);
     }
 
     function buildFlow() {
-      const axis = id => state.selected.axes.find(item => item.id === id);
       const metrics = state.selected.metrics ?? {};
 
       if (state.flowMode === "equity") {
@@ -238,7 +315,7 @@
           { id: "closing_equity", label: "期末資本", value: metrics.closing_equity, color: "#53627a" },
           { id: "dividends", label: "配当金", value: metrics.dividends, color: "#d66a72" },
           { id: "share_buyback", label: "自己株式取得", value: metrics.share_buyback, color: "#ca4b58" },
-          { id: "other_decrease", label: "OCI等を含む差額（純減）", value: otherDecrease, color: "#e69273" }
+          { id: "other_decrease", label: "OCI等を含む差額（純減）", value: otherDecrease, color: "#e29573" }
         ];
         return {
           total,
@@ -269,15 +346,23 @@
       }
 
       if (state.flowMode === "gross_profit") {
-        const outputs = [
-          { id: "sga", label: "販売費及び一般管理費", value: metrics.sga, color: "#d66a72" },
-          { id: "rd", label: "研究開発費", value: metrics.research_and_development, color: "#e69273" },
-          { id: "operating_profit", label: "営業利益", value: metrics.operating_profit, color: "#42a846" }
-        ];
+        const stage = bridgeStage("to_operating_profit");
+        const outputs = stage.items.map((item, index) => ({
+          ...item,
+          color: item.id === "operating_profit" ? "#42a846" : ["#d66a72", "#e29573"][index] ?? "#d66a72"
+        }));
         return {
-          total: metrics.gross_profit,
+          total: stage.conserved_total,
           stages: [
-            { label: "粗利益", nodes: [{ id: "gross_profit", label: "粗利益", value: metrics.gross_profit, color: "#53627a" }] },
+            {
+              label: "粗利益",
+              nodes: [{
+                id: "gross_profit",
+                label: "粗利益",
+                value: stage.conserved_total,
+                color: "#53627a"
+              }]
+            },
             { label: "営業利益への分解", nodes: outputs }
           ],
           links: outputs.map(item => ({ from: [0, "gross_profit"], to: [1, item.id], value: item.value }))
@@ -285,22 +370,30 @@
       }
 
       if (state.flowMode === "pretax_profit") {
-        const nonOperatingGain = metrics.pretax_income - metrics.operating_profit;
-        const attributionDifference = metrics.pretax_income - metrics.income_tax - metrics.net_profit;
-        const inputs = [
-          { id: "operating_profit", label: "営業利益", value: metrics.operating_profit, color: "#42a846" },
-          { id: "non_operating_gain", label: "営業外純益", value: nonOperatingGain, color: "#59a6a6" }
-        ];
-        const outputs = [
-          { id: "income_tax", label: "法人税等", value: metrics.income_tax, color: "#ca4b58" },
-          { id: "attribution_difference", label: "帰属差・その他", value: attributionDifference, color: "#e69273" },
-          { id: "net_profit", label: "当期純利益", value: metrics.net_profit, color: "#42a846" }
-        ];
+        const toPretax = bridgeStage("to_pretax_income");
+        const toNet = bridgeStage("to_net_profit");
+        const inputs = toPretax.items.map((item, index) => ({
+          ...item,
+          color: item.id === "operating_profit" ? "#42a846" : "#59a6a6"
+        }));
+        const outputs = toNet.items.map(item => ({
+          ...item,
+          color: item.id === "net_profit" ? "#42a846"
+            : item.id === "income_tax" ? "#ca4b58" : "#e29573"
+        }));
         return {
-          total: metrics.pretax_income,
+          total: toPretax.conserved_total,
           stages: [
             { label: "税引前利益への流入", nodes: inputs },
-            { label: "税引前利益", nodes: [{ id: "pretax", label: "税引前利益", value: metrics.pretax_income, color: "#53627a" }] },
+            {
+              label: "税引前利益",
+              nodes: [{
+                id: "pretax",
+                label: "税引前利益",
+                value: toPretax.conserved_total,
+                color: "#53627a"
+              }]
+            },
             { label: "純利益への分解", nodes: outputs }
           ],
           links: [
@@ -311,8 +404,8 @@
       }
 
       if (state.flowMode === "assets") {
-        const assets = axis("assets");
-        const funding = axis("liabilities_and_equity");
+        const assets = dimension("assets");
+        const funding = dimension("liabilities_and_equity");
         const total = assets.total;
         return {
           total,
@@ -328,38 +421,25 @@
         };
       }
 
-      const geography = axis("geography");
-      const business = axis("business");
-      const pl = axis("pl");
-      const leaves = Object.fromEntries(pl.items.map(item => [item.id, item]));
-      const grossProfit = leaves.sga.value + leaves.research_and_development.value
-        + leaves.operating_profit.value;
-      let rightLabel = business.label;
-      let rightNodes = business.items.map((item, index) => ({ ...item, color: colors[index] }));
-      if (state.rightAxisMode === "pl_gross") {
-        rightLabel = "PL構成（粗利益階層）";
-        rightNodes = [
-          { ...leaves.cost_of_sales, color: "#ca4b58" },
-          { id: "gross_profit", label: "粗利益", value: grossProfit, color: "#42a846" }
-        ];
-      } else if (state.rightAxisMode === "pl_operating") {
-        rightLabel = "PL構成（営業利益階層）";
-        rightNodes = [
-          { ...leaves.cost_of_sales, color: "#ca4b58" },
-          { ...leaves.sga, color: "#d66a72" },
-          { ...leaves.research_and_development, color: "#e69273" },
-          { ...leaves.operating_profit, color: "#42a846" }
-        ];
-      }
+      // Demo client rendering for sales materials: one earning dimension → sales hub → PL bridge slice.
+      // Layout choice is not part of the JSON contract.
+      const earning = dimension(state.earningDimensionId) ?? availableEarningDimensions()[0];
+      const rightNodes = state.bridgeView === "gross" ? salesGrossNodes() : salesOperatingNodes();
+      const rightLabel = state.bridgeView === "gross"
+        ? "PL bridge（売上総利益）"
+        : "PL bridge（営業利益）";
       return {
-        total: geography.total,
+        total: earning.total,
         stages: [
-          { label: geography.label, nodes: geography.items.map((item, index) => ({ ...item, color: colors[index] })) },
-          { label: "売上高", nodes: [{ id: "sales", label: "売上高", value: geography.total, color: "#53627a" }] },
+          {
+            label: earning.label,
+            nodes: earning.items.map((item, index) => ({ ...item, color: colors[index % colors.length] }))
+          },
+          { label: "売上高", nodes: [{ id: "sales", label: "売上高", value: earning.total, color: "#53627a" }] },
           { label: rightLabel, nodes: rightNodes }
         ],
         links: [
-          ...geography.items.map(item => ({ from: [0, item.id], to: [1, "sales"], value: item.value })),
+          ...earning.items.map(item => ({ from: [0, item.id], to: [1, "sales"], value: item.value })),
           ...rightNodes.map(item => ({ from: [1, "sales"], to: [2, item.id], value: item.value }))
         ]
       };
@@ -391,7 +471,7 @@
       const svg = svgElement("svg", {
         viewBox: `0 0 ${width} ${height}`,
         role: "img",
-        "aria-label": `${state.selected.name} ${state.selected.metric} のSankeyグラフ`
+        "aria-label": `${state.selected.name} ${state.selected.metric} のSankeyグラフ（デモ）`
       });
 
       const layouts = flow.stages.map((stage, stageIndex) => {
@@ -472,7 +552,7 @@
     function flowOptions(prototypeCase) {
       return prototypeCase.metric === "sales"
         ? [
-            ["sales", "売上分解"],
+            ["sales", "売上 materials デモ"],
             ["gross_profit", "粗利益 → 営業利益"],
             ["pretax_profit", "営業利益 → 税引前利益 → 純利益"]
           ]
@@ -485,7 +565,10 @@
 
     function selectCase(id) {
       state.selected = state.cases.find(item => item.id === id) ?? state.cases[0] ?? null;
-      state.rightAxisMode = "business";
+      const preferred = availableEarningDimensions().find(item => item.id === "business")
+        ?? availableEarningDimensions()[0];
+      state.earningDimensionId = preferred?.id ?? "business";
+      state.bridgeView = "operating";
       const flowSelect = document.querySelector("#flow-select");
       flowSelect.replaceChildren();
       flowOptions(state.selected).forEach(([value, label]) => {
