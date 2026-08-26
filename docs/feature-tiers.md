@@ -40,7 +40,7 @@ Meta → Struct → Norm → Viz
 | Norm | Summary | 正規化済み財務データ | 済 | financials 水準値 |
 | Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開判断は Linear。軸は下表・`breakdown.md` |
 | Viz | Waterfall | 事業利益・ROIC・ROE の分解 | 済 | financials 同行の分析投影 |
-| Viz | Sankey | 地域別・製品別・利益構造・投資構造（項目入替可） | smoke | 軸別 JSON の実現可能性を検証中。`sankey.md` |
+| Viz | Sankey | metric / dimensions / bridges 材料（描画はクライアント） | smoke | BLT-18。`/sankey` 未公開。`sankey.md` |
 | Feed | Trend | 検索数の多い銘柄・検索トレンド | 済 | 匿名コマンド回数（Workers Analytics Engine）。提出件数ランキングは出さない |
 | Feed | Update | 新規取得・公開された有報などの更新情報 | 済 | REST/MCP。RSS は未提供 |
 | Feed | Status | データの新鮮度・カバー率 | 一部（運用 `status-report` / 既存 HTML） | Web HTML は抜本見直し予定 |
@@ -92,10 +92,12 @@ Meta → Struct → Norm → Viz
 
 ## Sankey
 
-サーバーは分解済み数値のみ返し、描画はクライアント。総資産2軸と売上高3軸の
-言語非依存プロトタイプに加え、PL利益・SS資本変動・R&Dセグメントの独立した深掘りを smoke で検証する。
-地域×事業の交差値は既存データにないため、開示にないリンクは生成しない。詳細は `sankey.md`。現在地は Linear
-[BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)。
+サーバーは分解済み数値（`metric` / `dimensions` / `bridges` / `drilldowns`）のみ返す。
+ノード・リンク・左右配置・色はクライアント責務で、レイアウトを JSON に載せない。
+Sales の PL は dimension ではなく bridge。地域×事業の交差値は既存データにないため、
+開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。詳細は `sankey.md`。
+現在地は Linear [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)
+（残作業の先頭は [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)）。
 
 ## 関連
 

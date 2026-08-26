@@ -1,6 +1,6 @@
 {
-  "_comment": "Sankey smoke prototype. Values are JPY. Axes contain independent marginals; cross-axis links are intentionally not fabricated.",
-  "schema_version": 1,
+  "_comment": "Sankey smoke prototype materials (BLT-18). Server/smoke returns metric + independent dimensions + bridges (+ drilldowns). Layout (left/right/hub/colors) is a client choice — not encoded here. Cross-axis links are intentionally not fabricated.",
+  "schema_version": 2,
   "cases": [
     {
       "id": "assets_2802_2025",
@@ -18,22 +18,26 @@
         "dividends": 39119000000,
         "share_buyback": 90695000000
       },
-      "axes": [
+      "dimensions": [
         {
           "id": "assets",
           "label": "資産",
+          "available": true,
+          "denominator": 1721131000000,
           "total": 1721131000000,
           "items": [
             {
               "id": "current_assets",
               "label": "流動資産",
               "value": 701298000000,
+              "row_kind": "segment",
               "tag": "CurrentAssetsIFRS"
             },
             {
               "id": "non_current_assets",
               "label": "非流動資産",
               "value": 1019833000000,
+              "row_kind": "segment",
               "tag": "NonCurrentAssetsIFRS"
             }
           ]
@@ -41,24 +45,29 @@
         {
           "id": "liabilities_and_equity",
           "label": "負債・純資産",
+          "available": true,
+          "denominator": 1721131000000,
           "total": 1721131000000,
           "items": [
             {
               "id": "current_liabilities",
               "label": "流動負債",
               "value": 384588000000,
+              "row_kind": "segment",
               "tag": "CurrentLiabilitiesIFRS"
             },
             {
               "id": "non_current_liabilities",
               "label": "非流動負債",
               "value": 523270000000,
+              "row_kind": "segment",
               "tag": "NonCurrentLiabilitiesIFRS"
             },
             {
               "id": "equity",
               "label": "資本",
               "value": 813273000000,
+              "row_kind": "segment",
               "tag": "EquityIFRS"
             }
           ]
@@ -117,6 +126,7 @@
       "fy_end": "2025-12-31",
       "metric": "sales",
       "unit": "JPY",
+      "accounting_standard": "us_gaap",
       "cross_axis_links_available": false,
       "metrics": {
         "gross_profit": 2161955000000,
@@ -127,90 +137,172 @@
         "income_tax": 123906000000,
         "net_profit": 332053000000
       },
-      "axes": [
+      "dimensions": [
         {
           "id": "geography",
           "label": "地域別",
+          "available": true,
+          "source": "geography_llm",
+          "denominator": 4624727000000,
           "total": 4624727000000,
+          "needs_review": false,
           "items": [
             {
               "id": "日本",
               "label": "日本",
-              "value": 961480000000
+              "value": 961480000000,
+              "row_kind": "segment"
             },
             {
               "id": "米州",
               "label": "米州",
-              "value": 1489639000000
+              "value": 1489639000000,
+              "row_kind": "segment"
             },
             {
               "id": "欧州",
               "label": "欧州",
-              "value": 1225475000000
+              "value": 1225475000000,
+              "row_kind": "segment"
             },
             {
               "id": "アジア・　オセアニア",
               "label": "アジア・　オセアニア",
-              "value": 948133000000
+              "value": 948133000000,
+              "row_kind": "segment"
             }
           ]
         },
         {
           "id": "business",
           "label": "事業別",
+          "available": true,
+          "source": "segment_info_llm",
+          "denominator": 4624727000000,
           "total": 4624727000000,
+          "needs_review": false,
           "items": [
             {
               "id": "プリンティング",
               "label": "プリンティング",
-              "value": 2487885000000
+              "value": 2487885000000,
+              "row_kind": "segment"
             },
             {
               "id": "メディカル",
               "label": "メディカル",
-              "value": 579723000000
+              "value": 579723000000,
+              "row_kind": "segment"
             },
             {
               "id": "イメージング",
               "label": "イメージング",
-              "value": 1054513000000
+              "value": 1054513000000,
+              "row_kind": "segment"
             },
             {
               "id": "インダストリアル",
               "label": "インダストリアル",
-              "value": 357924000000
+              "value": 357924000000,
+              "row_kind": "segment"
             },
             {
               "id": "その他及び全社",
               "label": "その他及び全社",
-              "value": 144682000000
+              "value": 144682000000,
+              "row_kind": "reconciling"
             }
           ]
-        },
+        }
+      ],
+      "bridges": [
         {
-          "id": "pl",
-          "label": "PL構成",
-          "total": 4624727000000,
-          "items": [
+          "id": "profit_and_loss",
+          "label": "損益計算書",
+          "accounting_standard": "us_gaap",
+          "conserved_total": 4624727000000,
+          "needs_review": false,
+          "stages": [
             {
-              "id": "cost_of_sales",
-              "label": "売上原価",
-              "value": 2462772000000
+              "id": "to_gross_profit",
+              "label": "売上総利益",
+              "conserved_total": 4624727000000,
+              "items": [
+                {
+                  "id": "cost_of_sales",
+                  "label": "売上原価",
+                  "value": 2462772000000,
+                  "derived": true
+                },
+                {
+                  "id": "gross_profit",
+                  "label": "売上総利益",
+                  "value": 2161955000000
+                }
+              ]
             },
             {
-              "id": "sga",
-              "label": "販売費及び一般管理費",
-              "value": 1367277000000
-            },
-            {
-              "id": "research_and_development",
-              "label": "研究開発費",
-              "value": 339288000000
-            },
-            {
-              "id": "operating_profit",
+              "id": "to_operating_profit",
               "label": "営業利益",
-              "value": 455390000000
+              "conserved_total": 2161955000000,
+              "items": [
+                {
+                  "id": "sga",
+                  "label": "販売費及び一般管理費",
+                  "value": 1367277000000
+                },
+                {
+                  "id": "research_and_development",
+                  "label": "研究開発費",
+                  "value": 339288000000
+                },
+                {
+                  "id": "operating_profit",
+                  "label": "営業利益",
+                  "value": 455390000000
+                }
+              ]
+            },
+            {
+              "id": "to_pretax_income",
+              "label": "税引前利益",
+              "conserved_total": 482059000000,
+              "items": [
+                {
+                  "id": "operating_profit",
+                  "label": "営業利益",
+                  "value": 455390000000
+                },
+                {
+                  "id": "other_income_expense_net",
+                  "label": "その他収益・費用（純額）",
+                  "value": 26669000000,
+                  "derived": true
+                }
+              ]
+            },
+            {
+              "id": "to_net_profit",
+              "label": "当期純利益",
+              "conserved_total": 482059000000,
+              "items": [
+                {
+                  "id": "income_tax",
+                  "label": "法人税等",
+                  "value": 123906000000
+                },
+                {
+                  "id": "attribution_and_other",
+                  "label": "帰属差・その他",
+                  "value": 26100000000,
+                  "derived": true
+                },
+                {
+                  "id": "net_profit",
+                  "label": "当期純利益",
+                  "value": 332053000000
+                }
+              ]
             }
           ]
         }
