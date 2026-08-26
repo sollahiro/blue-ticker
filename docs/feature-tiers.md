@@ -94,8 +94,9 @@ Meta → Struct → Norm → Viz
 
 サーバーは分解済み数値（`metric` / `dimensions` / `bridges` / `drilldowns`）のみ返す。
 ノード・リンク・左右配置・色はクライアント責務で、レイアウトを JSON に載せない。
-Sales の PL は dimension ではなく bridge。研究開発費は売上 dimension ではなく
-連結 PL の販管費の子（breakdown `research_and_development`）。地域×事業の交差値は
+Sales の PL は dimension ではなく bridge。研究開発費は売上 dimension ではなく、
+statement で販管費の内数なら販管費の子、別掲なら Waterfall 事業利益の次
+（breakdown `research_and_development`）。地域×事業の交差値は
 既存データにないため、開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。
 階層の正本は `sankey.md`。
 現在地は Linear [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)
