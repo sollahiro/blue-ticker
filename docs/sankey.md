@@ -35,8 +35,7 @@ Sales の PL は bridge。J-GAAP 事業会社と IFRS/US-GAAP でトポロジが
 キヤノン（7751、S100XTLJ）は US-GAAP のため経常利益・特別損益を発明しない。
 各 bridge stage は `conserved_total` へ一致し、説明不能な残差が 5% 超なら `needs_review`。
 
-研究開発費（breakdown `research_and_development`）は売上 dimension ではなく、
-連結損益計算書の **販売費及び一般管理費の子** として付ける。詳細は「階層カタログ」。
+研究開発費は売上 dimension ではない。親は statement の置き場で分岐する（販管費の内数／欠測、または別掲なら Waterfall 事業利益の次）。詳細は「階層カタログ」。
 
 ## 階層カタログ
 
@@ -57,10 +56,10 @@ Sankey に出す項目の親子と深さ上限。クライアントは同じ材�
 
 ### 研究開発費の置き場は statement で分岐する
 
-breakdown `research_and_development` の正本は当期費用（投資額ではない）。
+breakdown `research_and_development` の正本は発生支出（financials の rd と同じ。開発資産への振替前であることがある）。
 売上ハブの dimension にも、投資ハブの配賦先にもしない。
 
-**判定は statement の損益計算書だけ。** 研究開発費のタグが販管費合計の `components` に入っている、または PL に行が無い → 販管費から分解。販管費（または販売費・一般管理費）と**兄弟**の独立行 → Waterfall の事業利益の次に分解。開示の「事業利益」行（味の素 `BusinessProfitLossIFRS` 等）は探さない。
+**判定は statement の損益計算書だけ。** 研究開発費のタグが販管費合計の `components` に入っている → 販管費から分解。販管費（または販売費・一般管理費）と**兄弟**の独立行 → Waterfall の事業利益の次に分解。PL に行が無い（欠測）→ 販管費は葉のまま。開示の「事業利益」行（味の素 `BusinessProfitLossIFRS` 等）は探さない。
 
 ```text
 売上総利益
@@ -75,7 +74,7 @@ breakdown `research_and_development` の正本は当期費用（投資額では�
 | 判定 | statement 上の根拠 | R&D の親 | smoke |
 |---|---|---|---|
 | 内数 | 販管費合計の `components` に `ResearchAndDevelopmentExpensesSGA` 等 | 販管費 | ニチレイ |
-| 欠測 | PL に R&D 行が無い。値は注記 / breakdown にあれば販管費の子。無ければ出さない | 販管費（葉のまま、または注記分母） | オークマ、クボタ、スズキ、AZ、東邦レマック |
+| 欠測 | PL に R&D 行が無い | 販管費は葉。注記の「販管費に含まれる額」だけ子にしてよい。無ければ出さない | オークマ、クボタ、スズキ、AZ、東邦レマック |
 | 別掲 | 販管費（または販売費・一般管理費）と兄弟 | 事業利益（Waterfall）の次 | 味の素、キヤノン、富士フイルム |
 
 銀行（MUFG / SMFG）は商業 PL を当てない。R&D は欠測。
@@ -84,13 +83,14 @@ breakdown `research_and_development` の正本は当期費用（投資額では�
 
 保存:
 
-- 内数: `R&D 分母 + その他販管費 == 開示販管費`
+- 内数: `PL の R&D + その他販管費 == 開示販管費`
 - 別掲: 開示販管費から R&D を引かない。`1,367,277 − 339,288` をその他販管費にしない
-- `sum(R&D の segment＋reconciling＋residual) == R&D 分母`
+- 欠測: breakdown / financials の rd（`ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities`）は**発生支出**。製造費用（オークマ 4,265 のうち販管費費目は 2,097）や開発資産への振替（スズキ FY2025 は 265,571 → 販管費内 241,018）を含む。これを販管費から引いて残差を作らない。子にするなら注記の「販管費に含まれる額」
+- `sum(R&D の segment＋reconciling＋residual) == breakdown 分母`（発生支出側。販管費の子の分母とは別）
 - R&D 欠測は空の内訳で埋めない
 - 地域別 R&D は通常非開示。推計しない
 
-材料: PL の販管費と独立 R&D 行は statement `income_statement`。R&D 合計とセグメントは breakdown `research_and_development`（financials の rd と同じ分母）。
+材料: PL の販管費と独立 R&D 行は statement `income_statement`。セグメント内訳は breakdown `research_and_development`（発生支出。financials の rd と同じ）。販管費の子に使う額は注記の販管費内訳（あれば）。
 
 ### 連結損益計算書（metric `sales`）
 
@@ -145,7 +145,7 @@ L0 売上高
 
 | 例 | 営業利益 | Waterfall 事業利益 | R&D の置き場 |
 |---|---|---|---|
-| オークマ | 14,651m | ＝営業利益 | 販管費（PL に R&D 行なし。注記分母） |
+| オークマ S100YFQC | 15,505m | ＝営業利益（1m 丸め） | 販管費は葉。費目 2,097m だけ子。注記合計 4,265m は製造費用込み |
 | ニチレイ | GP − 販管費合計 | ＝営業利益 | 販管費（`ResearchAndDevelopmentExpensesSGA` が販管費の内訳） |
 | 味の素 S100VXJA | 113,968m | 550,764 − 366,854 ＝ 183,910m | 事業利益の次。開示事業利益 159,302m とは一致しない |
 | キヤノン | 455,390m | 2,161,955 − 1,367,277 ＝ 794,678m | 事業利益の次（別掲 339,288m） |
@@ -155,7 +155,7 @@ L0 売上高
 
 #### IFRS / US-GAAP
 
-経常利益・特別損益を作らない。別掲 R&D は事業利益の次。内数・欠測は販管費の子。営業利益から金融損益・持分法（税引前の後に来る会社もある）・その他を経由して税引前へ。
+経常利益・特別損益を作らない。別掲 R&D は事業利益の次。内数は販管費の子。欠測は販管費を葉にし、注記の販管費内の額だけ子にする。営業利益から金融損益・持分法（税引前の後に来る会社もある）・その他を経由して税引前へ。
 
 味の素（S100VXJA）の Waterfall カスケード:
 
@@ -171,7 +171,7 @@ L0 売上高
    └─ 営業利益 113,968
 ```
 
-クボタ・スズキは PL に R&D 行も無く、販管費合計だけ。R&D は内数扱いで breakdown / 注記から販管費の子にする。
+クボタ・スズキは PL に R&D 行が無く販管費合計だけ。`GP − 販管費 → その他営業 → 営業利益` は保存する。R&D を販管費の子にするなら注記の販管費内訳（スズキ S100YFG2 は振替後 271,082m）。breakdown の発生支出（同 270,400m、クボタ 110,300m）で残差を作らない。
 
 #### 銀行
 
@@ -272,7 +272,7 @@ L2 科目は statement `balance_sheet` の `section` / `is_total` / `components`
 
 ### キャッシュ・フローと投資ハブ（BLT-45）
 
-R&D はここに置かない（販管費の子のまま）。Capex と株主還元を売上 PL に足さない。
+R&D はここに置かない（置き場は連結 PL。投資ハブの配賦先にしない）。Capex と株主還元を売上 PL に足さない。
 
 ```text
 L0 営業CF（初期 metric）
@@ -384,10 +384,10 @@ smoke fixture の付け替えは実装着手時。
 - 味の素: 売上総利益 → 販売費・一般管理費 → 事業利益（Waterfall）→ 別掲 R&D・持分法・その他営業 → 営業利益
 - 味の素: 親会社帰属純利益 →（SS の）当期包括利益 → 配当・自己株式取得・残差
 - 味の素: 期首資本 + 当期包括利益 → 期末資本・配当・自己株式取得・その他
-- 味の素: 販管費 → 研究開発費 → セグメント別（XBRLタグ行 + 丸め差）
+- 味の素: 事業利益（Waterfall）→ 別掲 R&D → セグメント別（XBRLタグ行 + 丸め差）
 
 配当・自己株式取得を当期純利益から直接配賦せず、期首資本を含む SS 資本ブリッジとして表示する。
-`research_and_development` は当期費用。売上 dimension ではなく販管費の drilldown。
+`research_and_development` は発生支出。売上 dimension ではない。販管費の drilldown にするのは内数、または欠測で注記が販管費内の額を示すときに限る。
 
 ```bash
 cd smoke
