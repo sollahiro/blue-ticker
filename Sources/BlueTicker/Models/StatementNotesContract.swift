@@ -30,8 +30,16 @@ public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// BS 構造化タグは `available_via_statement`、借入金等明細表のリース債務は `available_via_notes`。
 /// 使用権資産の増減表は対象外。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
+/// 販売費及び一般管理費の主要な費目内訳（連結損益計算書関係注記）。決定論（構造化 `*SGA` /
+/// IFRS 販管費注記タグ）。発生支出の `research_and_development` breakdown とは別物。
+/// US-GAAP は `us_gaap_unsupported`。銀行など連結に費目タグが無い場合は `not_found`
+/// （個別注記のみの開示は拾わない）。
+/// **未公開・未配線**（BLT-46）: `allStatementNoteTypes` / ingest / job-03 / ApiSkills に載せない。
+/// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す。
+public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
-/// ingest / `--note-types` バリデーション用の全 note_type 一覧（`FactsIngest` の走査順）。
+/// ingest / `--note-types` バリデーション用の公開 note_type 一覧（`FactsIngest` の走査順）。
+/// `sga_expense_breakdown` は未公開のため含めない。
 public let allStatementNoteTypes: [String] = [
     statementNoteTypePerShareInformation,
     statementNoteTypeIssuedSharesAndCapital,
@@ -77,6 +85,11 @@ public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 /// v7（2026-08-16）: `available_via_notes` を HTML「リース」部分一致から区分行ラベル
 /// （`BorrowingsSchedule.hasLeaseDebtRowLabel`）判定へ変更。
 public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v7"
+/// v1（2026-08-27）: 連結の販管費費目（`*SGA` / IFRS 販管・一般管理費注記タグ）。
+/// 発生支出タグは除外。US-GAAP 非対応。
+/// v2（2026-08-27）: 日本語ラベル（タクソノミ優先、無ければ注記 HTML 行ラベル）。
+/// v3（2026-08-27）: セグメント情報の `AmortizationOfGoodwillSGA`（のれんの償却額）を除外。
+public let sgaExpenseBreakdownNoteCacheVersion = "notes-sga-expense-breakdown-v3"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {
@@ -89,6 +102,7 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     case statementNoteTypePropertyPlantEquipmentSchedule: return propertyPlantEquipmentScheduleNoteCacheVersion
     case statementNoteTypeGoodwillAndIntangibles: return goodwillAndIntangiblesNoteCacheVersion
     case statementNoteTypeLeaseLiabilities: return leaseLiabilitiesNoteCacheVersion
+    case statementNoteTypeSgaExpenseBreakdown: return sgaExpenseBreakdownNoteCacheVersion
     default: return ""
     }
 }

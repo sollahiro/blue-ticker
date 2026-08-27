@@ -27,7 +27,7 @@ smoke / golden は主に `SPEC_ORACLE` / `SPEC_INVARIANT`（`xbrl-parsing.md` §
 
 ## 既知のギャップ
 
-- 公開 note_type 8種はいずれも smoke 固定11社の外出しオラクル床に載済み（詳細は `xbrl-parsing.md` §6）
+- 公開 note_type はいずれも smoke 固定11社の外出しオラクル床に載済み。`sga_expense_breakdown` は実装・golden 済みだが **未公開**（詳細は `xbrl-parsing.md` §6）
 - `statement` 本体は `SmokeTests` 未通過（golden で smoke 社をカバー）
 - 横断 `SPEC_INVARIANT`（financials↔statement↔notes↔breakdown）は薄い
 - golden 期待値の多くがハードコード。外出しオラクルは一部 note_type / breakdown のみ

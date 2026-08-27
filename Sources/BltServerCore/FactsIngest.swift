@@ -520,6 +520,7 @@ public func runFactsIngestCommand(
             // 財務諸表注記取り込み: 日経225（`priority`）限定のまま（statements の上場拡大とは独立）。
             // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
+            // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（BLT-46）。
             let statementNotesListed = codes ?? priority
             if statementNotesListed.isEmpty {
                 app.logger.warning(

@@ -92,7 +92,7 @@ breakdown `research_and_development` の正本は発生支出（financials の r
 - R&D 欠測は空の内訳で埋めない
 - 地域別 R&D は通常非開示。推計しない
 
-材料: PL の販管費と独立 R&D 行は statement `income_statement`。セグメント内訳は breakdown `research_and_development`（発生支出。financials の rd と同じ）。欠測社の販管費費目は BLT-46（notes または breakdown。未決）。発生支出軸は流用しない。
+材料: PL の販管費と独立 R&D 行は statement `income_statement`。セグメント内訳は breakdown `research_and_development`（発生支出。financials の rd と同じ）。欠測社の販管費費目は note_type `sga_expense_breakdown`（BLT-46。構造化 `*SGA` / IFRS 販管費注記タグ。発生支出軸は流用しない。**未公開**）。
 
 ### 連結損益計算書（metric `sales`）
 

@@ -256,6 +256,8 @@ func loadStoredStatementNote(
 ) async throws -> StatementNoteLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
+    // 未公開 note_type（例: sga_expense_breakdown）は cache_version があっても配信しない。
+    guard isKnownStatementNoteType(noteType) else { return .absent }
     guard !statementNoteCacheVersion(forType: noteType).isEmpty else { return .absent }
 
     let row: CompanyStatementNote?

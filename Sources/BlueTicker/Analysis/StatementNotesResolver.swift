@@ -202,6 +202,283 @@ enum StatementNotesResolver {
             contentHash: hash)
     }
 
+    /// 販売費及び一般管理費の主要な費目内訳（`sga_expense_breakdown` note_type）。
+    ///
+    /// 連結損益計算書関係注記の構造化タグから決定論で抽出する（BLT-46 / `docs/sankey.md`）。
+    /// breakdown `research_and_development`（発生支出）とは別物。販管費から引いて残差を作らない。
+    ///
+    /// 実データ検証（2026-08-27）:
+    /// - オークマ S100YFQC: `*SGA`（運賃荷造費・研究開発費 2,097 等）。発生支出 4,265 と
+    ///   セグメントののれん償却は除外
+    /// - アズ企画 S100VU4O: `*SGA`
+    /// - スズキ S100YFG2: `*SGAIFRS` + `ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS`
+    ///   （271,082。発生支出 270,400 とは別）。合計は開示 SGA と一致
+    /// - 味の素 S100VXJA: 販売費・一般管理費を分けた IFRS 注記タグ（別掲 R&D は費目に入れない）
+    /// - 東邦レマック S100XRD8: 非連結のみ → `fieldSetFromDuration` の単体フォールバック
+    /// - SMFG S100W0S7: 個別注記のみ（連結に費目タグ無し）→ `not_found`
+    /// - クボタ S100XR0M: 連結に費目タグ無し（個別のみ）→ `not_found`
+    /// - US-GAAP → `us_gaap_unsupported`
+    static func resolveSgaExpenseBreakdown(xbrlDir: URL) -> StatementNoteResolveResult {
+        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(tagElements)
+        if accountingStandard == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+
+        let durationFS = fieldSetFromDuration(tagElements)
+
+        let hasCombinedSGAIFRSComponents = durationFS.contains { tag, fv in
+            fv.current != nil && tag.hasSuffix("SGAIFRS")
+                && !Xbrl.sgaExpenseBreakdownExcludedTags.contains(tag)
+                && !Xbrl.sgaExpenseBreakdownTotalTags.contains(tag)
+        }
+
+        var componentTags: [String] = []
+        var totalTags: [String] = []
+        for (tag, fv) in durationFS {
+            guard fv.current != nil else { continue }
+            if Xbrl.sgaExpenseBreakdownTotalTags.contains(tag) {
+                totalTags.append(tag)
+                continue
+            }
+            if isSgaExpenseBreakdownComponentTag(
+                tag, hasCombinedSGAIFRSComponents: hasCombinedSGAIFRSComponents
+            ) {
+                componentTags.append(tag)
+            }
+        }
+        guard !componentTags.isEmpty else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+
+        let isSplitSellingAndGA =
+            totalTags.contains("SellingExpensesIFRS")
+            || totalTags.contains("GeneralAndAdministrativeExpensesIFRS")
+
+        let wantedTags = Set(componentTags + totalTags)
+        let labelsByTag = sgaExpenseBreakdownLabels(xbrlDir: xbrlDir, tags: wantedTags)
+
+        var items: [StatementLineItem] = []
+        for tag in componentTags.sorted() {
+            guard let value = durationFS[tag]?.current else { continue }
+            items.append(
+                StatementLineItem(
+                    tag: tag, label: labelsByTag[tag], value: value, unit: "yen", order: nil,
+                    section: sgaExpenseBreakdownSection(
+                        for: tag, isSplitSellingAndGA: isSplitSellingAndGA),
+                    isTotal: false))
+        }
+        for tag in totalTags.sorted() {
+            guard let value = durationFS[tag]?.current else { continue }
+            items.append(
+                StatementLineItem(
+                    tag: tag, label: labelsByTag[tag], value: value, unit: "yen", order: nil,
+                    section: sgaExpenseBreakdownSection(
+                        for: tag, isSplitSellingAndGA: isSplitSellingAndGA),
+                    isTotal: true))
+        }
+        guard items.contains(where: { !$0.isTotal }) else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+
+        let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
+        return .resolved(
+            payload: StatementNotePayload(items: items), source: statementNoteSourceXbrlFacts,
+            contentHash: hash)
+    }
+
+    /// 日本語ラベル。標準タクソノミ／提出パッケージの lab を優先し、無ければ当期 fact が載る
+    /// `<tr>` 先頭の日本語セルを使う（`assets/taxonomy` 未配置の CI / Cloud でも床が揃う）。
+    private static func sgaExpenseBreakdownLabels(
+        xbrlDir: URL, tags: Set<String>
+    ) -> [String: String] {
+        let taxonomyLabels = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let htmlLabels = sgaExpenseBreakdownHtmlRowLabels(xbrlDir: xbrlDir, tags: tags)
+        var result: [String: String] = [:]
+        for tag in tags {
+            if let taxonomy = taxonomyLabels[tag], !taxonomy.isEmpty {
+                result[tag] = taxonomy
+                continue
+            }
+            if let html = htmlLabels[tag], !html.isEmpty {
+                result[tag] = refineSgaExpenseBreakdownHtmlLabel(tag: tag, htmlLabel: html)
+            }
+        }
+        return result
+    }
+
+    /// 当期 Duration fact（連結優先、無ければ個別）を含む表行から日本語ラベルを拾う。
+    /// SwiftSoup 経由だと inline XBRL 属性が欠落することがあるため、生 HTML を正規表現で走査する。
+    private static func sgaExpenseBreakdownHtmlRowLabels(
+        xbrlDir: URL, tags: Set<String>
+    ) -> [String: String] {
+        var consolidated: [String: String] = [:]
+        var nonconsolidated: [String: String] = [:]
+        let factPattern = try? NSRegularExpression(
+            pattern: #"<ix:nonFraction\b([^>]*)>"#,
+            options: [.caseInsensitive])
+        let namePattern = try? NSRegularExpression(
+            pattern: #"name\s*=\s*["'](?:[\w]+:)?([A-Za-z0-9]+)["']"#)
+        let ctxPattern = try? NSRegularExpression(
+            pattern: #"contextRef\s*=\s*["']([^"']+)["']"#)
+        let cellPattern = try? NSRegularExpression(
+            pattern: #"<t[dh]\b[^>]*>(.*?)</t[dh]>"#,
+            options: [.caseInsensitive, .dotMatchesLineSeparators])
+
+        for file in sgaExpenseBreakdownHtmlFiles(in: xbrlDir) {
+            guard let raw = try? String(contentsOf: file, encoding: .utf8),
+                  let factPattern, let namePattern, let ctxPattern, let cellPattern
+            else { continue }
+            let ns = NSRange(raw.startIndex..., in: raw)
+            for fact in factPattern.matches(in: raw, range: ns) {
+                guard let attrsRange = Range(fact.range(at: 1), in: raw) else { continue }
+                let attrs = String(raw[attrsRange])
+                let attrsNS = NSRange(attrs.startIndex..., in: attrs)
+                guard let nameMatch = namePattern.firstMatch(in: attrs, range: attrsNS),
+                      let nameRange = Range(nameMatch.range(at: 1), in: attrs),
+                      let ctxMatch = ctxPattern.firstMatch(in: attrs, range: attrsNS),
+                      let ctxRange = Range(ctxMatch.range(at: 1), in: attrs)
+                else { continue }
+                let tag = String(attrs[nameRange])
+                guard tags.contains(tag) else { continue }
+                let ctx = String(attrs[ctxRange])
+                let isCons = ContextHelpers.isConsolidatedDuration(ctx)
+                let isNonCons = ContextHelpers.isNonConsolidatedDuration(ctx)
+                guard isCons || isNonCons else { continue }
+                if isCons, consolidated[tag] != nil { continue }
+                if isNonCons, nonconsolidated[tag] != nil || consolidated[tag] != nil {
+                    continue
+                }
+
+                guard let factRange = Range(fact.range, in: raw) else { continue }
+                let before = raw[..<factRange.lowerBound]
+                guard let trStart = before.range(of: "<tr", options: [.backwards, .caseInsensitive])
+                else { continue }
+                guard let trEnd = raw.range(
+                    of: "</tr>", options: [.caseInsensitive],
+                    range: factRange.lowerBound..<raw.endIndex)
+                else { continue }
+                let row = String(raw[trStart.lowerBound..<trEnd.upperBound])
+                guard let label = sgaExpenseBreakdownLabelFromRowHTML(row, cellPattern: cellPattern)
+                else { continue }
+                if isCons {
+                    consolidated[tag] = label
+                } else {
+                    nonconsolidated[tag] = label
+                }
+            }
+        }
+        var merged = consolidated
+        for (tag, label) in nonconsolidated where merged[tag] == nil {
+            merged[tag] = label
+        }
+        return merged
+    }
+
+    /// inline XBRL（`.htm` / `.html`）を優先し、無ければ通常の XBRL インスタンスも見る。
+    private static func sgaExpenseBreakdownHtmlFiles(in dir: URL) -> [URL] {
+        let fm = FileManager.default
+        var html: [URL] = []
+        guard let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: nil) else {
+            return XBRLUtils.findXbrlFiles(in: dir)
+        }
+        for case let url as URL in enumerator {
+            let ext = url.pathExtension.lowercased()
+            if ext == "htm" || ext == "html" {
+                html.append(url)
+            }
+        }
+        return html.isEmpty ? XBRLUtils.findXbrlFiles(in: dir) : html
+    }
+
+    /// 表行 HTML の先頭付近にある日本語科目名セル（金額・単位・年度見出しは除外）。
+    private static func sgaExpenseBreakdownLabelFromRowHTML(
+        _ row: String, cellPattern: NSRegularExpression
+    ) -> String? {
+        let ns = NSRange(row.startIndex..., in: row)
+        for match in cellPattern.matches(in: row, range: ns) {
+            guard let bodyRange = Range(match.range(at: 1), in: row) else { continue }
+            var cleaned = String(row[bodyRange])
+            cleaned = cleaned.replacingOccurrences(
+                of: #"<[^>]+>"#, with: "", options: .regularExpression)
+            cleaned = cleaned.htmlEntityDecoded
+                .replacingOccurrences(of: "\u{00A0}", with: " ")
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            guard cleaned.unicodeScalars.contains(where: {
+                (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value)
+            }) else { continue }
+            if cleaned.contains("年度") || cleaned.hasPrefix("自") || cleaned.hasPrefix("至") {
+                continue
+            }
+            let numericLike = cleaned
+                .replacingOccurrences(of: ",", with: "")
+                .replacingOccurrences(of: "，", with: "")
+                .replacingOccurrences(of: "百万円", with: "")
+                .replacingOccurrences(of: "千円", with: "")
+                .replacingOccurrences(of: "〃", with: "")
+                .replacingOccurrences(of: "△", with: "")
+                .replacingOccurrences(of: "−", with: "")
+                .replacingOccurrences(of: "－", with: "")
+                .replacingOccurrences(of: "-", with: "")
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            if numericLike.isEmpty || Double(numericLike) != nil { continue }
+            return cleaned
+        }
+        return nil
+    }
+
+    /// HTML 行ラベルが「合計」だけのとき、合計タグ種別に応じた科目名へ置き換える。
+    private static func refineSgaExpenseBreakdownHtmlLabel(tag: String, htmlLabel: String) -> String {
+        let bare = ["合計", "計", "小計"].contains(htmlLabel)
+        guard bare else { return htmlLabel }
+        switch tag {
+        case "SellingExpensesIFRS": return "販売費"
+        case "GeneralAndAdministrativeExpensesIFRS": return "一般管理費"
+        case "SellingGeneralAndAdministrativeExpenses",
+            "SellingGeneralAndAdministrativeExpensesIFRS":
+            return "販売費及び一般管理費"
+        default: return htmlLabel
+        }
+    }
+
+    /// 販管費費目タグかどうか。合計行・発生支出・TextBlock/Abstract は除外。
+    private static func isSgaExpenseBreakdownComponentTag(
+        _ tag: String, hasCombinedSGAIFRSComponents: Bool
+    ) -> Bool {
+        if tag.hasSuffix("TextBlock") || tag.hasSuffix("Abstract") { return false }
+        if Xbrl.sgaExpenseBreakdownExcludedTags.contains(tag) { return false }
+        if Xbrl.sgaExpenseBreakdownTotalTags.contains(tag) { return false }
+        if tag.hasSuffix("SGA") || tag.hasSuffix("SGAIFRS") { return true }
+        if tag.hasSuffix("SellingExpensesIFRS") { return true }
+        if tag.hasSuffix("GAIFRS") { return true }
+        if Xbrl.sgaExpenseBreakdownIFRSComponentTags.contains(tag) { return true }
+        if tag == Xbrl.sgaExpenseBreakdownIFRSRdInSGATag {
+            return hasCombinedSGAIFRSComponents
+        }
+        return false
+    }
+
+    /// 味の素型（販売費／一般管理費分離）向けの `section`。結合販管費（スズキ等）は nil。
+    /// `*SGAIFRS` は `hasSuffix("GAIFRS")` にも当たるため、結合タグを先に除外する。
+    private static func sgaExpenseBreakdownSection(
+        for tag: String, isSplitSellingAndGA: Bool
+    ) -> StatementLineSection? {
+        if tag.hasSuffix("SGA") || tag.hasSuffix("SGAIFRS") { return nil }
+        if tag == "SellingExpensesIFRS" || tag.hasSuffix("SellingExpensesIFRS") {
+            return .group("selling")
+        }
+        if tag == "GeneralAndAdministrativeExpensesIFRS" || tag.hasSuffix("GAIFRS") {
+            return .group("general_and_administrative")
+        }
+        if isSplitSellingAndGA, Xbrl.sgaExpenseBreakdownIFRSComponentTags.contains(tag) {
+            return .group("selling")
+        }
+        return nil
+    }
+
     /// IFRS注記に共通の「資産区分ごとに正味帳簿価額・取得原価・累計償却/減損の3タグが揃う」構造から
     /// 正味帳簿価額タグだけを抽出する共通処理（PPE・のれん双方で使う）。
     ///

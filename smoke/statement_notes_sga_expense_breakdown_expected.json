@@ -1,0 +1,748 @@
+{
+  "S100VU4O" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "支払手数料",
+        "order" : null,
+        "section" : null,
+        "tag" : "CommissionFeeSGA",
+        "unit" : "yen",
+        "value" : 100215000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "役員報酬",
+        "order" : null,
+        "section" : null,
+        "tag" : "DirectorsCompensationsSGA",
+        "unit" : "yen",
+        "value" : 99300000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "賞与引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionForBonusesSGA",
+        "unit" : "yen",
+        "value" : 22063000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "株主優待引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionForShareholderBenefitProgramSGA",
+        "unit" : "yen",
+        "value" : 10911000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "貸倒引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionOfAllowanceForDoubtfulAccountsSGA",
+        "unit" : "yen",
+        "value" : 12000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "退職給付費用",
+        "order" : null,
+        "section" : null,
+        "tag" : "RetirementBenefitExpensesSGA",
+        "unit" : "yen",
+        "value" : 6468000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "給料及び手当",
+        "order" : null,
+        "section" : null,
+        "tag" : "SalariesAndAllowancesSGA",
+        "unit" : "yen",
+        "value" : 297087000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "租税公課",
+        "order" : null,
+        "section" : null,
+        "tag" : "TaxesAndDuesSGA",
+        "unit" : "yen",
+        "value" : 26505000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費及び一般管理費",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingGeneralAndAdministrativeExpenses",
+        "unit" : "yen",
+        "value" : 966110000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100VXJA" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "広告費",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "AdvertisingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 44529000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "減価償却費及び償却費",
+        "order" : null,
+        "section" : "general_and_administrative",
+        "tag" : "DepreciationAndAmortizationGAIFRS",
+        "unit" : "yen",
+        "value" : 21148000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "減価償却費及び償却費",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "DepreciationAndAmortizationSellingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 3848000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "従業員給付費用",
+        "order" : null,
+        "section" : "general_and_administrative",
+        "tag" : "EmployeeBenefitExpensesGAIFRS",
+        "unit" : "yen",
+        "value" : 82136000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "従業員給付費用",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "EmployeeBenefitExpensesSellingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 52837000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "その他",
+        "order" : null,
+        "section" : "general_and_administrative",
+        "tag" : "OtherGAIFRS",
+        "unit" : "yen",
+        "value" : 51592000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "その他",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "OtherSellingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 22766000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "物流費",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "PackingAndTransportationExpensesIFRS",
+        "unit" : "yen",
+        "value" : 57357000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売手数料",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "SalesCommissionsIFRS",
+        "unit" : "yen",
+        "value" : 2419000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売促進費",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "SalesPromotionExpensesIFRS",
+        "unit" : "yen",
+        "value" : 28217000000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "一般管理費",
+        "order" : null,
+        "section" : "general_and_administrative",
+        "tag" : "GeneralAndAdministrativeExpensesIFRS",
+        "unit" : "yen",
+        "value" : 154878000000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費",
+        "order" : null,
+        "section" : "selling",
+        "tag" : "SellingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 211976000000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100VYA0" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "広告宣伝費",
+        "order" : null,
+        "section" : null,
+        "tag" : "AdvertisingExpensesSGA",
+        "unit" : "yen",
+        "value" : 5082000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "業務委託費",
+        "order" : null,
+        "section" : null,
+        "tag" : "BusinessConsignmentExpensesSGA",
+        "unit" : "yen",
+        "value" : 6044000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "役員報酬及び従業員給料・賞与・手当",
+        "order" : null,
+        "section" : null,
+        "tag" : "DirectorsCompensationEmployeesSalariesBonusesAndAllowancesSGA",
+        "unit" : "yen",
+        "value" : 24799000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "法定福利及び厚生費",
+        "order" : null,
+        "section" : null,
+        "tag" : "LegalAndEmployeeBenefitsExpensesSGA",
+        "unit" : "yen",
+        "value" : 4154000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "その他",
+        "order" : null,
+        "section" : null,
+        "tag" : "OtherSGA",
+        "unit" : "yen",
+        "value" : 16175000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売促進費",
+        "order" : null,
+        "section" : null,
+        "tag" : "PromotionExpensesSGA",
+        "unit" : "yen",
+        "value" : 1430000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "賃借料",
+        "order" : null,
+        "section" : null,
+        "tag" : "RentExpensesSGA",
+        "unit" : "yen",
+        "value" : 2628000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "研究開発費",
+        "order" : null,
+        "section" : null,
+        "tag" : "ResearchAndDevelopmentExpensesSGA",
+        "unit" : "yen",
+        "value" : 2206000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "退職給付費用",
+        "order" : null,
+        "section" : null,
+        "tag" : "RetirementBenefitExpensesSGA",
+        "unit" : "yen",
+        "value" : 1282000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "旅費交通費及び通信費",
+        "order" : null,
+        "section" : null,
+        "tag" : "TransportationAndCommunicationExpensesSGA",
+        "unit" : "yen",
+        "value" : 2673000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "運送費及び保管費",
+        "order" : null,
+        "section" : null,
+        "tag" : "TransportationAndWarehousingExpensesSGA",
+        "unit" : "yen",
+        "value" : 21434000000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費及び一般管理費合計",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingGeneralAndAdministrativeExpenses",
+        "unit" : "yen",
+        "value" : 87913000000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100W0S7" : {
+    "reason" : "not_found",
+    "status" : "not_applicable"
+  },
+  "S100W3XJ" : {
+    "reason" : "us_gaap_unsupported",
+    "status" : "not_applicable"
+  },
+  "S100W4FB" : {
+    "reason" : "not_found",
+    "status" : "not_applicable"
+  },
+  "S100W4MT" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "広告宣伝費",
+        "order" : null,
+        "section" : null,
+        "tag" : "AdvertisingExpensesIFRS",
+        "unit" : "yen",
+        "value" : 79310000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "従業員給付費用",
+        "order" : null,
+        "section" : null,
+        "tag" : "EmployeeBenefitExpensesSGAIFRS",
+        "unit" : "yen",
+        "value" : 205295000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "その他",
+        "order" : null,
+        "section" : null,
+        "tag" : "OtherSGAIFRS",
+        "unit" : "yen",
+        "value" : 150399000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "研究開発費",
+        "order" : null,
+        "section" : null,
+        "tag" : "ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS",
+        "unit" : "yen",
+        "value" : 241018000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売諸費",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingAndVariousExpensesSGAIFRS",
+        "unit" : "yen",
+        "value" : 67209000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "発送費",
+        "order" : null,
+        "section" : null,
+        "tag" : "ShippingExpenseSGAIFRS",
+        "unit" : "yen",
+        "value" : 201107000000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費及び一般管理費",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingGeneralAndAdministrativeExpensesIFRS",
+        "unit" : "yen",
+        "value" : 944341000000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100W043" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "報酬、給料及び手当",
+        "order" : null,
+        "section" : null,
+        "tag" : "CompensationsSalariesAndAllowancesSGA",
+        "unit" : "yen",
+        "value" : 15837000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "運賃荷造費",
+        "order" : null,
+        "section" : null,
+        "tag" : "FreightageAndPackingExpensesSGA",
+        "unit" : "yen",
+        "value" : 11862000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "研究開発費",
+        "order" : null,
+        "section" : null,
+        "tag" : "ResearchAndDevelopmentExpensesSGA",
+        "unit" : "yen",
+        "value" : 2094000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売諸掛",
+        "order" : null,
+        "section" : null,
+        "tag" : "SalesChargesSGA",
+        "unit" : "yen",
+        "value" : 4413000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "旅費通信費",
+        "order" : null,
+        "section" : null,
+        "tag" : "TravelingAndCommunicationExpensesSGA",
+        "unit" : "yen",
+        "value" : 2180000000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "福利費及び退職給付費用",
+        "order" : null,
+        "section" : null,
+        "tag" : "WelfareAndRetirementBenefitExpensesSGA",
+        "unit" : "yen",
+        "value" : 2725000000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費及び一般管理費",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingGeneralAndAdministrativeExpenses",
+        "unit" : "yen",
+        "value" : 50985000000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100XR0M" : {
+    "reason" : "not_found",
+    "status" : "not_applicable"
+  },
+  "S100XRD8" : {
+    "items" : [
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "広告宣伝費",
+        "order" : null,
+        "section" : null,
+        "tag" : "AdvertisingExpensesSGA",
+        "unit" : "yen",
+        "value" : 59730000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "支払手数料",
+        "order" : null,
+        "section" : null,
+        "tag" : "CommissionFeeSGA",
+        "unit" : "yen",
+        "value" : 272800000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "通信費",
+        "order" : null,
+        "section" : null,
+        "tag" : "CommunicationExpensesSGA",
+        "unit" : "yen",
+        "value" : 3187000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "減価償却費",
+        "order" : null,
+        "section" : null,
+        "tag" : "DepreciationSGA",
+        "unit" : "yen",
+        "value" : 23809000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "役員報酬",
+        "order" : null,
+        "section" : null,
+        "tag" : "DirectorsCompensationsSGA",
+        "unit" : "yen",
+        "value" : 47920000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "従業員給料及び手当",
+        "order" : null,
+        "section" : null,
+        "tag" : "EmployeesSalariesAndAllowancesSGA",
+        "unit" : "yen",
+        "value" : 357253000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "雑費",
+        "order" : null,
+        "section" : null,
+        "tag" : "MiscellaneousExpensesSGA",
+        "unit" : "yen",
+        "value" : 119949000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "その他の人件費",
+        "order" : null,
+        "section" : null,
+        "tag" : "OtherPersonalExpensesSGA",
+        "unit" : "yen",
+        "value" : 74280000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "雑給",
+        "order" : null,
+        "section" : null,
+        "tag" : "OtherSalariesSGA",
+        "unit" : "yen",
+        "value" : 29542000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "販売促進費",
+        "order" : null,
+        "section" : null,
+        "tag" : "PromotionExpensesSGA",
+        "unit" : "yen",
+        "value" : 91482000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "賞与引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionForBonusesSGA",
+        "unit" : "yen",
+        "value" : 15029000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "役員退職慰労引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionForDirectorsRetirementBenefitsSGA",
+        "unit" : "yen",
+        "value" : 4558000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "貸倒引当金繰入額",
+        "order" : null,
+        "section" : null,
+        "tag" : "ProvisionOfAllowanceForDoubtfulAccountsSGA",
+        "unit" : "yen",
+        "value" : 527000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "賃借料",
+        "order" : null,
+        "section" : null,
+        "tag" : "RentExpensesSGA",
+        "unit" : "yen",
+        "value" : 8401000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "修繕費",
+        "order" : null,
+        "section" : null,
+        "tag" : "RepairExpensesSGA",
+        "unit" : "yen",
+        "value" : 7139000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "退職給付費用",
+        "order" : null,
+        "section" : null,
+        "tag" : "RetirementBenefitExpensesSGA",
+        "unit" : "yen",
+        "value" : 21333000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "消耗品費",
+        "order" : null,
+        "section" : null,
+        "tag" : "SuppliesExpensesSGA",
+        "unit" : "yen",
+        "value" : 25691000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "租税公課",
+        "order" : null,
+        "section" : null,
+        "tag" : "TaxesAndDuesSGA",
+        "unit" : "yen",
+        "value" : 32137000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "運送費及び保管費",
+        "order" : null,
+        "section" : null,
+        "tag" : "TransportationAndWarehousingExpensesSGA",
+        "unit" : "yen",
+        "value" : 198267000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "旅費及び交通費",
+        "order" : null,
+        "section" : null,
+        "tag" : "TravelingAndTransportationExpensesSGA",
+        "unit" : "yen",
+        "value" : 29920000
+      },
+      {
+        "components" : null,
+        "is_total" : false,
+        "label" : "水道光熱費",
+        "order" : null,
+        "section" : null,
+        "tag" : "UtilitiesExpensesSGA",
+        "unit" : "yen",
+        "value" : 11062000
+      },
+      {
+        "components" : null,
+        "is_total" : true,
+        "label" : "販売費及び一般管理費合計",
+        "order" : null,
+        "section" : null,
+        "tag" : "SellingGeneralAndAdministrativeExpenses",
+        "unit" : "yen",
+        "value" : 1434025000
+      }
+    ],
+    "source" : "xbrl_facts",
+    "status" : "resolved"
+  },
+  "S100XTLJ" : {
+    "reason" : "us_gaap_unsupported",
+    "status" : "not_applicable"
+  }
+}

@@ -17,7 +17,7 @@
 | 0 | `scripts/jp/edinet/ingest-job-00-sync-foundation.sh` | `sync` → `filing-sections` | 上場 | 80 | 日次（軽） |
 | 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 上場（225は処理順） | 80 | 6h |
 | 2 | `scripts/jp/edinet/ingest-job-02-notes-core.sh` | `statement-notes`（per_share, issued_shares） | 225 | 80 | 6h |
-| 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（残り7種） | 225 | 80 | 日次 |
+| 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（残り6種。`sga_expense_breakdown` は未公開のため省略） | 225 | 80 | 日次 |
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全5軸） | business/geo=上場、他=225 | 50 | 6h |
 | 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2・3の後） |
 

@@ -16,7 +16,7 @@
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --note-types は statement-notes ステージで ingest する
-//                                                            note_type を絞る（未指定時は全9種）。
+//                                                            note_type を絞る（未指定時は公開全8種）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
