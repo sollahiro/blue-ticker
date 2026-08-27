@@ -85,7 +85,8 @@ public let goodwillAndIntangiblesNoteCacheVersion = "notes-goodwill-v1"
 public let leaseLiabilitiesNoteCacheVersion = "notes-lease-liabilities-v7"
 /// v1（2026-08-27）: 連結の販管費費目（`*SGA` / IFRS 販管・一般管理費注記タグ）。
 /// 発生支出タグは除外。US-GAAP 非対応。
-public let sgaExpenseBreakdownNoteCacheVersion = "notes-sga-expense-breakdown-v1"
+/// v2（2026-08-27）: 日本語ラベル（タクソノミ優先、無ければ注記 HTML 行ラベル）。
+public let sgaExpenseBreakdownNoteCacheVersion = "notes-sga-expense-breakdown-v2"
 
 /// note_type に対応する現行 cache_version 文字列。未知の note_type は空文字（安全側で非 servable 扱い）。
 public func statementNoteCacheVersion(forType noteType: String) -> String {

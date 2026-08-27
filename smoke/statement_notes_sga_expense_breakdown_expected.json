@@ -4,7 +4,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "支払手数料",
         "order" : null,
         "section" : null,
         "tag" : "CommissionFeeSGA",
@@ -14,7 +14,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "役員報酬",
         "order" : null,
         "section" : null,
         "tag" : "DirectorsCompensationsSGA",
@@ -24,7 +24,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "賞与引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionForBonusesSGA",
@@ -34,7 +34,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "株主優待引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionForShareholderBenefitProgramSGA",
@@ -44,7 +44,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "貸倒引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionOfAllowanceForDoubtfulAccountsSGA",
@@ -54,7 +54,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "退職給付費用",
         "order" : null,
         "section" : null,
         "tag" : "RetirementBenefitExpensesSGA",
@@ -64,7 +64,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "給料及び手当",
         "order" : null,
         "section" : null,
         "tag" : "SalariesAndAllowancesSGA",
@@ -74,7 +74,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "租税公課",
         "order" : null,
         "section" : null,
         "tag" : "TaxesAndDuesSGA",
@@ -84,7 +84,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費及び一般管理費",
         "order" : null,
         "section" : null,
         "tag" : "SellingGeneralAndAdministrativeExpenses",
@@ -110,7 +110,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "減価償却費及び償却費",
         "order" : null,
         "section" : "general_and_administrative",
         "tag" : "DepreciationAndAmortizationGAIFRS",
@@ -120,7 +120,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "減価償却費及び償却費",
         "order" : null,
         "section" : "selling",
         "tag" : "DepreciationAndAmortizationSellingExpensesIFRS",
@@ -130,7 +130,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "従業員給付費用",
         "order" : null,
         "section" : "general_and_administrative",
         "tag" : "EmployeeBenefitExpensesGAIFRS",
@@ -140,7 +140,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "従業員給付費用",
         "order" : null,
         "section" : "selling",
         "tag" : "EmployeeBenefitExpensesSellingExpensesIFRS",
@@ -150,7 +150,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "その他",
         "order" : null,
         "section" : "general_and_administrative",
         "tag" : "OtherGAIFRS",
@@ -160,7 +160,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "その他",
         "order" : null,
         "section" : "selling",
         "tag" : "OtherSellingExpensesIFRS",
@@ -180,7 +180,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "販売手数料",
         "order" : null,
         "section" : "selling",
         "tag" : "SalesCommissionsIFRS",
@@ -190,7 +190,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "販売促進費",
         "order" : null,
         "section" : "selling",
         "tag" : "SalesPromotionExpensesIFRS",
@@ -200,7 +200,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "一般管理費",
         "order" : null,
         "section" : "general_and_administrative",
         "tag" : "GeneralAndAdministrativeExpensesIFRS",
@@ -210,7 +210,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費",
         "order" : null,
         "section" : "selling",
         "tag" : "SellingExpensesIFRS",
@@ -226,7 +226,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "広告宣伝費",
         "order" : null,
         "section" : null,
         "tag" : "AdvertisingExpensesSGA",
@@ -236,7 +236,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "のれんの償却額",
         "order" : null,
         "section" : null,
         "tag" : "AmortizationOfGoodwillSGA",
@@ -246,7 +246,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "業務委託費",
         "order" : null,
         "section" : null,
         "tag" : "BusinessConsignmentExpensesSGA",
@@ -266,7 +266,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "法定福利及び厚生費",
         "order" : null,
         "section" : null,
         "tag" : "LegalAndEmployeeBenefitsExpensesSGA",
@@ -276,7 +276,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "その他",
         "order" : null,
         "section" : null,
         "tag" : "OtherSGA",
@@ -286,7 +286,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "販売促進費",
         "order" : null,
         "section" : null,
         "tag" : "PromotionExpensesSGA",
@@ -296,7 +296,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "賃借料",
         "order" : null,
         "section" : null,
         "tag" : "RentExpensesSGA",
@@ -306,7 +306,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "研究開発費",
         "order" : null,
         "section" : null,
         "tag" : "ResearchAndDevelopmentExpensesSGA",
@@ -316,7 +316,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "退職給付費用",
         "order" : null,
         "section" : null,
         "tag" : "RetirementBenefitExpensesSGA",
@@ -326,7 +326,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "旅費交通費及び通信費",
         "order" : null,
         "section" : null,
         "tag" : "TransportationAndCommunicationExpensesSGA",
@@ -336,7 +336,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "運送費及び保管費",
         "order" : null,
         "section" : null,
         "tag" : "TransportationAndWarehousingExpensesSGA",
@@ -346,7 +346,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費及び一般管理費合計",
         "order" : null,
         "section" : null,
         "tag" : "SellingGeneralAndAdministrativeExpenses",
@@ -374,7 +374,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "広告宣伝費",
         "order" : null,
         "section" : null,
         "tag" : "AdvertisingExpensesIFRS",
@@ -384,7 +384,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "従業員給付費用",
         "order" : null,
         "section" : null,
         "tag" : "EmployeeBenefitExpensesSGAIFRS",
@@ -394,7 +394,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "その他",
         "order" : null,
         "section" : null,
         "tag" : "OtherSGAIFRS",
@@ -404,7 +404,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "研究開発費",
         "order" : null,
         "section" : null,
         "tag" : "ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS",
@@ -434,7 +434,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費及び一般管理費",
         "order" : null,
         "section" : null,
         "tag" : "SellingGeneralAndAdministrativeExpensesIFRS",
@@ -450,7 +450,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "のれんの償却額",
         "order" : null,
         "section" : null,
         "tag" : "AmortizationOfGoodwillSGA",
@@ -460,7 +460,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "報酬、給料及び手当",
         "order" : null,
         "section" : null,
         "tag" : "CompensationsSalariesAndAllowancesSGA",
@@ -470,7 +470,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "運賃荷造費",
         "order" : null,
         "section" : null,
         "tag" : "FreightageAndPackingExpensesSGA",
@@ -480,7 +480,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "研究開発費",
         "order" : null,
         "section" : null,
         "tag" : "ResearchAndDevelopmentExpensesSGA",
@@ -500,7 +500,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "旅費通信費",
         "order" : null,
         "section" : null,
         "tag" : "TravelingAndCommunicationExpensesSGA",
@@ -520,7 +520,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費及び一般管理費",
         "order" : null,
         "section" : null,
         "tag" : "SellingGeneralAndAdministrativeExpenses",
@@ -540,7 +540,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "広告宣伝費",
         "order" : null,
         "section" : null,
         "tag" : "AdvertisingExpensesSGA",
@@ -550,7 +550,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "支払手数料",
         "order" : null,
         "section" : null,
         "tag" : "CommissionFeeSGA",
@@ -560,7 +560,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "通信費",
         "order" : null,
         "section" : null,
         "tag" : "CommunicationExpensesSGA",
@@ -570,7 +570,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "減価償却費",
         "order" : null,
         "section" : null,
         "tag" : "DepreciationSGA",
@@ -580,7 +580,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "役員報酬",
         "order" : null,
         "section" : null,
         "tag" : "DirectorsCompensationsSGA",
@@ -590,7 +590,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "従業員給料及び手当",
         "order" : null,
         "section" : null,
         "tag" : "EmployeesSalariesAndAllowancesSGA",
@@ -600,7 +600,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "雑費",
         "order" : null,
         "section" : null,
         "tag" : "MiscellaneousExpensesSGA",
@@ -610,7 +610,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "その他の人件費",
         "order" : null,
         "section" : null,
         "tag" : "OtherPersonalExpensesSGA",
@@ -620,7 +620,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "雑給",
         "order" : null,
         "section" : null,
         "tag" : "OtherSalariesSGA",
@@ -630,7 +630,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "販売促進費",
         "order" : null,
         "section" : null,
         "tag" : "PromotionExpensesSGA",
@@ -640,7 +640,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "賞与引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionForBonusesSGA",
@@ -650,7 +650,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "役員退職慰労引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionForDirectorsRetirementBenefitsSGA",
@@ -660,7 +660,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "貸倒引当金繰入額",
         "order" : null,
         "section" : null,
         "tag" : "ProvisionOfAllowanceForDoubtfulAccountsSGA",
@@ -670,7 +670,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "賃借料",
         "order" : null,
         "section" : null,
         "tag" : "RentExpensesSGA",
@@ -680,7 +680,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "修繕費",
         "order" : null,
         "section" : null,
         "tag" : "RepairExpensesSGA",
@@ -690,7 +690,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "退職給付費用",
         "order" : null,
         "section" : null,
         "tag" : "RetirementBenefitExpensesSGA",
@@ -700,7 +700,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "消耗品費",
         "order" : null,
         "section" : null,
         "tag" : "SuppliesExpensesSGA",
@@ -710,7 +710,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "租税公課",
         "order" : null,
         "section" : null,
         "tag" : "TaxesAndDuesSGA",
@@ -720,7 +720,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "運送費及び保管費",
         "order" : null,
         "section" : null,
         "tag" : "TransportationAndWarehousingExpensesSGA",
@@ -730,7 +730,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "旅費及び交通費",
         "order" : null,
         "section" : null,
         "tag" : "TravelingAndTransportationExpensesSGA",
@@ -740,7 +740,7 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : null,
+        "label" : "水道光熱費",
         "order" : null,
         "section" : null,
         "tag" : "UtilitiesExpensesSGA",
@@ -750,7 +750,7 @@
       {
         "components" : null,
         "is_total" : true,
-        "label" : null,
+        "label" : "販売費及び一般管理費合計",
         "order" : null,
         "section" : null,
         "tag" : "SellingGeneralAndAdministrativeExpenses",
