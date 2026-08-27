@@ -187,6 +187,37 @@ enum Xbrl {
     static let sgaSellingIFRSTags: [String] = ["SellingExpensesIFRS"]
     static let sgaGaIFRSTags: [String] = ["GeneralAndAdministrativeExpensesIFRS"]
 
+    /// `sga_expense_breakdown` note_type の合計行タグ（`is_total`）。
+    /// 味の素型は販売費・一般管理費を分けて開示するため両方を合計候補にする。
+    static let sgaExpenseBreakdownTotalTags: Set<String> = Set(
+        sgaDirectTags + sgaSellingIFRSTags + sgaGaIFRSTags
+    )
+
+    /// 販管費費目ではないが名前が紛らわしいタグ（発生支出・製造費用込み・銀行営業経費合計）。
+    /// `ResearchAndDevelopmentExpensesSGA`（販管費内の研究開発費）は含めない。
+    static let sgaExpenseBreakdownExcludedTags: Set<String> = [
+        "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+        "ResearchAndDevelopmentExpensesIncludedInGeneralAndAdministrativeExpensesAndManufacturingCostForCurrentPeriod",
+        "GeneralAndAdministrativeExpensesOEBNK",
+        "ResearchAndDevelopmentExpenses",
+        "ResearchAndDevelopmentExpensesIFRS",
+        "ResearchAndDevelopmentCostsIFRS",
+    ]
+
+    /// IFRS 販管費注記で `*SGA` / `*SGAIFRS` 接尾辞を持たない費目タグ
+    /// （スズキ・味の素の連結注記。実データ 2026-08-27）。
+    static let sgaExpenseBreakdownIFRSComponentTags: Set<String> = [
+        "AdvertisingExpensesIFRS",
+        "PackingAndTransportationExpensesIFRS",
+        "SalesCommissionsIFRS",
+        "SalesPromotionExpensesIFRS",
+    ]
+
+    /// スズキ型: 連結販管費注記表に載る「費用として認識した研究開発費」。
+    /// `*SGAIFRS` 費目と共起するときだけ採用（味の素の別掲 R&D と同じタグを誤って販管費に入れない）。
+    static let sgaExpenseBreakdownIFRSRdInSGATag =
+        "ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS"
+
     // MARK: - 売上総利益タグ
 
     static let grossProfitDirectTags: [String] = [

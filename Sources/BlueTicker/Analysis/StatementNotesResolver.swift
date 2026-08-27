@@ -202,6 +202,125 @@ enum StatementNotesResolver {
             contentHash: hash)
     }
 
+    /// 販売費及び一般管理費の主要な費目内訳（`sga_expense_breakdown` note_type）。
+    ///
+    /// 連結損益計算書関係注記の構造化タグから決定論で抽出する（BLT-46 / `docs/sankey.md`）。
+    /// breakdown `research_and_development`（発生支出）とは別物。販管費から引いて残差を作らない。
+    ///
+    /// 実データ検証（2026-08-27）:
+    /// - オークマ S100YFQC: `*SGA`（運賃荷造費・研究開発費 2,097 等）。発生支出 4,265 は除外
+    /// - アズ企画 S100VU4O: `*SGA`
+    /// - スズキ S100YFG2: `*SGAIFRS` + `ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS`
+    ///   （271,082。発生支出 270,400 とは別）。合計は開示 SGA と一致
+    /// - 味の素 S100VXJA: 販売費・一般管理費を分けた IFRS 注記タグ（別掲 R&D は費目に入れない）
+    /// - 東邦レマック S100XRD8: 非連結のみ → `fieldSetFromDuration` の単体フォールバック
+    /// - SMFG S100W0S7: 個別注記のみ（連結に費目タグ無し）→ `not_found`
+    /// - クボタ S100XR0M: 連結に費目タグ無し（個別のみ）→ `not_found`
+    /// - US-GAAP → `us_gaap_unsupported`
+    static func resolveSgaExpenseBreakdown(xbrlDir: URL) -> StatementNoteResolveResult {
+        let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(tagElements)
+        if accountingStandard == "US-GAAP" {
+            return .notApplicable(reason: statementNotApplicableUSGAAP)
+        }
+
+        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
+        let durationFS = fieldSetFromDuration(tagElements)
+
+        let hasCombinedSGAIFRSComponents = durationFS.contains { tag, fv in
+            fv.current != nil && tag.hasSuffix("SGAIFRS")
+                && !Xbrl.sgaExpenseBreakdownExcludedTags.contains(tag)
+                && !Xbrl.sgaExpenseBreakdownTotalTags.contains(tag)
+        }
+
+        var componentTags: [String] = []
+        var totalTags: [String] = []
+        for (tag, fv) in durationFS {
+            guard fv.current != nil else { continue }
+            if Xbrl.sgaExpenseBreakdownTotalTags.contains(tag) {
+                totalTags.append(tag)
+                continue
+            }
+            if isSgaExpenseBreakdownComponentTag(
+                tag, hasCombinedSGAIFRSComponents: hasCombinedSGAIFRSComponents
+            ) {
+                componentTags.append(tag)
+            }
+        }
+        guard !componentTags.isEmpty else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+
+        let isSplitSellingAndGA =
+            totalTags.contains("SellingExpensesIFRS")
+            || totalTags.contains("GeneralAndAdministrativeExpensesIFRS")
+
+        var items: [StatementLineItem] = []
+        for tag in componentTags.sorted() {
+            guard let value = durationFS[tag]?.current else { continue }
+            let label = facts[tag]?.values.lazy.compactMap(\.label).first
+            items.append(
+                StatementLineItem(
+                    tag: tag, label: label, value: value, unit: "yen", order: nil,
+                    section: sgaExpenseBreakdownSection(
+                        for: tag, isSplitSellingAndGA: isSplitSellingAndGA),
+                    isTotal: false))
+        }
+        for tag in totalTags.sorted() {
+            guard let value = durationFS[tag]?.current else { continue }
+            let label = facts[tag]?.values.lazy.compactMap(\.label).first
+            items.append(
+                StatementLineItem(
+                    tag: tag, label: label, value: value, unit: "yen", order: nil,
+                    section: sgaExpenseBreakdownSection(
+                        for: tag, isSplitSellingAndGA: isSplitSellingAndGA),
+                    isTotal: true))
+        }
+        guard items.contains(where: { !$0.isTotal }) else {
+            return .notApplicable(reason: statementNoteNotApplicableNotFound)
+        }
+
+        let hash = items.map { "\($0.tag)=\($0.value)" }.joined(separator: ",")
+        return .resolved(
+            payload: StatementNotePayload(items: items), source: statementNoteSourceXbrlFacts,
+            contentHash: hash)
+    }
+
+    /// 販管費費目タグかどうか。合計行・発生支出・TextBlock/Abstract は除外。
+    private static func isSgaExpenseBreakdownComponentTag(
+        _ tag: String, hasCombinedSGAIFRSComponents: Bool
+    ) -> Bool {
+        if tag.hasSuffix("TextBlock") || tag.hasSuffix("Abstract") { return false }
+        if Xbrl.sgaExpenseBreakdownExcludedTags.contains(tag) { return false }
+        if Xbrl.sgaExpenseBreakdownTotalTags.contains(tag) { return false }
+        if tag.hasSuffix("SGA") || tag.hasSuffix("SGAIFRS") { return true }
+        if tag.hasSuffix("SellingExpensesIFRS") { return true }
+        if tag.hasSuffix("GAIFRS") { return true }
+        if Xbrl.sgaExpenseBreakdownIFRSComponentTags.contains(tag) { return true }
+        if tag == Xbrl.sgaExpenseBreakdownIFRSRdInSGATag {
+            return hasCombinedSGAIFRSComponents
+        }
+        return false
+    }
+
+    /// 味の素型（販売費／一般管理費分離）向けの `section`。結合販管費（スズキ等）は nil。
+    /// `*SGAIFRS` は `hasSuffix("GAIFRS")` にも当たるため、結合タグを先に除外する。
+    private static func sgaExpenseBreakdownSection(
+        for tag: String, isSplitSellingAndGA: Bool
+    ) -> StatementLineSection? {
+        if tag.hasSuffix("SGA") || tag.hasSuffix("SGAIFRS") { return nil }
+        if tag == "SellingExpensesIFRS" || tag.hasSuffix("SellingExpensesIFRS") {
+            return .group("selling")
+        }
+        if tag == "GeneralAndAdministrativeExpensesIFRS" || tag.hasSuffix("GAIFRS") {
+            return .group("general_and_administrative")
+        }
+        if isSplitSellingAndGA, Xbrl.sgaExpenseBreakdownIFRSComponentTags.contains(tag) {
+            return .group("selling")
+        }
+        return nil
+    }
+
     /// IFRS注記に共通の「資産区分ごとに正味帳簿価額・取得原価・累計償却/減損の3タグが揃う」構造から
     /// 正味帳簿価額タグだけを抽出する共通処理（PPE・のれん双方で使う）。
     ///

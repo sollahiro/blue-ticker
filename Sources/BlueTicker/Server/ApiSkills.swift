@@ -457,7 +457,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
                 （EPS・発行済株式数・配当金・
                 借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細・
-                リース負債）を
+                リース負債・販売費及び一般管理費の費目内訳）を
                 note_type 単位で取得します（格納済みデータのみ）。
                 対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
                 注記が取得できない場合はエラー応答とともに reason が返ることがあります
@@ -491,7 +491,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                         dividends / \
                         borrowings_schedule / policy_holding_securities / \
                         property_plant_equipment_schedule / goodwill_and_intangibles / \
-                        lease_liabilities
+                        lease_liabilities / sga_expense_breakdown
                         """,
                     required: true
                 ),
@@ -512,6 +512,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 優先し、それ以外は BS 構造化タグ当期値で available_via_statement（lease は借入金等明細表の
                 リース債務なら available_via_notes。US-GAAP は us_gaap_unsupported）。
                 goodwill_and_intangibles は IFRS 注記限定。
+                sga_expense_breakdown は連結の販管費費目（発生支出の research_and_development 軸とは別。
+                US-GAAP 非対応。個別注記のみの銀行等は not_found）。
                 例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
                 """,
             mcpOutputSchema:

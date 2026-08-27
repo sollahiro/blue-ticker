@@ -519,7 +519,7 @@ public func runFactsIngestCommand(
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 日経225（`priority`）限定のまま（statements の上場拡大とは独立）。
             // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
-            // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
+            // lease_liabilities/policy_holding_securities/sga_expense_breakdown は注記からXBRL直接抽出（決定論）。
             let statementNotesListed = codes ?? priority
             if statementNotesListed.isEmpty {
                 app.logger.warning(
@@ -559,6 +559,10 @@ public func runFactsIngestCommand(
                     (
                         statementNoteTypePolicyHoldingSecurities,
                         { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
+                    ),
+                    (
+                        statementNoteTypeSgaExpenseBreakdown,
+                        { docID, _ in await context.resolveSgaExpenseBreakdownNote(docID: docID) }
                     ),
                 ]
             let noteTypeFilter = noteTypes

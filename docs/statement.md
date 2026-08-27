@@ -42,7 +42,7 @@
 
 ## notes
 
-決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約。ingest の現在地は Linear（親 [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)）。
+決定論の note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳は note_type `sga_expense_breakdown`（BLT-46。発生支出軸とは別）。ingest の現在地は Linear（親 [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)）。
 
 REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
 

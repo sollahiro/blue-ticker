@@ -9,7 +9,7 @@ export INGEST_JOB_NAME="job-03-notes-heavy"
 ingest_require_ready
 
 LIMIT="${BLT_INGEST_NOTES_LIMIT:-80}"
-NOTE_TYPES="dividends,borrowings_schedule,lease_liabilities,property_plant_equipment_schedule,policy_holding_securities,goodwill_and_intangibles"
+NOTE_TYPES="dividends,borrowings_schedule,lease_liabilities,property_plant_equipment_schedule,policy_holding_securities,goodwill_and_intangibles,sga_expense_breakdown"
 
 ingest_run ingest --stages statement-notes --note-types "$NOTE_TYPES" --limit "$LIMIT"
 
