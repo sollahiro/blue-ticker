@@ -40,7 +40,7 @@ Meta → Struct → Norm → Viz
 | Norm | Summary | 正規化済み財務データ | 済 | financials 水準値 |
 | Norm | Breakdown | 事業別・地域別の売上／従業員／研究開発／報告セグメント指標 | 済（軸あり） | 公開判断は Linear。軸は下表・`breakdown.md` |
 | Viz | Waterfall | 事業利益・ROIC・ROE の分解 | 済 | financials 同行の分析投影 |
-| Viz | Sankey | metric / dimensions / bridges 材料（描画はクライアント） | smoke | BLT-18。`/sankey` 未公開。`sankey.md` |
+| Viz | Sankey | metric / dimensions / bridges / R&D drilldown（描画はクライアント） | smoke | BLT-18。欠測 R&D は BLT-46 → BLT-47。`/sankey` 未公開。階層は `sankey.md` |
 | Feed | Trend | 検索数の多い銘柄・検索トレンド | 済 | 匿名コマンド回数（Workers Analytics Engine）。提出件数ランキングは出さない |
 | Feed | Update | 新規取得・公開された有報などの更新情報 | 済 | REST/MCP。RSS は未提供 |
 | Feed | Status | データの新鮮度・カバー率 | 一部（運用 `status-report` / 既存 HTML） | Web HTML は抜本見直し予定 |
@@ -94,8 +94,13 @@ Meta → Struct → Norm → Viz
 
 サーバーは分解済み数値（`metric` / `dimensions` / `bridges` / `drilldowns`）のみ返す。
 ノード・リンク・左右配置・色はクライアント責務で、レイアウトを JSON に載せない。
-Sales の PL は dimension ではなく bridge。地域×事業の交差値は既存データにないため、
-開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。詳細は `sankey.md`。
+Sales の PL は dimension ではなく bridge。研究開発費は売上 dimension ではなく、
+statement で販管費の内数なら販管費の子、別掲なら Waterfall 事業利益の次。
+欠測は販管費を葉のまま。費目内訳は [BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)、
+接続は [BLT-47](https://linear.app/sollahiro/issue/BLT-47/sankey-欠測-randd販管費の子)
+（breakdown `research_and_development` は発生支出で、販管費から引かない）。地域×事業の交差値は
+既存データにないため、開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。
+階層の正本は `sankey.md`。
 現在地は Linear [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)
 （残作業の先頭は [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)）。
 
