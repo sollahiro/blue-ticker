@@ -236,16 +236,6 @@
       {
         "components" : null,
         "is_total" : false,
-        "label" : "のれんの償却額",
-        "order" : null,
-        "section" : null,
-        "tag" : "AmortizationOfGoodwillSGA",
-        "unit" : "yen",
-        "value" : 703000000
-      },
-      {
-        "components" : null,
-        "is_total" : false,
         "label" : "業務委託費",
         "order" : null,
         "section" : null,
@@ -447,16 +437,6 @@
   },
   "S100W043" : {
     "items" : [
-      {
-        "components" : null,
-        "is_total" : false,
-        "label" : "のれんの償却額",
-        "order" : null,
-        "section" : null,
-        "tag" : "AmortizationOfGoodwillSGA",
-        "unit" : "yen",
-        "value" : 107000000
-      },
       {
         "components" : null,
         "is_total" : false,

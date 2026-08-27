@@ -193,8 +193,8 @@ enum Xbrl {
         sgaDirectTags + sgaSellingIFRSTags + sgaGaIFRSTags
     )
 
-    /// 販管費費目ではないが名前が紛らわしいタグ（発生支出・製造費用込み・銀行営業経費合計）。
-    /// `ResearchAndDevelopmentExpensesSGA`（販管費内の研究開発費）は含めない。
+    /// 販管費費目ではないが名前が紛らわしいタグ（発生支出・製造費用込み・銀行営業経費合計・
+    /// セグメント情報ののれん償却）。`ResearchAndDevelopmentExpensesSGA`（販管費内の研究開発費）は含めない。
     static let sgaExpenseBreakdownExcludedTags: Set<String> = [
         "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
         "ResearchAndDevelopmentExpensesIncludedInGeneralAndAdministrativeExpensesAndManufacturingCostForCurrentPeriod",
@@ -202,6 +202,7 @@ enum Xbrl {
         "ResearchAndDevelopmentExpenses",
         "ResearchAndDevelopmentExpensesIFRS",
         "ResearchAndDevelopmentCostsIFRS",
+        "AmortizationOfGoodwillSGA",
     ]
 
     /// IFRS 販管費注記で `*SGA` / `*SGAIFRS` 接尾辞を持たない費目タグ

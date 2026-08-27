@@ -208,7 +208,8 @@ enum StatementNotesResolver {
     /// breakdown `research_and_development`（発生支出）とは別物。販管費から引いて残差を作らない。
     ///
     /// 実データ検証（2026-08-27）:
-    /// - オークマ S100YFQC: `*SGA`（運賃荷造費・研究開発費 2,097 等）。発生支出 4,265 は除外
+    /// - オークマ S100YFQC: `*SGA`（運賃荷造費・研究開発費 2,097 等）。発生支出 4,265 と
+    ///   セグメントののれん償却は除外
     /// - アズ企画 S100VU4O: `*SGA`
     /// - スズキ S100YFG2: `*SGAIFRS` + `ResearchAndDevelopmentExpenditureRecognizedAsExpenseDuringPeriodIFRS`
     ///   （271,082。発生支出 270,400 とは別）。合計は開示 SGA と一致
