@@ -60,7 +60,12 @@ Meta → Struct → Norm → Viz
 | `goodwill_and_intangibles` | のれん・無形資産 |
 | `lease_liabilities` | リース負債 |
 | `policy_holding_securities` | 政策保有株式 |
-| `sga_expense_breakdown` | 販管費の主要な費目内訳（連結。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応） |
+
+実装済み・**未公開**（ingest / REST / MCP / job-03 未配線。smoke/golden のみ）:
+
+| note_type | 内容 |
+|---|---|
+| `sga_expense_breakdown` | 販管費の主要な費目内訳（連結。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応。[BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)） |
 
 ### Breakdown（軸）
 
@@ -98,7 +103,7 @@ Meta → Struct → Norm → Viz
 Sales の PL は dimension ではなく bridge。研究開発費は売上 dimension ではなく、
 statement で販管費の内数なら販管費の子、別掲なら Waterfall 事業利益の次。
 欠測は販管費を葉のまま。費目内訳は note_type `sga_expense_breakdown`
-（[BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)）、
+（[BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)、**未公開**）、
 接続は [BLT-47](https://linear.app/sollahiro/issue/BLT-47/sankey-欠測-randd販管費の子)
 （breakdown `research_and_development` は発生支出で、販管費から引かない）。地域×事業の交差値は
 既存データにないため、開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。

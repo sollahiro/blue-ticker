@@ -141,4 +141,12 @@ import Testing
         #expect(isKnownStatementNoteType("capital_expenditures_overview") == false)
         #expect(statementNoteCacheVersion(forType: "capital_expenditures_overview").isEmpty)
     }
+
+    @Test func sgaExpenseBreakdownIsImplementedButUnpublished() {
+        // BLT-46: resolver / cache_version / smoke·golden はあるが公開一覧・ingest・API 未配線。
+        #expect(isKnownStatementNoteType(statementNoteTypeSgaExpenseBreakdown) == false)
+        #expect(!allStatementNoteTypes.contains(statementNoteTypeSgaExpenseBreakdown))
+        #expect(statementNoteCacheVersion(forType: statementNoteTypeSgaExpenseBreakdown)
+            == sgaExpenseBreakdownNoteCacheVersion)
+    }
 }
