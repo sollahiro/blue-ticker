@@ -202,9 +202,9 @@ public enum Api {
     public static let feedDefaultDocTypes = [docTypeAnnualReport]
 
     /// 財務取り込み（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
-    /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（有報＋訂正有報）とだけ
-    /// 揃える。これ以外の新規提出（四半期等）では通期の再計算をトリガーしない。
-    /// BltServerCore（FinancialsIngest）から参照するため public。
+    /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（会社有報＋訂正有報、
+    /// 府令010）とだけ揃える。これ以外の新規提出（四半期・信託受益証券の 120 等）では
+    /// 通期の再計算をトリガーしない。BltServerCore（FinancialsIngest）から参照するため public。
     public static let financialsFreshnessDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,
