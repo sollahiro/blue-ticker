@@ -22,8 +22,22 @@ struct ResolvedItem {
 func detectAccountingStandard(_ tagElements: XbrlTagElements) -> String {
     let hasUSGAAP = tagElements.keys.contains(where: { $0.contains("USGAAP") })
     let hasIFRS = tagElements.keys.contains(where: { $0.contains("IFRS") })
-    if hasUSGAAP && !hasIFRS { return "US-GAAP" }
     if hasIFRS { return "IFRS" }
+    // `*USGAAPSummaryOfBusinessResults` は会計基準の決定打にならない。J-GAAP 企業でも、
+    // 過去の米国基準値や filer 拡張タグを主要な経営指標等に残すことがある
+    // （三洋化成 4471 / S100YC0P）。当期の連結 J-GAAP 本表 fact があればそちらを優先する。
+    let jgaapMainStatementTags: Set<String> = [
+        "Assets", "Liabilities", "NetAssets",
+        "NetSales", "OperatingIncome", "OrdinaryIncome", "ProfitLoss",
+        "NetCashProvidedByUsedInOperatingActivities",
+    ]
+    let hasCurrentConsolidatedJGAAPStatement = jgaapMainStatementTags.contains { tag in
+        tagElements[tag]?.keys.contains {
+            ContextHelpers.isConsolidatedDuration($0)
+                || ContextHelpers.isConsolidatedInstant($0)
+        } ?? false
+    }
+    if hasUSGAAP && !hasCurrentConsolidatedJGAAPStatement { return "US-GAAP" }
     return "J-GAAP"
 }
 

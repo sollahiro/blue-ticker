@@ -55,7 +55,9 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// 旧 notApplicable プレースホルダと部分欠測行を再抽出する。
 /// 2026-08-23: 保持窓内の旧年 US-GAAP で SS/CF が length-0 だった穴（見出し空白・
 /// CF 後 SS・0105020 連結 CF）を埋めたため v3（BLT-43）。
-public let statementCacheVersion = "statement-v3"
+/// 2026-08-30: J-GAAP 本表がある企業に過去 US-GAAP の Summary / filer 拡張タグが残る場合も、
+/// 当期連結本表を優先して J-GAAP と判定するため v4（三洋化成 4471 / BLT-48）。
+public let statementCacheVersion = "statement-v4"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。
 /// **明示指定**であり、「現行から N つ前」のような機械オフセットではない。

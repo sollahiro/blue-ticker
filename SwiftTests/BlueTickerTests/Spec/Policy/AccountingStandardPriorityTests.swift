@@ -84,6 +84,27 @@ import Foundation
         #expect(result.netProfit == 260_951_000_000.0)
     }
 
+    @Test func testJgaapCurrentStatementsOverrideStrayUsgaapSummaryTags() {
+        let (result, std) = incomeStatement([
+            "OperatingIncomeLossUSGAAPSummaryOfBusinessResults": [
+                "CurrentYearDuration": 10_007_000_000.0
+            ],
+            "OperatingProfitLossUSGAAP": [
+                "CurrentYearDuration_NonConsolidatedMember": 4_381_000_000.0
+            ],
+            "NetSales": ["CurrentYearDuration": 127_859_000_000.0],
+            "OperatingIncome": ["CurrentYearDuration": 10_007_000_000.0],
+            "ProfitLossAttributableToOwnersOfParent": [
+                "CurrentYearDuration": 15_637_000_000.0
+            ],
+        ])
+
+        #expect(std == "J-GAAP")
+        #expect(result.sales == 127_859_000_000.0)
+        #expect(result.operatingProfit == 10_007_000_000.0)
+        #expect(result.netProfit == 15_637_000_000.0)
+    }
+
     @Test func testIncomeStatementReadsJgaapOperatingRevenueSummary() {
         let (result, std) = incomeStatement([
             "OperatingRevenue1SummaryOfBusinessResults": [
