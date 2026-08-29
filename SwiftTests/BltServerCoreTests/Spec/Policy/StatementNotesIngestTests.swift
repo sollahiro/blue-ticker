@@ -31,7 +31,9 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 }
 
 private func seedDoc(
-    _ docID: String, secCode: String, submit: String = "2025-06-20 09:00", db: Database
+    _ docID: String, secCode: String, submit: String = "2025-06-20 09:00",
+    ordinance: String? = Api.ordinanceCompanyDisclosure, form: String? = "030000",
+    db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
@@ -39,8 +41,8 @@ private func seedDoc(
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = Api.docTypeAnnualReport
-    model.ordinanceCode = Api.ordinanceCompanyDisclosure
-    model.formCode = "030000"
+    model.ordinanceCode = ordinance
+    model.formCode = form
     model.submitDateTime = submit
     try await model.create(on: db)
 }
@@ -282,6 +284,47 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             #expect(json["note_type"] as? String == statementNoteTypePerShareInformation)
             let note = try #require(json["note"] as? [String: Any])
             #expect(note["value"] as? Double == 123.45)
+        }
+    }
+
+    @Test func loadByCodeSkipsNewerTrustFilingPreferringCompanyAnnual() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+
+            func seedNote(_ docID: String, submit: String, value: Double) async throws {
+                let row = CompanyStatementNote(
+                    docID: docID, noteType: statementNoteTypePerShareInformation)
+                row.code = "8253"
+                row.submitDateTime = submit
+                row.payload = StatementNotePayload(value: value, unit: "yen_per_share")
+                row.needsReview = false
+                row.source = statementNoteSourceXbrlFacts
+                row.contentHash = "\(value)"
+                row.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypePerShareInformation)
+                try await row.create(on: app.db)
+            }
+            try await seedNote("S100YCDE", submit: "2026-06-16 11:38", value: 100)
+            try await seedNote("S100YZ8K", submit: "2026-08-28 16:00", value: 999)
+
+            let result = try await loadStoredStatementNote(
+                code: "8253", docId: nil, noteType: statementNoteTypePerShareInformation, db: app.db)
+            guard case .found(let json) = result else {
+                Issue.record("expected .found, got \(result)")
+                return
+            }
+            #expect(json["doc_id"] as? String == "S100YCDE")
+
+            let explicit = try await loadStoredStatementNote(
+                code: "8253", docId: "S100YZ8K",
+                noteType: statementNoteTypePerShareInformation, db: app.db)
+            guard case .absent = explicit else {
+                Issue.record("expected .absent for trust doc_id, got \(explicit)")
+                return
+            }
         }
     }
 

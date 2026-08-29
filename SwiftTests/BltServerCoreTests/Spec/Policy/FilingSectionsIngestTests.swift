@@ -467,6 +467,33 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    @Test func loadByCodeSkipsNewerTrustFilingPreferringCompanyAnnual() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+            try await seedStored(
+                "S100YCDE", code: "8253", submit: "2026-06-16 11:38", db: app.db,
+                payload: fakePayload("company"))
+            try await seedStored(
+                "S100YZ8K", code: "8253", submit: "2026-08-28 16:00", db: app.db,
+                payload: fakePayload("trust"))
+
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "8253", docId: nil, sections: nil, db: app.db))
+            #expect(json["doc_id"] as? String == "S100YCDE")
+            let sections = try #require(json["sections"] as? [String: Any])
+            #expect(sections["business_risks"] as? String == "company")
+
+            #expect(
+                try await loadStoredFilingSections(
+                    code: "8253", docId: "S100YZ8K", sections: nil, db: app.db) == nil)
+        }
+    }
+
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
             let json = try await loadStoredFilingSections(

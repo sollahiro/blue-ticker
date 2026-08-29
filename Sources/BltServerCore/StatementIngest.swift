@@ -241,7 +241,7 @@ func loadStoredStatement(
         guard let found = try await CompanyStatement.find(docId, on: db), found.code == code4,
             isServableStatementCacheVersion(found.cacheVersion),
             !isStatementNotApplicablePlaceholder(found.payload),
-            try await isCompanyDisclosureStatementDoc(docID: docId, db: db)
+            try await isCompanyDisclosureDoc(docID: docId, db: db)
         else { return nil }
         rows = [found]
     } else {
@@ -270,7 +270,7 @@ func loadStoredStatement(
 }
 
 /// `edinet_documents` 上で会社開示府令(010)の docID 集合。メタ欠落は通す（単体テストの
-/// statement 行のみシードを壊さない）。メタがあり府令が 010 以外なら落とす。
+/// 格納行のみシードを壊さない）。メタがあり府令が 010 以外なら落とす。
 func companyDisclosureDocIDs(among docIDs: [String], db: Database) async throws -> Set<String> {
     guard !docIDs.isEmpty else { return [] }
     let metas = try await EdinetDocument.query(on: db).filter(\.$id ~~ docIDs).all()
@@ -289,6 +289,6 @@ func companyDisclosureDocIDs(among docIDs: [String], db: Database) async throws 
     return allowed
 }
 
-func isCompanyDisclosureStatementDoc(docID: String, db: Database) async throws -> Bool {
+func isCompanyDisclosureDoc(docID: String, db: Database) async throws -> Bool {
     try await companyDisclosureDocIDs(among: [docID], db: db).contains(docID)
 }

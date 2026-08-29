@@ -662,6 +662,29 @@ extension BreakdownLoadResult {
         }
     }
 
+    @Test func loadByCodeSkipsNewerTrustFilingPreferringCompanyAnnual() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+            try await seedRow(
+                "S100YCDE", code: "8253", submit: "2026-06-16 11:38", db: app.db)
+            try await seedRow(
+                "S100YZ8K", code: "8253", submit: "2026-08-28 16:00", db: app.db)
+
+            let result = try await loadStoredBreakdown(
+                code: "8253", docId: nil, axis: "business", db: app.db)
+            let json = try #require(result.foundJSON)
+            #expect(json["doc_id"] as? String == "S100YCDE")
+
+            let explicit = try await loadStoredBreakdown(
+                code: "8253", docId: "S100YZ8K", axis: "business", db: app.db)
+            #expect(explicit.isAbsent)
+        }
+    }
+
     @Test func loadByDocIdReturnsThatDocument() async throws {
         try await withMigratedApp { app in
             try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
