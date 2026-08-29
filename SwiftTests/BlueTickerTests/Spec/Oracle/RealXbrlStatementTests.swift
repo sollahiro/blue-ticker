@@ -816,7 +816,7 @@ import Foundation
 
     @Test
     func sanyoChemicalChangesInEquityMatchesFiledTotalColumn() async throws {
-        // BLT-48: 公開原本には連結SSとdimensionなし合計列があるが、statement-v3格納行は空だった。
+        // 公開原本には連結SSとdimensionなし合計列がある。会計基準誤判定で SS が空になっていた。
         guard await Self.ensureAvailable("S100YC0P") else { return }
         let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100YC0P", statementTypes: [.changesInEquity]))
