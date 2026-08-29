@@ -150,7 +150,8 @@ func runFinancialsIngest(
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
 /// secCode が無い／非上場（末尾 0 でない・桁数不一致）は対象外。
 /// コード列挙は財務行の対象社集合を変えないため全 doc から行うが、high-water は
-/// `docTypes` に含まれる doc のみで `code -> max(submitDateTime)`（辞書順）を構築する。
+/// `docTypes` に含まれる **かつ会社開示府令(010)** の doc のみで `code -> max(submitDateTime)`
+/// （辞書順）を構築する。信託受益証券等の 120 では通期再計算を起こさない。
 /// 該当種別の書類が無い社は high-water map に現れない（nil 扱い）。
 func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
@@ -166,7 +167,9 @@ func distinctCompanyCodesWithHighWater(
         let code = String(sec.dropLast())
         if seen.insert(code).inserted { codes.append(code) }
 
-        guard let docType = doc.docTypeCode, docTypes.contains(docType) else { continue }
+        guard let docType = doc.docTypeCode, docTypes.contains(docType),
+            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
+        else { continue }
         if let current = highWater[code] {
             if doc.submitDateTime > current { highWater[code] = doc.submitDateTime }
         } else {

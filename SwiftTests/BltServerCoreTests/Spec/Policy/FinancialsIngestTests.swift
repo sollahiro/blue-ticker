@@ -34,7 +34,10 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 /// docTypeCode / submitDateTime は high-water 判定のテストで可変にできるよう引数化する。
 private func seedDocument(
     _ docID: String, secCode: String?, docTypeCode: String = "120",
-    submitDateTime: String = "2025-06-20 09:00", db: Database
+    submitDateTime: String = "2025-06-20 09:00",
+    ordinanceCode: String? = Api.ordinanceCompanyDisclosure,
+    formCode: String? = "030000",
+    db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
@@ -42,6 +45,8 @@ private func seedDocument(
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = docTypeCode
+    model.ordinanceCode = ordinanceCode
+    model.formCode = formCode
     model.submitDateTime = submitDateTime
     try await model.create(on: db)
 }
@@ -316,6 +321,38 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
+        }
+    }
+
+    @Test func doesNotRecomputeWhenOnlyTrustBeneficiaryOrdinance030Arrives() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "82530", docTypeCode: "120",
+                submitDateTime: "2026-06-16 11:38", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "8253"
+            pre.response = try makeResponse(code: "8253", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2026-06-16 11:38"
+            pre.assemblyFingerprint = financialsAssemblyFingerprint()
+            try await pre.create(on: app.db)
+
+            // docType 120 でも特定有価証券府令(030)は会社有報の high-water に入れない
+            try await seedDocument(
+                "S-trust", secCode: "82530", docTypeCode: "120",
+                submitDateTime: "2026-08-28 16:00",
+                ordinanceCode: "030", formCode: "09A000", db: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run for trust beneficiary 120")
+                return fakeSuccess(code: "x", years: 5)
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+            let row = try #require(try await CompanyFinancials.find("8253", on: app.db))
+            #expect(row.highWater == "2026-06-16 11:38")
         }
     }
 

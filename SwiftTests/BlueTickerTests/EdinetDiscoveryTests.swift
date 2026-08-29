@@ -36,13 +36,16 @@ import Foundation
     }
 
     private func makeAnnualDoc(
-        docID: String, edinetCode: String, periodStart: String?, periodEnd: String, submit: String
+        docID: String, edinetCode: String, periodStart: String?, periodEnd: String, submit: String,
+        ordinanceCode: String = Api.ordinanceCompanyDisclosure
     ) -> [String: Any] {
         var doc: [String: Any] = [
             "docID": docID,
             "edinetCode": edinetCode,
             "secCode": "98430",
             "docTypeCode": "120",
+            "ordinanceCode": ordinanceCode,
+            "formCode": ordinanceCode == Api.ordinanceCompanyDisclosure ? "030000" : "09A000",
             "periodEnd": periodEnd,
             "submitDateTime": submit,
         ]
@@ -57,6 +60,8 @@ import Foundation
             "docID": docID,
             "edinetCode": edinetCode,
             "docTypeCode": "130",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
+            "formCode": "030001",
             "parentDocID": parentID,
             "submitDateTime": submit,
         ]
@@ -171,6 +176,7 @@ import Foundation
             "edinetCode": edinetCode,
             "secCode": "98430",
             "docTypeCode": "160",  // 半期報告書
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
             "periodEnd": "\(year - 1)-09-30",
             "submitDateTime": "\(todayStr) 10:00",
         ]
@@ -258,6 +264,35 @@ import Foundation
         #expect(annual[0]["edinet_fy_end"] as? String == "\(year - 1)-12-31")
         #expect(annual[1]["edinet_fy_end"] as? String == "\(year - 2)-12-31")
         #expect(annual[2]["edinet_fy_end"] as? String == "\(year - 3)-12-31")
+    }
+
+    @Test func testBuildDocumentIndexExcludesTrustBeneficiaryOrdinance030() async throws {
+        // docType 120 でも特定有価証券府令(030)の信託受益証券等は会社有報の latest にしない
+        let edinetCode = "E03041"
+        let year = support.currentUTCYear()
+        let todayStr = support.iso(support.utcToday())
+        let companySubmit = support.iso(support.addDays(support.utcToday(), -10))
+
+        let company = makeAnnualDoc(
+            docID: "S100YCDE", edinetCode: edinetCode,
+            periodStart: "\(year - 1)-04-01", periodEnd: "\(year)-03-31",
+            submit: "\(companySubmit) 11:38"
+        )
+        let trust = makeAnnualDoc(
+            docID: "S100YZ8K", edinetCode: edinetCode,
+            periodStart: "\(year - 1)-06-13", periodEnd: "\(year)-05-31",
+            submit: "\(todayStr) 16:00",
+            ordinanceCode: "030"
+        )
+        seedIndexes(year...year, [year: [trust, company]])
+
+        let docs = await EdinetDiscovery.buildDocumentIndexForCode(
+            code: "9843", client: client, analysisYears: 3
+        )
+        let annual = annualDocs(docs)
+        #expect(annual.count == 1)
+        #expect(annual.first?["docID"] as? String == "S100YCDE")
+        #expect(annual.allSatisfy { ($0["ordinanceCode"] as? String) == Api.ordinanceCompanyDisclosure })
     }
 
     // MARK: - 半期報告書探索（findHalfReportForFy 相当）

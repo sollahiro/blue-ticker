@@ -42,7 +42,10 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 
 private func seedDoc(
     _ docID: String, secCode: String?, docType: String? = Api.docTypeAnnualReport,
-    submit: String = "2025-06-20 09:00", db: Database
+    submit: String = "2025-06-20 09:00",
+    ordinance: String? = Api.ordinanceCompanyDisclosure,
+    form: String? = "030000",
+    db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
@@ -50,6 +53,8 @@ private func seedDoc(
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = docType
+    model.ordinanceCode = ordinance
+    model.formCode = form
     model.submitDateTime = submit
     try await model.create(on: db)
 }
@@ -1037,6 +1042,8 @@ extension BreakdownLoadResult {
             model.secCode = "68410"
             model.filerName = "横河電機株式会社"
             model.docTypeCode = Api.docTypeAnnualReport
+            model.ordinanceCode = Api.ordinanceCompanyDisclosure
+            model.formCode = "030000"
             model.submitDateTime = "2025-06-20 09:00"
             try await model.create(on: app.db)
 
@@ -1066,6 +1073,8 @@ extension BreakdownLoadResult {
             model.secCode = "72030"
             model.filerName = "トヨタ自動車株式会社"
             model.docTypeCode = Api.docTypeAnnualReport
+            model.ordinanceCode = Api.ordinanceCompanyDisclosure
+            model.formCode = "030000"
             model.submitDateTime = "2025-06-20 09:00"
             try await model.create(on: app.db)
 

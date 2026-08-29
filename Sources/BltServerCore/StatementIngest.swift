@@ -2,8 +2,8 @@
 // 抽出は BlueTickerCore のファサード（extractStatement）に委譲し、ここでは対象選定・staleness 判定・
 // DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 //
-// `filingSectionCandidates`（`listedCodes × 有報(120) × 直近 years 件`）をそのまま再利用し、返ってきた
-// docID ごとに抽出結果を1行として格納する（company_filing_sections と同じ「1書類=1行」設計）。
+// `filingSectionCandidates`（`listedCodes × 会社有報(120・府令010) × 直近 years 件`）をそのまま再利用し、
+// 返ってきた docID ごとに抽出結果を1行として格納する（company_filing_sections と同じ「1書類=1行」設計）。
 // 複数年度対応は本関数の呼び出し元が filingSectionCandidates から複数 docID を受け取ることで自然に
 // 達成され、`StatementAnalyzer` 自体を複数年度対応に拡張する必要はない
 // （docs/statement.md）。
@@ -225,7 +225,7 @@ func countServableStatements(db: Database) async throws -> (servable: Int, unser
 
 /// 格納済み Statement 取り込み 行を code で引き、公開契約 `StatementResponse` の JSON を返す。
 /// `docId` 指定時はその書類（当該 code のもの）1件のみ、省略時は当該 code の直近 `years` 件
-/// （提出日時降順・床以上）を束ねる。床は `statementMinServableVersion`（明示定数）。
+/// （提出日時降順・床以上・会社開示府令）を束ねる。床は `statementMinServableVersion`（明示定数）。
 /// 無い・床未満・対象外プレースホルダのみなら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
 func loadStoredStatement(
     code: String, docId: String?, years: Int, db: Database
@@ -240,20 +240,24 @@ func loadStoredStatement(
         // 指定書類。取り違え防止に当該 code の書類であることを確認する。
         guard let found = try await CompanyStatement.find(docId, on: db), found.code == code4,
             isServableStatementCacheVersion(found.cacheVersion),
-            !isStatementNotApplicablePlaceholder(found.payload)
+            !isStatementNotApplicablePlaceholder(found.payload),
+            try await isCompanyDisclosureStatementDoc(docID: docId, db: db)
         else { return nil }
         rows = [found]
     } else {
-        // 直近 years 件（提出日時降順のうち、read 床以上かつ実データ行）。
+        // 直近 years 件（提出日時降順のうち、read 床以上・実データ・会社開示府令）。
         let candidates = try await CompanyStatement.query(on: db)
             .filter(\.$code == code4)
             .sort(\.$submitDateTime, .descending)
             .all()
+        let companyDocIDs = try await companyDisclosureDocIDs(
+            among: candidates.compactMap(\.id), db: db)
         rows = Array(
             candidates
                 .filter {
                     isServableStatementCacheVersion($0.cacheVersion)
                         && !isStatementNotApplicablePlaceholder($0.payload)
+                        && ($0.id.map { companyDocIDs.contains($0) } ?? false)
                 }
                 .prefix(years))
     }
@@ -263,4 +267,28 @@ func loadStoredStatement(
         schemaVersion: statementSchemaVersion, code: code4, name: nil, sector: nil, market: nil,
         years: rows.map(\.payload))
     return response.jsonObject()
+}
+
+/// `edinet_documents` 上で会社開示府令(010)の docID 集合。メタ欠落は通す（単体テストの
+/// statement 行のみシードを壊さない）。メタがあり府令が 010 以外なら落とす。
+func companyDisclosureDocIDs(among docIDs: [String], db: Database) async throws -> Set<String> {
+    guard !docIDs.isEmpty else { return [] }
+    let metas = try await EdinetDocument.query(on: db).filter(\.$id ~~ docIDs).all()
+    let metaByID = Dictionary(uniqueKeysWithValues: metas.compactMap { doc -> (String, EdinetDocument)? in
+        guard let id = doc.id else { return nil }
+        return (id, doc)
+    })
+    var allowed = Set<String>()
+    for id in docIDs {
+        if let meta = metaByID[id] {
+            if Api.isCompanyDisclosureOrdinance(meta.ordinanceCode) { allowed.insert(id) }
+        } else {
+            allowed.insert(id)
+        }
+    }
+    return allowed
+}
+
+func isCompanyDisclosureStatementDoc(docID: String, db: Database) async throws -> Bool {
+    try await companyDisclosureDocIDs(among: [docID], db: db).contains(docID)
 }

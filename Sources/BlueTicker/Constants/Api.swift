@@ -171,6 +171,16 @@ public enum Api {
     static let docTypeHalfYearReport = "160"
     static let docTypeAmendedHalfYearReport = "170"
 
+    /// 企業内容等の開示に関する内閣府令。会社の有報・訂正有報はこれ。
+    /// `030`（特定有価証券の開示に関する内閣府令）は投資信託・信託受益証券等で、
+    /// docType 120 でも会社財務の latest / yearRank には使わない。
+    public static let ordinanceCompanyDisclosure = "010"
+
+    /// 会社開示府令の書類か（ordinance 欠落は false。テストシードは明示すること）。
+    public static func isCompanyDisclosureOrdinance(_ ordinanceCode: String?) -> Bool {
+        ordinanceCode == ordinanceCompanyDisclosure
+    }
+
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
     /// レスポンス形を破壊的に変更したときのみ +1 する。
     static let financialsSchemaVersion = 2

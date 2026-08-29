@@ -58,15 +58,17 @@ enum EdinetDiscovery {
             return seenDocIDs.insert(id).inserted
         }
 
-        // ③ edinetCode でフィルタ（有報・訂正を分類）
+        // ③ edinetCode でフィルタ（会社有報・訂正を分類。特定有価証券府令は除外）
         let annualDocs = allDocs.filter {
             $0["edinetCode"] as? String == edinetCode &&
             $0["docTypeCode"] as? String == Api.docTypeAnnualReport &&
+            Api.isCompanyDisclosureOrdinance($0["ordinanceCode"] as? String) &&
             !($0["periodEnd"] as? String ?? "").isEmpty
         }
         let amendmentCandidates = allDocs.filter {
             $0["edinetCode"] as? String == edinetCode &&
-            $0["docTypeCode"] as? String == Api.docTypeAmendment
+            $0["docTypeCode"] as? String == Api.docTypeAmendment &&
+            Api.isCompanyDisclosureOrdinance($0["ordinanceCode"] as? String)
         }
 
         // ④ periodEnd 降順ソート → 上位 analysisYears 件を選択し、メタ情報付与
@@ -175,6 +177,8 @@ enum EdinetDiscovery {
                 let sec = (doc["secCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
                 guard sec.hasPrefix(code4) else { continue }
                 guard let docType = doc["docTypeCode"] as? String, seedDocTypes.contains(docType) else { continue }
+                // 会社開示府令のみ（信託受益証券等の 120 で edinetCode を拾わない）
+                guard Api.isCompanyDisclosureOrdinance(doc["ordinanceCode"] as? String) else { continue }
                 guard let ec = doc["edinetCode"] as? String, !ec.isEmpty else { continue }
                 return doc
             }

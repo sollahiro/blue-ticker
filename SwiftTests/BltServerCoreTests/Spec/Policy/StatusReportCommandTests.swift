@@ -46,6 +46,8 @@ private func seedAnnualReportDoc(
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = Api.docTypeAnnualReport
+    model.ordinanceCode = Api.ordinanceCompanyDisclosure
+    model.formCode = "030000"
     model.submitDateTime = submit
     try await model.create(on: db)
 }
