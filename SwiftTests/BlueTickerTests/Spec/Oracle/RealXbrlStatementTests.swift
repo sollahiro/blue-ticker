@@ -814,6 +814,31 @@ import Foundation
         #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
     }
 
+    @Test
+    func sanyoChemicalChangesInEquityMatchesFiledTotalColumn() async throws {
+        // 公開原本には連結SSとdimensionなし合計列がある。会計基準誤判定で SS が空になっていた。
+        guard await Self.ensureAvailable("S100YC0P") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YC0P", statementTypes: [.changesInEquity]))
+
+        Self.expectOpeningClosing(
+            year.changesInEquity, tag: "NetAssets",
+            opening: 138_302_000_000, closing: 162_556_000_000)
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "DividendsFromSurplus" && $0.value == -3_786_000_000
+            })
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 15_637_000_000
+            })
+        #expect(
+            year.changesInEquity.contains {
+                $0.tag == "PurchaseOfTreasuryStock" && $0.value == -3_000_000
+            })
+        #expect(!year.changesInEquity.contains { $0.tag == "ProfitLoss" })
+    }
+
     // MARK: - US-GAAP（HTML 経路。富士フイルム S100W3XJ は 2026-08-22 目視済み）
 
     private static func labelValue(
