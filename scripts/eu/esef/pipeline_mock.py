@@ -2,7 +2,7 @@
 """EU / ESEF pipeline mock (script-level).
 
 Monorepo naming: Region JP↔EU, Source EDINET↔ESEF
-(see `docs/architecture.md` § Region × Source, `.agents/rules/project/regions.md`).
+(see `docs/architecture.md` § Region × Source, `.agents/rules/regions.md`).
 
 Mirrors JP/EDINET BlueTicker stages at a coarse grain:
 

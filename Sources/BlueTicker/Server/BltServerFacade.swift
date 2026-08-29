@@ -12,7 +12,7 @@ import Foundation
 // MARK: - BltServerResponse
 
 /// ファサードの応答。HTTP ステータスコードはトランスポート側が決める。
-/// 戻り値パターン（error-handling.md）に従い、失敗は throw せず case で表現する。
+/// 戻り値パターン（`.agents/rules/data-handling.md`）に従い、失敗は throw せず case で表現する。
 public enum BltServerResponse {
     /// 成功。JSON 値（オブジェクト or 配列）。
     case ok(Any)
@@ -790,7 +790,7 @@ func filingsList(from records: [EdinetDocumentRecord], maxYears: Int) -> [[Strin
 }
 
 /// filings 応答の 1 件分（公開スキーマ）。ライブ経路と DB read 経路でマッピングを共有しドリフトを防ぐ。
-/// fy_end は期末日（YYYY-MM-DD）の先頭 7 文字（YYYY-MM）。date-conversion.md で許容された prefix(7)。
+/// fy_end は期末日（YYYY-MM-DD）の先頭 7 文字（YYYY-MM）。`.agents/rules/data-handling.md` で許容された prefix(7)。
 func filingDict(
     docID: String, docType: String, rawFyEnd: String, submitAt: String, docDescription: String
 ) -> [String: Any] {

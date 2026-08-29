@@ -58,7 +58,7 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 
 /// note_type ごとの現行 cache_version（決定論経路のみが対象。`isVersionGatedStatementNoteType` 参照）。
 /// blueTickerVersion とは独立し、当該 note_type の抽出ロジック変更時のみバンプする
-/// （`.agents/rules/project/versioning.md` の cache_version 運用と同型）。
+/// （`.agents/rules/versioning.md` の cache_version 運用と同型）。
 /// v2: EPS 抽出。v3（2026-08-19）: IFRS の `JPYPerShares` BPS を日本基準
 /// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v3"
@@ -171,7 +171,7 @@ public func isServableStatementNote(source: String, cacheVersion: String, noteTy
 }
 
 /// 財務諸表注記取り込み ingest（書類1件・note_type1つ分）の計算結果。`BreakdownResolveResult`（内訳取り込み）と同型の
-/// 3値パターン（`.agents/rules/project/error-handling.md`）。
+/// 3値パターン（`.agents/rules/data-handling.md`）。
 public enum StatementNoteResolveResult: Sendable {
     case resolved(payload: StatementNotePayload, source: String, contentHash: String)
     case notApplicable(reason: String)

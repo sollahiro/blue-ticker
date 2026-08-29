@@ -7,7 +7,7 @@
 - **機能単位の有料／無料分けはしない**（全機能を同一条件で提供）。
 - **段階 B（第三者 REST）と x402 は残す**（機械課金・レート制限。顧客アカウントは持たない）。
 - **MCP は当面 Apps in ChatGPT 専用**（他 MCP クライアント向けの案内・サポート対象外）。
-- 公開規約（どの Feature をいつ外に出すか）は **実装サイクル**（`AGENTS.md`：smoke → golden → 限定投入 → 公開）に準拠する。サイクル段階・本番件数・公開ゲートの現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。本表の「実装」はコード有無。
+- 公開規約（どの Feature をいつ外に出すか）は **実装サイクル**（`.agents/skills/xbrl-development/SKILL.md`：smoke → golden → 限定投入 → 公開）に準拠する。サイクル段階・本番件数・公開ゲートの現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）。本表の「実装」はコード有無。
 - client 表の **All** は **実装済み Feature の全部**（未実装・構想は含めない）。
 
 ## Class 依存
@@ -108,8 +108,7 @@ statement で販管費の内数なら販管費の子、別掲なら Waterfall �
 （breakdown `research_and_development` は発生支出で、販管費から引かない）。地域×事業の交差値は
 既存データにないため、開示にないリンクは生成しない。`/sankey` エンドポイントは未公開。
 階層の正本は `sankey.md`。
-現在地は Linear [BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後)
-（残作業の先頭は [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)）。
+Sankey の残作業と現在地は Linear Team `blue-ticker` を正本とする。
 
 ## 関連
 

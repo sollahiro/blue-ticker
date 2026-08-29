@@ -2,7 +2,7 @@
 import PackageDescription
 
 // =============================================================================
-// 外部パッケージ一覧の正本（表は docs / rules に複製しない → .agents/rules/project/dependencies.md）
+// 外部パッケージ一覧の正本（表は docs / rules に複製しない → .agents/rules/architecture.md）
 //
 // | パッケージ                    | 用途                         | リンク先ターゲット                          |
 // |-------------------------------|------------------------------|---------------------------------------------|
@@ -17,7 +17,7 @@ import PackageDescription
 //
 // ターゲット間: BltServer → BltServerCore → BlueTickerCore / BltMcpServerCore
 // Core は Vapor/Fluent を参照しない（AGENTS.md / docs/architecture.md）。
-// 検証: 段階1–2 は smoke/golden、契約確認は使い捨て Neon へ ingest 後に /v1。
+// 検証: smoke/golden の後、使い捨て Neon へ ingest して /v1 契約を確認する。
 // =============================================================================
 
 let package = Package(

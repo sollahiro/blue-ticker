@@ -4,7 +4,7 @@ import Foundation
 
 // XBRLParser（Analysis/XBRLSectionParser.swift）のセクション抽出仕様。
 // 有報セクション本文は 有報セクション取り込み で Neon に格納され、抽出ロジックの変更は
-// filingSectionsCacheVersion のバンプ判断に直結する（versioning.md）。ここでは合成
+// filingSectionsCacheVersion のバンプ判断に直結する（`.agents/rules/versioning.md`）。ここでは合成
 // フィクスチャで HTML 経由（extractSection / extractSections）・TextBlock 経由
 // （extractSectionsByType）・報告書種別判定（detectReportType）の挙動を固定する。
 

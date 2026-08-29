@@ -1,12 +1,12 @@
 # ingest 運用方針
 
-本番 write・定期ジョブ・R2 温めの正本。実装サイクル（`AGENTS.md` 段階1–10）との対応、CLI 詳細は `deploy.md` / `operations.md`。
+本番 write・定期ジョブ・R2 温めの正本。実装サイクル（`.agents/skills/xbrl-development/SKILL.md`）との対応、CLI 詳細は `deploy.md` / `operations.md`。
 
 ## 原則
 
 - **ジョブは stage 系統ごとに分離**する。1 プロセスに `--stages` を詰め込まない（失敗時の再実行範囲・所要時間・needs_review 多発軸の隔離）。
 - **最新年度を先**、過去年度バックフィルは別サイクル。
-- **探索的試し書き禁止**（段階3）。本番 write は使い捨て225で確認済みの note_type / 軸だけ。
+- **探索的試し書き禁止**。本番 write は使い捨て225で確認済みの note_type / 軸だけ。
 - **`financials` は組立の最後**に 1 回（正本を貯めてから `fin-vN` 再計算）。`#10b` により ingest 順序依存はないが、**BPS 等を埋めるなら notes を先**に回すと無駄が少ない。
 - **R2（生 XBRL L2）**は doc 取得の副産物。`filing-sections` / 書類単位 stage を先に回して温める。
 

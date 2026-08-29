@@ -3,7 +3,7 @@ import Foundation
 /// EDINET・キャッシュの日付処理で共有する UTC 固定カレンダー。
 /// `Calendar.current` を使うと JST 環境で日付境界（0:00〜8:59）に、
 /// UTC 固定の EDINET 処理（`EdinetAPIClient`）と TTL・現在年の判定が 1 日ずれる。
-/// 新規コードは `Calendar.current` ではなくこれを使う（`date-conversion.md`）。
+/// 新規コードは `Calendar.current` ではなくこれを使う（`.agents/rules/data-handling.md`）。
 let utcCalendar: Calendar = {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(secondsFromGMT: 0)!

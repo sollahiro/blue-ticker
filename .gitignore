@@ -60,10 +60,6 @@ workers/**/.dev.vars
 .cursor/
 .gemini/
 .agent/
-.claude/settings.local.json
-
-# Session handoff working files (transient, never committed)
-.claude/*.local.md
 
 # ==========================================
 # OS

@@ -44,7 +44,7 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 
 /// Neon Statement 取り込み キャッシュ（`company_statements.cache_version`）の計算バージョン。
 /// `blueTickerVersion` とは独立し、抽出ロジックまたは本契約型の意味を変えたときのみバンプする
-/// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/project/versioning.md`）。
+/// （`companyFinancialsCacheVersion` と同じ運用。`.agents/rules/versioning.md`）。
 /// 注記（注記取り込み）は別バージョン系統になる想定で、本定数には連動させない。
 /// US-GAAP 明示 notApplicable（個別 BS silent fallback 廃止）は v1 のまま拡張（2026-08-09）。
 /// SS（持分変動計算書）追加も v1 のまま拡張（2026-08-09。本番 `company_statements` は 0 行のため

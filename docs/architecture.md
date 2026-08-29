@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-**現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/project/versioning.md`）、経緯は Git。
+**現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/versioning.md`）、経緯は Git。
 
 ## Region × Source（モノレポ命名）
 
@@ -17,7 +17,7 @@
 | 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
 | cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
 
-規律の短文正本: `.agents/rules/project/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針・未決は `eu-esef-roadmap.md`、進捗は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
+規律の短文正本: `.agents/rules/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針・未決は `eu-esef-roadmap.md`、進捗は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 ## デプロイモード
 
@@ -35,7 +35,7 @@
 
 Core に Vapor/Fluent をリンクさせない。実行バイナリは薄く、Web/DB は `BltServerCore` に閉じる。
 
-外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/project/dependencies.md`）。
+外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/architecture.md`）。
 
 ```mermaid
 graph TD
@@ -115,7 +115,7 @@ flowchart LR
 
 ## データパイプライン（構成）
 
-取り込み対象と保存先の**構成**のみ。進捗は Linear。床定数は `versioning.md`。
+取り込み対象と保存先の**構成**のみ。進捗は Linear。床定数は `.agents/rules/versioning.md`。
 
 | 対象 | 保存先 |
 |---|---|
@@ -127,7 +127,7 @@ flowchart LR
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`.agents/rules/project/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 

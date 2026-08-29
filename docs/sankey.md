@@ -11,8 +11,7 @@
 [BLT-45](https://linear.app/sollahiro/issue/BLT-45/sankey-投資ハブ利益の活用) は投資ハブ。
 欠測社の販管費費目は [BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)（notes または breakdown の別軸）。
 揃ってから [BLT-47](https://linear.app/sollahiro/issue/BLT-47/sankey-欠測-randd販管費の子) で欠測 R&D を販管費の子にする。
-残作業の先頭は [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)。
-本 Feature・ingest・Notes・listed drain へ BLT-28 より先に着手しない。
+着手順と現在地は Linear Team `blue-ticker` の依存関係を正本とする。
 
 ## 材料契約（BLT-18）
 

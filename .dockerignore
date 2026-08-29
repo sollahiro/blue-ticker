@@ -3,7 +3,6 @@
 .build/
 .git/
 .github/
-.claude/
 docs/
 # taxonomy（約 105MB）はサーバー未使用。CSV だけ残す。
 assets/taxonomy/

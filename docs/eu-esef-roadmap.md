@@ -1,6 +1,6 @@
 # EU / ESEF ロードマップ
 
-**Region `EU` · Source `ESEF` の方針・フェーズ・未決**。命名は `.agents/rules/project/regions.md`。構成は `architecture.md`。JP の方針は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。進捗の現在地は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
+**Region `EU` · Source `ESEF` の方針・フェーズ・未決**。命名は `.agents/rules/regions.md`。構成は `architecture.md`。JP の方針は `blt-server-roadmap.md`。機能マトリクスは `feature-tiers.md`。Summary 組立は `financials-summary-separation.md`（JP と同じ形を目指す）。進捗の現在地は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 モノレポ前提（JP↔EU / EDINET↔ESEF）。リポジトリ分割はしない。
 
@@ -43,7 +43,7 @@ Statement / Statement-Notes / Breakdown
 - 製品順は **Meta → Struct → Norm → Viz**。Summary は Struct + Breakdown 経路の組立。
 - Source 固有は `eu/esef` 配下に閉じ、共有は FieldSet / resolve / 配信契約 / Waterfall 計算に限る。
 - JP の実装サイクル（smoke → golden → 限定投入 → 公開）を EU でも踏む。
-- 公開範囲・スキーマ追加は着手前に都度確認（`workflow.md`）。
+- 公開範囲・スキーマ追加は着手前に都度確認（`AGENTS.md`）。
 - **発行体マスター（entity index）は ESAP 公開まで保留。** それまでは filings.xbrl.org の live 完全一致（LEI / 正確な name / fxo_id）と、固定 LEI セットでの Struct 以降を優先する。`EsefEntityIndexStore` / `refreshIndex` はコード上の試作として残し、本番ジョブ化しない。
 
 ## 機能カバレッジ（Class 順）
@@ -105,4 +105,4 @@ Struct / Breakdown 正本が無い段階で Summary を本番公開しない。�
 
 ## 関連
 
-`architecture.md` · `feature-tiers.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `scripts/eu/esef/README.md` · `.agents/rules/project/regions.md`
+`architecture.md` · `feature-tiers.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `scripts/eu/esef/README.md` · `.agents/rules/regions.md`

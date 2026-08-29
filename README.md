@@ -58,7 +58,7 @@ ChatGPT の Apps / コネクタ向けに **`https://mcp.sollahiro.com`** を登�
 - [`docs/architecture.md`](docs/architecture.md) — 構成
 - [`docs/feature-tiers.md`](docs/feature-tiers.md) — 機能マトリクス
 - [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md) — 運用
-- [`AGENTS.md`](AGENTS.md) — ビルド・ターゲット構成
+- [`AGENTS.md`](AGENTS.md) — エージェント向け常時ガードレール
 
 ## 免責事項
 
