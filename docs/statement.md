@@ -63,4 +63,4 @@ REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `rea
 
 ## 関連
 
-`feature-tiers.md` · `breakdown.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `.agents/rules/project/xbrl-analysis.md` · `versioning.md`
+`feature-tiers.md` · `breakdown.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `.agents/rules/xbrl.md` · `.agents/rules/versioning.md`

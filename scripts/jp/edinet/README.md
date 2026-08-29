@@ -1,6 +1,6 @@
 # JP / EDINET
 
-Region `JP` · Source `EDINET`。命名規約は `.agents/rules/project/regions.md`。
+Region `JP` · Source `EDINET`。命名規約は `.agents/rules/regions.md`。
 
 本番ロジックの正本は Swift モノレポ側:
 

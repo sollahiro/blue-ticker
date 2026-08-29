@@ -1,6 +1,6 @@
 # EU / ESEF — API（Meta）
 
-Region `EU` · Source `ESEF`。命名は `.agents/rules/project/regions.md`。
+Region `EU` · Source `ESEF`。命名は `.agents/rules/regions.md`。
 
 | ファイル | 役割 |
 |---|---|

@@ -47,7 +47,7 @@ private final class ContinuationBox<T: Sendable>: @unchecked Sendable {
 }
 
 /// `T` を Sendable 制約なしで継続の外へ運ぶための箱。DB read 経路は `[String: Any]`（JSON 境界の
-/// 動的型、`typing.md` で許容）を返すため `T: Sendable` を要求できない。実際には呼び出し元の
+/// 動的型、`.agents/rules/data-handling.md` で許容）を返すため `T: Sendable` を要求できない。実際には呼び出し元の
 /// タスク1つが値を生成し、それを継続経由で1回だけ受け渡すだけ（複数タスクからの同時アクセスはない）
 /// なので `@unchecked Sendable` は安全。
 private struct UncheckedSendableBox<T>: @unchecked Sendable {

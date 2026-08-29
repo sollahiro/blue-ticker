@@ -4,7 +4,7 @@
 //
 // C の stderr/stdout は使わない。Glibc のグローバル var は Swift 6 の並行性
 // チェックに通らないため、FileHandle.standardError / standardOutput に寄せる
-//（Utils/StandardError.swift・error-handling.md と同じ方針）。
+//（Utils/StandardError.swift・`.agents/rules/data-handling.md` と同じ方針）。
 
 import Foundation
 import Logging

@@ -1,6 +1,6 @@
 # EU / ESEF
 
-Region `EU` · Source `ESEF` の探索コード。命名規約は `.agents/rules/project/regions.md`。
+Region `EU` · Source `ESEF` の探索コード。命名規約は `.agents/rules/regions.md`。
 
 対となる JP / EDINET 実装の正本は Swift（`Sources/BlueTicker/`）。ポインタは `scripts/jp/edinet/`。
 

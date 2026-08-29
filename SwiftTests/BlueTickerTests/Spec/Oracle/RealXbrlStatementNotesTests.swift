@@ -1223,7 +1223,7 @@ import Testing
     //
     // 年度中に保有株式を全数売却した銘柄（当年の保有株式数・計上額が nil になる）を含む4社について、
     // 開示順（保有額の大きい順）での全銘柄・全値をユーザーが目視確認した結果を golden として固定する
-    // （`.agents/rules/generic/workflow.md` のテスト方針: 実データ検証→golden記録。
+    // （`.agents/skills/xbrl-development/SKILL.md` のテスト方針: 実データ検証→golden記録。
     // memory `feedback_practicality_validation_methodology` と同型の運用）。
     // 件数・順序・値のいずれかが変わればこのテストが検知する（resolver の将来的な変更に対する
     // 回帰ガード）。

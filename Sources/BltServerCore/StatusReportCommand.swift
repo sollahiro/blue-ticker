@@ -126,7 +126,7 @@ public struct IngestStageStatus: Codable, Sendable, Equatable {
     /// ISO8601（UTC）。行が1件も無ければ nil。
     public let lastUpdated: String?
     public let stale: Bool
-    /// 各社の最新有報（`yearRank == 0`）を母数にしたカバレッジ。`AGENTS.md` 段階4。
+    /// 各社の最新有報（`yearRank == 0`）を母数にしたカバレッジ。母集団は `.agents/skills/xbrl-development/SKILL.md`。
     /// 分母は「最新 120 がある対象社／その書類」であり、120 が無い上場社は含めない。
     /// financials は 1 行 = 1 社のため、カバー条件は `high_water >=` その社の最新 120 提出日時。
     /// 他ステージは当該 docID の行があること。最新 120 が 0 件ならすべて 0。

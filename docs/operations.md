@@ -32,7 +32,7 @@ Tunnel + Access（SSO / Service Token / MCP OAuth）。Bearer は廃止済み。
 - cloudflared は Dockerfile で版固定。数ヶ月に一度更新。
 - Fly serviceless 後は stopped になり得る → deploy ワークフローが `machine start`。
 - Neon scale-to-zero: `withDbRetry` ＋プール待ち 45s。プラン変更時に再確認。
-- Linux: MemberImportVisibility 回避フラグ（`dependencies.md`）。swift-nio 修正後に除去。
+- Linux: MemberImportVisibility 回避フラグ（`AGENTS.md` / `.github/workflows/ci.yml`）。swift-nio 修正後に除去。
 
 ## Git の外にある状態
 
