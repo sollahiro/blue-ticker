@@ -25,13 +25,15 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 }
 
 private func record(
-    _ docID: String, filerName: String = "テスト株式会社", secCode: String? = "72030"
+    _ docID: String, filerName: String = "テスト株式会社", secCode: String? = "72030",
+    ordinanceCode: String? = "010", formCode: String? = "030000",
+    docTypeCode: String = "120", docDescription: String = "有価証券報告書"
 ) -> EdinetDocumentRecord {
     EdinetDocumentRecord(
         docID: docID, edinetCode: "E00001", secCode: secCode, filerName: filerName,
-        docTypeCode: "120", ordinanceCode: "010", formCode: "030000",
+        docTypeCode: docTypeCode, ordinanceCode: ordinanceCode, formCode: formCode,
         periodStart: "2024-04-01", periodEnd: "2025-03-31",
-        submitDateTime: "2025-06-20 09:00", docDescription: "有価証券報告書")
+        submitDateTime: "2025-06-20 09:00", docDescription: docDescription)
 }
 
 @Suite struct DocumentSyncTests {
@@ -91,6 +93,21 @@ private func record(
             // 5 桁コードを渡しても prefix(4) で正規化される。
             let viaFive = try await loadStoredFilingRecords(code: "85910", db: app.db)
             #expect(Set(viaFive.map(\.docID)) == ["MATCH1", "MATCH2"])
+        }
+    }
+
+    @Test func loadStoredFilingRecordsExcludesTrustOrdinance030() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S100X4JS", secCode: "82530", ordinanceCode: "010", formCode: "043A00",
+                        docTypeCode: "160", docDescription: "半期報告書"),
+                    record("S100XQ9U", secCode: "82530", ordinanceCode: "030", formCode: "12A000",
+                        docTypeCode: "160", docDescription: "半期報告書（内国信託受益証券等）"),
+                ], db: app.db)
+
+            let records = try await loadStoredFilingRecords(code: "8253", db: app.db)
+            #expect(records.map(\.docID) == ["S100X4JS"])
         }
     }
 

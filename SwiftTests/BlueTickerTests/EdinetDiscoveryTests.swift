@@ -303,6 +303,7 @@ import Foundation
             "docID": "S100UOCS",
             "secCode": "28020",
             "docTypeCode": "160",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
             "docDescription": "半期報告書－第147期(2024/04/01－2025/03/31)",
             "periodStart": "2024-04-01",
             "periodEnd": "2025-03-31",
@@ -341,6 +342,7 @@ import Foundation
             "docID": "S100X3OS",
             "secCode": "332A0",
             "docTypeCode": "160",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
             "docDescription": "半期報告書－第8期(2025/04/01－2025/09/30)",
             "periodStart": "2025-04-01",
             "periodEnd": "2025-09-30",
@@ -375,6 +377,7 @@ import Foundation
             "docID": "S100S3PK",
             "secCode": "28020",
             "docTypeCode": "140",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
             "docDescription": "四半期報告書－第146期第2四半期(2023/07/01－2023/09/30)",
             "periodStart": "2023-07-01",
             "periodEnd": "2023-09-30",
@@ -403,5 +406,47 @@ import Foundation
         #expect(doc?["edinet_period_start"] as? String == "2023-04-01")
         #expect(doc?["edinet_period_end"] as? String == "2023-09-30")
         #expect(doc?["period_type"] as? String == "2Q")
+    }
+
+    @Test func testFindHalfReportExcludesTrustBeneficiaryOrdinance030() async throws {
+        // 同じ期でも特定有価証券府令(030)の信託半期は会社半期にしない
+        let trust: [String: Any] = [
+            "docID": "S100XQ9U",
+            "secCode": "82530",
+            "docTypeCode": "160",
+            "ordinanceCode": "030",
+            "docDescription": "半期報告書（内国信託受益証券等）－第1期(2024/04/01－2025/03/31)",
+            "periodStart": "2024-04-01",
+            "periodEnd": "2025-03-31",
+            "submitDateTime": "2024-11-20 09:30",
+            "_edinet_list_date": "2024-11-20",
+        ]
+        let company: [String: Any] = [
+            "docID": "S100X4JS",
+            "secCode": "82530",
+            "docTypeCode": "160",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
+            "docDescription": "半期報告書－第76期(2024/04/01－2025/03/31)",
+            "periodStart": "2024-04-01",
+            "periodEnd": "2025-03-31",
+            "submitDateTime": "2024-11-12 16:00",
+            "_edinet_list_date": "2024-11-12",
+        ]
+        seedIndexes(2024...2025, [2024: [trust, company]])
+
+        let prebuiltAnnual: [[String: Any]] = [[
+            "docID": "S100YCDE",
+            "docTypeCode": "120",
+            "edinet_fy_end": "2025-03-31",
+            "periodStart": "2024-04-01",
+            "periodEnd": "2025-03-31",
+        ]]
+
+        let docs = await EdinetDiscovery.buildHalfYearDocumentIndexForCode(
+            code: "8253", client: client, prebuiltAnnualDocs: prebuiltAnnual
+        )
+        let found = docs.first { ($0["period_type"] as? String) == "2Q" }
+        #expect(found?["docID"] as? String == "S100X4JS")
+        #expect(docs.contains { ($0["docID"] as? String) == "S100XQ9U" } == false)
     }
 }

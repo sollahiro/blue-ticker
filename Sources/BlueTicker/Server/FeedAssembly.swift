@@ -94,8 +94,9 @@ public func assembleFeedUpdates(
     ]
 }
 
-/// 1 書類の公開フィード行。非上場は nil。filings 1 件に code / name を足した形。
+/// 1 書類の公開フィード行。非上場・会社開示府令以外は nil。filings 1 件に code / name を足した形。
 func feedFilingItem(from record: EdinetDocumentRecord) -> [String: Any]? {
+    guard Api.isCompanyDisclosureOrdinance(record.ordinanceCode) else { return nil }
     guard let code = listedTickerCode(fromSecCode: record.secCode) else { return nil }
     var item = filingDict(
         docID: record.docID,

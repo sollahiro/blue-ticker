@@ -210,6 +210,8 @@ enum EdinetDiscovery {
                 guard sec.hasPrefix(code4) else { continue }
                 guard let docType = doc["docTypeCode"] as? String,
                       halfYearDocTypes.contains(docType) else { continue }
+                // 会社開示府令のみ（信託・投信の 160 を会社半期として採用しない）
+                guard Api.isCompanyDisclosureOrdinance(doc["ordinanceCode"] as? String) else { continue }
                 let desc = doc["docDescription"] as? String ?? ""
                 guard !desc.contains("訂正") && !desc.contains("補正") else { continue }
 
