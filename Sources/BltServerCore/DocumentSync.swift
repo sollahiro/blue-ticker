@@ -181,6 +181,7 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 /// 指定銘柄（4 桁証券コード）の 書類同期 書類を DB から引いて正規化レコードで返す。
 /// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため LIKE プレフィックスで突き合わせる
 /// （ライブ探索の hasPrefix(code4) と同条件）。該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
+/// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
     let code4 = String(code.prefix(4))
     // 証券コードは英数字のみ。LIKE プレフィックス突き合わせのため、ワイルドカード
@@ -188,6 +189,7 @@ func loadStoredFilingRecords(code: String, db: Database) async throws -> [Edinet
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
     let rows = try await EdinetDocument.query(on: db)
         .filter(\.$secCode, .contains(inverse: false, .prefix), code4)
+        .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
         .all()
     return rows.map { $0.toRecord() }
 }

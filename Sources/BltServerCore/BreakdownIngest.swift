@@ -336,9 +336,10 @@ enum BreakdownLoadResult {
 /// （geography は 2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ
 /// 解禁。employees/research_and_development/goodwill は決定論のみで LLM 非依存だが
 /// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
-/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
+/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
+/// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
 /// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
-/// 無い・read 不可なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
+/// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
 ) async throws -> BreakdownLoadResult {
@@ -348,6 +349,7 @@ func loadStoredBreakdown(
 
     let row: CompanyBreakdown?
     if let docId, !docId.isEmpty {
+        guard try await isCompanyDisclosureDoc(docID: docId, db: db) else { return .absent }
         let key = CompanyBreakdown.compositeID(docID: docId, axis: axis)
         let found = try await CompanyBreakdown.find(key, on: db)
         row = (found?.code == code4) ? found : nil
@@ -357,8 +359,11 @@ func loadStoredBreakdown(
             .filter(\.$axis == axis)
             .sort(\.$submitDateTime, .descending)
             .all()
+        let companyDocIDs = try await companyDisclosureDocIDs(
+            among: candidates.map(\.docID), db: db)
         row = candidates.first {
             isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion, axis: axis)
+                && companyDocIDs.contains($0.docID)
         }
     }
 

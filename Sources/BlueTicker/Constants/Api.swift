@@ -171,6 +171,16 @@ public enum Api {
     static let docTypeHalfYearReport = "160"
     static let docTypeAmendedHalfYearReport = "170"
 
+    /// 企業内容等の開示に関する内閣府令。会社の有報・訂正有報はこれ。
+    /// `030`（特定有価証券の開示に関する内閣府令）は投資信託・信託受益証券等で、
+    /// docType 120 でも会社財務の latest / yearRank には使わない。
+    public static let ordinanceCompanyDisclosure = "010"
+
+    /// 会社開示府令の書類か（ordinance 欠落は false。テストシードは明示すること）。
+    public static func isCompanyDisclosureOrdinance(_ ordinanceCode: String?) -> Bool {
+        ordinanceCode == ordinanceCompanyDisclosure
+    }
+
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
     /// レスポンス形を破壊的に変更したときのみ +1 する。
     static let financialsSchemaVersion = 2
@@ -192,9 +202,9 @@ public enum Api {
     public static let feedDefaultDocTypes = [docTypeAnnualReport]
 
     /// 財務取り込み（通期 company_financials）の high-water 鮮度判定が対象とする書類種別。
-    /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（有報＋訂正有報）とだけ
-    /// 揃える。これ以外の新規提出（四半期等）では通期の再計算をトリガーしない。
-    /// BltServerCore（FinancialsIngest）から参照するため public。
+    /// `EdinetDiscovery.buildDocumentIndexForCode` が実際に消費する種別（会社有報＋訂正有報、
+    /// 府令010）とだけ揃える。これ以外の新規提出（四半期・信託受益証券の 120 等）では
+    /// 通期の再計算をトリガーしない。BltServerCore（FinancialsIngest）から参照するため public。
     public static let financialsFreshnessDocTypes: Set<String> = [
         docTypeAnnualReport,
         docTypeAmendment,

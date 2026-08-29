@@ -160,7 +160,7 @@ func runFilingSectionsIngest(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped, purged: purged)
 }
 
-/// 保持窓内の1書類。`yearRank` は当該社の窓内での新しさ（0 が最新有報）。
+/// 保持窓内の1書類。`yearRank` は当該社の窓内での新しさ（0 が最新の会社有報）。
 struct FilingDocCandidate: Equatable, Sendable {
     var docID: String
     var code: String
@@ -182,7 +182,8 @@ struct FilingSectionCandidateSets {
 }
 
 /// 取り込み候補（保持窓内）と purge 対象をまとめて返す。
-/// 「上場（listedCodes）× 有報(120) × 各社 提出日時降順の直近 years 件」を keep、それを超えた分を purge とする。
+/// 「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep、
+/// それを超えた分を purge とする。docType 120 でも特定有価証券府令(030)の信託受益証券等は除外。
 /// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
@@ -194,11 +195,12 @@ func filingSectionCandidates(
             .all()
     }
 
-    // 4 桁コードごとに有報をまとめる。secCode は 5 桁（4 桁＋種別 1 桁 "0"）。
+    // 4 桁コードごとに会社有報をまとめる。secCode は 5 桁（4 桁＋種別 1 桁 "0"）。
     var byCode: [String: [(docID: String, submitDateTime: String)]] = [:]
     for doc in documents {
         guard let docID = doc.id,
-            let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0")
+            let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0"),
+            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
         let code = String(sec.dropLast())
         guard listedCodes.contains(code) else { continue }
@@ -289,9 +291,10 @@ func countServableFilingSections(db: Database) async throws -> (servable: Int, u
 // MARK: - read 経路（REST filing-content）
 
 /// 格納済み 有報セクション取り込み セクションを引いて公開契約 {code, doc_id, sections} を返す。
-/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち床以上）。
+/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
+/// （提出日時降順のうち床以上・会社開示府令）。特定有価証券府令(030)の信託受益証券等は選ばない。
 /// 床は `filingSectionsMinServableVersion`（明示定数。現行版との完全一致ではない）。
-/// 無い・床未満なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
+/// 無い・床未満・府令対象外なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
 func loadStoredFilingSections(
     code: String, docId: String?, sections: [String]?, db: Database
 ) async throws -> [String: Any]? {
@@ -302,15 +305,23 @@ func loadStoredFilingSections(
     if let docId, !docId.isEmpty {
         // 指定書類。取り違え防止に当該 code の書類であることを確認する。
         let found = try await CompanyFilingSections.find(docId, on: db)
-        row = (found?.code == code4) ? found : nil
+        guard found?.code == code4, try await isCompanyDisclosureDoc(docID: docId, db: db) else {
+            return nil
+        }
+        row = found
     } else {
-        // 最新有報（提出日時降順のうち、read 床以上の先頭）。
+        // 最新会社有報（提出日時降順のうち、read 床以上・会社開示府令の先頭）。
         // 床判定は SQL では表現しにくいため code 単位で取得してから選ぶ（社あたり直近数件）。
         let candidates = try await CompanyFilingSections.query(on: db)
             .filter(\.$code == code4)
             .sort(\.$submitDateTime, .descending)
             .all()
-        row = candidates.first { isServableFilingSectionsCacheVersion($0.cacheVersion) }
+        let companyDocIDs = try await companyDisclosureDocIDs(
+            among: candidates.compactMap(\.id), db: db)
+        row = candidates.first {
+            isServableFilingSectionsCacheVersion($0.cacheVersion)
+                && ($0.id.map { companyDocIDs.contains($0) } ?? false)
+        }
     }
 
     guard let row, isServableFilingSectionsCacheVersion(row.cacheVersion), let docID = row.id else {

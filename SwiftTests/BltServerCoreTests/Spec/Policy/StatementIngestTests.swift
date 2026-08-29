@@ -31,7 +31,10 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 
 private func seedDoc(
     _ docID: String, secCode: String?, docType: String? = Api.docTypeAnnualReport,
-    submit: String = "2025-06-20 09:00", db: Database
+    submit: String = "2025-06-20 09:00",
+    ordinance: String? = Api.ordinanceCompanyDisclosure,
+    form: String? = "030000",
+    db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
@@ -39,6 +42,8 @@ private func seedDoc(
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = docType
+    model.ordinanceCode = ordinance
+    model.formCode = form
     model.submitDateTime = submit
     try await model.create(on: db)
 }
@@ -97,6 +102,25 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             ) { docID in .resolved(fakeYear(docID: docID)) }
 
             #expect(summary.attempted == 1)
+        }
+    }
+
+    @Test func ingestExcludesTrustBeneficiaryOrdinance030EvenIfDocType120() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S-company", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S-trust", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+
+            let summary = try await runStatementIngest(
+                db: app.db, listedCodes: ["8253"], years: 3, limit: nil
+            ) { docID in .resolved(fakeYear(docID: docID)) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(try await CompanyStatement.find("S-company", on: app.db) != nil)
+            #expect(try await CompanyStatement.find("S-trust", on: app.db) == nil)
         }
     }
 
@@ -352,6 +376,32 @@ private func fakeYear(_ marker: String = "資産合計", docID: String = "S1") -
             #expect(years.count == 2)
             #expect(years[0]["doc_id"] as? String == "S25")
             #expect(years[1]["doc_id"] as? String == "S24")
+        }
+    }
+
+    @Test func loadWithoutDocIdSkipsNewerTrustFilingPreferringCompanyAnnual() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+            try await seedStored(
+                "S100YCDE", code: "8253", submit: "2026-06-16 11:38", db: app.db,
+                payload: fakeYear(docID: "S100YCDE"))
+            try await seedStored(
+                "S100YZ8K", code: "8253", submit: "2026-08-28 16:00", db: app.db,
+                payload: fakeYear(docID: "S100YZ8K"))
+
+            let json = try #require(
+                try await loadStoredStatement(code: "8253", docId: nil, years: 1, db: app.db))
+            let years = try #require(json["years"] as? [[String: Any]])
+            #expect(years.count == 1)
+            #expect(years[0]["doc_id"] as? String == "S100YCDE")
+
+            #expect(
+                try await loadStoredStatement(
+                    code: "8253", docId: "S100YZ8K", years: 1, db: app.db) == nil)
         }
     }
 

@@ -10,12 +10,13 @@ private func rec(
     secCode: String? = "72030",
     filerName: String = "トヨタ自動車株式会社",
     docType: String = "120",
+    ordinanceCode: String? = "010",
     periodEnd: String = "2025-03-31",
     submit: String
 ) -> EdinetDocumentRecord {
     EdinetDocumentRecord(
         docID: docID, edinetCode: "E00001", secCode: secCode, filerName: filerName,
-        docTypeCode: docType, ordinanceCode: "010", formCode: "030000",
+        docTypeCode: docType, ordinanceCode: ordinanceCode, formCode: "030000",
         periodStart: "2024-04-01", periodEnd: periodEnd,
         submitDateTime: submit, docDescription: "有価証券報告書")
 }
@@ -114,5 +115,20 @@ private func rec(
         #expect(feedInclusiveCutoffDateString(days: 1, now: now) == "2026-08-22")
         #expect(feedInclusiveCutoffDateString(days: 7, now: now) == "2026-08-16")
         #expect(feedSubmitDatePrefix("2026-08-22 09:00") == "2026-08-22")
+    }
+
+    @Test func updatesSkipTrustBeneficiaryOrdinance030() {
+        let now = utcCalendar.date(from: DateComponents(year: 2026, month: 8, day: 29, hour: 12))!
+        let records = [
+            rec("S100YCDE", submit: "2026-06-16 11:38"),
+            rec("S100YZ8K", ordinanceCode: "030", submit: "2026-08-28 16:00"),
+        ]
+        let json = assembleFeedUpdates(
+            from: records, limit: 10, days: 7, docTypes: ["120"], now: now)
+        let items = json["items"] as? [[String: Any]]
+        #expect(items?.compactMap { $0["doc_id"] as? String } == [])
+        let total = json["total"] as? [String: Any]
+        #expect(total?["day"] as? Int == 0)
+        #expect(total?["week"] as? Int == 0)
     }
 }

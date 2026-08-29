@@ -248,9 +248,10 @@ enum StatementNoteLoadResult {
 
 /// 格納済み 財務諸表注記取り込み 注記を引いて公開契約 {code, doc_id, note_type, note} を返す。
 /// `noteType` は `statementNoteType*` 定数のいずれか（未知の note_type は absent）。
-/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新有報（提出日時降順のうち read 可能な先頭）。
+/// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
+/// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
 /// read 可否は `isServableStatementNote`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
-/// 無い・read 不可なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
+/// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredStatementNote(
     code: String, docId: String?, noteType: String, db: Database
 ) async throws -> StatementNoteLoadResult {
@@ -262,6 +263,7 @@ func loadStoredStatementNote(
 
     let row: CompanyStatementNote?
     if let docId, !docId.isEmpty {
+        guard try await isCompanyDisclosureDoc(docID: docId, db: db) else { return .absent }
         let key = CompanyStatementNote.compositeID(docID: docId, noteType: noteType)
         let found = try await CompanyStatementNote.find(key, on: db)
         row = (found?.code == code4) ? found : nil
@@ -271,8 +273,11 @@ func loadStoredStatementNote(
             .filter(\.$noteType == noteType)
             .sort(\.$submitDateTime, .descending)
             .all()
+        let companyDocIDs = try await companyDisclosureDocIDs(
+            among: candidates.map(\.docID), db: db)
         row = candidates.first {
             isServableStatementNote(source: $0.source, cacheVersion: $0.cacheVersion, noteType: noteType)
+                && companyDocIDs.contains($0.docID)
         }
     }
 

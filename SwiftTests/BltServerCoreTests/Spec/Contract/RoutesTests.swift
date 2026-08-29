@@ -828,6 +828,8 @@ private func seedFeedDocument(
     doc.secCode = secCode
     doc.filerName = filer
     doc.docTypeCode = type
+    doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+    doc.formCode = type == "160" ? "043A00" : "030000"
     doc.periodEnd = "2025-03-31"
     doc.submitDateTime = submit
     try await doc.create(on: app.db)
