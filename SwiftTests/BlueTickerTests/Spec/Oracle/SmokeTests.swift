@@ -40,7 +40,7 @@ import Foundation
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -93,7 +93,7 @@ import Foundation
 
         // 結果表示
         for r in results {
-            print("\(r.status.padding(toLength: 6, withPad: " ", startingAt: 0)) \(r.id): \(r.detail)")
+            TestVerboseLog.print("\(r.status.padding(toLength: 6, withPad: " ", startingAt: 0)) \(r.id): \(r.detail)")
         }
 
         let failures = results.filter { $0.status == "DIFF" }
@@ -201,7 +201,7 @@ import Foundation
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -316,7 +316,7 @@ import Foundation
         }
 
         guard checked > 0 else {
-            print("SKIP   statement 正本パススルー: XBRL キャッシュなし")
+            TestVerboseLog.print("SKIP   statement 正本パススルー: XBRL キャッシュなし")
             return
         }
         #expect(
@@ -332,7 +332,7 @@ import Foundation
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -384,12 +384,13 @@ import Foundation
     /// `SummaryOfBusinessResults` タグだけで smoke 期待値に届くかを測る。
     /// 既存の done フィールド（本表パススルー・notes EPS/株式）は対象外。
     @Test func testSummaryPathChangeFeasibility() async throws {
+        guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -459,16 +460,16 @@ import Foundation
         }
 
         guard checked > 0 else {
-            print("SKIP   summary 経路変更可行性: XBRL キャッシュなし")
+            TestVerboseLog.print("SKIP   summary 経路変更可行性: XBRL キャッシュなし")
             return
         }
 
-        print("summary path feasibility (\(checked) companies)")
-        print("cell = statement / SummaryOfBusinessResults / current extractor")
-        print(
+        TestVerboseLog.print("summary path feasibility (\(checked) companies)")
+        TestVerboseLog.print("cell = statement / SummaryOfBusinessResults / current extractor")
+        TestVerboseLog.print(
             "fixture | "
                 + remaining.map(\.field).joined(separator: " | "))
-        for line in companyLines { print(line) }
+        for line in companyLines { TestVerboseLog.print(line) }
 
         var switchable: [String] = []
         var partial: [String] = []
@@ -478,16 +479,16 @@ import Foundation
             let s = stats[spec.field] ?? FieldStat()
             let line =
                 "\(spec.field): expected=\(s.expected) statement=\(s.statementOK) (nil=\(s.statementNil)) summaryTags=\(s.summaryOK) (nil=\(s.summaryNil)) current=\(s.currentOK)"
-            print(line)
+            TestVerboseLog.print(line)
             if s.expected > 0 && s.statementOK == s.expected { switchable.append(spec.field) }
             else if s.statementOK > 0 { partial.append("\(spec.field)(\(s.statementOK)/\(s.expected))") }
             else { blocked.append(spec.field) }
             if s.expected > 0 && s.summaryOK == s.expected { summaryEnough.append(spec.field) }
         }
-        print("statement-switchable-now: \(switchable.joined(separator: ", "))")
-        print("statement-partial: \(partial.joined(separator: ", "))")
-        print("statement-blocked: \(blocked.joined(separator: ", "))")
-        print("summary-tags-enough: \(summaryEnough.joined(separator: ", "))")
+        TestVerboseLog.print("statement-switchable-now: \(switchable.joined(separator: ", "))")
+        TestVerboseLog.print("statement-partial: \(partial.joined(separator: ", "))")
+        TestVerboseLog.print("statement-blocked: \(blocked.joined(separator: ", "))")
+        TestVerboseLog.print("summary-tags-enough: \(summaryEnough.joined(separator: ", "))")
 
         var mainStats: [String: FieldStat] = [:]
         let mainFields: [(field: String, expectedKey: ([String: Any]) -> Double?)] = [
@@ -503,7 +504,7 @@ import Foundation
             ("ppe_total", { dbl(($0["tangible_fixed_assets"] as? [String: Any])?["total"]) }),
             ("cash_eq", { dbl(($0["cash_eq"] as? [String: Any])?["current"]) }),
         ]
-        print("main-table vs SummaryOfBusinessResults tags")
+        TestVerboseLog.print("main-table vs SummaryOfBusinessResults tags")
         for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
             let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
             let fixturePath = fixtureDir.appendingPathComponent("\(fixtureID).json")
@@ -547,14 +548,14 @@ import Foundation
         var summaryMainBlocked: [String] = []
         for spec in mainFields {
             let s = mainStats[spec.field] ?? FieldStat()
-            print(
+            TestVerboseLog.print(
                 "\(spec.field): expected=\(s.expected) statement=\(s.statementOK) (nil=\(s.statementNil)) summaryTags=\(s.summaryOK) (nil=\(s.summaryNil))"
             )
             if s.expected > 0 && s.summaryOK == s.expected { summaryMainEnough.append(spec.field) }
             if s.expected > 0 && s.summaryOK == 0 { summaryMainBlocked.append(spec.field) }
         }
-        print("summary-tags-main-enough: \(summaryMainEnough.joined(separator: ", "))")
-        print("summary-tags-main-blocked: \(summaryMainBlocked.joined(separator: ", "))")
+        TestVerboseLog.print("summary-tags-main-enough: \(summaryMainEnough.joined(separator: ", "))")
+        TestVerboseLog.print("summary-tags-main-blocked: \(summaryMainBlocked.joined(separator: ", "))")
 
         // 現行 Extractor が期待値を満たすことは床。statement 全面置換はまだ要求しない。
         for spec in remaining {
@@ -577,12 +578,13 @@ import Foundation
     /// B: statement が現行 Extractor 合計と一致するときだけ採用（BS だけで足りる場合）。それ以外は notes。
     /// C: B と同じだが銀行 `bank_components`（預金込み）は statement 不足とみなし notes へ。
     @Test func testSummaryIbdAssemblyVsSmokeExpected() async throws {
+        guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
         let xbrlBase = SmokeCacheSupport.cacheDir
 
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -594,8 +596,8 @@ import Foundation
         var notesOK = 0
         var statementOK = 0
 
-        print("ibd assembly vs smoke expected")
-        print(
+        TestVerboseLog.print("ibd assembly vs smoke expected")
+        TestVerboseLog.print(
             "fixture | std | smoke | extractor | statement | notes | notes_via | A | B | C"
         )
         for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
@@ -632,40 +634,41 @@ import Foundation
             if closeEnoughOptional(smoke, ruleB) { bOK += 1 }
             if closeEnoughOptional(smoke, ruleC) { cOK += 1 }
 
-            print(
+            TestVerboseLog.print(
                 "\(fixtureID) | \(std) | \(yen(smoke)) | \(extractor.method) | \(yen(statement)) | \(yen(notes.value)) | \(notes.detail) | \(statusMark(exp: smoke, act: ruleA)) | \(statusMark(exp: smoke, act: ruleB)) | \(statusMark(exp: smoke, act: ruleC))"
             )
         }
 
         guard checked > 0 else {
-            print("SKIP   ibd assembly vs smoke: XBRL キャッシュなし")
+            TestVerboseLog.print("SKIP   ibd assembly vs smoke: XBRL キャッシュなし")
             return
         }
-        print("checked=\(checked)")
-        print("statement-vs-smoke: \(statementOK)/\(checked)")
-        print("notes-vs-smoke: \(notesOK)/\(checked)")
-        print("ruleA statement-if-non-nil: \(aOK)/\(checked)")
-        print("ruleB statement-if-complete-else-notes: \(bOK)/\(checked)")
-        print("ruleC B-but-banks-to-notes: \(cOK)/\(checked)")
+        TestVerboseLog.print("checked=\(checked)")
+        TestVerboseLog.print("statement-vs-smoke: \(statementOK)/\(checked)")
+        TestVerboseLog.print("notes-vs-smoke: \(notesOK)/\(checked)")
+        TestVerboseLog.print("ruleA statement-if-non-nil: \(aOK)/\(checked)")
+        TestVerboseLog.print("ruleB statement-if-complete-else-notes: \(bOK)/\(checked)")
+        TestVerboseLog.print("ruleC B-but-banks-to-notes: \(cOK)/\(checked)")
         #expect(checked == Self.docIDs.count)
     }
 
     /// statement の有利子負債項目 ＋ statement に無い notes 項目（合計行は使わない）が
     /// 既存 smoke IBD と揃うか。`IBDExtractor.extractCanonical` が本番組立。
     @Test func testIbdItemTagsComposeVsSmoke() async throws {
+        guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
         let xbrlBase = SmokeCacheSupport.cacheDir
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
 
         var checked = 0
         var match = 0
-        print("ibd item-tag compose vs smoke")
-        print("fixture | std | smoke | composed | method | mark")
+        TestVerboseLog.print("ibd item-tag compose vs smoke")
+        TestVerboseLog.print("fixture | std | smoke | composed | method | mark")
 
         for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
             let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
@@ -684,14 +687,14 @@ import Foundation
                 guard let v = c.current else { return nil }
                 return "\(c.label)=\(yen(v))"
             }.joined(separator: ", ")
-            print(
+            TestVerboseLog.print(
                 "\(fixtureID) | \(composed.accountingStandard) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.method) | \(statusMark(exp: smoke, act: composed.total))"
             )
-            print("  parts: \(parts)")
+            TestVerboseLog.print("  parts: \(parts)")
         }
-        print("composed-vs-smoke: \(match)/\(checked)")
+        TestVerboseLog.print("composed-vs-smoke: \(match)/\(checked)")
         guard checked > 0 else {
-            print("SKIP   ibd item-tag compose vs smoke: XBRL キャッシュなし")
+            TestVerboseLog.print("SKIP   ibd item-tag compose vs smoke: XBRL キャッシュなし")
             return
         }
         #expect(checked == Self.docIDs.count)
@@ -702,11 +705,12 @@ import Foundation
     /// employees / rd は breakdown 分母のみ（statement PL は使わない）。
     /// IBD は `testIbdItemTagsComposeVsSmoke`。IndividualAnalyzer は同組立へ切替済（#8）。
     @Test func testRemainingFieldsComposeVsSmoke() async throws {
+        guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixtureDir = projectRoot.appendingPathComponent("smoke/smoke_expected")
         let xbrlBase = SmokeCacheSupport.cacheDir
         guard FileManager.default.fileExists(atPath: fixtureDir.path) else {
-            print("SKIP   smoke/smoke_expected が見つかりません")
+            TestVerboseLog.print("SKIP   smoke/smoke_expected が見つかりません")
             return
         }
         await SmokeCacheSupport.ensureCached(Self.docIDs.values)
@@ -735,9 +739,9 @@ import Foundation
         var stats: [String: FieldStat] = [:]
         var checked = 0
 
-        print("remaining compose vs smoke (statement → notes → breakdown; employees/rd は breakdown のみ)")
-        print("cell = statement / composed / current")
-        print("fixture | " + fields.map(\.name).joined(separator: " | "))
+        TestVerboseLog.print("remaining compose vs smoke (statement → notes → breakdown; employees/rd は breakdown のみ)")
+        TestVerboseLog.print("cell = statement / composed / current")
+        TestVerboseLog.print("fixture | " + fields.map(\.name).joined(separator: " | "))
 
         for (fixtureID, docID) in Self.docIDs.sorted(by: { $0.key < $1.key }) {
             let xbrlDir = xbrlBase.appendingPathComponent("\(docID)_xbrl")
@@ -775,11 +779,11 @@ import Foundation
                     "\(statusMark(exp: exp, act: st))/\(statusMark(exp: exp, act: composed))/\(statusMark(exp: exp, act: cu))"
                 )
             }
-            print(cells.joined(separator: " | "))
+            TestVerboseLog.print(cells.joined(separator: " | "))
         }
 
         guard checked > 0 else {
-            print("SKIP   remaining compose vs smoke: XBRL キャッシュなし")
+            TestVerboseLog.print("SKIP   remaining compose vs smoke: XBRL キャッシュなし")
             return
         }
 
@@ -788,16 +792,16 @@ import Foundation
         var partial: [String] = []
         for spec in fields {
             let s = stats[spec.name] ?? FieldStat()
-            print(
+            TestVerboseLog.print(
                 "\(spec.name): expected=\(s.expected) statement=\(s.statementOK) composed=\(s.composedOK) current=\(s.currentOK)"
             )
             if s.expected > 0 && s.statementOK == s.expected { switchable.append(spec.name) }
             else if s.expected > 0 && s.composedOK == s.expected { composedOK.append(spec.name) }
             else if s.composedOK > 0 { partial.append("\(spec.name)(\(s.composedOK)/\(s.expected))") }
         }
-        print("statement-switchable-now: \(switchable.joined(separator: ", "))")
-        print("compose-complete: \(composedOK.joined(separator: ", "))")
-        print("compose-partial: \(partial.joined(separator: ", "))")
+        TestVerboseLog.print("statement-switchable-now: \(switchable.joined(separator: ", "))")
+        TestVerboseLog.print("compose-complete: \(composedOK.joined(separator: ", "))")
+        TestVerboseLog.print("compose-partial: \(partial.joined(separator: ", "))")
 
         #expect(checked == Self.docIDs.count)
         for spec in fields {
@@ -822,11 +826,12 @@ import Foundation
 
     /// 味の素 statement IBD（4,554億）の内訳と、BS / notes / リースの抽出項目を全部出す。
     @Test func testAjinomotoStatementIbdComponentsDump() async throws {
+        guard TestVerboseLog.enabled else { return }
         let docID = "S100VXJA"
         await SmokeCacheSupport.ensureCached([docID])
         let xbrlDir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
         guard FileManager.default.fileExists(atPath: xbrlDir.path) else {
-            print("SKIP   Ajinomoto XBRL cache missing")
+            TestVerboseLog.print("SKIP   Ajinomoto XBRL cache missing")
             return
         }
 
@@ -859,20 +864,20 @@ import Foundation
             return "\(fmt(v)) (\(yen(v)))"
         }
 
-        print("=== 味の素 S100VXJA statement IBD ===")
-        print("statement IBDExtractor total=\(yenLine(statementIBD.total)) method=\(statementIBD.method)")
-        print("full IBDExtractor total=\(yenLine(fullIBD.total)) method=\(fullIBD.method)")
-        print("resolve path: direct.tag=\(direct.tag ?? "nil") ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
-        print("ifrsAgg current=\(yenLine(ifrsAgg.current))")
-        print("component-stack current=\(yenLine(comp.current))")
+        TestVerboseLog.print("=== 味の素 S100VXJA statement IBD ===")
+        TestVerboseLog.print("statement IBDExtractor total=\(yenLine(statementIBD.total)) method=\(statementIBD.method)")
+        TestVerboseLog.print("full IBDExtractor total=\(yenLine(fullIBD.total)) method=\(fullIBD.method)")
+        TestVerboseLog.print("resolve path: direct.tag=\(direct.tag ?? "nil") ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
+        TestVerboseLog.print("ifrsAgg current=\(yenLine(ifrsAgg.current))")
+        TestVerboseLog.print("component-stack current=\(yenLine(comp.current))")
 
-        print("--- IBDExtractor statement components ---")
+        TestVerboseLog.print("--- IBDExtractor statement components ---")
         for c in statementIBD.components {
-            print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
+            TestVerboseLog.print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
         }
-        print("--- IBDExtractor full components ---")
+        TestVerboseLog.print("--- IBDExtractor full components ---")
         for c in fullIBD.components {
-            print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
+            TestVerboseLog.print("  \(c.label): current=\(yenLine(c.current)) prior=\(yenLine(c.prior))")
         }
 
         var candidateTags: [String] = []
@@ -889,7 +894,7 @@ import Foundation
             "OtherFinancialLiabilitiesCLIFRS",
             "OtherFinancialLiabilitiesNCLIFRS",
         ])
-        print("--- IBD/金融負債 candidate tags on statement FieldSet ---")
+        TestVerboseLog.print("--- IBD/金融負債 candidate tags on statement FieldSet ---")
         var seen = Set<String>()
         for tag in candidateTags {
             guard !seen.contains(tag) else { continue }
@@ -898,14 +903,14 @@ import Foundation
             let fv = instantFS[tag]
             let full = fullFS[tag]
             if fv?.current != nil || fv?.prior != nil || full?.current != nil || onStatement {
-                print(
+                TestVerboseLog.print(
                     "  \(tag): statement=\(onStatement) stmtCurrent=\(yenLine(fv?.current)) stmtPrior=\(yenLine(fv?.prior)) fullCurrent=\(yenLine(full?.current))"
                 )
             }
         }
 
         let keywords = ["借入", "社債", "リース", "コマーシャル", "有利子", "金融負債", "債券", "CP"]
-        print("--- statement BS lines matching debt/lease/financial-liability labels ---")
+        TestVerboseLog.print("--- statement BS lines matching debt/lease/financial-liability labels ---")
         for item in year.balanceSheet.sorted(by: { ($0.order ?? 0) < ($1.order ?? 0) }) {
             let label = item.label ?? ""
             let tag = item.tag
@@ -922,37 +927,37 @@ import Foundation
                     extra += " children=[" + comps.map { "\($0.tag) w=\($0.weight)" }.joined(separator: ", ") + "]"
                 }
             }
-            print(
+            TestVerboseLog.print(
                 "  order=\(item.order.map(String.init) ?? "-") section=\(item.section?.rawValue ?? "-") \(item.tag) |\(label)| \(yenLine(item.value))\(extra)"
             )
         }
 
-        print("--- notes borrowings_schedule ---")
+        TestVerboseLog.print("--- notes borrowings_schedule ---")
         switch StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir) {
         case .resolved(let payload, _, _):
             for row in payload.borrowingsComponents ?? [] {
-                print(
+                TestVerboseLog.print(
                     "  \(row.isTotal ? "TOTAL " : "")\(row.label): current=\(yenLine(row.currentBalance)) prior=\(yenLine(row.priorBalance)) rate=\(row.averageInterestRatePercent.map { String($0) } ?? "nil")"
                 )
             }
         case .notApplicable(let reason):
-            print("  notApplicable \(reason)")
+            TestVerboseLog.print("  notApplicable \(reason)")
         case .failed:
-            print("  failed")
+            TestVerboseLog.print("  failed")
         }
 
-        print("--- notes lease_liabilities ---")
+        TestVerboseLog.print("--- notes lease_liabilities ---")
         switch StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir) {
         case .resolved(let payload, _, _):
             let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
-            print("  book=\(yenLine(lease.current))")
+            TestVerboseLog.print("  book=\(yenLine(lease.current))")
             for item in payload.items ?? [] {
-                print("  \(item.label ?? "?"): \(yenLine(item.value)) tag=\(item.tag)")
+                TestVerboseLog.print("  \(item.label ?? "?"): \(yenLine(item.value)) tag=\(item.tag)")
             }
         case .notApplicable(let reason):
-            print("  notApplicable \(reason)")
+            TestVerboseLog.print("  notApplicable \(reason)")
         case .failed:
-            print("  failed")
+            TestVerboseLog.print("  failed")
         }
 
         let statementTotal = try #require(statementIBD.total)
