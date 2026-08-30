@@ -2,7 +2,7 @@
 
 ネイティブ iOS の IA・画面対応。サーバー契約の正本は REST `/v1`（`architecture.md` / `feature-tiers.md`）。見た目は iOS SDK 標準コンポーネント前提の簡易矩形で、Figma の長方形はプレースホルダ。
 
-ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。進捗は Linear [BLT-53](https://linear.app/sollahiro/issue/BLT-53/ios-クライアントポンチ絵)。
+ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。進捗は Linear Team `blue-ticker`。
 
 ## 決めたこと
 
