@@ -1,4 +1,4 @@
-// 会社アイコン取り込みの DB ロジック（対象選定＝上場×有報×会社ごと最新1件・staleness 判定・upsert・limit）を
+// 会社アイコン取り込みの DB ロジック（対象選定＝上場×会社有報120・府令010×会社ごと最新1件・staleness 判定・upsert・limit）を
 // 検証する。抽出（extractAndUploadCompanyIcon）は EDINET/favicon/R2 依存のため、フェイク抽出器を注入して
 // ネットワーク非依存で見る。
 
