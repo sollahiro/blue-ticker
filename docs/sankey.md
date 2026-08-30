@@ -6,7 +6,7 @@
 クライアント責務とする。Blue Ticker は Sankey のレイアウトを規定しない。
 サーバーは開示にない軸間配賦を推計しない。
 
-方針の正本は本ファイル。着手順と現在地は Linear Team `blue-ticker`（[BLT-18](https://linear.app/sollahiro/issue/BLT-18)）。公開 REST 契約ではない。
+方針の正本は本ファイル。着手順と現在地は Linear Team `blue-ticker`。公開 REST 契約ではない。
 
 ## 材料契約（BLT-18）
 

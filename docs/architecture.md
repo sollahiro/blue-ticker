@@ -7,7 +7,7 @@
 | 面 | 位置づけ |
 |---|---|
 | REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B は `public-api.md` |
-| iOS | 近傍の製品面（構想。IA は `ios-client.md`、未決は Linear [BLT-53](https://linear.app/sollahiro/issue/BLT-53)） |
+| iOS | 近傍の製品面（構想。IA は `ios-client.md`、進捗は Linear Team `blue-ticker`） |
 | MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore` は残す。製品として伸ばさない。ChatGPT Apps は凍結 |
 | Web / RSS | 将来候補（優先度低） |
 
