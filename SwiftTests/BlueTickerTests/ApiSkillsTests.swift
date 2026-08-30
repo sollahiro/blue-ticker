@@ -78,4 +78,20 @@ import Testing
                 "missing reason \(reason)")
         }
     }
+
+    /// 未公開 note_type を公開カタログ（description / note_type 引数説明）に載せない。
+    @Test func statementNotesCatalogOmitsUnpublishedSgaExpenseBreakdown() throws {
+        let skill = try #require(apiSkill(id: "get-statement-notes"))
+        let noteType = try #require(skill.parameters.first { $0.name == "note_type" })
+        let surfaces = [skill.description, skill.instructions, noteType.description]
+        for text in surfaces {
+            #expect(!text.contains("sga_expense_breakdown"))
+            #expect(!text.contains("販売費及び一般管理費の費目内訳"))
+        }
+        for published in allStatementNoteTypes {
+            #expect(
+                noteType.description.contains(published),
+                "note_type param must list published type \(published)")
+        }
+    }
 }
