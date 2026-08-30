@@ -864,7 +864,7 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
         }
     }
 
-    /// financials（Summary）は増減分解フィールド（Waterfall 専用、`docs/feature-tiers.md`）を
+    /// financials（Summary）は増減分解フィールド（Waterfall 専用、`docs/financials-summary-separation.md`）を
     /// trim の有無に関わらず一切含まない。
     @Test func loadStoredFinancialsExcludesAnalysisOnlyFields() async throws {
         try await withMigratedApp { app in

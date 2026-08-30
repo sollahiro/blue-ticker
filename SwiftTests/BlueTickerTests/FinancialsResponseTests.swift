@@ -93,7 +93,7 @@ import Testing
         #expect(isCurrentFinancialsAssemblyFingerprint("statement-v0") == false)
     }
 
-    // MARK: - Summary / Waterfall の境界（docs/feature-tiers.md）
+    // MARK: - Summary / Waterfall の境界（docs/financials-summary-separation.md）
 
     private func twoYearResult() throws -> MetricsResult {
         try decodeResult(#"""

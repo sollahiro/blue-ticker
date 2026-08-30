@@ -1,5 +1,5 @@
 # blt-server の 2 段ビルド。Fly.io（クラウド）・self-host で同一イメージを使う。
-# 詳細・デプロイ手順は docs/deploy.md / docs/blt-server-roadmap.md「クラウド構成」を参照。
+# 詳細・デプロイ手順は .agents/skills/deploy/SKILL.md / docs/blt-server-roadmap.md を参照。
 
 # ===== ビルドステージ =====
 FROM swift:6.1 AS build
@@ -31,7 +31,7 @@ WORKDIR /app
 COPY --from=build /build/.build/release/blt-server ./blt-server
 COPY assets/EdinetcodeDlInfo.csv ./assets/EdinetcodeDlInfo.csv
 
-# cloudflared サイドカー（Cloudflare Access 方式A・エッジ信頼。docs/deploy.md 参照）。
+# cloudflared サイドカー（Cloudflare Access 方式A・エッジ信頼。.agents/skills/deploy/SKILL.md 参照）。
 # CLOUDFLARE_TUNNEL_TOKEN 未設定時は entrypoint.sh が起動をスキップするため self-host 互換は保たれる。
 # バージョン固定 + sha256 検証で取得（latest 追従によるサプライチェーン変化を防ぐ）。
 # 更新時は https://github.com/cloudflare/cloudflared/releases で新バージョンを確認し、
