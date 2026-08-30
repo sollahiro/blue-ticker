@@ -11,7 +11,7 @@ enum SmokeCacheSupport {
     static let cacheDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent("tmp_cache/edinet")
 
-    /// `cacheDir` 省略時は `tmp_cache/edinet`（従来通り）。`RealXbrlBreakdownTests` のような
+    /// `cacheDir` 省略時は `tmp_cache/edinet`（従来通り）。`RealXbrlBreakdown*Tests` のような
     /// 別ディレクトリ（`~/.config/blue-ticker/analysis_cache/...`）を使う呼び出し元は明示指定する。
     static func ensureCached(_ docIDs: some Sequence<String>, cacheDir: URL? = nil) async {
         guard let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"], !apiKey.isEmpty else {

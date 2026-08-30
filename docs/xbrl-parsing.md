@@ -83,9 +83,9 @@ smoke/
 | テスト | 実装 | 照合対象 |
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
-| セグメントパリティ | `BreakdownExtractorTests.swift` `SegmentParityTests` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
+| セグメントパリティ | `SwiftTests/BlueTickerTests/Spec/Oracle/SegmentParityTests.swift` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
 | 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
-| 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownTests.swift`（4 `@Suite`: Extraction / EmployeesRD / Resolver / LiveLLM） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は同ファイル参照） |
+| 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdown*Tests.swift`（Extraction / EmployeesRD / Capex / Resolver / LiveLLM / Goodwill。共有は `RealXbrlBreakdownSupport.swift`） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は各ファイル参照） |
 | Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外。US-GAAP HTML は富士フイルム/キヤノンに加え野村（連結資本勘定変動表の全行＋`section` 見出し）・オムロン（BS 45行 / PL 21行 / CF 50行 / SS 11行）・小松（BS 39行 / PL 21行 / CF 31行 / SS 12行）・オリックス（BS 39行 / PL 28行 / CF 51行 / SS 18行）。詳細は `docs/statement.md` / `.agents/skills/xbrl-development/SKILL.md`（Spec 層） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
 | 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は巨大注記 HTML から内訳。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
@@ -108,11 +108,11 @@ smoke/
 
 原則としては note_type の決定論ロジックもこの床でカバーされるべきだが、公開 note_type はいずれも固定11社の外出しオラクル床に載済み。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認を後追いで足す余地は、新規 note_type 追加時に残る。
 
-smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`＝L0）にあたる。突合する Swift テストコードは L1（`HARNESS_ONLY`）。テストを移行耐性の観点で層分けする指針は `.agents/skills/xbrl-development/SKILL.md` を参照。
+smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`＝L0）にあたる。突合する Swift テストコードは L1（`HARNESS_ONLY`）。成功時の詳細 stdout は既定で抑制し、`BLT_TEST_VERBOSE=1` のときだけ出す（`TestVerboseLog`）。テストを移行耐性の観点で層分けする指針は `.agents/skills/xbrl-development/SKILL.md` を参照。
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
-`RealXbrlBreakdownTests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
+`RealXbrlBreakdown*Tests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
 
 CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。未設定（fork からの PR 等）では各テストが SKIP し、ジョブは失敗しません。
 

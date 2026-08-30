@@ -62,7 +62,7 @@ import Foundation
     }
 
     /// `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、それでも無ければ SKIP する
-    /// （`RealXbrlBreakdownTests.swift` と同型。smoke 由来の企業セットで採用し、CI・新規
+    /// （`RealXbrlBreakdown*Tests` と同型。smoke 由来の企業セットで採用し、CI・新規
     /// checkout でもキャッシュ未取得のまま無条件 SKIP にならないようにする）。
     private static func ensureAvailable(_ docID: String) async -> Bool {
         await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
