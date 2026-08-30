@@ -100,7 +100,7 @@ public struct ApiSkill: Sendable {
     public let path: String
     /// 対応 MCP ツール名。REST のみの能力は nil。
     public let mcpTool: String?
-    /// `docs/feature-tiers.md` の機能枠。
+    /// REST 能力カタログの機能枠（`docs/architecture.md`）。
     public let feature: String
     public let parameters: [ApiSkillParameter]
     /// 使い方の詳細（エラー意味・関連エンドポイント・単位など）。

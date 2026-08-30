@@ -4,7 +4,6 @@
 
 - 認証の住み分け → `api-auth.md`
 - 互換ポリシー → `api-compatibility.md`
-- 機能マトリクス・提供面 → `feature-tiers.md`
 - クライアント面の現構成 → `architecture.md`
 
 ## 定義
@@ -17,6 +16,6 @@
 | 契約の安定化 | 後方互換の約束を厳格化（段階 B で deprecation 期間等を足す） |
 | 利用制御 | レート制限（未払い 402 連打も含む）。クォータは x402 の従量で代替 |
 
-機能単位の有料マスクは採らない（`feature-tiers.md`）。**段階 B の対象は REST（x402）**。MCP は当面 Apps in ChatGPT 専用で、段階 B の x402 対象外（課金なし）。
+機能単位の有料マスクは採らない。**段階 B の対象は REST（x402）**。MCP は開発専用のため段階 B の x402 対象外。
 
 土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断は Linear [BLT-25](https://linear.app/sollahiro/issue/BLT-25/rest-段階-b-x402)。定義の索引は `blt-server-roadmap.md`。

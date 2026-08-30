@@ -1,4 +1,4 @@
-// 財務諸表注記取り込み: 外出しoracle JSON突合テスト（`docs/test-spec-assets.md` の SPEC_ORACLE/C型）の
+// 財務諸表注記取り込み: 外出しoracle JSON突合テスト（`.agents/skills/xbrl-development/SKILL.md` の SPEC_ORACLE）の
 // note_type共通ヘルパー。`StatementNotesOracleFormatTests.swift`（borrowings_schedule、最初の導入）と
 // 同じ経路・比較方式を他note_typeにも展開する際の重複を避けるため切り出した。
 //

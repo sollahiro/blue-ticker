@@ -437,7 +437,7 @@ extension FinancialsYear {
         return dict
     }
 
-    /// Waterfall（`docs/feature-tiers.md`）専用の増減分解フィールド。Summary（financials）の応答からは
+    /// Waterfall（`docs/financials-summary-separation.md`）専用の増減分解フィールド。Summary（financials）の応答からは
     /// これらを外す。値自体は 財務取り込み ingest で計算済みで DB には残したまま、read 応答でのみ絞り込む。
     /// 対象は Waterfall（増減分析）が使う前年差・要因分解・運転資本/CCC水準値。
     /// 注意: 「`SummaryRendering.levelMetrics` に無いフィールド」全般ではない

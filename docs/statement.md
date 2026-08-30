@@ -1,6 +1,6 @@
-# Statement / Notes（ドメイン仕様）
+# Statement / Notes（ドメイン契約）
 
-有報 XBRL の BS/PL/CF/SS を絞り込みなしで構造化する。**現行の実装方針・再発防止の正本**（構想メモではない）。Summary は主要指標、Breakdown は比較用割合。正本→組立は `docs/financials-summary-separation.md`。
+有報 XBRL の BS/PL/CF/SS を絞り込みなしで構造化する。Summary は主要指標、Breakdown は比較用割合。正本→組立は `docs/financials-summary-separation.md`。抽出の再発防止は `.agents/skills/xbrl-development/SKILL.md`。
 
 ## 目的
 
@@ -14,9 +14,9 @@
 
 ## 公開面
 
-別エンドポイント・別テーブル（バージョニング独立。提供面は `feature-tiers.md`）。
+別エンドポイント・別テーブル（バージョニング独立）。
 
-| 機能 | REST | MCP |
+| 機能 | REST | 開発用 MCP |
 |---|---|---|
 | Statement | `GET /v1/companies/{code}/statement` | `get_statement` |
 | Notes | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` |
@@ -27,31 +27,33 @@
 
 `StatementContract.swift`: `statementCacheVersion` / min servable、`StatementLineItem`（tag, label, value, unit, order, section?, is_total?, components?）。SS は合計列のみ（`changes_in_equity`）。
 
-## 再発防止（学びの要約）
-
-1. **role 分類**: `Notes*` 接頭辞を先に除外（注記ロールに `BalanceSheet` 等が含まれる）。
-2. **連結/非連結**: contextRef で判定。非連結は `isPureNonConsolidatedContext`（セグメント軸付きを拾わない）。
-3. **表示順 `order`**: 同一 presentation role 内でのみ比較。代表 role は**出現頻度ではなく採用タグ集合のカバレッジ**。取れないタグはアルファベット順フォールバック。
-4. **SS**: 別名 loc をマージし期首→変動→期末の order。連結で個別 SS 由来の stray `ProfitLoss` を除外（個別のみ企業は正当行として残す）。
-5. **`section`（BS/CF、科目縦 SS）**: BS/CF は presentation 祖先キーワード。BS 判定順は 純資産→負債→資産（`NetAssets` が `Asset` を部分一致するため）。複数区分に同時一致する祖先は曖昧として上へ。タグ自身名へのフォールバックは単一区分に曖昧さなく一致する場合のみ。US-GAAP 科目縦 SS は区分見出し（資本金 等）を同じキーに載せる（JSON 文字列）。label は開示どおり。
-6. **同一タグの二重 loc**: 親候補を集合で持ち BFS。
-7. **ラベル**: 提出パッケージ＋ `assets/taxonomy` 補完。`preferredLabel` 対応。期首/期末ラベル差し替えは **CF（と SS）限定**（BS 合計行を巻き込まない）。ロール選択は標準 XBRL ロール優先で決定的に。
-8. **CF Instant**: 期首/期末現金は Instant。CF に限り前期 Instant も受理。
-9. **`is_total`/`components`**: calculation linkbase（`summation-item`）。presentation の親子では二重計上を防げない。
-10. **US-GAAP**: fact 経路不可 → `USGAAPStatementHtml`（当期優先・キヤノン型 components）。表分類・残高・合計の語彙は `USGAAPStatementHtmlVocabulary`（見出しゆれは語を足す。社名 `contains` 分岐は作らない）。分類照合は空白を潰す（`期末 現在` / 改行分割の `営業活動による`+`キャッシュ・フロー`）。見出しゆれ例: `（資産）`/`資本：`/`資本の部`、営業利益行なし PL、CF 分割表、SS の `期末現在`/`期首残高`/`YYYY年M月DD日残高`、SS タイトル `連結株主持分計算書`/`連結資本変動表`/`連結資本変動計算書`、連結資本勘定変動表（科目縦・年次は列。改ページ分割は追記。label は開示どおり。区分見出しは `section`（`group`）へ載せる。科目横 SS の `section` は nil）。CF 後に初めて来る SS は空のときだけ採用（確定済み SS のあとの注記類似表は拾わない）。0105010 に連結 CF が無く 0105020 に `連結キャッシュ・フロー計算書` がある年次は CF のみフォールバック。年次切り出しは時系列マーカーだけ（科目縦の期首/期末は切らない）。`is_total` は「合計」、1文字の「計」、「費用計」、「小計」、空白+「計」（営業収益 計）、および営業/投資/財務CF合計（「キャッシュ・フロー」または「現金（純額）」型）。`負債および資本合計` は部見出しではなくグランドトータル（section=nil）。表示ラベルは項番・括弧番号を落とす。足し算だけの空番号親は行にしない。4スロットで左が空の金額行は空スペーサとして剥がさない（剥がすと奇数スロットになり行ごと落ちる。空+「注５」だけ偶数残る範囲で剥がす）。注記番号セル（`15,32` / `23`）は金額にしない（カンマを潰すと 1532 になり奇数スロットで行ごと落ちる）。先頭が1〜2桁に見えても、剥がすと奇数が残るなら残す（`その他 | 40 | 60`）。Summary 売上（`StatementFinancialsResolver.resolveUSGAAPSales`）は営業収益計 / 収益合計を中間の「〜売上高」より優先する。Summary 用 `USGAAPHtml` と混同しない。取れないときだけ `us_gaap_unsupported`。
-
 ## notes
 
-決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown`（BLT-46）は実装済みだが **未公開・未配線**（ingest / REST / MCP / job-03 に載せない）。ingest の現在地は Linear（親 [BLT-5](https://linear.app/sollahiro/issue/BLT-5/jp-statement-notes)）。
+決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown` は実装済みだが **未公開・未配線**（ingest / REST / 開発用 MCP / job-03 に載せない）。ingest の現在地は Linear Team `blue-ticker`。
 
-REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
+注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
 
 | reason | 意味 |
 |---|---|
 | `not_found` | 当該 note_type の開示・タグが無い（正当欠測） |
-| `available_via_statement` | 本 note_type 対象外だが同等値は `get-statement` から取得可 |
+| `available_via_statement` | 本 note_type 対象外だが同等値は statement から取得可 |
 | `available_via_notes` | 本 note_type 対象外だが同等値は他 note_type（例: `borrowings_schedule`）から取得可 |
 | `us_gaap_unsupported` | US-GAAP 連結で本 note_type の構造化タグ判定ができない |
+
+公開 note_type:
+
+| note_type | 内容 |
+|---|---|
+| `per_share_information` | 1 株当たり情報 |
+| `issued_shares_and_capital` | 発行済株式・資本金等 |
+| `dividends` | 配当 |
+| `borrowings_schedule` | 借入金等明細 |
+| `property_plant_equipment_schedule` | 有形固定資産明細 |
+| `goodwill_and_intangibles` | のれん・無形資産 |
+| `lease_liabilities` | リース負債 |
+| `policy_holding_securities` | 政策保有株式 |
+
+未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。
 
 ## 非ゴール（当面）
 
@@ -59,8 +61,6 @@ REST/MCP で注記が対象外・非開示のときは **404** ＋ボディ `rea
 - 半期報告書（通期のみ）
 - PL 利益段階ラベリング（科目統一に当たるため）
 
-母集団拡大（上場）は Linear [BLT-28](https://linear.app/sollahiro/issue/BLT-28/statement-母集団拡大上場)。`assets/taxonomy` の本番配置は [BLT-37](https://linear.app/sollahiro/issue/BLT-37/運用-assetstaxonomy-本番配置)。
-
 ## 関連
 
-`feature-tiers.md` · `breakdown.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `.agents/rules/xbrl.md` · `.agents/rules/versioning.md`
+`breakdown.md` · `financials-summary-separation.md` · `architecture.md` · `.agents/rules/xbrl.md` · `.agents/rules/versioning.md`

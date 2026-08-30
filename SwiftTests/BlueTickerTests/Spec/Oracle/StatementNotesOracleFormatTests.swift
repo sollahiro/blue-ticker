@@ -1,4 +1,4 @@
-// 外出し SPEC_ORACLE フォーマット（docs/test-spec-assets.md の C、2026-08-09）。
+// 外出し SPEC_ORACLE フォーマット（.agents/skills/xbrl-development/SKILL.md、2026-08-09）。
 //
 // borrowings_schedule note_type を対象に、期待値を Swift コード中のハードコード値ではなく
 // `smoke/statement_notes_borrowings_schedule_expected.json` へ外出しし、実装（Swift）を消しても

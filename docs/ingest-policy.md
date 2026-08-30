@@ -1,6 +1,6 @@
 # ingest 運用方針
 
-本番 write・定期ジョブ・R2 温めの正本。実装サイクル（`.agents/skills/xbrl-development/SKILL.md`）との対応、CLI 詳細は `deploy.md` / `operations.md`。
+本番 write・定期ジョブ・R2 温めの正本（ジョブ編成）。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。接続と Neon write 手順は `.agents/skills/production-ingest/SKILL.md`。Fly / Tunnel は `.agents/skills/deploy/SKILL.md`。
 
 ## 原則
 
@@ -119,4 +119,4 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
 
 ## 関連
 
-`AGENTS.md` · `deploy.md` · `operations.md` · `blt-server-roadmap.md` · `financials-summary-separation.md` · `breakdown.md` · `statement.md` · `scripts/jp/edinet/README.md`
+`AGENTS.md` · `.agents/skills/production-ingest/SKILL.md` · `.agents/skills/deploy/SKILL.md` · `blt-server-roadmap.md` · `financials-summary-separation.md` · `breakdown.md` · `statement.md` · `scripts/jp/edinet/README.md`

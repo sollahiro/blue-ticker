@@ -1,4 +1,4 @@
-// モジュール横断 SPEC_INVARIANT（docs/test-spec-assets.md の D、2026-08-09）。
+// モジュール横断 SPEC_INVARIANT（.agents/skills/xbrl-development/SKILL.md、2026-08-09）。
 //
 // IBDExtractor（有利子負債抽出器、Analysis/Extractors.swift）の借入金等明細表フォールバックと
 // StatementNotesResolver.resolveBorrowingsSchedule（財務諸表注記取り込み borrowings_schedule note_type）は

@@ -7,8 +7,8 @@
 // - 7974 任天堂 S100W73A（J-GAAP連結、2025-03期）
 //
 // 2026-08-09、smoke（`smoke/smoke_expected/*.json`、SmokeTests.swift）が対象とする固定11社
-// セットのうち US-GAAP2社を除く9社**全件**を、statement 側の床として追加（`.agents/skills/xbrl-development/SKILL.md` ·
-// docs/test-spec-assets.md「既知のギャップ」参照。SmokeTests.swift 自体は Extractors.swift 経由の
+// セットのうち US-GAAP2社を除く9社**全件**を、statement 側の床として追加（`.agents/skills/xbrl-development/SKILL.md`。
+// SmokeTests.swift 自体は Extractors.swift 経由の
 // 抽出器のみを検証しており StatementAnalyzer は通らないため、床を広げるにはここへ追加する）。
 // 追加した9社は「同一区分内で他行の components からも参照されていない isTotal 行」（＝各区分の
 // 最上位合計）を構造的に特定した上で、smoke_expected の既存 golden 値（total_assets/net_assets/

@@ -50,7 +50,7 @@ func registerRoutes(
         ], status: .ok)
     }
 
-    // /v1 配下の認証モードを env から決める（docs/api-auth.md / docs/deploy.md）。
+    // /v1 配下の認証モードを env から決める（docs/api-auth.md / .agents/skills/deploy/SKILL.md）。
     // 優先順位:
     //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
     //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
@@ -139,7 +139,7 @@ func registerRoutes(
     }
 
     // GET /v1/companies/{code}/waterfall?years=5
-    // Waterfall（`docs/feature-tiers.md`）。DB（財務取り込み derived キャッシュ company_financials、
+    // Waterfall（`docs/financials-summary-separation.md`）。DB（財務取り込み derived キャッシュ company_financials、
     // financials と同じ格納行）から増減分解フィールド（事業利益ウォーターフォール・ROIC/ROE分解・
     // ネットキャッシュ差分・運転資本/CCC差分）を含めて返す。未格納・古い・年数不足は 404。
     v1.get("companies", ":code", "waterfall") { req async -> Response in
@@ -204,7 +204,7 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/statement/notes?note_type=policy_holding_securities&doc_id=...
     // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
-    // `statement` 本体とは別エンドポイント（バージョニング独立。docs/feature-tiers.md）。
+    // `statement` 本体とは別エンドポイント（バージョニング独立。docs/statement.md）。
     // 財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
     v1.get("companies", ":code", "statement", "notes") { req async -> Response in
         let code = req.parameters.get("code") ?? ""

@@ -1,4 +1,4 @@
-// business / geography breakdown 軸の外出し SPEC_ORACLE（docs/test-spec-assets.md の C）。
+// business / geography breakdown 軸の外出し SPEC_ORACLE（.agents/skills/xbrl-development/SKILL.md）。
 //
 // smoke 固定11社を床にする。経路は2種:
 // - `path=xbrl_facts`: BreakdownNormalizer の決定論出力（segment 行の実額）を突合

@@ -88,8 +88,8 @@ jobs:
 
       - name: Ensure machine is running
         if: steps.paths.outputs.changed == 'true'
-        # serviceless 構成（[http_service] 撤去済み・docs/deploy.md「D. fly.toml の段階カットオーバー」）
-        # のため、fly deploy 後にマシンが stopped のままになることがある（docs/operations.md「保守ポイント」）。
+        # serviceless 構成（[http_service] 撤去済み・.agents/skills/deploy/SKILL.md）
+        # のため、fly deploy 後にマシンが stopped のままになることがある（deploy skill「定常運用」）。
         # `flyctl machine status` に汎用 --json フラグは無いため、id/state を含む `machine list --json` のみで完結させる。
         run: |
           flyctl machine list --json | jq -c '.[]' | while read -r m; do
