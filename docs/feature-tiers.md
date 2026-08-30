@@ -86,6 +86,7 @@ Meta → Struct → Norm → Viz
 |---|---|---|
 | REST API | **All**（実装済み全部） | 契約の正。段階 A は Service Token。段階 B で x402 |
 | Apps in ChatGPT（MCP） | **All**（実装済み全部） | **当面この面のみ** MCP を提供 |
+| iOS | Search, Summary, Waterfall, Feed（構想） | ポンチ絵。IA は `ios-client.md`。公開契約は未変更 |
 | Web | Search, Icon, Summary, Feed | 将来候補（優先度低）。HTML は抜本見直し |
 | RSS | Search, Summary, Feed | 構想 |
 
@@ -112,4 +113,4 @@ Sankey の残作業と現在地は Linear Team `blue-ticker` を正本とする�
 
 ## 関連
 
-`public-api.md` · `api-auth.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `eu-esef-roadmap.md` · `architecture.md`
+`public-api.md` · `api-auth.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `blt-server-roadmap.md` · `eu-esef-roadmap.md` · `architecture.md` · `ios-client.md`
