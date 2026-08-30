@@ -111,7 +111,7 @@ flowchart LR
 
 ### MCP（`POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。**当面 Apps in ChatGPT 専用**（`feature-tiers.md`）。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。**当面 Apps in ChatGPT 専用**（`feature-tiers.md`）。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS ネイティブは構想（`ios-client.md`）。REST 認証は未決で、`api-auth.md` はまだ変えない。
 
 ## データパイプライン（構成）
 
@@ -133,4 +133,4 @@ flowchart LR
 
 Linux 検証・テスト Postgres・手元の OCI ビルドは Apple `container`。本番実行は Fly（Dockerfile をリモートビルド）。選択機構の常設はしない。
 
-詳細: `deploy.md` · `operations.md` · `xbrl-parsing.md` · `blt-server-roadmap.md`
+詳細: `deploy.md` · `operations.md` · `xbrl-parsing.md` · `blt-server-roadmap.md` · `ios-client.md`
