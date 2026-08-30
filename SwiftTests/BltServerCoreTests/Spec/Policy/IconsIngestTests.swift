@@ -116,6 +116,26 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
         }
     }
 
+    /// 8253 型: 会社 010 有報より新しい特定有価証券 030 120 があっても、アイコン候補は 010 のみ。
+    @Test func ingestExcludesTrustBeneficiaryOrdinance030EvenIfNewerDocType120() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["8253"], limit: nil
+            ) { docID, _ in .success(fakeResult(docID)) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyIcon.find("8253", on: app.db))
+            #expect(row.r2ObjectKey == "company-icons/S100YCDE.png")
+        }
+    }
+
     @Test func ingestExcludesNonAnnualDocTypes() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", docType: Api.docTypeQuarterlyReport, db: app.db)

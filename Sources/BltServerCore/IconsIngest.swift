@@ -110,7 +110,8 @@ func runIconsIngest(
     return IconsIngestSummary(attempted: attempted, stored: stored, failed: failed, skipped: skipped)
 }
 
-/// 上場（listedCodes）× 有報(120) の直近1件を会社ごとに選ぶ。`explicitCodes` を渡すとさらに絞る。
+/// 上場（listedCodes）× 会社有報(120・府令010) の直近1件を会社ごとに選ぶ。`explicitCodes` を渡すとさらに絞る。
+/// docType 120 でも特定有価証券府令(030)の信託受益証券等は除外（statements / filings と同じ）。
 func latestAnnualReportPerCompany(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
 ) async throws -> [(docID: String, code: String)] {
@@ -123,7 +124,8 @@ func latestAnnualReportPerCompany(
     var byCode: [String: (docID: String, submitDateTime: String)] = [:]
     for doc in documents {
         guard let docID = doc.id,
-            let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0")
+            let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0"),
+            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
         let code = String(sec.dropLast())
         guard listedCodes.contains(code) else { continue }
