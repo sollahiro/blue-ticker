@@ -6,17 +6,12 @@
 クライアント責務とする。Blue Ticker は Sankey のレイアウトを規定しない。
 サーバーは開示にない軸間配賦を推計しない。
 
-方針の正本は本ファイル。Linear
-[BLT-18](https://linear.app/sollahiro/issue/BLT-18/sankey要求具体化後) は売上・BS の初期方針、
-[BLT-45](https://linear.app/sollahiro/issue/BLT-45/sankey-投資ハブ利益の活用) は投資ハブ。
-欠測社の販管費費目は [BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)（notes または breakdown の別軸）。
-揃ってから [BLT-47](https://linear.app/sollahiro/issue/BLT-47/sankey-欠測-randd販管費の子) で欠測 R&D を販管費の子にする。
-着手順と現在地は Linear Team `blue-ticker` の依存関係を正本とする。
+方針の正本は本ファイル。着手順と現在地は Linear Team `blue-ticker`（[BLT-18](https://linear.app/sollahiro/issue/BLT-18)）。公開 REST 契約ではない。
 
 ## 材料契約（BLT-18）
 
 smoke の言語非依存プロトタイプは `smoke/sankey_prototype_expected.json`（`schema_version: 2`）。
-公開 REST/MCP 契約ではなく、次の境界を固定する。
+公開 REST 契約ではなく、次の境界を固定する。
 
 | 区分 | 役割 |
 |---|---|
@@ -330,49 +325,10 @@ L0 期首資本 + 当期包括利益（無ければ親会社帰属純利益）
 - 銀行への商業会社ツリーの当てはめ
 - IBD 葉の上に `borrowings_schedule` 合計を重ねる
 
-## smoke 結果
-
-### 総資産
-
-実現可能。味の素（2802、S100VXJA）で次の両 dimension が `1,721,131,000,000` 円に一致する。
-
-- 資産: 流動資産 + 非流動資産
-- 負債・純資産: 流動負債 + 非流動負債 + 資本
-
-材料は既存 Statement JSON の `balance_sheet`。資産項目から個別の負債・資本項目へのリンク値は
-開示されないため、`cross_axis_links_available: false`。
-
-### 売上高
-
-軸ごとの独立した構成比として実現可能。キヤノンの正規化後 spot fixture では
-geography・business の各 dimension と PL bridge の売上高がすべて `4,624,727,000,000` 円に一致する。
-材料は既存の次の JSON。
-
-- `GET /v1/companies/{code}/breakdown?axis=geography`
-- `GET /v1/companies/{code}/breakdown?axis=business`
-- `GET /v1/companies/{code}/statement` または `financials`
-
-地域×事業の交差値は既存データにない。周辺合計だけから交差リンクは一意に決まらない。
-クライアントは各 dimension / bridge を独立した材料として組み合わせて描画する。
-
-キヤノンの business / geography は公式 smoke 床では LLM に渡す前の表までを固定しており、
-正規化後の金額は spot 監査資産である。公開契約の可用性確認は disposable Neon への ingest 後に行う。
-
-現行 smoke JSON のキヤノン `to_operating_profit` は別掲 R&D を販管費の兄弟に置いている。
-階層カタログでは販管費のあとに Waterfall 事業利益を置き、別掲 R&D はその次（事業利益→営業利益）。販管費へは足さない。
-smoke fixture の付け替えは実装着手時。
-
-### 営業利益
-
-現状の3軸では実現不可。smoke の geography 行に利益がない。business のセグメント利益合計
-`454,479,000,000` 円と PL 営業利益 `455,390,000,000` 円の差 `911,000,000` 円は、元の開示表に
-「消去」として存在するため、これを抽出すれば business→PL は保存できる。3軸化に残る必須要件は
-地域別利益の開示・抽出元であり、開示がない会社では生成できない。
-
 ## プロトタイプ境界
 
 `smoke/sankey_prototype_expected.json` は値の受け渡し形と実現可能性を固定するテスト資産であり、
-公開 REST/MCP 契約ではない。smoke 段階では `/sankey` エンドポイントや `nodes` / `links` を追加しない。
+公開 REST 契約ではない。smoke 段階では `/sankey` エンドポイントや `nodes` / `links` を追加しない。
 本番 Neon 書き込み・ingest ジョブも出さない。
 
 簡易表示は `smoke/sankey_prototype.html`。外部ライブラリを使わず同 JSON を読み、描画可能であることを

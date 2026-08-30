@@ -1,6 +1,15 @@
+---
+name: deploy
+description: Fly / self-host / Cloudflare Tunnel・Access・GitHub Actions のデプロイと定常運用を行うときに使う。
+---
+
+# デプロイと運用
+
+Neon write・RO 同期・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リリース tag は `.agents/skills/release/SKILL.md`。
+
 # blt-server デプロイ手順
 
-同一 OCI イメージを Fly と self-host で使う。手元のビルド・実行は Apple `container`。構成は `architecture.md`、認証方針は `api-auth.md`。
+同一 OCI イメージを Fly と self-host で使う。手元のビルド・実行は Apple `container`。構成は `docs/architecture.md`、認証方針は `docs/api-auth.md`。環境変数の薄い表も architecture。Neon 接続の正本は `.env.example`。
 
 ## 環境変数
 
@@ -105,18 +114,20 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 レート制限はゾーン Free の短い period のみ。悪用が観測されたらプラン検討。
 
-## MCP（Managed OAuth）
+## MCP（Managed OAuth・開発用）
+
+製品面ではない。ChatGPT Apps は凍結。ホストは解体しない。Cursor / 手元検証で使うときだけ触る。
 
 `POST /`。Managed OAuth は**パス付きホスト不可** → 専用 `mcp.<domain>`。
 
 1. Tunnel に `mcp.<domain>` → 同 origin
 2. Access アプリ（パスなし）＋ Managed OAuth ON
-3. 許可 IdP（例: One-Time PIN）と redirect URI（Apps in ChatGPT 用に Access へ登録した callback、加えて `http://localhost/callback`・`http://127.0.0.1/callback` — ポートなしで登録）
+3. 許可 IdP と redirect URI（`http://localhost/callback`・`http://127.0.0.1/callback` — ポートなしで登録）
 4. discovery が 200、未認証 `tools/list` が 401 であることを確認
 
 ## 定期同期（ローカル）
 
-重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。**ジョブ編成・実行順**は `ingest-policy.md`。**limit / skip / write** は `scripts/jp/edinet/ingest.local.env`（gitignore。PR 不要）。
+重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。**ジョブ編成・実行順**は `docs/ingest-policy.md`。本番 write は `.agents/skills/production-ingest/SKILL.md`。**limit / skip / write** は `scripts/jp/edinet/ingest.local.env`（gitignore。PR 不要）。
 
 ```bash
 swift build -c release --product blt-server
@@ -140,3 +151,49 @@ chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
 
 1. ローカル Postgres: `BLT_TEST_POSTGRES_URL` + `PostgresIntegrationTests`（CI linux でも実行）
 2. 実 Neon: `.env` を load → `blt-server sync` → `ingest --limit` → `/v1/.../financials` が 200
+
+
+# 外部サービス依存と運用保守
+
+
+## 大前提
+
+Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可能。失われる一次データはない。全社再バックフィルは重いので移行時は dump/restore が現実的。
+
+## サービス別
+
+### Neon（代替容易）
+
+結合点はプロセス束縛の `DATABASE_URL` のみ（手元では `BLT_NEON_DISPOSABLE_DATABASE_URL` 等を代入）。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
+
+### 内訳 LLM（切替容易）
+
+結合点は軸共通の `LLM_PROVIDER`（`openai` / `xai`）と、プロバイダ×軸のキー（`OPENAI_*` / `XAI_*`）。現行は `LLM_PROVIDER=openai` + GPT-5.6 Luna。Grok に戻すときは `LLM_PROVIDER=xai`（xAI 側のキーはそのまま残せる）。`BASE_URL` 省略時はプロバイダの既定 URL。html_table 経路のみ使用。切替後の再計算は `docs/breakdown.md`（`needs_review` または行削除）。
+
+### Fly.io（代替容易）
+
+結合は `fly.toml` / Volume / secrets / deploy。アプリは素の OCI イメージ（Dockerfile）。方式A（Tunnel）のため Fly LB 非依存。切替: 新ホストで同イメージ＋secrets＋Tunnel トークン。
+
+### Cloudflare（撤退経路なし・SSO）
+
+Tunnel + Access（SSO / Service Token / MCP OAuth。MCP は開発用）。Bearer は廃止済み。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 バケット分離は `.agents/rules/caching.md`。
+
+## 定常運用
+
+- ログは JSON 1行（`ingest_summary` / `db_retry` / `http_access`）。レイテンシ切り分けは `duration_ms`（サーバー内）とクライアント往復を比較。乖離が大きいときは Tunnel/Access 側を疑う。
+- 重い ingest はローカル。鮮度監視: `scripts/check-ingest-freshness.sh`。
+- デプロイ: CI 成功後 `deploy.yml` が自動（手動は `workflow_dispatch`）。`/healthz` の `cache_versions` で版確認。
+- cloudflared は Dockerfile で版固定。数ヶ月に一度更新。
+- Fly serviceless 後は stopped になり得る → deploy ワークフローが `machine start`。
+- Neon scale-to-zero: `withDbRetry` ＋プール待ち 45s。プラン変更時に再確認。
+- Linux: MemberImportVisibility 回避フラグ（`AGENTS.md` / `.github/workflows/ci.yml`）。swift-nio 修正後に除去。
+
+## Git の外にある状態
+
+| 場所 | 内容 | 復旧 |
+|---|---|---|
+| Fly secrets | API キー / DB / Access / Tunnel | 再発行・`fly secrets set` |
+| Neon | 全テーブル | dump または再 ingest |
+| Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット） | 本 skill で再作成。ZIP は EDINET 再取得可 |
+| ローカル Mac | 手元スケジュール・`.env` | 本 skill 定期同期 |
+| Fly Volume `/data` | EDINET キャッシュ（L1） | 再取得または R2 L2 |

@@ -1,6 +1,6 @@
 # BLUE TICKER
 
-日本株の財務データ基盤。**Swift** 製の **REST API** と、Apps in ChatGPT 向け **MCP**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。
+日本株の財務データ基盤。**Swift** 製の **REST API**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。近傍の製品面は REST と iOS。MCP は開発時（Cursor / 手元）のみ使い、製品としては伸ばしません。
 
 ## 主な機能
 
@@ -8,8 +8,9 @@
 - 年次の財務サマリ（Summary）と増減分析（Waterfall）
 - 有価証券報告書のセクション本文（Filing）
 - 事業別・地域別売上の内訳（Breakdown）
+- 財務諸表本体と注記（Statement / Notes）
 
-機能一覧・提供面は [`docs/feature-tiers.md`](docs/feature-tiers.md)。利用可能な API / ツールは `GET /v1/skills`（MCP では `tools/list`）でも取得できます。
+エンドポイント一覧は [`docs/architecture.md`](docs/architecture.md)。利用可能な API は `GET /v1/skills` でも取得できます。ドメイン契約は [`docs/statement.md`](docs/statement.md) / [`docs/breakdown.md`](docs/breakdown.md)。
 
 ## 使い方
 
@@ -18,7 +19,6 @@
 | 用途 | ホスト | 認証 |
 |---|---|---|
 | curl / スクリプト / CI | `https://api.sollahiro.com` | Access Service Token |
-| Apps in ChatGPT | `https://mcp.sollahiro.com` | Managed OAuth（ブラウザで認可） |
 
 ### REST API
 
@@ -44,21 +44,19 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
 | `GET` | `/v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET` | `/v1/skills` | 能力カタログ |
 
-認証の発行手順・住み分け: [`docs/api-auth.md`](docs/api-auth.md) / [`docs/deploy.md`](docs/deploy.md)  
+認証の住み分け: [`docs/api-auth.md`](docs/api-auth.md)。発行手順: [`.agents/skills/deploy/SKILL.md`](.agents/skills/deploy/SKILL.md)  
 互換ポリシー: [`docs/api-compatibility.md`](docs/api-compatibility.md)
 
-### MCP（Apps in ChatGPT）
+### MCP（開発用）
 
-ChatGPT の Apps / コネクタ向けに **`https://mcp.sollahiro.com`** を登録し、ブラウザで OAuth 認可します。接続後は REST と同じ能力をツールとして呼べます（例: `search_companies`・`get_financial_summary`・`get_waterfall`）。**当面この面専用**です（他 MCP クライアントはサポート対象外）。
+Cursor と手元検証向けに `BltMcpServerCore` が REST と同じ能力をツールとして提供します。ChatGPT Apps 向けの公開は凍結しています。ホストや OAuth の配線は deploy skill。
 
 ## ドキュメント
 
-デプロイ・セルフホスト・開発検証（`swift test` / 使い捨て ingest + `/v1`）などは [`docs/`](docs/) を参照してください。
-
-- [`docs/architecture.md`](docs/architecture.md) — 構成
-- [`docs/feature-tiers.md`](docs/feature-tiers.md) — 機能マトリクス
-- [`docs/deploy.md`](docs/deploy.md) / [`docs/operations.md`](docs/operations.md) — 運用
+- [`docs/architecture.md`](docs/architecture.md) — 構成・提供面・エンドポイント
 - [`AGENTS.md`](AGENTS.md) — エージェント向け常時ガードレール
+- [`.agents/skills/deploy/SKILL.md`](.agents/skills/deploy/SKILL.md) — Fly / Tunnel / Access
+- [`.agents/skills/production-ingest/SKILL.md`](.agents/skills/production-ingest/SKILL.md) — Neon write
 
 ## 免責事項
 

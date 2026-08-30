@@ -8,7 +8,7 @@ description: Neon を使った disposable 検証、本番 ingest、RO 同期、�
 ## 正本
 
 - Stage の順序・ジョブ編成: `docs/ingest-policy.md`
-- CLI と障害対応: `docs/operations.md`
+- CLI と障害対応: `.agents/skills/deploy/SKILL.md`
 - 接続変数: `.env.example`
 - 訂正有報: `.agents/rules/amendments.md`
 

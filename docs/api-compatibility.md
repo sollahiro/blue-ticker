@@ -2,13 +2,13 @@
 
 自社向け REST 本線化（段階 A）の契約ルール。第三者公開（段階 B）では deprecation 期間などを足す前提で、いまはゆるく運用する。
 
-構想全体は `docs/public-api.md`（段階 B）。段階 A の契約は本ファイルと `api-auth.md` / `feature-tiers.md`。内部の Neon `cache_version` / read 床は本ポリシーの対象外（`.agents/rules/versioning.md`）。
+構想全体は `docs/public-api.md`（段階 B）。段階 A の契約は本ファイルと `api-auth.md` / `architecture.md`。内部の Neon `cache_version` / read 床は本ポリシーの対象外（`.agents/rules/versioning.md`）。
 
 ## 原則
 
 1. **普段は追加中心** — 既存クライアントが知らなくてよいフィールド・エンドポイントの追加は互換
 2. **たまってから明示付きで再編** — 削除・改名・型変更・意味変更はまとめて行い、breaking として版を上げる
-3. **契約の正は REST** — MCP は REST を写す。互換判断も REST 応答を基準にする
+3. **契約の正は REST** — 互換判断も REST 応答を基準にする。開発用 MCP ツールは REST を写すだけであり、MCP 単独の契約変更はしない
 
 ## 互換対象（段階 A）
 
@@ -65,7 +65,7 @@ breaking 再編時は可能な範囲で:
 
 - breaking なら該当 `schema_version` 定数を上げ、PR / コミットで分かるようにする
 - 互換追加も含め、契約に触る変更は短いメモを残す（PR 説明または関連 docs）
-- MCP ツール入出力を変える場合は、先に REST 契約を決め、MCP は追従させる
+- 開発用 MCP の入出力を変える必要が出ても、先に REST 契約を決める。MCP を製品面として拡張しない
 
 ## 段階 B で足す予定
 

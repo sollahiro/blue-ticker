@@ -2,6 +2,35 @@
 
 **現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/versioning.md`）、経緯は Git。
 
+## 提供面
+
+| 面 | 位置づけ |
+|---|---|
+| REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B は `public-api.md` |
+| iOS | 近傍の製品面（構想。IA は `ios-client.md`、未決は Linear [BLT-53](https://linear.app/sollahiro/issue/BLT-53)） |
+| MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore` は残す。製品として伸ばさない。ChatGPT Apps は凍結 |
+| Web / RSS | 将来候補（優先度低） |
+
+機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）は Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
+
+## Class 依存
+
+実装・理解の順（下は上に依存）。JP / EU とも同じ。
+
+```text
+Meta → Struct → Norm → Viz
+```
+
+| Class | 役割 | 主な Feature |
+|---|---|---|
+| Meta | 発行体・書類の同定 | Search, Icon |
+| Struct | 開示の構造化（**正本**） | Filing, Statement, Statement-Notes |
+| Norm | 正規化・組立 | Breakdown（内訳正本）, Summary（組立スナップショット） |
+| Viz | 正規化値の分解・配分 | Waterfall, Sankey |
+| Feed | 縦依存の外 | Trend, Update, Status, Report |
+
+**Summary** は Statement / Statement-Notes / Breakdown 経路の組立（Filing は本文。`financials-summary-separation.md`）。
+
 ## Region × Source（モノレポ命名）
 
 単一リポジトリで複数市場を扱う。命名の対応は固定:
@@ -17,11 +46,11 @@
 | 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
 | cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
 
-規律の短文正本: `.agents/rules/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針・未決は `eu-esef-roadmap.md`、進捗は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
+規律の短文正本: `.agents/rules/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針は `eu-esef-roadmap.md`、進捗・未決は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
 
 ## デプロイモード
 
-配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。ユーザー接点は REST / MCP。検証は `swift test`（smoke/golden）と、使い捨て Neon へ ingest したうえでの `/v1`。
+配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。製品接点は REST。検証は `swift test`（smoke/golden）と、使い捨て Neon へ ingest したうえでの `/v1`。MCP は開発検証用。
 
 | モード | EDINET | blt-server | 状態 |
 |---|---|---|---|
@@ -29,7 +58,9 @@
 | remote (self-host) | blt-server | 同一マシン | 基盤あり |
 | remote (cloud) | blt-server | Fly (nrt) + Neon | **本番** |
 
-**REST `/v1` が契約の正**。MCP は追従面。機械到達は Access Service Token（`api-auth.md`）。
+機械到達は Access Service Token（`api-auth.md`）。
+
+公開デプロイの安全性は **Tunnel ＋ 公開ポート閉鎖（serviceless）＋ Access** の 3 点。どれか欠けると無認証素通り。Fly の `[http_service]` を戻さない。手順は `.agents/skills/deploy/SKILL.md`。
 
 ## ターゲット構成と依存方向
 
@@ -79,8 +110,8 @@ products は `blt-server` のみ。同一モジュール内の依存はレビュ
 
 ```mermaid
 flowchart LR
-    user(["クライアント"]) -->|"HTTPS /v1 または MCP POST /"| server["blt-server"]
-    dev(["開発者"]) -->|"swift test / ingest+curl"| server
+    user(["クライアント"]) -->|"HTTPS /v1"| server["blt-server"]
+    dev(["開発者"]) -->|"swift test / ingest+curl / MCP"| server
     server --> facade["BltServerContext"]
     facade --> svc["Services / Analysis"]
     svc --> edinet[("EDINET")]
@@ -88,7 +119,7 @@ flowchart LR
     server -.->|"fire-and-forget POST"| trend["Feed Trend Worker / Analytics Engine"]
 ```
 
-認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（dev）。詳細は `deploy.md` / `api-auth.md`。
+認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（dev）。詳細は `api-auth.md` / `.agents/skills/deploy/SKILL.md`。
 
 ### REST（`/v1/`）
 
@@ -97,7 +128,7 @@ flowchart LR
 | `GET /healthz` | ヘルス（認証不要）・`cache_versions` |
 | `GET /v1/skills` · `/v1/skills/{id}` | 能力カタログ |
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
-| `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills/MCP 未掲載） |
+| `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills 未掲載） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
@@ -109,9 +140,26 @@ flowchart LR
 
 エラー封筒: `{"error":...,"status":N}`。
 
-### MCP（`POST /`）
+### MCP（開発用 `POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。**当面 Apps in ChatGPT 専用**（`feature-tiers.md`）。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS ネイティブは構想（`ios-client.md`）。REST 認証は未決で、`api-auth.md` はまだ変えない。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS REST 認証は未決で、`api-auth.md` はまだ変えない。
+
+## 環境変数（薄い表）
+
+Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセスが読む接続スロットは `DATABASE_URL` だけ。
+
+| 変数 | 役割 |
+|---|---|
+| `BLT_HOST` / `BLT_PORT` | bind（既定 `0.0.0.0:8080`） |
+| `BLUE_TICKER_ASSETS_PATH` | assets（既定 `/app/assets`） |
+| `BLUE_TICKER_USER_DATA_PATH` | キャッシュ永続先（既定 `/data`） |
+| `BLT_EDINET_API_KEY` | EDINET（**secret・必須**） |
+| `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード。公開デプロイでは**必須**（未設定＝無認証） |
+| `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
+| `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
+
+`/healthz` は認証不要。`cache_versions` でイメージの版を確認。Bearer は廃止済み。
 
 ## データパイプライン（構成）
 
@@ -133,4 +181,4 @@ flowchart LR
 
 Linux 検証・テスト Postgres・手元の OCI ビルドは Apple `container`。本番実行は Fly（Dockerfile をリモートビルド）。選択機構の常設はしない。
 
-詳細: `deploy.md` · `operations.md` · `xbrl-parsing.md` · `blt-server-roadmap.md` · `ios-client.md`
+詳細: `.agents/skills/deploy/SKILL.md` · `xbrl-parsing.md` · `blt-server-roadmap.md` · `ios-client.md`
