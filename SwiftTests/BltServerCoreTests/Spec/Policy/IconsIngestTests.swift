@@ -1,4 +1,4 @@
-// 会社アイコン取り込みの DB ロジック（対象選定＝上場×有報×会社ごと最新1件・staleness 判定・upsert・limit）を
+// 会社アイコン取り込みの DB ロジック（対象選定＝上場×会社有報120・府令010×会社ごと最新1件・staleness 判定・upsert・limit）を
 // 検証する。抽出（extractAndUploadCompanyIcon）は EDINET/favicon/R2 依存のため、フェイク抽出器を注入して
 // ネットワーク非依存で見る。
 
@@ -113,6 +113,26 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
             #expect(summary.attempted == 1)
             let row = try #require(try await CompanyIcon.find("7203", on: app.db))
             #expect(row.r2ObjectKey == "company-icons/S1_NEW.png")
+        }
+    }
+
+    /// 8253 型: 会社 010 有報より新しい特定有価証券 030 120 があっても、アイコン候補は 010 のみ。
+    @Test func ingestExcludesTrustBeneficiaryOrdinance030EvenIfNewerDocType120() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100YCDE", secCode: "82530", submit: "2026-06-16 11:38", db: app.db)
+            try await seedDoc(
+                "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
+                ordinance: "030", form: "09A000", db: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["8253"], limit: nil
+            ) { docID, _ in .success(fakeResult(docID)) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyIcon.find("8253", on: app.db))
+            #expect(row.r2ObjectKey == "company-icons/S100YCDE.png")
         }
     }
 
