@@ -108,7 +108,7 @@ smoke/
 
 原則としては note_type の決定論ロジックもこの床でカバーされるべきだが、公開 note_type はいずれも固定11社の外出しオラクル床に載済み。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認を後追いで足す余地は、新規 note_type 追加時に残る。
 
-smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`）にあたる。テストを移行耐性の観点で層分けする指針は `.agents/skills/xbrl-development/SKILL.md` を参照。
+smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`＝L0）にあたる。突合する Swift テストコードは L1（`HARNESS_ONLY`）。テストを移行耐性の観点で層分けする指針は `.agents/skills/xbrl-development/SKILL.md` を参照。
 
 XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 

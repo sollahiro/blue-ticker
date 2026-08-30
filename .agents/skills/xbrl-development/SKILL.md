@@ -61,13 +61,13 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 
 ## Spec 層（テスト資産）
 
-言語が変わっても残る資産と、実装に紐づいて捨ててよい部分を区別する。
+言語が変わっても残る資産と、実装に紐づいて捨ててよい部分を区別する。重要度は層であり、ファイル量ではない。
 
 | 層 | 内容 | 移行耐性 |
 |---|---|---|
-| **L0 Spec Asset** | 入出力・不変条件・契約・状態規則 | 残す |
-| **L1 Spec Runner** | L0 を実行する薄い実行器 | 言語ごとに差し替え |
-| **L2 Impl Coupling** | FW・内部型・呼び出し順 | 最小限。捨ててよい |
+| **L0 Spec Asset** | 入出力・不変条件・契約・状態規則・期待値 | 残す（トークン理由でも削らない） |
+| **L1 Spec Runner** | L0 を接続して走らせる薄い実行器 | 言語ごとに差し替え |
+| **L2 Impl Coupling** | 合否に不要な内部型・呼び出し順・FW 固有アサーション | 最小限。捨ててよい |
 
 判定: **実装を消して仕様書だけで同じ合否が書けるか** → Yes なら L0。
 
@@ -80,7 +80,15 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 | `HARNESS_ONLY` | L1 | 実行装置 |
 | `IMPL_ONLY` | L2 | 実装内部都合のみ（新規禁止） |
 
-smoke / golden は主に `SPEC_ORACLE` / `SPEC_INVARIANT`（`docs/xbrl-parsing.md` §3）。新規は L0 を厚く、L2 は最小。横断一貫性は結合テストではなく `SPEC_INVARIANT` として書く。
+**ラベルは L0 の種類。フォルダ名は層ではない。** `Spec/Contract`・`Spec/Policy` 配下の Swift 全体が L0 ではない。
+
+- **L0**: 契約の形・エラー意味・version / skip / floor・JSON 期待値・状態規則そのもの（例: `smoke/*.json`）
+- **L1**: in-memory App、ルート叩き、フェイク注入、オラクル突合の実行コード。Vapor 等を使っても、合否定義ではなく実行器なら L1（例: `*OracleFormatTests.swift`、`RoutesTests` の App 起動）
+- **L2**: 合否に不要な内部型・呼び出し順・FW 固有の密着。FW を使うこと自体は L2 ではない
+
+削減対象は主に L2 と、過剰な L1 **出力**（成功時の冗長ログ・フル test 出力の文脈投入）。接続テスト本体は残す。
+
+smoke / golden は主に `SPEC_ORACLE` / `SPEC_INVARIANT`（`docs/xbrl-parsing.md` §3）。新規は L0 を厚く（外出し Oracle・床を先に）、床で踏めない分岐だけ golden、L2 は最小。横断一貫性は結合テストではなく `SPEC_INVARIANT` として書く。MCP は製品面にしない（テストも増やさない。既存接続テストは残す）。
 
 ## 抽出 how-to（旧 xbrl-parsing）
 
