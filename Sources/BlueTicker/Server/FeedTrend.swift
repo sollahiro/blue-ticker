@@ -3,7 +3,7 @@
 
 import Foundation
 
-/// Trend が数える MCP / REST ツール。healthz・skills・feed・demo・EU preview は含めない。
+/// Trend が数える MCP / REST ツール。healthz・skills・feed・EU preview は含めない。
 public let feedTrendRecordedTools: Set<String> = [
     "search_companies",
     "get_filings",

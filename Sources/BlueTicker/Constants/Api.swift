@@ -64,20 +64,6 @@ public enum Api {
     // 件数上限
     static let companySearchLimit = 50      // searchCompanies の返却上限
 
-    /// `/v1/demo/companies` の返却件数上限。子サイト（sollahiro.com/demo）の実データ検索専用。
-    /// company_breakdowns 格納銘柄に絞ったうえでの表示件数（検索窓の下の候補用）。
-    /// BltServerCore（Routes.swift）から参照するため public。
-    public static let demoSearchResultLimit = 8
-
-    /// `/v1/demo/companies` の検索クエリ `q` の受理上限（文字）。超過分は切り詰める。
-    /// 無認証公開（Cloudflare Bypass）想定のため、アプリ側でも入力をクランプする。
-    public static let demoQueryMaxLength = 100
-
-    /// `/v1/demo/*` に CORS で許可するオリジン。summary.html が同一オリジンでない
-    /// api.sollahiro.com へ fetch するため必要（ブラウザは Access-Control-Allow-Origin が
-    /// 一致しないとレスポンスをスクリプトから読ませない）。BltServerCore（Routes.swift）から
-    /// 参照するため public。
-    public static let demoAllowedOrigin = "https://sollahiro.com"
     static let filingsMaxDocuments = 50     // server read（getFilings / filingsList）の filings 上限
     static let filingsCliMaxDocuments = 10  // CLI `filings` コマンドの表示上限
 
