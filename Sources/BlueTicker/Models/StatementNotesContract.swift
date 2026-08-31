@@ -34,8 +34,8 @@ public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 /// IFRS 販管費注記タグ）。発生支出の `research_and_development` breakdown とは別物。
 /// US-GAAP は `us_gaap_unsupported`。銀行など連結に費目タグが無い場合は `not_found`
 /// （個別注記のみの開示は拾わない）。
-/// **未公開・未配線**（BLT-46）: `allStatementNoteTypes` / ingest / job-03 / ApiSkills に載せない。
-/// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す。
+/// **未公開・未配線**: `allStatementNoteTypes` / ingest / job-03 / ApiSkills に載せない。
+/// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す（進捗は Linear Team `blue-ticker`）。
 public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
 /// ingest / `--note-types` バリデーション用の公開 note_type 一覧（`FactsIngest` の走査順）。

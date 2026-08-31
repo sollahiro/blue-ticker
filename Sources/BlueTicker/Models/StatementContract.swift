@@ -54,7 +54,7 @@ public func isStatementNotApplicablePlaceholder(_ year: StatementYear) -> Bool {
 /// 小松/オリックス（SS 残高ラベル）を HTML 経路で拾えるようにしたため v2。
 /// 旧 notApplicable プレースホルダと部分欠測行を再抽出する。
 /// 2026-08-23: 保持窓内の旧年 US-GAAP で SS/CF が length-0 だった穴（見出し空白・
-/// CF 後 SS・0105020 連結 CF）を埋めたため v3（BLT-43）。
+/// CF 後 SS・0105020 連結 CF）を埋めたため v3。
 public let statementCacheVersion = "statement-v3"
 
 /// Statement read が 200 を返す最低計算バージョン番号（`statement-vN` の N）。

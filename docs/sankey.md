@@ -8,7 +8,7 @@
 
 方針の正本は本ファイル。着手順と現在地は Linear Team `blue-ticker`。公開 REST 契約ではない。
 
-## 材料契約（BLT-18）
+## 材料契約
 
 smoke の言語非依存プロトタイプは `smoke/sankey_prototype_expected.json`（`schema_version: 2`）。
 公開 REST 契約ではなく、次の境界を固定する。
@@ -31,7 +31,7 @@ Sales の PL は bridge。J-GAAP 事業会社と IFRS/US-GAAP でトポロジが
 キヤノン（7751、S100XTLJ）は US-GAAP のため経常利益・特別損益を発明しない。
 各 bridge stage は `conserved_total` へ一致し、説明不能な残差が 5% 超なら `needs_review`。
 
-研究開発費は売上 dimension ではない。親は statement の置き場で分岐する（販管費の内数、または別掲なら Waterfall 事業利益の次）。欠測は販管費を葉のまま。費目内訳は BLT-46、接続は BLT-47。詳細は「階層カタログ」。
+研究開発費は売上 dimension ではない。親は statement の置き場で分岐する（販管費の内数、または別掲なら Waterfall 事業利益の次）。欠測は販管費を葉のまま。費目内訳と接続の進捗は Linear Team `blue-ticker`。詳細は「階層カタログ」。
 
 ## 階層カタログ
 
@@ -70,7 +70,7 @@ breakdown `research_and_development` の正本は発生支出（financials の r
 | 判定 | statement 上の根拠 | R&D の親 | smoke |
 |---|---|---|---|
 | 内数 | 販管費合計の `components` に `ResearchAndDevelopmentExpensesSGA` 等 | 販管費 | ニチレイ |
-| 欠測 | PL に R&D 行が無い | 販管費は葉。費目内訳は [BLT-46](https://linear.app/sollahiro/issue/BLT-46/jp-販管費費目内訳notes-または-breakdown)。子にするのは [BLT-47](https://linear.app/sollahiro/issue/BLT-47/sankey-欠測-randd販管費の子)（BLT-46 Done の後） | オークマ、クボタ、スズキ、AZ、東邦レマック |
+| 欠測 | PL に R&D 行が無い | 販管費は葉。費目内訳の公開と、それを販管費の子にする接続は Linear Team `blue-ticker`（費目内訳の後） | オークマ、クボタ、スズキ、AZ、東邦レマック |
 | 別掲 | 販管費（または販売費・一般管理費）と兄弟 | 事業利益（Waterfall）の次 | 味の素、キヤノン、富士フイルム |
 
 銀行（MUFG / SMFG）は商業 PL を当てない。R&D は欠測。
@@ -81,12 +81,12 @@ breakdown `research_and_development` の正本は発生支出（financials の r
 
 - 内数: `PL の R&D + その他販管費 == 開示販管費`
 - 別掲: 開示販管費から R&D を引かない。`1,367,277 − 339,288` をその他販管費にしない
-- 欠測: breakdown / financials の rd（`ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities`）は**発生支出**。製造費用（オークマ 4,265 のうち販管費費目は 2,097）や開発資産への振替（スズキ FY2025 は 265,571 → 販管費内 241,018）を含む。これを販管費から引いて残差を作らない。子にする額は BLT-46 の販管費費目（今は葉）
+- 欠測: breakdown / financials の rd（`ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities`）は**発生支出**。製造費用（オークマ 4,265 のうち販管費費目は 2,097）や開発資産への振替（スズキ FY2025 は 265,571 → 販管費内 241,018）を含む。これを販管費から引いて残差を作らない。子にする額は `sga_expense_breakdown` の販管費費目（今は葉）
 - `sum(R&D の segment＋reconciling＋residual) == breakdown 分母`（発生支出側。販管費の子の分母とは別）
 - R&D 欠測は空の内訳で埋めない
 - 地域別 R&D は通常非開示。推計しない
 
-材料: PL の販管費と独立 R&D 行は statement `income_statement`。セグメント内訳は breakdown `research_and_development`（発生支出。financials の rd と同じ）。欠測社の販管費費目は note_type `sga_expense_breakdown`（BLT-46。構造化 `*SGA` / IFRS 販管費注記タグ。発生支出軸は流用しない。**未公開**）。
+材料: PL の販管費と独立 R&D 行は statement `income_statement`。セグメント内訳は breakdown `research_and_development`（発生支出。financials の rd と同じ）。欠測社の販管費費目は note_type `sga_expense_breakdown`（構造化 `*SGA` / IFRS 販管費注記タグ。発生支出軸は流用しない。**未公開**。進捗は Linear Team `blue-ticker`）。
 
 ### 連結損益計算書（metric `sales`）
 
@@ -141,7 +141,7 @@ L0 売上高
 
 | 例 | 営業利益 | Waterfall 事業利益 | R&D の置き場 |
 |---|---|---|---|
-| オークマ S100YFQC | 15,505m | ＝営業利益（1m 丸め） | 販管費は葉。注記合計 4,265m は製造費用込み。費目 2,097m は BLT-47 |
+| オークマ S100YFQC | 15,505m | ＝営業利益（1m 丸め） | 販管費は葉。注記合計 4,265m は製造費用込み。費目 2,097m は接続待ち（Linear Team `blue-ticker`） |
 | ニチレイ | GP − 販管費合計 | ＝営業利益 | 販管費（`ResearchAndDevelopmentExpensesSGA` が販管費の内訳） |
 | 味の素 S100VXJA | 113,968m | 550,764 − 366,854 ＝ 183,910m | 事業利益の次。開示事業利益 159,302m とは一致しない |
 | キヤノン | 455,390m | 2,161,955 − 1,367,277 ＝ 794,678m | 事業利益の次（別掲 339,288m） |
@@ -151,7 +151,7 @@ L0 売上高
 
 #### IFRS / US-GAAP
 
-経常利益・特別損益を作らない。別掲 R&D は事業利益の次。内数は販管費の子。欠測は販管費を葉。費目内訳は BLT-46、接続は BLT-47。営業利益から金融損益・持分法（税引前の後に来る会社もある）・その他を経由して税引前へ。
+経常利益・特別損益を作らない。別掲 R&D は事業利益の次。内数は販管費の子。欠測は販管費を葉。費目内訳と接続の進捗は Linear Team `blue-ticker`。営業利益から金融損益・持分法（税引前の後に来る会社もある）・その他を経由して税引前へ。
 
 味の素（S100VXJA）の Waterfall カスケード:
 
@@ -167,7 +167,7 @@ L0 売上高
    └─ 営業利益 113,968
 ```
 
-クボタ・スズキは PL に R&D 行が無く販管費合計だけ。`GP − 販管費 → その他営業 → 営業利益` は保存する。R&D を販管費の子にするのは BLT-47（スズキ S100YFG2 の販管費内は振替後 271,082m）。breakdown の発生支出（同 270,400m、クボタ 110,300m）で残差を作らない。
+クボタ・スズキは PL に R&D 行が無く販管費合計だけ。`GP − 販管費 → その他営業 → 営業利益` は保存する。R&D を販管費の子にする接続は Linear Team `blue-ticker`（スズキ S100YFG2 の販管費内は振替後 271,082m）。breakdown の発生支出（同 270,400m、クボタ 110,300m）で残差を作らない。
 
 #### 銀行
 
@@ -266,7 +266,7 @@ L2 科目は statement `balance_sheet` の `section` / `is_total` / `components`
 | breakdown `noncurrent_asset_additions` | 投資ハブ側。期末残高ツリーに混ぜない | フローでありストックではない |
 | 地域別非流動資産 | metric を `noncurrent_assets` に切り替える | 総資産 dimension へ混ぜない |
 
-### キャッシュ・フローと投資ハブ（BLT-45）
+### キャッシュ・フローと投資ハブ
 
 R&D はここに置かない（置き場は連結 PL。投資ハブの配賦先にしない）。Capex と株主還元を売上 PL に足さない。
 
@@ -344,7 +344,7 @@ L0 期首資本 + 当期包括利益（無ければ親会社帰属純利益）
 - 味の素: 事業利益（Waterfall）→ 別掲 R&D → セグメント別（XBRLタグ行 + 丸め差）
 
 配当・自己株式取得を当期純利益から直接配賦せず、期首資本を含む SS 資本ブリッジとして表示する。
-`research_and_development` は発生支出。売上 dimension ではない。販管費の drilldown にするのは内数に限る。欠測は BLT-46 の費目内訳が揃ってから BLT-47。
+`research_and_development` は発生支出。売上 dimension ではない。販管費の drilldown にするのは内数に限る。欠測は費目内訳が揃ってから接続する（進捗は Linear Team `blue-ticker`）。
 
 ```bash
 cd smoke

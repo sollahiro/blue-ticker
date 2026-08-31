@@ -33,7 +33,7 @@
 // 野村 SS は連結資本勘定変動表の全行（label / section / value / is_total）を golden 化。
 // オムロンは BS 45 / PL 21 / CF 50 / SS 11 行。小松は BS 39 / PL 21 / CF 31 / SS 12 行。
 // オリックスは BS 39 / PL 28 / CF 51 / SS 18 行（注記番号セル・資本の部・小計/空白+計）。
-// 2026-08-23、BLT-43: 保持窓内の旧年 US-GAAP で SS/CF が length-0 だった穴を golden 化。
+// 2026-08-23: 保持窓内の旧年 US-GAAP で SS/CF が length-0 だった穴を golden 化。
 // オムロン S100OEI0/S100LLFL（`第N期末 現在`）、ソニー S100LM4N（CF 後の連結資本変動表）、
 // 村田 S100R773/S100OJOR/S100LPV9（活動見出しの空白）、ORIX S100R3ZX/S100OKI8/S100LU21
 // （連結CF が 0105020）。7203 S100IUNR は保持窓外で対象外。
@@ -1673,7 +1673,7 @@ import Foundation
         #expect(Self.statementGoldenRows(year.changesInEquity) == expectedSS)
     }
 
-    // MARK: - BLT-43 旧年 US-GAAP（保持窓内の SS/CF length-0）
+    // MARK: - 旧年 US-GAAP（保持窓内の SS/CF length-0）
 
     @Test
     func omronS100OEI0HistoricalSSWithSpacedPeriodEndLabels() async throws {

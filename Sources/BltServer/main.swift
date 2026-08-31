@@ -11,7 +11,7 @@
 //                                                            statements は上場全体（日経225は処理順の優先のみ）。
 //                                                            statement-notes は日経225構成銘柄限定。
 //                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
-//                                                            --with-facts は残存（数値 facts 永続は閉じた。BLT-23）。
+//                                                            --with-facts は残存（数値 facts 永続は閉じた）。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
