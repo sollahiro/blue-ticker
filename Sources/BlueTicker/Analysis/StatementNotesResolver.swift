@@ -204,7 +204,7 @@ enum StatementNotesResolver {
 
     /// 販売費及び一般管理費の主要な費目内訳（`sga_expense_breakdown` note_type）。
     ///
-    /// 連結損益計算書関係注記の構造化タグから決定論で抽出する（BLT-46 / `docs/sankey.md`）。
+    /// 連結損益計算書関係注記の構造化タグから決定論で抽出する（`docs/sankey.md`）。
     /// breakdown `research_and_development`（発生支出）とは別物。販管費から引いて残差を作らない。
     ///
     /// 実データ検証（2026-08-27）:

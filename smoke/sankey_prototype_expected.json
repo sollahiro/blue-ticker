@@ -1,5 +1,5 @@
 {
-  "_comment": "Sankey smoke prototype materials (BLT-18). Server/smoke returns metric + independent dimensions + bridges (+ drilldowns). Layout (left/right/hub/colors) is a client choice — not encoded here. Cross-axis links are intentionally not fabricated.",
+  "_comment": "Sankey smoke prototype materials. Server/smoke returns metric + independent dimensions + bridges (+ drilldowns). Layout (left/right/hub/colors) is a client choice — not encoded here. Cross-axis links are intentionally not fabricated.",
   "schema_version": 2,
   "cases": [
     {

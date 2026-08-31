@@ -18,4 +18,4 @@
 
 機能単位の有料マスクは採らない。**段階 B の対象は REST（x402）**。MCP は開発専用のため段階 B の x402 対象外。
 
-土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断は Linear [BLT-25](https://linear.app/sollahiro/issue/BLT-25/rest-段階-b-x402)。定義の索引は `blt-server-roadmap.md`。
+土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断は Linear Team `blue-ticker`。定義の索引は `blt-server-roadmap.md`。

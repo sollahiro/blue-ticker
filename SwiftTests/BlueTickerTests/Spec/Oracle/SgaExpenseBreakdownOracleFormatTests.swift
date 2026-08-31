@@ -435,7 +435,7 @@ import Testing
     }
 
 
-    // MARK: - BLT-46 golden（発生支出と販管費内 R&D の区別・別年度）
+    // MARK: - sga_expense_breakdown golden（発生支出と販管費内 R&D の区別・別年度）
 
     @Test
     func goldenOkumaSgaRdDistinctFromOccurrenceSpend() async throws {

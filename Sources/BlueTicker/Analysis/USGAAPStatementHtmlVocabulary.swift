@@ -1,6 +1,6 @@
 // US-GAAP Statement HTML（`USGAAPStatementHtml`）の表分類・残高・合計語彙。
 //
-// 見出しゆれは社名 contains ではなく、ここに語を足して潰す（BLT-41）。
+// 見出しゆれは社名 contains ではなく、ここに語を足して潰す。
 // 複合条件（A かつ B、除外）の組み立ては `USGAAPStatementHtml` 側。語そのものはここが正本。
 
 import Foundation
@@ -10,7 +10,7 @@ enum USGAAPStatementHtmlVocabulary {
     // MARK: - Generic matchers
 
     /// 分類・残高・活動見出しの照合用。開示 HTML は `期末 現在` / 改行分割の
-    /// `営業活動による`+`キャッシュ・フロー` のように空白が入る（BLT-43）。
+    /// `営業活動による`+`キャッシュ・フロー` のように空白が入る。
     static func compactWhitespace(_ s: String) -> String {
         var out = String()
         out.reserveCapacity(s.count)

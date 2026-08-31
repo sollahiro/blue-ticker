@@ -143,7 +143,7 @@ import Testing
     }
 
     @Test func sgaExpenseBreakdownIsImplementedButUnpublished() {
-        // BLT-46: resolver / cache_version / smoke·golden はあるが公開一覧・ingest・API 未配線。
+        // sga_expense_breakdown: resolver / cache_version / smoke·golden はあるが公開一覧・ingest・API 未配線。
         #expect(isKnownStatementNoteType(statementNoteTypeSgaExpenseBreakdown) == false)
         #expect(!allStatementNoteTypes.contains(statementNoteTypeSgaExpenseBreakdown))
         #expect(statementNoteCacheVersion(forType: statementNoteTypeSgaExpenseBreakdown)

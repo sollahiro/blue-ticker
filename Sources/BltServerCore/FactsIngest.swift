@@ -162,7 +162,7 @@ let unpublishedBreakdownIngestLimit = 30
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
 /// 内訳取り込み（business/geography は上場全体、決定論指標軸は日経225限定）を取り込む。
 ///
-/// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**（BLT-23）。生 XBRL の R2 L2 から
+/// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**。生 XBRL の R2 L2 から
 /// 再導出できるパース済み投影で、配信も他 stage も読まない。全件投影は Neon 512MB を超える。
 /// `--with-facts`（`includeFacts`）は残存 CLI で製品経路ではない。財務取り込みの
 /// `computeFinancials` は自前で生 XBRL を読むため、facts 行が無くても自足する。
@@ -520,7 +520,7 @@ public func runFactsIngestCommand(
             // 財務諸表注記取り込み: 日経225（`priority`）限定のまま（statements の上場拡大とは独立）。
             // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
-            // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（BLT-46）。
+            // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（進捗は Linear Team `blue-ticker`）。
             let statementNotesListed = codes ?? priority
             if statementNotesListed.isEmpty {
                 app.logger.warning(

@@ -25,7 +25,7 @@ enum USGAAPStatementHtml {
 
     /// 0105010（無ければ 0104010）から要求セクションの行を抽出する。単位は円。
     /// CF だけ 0105010 に無く 0105020 に連結CFがある年次（ORIX 旧年）は、CF のみ
-    /// 0105020 を追加スキャンする（BLT-43）。
+    /// 0105020 を追加スキャンする。
     /// HTML が無い・行が1つも取れない場合は nil（呼び出し側で notApplicable 等へ倒す）。
     static func extractLineItems(
         in xbrlDir: URL, statementTypes: Set<StatementSectionType>

@@ -169,7 +169,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 |---|---|
 | sync | `edinet_documents` / `edinet_sync_state` |
 | 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、`BLT_R2_XBRL_BUCKET` 未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
-| facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない（BLT-23） |
+| facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない |
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル |
 
