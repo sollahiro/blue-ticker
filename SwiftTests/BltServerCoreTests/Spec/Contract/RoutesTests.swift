@@ -172,6 +172,69 @@ private func send(
         }
     }
 
+    // MARK: - financials `?fields=` 射影（BLT-57）
+
+    /// 格納済み 1 社を投入する（`?fields=` の射影確認用）。
+    private func seedFinancials(app: Application) async throws {
+        let dict: [String: Any] = [
+            "schema_version": Api.financialsSchemaVersion, "code": "7203", "name": "テスト",
+            "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
+            "years": [["fy_end": "2025-03-31", "sales": 1000.0, "operating_profit": 100.0, "roe": 9.0]],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        let row = CompanyFinancials()
+        row.id = "7203"
+        row.response = try JSONDecoder().decode(FinancialsResponse.self, from: data)
+        row.cacheVersion = companyFinancialsCacheVersion
+        row.requestedYears = 1
+        row.assemblyFingerprint = financialsAssemblyFingerprint()
+        try await row.create(on: app.db)
+    }
+
+    @Test func financialsProjectsYearsToRequestedFields() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFinancials(app: app)
+
+            let (status, json) = try await send(
+                app, "/v1/companies/7203/financials?years=1&fields=sales,operating_profit")
+            #expect(status == .ok)
+            // 封筒キーは射影しない。
+            #expect(json?["code"] as? String == "7203")
+            #expect(json?["schema_version"] as? Int == Api.financialsSchemaVersion)
+
+            let years = try #require(json?["years"] as? [[String: Any]])
+            let y = try #require(years.first)
+            #expect(Set(y.keys) == financialsSummaryIdentityKeys.union(["sales", "operating_profit"]))
+            // 値は射影しても変わらない。
+            #expect(y["sales"] as? Double == 1000.0)
+            #expect(y["operating_profit"] as? Double == 100.0)
+        }
+    }
+
+    @Test func financialsWithoutFieldsKeepsAllSummaryKeys() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFinancials(app: app)
+
+            let (status, json) = try await send(app, "/v1/companies/7203/financials?years=1")
+            #expect(status == .ok)
+            let years = try #require(json?["years"] as? [[String: Any]])
+            #expect(Set(try #require(years.first).keys) == financialsSummaryFieldKeys)
+        }
+    }
+
+    @Test func financialsRejectsUnknownFieldsWith400() async throws {
+        try await withApp(databases: true) { app in
+            try await seedFinancials(app: app)
+
+            let (status, json) = try await send(
+                app, "/v1/companies/7203/financials?fields=sales,bogus,roic_delta")
+            #expect(status == .badRequest)
+            // Waterfall 専用キー（roic_delta）も Summary の公開キーではないため 400。
+            #expect(json?["error"] as? String == "fields に不明なキーがあります: bogus, roic_delta")
+            #expect(json?["status"] as? Int == 400)
+        }
+    }
+
     @Test func waterfallReturns404WhenNotStored() async throws {
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/waterfall")

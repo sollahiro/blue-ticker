@@ -253,7 +253,10 @@ func countServableCompanyFinancials(db: Database) async throws -> (servable: Int
 /// 床は `companyFinancialsMinServableVersion`（明示定数。現行版との完全一致ではない）。
 /// 無い・床未満・年数不足なら nil（呼び出し側は 404。ライブ計算へはフォールバックしない）。
 /// `years` 空（有価証券報告書未提出の notApplicable プレースホルダ、issue #86）も nil（404）とする。
-func loadStoredFinancials(code: String, years: Int, db: Database) async throws -> [String: Any]? {
+/// `fields` は `years[]` 要素の射影（BLT-57）。nil なら従来どおり全キー。値・年数は変えない。
+func loadStoredFinancials(
+    code: String, years: Int, fields: Set<String>? = nil, db: Database
+) async throws -> [String: Any]? {
     // years <= 0 は無効要求として nil（呼び出し側 404）。空 years の 200 を返さない。
     guard years > 0,
         let row = try await CompanyFinancials.find(code, on: db),
@@ -261,7 +264,7 @@ func loadStoredFinancials(code: String, years: Int, db: Database) async throws -
         row.requestedYears >= years,
         row.response.yearCount > 0
     else { return nil }
-    return row.response.trimmed(toYears: years).summaryJsonObject()
+    return row.response.trimmed(toYears: years).summaryJsonObject(fields: fields)
 }
 
 /// 格納済み 財務取り込み 結果を code で引き、増減分解フィールド（`docs/financials-summary-separation.md` の Waterfall）を

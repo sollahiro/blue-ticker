@@ -123,7 +123,7 @@ func registerRoutes(
                 logger: req.logger, context: context))
     }
 
-    // GET /v1/companies/{code}/financials?years=5
+    // GET /v1/companies/{code}/financials?years=5&fields=sales,operating_profit
     // DB（財務取り込み derived キャッシュ company_financials）の格納済み結果のみを返す。
     // 重い XBRL 取得・計算はローカル ingest→Neon に閉じ込め、サーバーは読むだけにして OOM を防ぐ。
     // 未格納・古い・年数不足は 404（バックフィルが追いつけば warm read になる）。
@@ -132,9 +132,21 @@ func registerRoutes(
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_financial_summary", code: code)
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
+        // `?fields=` は years[] 要素の射影のみ（BLT-57）。不明キーは 400。
+        let fields: Set<String>?
+        switch parseFinancialsFieldsQuery(req.query[String.self, at: "fields"]) {
+        case .all:
+            fields = nil
+        case .projection(let keys):
+            fields = keys
+        case .unknownFields(let unknown):
+            return errorResponse(
+                .badRequest, message: "fields に不明なキーがあります: \(unknown.joined(separator: ", "))")
+        }
         return makeStoredDataResponse(
             await serveStoredFinancials(
-                code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
+                code: code, years: years, fields: fields, db: dbAvailable ? req.db : nil,
+                logger: req.logger),
             notFoundMessage: "財務データは未集計です")
     }
 
@@ -338,8 +350,9 @@ enum StoredDataServeResult {
 /// `financials` の DB 読み取り共通ロジック。ライブ計算へのフォールバックは行わない（OOM 回避）。
 /// `db` は DB 未接続時 `nil` を渡す（`Database` の取得自体が未接続時に fatalError するため、
 /// 呼び出し側で dbAvailable ガード済みの値のみ渡すこと。呼び出し例は Routes.swift 内を参照）。
+/// `fields` は `years[]` 要素の射影（BLT-57）。nil なら従来どおり全キー。
 func serveStoredFinancials(
-    code: String, years: Int, db: Database?, logger: Logger
+    code: String, years: Int, fields: Set<String>? = nil, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {
     guard let db else { return .dbUnavailable }
     do {
@@ -348,7 +361,7 @@ func serveStoredFinancials(
             maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
             logger: logger
         ) {
-            try await loadStoredFinancials(code: code, years: years, db: db)
+            try await loadStoredFinancials(code: code, years: years, fields: fields, db: db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)

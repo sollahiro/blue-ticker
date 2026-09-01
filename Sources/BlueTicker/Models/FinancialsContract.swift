@@ -453,10 +453,13 @@ extension FinancialsYear {
     ]
 
     /// Summary（financials）応答用 JSON。`analysisOnlyKeys` を除いた水準値のみを返す。
-    func summaryJsonObject() -> [String: Any] {
+    /// `fields` を渡すと、そのキー（＋`financialsSummaryIdentityKeys`）だけへ射影する。値は変えない。
+    func summaryJsonObject(fields: Set<String>? = nil) -> [String: Any] {
         var dict = jsonObject()
         for key in Self.analysisOnlyKeys { dict.removeValue(forKey: key) }
-        return dict
+        guard let fields else { return dict }
+        let kept = fields.union(financialsSummaryIdentityKeys)
+        return dict.filter { kept.contains($0.key) }
     }
 
     /// Waterfall（waterfall）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker waterfall` の
@@ -481,6 +484,37 @@ extension FinancialsYear {
         dict["dpo_change_impact"] = delta(prior?.dpo, dpo)
         return dict
     }
+}
+
+// MARK: - Summary 射影（REST `?fields=`）
+
+/// 射影しても落とさない年度識別キー。どの年度・どの書類の値かを失わせないため常に残す。
+public let financialsSummaryIdentityKeys: Set<String> = ["fy_end", "financial_period", "doc_id"]
+
+/// `?fields=` に指定できる Summary 公開キー（`years[]` 要素のキー）。Waterfall 専用キーは含まない。
+public let financialsSummaryFieldKeys: Set<String> = Set(
+    FinancialsYear.CodingKeys.allCases.map(\.rawValue)
+).subtracting(FinancialsYear.analysisOnlyKeys)
+
+/// `?fields=` クエリの解析結果。
+public enum FinancialsFieldsQuery: Sendable, Equatable {
+    /// 指定なし（従来どおり全キーを返す）。
+    case all
+    /// 射影するキー集合。
+    case projection(Set<String>)
+    /// Summary 公開キーに無いキーが含まれていた（呼び出し側は 400）。
+    case unknownFields([String])
+}
+
+/// `fields=sales,operating_profit` 形式を解析する。空・空白のみは指定なし（全キー）として扱う。
+public func parseFinancialsFieldsQuery(_ raw: String?) -> FinancialsFieldsQuery {
+    guard let raw else { return .all }
+    let keys = raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty }
+    if keys.isEmpty { return .all }
+    let unknown = keys.filter { !financialsSummaryFieldKeys.contains($0) }
+    guard unknown.isEmpty else { return .unknownFields(unknown.sorted()) }
+    return .projection(Set(keys))
 }
 
 // MARK: - レスポンス（トップレベル封筒）
@@ -576,7 +610,8 @@ extension FinancialsResponse {
 
     /// Summary（financials）応答用の全キー JSON オブジェクト（`years` 各要素は
     /// `analysisOnlyKeys` を除いた水準値のみ）。public: BltServerCore の financials read 経路が使う。
-    public func summaryJsonObject() -> [String: Any] {
+    /// `fields` を渡すと `years[]` の各要素をそのキー集合へ射影する（封筒キーは常に全て返す）。
+    public func summaryJsonObject(fields: Set<String>? = nil) -> [String: Any] {
         [
             "schema_version": schemaVersion,
             "code": code,
@@ -585,7 +620,7 @@ extension FinancialsResponse {
             "market": market,
             "currency": currency,
             "unit": unit,
-            "years": years.map { $0.summaryJsonObject() },
+            "years": years.map { $0.summaryJsonObject(fields: fields) },
         ]
     }
 

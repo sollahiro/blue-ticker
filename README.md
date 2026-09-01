@@ -39,7 +39,7 @@ curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
 | メソッド | パス | 内容 |
 |---|---|---|
 | `GET` | `/v1/companies?q=` | 企業検索 |
-| `GET` | `/v1/companies/{code}/financials` | 年次財務サマリ |
+| `GET` | `/v1/companies/{code}/financials` | 年次財務サマリ（`?fields=sales,operating_profit` でキーを射影） |
 | `GET` | `/v1/companies/{code}/waterfall` | 年次増減分析 |
 | `GET` | `/v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET` | `/v1/skills` | 能力カタログ |
