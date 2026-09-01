@@ -8,6 +8,7 @@ struct TopView: View {
     @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
+    @State private var searchGeneration = 0
 
     var body: some View {
         List {
@@ -65,22 +66,10 @@ struct TopView: View {
         .bltChrome()
         .searchable(text: $query, prompt: "会社名を入力してください")
         .onSubmit(of: .search) {
-            Task { await runSearch(query) }
+            scheduleSearch(query)
         }
         .onChange(of: query) { _, newValue in
-            searchTask?.cancel()
-            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                searchResults = []
-                searchError = nil
-                isSearching = false
-                return
-            }
-            searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(280))
-                guard !Task.isCancelled else { return }
-                await runSearch(trimmed)
-            }
+            scheduleSearch(newValue, debounce: .milliseconds(280))
         }
         .task { await loadFeeds() }
     }
@@ -90,19 +79,44 @@ struct TopView: View {
         updates = (try? await APIClient.shared.feedUpdates())?.items ?? []
     }
 
-    private func runSearch(_ raw: String) async {
+    private func scheduleSearch(_ raw: String, debounce: Duration? = nil) {
+        searchTask?.cancel()
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        searchGeneration += 1
+        let generation = searchGeneration
+        if trimmed.isEmpty {
             searchResults = []
             searchError = nil
+            isSearching = false
+            searchTask = nil
             return
         }
+        searchTask = Task {
+            if let debounce {
+                try? await Task.sleep(for: debounce)
+                guard !Task.isCancelled else { return }
+            }
+            await runSearch(trimmed, generation: generation)
+        }
+    }
+
+    private func runSearch(_ raw: String, generation: Int) async {
+        guard generation == searchGeneration else { return }
         isSearching = true
-        defer { isSearching = false }
+        defer {
+            if generation == searchGeneration {
+                isSearching = false
+            }
+        }
         do {
-            searchResults = try await APIClient.shared.searchCompanies(query: trimmed)
-            searchError = searchResults.isEmpty ? "該当する会社はありません" : nil
+            let results = try await APIClient.shared.searchCompanies(query: raw)
+            guard generation == searchGeneration, !Task.isCancelled else { return }
+            searchResults = results
+            searchError = results.isEmpty ? "該当する会社はありません" : nil
+        } catch is CancellationError {
+            return
         } catch {
+            guard generation == searchGeneration, !Task.isCancelled else { return }
             searchResults = []
             searchError = error.localizedDescription
         }
