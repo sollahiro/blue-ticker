@@ -73,6 +73,7 @@ workers/**/.dev.vars
 # ==========================================
 .build/
 .swiftpm/
+**/xcuserdata/
 *.o
 *.d
 
