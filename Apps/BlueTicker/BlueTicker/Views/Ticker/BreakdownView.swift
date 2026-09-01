@@ -58,7 +58,7 @@ struct BreakdownView: View {
                 if let selectedYear {
                     factorChart(selectedYear)
                 } else {
-                    Text("年を選ぶと売上要因・利益率要因・販管費要因を表示します。")
+                    Text(factorPrompt)
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
                 }
@@ -108,36 +108,108 @@ struct BreakdownView: View {
         }
     }
 
+    private var factorPrompt: String {
+        switch metric {
+        case .businessProfit:
+            return "年を選ぶと売上要因・利益率要因・販管費要因を表示します。"
+        case .roic:
+            return "年を選ぶと利益率要因・回転率要因を表示します。"
+        case .roe:
+            return "年を選ぶと純利益率要因・回転率要因・レバレッジ要因を表示します。"
+        }
+    }
+
     private func factorChart(_ year: FinancialsYear) -> some View {
-        let factors: [(String, Double?)] = [
-            ("売上要因", year.salesChangeImpact),
-            ("利益率要因", year.grossMarginChangeImpact),
-            ("販管費要因", year.sgaChangeImpact),
-        ]
+        let spec = factorSpec(year)
         return VStack(alignment: .leading, spacing: 8) {
             Text("\(Format.fy(year.fyEnd)) の要因分解")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            ForEach(factors, id: \.0) { name, value in
+            ForEach(spec.factors, id: \.name) { factor in
                 HStack {
-                    Text(name)
+                    Text(factor.name)
                         .font(.caption)
                         .foregroundStyle(Theme.text)
                         .frame(width: 88, alignment: .leading)
                     RoundedRectangle(cornerRadius: 2)
-                        .fill((value ?? 0) >= 0 ? Theme.positive : Theme.negative)
-                        .frame(width: max(abs(value ?? 0).squareRoot() * 4, 4), height: 16)
-                    Text(Format.millionYen(value))
+                        .fill((factor.value ?? 0) >= 0 ? Theme.positive : Theme.negative)
+                        .frame(width: factorBarWidth(factor.value, unit: spec.unit), height: 16)
+                    Text(spec.format(factor.value))
                         .font(.caption.monospacedDigit())
                 }
             }
-            if let change = year.businessProfitChange {
-                Text("事業利益 前年差 \(Format.millionYen(change))")
+            if let summary = spec.summary {
+                Text(summary)
                     .font(.caption)
                     .foregroundStyle(Theme.textMuted)
             }
         }
         .padding(.top, 8)
+    }
+
+    private struct FactorRow: Identifiable {
+        var name: String
+        var value: Double?
+        var id: String { name }
+    }
+
+    private struct FactorSpec {
+        var factors: [FactorRow]
+        var unit: FactorUnit
+        var format: (Double?) -> String
+        var summary: String?
+    }
+
+    private enum FactorUnit {
+        case millionYen
+        case percentPoints
+    }
+
+    private func factorSpec(_ year: FinancialsYear) -> FactorSpec {
+        switch metric {
+        case .businessProfit:
+            return FactorSpec(
+                factors: [
+                    FactorRow(name: "売上要因", value: year.salesChangeImpact),
+                    FactorRow(name: "利益率要因", value: year.grossMarginChangeImpact),
+                    FactorRow(name: "販管費要因", value: year.sgaChangeImpact),
+                ],
+                unit: .millionYen,
+                format: Format.millionYen,
+                summary: year.businessProfitChange.map { "事業利益 前年差 \(Format.millionYen($0))" }
+            )
+        case .roic:
+            return FactorSpec(
+                factors: [
+                    FactorRow(name: "利益率要因", value: year.roicMarginEffect),
+                    FactorRow(name: "回転率要因", value: year.roicTurnoverEffect),
+                ],
+                unit: .percentPoints,
+                format: Format.percentPoints,
+                summary: year.roicDelta.map { "ROIC 前年差 \(Format.percentPoints($0))" }
+            )
+        case .roe:
+            return FactorSpec(
+                factors: [
+                    FactorRow(name: "純利益率要因", value: year.roeNetMarginEffect),
+                    FactorRow(name: "回転率要因", value: year.roeAssetTurnoverEffect),
+                    FactorRow(name: "レバレッジ要因", value: year.roeLeverageEffect),
+                ],
+                unit: .percentPoints,
+                format: Format.percentPoints,
+                summary: year.roeDelta.map { "ROE 前年差 \(Format.percentPoints($0))" }
+            )
+        }
+    }
+
+    private func factorBarWidth(_ value: Double?, unit: FactorUnit) -> CGFloat {
+        let magnitude = abs(value ?? 0)
+        switch unit {
+        case .millionYen:
+            return max(magnitude.squareRoot() * 4, 4)
+        case .percentPoints:
+            return max(magnitude * 12, 4)
+        }
     }
 
     private func metricValue(_ year: FinancialsYear) -> Double {

@@ -5,6 +5,10 @@ struct TopView: View {
     @State private var searchResults: [CompanyHit] = []
     @State private var trend: [FeedTrendItem] = []
     @State private var updates: [FeedUpdateItem] = []
+    @State private var trendReady = false
+    @State private var updatesReady = false
+    @State private var trendError: String?
+    @State private var updatesError: String?
     @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
@@ -33,8 +37,15 @@ struct TopView: View {
             }
 
             Section("最近よく調べられています") {
-                if trend.isEmpty {
-                    Text("トレンドを取得できませんでした")
+                if !trendReady {
+                    ProgressView()
+                        .listRowBackground(Theme.elevated)
+                } else if let trendError {
+                    Text(trendError)
+                        .foregroundStyle(Theme.textMuted)
+                        .listRowBackground(Theme.elevated)
+                } else if trend.isEmpty {
+                    Text("ランキングはありません")
                         .foregroundStyle(Theme.textMuted)
                         .listRowBackground(Theme.elevated)
                 } else {
@@ -48,7 +59,14 @@ struct TopView: View {
             }
 
             Section("最近新しい有報がアップロードされました") {
-                if updates.isEmpty {
+                if !updatesReady {
+                    ProgressView()
+                        .listRowBackground(Theme.elevated)
+                } else if let updatesError {
+                    Text(updatesError)
+                        .foregroundStyle(Theme.textMuted)
+                        .listRowBackground(Theme.elevated)
+                } else if updates.isEmpty {
                     Text("直近の有報はありません")
                         .foregroundStyle(Theme.textMuted)
                         .listRowBackground(Theme.elevated)
@@ -75,8 +93,24 @@ struct TopView: View {
     }
 
     private func loadFeeds() async {
-        trend = (try? await APIClient.shared.feedTrend())?.items ?? []
-        updates = (try? await APIClient.shared.feedUpdates())?.items ?? []
+        async let trendLoad = APIClient.shared.feedTrend()
+        async let updatesLoad = APIClient.shared.feedUpdates()
+        do {
+            trend = try await trendLoad.items
+            trendError = nil
+        } catch {
+            trend = []
+            trendError = "トレンドを取得できませんでした"
+        }
+        trendReady = true
+        do {
+            updates = try await updatesLoad.items
+            updatesError = nil
+        } catch {
+            updates = []
+            updatesError = "有報一覧を取得できませんでした"
+        }
+        updatesReady = true
     }
 
     private func scheduleSearch(_ raw: String, debounce: Duration? = nil) {
