@@ -21,4 +21,9 @@ enum Format {
         guard let value else { return "—" }
         return String(format: "%.0f億円", value / 100.0)
     }
+
+    static func percentPoints(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%+.2f%%", value)
+    }
 }

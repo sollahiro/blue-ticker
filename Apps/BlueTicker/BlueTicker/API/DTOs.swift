@@ -108,6 +108,13 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var salesChangeImpact: Double?
     var grossMarginChangeImpact: Double?
     var sgaChangeImpact: Double?
+    var roicDelta: Double?
+    var roicMarginEffect: Double?
+    var roicTurnoverEffect: Double?
+    var roeDelta: Double?
+    var roeNetMarginEffect: Double?
+    var roeAssetTurnoverEffect: Double?
+    var roeLeverageEffect: Double?
 
     var id: String { fyEnd ?? UUID().uuidString }
 
@@ -125,6 +132,13 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case salesChangeImpact = "sales_change_impact"
         case grossMarginChangeImpact = "gross_margin_change_impact"
         case sgaChangeImpact = "sga_change_impact"
+        case roicDelta = "roic_delta"
+        case roicMarginEffect = "roic_margin_effect"
+        case roicTurnoverEffect = "roic_turnover_effect"
+        case roeDelta = "roe_delta"
+        case roeNetMarginEffect = "roe_net_margin_effect"
+        case roeAssetTurnoverEffect = "roe_asset_turnover_effect"
+        case roeLeverageEffect = "roe_leverage_effect"
     }
 }
 
