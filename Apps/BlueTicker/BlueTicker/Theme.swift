@@ -13,9 +13,9 @@ enum Theme {
     static let negative = Color(red: 0.88, green: 0.32, blue: 0.36)
     static let margin = Color(red: 0.35, green: 0.78, blue: 0.82)
 
-    static let bandLow = SIMD3<Double>(0.90, 0.32, 0.36)
-    static let bandMid = SIMD3<Double>(0.95, 0.76, 0.28)
-    static let bandHigh = SIMD3<Double>(0.28, 0.78, 0.95)
+    static let bandLow = SIMD3<Double>(0.95, 0.08, 0.08)
+    static let bandMid = SIMD3<Double>(0.98, 0.82, 0.12)
+    static let bandHigh = SIMD3<Double>(0.18, 0.78, 0.28)
 
     static var bandLowColor: Color { color(bandLow) }
     static var bandMidColor: Color { color(bandMid) }
@@ -84,11 +84,15 @@ enum MetricBand {
     case higherBetter(lowBelow: Double, midFrom: Double, midTo: Double, highFrom: Double)
     /// 値が小さいほど優良。`highBelow` 未満が High、`midFrom...midTo` が Mid、`lowFrom` 以上が Low。
     case lowerBetter(highBelow: Double, midFrom: Double, midTo: Double, lowFrom: Double)
+    /// 閾値未満は黄、以上は緑。
+    case yellowThenGreen(greenFrom: Double)
 
     func quality(_ value: Double) -> Double {
         switch self {
         case .none:
             return 0.5
+        case .yellowThenGreen(let greenFrom):
+            return value >= greenFrom ? 1 : 0.5
         case .higherBetter(let lowBelow, let midFrom, let midTo, let highFrom):
             if value < lowBelow { return 0 }
             if value >= highFrom { return 1 }
@@ -114,18 +118,6 @@ enum MetricBand {
             return Theme.accent
         default:
             return Theme.bandColor(quality: quality(value))
-        }
-    }
-
-    func zoneLabel(for value: Double) -> String? {
-        switch self {
-        case .none:
-            return nil
-        default:
-            let q = quality(value)
-            if q <= 0.25 { return "改善を要する水準" }
-            if q < 0.75 { return "標準的な水準" }
-            return "優良・高水準"
         }
     }
 }

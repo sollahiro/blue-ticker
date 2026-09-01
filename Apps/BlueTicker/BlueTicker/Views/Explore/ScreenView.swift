@@ -54,7 +54,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
     var band: MetricBand {
         switch self {
         case .sales:
-            return .none
+            return .yellowThenGreen(greenFrom: 10_000)
         case .grossMargin:
             return .higherBetter(lowBelow: 15, midFrom: 20, midTo: 40, highFrom: 50)
         case .operatingMargin:
@@ -99,8 +99,6 @@ struct ScreenView: View {
             }
 
             Section {
-                legend
-                    .listRowBackground(Theme.elevated)
                 ForEach(ScreenMetric.allCases) { metric in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(metric.title)
@@ -115,86 +113,92 @@ struct ScreenView: View {
                             band: metric.band
                         )
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 8)
                     .listRowBackground(Theme.elevated)
                 }
             } header: {
                 Text("指標")
                     .foregroundStyle(Theme.textMuted)
+            } footer: {
+                Text("ソートは ROIC 降順、件数は 50 件で固定です。売上増加率は横断検索の対象外です。")
+                    .foregroundStyle(Theme.textMuted)
             }
 
-            Section {
-                Button("絞り込む") {
-                    didQuery = true
-                }
-                .foregroundStyle(Theme.accent)
-                .listRowBackground(Theme.elevated)
-                if didQuery {
+            if didQuery {
+                Section {
                     Text("横断検索は未接続です。Screen REST が公開されるまで結果は返しません。")
                         .font(.subheadline)
                         .foregroundStyle(Theme.textMuted)
                         .listRowBackground(Theme.elevated)
                 }
-            } footer: {
-                Text("ソートは ROIC 降順、件数は 50 件で固定です。売上増加率は横断検索の対象外です。")
-                    .foregroundStyle(Theme.textMuted)
             }
         }
         .navigationTitle("条件")
         .bltChrome()
-    }
-
-    private var legend: some View {
-        HStack(spacing: 12) {
-            legendItem(Theme.bandLowColor, "改善を要する")
-            legendItem(Theme.bandMidColor, "標準")
-            legendItem(Theme.bandHighColor, "優良")
-            Spacer()
-        }
-        .font(.caption2)
-        .foregroundStyle(Theme.textMuted)
-    }
-
-    private func legendItem(_ color: Color, _ title: String) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(title)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("検索") {
+                    didQuery = true
+                }
+                .foregroundStyle(Theme.text)
+            }
         }
     }
 
     private var sectorChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(TSESector.catalog, id: \.self) { sector in
-                    let selected = selectedSectors.contains(sector)
-                    Button {
-                        if selected {
-                            selectedSectors.remove(sector)
-                        } else {
-                            selectedSectors.insert(sector)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { sector in
+                            sectorChip(sector)
                         }
-                    } label: {
-                        Text(sector)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Theme.sectorColor(sector).opacity(selected ? 1 : 0.45))
-                            .foregroundStyle(.white)
-                            .overlay {
-                                if selected {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Theme.accent, lineWidth: 2)
-                                }
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+    }
+
+    private var packedSectorRows: [[String]] {
+        let catalog = TSESector.catalog
+        let rowCount = 3
+        let perRow = Int(ceil(Double(catalog.count) / Double(rowCount)))
+        return (0..<rowCount).compactMap { row in
+            let start = row * perRow
+            guard start < catalog.count else { return nil }
+            let end = min(start + perRow, catalog.count)
+            return Array(catalog[start..<end])
+        }
+    }
+
+    private func sectorChip(_ sector: String) -> some View {
+        let selected = selectedSectors.contains(sector)
+        return Button {
+            if selected {
+                selectedSectors.remove(sector)
+            } else {
+                selectedSectors.insert(sector)
+            }
+        } label: {
+            Text(sector)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Theme.sectorColor(sector)
+                        .saturation(selected ? 1 : 0.22)
+                )
+                .foregroundStyle(.white)
+                .overlay {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Theme.accent, lineWidth: 2)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
     }
 
     private func rangeBinding(_ metric: ScreenMetric) -> Binding<[Double]> {

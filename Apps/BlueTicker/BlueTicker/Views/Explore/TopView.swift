@@ -58,7 +58,7 @@ struct TopView: View {
         }
         .navigationTitle("トップ")
         .bltChrome()
-        .searchable(text: $query, prompt: "トヨタ自動車")
+        .searchable(text: $query, prompt: "会社名を入力してください")
         .onSubmit(of: .search) {
             Task { await runSearch() }
         }

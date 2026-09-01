@@ -19,7 +19,6 @@ enum TickerPage: Int, CaseIterable, Identifiable {
 
 struct TickerView: View {
     var company: CompanyRef
-    var onOpenSettings: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var watched: [WatchedCompany]
@@ -67,11 +66,6 @@ struct TickerView: View {
                 Spacer()
                 Button("探す") { dismiss() }
                     .foregroundStyle(Theme.text)
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                }
-                .foregroundStyle(Theme.text)
-                .accessibilityLabel("設定")
             }
             HStack(alignment: .center, spacing: 10) {
                 CompanyIconView(url: company.iconURL)

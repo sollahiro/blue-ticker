@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 数直線上の 2 ハンドルで「以上〜以下」を選ぶ。`values` は `[下限, 上限]`。
+/// 数直線上の 2 ハンドルで範囲を選ぶ。`values` は `[下限, 上限]`。
 struct DualRangeSlider: View {
     var rangeMin: Double
     var rangeMax: Double
@@ -11,6 +11,7 @@ struct DualRangeSlider: View {
 
     private let handleSize: CGFloat = 28
     private let trackHeight: CGFloat = 6
+    private let valueHeight: CGFloat = 16
 
     @State private var dragging: Handle?
 
@@ -29,53 +30,46 @@ struct DualRangeSlider: View {
         snapped(values.count > 1 ? values[1] : rangeMax)
     }
 
+    private var controlHeight: CGFloat { handleSize + valueHeight + 4 }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("\(formatValue(lower)) 以上")
-                    .foregroundStyle(band.color(for: lower))
-                Text("\(formatValue(upper)) 以下")
-                    .foregroundStyle(band.color(for: upper))
+        GeometryReader { geo in
+            let width = geo.size.width
+            let trackY = geo.size.height - handleSize / 2
+            let lowerX = x(for: lower, width: width)
+            let upperX = x(for: upper, width: width)
+
+            ZStack {
+                Capsule()
+                    .fill(LinearGradient(
+                        stops: trackStops,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .opacity(0.4)
+                    .frame(width: width, height: trackHeight)
+                    .position(x: width / 2, y: trackY)
+
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: [band.color(for: lower), band.color(for: upper)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .frame(width: max(upperX - lowerX, 0), height: trackHeight)
+                    .position(x: (lowerX + upperX) / 2, y: trackY)
+
+                handle(isLower: true)
+                    .position(x: lowerX, y: trackY)
+                handle(isLower: false)
+                    .position(x: upperX, y: trackY)
             }
-            .font(.subheadline.monospacedDigit())
-            .accessibilityLabel("\(formatValue(lower))以上、\(formatValue(upper))以下")
-
-            GeometryReader { geo in
-                let width = geo.size.width
-                let midY = geo.size.height / 2
-                let lowerX = x(for: lower, width: width)
-                let upperX = x(for: upper, width: width)
-
-                ZStack {
-                    Capsule()
-                        .fill(LinearGradient(
-                            stops: trackStops,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ))
-                        .opacity(0.35)
-                        .frame(width: width, height: trackHeight)
-                        .position(x: width / 2, y: midY)
-
-                    Capsule()
-                        .fill(LinearGradient(
-                            colors: [band.color(for: lower), band.color(for: upper)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ))
-                        .frame(width: max(upperX - lowerX, 0), height: trackHeight)
-                        .position(x: (lowerX + upperX) / 2, y: midY)
-
-                    handle(isLower: true)
-                        .position(x: lowerX, y: midY)
-                    handle(isLower: false)
-                        .position(x: upperX, y: midY)
-                }
-                .contentShape(Rectangle())
-                .highPriorityGesture(dragGesture(width: width))
-            }
-            .frame(height: handleSize)
+            .contentShape(Rectangle())
+            .highPriorityGesture(dragGesture(width: width))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(formatValue(lower))から\(formatValue(upper))")
         }
+        .frame(height: controlHeight)
         .onAppear { publish(lower, upper) }
     }
 
@@ -91,30 +85,30 @@ struct DualRangeSlider: View {
     private func handle(isLower: Bool) -> some View {
         let value = isLower ? lower : upper
         let fill = band.color(for: value)
-        return Circle()
-            .fill(fill)
-            .shadow(color: fill.opacity(0.55), radius: 3, y: 1)
-            .overlay {
-                Circle().stroke(Color.white.opacity(0.45), lineWidth: 1.5)
-            }
-            .frame(width: handleSize, height: handleSize)
-            .accessibilityLabel(isLower ? "下限" : "上限")
-            .accessibilityValue(accessibilityValue(value))
-            .accessibilityAdjustableAction { direction in
-                let delta = direction == .increment ? step : -step
-                if isLower {
-                    publish(min(lower + delta, upper), upper)
-                } else {
-                    publish(lower, max(upper + delta, lower))
-                }
-            }
-    }
-
-    private func accessibilityValue(_ value: Double) -> String {
-        if let zone = band.zoneLabel(for: value) {
-            return "\(formatValue(value))、\(zone)"
+        return ZStack {
+            Circle()
+                .fill(fill)
+                .shadow(color: fill.opacity(0.45), radius: 3, y: 1)
+                .frame(width: handleSize, height: handleSize)
+            Text(formatValue(value))
+                .font(.caption2.monospacedDigit().weight(.bold))
+                .foregroundStyle(fill)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .fixedSize()
+                .offset(y: -(handleSize / 2 + valueHeight / 2 + 2))
         }
-        return formatValue(value)
+        .frame(width: handleSize, height: handleSize)
+        .accessibilityLabel(isLower ? "下限" : "上限")
+        .accessibilityValue(formatValue(value))
+        .accessibilityAdjustableAction { direction in
+            let delta = direction == .increment ? step : -step
+            if isLower {
+                publish(min(lower + delta, upper), upper)
+            } else {
+                publish(lower, max(upper + delta, lower))
+            }
+        }
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {

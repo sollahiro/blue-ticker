@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct RootView: View {
-    @State private var showSettings = false
     @State private var tab = 0
 
     var body: some View {
@@ -9,7 +8,7 @@ struct RootView: View {
             NavigationStack {
                 TopView()
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar(onOpenSettings: openSettings)
+                    .exploreToolbar()
             }
             .tabItem { Label("トップ", systemImage: "house") }
             .tag(0)
@@ -17,7 +16,7 @@ struct RootView: View {
             NavigationStack {
                 ScreenView()
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar(onOpenSettings: openSettings)
+                    .exploreToolbar()
             }
             .tabItem { Label("条件", systemImage: "slider.horizontal.3") }
             .tag(1)
@@ -25,43 +24,36 @@ struct RootView: View {
             NavigationStack {
                 WatchlistView()
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar(onOpenSettings: openSettings)
+                    .exploreToolbar()
             }
             .tabItem { Label("リスト", systemImage: "list.bullet") }
             .tag(2)
+
+            NavigationStack {
+                SettingsPlaceholder()
+                    .exploreToolbar()
+            }
+            .tabItem { Label("設定", systemImage: "gearshape") }
+            .tag(3)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(Theme.shell, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .sheet(isPresented: $showSettings) {
-            SettingsPlaceholder()
-        }
     }
 
     private func ticker(_ company: CompanyRef) -> some View {
-        TickerView(company: company, onOpenSettings: openSettings)
-    }
-
-    private func openSettings() {
-        showSettings = true
+        TickerView(company: company)
     }
 }
 
 extension View {
-    func exploreToolbar(onOpenSettings: @escaping () -> Void) -> some View {
+    func exploreToolbar() -> some View {
         toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 BrandMark()
             }
             .withoutSharedBackground()
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                }
-                .foregroundStyle(Theme.text)
-                .accessibilityLabel("設定")
-            }
         }
     }
 }
