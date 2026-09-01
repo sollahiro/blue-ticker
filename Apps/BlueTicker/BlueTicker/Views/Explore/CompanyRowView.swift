@@ -147,7 +147,7 @@ actor CompanyIconLoader {
                 return .unavailable
             }
             guard let image = CompanyIconDecoder.image(from: data) else {
-                return .notFound
+                return .unavailable
             }
             return .image(image)
         } catch is CancellationError {
