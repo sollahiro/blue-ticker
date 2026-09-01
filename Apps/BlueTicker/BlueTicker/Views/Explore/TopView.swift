@@ -7,11 +7,16 @@ struct TopView: View {
     @State private var updates: [FeedUpdateItem] = []
     @State private var searchError: String?
     @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         List {
-            if !searchResults.isEmpty || searchError != nil {
+            if !searchResults.isEmpty || searchError != nil || isSearching {
                 Section("検索結果") {
+                    if isSearching && searchResults.isEmpty && searchError == nil {
+                        ProgressView()
+                            .listRowBackground(Theme.elevated)
+                    }
                     if let searchError {
                         Text(searchError)
                             .foregroundStyle(Theme.textMuted)
@@ -60,12 +65,21 @@ struct TopView: View {
         .bltChrome()
         .searchable(text: $query, prompt: "会社名を入力してください")
         .onSubmit(of: .search) {
-            Task { await runSearch() }
+            Task { await runSearch(query) }
         }
         .onChange(of: query) { _, newValue in
-            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            searchTask?.cancel()
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
                 searchResults = []
                 searchError = nil
+                isSearching = false
+                return
+            }
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(280))
+                guard !Task.isCancelled else { return }
+                await runSearch(trimmed)
             }
         }
         .task { await loadFeeds() }
@@ -76,8 +90,8 @@ struct TopView: View {
         updates = (try? await APIClient.shared.feedUpdates())?.items ?? []
     }
 
-    private func runSearch() async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func runSearch(_ raw: String) async {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             searchResults = []
             searchError = nil
