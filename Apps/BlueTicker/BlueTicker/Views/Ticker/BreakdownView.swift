@@ -133,7 +133,7 @@ struct BreakdownView: View {
                         .frame(width: 88, alignment: .leading)
                     RoundedRectangle(cornerRadius: 2)
                         .fill((factor.value ?? 0) >= 0 ? Theme.positive : Theme.negative)
-                        .frame(width: factorBarWidth(factor.value, unit: spec.unit), height: 16)
+                        .frame(width: factorBarWidth(factor.value, among: spec.factors), height: 16)
                     Text(spec.format(factor.value))
                         .font(.caption.monospacedDigit())
                 }
@@ -155,14 +155,8 @@ struct BreakdownView: View {
 
     private struct FactorSpec {
         var factors: [FactorRow]
-        var unit: FactorUnit
         var format: (Double?) -> String
         var summary: String?
-    }
-
-    private enum FactorUnit {
-        case millionYen
-        case percentPoints
     }
 
     private func factorSpec(_ year: FinancialsYear) -> FactorSpec {
@@ -174,7 +168,6 @@ struct BreakdownView: View {
                     FactorRow(name: "利益率要因", value: year.grossMarginChangeImpact),
                     FactorRow(name: "販管費要因", value: year.sgaChangeImpact),
                 ],
-                unit: .millionYen,
                 format: Format.millionYen,
                 summary: year.businessProfitChange.map { "事業利益 前年差 \(Format.millionYen($0))" }
             )
@@ -184,7 +177,6 @@ struct BreakdownView: View {
                     FactorRow(name: "利益率要因", value: year.roicMarginEffect),
                     FactorRow(name: "回転率要因", value: year.roicTurnoverEffect),
                 ],
-                unit: .percentPoints,
                 format: Format.percentPoints,
                 summary: year.roicDelta.map { "ROIC 前年差 \(Format.percentPoints($0))" }
             )
@@ -195,21 +187,17 @@ struct BreakdownView: View {
                     FactorRow(name: "回転率要因", value: year.roeAssetTurnoverEffect),
                     FactorRow(name: "レバレッジ要因", value: year.roeLeverageEffect),
                 ],
-                unit: .percentPoints,
                 format: Format.percentPoints,
                 summary: year.roeDelta.map { "ROE 前年差 \(Format.percentPoints($0))" }
             )
         }
     }
 
-    private func factorBarWidth(_ value: Double?, unit: FactorUnit) -> CGFloat {
+    private func factorBarWidth(_ value: Double?, among factors: [FactorRow]) -> CGFloat {
         let magnitude = abs(value ?? 0)
-        switch unit {
-        case .millionYen:
-            return max(magnitude.squareRoot() * 4, 4)
-        case .percentPoints:
-            return max(magnitude * 12, 4)
-        }
+        let peak = factors.map { abs($0.value ?? 0) }.max() ?? 0
+        guard peak > 0 else { return 4 }
+        return max(CGFloat(magnitude / peak) * 180, 4)
     }
 
     private func metricValue(_ year: FinancialsYear) -> Double {
