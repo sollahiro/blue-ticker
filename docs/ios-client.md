@@ -1,25 +1,33 @@
-# iOS クライアント（ポンチ絵）
+# iOS クライアント
 
-ネイティブ iOS の IA・画面対応。サーバー契約の正本は REST `/v1`（`architecture.md` / `feature-tiers.md`）。見た目は iOS SDK 標準コンポーネント前提の簡易矩形で、Figma の長方形はプレースホルダ。
+ネイティブ iOS の IA・画面対応。実装は `Apps/BlueTicker`（`open Apps/BlueTicker/BlueTicker.xcodeproj`）。REST `/v1` の HTTP クライアント。サーバー契約の正本は REST（`architecture.md`）。見た目は iOS SDK 標準コンポーネント。Figma の長方形はプレースホルダ。
 
-ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。進捗は Linear Team `blue-ticker`。
+ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。進捗は Linear Team `blue-ticker`（[BLT-53](https://linear.app/sollahiro/issue/BLT-53/ios-クライアントポンチ絵)）。条件面（Screen）は [BLT-49](https://linear.app/sollahiro/issue/BLT-49/jp-screen-v1-summary-横断検索)。
+
+`BlueTickerCore` をリンクしない。iOS 専用の非公開エンドポイントを足さない。DTO は公開 JSON の手書き。Core の内部型をコピーしない。
+
+## 置き場
+
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。別リポジトリは App Store 署名・iOS CI がサーバー CI を汚し始めたら分ける。
 
 ## 決めたこと
 
 | 項目 | 方針 |
 |---|---|
-| 探索 3 面 | `トップ` / `条件` / `リスト`。`TabView` + `.tabViewStyle(.page)` で左右スワイプ。下の 3 ラベルはページインジケータ（タップでも移動） |
+| 探索 3 面 | `トップ` / `条件` / `リスト`。OS 標準 `TabView`（タブバー）。各タブは `NavigationStack` + 標準ツールバー |
+| 探索ツールバー | 左にブランドマーク、右に歯車（`gearshape`）で設定 |
+| キーワード検索 | トップの `.searchable`。`GET /v1/companies?q=` |
 | 銘柄面 | 探索から `NavigationStack` で push。タブの入れ子にしない |
-| 銘柄ヘッダ | `探す`（探索へ戻る）と `設定`。戻るは標準 Back |
-| 検索欄の実行 | `検索`（クエリ送信）。`search_companies` の `q` |
-| フロー | Sankey。未実装。タブだけ先に置いてよい |
+| 銘柄ヘッダ | `探す`（探索へ戻る）と歯車（設定） |
+| 条件 | Screen。キーワードは正本にしない。Figma の業種チップ列は未完成で、インタラクティブな条件設定ができればよい |
+| フロー | Sankey。未実装。タブだけ先に置く |
 | 概要の中タブ | `売上` / `利益率` / `CF` / `BS` / `投資` はフロー側の metric 切替へ移す |
 | 概要 | Summary の水準値（損益など） |
 | 分解 | Waterfall の `事業利益` / `ROIC` / `ROE` のみ。ネットキャッシュ・CCC は出さない |
 | 事業利益 | 売上総利益 − 販管費。開示の営業利益ではない。分解に一文を置く |
-| 新着 | ウォッチリストだけ。トップの Feed 行には付けない |
+| 新着 | ウォッチリストだけ。トップの Feed 行には付けない。バッジの定義は未決のため v1 では出さない |
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
-| ウォッチリスト | クライアントローカル（`SwiftData` / `UserDefaults`） |
+| ウォッチリスト | クライアントローカル（`SwiftData`） |
 | 会社行 | 社名・業種に加え銘柄コードを載せる |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`） |
 
@@ -27,42 +35,64 @@
 
 | 画面 | Feature | 備考 |
 |---|---|---|
-| トップ | Feed Trend / Feed Update | 「最近よく調べられています」「最近新しい有報がアップロードされました」 |
-| 条件 | Search | キーワードが正本。業種チップは下記「未決」 |
+| トップ | Feed Trend / Feed Update / Search | 「最近よく調べられています」「最近新しい有報がアップロードされました」＋キーワード検索。Trend の 503 は空リスト |
+| 条件 | Screen（BLT-49） | 横断フィルタ UI。Screen REST は未接続。結果は空状態。全社 `financials` をクライアントで絞らない |
 | リスト | （クライアント） | ウォッチリスト |
 | 概要 | Summary | 年次の水準値。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解（売上差 / 粗利率差 / 販管費差） |
-| フロー | Sankey | smoke・`/sankey` 未公開。描画はクライアント責務（`sankey.md`） |
-| インタビュー | Report（構想） | 本来クライアント責務 |
-| レポート | Filing または外部ニュース | ニュースは下記「未決」 |
+| フロー | Sankey | smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
+| インタビュー | Report（構想） | 本来クライアント責務。v1 はタブ枠 |
+| レポート | Filing または外部ニュース | ニュースは未決。v1 はタブ枠 |
 
-## 条件画面
+## 条件（Screen）
 
-- 上にキーワード欄（コードまたは社名）
-- 業種チップは単一選択。未選択ならキーワード結果のみ。複数業種の AND はしない
-- 市場チップは出さない（`market` は「上場」だけで、プライム等ではない）
-- 結果行は社名・コード・業種。空なら「社名かコードを入力するか、業種を 1 つ選ぶ」
+ポンチ絵の業種チップは Screen の一部だけ。完成形のレイアウト再現は求めない。
 
-`GET /v1/companies` は `q` のみ、返却上限 50。業種ブラウズをサーバーでやるなら `?sector=` が要る（公開契約の変更。確認してから）。契約を触らない v1 はキーワードを正本にし、チップは見た目かクライアント側のヒット絞りに留める。
+アプリ側の制約（サーバー許可リストは削らない。BLT-49）:
+
+- 業種は横スクロールのチップで複数選択。市場チップは出さない。REST 未接続のため送出契約は未決（AND にはしない）
+- 数値指標は次の 6 つ。各指標は DualRangeSlider（下限＝以上、上限＝以下、`[minValue, maxValue]`）。ソートは `roic` 降順、LIMIT 50 で固定
+  - 売上高 `sales`
+  - 粗利率 `gross_profit_margin`（売上高総利益率）
+  - 営業利益率 `operating_margin`（開示営業利益 ÷ 売上。分解の事業利益率ではない）
+  - ROIC `roic`
+  - ROE `roe`
+  - ネット D/E `net_de`
+- スライダーのハンドル色は水準帯（改善を要する / 標準 / 優良）に連動する UI 表示。Screen REST の許可リストは変えない
+- **売上増加率は入れない。** Summary の `years[]` に YoY キーは無く、Screen v1 の 1 社 1 行（最新 FY）にも前年が無い。単体の概要では隣接 FY からクライアント計算できる。横断に載せるなら `screen_index` の派生列（公開契約）
+- 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
+- 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
+
+Screen REST（`screen_index`、横断エンドポイント、skills 掲載）はまだ無い。今は実装・カタログ追加をしない（BLT-49）。結果面は未接続の空状態。
+
+## 認証
+
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。
+
+| 段階 | 方針 |
+|---|---|
+| 開発 | `127.0.0.1` 無認証（既存のローカル規則。既定ポートは `BLT_PORT` 未設定時 3000） |
+| 自社本番（段階 A） | Access ユーザー SSO / OTP の短命 JWT。curl 用 Service Token はアプリに埋め込まない |
+| 段階 B | iOS も第三者も x402。機能マスクはしない |
+
+`api-auth.md` のクライアント表はまだ変えない。MCP は製品認証に使わない。
 
 ## ニュース（Brave）
 
-候補は [Brave News Search](https://api-dashboard.search.brave.com/documentation/services/news-search)（`q` 必須、`freshness` / `search_lang` / `country`、`site:`、Goggles）。EDINET の代替ではない。有報・Summary と並べるなら出典を分ける。JP / `ja` の対応、料金、利用規約、キー管理、iOS 直叩きかサーバー経由かは未決。サーバーに載せるなら外部 API 追加になる。
+候補は [Brave News Search](https://api-dashboard.search.brave.com/documentation/services/news-search)。EDINET の代替ではない。JP / `ja`、料金、キー管理、iOS 直叩きかサーバー経由かは未決。サーバーに載せるなら外部 API 追加になる。
 
 ## 未決
 
-- 業種チップを `?sector=` で本物にするか、v1 はキーワード正本にするか
 - ニュースを iOS から Brave 直呼び出しか、サーバー経由か。有報と同一カードに載せるか
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か
-- `設定` の中身
+- `設定` の中身（開発用の base URL 以外）
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
-- フローは空プレースホルダを 1 枚置くか、タブだけ先に置くか
-- iOS の REST 認証（段階 A の Service Token か、別方式か）。`api-auth.md` はまだ変えない
+- Screen REST をいつ公開するか（BLT-49。listed drain 後でもカタログ追加は別判断）
 
 ## Figma の途中
 
-Starter の MCP 月次上限で、銘柄ヘッダのコードと分解の一文は未描き。探索の近くの本社削除、トップの新着削除、タブ／ヘッダの語、リストのコード、富士フイルム業種は反映済み。
+Starter の MCP 月次上限で、銘柄ヘッダのコードと分解の一文は未描き。探索の近くの本社削除、トップの新着削除、タブ／ヘッダの語、リストのコード、富士フイルム業種は反映済み。条件面は Figma 未完成のまま実装してよい。
 
 ## 関連
 
-`feature-tiers.md` · `architecture.md` · `sankey.md` · `financials-summary-separation.md` · `api-auth.md` · `public-api.md`
+`architecture.md` · `sankey.md` · `financials-summary-separation.md` · `api-auth.md` · `public-api.md`

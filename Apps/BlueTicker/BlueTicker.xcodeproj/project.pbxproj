@@ -1,0 +1,366 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001; };
+		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002; };
+		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003; };
+		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004; };
+		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005; };
+		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006; };
+		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007; };
+		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008; };
+		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009; };
+		AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010; };
+		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021; };
+		AA0000000000000000000011 /* DualRangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011; };
+		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012; };
+		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013; };
+		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014; };
+		AA0000000000000000000015 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015; };
+		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016; };
+		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017; };
+		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018; };
+		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		BB0000000000000000000000 /* BlueTicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlueTicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000001 /* BlueTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueTickerApp.swift; sourceTree = "<group>"; };
+		BB0000000000000000000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		BB0000000000000000000003 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		BB0000000000000000000004 /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
+		BB0000000000000000000005 /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
+		BB0000000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		BB0000000000000000000007 /* WatchedCompany.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedCompany.swift; sourceTree = "<group>"; };
+		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
+		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000010 /* SettingsPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPlaceholder.swift; sourceTree = "<group>"; };
+		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
+		BB0000000000000000000011 /* DualRangeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualRangeSlider.swift; sourceTree = "<group>"; };
+		BB0000000000000000000012 /* CompanyRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRowView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000013 /* TopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000014 /* ScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000015 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000016 /* TickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000017 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CC0000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		DD0000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				DD0000000000000000000002 /* BlueTicker */,
+				DD0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000002 /* BlueTicker */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000001 /* BlueTickerApp.swift */,
+				BB0000000000000000000002 /* Theme.swift */,
+				BB0000000000000000000003 /* Format.swift */,
+				DD0000000000000000000004 /* API */,
+				DD0000000000000000000005 /* Models */,
+				DD0000000000000000000006 /* Views */,
+				BB0000000000000000000019 /* Assets.xcassets */,
+				BB0000000000000000000020 /* Info.plist */,
+			);
+			path = BlueTicker;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000000 /* BlueTicker.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000004 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000004 /* APIConfiguration.swift */,
+				BB0000000000000000000005 /* DTOs.swift */,
+				BB0000000000000000000006 /* APIClient.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000007 /* WatchedCompany.swift */,
+				BB0000000000000000000008 /* CompanyRef.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000009 /* RootView.swift */,
+				BB0000000000000000000021 /* BrandMark.swift */,
+				BB0000000000000000000010 /* SettingsPlaceholder.swift */,
+				DD0000000000000000000007 /* Explore */,
+				DD0000000000000000000008 /* Ticker */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000007 /* Explore */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000011 /* DualRangeSlider.swift */,
+				BB0000000000000000000012 /* CompanyRowView.swift */,
+				BB0000000000000000000013 /* TopView.swift */,
+				BB0000000000000000000014 /* ScreenView.swift */,
+				BB0000000000000000000015 /* WatchlistView.swift */,
+			);
+			path = Explore;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000008 /* Ticker */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000016 /* TickerView.swift */,
+				BB0000000000000000000017 /* SummaryView.swift */,
+				BB0000000000000000000018 /* BreakdownView.swift */,
+			);
+			path = Ticker;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EE0000000000000000000001 /* BlueTicker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF0000000000000000000003 /* Build configuration list for PBXNativeTarget "BlueTicker" */;
+			buildPhases = (
+				EE0000000000000000000002 /* Sources */,
+				CC0000000000000000000001 /* Frameworks */,
+				EE0000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlueTicker;
+			productName = BlueTicker;
+			productReference = BB0000000000000000000000 /* BlueTicker.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EE0000000000000000000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					EE0000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = FF0000000000000000000001 /* Build configuration list for PBXProject "BlueTicker" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				ja,
+			);
+			mainGroup = DD0000000000000000000001;
+			productRefGroup = DD0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EE0000000000000000000001 /* BlueTicker */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EE0000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000019 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		EE0000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000001 /* BlueTickerApp.swift in Sources */,
+				AA0000000000000000000002 /* Theme.swift in Sources */,
+				AA0000000000000000000003 /* Format.swift in Sources */,
+				AA0000000000000000000004 /* APIConfiguration.swift in Sources */,
+				AA0000000000000000000005 /* DTOs.swift in Sources */,
+				AA0000000000000000000006 /* APIClient.swift in Sources */,
+				AA0000000000000000000007 /* WatchedCompany.swift in Sources */,
+				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
+				AA0000000000000000000009 /* RootView.swift in Sources */,
+				AA0000000000000000000021 /* BrandMark.swift in Sources */,
+				AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */,
+				AA0000000000000000000011 /* DualRangeSlider.swift in Sources */,
+				AA0000000000000000000012 /* CompanyRowView.swift in Sources */,
+				AA0000000000000000000013 /* TopView.swift in Sources */,
+				AA0000000000000000000014 /* ScreenView.swift in Sources */,
+				AA0000000000000000000015 /* WatchlistView.swift in Sources */,
+				AA0000000000000000000016 /* TickerView.swift in Sources */,
+				AA0000000000000000000017 /* SummaryView.swift in Sources */,
+				AA0000000000000000000018 /* BreakdownView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		FF0000000000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FF0000000000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FF0000000000000000000012 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BlueTicker/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sollahiro.BlueTicker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		FF0000000000000000000013 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BlueTicker/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sollahiro.BlueTicker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FF0000000000000000000001 /* Build configuration list for PBXProject "BlueTicker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF0000000000000000000010 /* Debug */,
+				FF0000000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FF0000000000000000000003 /* Build configuration list for PBXNativeTarget "BlueTicker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF0000000000000000000012 /* Debug */,
+				FF0000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = EE0000000000000000000000 /* Project object */;
+}
