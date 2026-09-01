@@ -9,7 +9,7 @@ enum APIConfiguration {
     static var baseURL: URL {
         get {
             if let raw = UserDefaults.standard.string(forKey: storageKey),
-                let url = URL(string: raw)
+                let url = validatedBaseURL(from: raw)
             {
                 return url
             }
@@ -18,5 +18,18 @@ enum APIConfiguration {
         set {
             UserDefaults.standard.set(newValue.absoluteString, forKey: storageKey)
         }
+    }
+
+    /// `http`/`https` と host がある絶対 URL だけを受け付ける。相対パスやスキーム無しは拒否する。
+    static func validatedBaseURL(from raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+            let scheme = url.scheme?.lowercased(),
+            ["http", "https"].contains(scheme),
+            url.host != nil
+        else {
+            return nil
+        }
+        return url
     }
 }

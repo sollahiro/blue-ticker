@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsPlaceholder: View {
     @State private var baseURL = APIConfiguration.baseURL.absoluteString
+    @State private var saveError: String?
 
     var body: some View {
         Form {
@@ -10,9 +11,18 @@ struct SettingsPlaceholder: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                 Button("保存") {
-                    if let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    if let url = APIConfiguration.validatedBaseURL(from: baseURL) {
                         APIConfiguration.baseURL = url
+                        baseURL = url.absoluteString
+                        saveError = nil
+                    } else {
+                        saveError = "http または https の絶対 URL を入力してください"
                     }
+                }
+                if let saveError {
+                    Text(saveError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
                 }
             }
             Section {

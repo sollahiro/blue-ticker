@@ -80,60 +80,99 @@ actor CompanyIconLoader {
 
     private var memory: [String: UIImage] = [:]
     private var missing: Set<String> = []
-    private var inflight: [String: Task<UIImage?, Never>] = [:]
+    private var inflight: [String: Task<IconLoadOutcome, Never>] = [:]
 
     func image(code: String, preferredURL: String?) async -> UIImage? {
         let key = cacheKey(code: code, preferredURL: preferredURL)
         if let cached = memory[key] { return cached }
         if missing.contains(key) { return nil }
         if let existing = inflight[key] {
-            return await existing.value
+            return await existing.value.image
         }
         let task = Task { await load(code: code, preferredURL: preferredURL) }
         inflight[key] = task
-        let loaded = await task.value
+        let outcome = await task.value
         inflight[key] = nil
-        if let loaded {
+        if let loaded = outcome.image {
             memory[key] = loaded
-        } else {
+        } else if outcome.cacheAsMissing {
             missing.insert(key)
         }
-        return loaded
+        return outcome.image
     }
 
-    private func load(code: String, preferredURL: String?) async -> UIImage? {
-        if let preferredURL, let url = URL(string: preferredURL),
-            let image = await fetchImage(url)
-        {
-            return image
+    private func load(code: String, preferredURL: String?) async -> IconLoadOutcome {
+        var sawUnavailable = false
+        if let preferredURL, let url = URL(string: preferredURL) {
+            switch await fetchImage(url) {
+            case .image(let image):
+                return IconLoadOutcome(image: image, cacheAsMissing: false)
+            case .unavailable:
+                sawUnavailable = true
+            case .notFound:
+                break
+            }
         }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty else {
+            return IconLoadOutcome(image: nil, cacheAsMissing: !sawUnavailable)
+        }
         for ext in Self.probeExtensions {
             let url = APIConfiguration.defaultIconBaseURL
                 .appending(path: "company-icons/\(trimmed).\(ext)")
-            if let image = await fetchImage(url) {
-                return image
+            switch await fetchImage(url) {
+            case .image(let image):
+                return IconLoadOutcome(image: image, cacheAsMissing: false)
+            case .unavailable:
+                sawUnavailable = true
+            case .notFound:
+                break
             }
         }
-        return nil
+        return IconLoadOutcome(image: nil, cacheAsMissing: !sawUnavailable)
     }
 
-    private func fetchImage(_ url: URL) async -> UIImage? {
+    private func fetchImage(_ url: URL) async -> IconFetchResult {
         var request = URLRequest(url: url)
         request.setValue("image/*", forHTTPHeaderField: "Accept")
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-            let http = response as? HTTPURLResponse,
-            (200..<300).contains(http.statusCode)
-        else {
-            return nil
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .unavailable
+            }
+            if http.statusCode == 404 || http.statusCode == 410 {
+                return .notFound
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                return .unavailable
+            }
+            guard let image = CompanyIconDecoder.image(from: data) else {
+                return .unavailable
+            }
+            return .image(image)
+        } catch is CancellationError {
+            return .unavailable
+        } catch let error as URLError where error.code == .cancelled {
+            return .unavailable
+        } catch {
+            return .unavailable
         }
-        return CompanyIconDecoder.image(from: data)
     }
 
     private func cacheKey(code: String, preferredURL: String?) -> String {
         "\(code)|\(preferredURL ?? "")"
     }
+}
+
+private struct IconLoadOutcome {
+    var image: UIImage?
+    var cacheAsMissing: Bool
+}
+
+private enum IconFetchResult {
+    case image(UIImage)
+    case notFound
+    case unavailable
 }
 
 enum CompanyIconDecoder {
