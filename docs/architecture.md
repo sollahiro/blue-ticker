@@ -130,7 +130,7 @@ flowchart LR
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills 未掲載） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
-| `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404） |
+| `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |

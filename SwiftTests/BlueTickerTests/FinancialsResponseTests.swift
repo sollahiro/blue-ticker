@@ -136,6 +136,44 @@ import Testing
         #expect(y["accounts_receivable"] as? Double == 200)
     }
 
+    // MARK: - `?fields=` 射影（BLT-57）
+
+    @Test func summaryFieldKeysExcludeAnalysisOnlyKeys() {
+        #expect(financialsSummaryFieldKeys.contains("sales"))
+        #expect(financialsSummaryFieldKeys.contains("operating_profit"))
+        #expect(financialsSummaryFieldKeys.contains("net_profit"))
+        #expect(financialsSummaryFieldKeys.isSuperset(of: financialsSummaryIdentityKeys))
+        #expect(financialsSummaryFieldKeys.isDisjoint(with: FinancialsYear.analysisOnlyKeys))
+    }
+
+    @Test func fieldsQueryParsesKeysAndRejectsUnknown() {
+        #expect(parseFinancialsFieldsQuery(nil) == .all)
+        #expect(parseFinancialsFieldsQuery("") == .all)
+        #expect(parseFinancialsFieldsQuery(" , ") == .all)
+        #expect(parseFinancialsFieldsQuery("sales, operating_profit") == .projection(["sales", "operating_profit"]))
+        // Waterfall 専用キーは Summary の射影対象外。
+        #expect(parseFinancialsFieldsQuery("roic_delta") == .unknownFields(["roic_delta"]))
+        #expect(parseFinancialsFieldsQuery("zzz,sales,aaa") == .unknownFields(["aaa", "zzz"]))
+    }
+
+    @Test func summaryProjectionKeepsIdentityKeysAndValues() throws {
+        let full = try #require(financialsResponse().summaryJsonObject()["years"] as? [[String: Any]])
+        let projected = try #require(
+            financialsResponse().summaryJsonObject(fields: ["net_cash"])["years"] as? [[String: Any]])
+
+        #expect(projected.count == full.count)
+        let y = projected[0]
+        #expect(Set(y.keys) == financialsSummaryIdentityKeys.union(["net_cash"]))
+        #expect(y["net_cash"] as? Double == 110)
+    }
+
+    @Test func summaryProjectionKeepsEnvelopeKeys() throws {
+        let resp = try financialsResponse().summaryJsonObject(fields: ["sales"])
+        #expect(resp["schema_version"] as? Int == Api.financialsSchemaVersion)
+        #expect(resp["code"] as? String == "7203")
+        #expect(resp["unit"] as? String == "百万円")
+    }
+
     @Test func analysisJsonObjectComputesFourthAndFifthBlockDeltas() throws {
         let years = try #require(financialsResponse().analysisJsonObject()["years"] as? [[String: Any]])
         #expect(years.count == 2)

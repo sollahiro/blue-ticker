@@ -226,13 +226,23 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     defaultValue: .int(Api.financialsYearsDefault),
                     mcpExposed: false
                 ),
+                ApiSkillParameter(
+                    name: "fields",
+                    location: .query,
+                    type: .string,
+                    description: "years[] の応答キーを絞るカンマ区切り（例: sales,operating_profit,net_profit）",
+                    required: false,
+                    mcpExposed: false
+                ),
             ],
             instructions: """
                 Summary（水準値）。増減分解が必要なら get-waterfall。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。ライブ計算へはフォールバックしない。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
-                MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
-                例: GET /v1/companies/6103/financials?years=5
+                MCP は years / fields 固定（既定年数・全キー）。REST のみクエリで調整可。
+                fields は値を変えずキーを絞るだけ。fy_end / financial_period / doc_id は常に返る。
+                不明キーを含むと 400。
+                例: GET /v1/companies/6103/financials?years=5&fields=sales,operating_profit
                 """,
             mcpOutputSchema: mcpOutputSchemaFinancialEnvelope
         ),
