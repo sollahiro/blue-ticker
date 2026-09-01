@@ -68,7 +68,7 @@ struct TickerView: View {
                     .foregroundStyle(Theme.text)
             }
             HStack(alignment: .center, spacing: 10) {
-                CompanyIconView(url: company.iconURL)
+                CompanyIconView(company, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(company.name.isEmpty ? company.code : company.name)
                         .font(.title3.weight(.bold))
