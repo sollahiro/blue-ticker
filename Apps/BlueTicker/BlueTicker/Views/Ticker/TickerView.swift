@@ -34,7 +34,7 @@ struct TickerView: View {
                     .tag(TickerPage.breakdown)
                 TickerStubView(
                     title: "フロー",
-                    detail: "Sankey は未実装です。タブだけ先に置いています。"
+                    detail: "Sankey は未実装です。ページ枠だけ先に置いています。"
                 )
                 .tag(TickerPage.flow)
                 TickerStubView(
@@ -44,15 +44,34 @@ struct TickerView: View {
                 .tag(TickerPage.interview)
                 TickerStubView(
                     title: "レポート",
-                    detail: "有報一覧・ニュースの置き場です。v1 はタブ枠のみです。"
+                    detail: "有報一覧・ニュースの置き場です。v1 はページ枠のみです。"
                 )
                 .tag(TickerPage.report)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            tickerTabs
+            pageDots
         }
         .background(Theme.shell.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                }
+                .accessibilityLabel("戻る")
+            }
+            .withoutSharedBackground()
+            ToolbarItem(placement: .principal) {
+                BrandMark()
+            }
+            .withoutSharedBackground()
+        }
+        .toolbarBackground(Theme.shell, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
     private var isWatched: Bool {
@@ -60,23 +79,19 @@ struct TickerView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                BrandMark()
-                Spacer()
-                Button("探す") { dismiss() }
+        HStack(alignment: .center, spacing: 10) {
+            CompanyIconView(company, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Format.displayName(company.name, fallback: company.code))
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                Text(company.code)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textMuted)
             }
-            HStack(alignment: .center, spacing: 10) {
-                CompanyIconView(company, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(company.name.isEmpty ? company.code : company.name)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Theme.text)
-                    Text(company.code)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textMuted)
-                }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 6) {
                 if !company.sector.isEmpty {
                     Text(company.sector)
                         .font(.caption.weight(.semibold))
@@ -85,39 +100,51 @@ struct TickerView: View {
                         .background(Theme.sectorColor(company.sector))
                         .foregroundStyle(.white)
                 }
-                Spacer()
-                Button(isWatched ? "リスト済" : "リストへ") {
-                    toggleWatch()
-                }
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Theme.accent)
-                .foregroundStyle(.black)
+                watchButton
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
 
-    private var tickerTabs: some View {
-        HStack(spacing: 6) {
+    private var watchButton: some View {
+        Button(action: toggleWatch) {
+            Text(isWatched ? "追加済み" : "リストに追加")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isWatched ? Color.clear : Theme.accent)
+                .foregroundStyle(isWatched ? Theme.accent : .black)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Theme.accent, lineWidth: isWatched ? 1.5 : 0)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var pageDots: some View {
+        HStack(spacing: 10) {
             ForEach(TickerPage.allCases) { item in
+                let current = page == item
                 Button {
-                    page = item
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        page = item
+                    }
                 } label: {
-                    Text(item.title)
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(page == item ? Theme.accent : Theme.idleTab)
-                        .foregroundStyle(page == item ? Theme.shell : Theme.text)
+                    Circle()
+                        .fill(current ? Theme.accent : Theme.textMuted.opacity(0.45))
+                        .frame(width: current ? 10 : 6, height: current ? 10 : 6)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(current ? .isSelected : [])
             }
         }
-        .padding(10)
-        .background(Theme.shell)
+        .animation(.easeInOut(duration: 0.2), value: page)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
     }
 
     private func toggleWatch() {

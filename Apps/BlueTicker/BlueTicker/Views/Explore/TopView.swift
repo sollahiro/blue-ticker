@@ -80,7 +80,7 @@ struct TopView: View {
                 }
             }
         }
-        .navigationTitle("トップ")
+        .navigationTitle("名称検索")
         .bltChrome()
         .searchable(text: $query, prompt: "会社名を入力してください")
         .onSubmit(of: .search) {

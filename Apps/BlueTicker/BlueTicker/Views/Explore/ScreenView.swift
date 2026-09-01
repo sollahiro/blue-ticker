@@ -133,7 +133,7 @@ struct ScreenView: View {
                 }
             }
         }
-        .navigationTitle("条件")
+        .navigationTitle("条件検索")
         .bltChrome()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
