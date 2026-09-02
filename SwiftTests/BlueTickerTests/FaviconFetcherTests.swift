@@ -62,4 +62,31 @@ import Testing
         let html = "<html><head><title>no icon here</title></head></html>"
         #expect(FaviconFetcher.extractIconHref(html: html) == nil)
     }
+
+    @Test func extractIconHrefsPrefersRelIconOverAppleTouchAndDropsDuplicates() {
+        // 実データ検証: 三井松島は theme favicon.ico と apple-touch-icon の両方を宣言する。
+        let html = """
+        <link rel="apple-touch-icon" href="/theme/apple-touch-icon.png">
+        <link rel="shortcut icon" href="/theme/favicon.ico">
+        <link rel="icon" href="/theme/favicon.ico">
+        """
+        #expect(
+            FaviconFetcher.extractIconHrefs(html: html) == [
+                "/theme/favicon.ico",
+                "/theme/apple-touch-icon.png",
+            ])
+        #expect(FaviconFetcher.extractIconHref(html: html) == "/theme/favicon.ico")
+    }
+
+    @Test func rejectsWordPressDefaultIconHashesAndKeepsOrdinaryPNG() {
+        let ordinaryPNG = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        #expect(!FaviconFetcher.isWordPressDefaultIcon(ordinaryPNG))
+        #expect(FaviconFetcher.wordPressDefaultIconSHA256.count == 2)
+        #expect(
+            FaviconFetcher.wordPressDefaultIconSHA256.contains(
+                "6bdb369337ac2496761c6f063bffea0aa6a91d4662279c399071a468251f51f0"))
+        #expect(
+            FaviconFetcher.wordPressDefaultIconSHA256.contains(
+                "c965a500f698483526faf92ac286047cecd825608cd1d83276de392b30a13a83"))
+    }
 }
