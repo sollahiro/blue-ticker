@@ -274,9 +274,11 @@ public extension BltServerContext {
             return .failure(.downloadFailed)
         }
         let extracted = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir)
-        guard let origin = extracted.url else {
+        guard let extractedOrigin = extracted.url else {
             return .failure(CompanyIconExtractFailure.urlExtractFailed(method: extracted.method))
         }
+        let origin = CompanyIconOriginOverride.originForFavicon(
+            code: code, extractedOrigin: extractedOrigin)
         guard let icon = await FaviconFetcher.fetch(origin: origin) else {
             return .failure(CompanyIconExtractFailure.faviconFetchFailed(origin: origin))
         }
