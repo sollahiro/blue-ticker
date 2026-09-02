@@ -8,7 +8,7 @@ import Foundation
 
 @Suite struct StackedSegmentPnLNormalizerTests {
 
-    /// S100YIBH（富士フイルム FY2026-03 IFRS）の積み上げ表 Markdown（抽出器実測）。
+    /// S100YIBH（富士フイルム FY2026-03 米国基準）の積み上げ表 Markdown（抽出器実測）。
     private static let yibhMarkdown = """
         |             |  | 前連結会計年度(百万円) |  | 当連結会計年度(百万円) |
         |-------------|--|--------------|--|--------------|

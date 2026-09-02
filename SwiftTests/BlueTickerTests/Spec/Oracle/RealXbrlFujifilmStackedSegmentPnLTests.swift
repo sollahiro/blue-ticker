@@ -1,5 +1,6 @@
-// 富士フイルム S100YIBH（FY2026-03 IFRS）の積み上げセグメント表で、
+// 富士フイルム S100YIBH（FY2026-03 米国基準）の積み上げセグメント表で、
 // get_breakdown axis=business の profit が研究開発費ではなくセグメント営業利益になること。
+// S100W3XJ（FY2025-03）も同型の積み上げ表。差は会計基準ではなく行寄せ。
 
 import Testing
 import Foundation

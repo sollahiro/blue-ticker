@@ -136,9 +136,12 @@ enum BreakdownSmokeOracleSupport {
         case "stacked_segment_pnl":
             // 積み上げセグメント損益表の決定論寄せ（売上→研究開発費→営業利益）。
             // LLM 入力床ではなく、sales/profit の公開キーまで固定する。
+            // 分母は期待値の denominator を優先（同一銘柄の別年度 golden が smoke_expected の
+            // 最新以外を指す場合に loadSales(code) と食い違わないようにする）。
+            let consolidated = (expected["denominator"] as? NSNumber)?.doubleValue ?? sales
             let snap = try #require(
                 StackedSegmentPnLNormalizer.normalize(
-                    segments, consolidatedSales: sales),
+                    segments, consolidatedSales: consolidated),
                 "\(docID): expected stacked_segment_pnl snapshot")
             #expect(snap.axis == "business")
             #expect(snap.sourceKind == "stacked_segment_pnl")
@@ -167,10 +170,24 @@ enum BreakdownSmokeOracleSupport {
         }
     }
 
-    @Test func smokeBusinessFujifilmStackedSegmentPnLMatchesOracle() async throws {
+    @Test func smokeBusinessFujifilmLLMInputMatchesOracle() async throws {
         try await BreakdownSmokeOracleSupport.withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", code: "4901", xbrlDir: $0)
         }
+    }
+
+    /// FY2026-03（S100YIBH）積み上げ表の営業利益寄せ。FY2025-03（S100W3XJ）の llm_input 床は置き換えない。
+    @Test func fujifilmS100YIBHStackedSegmentPnLMatchesOracle() async throws {
+        let docID = "S100YIBH"
+        let cacheRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: cacheRoot)
+        let xbrlDir = cacheRoot.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: xbrlDir.path) else {
+            TestVerboseLog.print("SKIP   \(docID): XBRL キャッシュなし")
+            return
+        }
+        try assertMatchesOracle(docID: docID, code: "4901", xbrlDir: xbrlDir)
     }
 
     @Test func smokeBusinessOkumaLLMInputMatchesOracle() async throws {
