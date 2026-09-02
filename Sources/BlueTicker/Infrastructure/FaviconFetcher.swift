@@ -5,6 +5,11 @@
 // （実体は404/SPAフォールバックページ）、うち1社（旧fujifilmholdings.com）はドメイン自体が
 // 別ドメインへ301リダイレクト済みだった。ルートページを取得しリダイレクトを追従したうえで
 // `<link rel="icon">` 系タグをパースするフォールバックを追加したところ 11/11 (100%) に到達。
+//
+// WordPress 既定ファビコン（2026-09-02、本番 company_icons 3267 件）: `/favicon.ico` を先に取ると
+// `wp-includes/images/w-logo-*-white-bg.png` へリダイレクトして打ち切る（青 W 175 + 灰 W 71）。
+// 同じページの `<link rel="icon"|"shortcut icon">` はテーマ固有ファイルを指す（ホーブ・ハッチ・ワーク・
+// 三井松島で実測）。HTML の icon リンクを先に試し、WordPress 既定画像ハッシュは棄てて次候補へ進む。
 // また、あるドメインはfaviconの実体がICOファイルにもかかわらずサーバーが
 // `Content-Type: text/plain` を返した（マジックバイトでの検証を確認: `00 00 01 00`）。
 // Content-Typeヘッダーは信用せず、取得バイト列の先頭シグネチャで画像かどうかを判定する。
@@ -41,6 +46,13 @@ enum FaviconFetcher {
         return URLSession(configuration: config, delegate: RedirectGuard(), delegateQueue: nil)
     }()
 
+    /// WordPress コア同梱の既定サイトアイコン（`w-logo-blue-white-bg.png` / `w-logo-gray-white-bg.png`）。
+    /// `/favicon.ico` がここに 301 するサイトを会社ロゴと誤認しないための棄却リスト。
+    static let wordPressDefaultIconSHA256: Set<String> = [
+        "6bdb369337ac2496761c6f063bffea0aa6a91d4662279c399071a468251f51f0",
+        "c965a500f698483526faf92ac286047cecd825608cd1d83276de392b30a13a83",
+    ]
+
     /// `origin` は `CorporateWebsiteExtractor` が返す `scheme://host`（パス無し）。
     static func fetch(origin: String) async -> FetchedIcon? {
         guard let originURL = URL(string: origin),
@@ -48,26 +60,35 @@ enum FaviconFetcher {
               let host = originURL.host, PrivateNetworkGuard.isPublicHost(host)
         else { return nil }
 
-        if let direct = await fetchDirect(origin: originURL) { return direct }
-        return await fetchViaHtmlLink(origin: originURL)
+        if let htmlIcon = await fetchViaHtmlLink(origin: originURL) { return htmlIcon }
+        return await fetchDirect(origin: originURL)
     }
 
     private static func fetchDirect(origin: URL) async -> FetchedIcon? {
         guard let url = URL(string: "/favicon.ico", relativeTo: origin)?.absoluteURL else { return nil }
-        guard let data = await safeGet(url) else { return nil }
-        guard let sniffed = sniffImageContentType(data) else { return nil }
-        return FetchedIcon(data: data, contentType: sniffed)
+        return await fetchImage(url)
     }
 
     private static func fetchViaHtmlLink(origin: URL) async -> FetchedIcon? {
         guard let (html, finalURL) = await safeGetHTML(origin) else { return nil }
-        guard let iconHref = extractIconHref(html: html) else { return nil }
-        guard let iconURL = URL(string: iconHref, relativeTo: finalURL)?.absoluteURL,
-              let iconHost = iconURL.host, PrivateNetworkGuard.isPublicHost(iconHost)
-        else { return nil }
-        guard let data = await safeGet(iconURL) else { return nil }
+        for iconHref in extractIconHrefs(html: html) {
+            guard let iconURL = URL(string: iconHref, relativeTo: finalURL)?.absoluteURL,
+                  let iconHost = iconURL.host, PrivateNetworkGuard.isPublicHost(iconHost)
+            else { continue }
+            if let icon = await fetchImage(iconURL) { return icon }
+        }
+        return nil
+    }
+
+    private static func fetchImage(_ url: URL) async -> FetchedIcon? {
+        guard let data = await safeGet(url) else { return nil }
         guard let sniffed = sniffImageContentType(data) else { return nil }
+        guard !isWordPressDefaultIcon(data) else { return nil }
         return FetchedIcon(data: data, contentType: sniffed)
+    }
+
+    static func isWordPressDefaultIcon(_ data: Data) -> Bool {
+        wordPressDefaultIconSHA256.contains(SigV4Signer.sha256Hex(data))
     }
 
     /// `<link rel="icon"|"shortcut icon"|"apple-touch-icon"...>` の href を探す。
@@ -75,16 +96,30 @@ enum FaviconFetcher {
     /// apple-touch-icon系（部分一致のみ）はそれが無い場合のフォールバックとする。
     /// SwiftSoupの属性正規表現セレクタには依存せず、`rel`値を取得後にSwift側で判定する。
     static func extractIconHref(html: String) -> String? {
+        extractIconHrefs(html: html).first
+    }
+
+    /// `rel` に `icon` トークンがある宣言を先に、apple-touch-icon 系を後に、出現順で返す（重複除去）。
+    static func extractIconHrefs(html: String) -> [String] {
         guard let soup = try? SwiftSoup.parse(html),
-              let links = try? soup.select("link") else { return nil }
-        var fallback: String?
+              let links = try? soup.select("link") else { return [] }
+        var preferred: [String] = []
+        var fallback: [String] = []
         for link in links {
             let rel = ((try? link.attr("rel")) ?? "").lowercased()
             guard let href = try? link.attr("href"), !href.isEmpty else { continue }
-            if rel.split(separator: " ").contains("icon") { return href }
-            if fallback == nil, rel.contains("icon") { fallback = href }
+            if rel.split(separator: " ").contains("icon") {
+                preferred.append(href)
+            } else if rel.contains("icon") {
+                fallback.append(href)
+            }
         }
-        return fallback
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for href in preferred + fallback where seen.insert(href).inserted {
+            ordered.append(href)
+        }
+        return ordered
     }
 
     private static func safeGet(_ url: URL) async -> Data? {
@@ -104,7 +139,8 @@ enum FaviconFetcher {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              data.count <= maxBytes, let html = String(data: data, encoding: .utf8),
+              data.count <= maxBytes,
+              let html = String(data: data, encoding: .utf8) ?? decodeCP932(data),
               let finalURL = response.url
         else { return nil }
         return (html, finalURL)

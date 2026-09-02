@@ -6,7 +6,8 @@
 import Foundation
 
 /// Neon 会社アイコン取り込み キャッシュ（company_icons.cache_version）の抽出バージョン。
-/// v1 → v2: Pronexus 電子公告ページ 16 社を公式サイト origin へ決め打ち差し替え。
+/// v1 → v2: Pronexus 電子公告 16 社を公式 origin へ決め打ち。WordPress 既定ファビコンを棄てて
+/// HTML `<link rel="icon">` を先に取る。
 public let companyIconsCacheVersion = "icons-v2"
 
 /// 会社アイコン取り込み（1書類分）の抽出・アップロード結果。R2への格納が完了した状態のみを表す
