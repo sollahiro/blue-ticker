@@ -21,10 +21,11 @@ struct SummaryView: View {
     }
 
     private func summaryTable(_ response: FinancialsResponse) -> some View {
-        ScrollView([.vertical, .horizontal], showsIndicators: true) {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+        ScrollView {
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
-                    Text("").frame(width: 72, alignment: .leading)
+                    Text("")
+                        .frame(minWidth: 52, alignment: .leading)
                     Text("売上高").gridHeader()
                     Text("営業利益").gridHeader()
                     Text("純利益").gridHeader()
@@ -34,6 +35,7 @@ struct SummaryView: View {
                         Text(Format.fy(year.fyEnd))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.text)
+                            .frame(minWidth: 52, alignment: .leading)
                         Text(Format.millionYen(year.sales)).gridCell()
                         Text(Format.millionYen(year.operatingProfit)).gridCell()
                         Text(Format.millionYen(year.netProfit)).gridCell()
@@ -65,12 +67,16 @@ private extension Text {
     func gridHeader() -> some View {
         self.font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textMuted)
-            .frame(width: 88, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 
     func gridCell() -> some View {
         self.font(.subheadline.monospacedDigit())
             .foregroundStyle(Theme.text)
-            .frame(width: 88, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 }
