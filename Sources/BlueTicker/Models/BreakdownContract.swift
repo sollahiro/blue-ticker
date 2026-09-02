@@ -67,7 +67,8 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// だけでは再計算せず、バンプで再計算する。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
-public let businessBreakdownCacheVersion = "breakdown-business-v9"
+/// v10: 積み上げセグメント損益表の決定論寄せ（研究開発費→profit 誤寄せを構造側で防止）。
+public let businessBreakdownCacheVersion = "breakdown-business-v10"
 public let geographyBreakdownCacheVersion = "breakdown-geography-v10"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
@@ -108,6 +109,8 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
 /// `.notFound` は行を作らない方針のため、この文字列が DB に書かれることはない
 /// （欠ける軸は出さない）。
 public let breakdownSourceXbrlFacts = "xbrl_facts"
+/// 積み上げセグメント損益表の決定論寄せ（`StackedSegmentPnLNormalizer`）。
+public let breakdownSourceStackedSegmentPnL = "stacked_segment_pnl"
 public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
 public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
@@ -208,7 +211,9 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
 /// 判定すべき source かどうか。LLM 経由（segment_info_llm 等）は content_hash + needs_review
 /// でのみ扱うためここには含めない（`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
 public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
-    source == breakdownSourceXbrlFacts || source == breakdownSourceNotApplicable
+    source == breakdownSourceXbrlFacts
+        || source == breakdownSourceStackedSegmentPnL
+        || source == breakdownSourceNotApplicable
 }
 
 /// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が当該軸の床以上の

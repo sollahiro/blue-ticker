@@ -133,6 +133,17 @@ enum BreakdownSmokeOracleSupport {
             #expect(snap.axis == "business")
             try BreakdownSmokeOracleSupport.assertXbrlFactsRowsMatch(
                 expectedEntry: expected, snapshot: snap, label: "\(docID).business")
+        case "stacked_segment_pnl":
+            // 積み上げセグメント損益表の決定論寄せ（売上→研究開発費→営業利益）。
+            // LLM 入力床ではなく、sales/profit の公開キーまで固定する。
+            let snap = try #require(
+                StackedSegmentPnLNormalizer.normalize(
+                    segments, consolidatedSales: sales),
+                "\(docID): expected stacked_segment_pnl snapshot")
+            #expect(snap.axis == "business")
+            #expect(snap.sourceKind == "stacked_segment_pnl")
+            try BreakdownSmokeOracleSupport.assertXbrlFactsRowsMatch(
+                expectedEntry: expected, snapshot: snap, label: "\(docID).business")
         default:
             Issue.record("\(docID): unknown path \(path)")
         }
@@ -156,7 +167,7 @@ enum BreakdownSmokeOracleSupport {
         }
     }
 
-    @Test func smokeBusinessFujifilmLLMInputMatchesOracle() async throws {
+    @Test func smokeBusinessFujifilmStackedSegmentPnLMatchesOracle() async throws {
         try await BreakdownSmokeOracleSupport.withSmokeCache("S100W3XJ") {
             try assertMatchesOracle(docID: "S100W3XJ", code: "4901", xbrlDir: $0)
         }

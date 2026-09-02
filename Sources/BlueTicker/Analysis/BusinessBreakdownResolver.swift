@@ -16,6 +16,8 @@ import Foundation
 /// どの経路で business breakdown を解決したか（監査・目視検証用）。
 enum BusinessBreakdownSource: String {
     case xbrlFacts = "xbrl_facts"
+    /// 積み上げセグメント損益表（売上→研究開発費→営業利益等）の決定論寄せ。
+    case stackedSegmentPnL = "stacked_segment_pnl"
     case revenueRecognitionLLM = "revenue_recognition_llm"
     case segmentInfoLLM = "segment_info_llm"
     case notFound = "not_found"
@@ -43,7 +45,17 @@ enum BusinessBreakdownResolver {
             return (factsSnapshot, .xbrlFacts, nil)
         }
 
-        // 2) html_table 経路。見出しで「収益認識関係由来（swap 済み）」か
+        // 2) 積み上げセグメント損益表の決定論寄せ（LLM より先）。
+        // 同一事業ラベルが指標ブロックごとに繰り返され、末尾「XXX計」だけが指標名を持つ表
+        // （実測: 富士フイルム S100YIBH / S100W3XJ）では、LLM が研究開発費を profit に
+        // 誤寄せする。比較必須の揃えは構造側で行う。
+        if let stacked = StackedSegmentPnLNormalizer.normalize(
+            segments, consolidatedSales: consolidatedSales)
+        {
+            return (stacked, .stackedSegmentPnL, nil)
+        }
+
+        // 3) html_table 経路。見出しで「収益認識関係由来（swap 済み）」か
         //    「segments 自体が html_table（例: キヤノン注23）」かを振り分ける。
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
         // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
@@ -77,7 +89,7 @@ enum BusinessBreakdownResolver {
             }
         }
 
-        // 3) LLM 経路が無い・失敗した場合、xbrl_facts の axis=business スナップショットが
+        // 4) LLM 経路が無い・失敗した場合、xbrl_facts の axis=business スナップショットが
         //    あれば（needs_review=true でも）何もないよりはマシなのでフォールバックする
         //    （INPEX旧filings型: tables が無く LLM 経路自体を試せない会社の挙動を変えない）。
         if let factsSnapshot, factsSnapshot.axis == "business" {
