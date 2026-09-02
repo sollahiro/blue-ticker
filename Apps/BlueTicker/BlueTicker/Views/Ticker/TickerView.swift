@@ -1,8 +1,9 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 enum TickerPage: Int, CaseIterable, Identifiable {
-    case summary, breakdown, flow, interview, report
+    case summary, breakdown, news, report
 
     var id: Int { rawValue }
 
@@ -10,8 +11,7 @@ enum TickerPage: Int, CaseIterable, Identifiable {
         switch self {
         case .summary: "概要"
         case .breakdown: "分解"
-        case .flow: "フロー"
-        case .interview: "インタビュー"
+        case .news: "ニュース"
         case .report: "レポート"
         }
     }
@@ -27,32 +27,53 @@ struct TickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            TabView(selection: $page) {
-                SummaryView(code: company.code)
-                    .tag(TickerPage.summary)
-                BreakdownView(code: company.code)
-                    .tag(TickerPage.breakdown)
-                TickerStubView(
-                    title: "フロー",
-                    detail: "Sankey は未実装です。タブだけ先に置いています。"
-                )
-                .tag(TickerPage.flow)
-                TickerStubView(
-                    title: "インタビュー",
-                    detail: "構想段階です。サーバーに載せず、クライアント責務のままです。"
-                )
-                .tag(TickerPage.interview)
-                TickerStubView(
-                    title: "レポート",
-                    detail: "有報一覧・ニュースの置き場です。v1 はタブ枠のみです。"
-                )
-                .tag(TickerPage.report)
+            GeometryReader { geo in
+                TabView(selection: $page) {
+                    SummaryView(code: company.code)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .tag(TickerPage.summary)
+                    BreakdownView(code: company.code)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .tag(TickerPage.breakdown)
+                    TickerStubView(
+                        title: "ニュース",
+                        detail: "外部ニュースの置き場です。ソースは未決のため、v1 はページ枠のみです。"
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .tag(TickerPage.news)
+                    TickerStubView(
+                        title: "レポート",
+                        detail: "有報一覧の置き場です。v1 はページ枠のみです。"
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .tag(TickerPage.report)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            tickerTabs
+            pageDots
         }
         .background(Theme.shell.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .background { InteractivePopGestureEnabler() }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                }
+                .accessibilityLabel("戻る")
+            }
+            .withoutSharedBackground()
+            ToolbarItem(placement: .principal) {
+                BrandMark()
+            }
+            .withoutSharedBackground()
+        }
+        .toolbarBackground(Theme.shell, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
     private var isWatched: Bool {
@@ -60,23 +81,19 @@ struct TickerView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                BrandMark()
-                Spacer()
-                Button("探す") { dismiss() }
+        HStack(alignment: .center, spacing: 10) {
+            CompanyIconView(company, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Format.displayName(company.name, fallback: company.code))
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                Text(company.code)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textMuted)
             }
-            HStack(alignment: .center, spacing: 10) {
-                CompanyIconView(company, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(company.name.isEmpty ? company.code : company.name)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Theme.text)
-                    Text(company.code)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textMuted)
-                }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 6) {
                 if !company.sector.isEmpty {
                     Text(company.sector)
                         .font(.caption.weight(.semibold))
@@ -85,39 +102,51 @@ struct TickerView: View {
                         .background(Theme.sectorColor(company.sector))
                         .foregroundStyle(.white)
                 }
-                Spacer()
-                Button(isWatched ? "リスト済" : "リストへ") {
-                    toggleWatch()
-                }
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Theme.accent)
-                .foregroundStyle(.black)
+                watchButton
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
 
-    private var tickerTabs: some View {
-        HStack(spacing: 6) {
+    private var watchButton: some View {
+        Button(action: toggleWatch) {
+            Text(isWatched ? "追加済み" : "リストに追加")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isWatched ? Color.clear : Theme.accent)
+                .foregroundStyle(isWatched ? Theme.accent : .black)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Theme.accent, lineWidth: isWatched ? 1.5 : 0)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var pageDots: some View {
+        HStack(spacing: 10) {
             ForEach(TickerPage.allCases) { item in
+                let current = page == item
                 Button {
-                    page = item
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        page = item
+                    }
                 } label: {
-                    Text(item.title)
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(page == item ? Theme.accent : Theme.idleTab)
-                        .foregroundStyle(page == item ? Theme.shell : Theme.text)
+                    Circle()
+                        .fill(current ? Theme.accent : Theme.textMuted.opacity(0.45))
+                        .frame(width: current ? 10 : 6, height: current ? 10 : 6)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(current ? .isSelected : [])
             }
         }
-        .padding(10)
-        .background(Theme.shell)
+        .animation(.easeInOut(duration: 0.2), value: page)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
     }
 
     private func toggleWatch() {
@@ -141,18 +170,80 @@ struct TickerStubView: View {
     var detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(Theme.text)
-            Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(Theme.textMuted)
-            Spacer()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.text)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
         .padding(16)
+    }
+}
+
+/// `navigationBarBackButtonHidden` でも端スワイプで戻れるようにする。
+private struct InteractivePopGestureEnabler: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.attach(from: uiView)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var navigationController: UINavigationController?
+
+        func attach(from view: UIView) {
+            guard let navigationController = view.nearestNavigationController() else { return }
+            self.navigationController = navigationController
+            guard let pop = navigationController.interactivePopGestureRecognizer else { return }
+            pop.isEnabled = navigationController.viewControllers.count > 1
+            pop.delegate = self
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            (navigationController?.viewControllers.count ?? 0) > 1
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy other: UIGestureRecognizer
+        ) -> Bool {
+            other is UIPanGestureRecognizer
+        }
+    }
+}
+
+private extension UIView {
+    func nearestNavigationController() -> UINavigationController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let navigationController = current as? UINavigationController {
+                return navigationController
+            }
+            if let viewController = current as? UIViewController {
+                return viewController.navigationController
+            }
+            responder = current.next
+        }
+        return nil
     }
 }

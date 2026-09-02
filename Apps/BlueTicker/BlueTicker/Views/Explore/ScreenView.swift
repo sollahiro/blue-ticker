@@ -83,7 +83,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
 struct ScreenView: View {
     @State private var selectedSectors: Set<String> = []
     @State private var ranges: [ScreenMetric: [Double]] = [:]
-    @State private var didQuery = false
+    @State private var showResults = false
 
     var body: some View {
         Form {
@@ -114,7 +114,7 @@ struct ScreenView: View {
                         )
                     }
                     .padding(.vertical, 8)
-                    .listRowBackground(Theme.elevated)
+                    .listRowBackground(Theme.control)
                 }
             } header: {
                 Text("指標")
@@ -123,25 +123,19 @@ struct ScreenView: View {
                 Text("ソートは ROIC 降順、件数は 50 件で固定です。売上増加率は横断検索の対象外です。")
                     .foregroundStyle(Theme.textMuted)
             }
-
-            if didQuery {
-                Section {
-                    Text("横断検索は未接続です。Screen REST が公開されるまで結果は返しません。")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textMuted)
-                        .listRowBackground(Theme.elevated)
-                }
-            }
         }
-        .navigationTitle("条件")
+        .navigationTitle("条件検索")
         .bltChrome()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("検索") {
-                    didQuery = true
+                    showResults = true
                 }
                 .foregroundStyle(Theme.text)
             }
+        }
+        .navigationDestination(isPresented: $showResults) {
+            ScreenResultsView()
         }
     }
 
@@ -206,5 +200,17 @@ struct ScreenView: View {
             get: { ranges[metric] ?? [metric.sliderMin, metric.sliderMax] },
             set: { ranges[metric] = $0 }
         )
+    }
+}
+
+private struct ScreenResultsView: View {
+    var body: some View {
+        ContentUnavailableView(
+            "該当する会社はありません",
+            systemImage: "slider.horizontal.3",
+            description: Text("横断検索は未接続です。Screen REST が公開されるまで結果は返しません。")
+        )
+        .navigationTitle("検索結果")
+        .bltChrome()
     }
 }

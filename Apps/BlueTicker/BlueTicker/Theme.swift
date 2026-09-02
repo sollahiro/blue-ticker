@@ -2,13 +2,16 @@ import SwiftUI
 import UIKit
 
 enum Theme {
-    static let shell = Color(red: 0.18, green: 0.18, blue: 0.19)
-    static let elevated = Color(red: 0.23, green: 0.24, blue: 0.26)
+    /// `#16446F`
+    static let shell = Color(red: 22 / 255, green: 68 / 255, blue: 111 / 255)
+    static let elevated = Color(red: 32 / 255, green: 84 / 255, blue: 128 / 255)
     static let text = Color(red: 0.55, green: 0.78, blue: 0.95)
     static let textMuted = Color(red: 0.40, green: 0.58, blue: 0.74)
     static let accent = Color(red: 0.35, green: 0.70, blue: 0.95)
-    static let idleTab = Color(red: 0.28, green: 0.36, blue: 0.46)
-    static let card = Color(red: 0.23, green: 0.24, blue: 0.26)
+    static let idleTab = Color(red: 18 / 255, green: 52 / 255, blue: 86 / 255)
+    /// 設定のサーバー入力欄に近い、黒寄りの背景。
+    static let control = Color(red: 16 / 255, green: 20 / 255, blue: 26 / 255)
+    static let card = Color(red: 32 / 255, green: 84 / 255, blue: 128 / 255)
     static let positive = Color(red: 0.30, green: 0.62, blue: 0.92)
     static let negative = Color(red: 0.88, green: 0.32, blue: 0.36)
     static let margin = Color(red: 0.35, green: 0.78, blue: 0.82)
@@ -24,18 +27,30 @@ enum Theme {
     static func applyChrome() {
         let textColor = UIColor(red: 0.55, green: 0.78, blue: 0.95, alpha: 1)
         let muted = UIColor(red: 0.40, green: 0.58, blue: 0.74, alpha: 1)
-        let shell = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
+        let shell = UIColor(red: 22 / 255, green: 68 / 255, blue: 111 / 255, alpha: 1)
+        let elevated = UIColor(red: 32 / 255, green: 84 / 255, blue: 128 / 255, alpha: 1)
         let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: textColor]
-        UINavigationBar.appearance().largeTitleTextAttributes = attrs
-        UINavigationBar.appearance().titleTextAttributes = attrs
+        let bar = UINavigationBarAppearance()
+        bar.configureWithOpaqueBackground()
+        bar.backgroundColor = shell
+        bar.titleTextAttributes = attrs
+        bar.largeTitleTextAttributes = attrs
+        UINavigationBar.appearance().standardAppearance = bar
+        UINavigationBar.appearance().scrollEdgeAppearance = bar
+        UINavigationBar.appearance().compactAppearance = bar
         UINavigationBar.appearance().tintColor = textColor
+        let tab = UITabBarAppearance()
+        tab.configureWithOpaqueBackground()
+        tab.backgroundColor = shell
+        UITabBar.appearance().standardAppearance = tab
+        UITabBar.appearance().scrollEdgeAppearance = tab
         UITabBar.appearance().unselectedItemTintColor = muted
         UITabBar.appearance().tintColor = UIColor(red: 0.35, green: 0.70, blue: 0.95, alpha: 1)
         UITextField.appearance(whenContainedInInstancesOf: [UISearchBar.self]).defaultTextAttributes = attrs
         UISearchBar.appearance().tintColor = textColor
         UITableView.appearance().backgroundColor = shell
         UICollectionView.appearance().backgroundColor = shell
-        UITableViewCell.appearance().backgroundColor = UIColor(red: 0.23, green: 0.24, blue: 0.26, alpha: 1)
+        UITableViewCell.appearance().backgroundColor = elevated
     }
 
     static func sectorColor(_ sector: String) -> Color {

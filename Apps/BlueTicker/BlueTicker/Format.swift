@@ -26,4 +26,15 @@ enum Format {
         guard let value else { return "—" }
         return String(format: "%+.2f%%", value)
     }
+
+    /// 検索結果・銘柄ヘッダ用。法人格の「株式会社」は出さない。
+    static func displayName(_ name: String, fallback: String = "") -> String {
+        let stripped = name
+            .replacingOccurrences(of: "株式会社", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if stripped.isEmpty {
+            return fallback.isEmpty ? name : fallback
+        }
+        return stripped
+    }
 }

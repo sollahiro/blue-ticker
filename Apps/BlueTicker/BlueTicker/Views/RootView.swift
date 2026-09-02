@@ -10,7 +10,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
-            .tabItem { Label("トップ", systemImage: "house") }
+            .tabItem { Label("名称検索", systemImage: "magnifyingglass") }
             .tag(0)
 
             NavigationStack {
@@ -18,7 +18,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
-            .tabItem { Label("条件", systemImage: "slider.horizontal.3") }
+            .tabItem { Label("条件検索", systemImage: "slider.horizontal.3") }
             .tag(1)
 
             NavigationStack {

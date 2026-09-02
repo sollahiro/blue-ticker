@@ -9,7 +9,7 @@ struct CompanyRowView: View {
         HStack(spacing: 12) {
             CompanyIconView(company)
             VStack(alignment: .leading, spacing: 2) {
-                Text(company.name.isEmpty ? company.code : company.name)
+                Text(Format.displayName(company.name, fallback: company.code))
                     .font(.headline)
                     .foregroundStyle(Theme.text)
                 Text(company.code)
