@@ -112,12 +112,9 @@ struct ScreenView: View {
                             formatValue: metric.format,
                             band: metric.band
                         )
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Theme.control, in: RoundedRectangle(cornerRadius: 8))
                     }
                     .padding(.vertical, 8)
-                    .listRowBackground(Theme.elevated)
+                    .listRowBackground(Theme.control)
                 }
             } header: {
                 Text("指標")
