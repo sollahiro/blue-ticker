@@ -9,6 +9,8 @@ enum Theme {
     static let textMuted = Color(red: 0.40, green: 0.58, blue: 0.74)
     static let accent = Color(red: 0.35, green: 0.70, blue: 0.95)
     static let idleTab = Color(red: 18 / 255, green: 52 / 255, blue: 86 / 255)
+    /// 設定のサーバー入力欄に近い、黒寄りの背景。
+    static let control = Color(red: 16 / 255, green: 20 / 255, blue: 26 / 255)
     static let card = Color(red: 32 / 255, green: 84 / 255, blue: 128 / 255)
     static let positive = Color(red: 0.30, green: 0.62, blue: 0.92)
     static let negative = Color(red: 0.88, green: 0.32, blue: 0.36)
