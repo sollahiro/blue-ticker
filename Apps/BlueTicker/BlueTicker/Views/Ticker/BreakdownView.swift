@@ -64,7 +64,10 @@ struct BreakdownView: View {
                 }
             }
             .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
         .padding(16)
     }

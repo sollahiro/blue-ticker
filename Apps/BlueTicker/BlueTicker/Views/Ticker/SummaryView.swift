@@ -21,29 +21,30 @@ struct SummaryView: View {
     }
 
     private func summaryTable(_ response: FinancialsResponse) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            ScrollView {
-                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+        ScrollView([.vertical, .horizontal], showsIndicators: true) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow {
+                    Text("").frame(width: 72, alignment: .leading)
+                    Text("売上高").gridHeader()
+                    Text("営業利益").gridHeader()
+                    Text("純利益").gridHeader()
+                }
+                ForEach(response.years) { year in
                     GridRow {
-                        Text("").frame(width: 72, alignment: .leading)
-                        Text("売上高").gridHeader()
-                        Text("営業利益").gridHeader()
-                        Text("純利益").gridHeader()
-                    }
-                    ForEach(response.years) { year in
-                        GridRow {
-                            Text(Format.fy(year.fyEnd))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Theme.text)
-                            Text(Format.millionYen(year.sales)).gridCell()
-                            Text(Format.millionYen(year.operatingProfit)).gridCell()
-                            Text(Format.millionYen(year.netProfit)).gridCell()
-                        }
+                        Text(Format.fy(year.fyEnd))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.text)
+                        Text(Format.millionYen(year.sales)).gridCell()
+                        Text(Format.millionYen(year.operatingProfit)).gridCell()
+                        Text(Format.millionYen(year.netProfit)).gridCell()
                     }
                 }
-                .padding(16)
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
         .padding(16)
     }

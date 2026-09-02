@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 enum TickerPage: Int, CaseIterable, Identifiable {
-    case summary, breakdown, flow, interview, report
+    case summary, breakdown, news, report
 
     var id: Int { rawValue }
 
@@ -11,8 +11,7 @@ enum TickerPage: Int, CaseIterable, Identifiable {
         switch self {
         case .summary: "概要"
         case .breakdown: "分解"
-        case .flow: "フロー"
-        case .interview: "インタビュー"
+        case .news: "ニュース"
         case .report: "レポート"
         }
     }
@@ -28,28 +27,29 @@ struct TickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            TabView(selection: $page) {
-                SummaryView(code: company.code)
-                    .tag(TickerPage.summary)
-                BreakdownView(code: company.code)
-                    .tag(TickerPage.breakdown)
-                TickerStubView(
-                    title: "フロー",
-                    detail: "Sankey は未実装です。ページ枠だけ先に置いています。"
-                )
-                .tag(TickerPage.flow)
-                TickerStubView(
-                    title: "インタビュー",
-                    detail: "構想段階です。サーバーに載せず、クライアント責務のままです。"
-                )
-                .tag(TickerPage.interview)
-                TickerStubView(
-                    title: "レポート",
-                    detail: "有報一覧・ニュースの置き場です。v1 はページ枠のみです。"
-                )
-                .tag(TickerPage.report)
+            GeometryReader { geo in
+                TabView(selection: $page) {
+                    SummaryView(code: company.code)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .tag(TickerPage.summary)
+                    BreakdownView(code: company.code)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .tag(TickerPage.breakdown)
+                    TickerStubView(
+                        title: "ニュース",
+                        detail: "外部ニュースの置き場です。ソースは未決のため、v1 はページ枠のみです。"
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .tag(TickerPage.news)
+                    TickerStubView(
+                        title: "レポート",
+                        detail: "有報一覧の置き場です。v1 はページ枠のみです。"
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .tag(TickerPage.report)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             pageDots
         }
         .background(Theme.shell.ignoresSafeArea())
@@ -170,17 +170,20 @@ struct TickerStubView: View {
     var detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(Theme.text)
-            Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(Theme.textMuted)
-            Spacer()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.text)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
         .padding(16)
     }
