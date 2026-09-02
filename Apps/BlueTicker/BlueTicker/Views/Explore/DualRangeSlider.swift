@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 数直線上の 2 ハンドルで範囲を選ぶ。`values` は `[下限, 上限]`。
 struct DualRangeSlider: View {
@@ -12,6 +13,7 @@ struct DualRangeSlider: View {
     private let handleSize: CGFloat = 28
     private let trackHeight: CGFloat = 6
     private let valueHeight: CGFloat = 16
+    private let labelGap: CGFloat = 8
 
     @State private var dragging: Handle?
 
@@ -38,6 +40,18 @@ struct DualRangeSlider: View {
             let trackY = geo.size.height - handleSize / 2
             let lowerX = x(for: lower, width: width)
             let upperX = x(for: upper, width: width)
+            let lowerText = formatValue(lower)
+            let upperText = formatValue(upper)
+            let maxLabel = max((width - labelGap) / 2, 32)
+            let lowerWidth = min(measuredWidth(lowerText), maxLabel)
+            let upperWidth = min(measuredWidth(upperText), maxLabel)
+            let labels = labelCenters(
+                lowerX: lowerX,
+                upperX: upperX,
+                lowerWidth: lowerWidth,
+                upperWidth: upperWidth,
+                totalWidth: width
+            )
 
             ZStack {
                 Capsule()
@@ -59,6 +73,11 @@ struct DualRangeSlider: View {
                     .frame(width: max(upperX - lowerX, 0), height: trackHeight)
                     .position(x: (lowerX + upperX) / 2, y: trackY)
 
+                valueLabel(lowerText, color: band.color(for: lower), width: lowerWidth)
+                    .position(x: labels.lower, y: valueHeight / 2)
+                valueLabel(upperText, color: band.color(for: upper), width: upperWidth)
+                    .position(x: labels.upper, y: valueHeight / 2)
+
                 handle(isLower: true)
                     .position(x: lowerX, y: trackY)
                 handle(isLower: false)
@@ -67,7 +86,7 @@ struct DualRangeSlider: View {
             .contentShape(Rectangle())
             .highPriorityGesture(dragGesture(width: width))
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(formatValue(lower))から\(formatValue(upper))")
+            .accessibilityLabel("\(lowerText)から\(upperText)")
         }
         .frame(height: controlHeight)
         .onAppear { publish(lower, upper) }
@@ -85,30 +104,30 @@ struct DualRangeSlider: View {
     private func handle(isLower: Bool) -> some View {
         let value = isLower ? lower : upper
         let fill = band.color(for: value)
-        return ZStack {
-            Circle()
-                .fill(fill)
-                .shadow(color: fill.opacity(0.45), radius: 3, y: 1)
-                .frame(width: handleSize, height: handleSize)
-            Text(formatValue(value))
-                .font(.caption2.monospacedDigit().weight(.bold))
-                .foregroundStyle(fill)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .fixedSize()
-                .offset(y: -(handleSize / 2 + valueHeight / 2 + 2))
-        }
-        .frame(width: handleSize, height: handleSize)
-        .accessibilityLabel(isLower ? "下限" : "上限")
-        .accessibilityValue(formatValue(value))
-        .accessibilityAdjustableAction { direction in
-            let delta = direction == .increment ? step : -step
-            if isLower {
-                publish(min(lower + delta, upper), upper)
-            } else {
-                publish(lower, max(upper + delta, lower))
+        return Circle()
+            .fill(fill)
+            .shadow(color: fill.opacity(0.45), radius: 3, y: 1)
+            .frame(width: handleSize, height: handleSize)
+            .accessibilityLabel(isLower ? "下限" : "上限")
+            .accessibilityValue(formatValue(value))
+            .accessibilityAdjustableAction { direction in
+                let delta = direction == .increment ? step : -step
+                if isLower {
+                    publish(min(lower + delta, upper), upper)
+                } else {
+                    publish(lower, max(upper + delta, lower))
+                }
             }
-        }
+    }
+
+    private func valueLabel(_ text: String, color: Color, width: CGFloat) -> some View {
+        Text(text)
+            .font(.caption2.monospacedDigit().weight(.bold))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(width: width, height: valueHeight)
+            .accessibilityHidden(true)
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {
@@ -165,5 +184,40 @@ struct DualRangeSlider: View {
         if values != next {
             values = next
         }
+    }
+
+    private func measuredWidth(_ text: String) -> CGFloat {
+        let base = UIFont.preferredFont(forTextStyle: .caption2)
+        let font = UIFont.monospacedDigitSystemFont(ofSize: base.pointSize, weight: .bold)
+        let size = (text as NSString).size(withAttributes: [.font: font])
+        return ceil(size.width)
+    }
+
+    private func labelCenters(
+        lowerX: CGFloat,
+        upperX: CGFloat,
+        lowerWidth: CGFloat,
+        upperWidth: CGFloat,
+        totalWidth: CGFloat
+    ) -> (lower: CGFloat, upper: CGFloat) {
+        let loHalf = lowerWidth / 2
+        let hiHalf = upperWidth / 2
+        var lo = min(max(lowerX, loHalf), totalWidth - loHalf)
+        var hi = min(max(upperX, hiHalf), totalWidth - hiHalf)
+        let overlap = (lo + loHalf + labelGap) - (hi - hiHalf)
+        if overlap > 0 {
+            lo -= overlap / 2
+            hi += overlap / 2
+            if lo < loHalf {
+                hi += loHalf - lo
+                lo = loHalf
+            }
+            if hi > totalWidth - hiHalf {
+                lo -= hi - (totalWidth - hiHalf)
+                hi = totalWidth - hiHalf
+                lo = max(lo, loHalf)
+            }
+        }
+        return (lo, hi)
     }
 }
