@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 enum TickerPage: Int, CaseIterable, Identifiable {
     case summary, breakdown, flow, interview, report
@@ -54,6 +55,7 @@ struct TickerView: View {
         .background(Theme.shell.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .background { InteractivePopGestureEnabler() }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: {
@@ -181,5 +183,64 @@ struct TickerStubView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.card)
         .padding(16)
+    }
+}
+
+/// `navigationBarBackButtonHidden` でも端スワイプで戻れるようにする。
+private struct InteractivePopGestureEnabler: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.attach(from: uiView)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var navigationController: UINavigationController?
+
+        func attach(from view: UIView) {
+            guard let navigationController = view.nearestNavigationController() else { return }
+            self.navigationController = navigationController
+            guard let pop = navigationController.interactivePopGestureRecognizer else { return }
+            pop.isEnabled = navigationController.viewControllers.count > 1
+            pop.delegate = self
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            (navigationController?.viewControllers.count ?? 0) > 1
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy other: UIGestureRecognizer
+        ) -> Bool {
+            other is UIPanGestureRecognizer
+        }
+    }
+}
+
+private extension UIView {
+    func nearestNavigationController() -> UINavigationController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let navigationController = current as? UINavigationController {
+                return navigationController
+            }
+            if let viewController = current as? UIViewController {
+                return viewController.navigationController
+            }
+            responder = current.next
+        }
+        return nil
     }
 }

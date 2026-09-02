@@ -82,14 +82,45 @@ struct TopView: View {
         }
         .navigationTitle("名称検索")
         .bltChrome()
-        .searchable(text: $query, prompt: "会社名を入力してください")
-        .onSubmit(of: .search) {
-            scheduleSearch(query)
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaBar(edge: .bottom) {
+            nameSearchBar
         }
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
         .task { await loadFeeds() }
+    }
+
+    private var nameSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.textMuted)
+                .accessibilityHidden(true)
+            TextField("会社名を入力してください", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .foregroundStyle(Theme.text)
+                .onSubmit { scheduleSearch(query) }
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("クリア")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Theme.elevated, in: Capsule())
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Theme.shell)
     }
 
     private func loadFeeds() async {
