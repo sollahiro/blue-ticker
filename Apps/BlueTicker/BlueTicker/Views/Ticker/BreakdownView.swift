@@ -151,12 +151,14 @@ struct BreakdownView: View {
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
             // 欠損年も年度軸の domain に含め、目盛りと行間隔を全年度分保つ。
+            // 値ではなく位置だけを表すので、読み上げ対象からは外す。
             ForEach(anchors, id: \.self) { index in
                 PointMark(
                     x: .value(metric.title, 0),
                     y: .value("年度", index)
                 )
                 .opacity(0)
+                .accessibilityHidden(true)
             }
             ForEach(points, id: \.id) { point in
                 PointMark(
