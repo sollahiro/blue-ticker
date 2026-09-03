@@ -114,4 +114,17 @@ import Testing
         #expect(!listed.contains("1773"))
         #expect(listed.contains("6501"))
     }
+
+    @Test func parseCSVRowKeepsCommasInsideQuotes() {
+        let fields = parseCSVRow(#"72030,"株式会社 ""例"" 商会",製造業"#)
+        #expect(fields.count == 3)
+        #expect(fields[0] == "72030")
+        #expect(fields[1] == #"株式会社 "例" 商会"#)
+        #expect(fields[2] == "製造業")
+    }
+
+    @Test func parseCSVRowDoesNotSplitOnQuotedComma() {
+        let fields = parseCSVRow(#"477A0,"Foo, Bar K.K.",情報・通信業"#)
+        #expect(fields == ["477A0", "Foo, Bar K.K.", "情報・通信業"])
+    }
 }
