@@ -59,8 +59,12 @@ struct BreakdownView: View {
                 }
                 if metric == .businessProfit {
                     yearBars(years)
-                } else {
+                } else if years.contains(where: { metricValue($0) != nil }) {
                     ratioChart(years)
+                } else {
+                    Text("\(metric.title) は未算出です。")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textMuted)
                 }
                 if let selectedYear {
                     factorChart(selectedYear)
@@ -80,7 +84,7 @@ struct BreakdownView: View {
     }
 
     private func yearBars(_ years: [FinancialsYear]) -> some View {
-        let peak = years.map(metricValue).map(abs).max() ?? 0
+        let peak = years.compactMap(metricValue).map(abs).max() ?? 0
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(years) { year in
                 let selected = year.id == selectedYearID
@@ -92,7 +96,7 @@ struct BreakdownView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(Theme.text)
                             .frame(width: 48, alignment: .leading)
-                        SignedBar(value: metricValue(year), peak: peak)
+                        SignedBar(value: metricValue(year) ?? 0, peak: peak)
                             .frame(height: 18)
                         Text(metricLabel(year))
                             .font(.caption.monospacedDigit())
@@ -113,14 +117,14 @@ struct BreakdownView: View {
     }
 
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
-        let band = metricBand
         let labels = years.map { Format.fy($0.fyEnd) }
-        let values = years.map(metricValue)
-        let xMin = min(values.min() ?? 0, 0)
-        let xMax = max(values.max() ?? 0, 0)
+        let points = ratioPoints(years)
+        let segments = ratioSegments(points)
+        let xMin = min(points.map(\.value).min() ?? 0, 0)
+        let xMax = max(points.map(\.value).max() ?? 0, 0)
         let selectedIndex = years.firstIndex { $0.id == selectedYearID }
         let selectedSegment = selectedIndex.flatMap { index in
-            ratioSegments(years).first { $0.points.last?.index == index }
+            segments.first { $0.points.last?.index == index }
         }
         return Chart {
             if let segment = selectedSegment, let start = segment.points.first?.index, let end = segment.points.last?.index, xMin < xMax {
@@ -132,7 +136,7 @@ struct BreakdownView: View {
                 )
                 .foregroundStyle(segment.color.opacity(0.15))
             }
-            ForEach(ratioSegments(years), id: \.id) { segment in
+            ForEach(segments, id: \.id) { segment in
                 ForEach(segment.points, id: \.id) { point in
                     LineMark(
                         x: .value(metric.title, point.value),
@@ -145,15 +149,15 @@ struct BreakdownView: View {
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
-            ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
+            ForEach(points, id: \.id) { point in
                 PointMark(
-                    x: .value(metric.title, metricValue(year)),
-                    y: .value("年度", index)
+                    x: .value(metric.title, point.value),
+                    y: .value("年度", point.index)
                 )
-                .foregroundStyle(year.id == selectedYearID ? Theme.accent : Theme.text)
-                .symbolSize(year.id == selectedYearID ? 90 : 45)
+                .foregroundStyle(point.index == selectedIndex ? Theme.accent : Theme.text)
+                .symbolSize(point.index == selectedIndex ? 90 : 45)
                 .annotation(position: .trailing, alignment: .leading, spacing: 4) {
-                    Text(Format.percent(metricValue(year), digits: 1))
+                    Text(Format.percent(point.value, digits: 1))
                         .font(.caption2)
                         .foregroundStyle(Theme.text)
                 }
@@ -219,22 +223,26 @@ struct BreakdownView: View {
         var value: Double
     }
 
-    private func ratioSegments(_ years: [FinancialsYear]) -> [Segment] {
-        guard years.count >= 2 else { return [] }
+    /// 値のある年だけを、元の年度並びの位置（`index`）を保ったまま返す。
+    private func ratioPoints(_ years: [FinancialsYear]) -> [SegmentPoint] {
+        years.enumerated().compactMap { index, year in
+            metricValue(year).map { SegmentPoint(id: index, index: index, value: $0) }
+        }
+    }
+
+    /// 隣り合う年どうしだけを結ぶ。欠損年を挟む区間は線を引かない。
+    private func ratioSegments(_ points: [SegmentPoint]) -> [Segment] {
         let band = metricBand
         var segments: [Segment] = []
-        for i in 0..<years.count - 1 {
-            let start = years[i]
-            let end = years[i + 1]
-            let midValue = (metricValue(start) + metricValue(end)) / 2
-            let color = band.color(for: midValue)
+        for (start, end) in zip(points, points.dropFirst()) where end.index == start.index + 1 {
+            let midValue = (start.value + end.value) / 2
             segments.append(Segment(
-                id: i,
+                id: start.index,
                 points: [
-                    SegmentPoint(id: i * 2, index: i, value: metricValue(start)),
-                    SegmentPoint(id: i * 2 + 1, index: i + 1, value: metricValue(end)),
+                    SegmentPoint(id: start.index * 2, index: start.index, value: start.value),
+                    SegmentPoint(id: start.index * 2 + 1, index: end.index, value: end.value),
                 ],
-                color: color
+                color: band.color(for: midValue)
             ))
         }
         return segments
@@ -345,11 +353,11 @@ struct BreakdownView: View {
         return Theme.negative
     }
 
-    private func metricValue(_ year: FinancialsYear) -> Double {
+    private func metricValue(_ year: FinancialsYear) -> Double? {
         switch metric {
-        case .businessProfit: year.businessProfit ?? 0
-        case .roic: year.roic ?? 0
-        case .roe: year.roe ?? 0
+        case .businessProfit: year.businessProfit
+        case .roic: year.roic
+        case .roe: year.roe
         }
     }
 
