@@ -4,6 +4,7 @@ struct SummaryView: View {
     var code: String
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
+    @State private var selectedRow: SummaryRow?
 
     var body: some View {
         Group {
@@ -47,10 +48,11 @@ struct SummaryView: View {
         let scales = moneyScales(for: response)
         return ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 8) {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("")
                             .frame(minWidth: 88, alignment: .leading)
+                            .padding(.vertical, 6)
                         ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                             Text(Format.fy(year.fyEnd))
                                 .gridHeader()
@@ -60,21 +62,39 @@ struct SummaryView: View {
                     ForEach(SummaryRow.allCases) { row in
                         GridRow {
                             Text(row.displayTitle(plUnit: scales.pl?.unit ?? "", cashUnit: scales.cash?.unit ?? ""))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.text)
+                                .font(.caption.weight(selectedRow == row ? .bold : .semibold))
+                                .foregroundStyle(selectedRow == row ? Theme.accent : Theme.text)
                                 .frame(minWidth: 88, alignment: .leading)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+                                .lineLimit(2)
+                                .padding(.vertical, 6)
                             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                                 Text(row.format(year, plScale: scales.pl, cashScale: scales.cash))
                                     .gridCell(color: row.color(year))
                                     .background(columnColor(index: index))
                             }
                         }
+                        .background(selectedRow == row ? Theme.accent.opacity(0.12) : Color.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedRow = (selectedRow == row ? nil : row)
+                        }
                     }
                 }
+                if let selectedRow {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(selectedRow.title)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Theme.accent)
+                        Text(selectedRow.description)
+                            .font(.caption)
+                            .foregroundStyle(Theme.text)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             }
-            .padding(16)
+            .padding(.top, 16)
+            .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -153,6 +173,27 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
             return "\(title)（\(cashUnit)）"
         }
         return title
+    }
+
+    var description: String {
+        switch self {
+        case .sales: "当期の売上高です。前期比での伸びを確認できます。"
+        case .grossProfit: "売上高から売上原価を差し引いた粗利益です。"
+        case .grossMargin: "粗利益 ÷ 売上高。原価効率を示します。"
+        case .operatingProfit: "営業活動で得た利益です。"
+        case .operatingMargin: "営業利益 ÷ 売上高です。"
+        case .netProfit: "税引き後の最終的な当期純利益です。"
+        case .netProfitMargin: "純利益 ÷ 売上高です。"
+        case .roic: "投下資本に対する利益率です。"
+        case .roe: "自己資本に対する利益率です。"
+        case .netCash: "現預金などから有利子負債を差し引いた正味の資金です。"
+        case .netDe: "純借入金 ÷ 自己資本。低いほど財務リスクが小さいです。"
+        case .cfo: "営業活動によるキャッシュフローです。"
+        case .cfi: "投資活動によるキャッシュフローです。"
+        case .equityRatio: "自己資本 ÷ 総資産。高いほど財務が安定します。"
+        case .currentRatio: "流動資産 ÷ 流動負債。200%以上が望ましいとされます。"
+        case .fixedRatio: "固定資産 ÷ 自己資本。低いほど安全です。"
+        }
     }
 
     func format(_ year: FinancialsYear, plScale: Format.YenScale?, cashScale: Format.YenScale?) -> String {
@@ -240,6 +281,7 @@ private extension Text {
     func gridHeader() -> some View {
         self.font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textMuted)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -248,6 +290,7 @@ private extension Text {
     func gridCell(color: Color) -> some View {
         self.font(.caption.monospacedDigit())
             .foregroundStyle(color)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)

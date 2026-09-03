@@ -8,6 +8,7 @@ enum Theme {
     static let text = Color(red: 0.98, green: 0.98, blue: 0.99)
     static let textMuted = Color(red: 0.86, green: 0.87, blue: 0.89)
     static let accent = Color(red: 0.35, green: 0.70, blue: 0.95)
+    static let selectedTab = Color(red: 0.18, green: 0.42, blue: 0.65)
     static let idleTab = Color(red: 0.40, green: 0.42, blue: 0.45)
     /// 指標スライダー。シェルより黒寄り。
     static let control = Color(red: 16 / 255, green: 20 / 255, blue: 26 / 255)

@@ -53,7 +53,7 @@ struct BreakdownView: View {
                             .font(.caption.weight(.semibold))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(metric == item ? Theme.accent : Theme.idleTab)
+                            .background(metric == item ? Theme.selectedTab : Theme.idleTab)
                             .foregroundStyle(metric == item ? .white : Theme.text)
                     }
                 }
@@ -115,16 +115,10 @@ struct BreakdownView: View {
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
         let band = metricBand
         let labels = years.map { Format.fy($0.fyEnd) }
-        let selectedIndex = years.firstIndex { $0.id == selectedYearID }
         return Chart {
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
-            if let selectedIndex {
-                RuleMark(y: .value("年度", selectedIndex))
-                    .foregroundStyle(band.color(for: metricValue(years[selectedIndex])).opacity(0.25))
-                    .lineStyle(StrokeStyle(lineWidth: 18))
-            }
             ForEach(ratioSegments(years), id: \.id) { segment in
                 ForEach(segment.points, id: \.id) { point in
                     LineMark(
@@ -132,7 +126,7 @@ struct BreakdownView: View {
                         y: .value("年度", point.index)
                     )
                     .foregroundStyle(segment.color)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    .lineStyle(StrokeStyle(lineWidth: 3))
                 }
             }
             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
@@ -140,7 +134,7 @@ struct BreakdownView: View {
                     x: .value(metric.title, metricValue(year)),
                     y: .value("年度", index)
                 )
-                .foregroundStyle(band.color(for: metricValue(year)))
+                .foregroundStyle(year.id == selectedYearID ? Theme.accent : Theme.text)
                 .symbolSize(year.id == selectedYearID ? 90 : 45)
             }
         }
