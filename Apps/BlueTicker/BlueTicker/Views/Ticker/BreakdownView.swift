@@ -54,7 +54,7 @@ struct BreakdownView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(metric == item ? Theme.accent : Theme.idleTab)
-                            .foregroundStyle(metric == item ? Theme.shell : Theme.text)
+                            .foregroundStyle(metric == item ? .white : Theme.text)
                     }
                 }
                 if metric == .businessProfit {
