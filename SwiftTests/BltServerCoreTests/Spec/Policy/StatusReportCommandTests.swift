@@ -280,17 +280,17 @@ private func seedBreakdown(
         }
     }
 
-    // MARK: - breakdown 軸: LLM 経由の行は cache_version でゲートしない
+    // MARK: - breakdown 軸: LLM 経由も cache_version でゲートする
 
-    @Test func breakdownCurrentVersionPctIgnoresLLMSourcedRows() async throws {
+    @Test func breakdownCurrentVersionPctGatesLLMSourcedRows() async throws {
         try await withMigratedApp { app in
             try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
             try await seedAnnualReportDoc("S2", secCode: "67580", db: app.db)
-            // xbrl_facts 経由・旧版 → 現行版ではない（cache_version でゲートされる）。
+            // xbrl_facts 経由・旧版 → 現行版ではない。
             try await seedBreakdown(
                 docID: "S1", axis: breakdownAxisBusiness, code: "7203",
                 source: breakdownSourceXbrlFacts, version: "breakdown-business-v1", db: app.db)
-            // segment_info_llm 経由・見た目は古いバージョン文字列だが LLM 経由なので現行扱い。
+            // segment_info_llm 経由・旧版も現行版ではない（version gate 対象）。
             try await seedBreakdown(
                 docID: "S2", axis: breakdownAxisBusiness, code: "6758",
                 source: breakdownSourceSegmentInfoLLM, version: "breakdown-business-v1", db: app.db)
@@ -301,8 +301,8 @@ private func seedBreakdown(
 
             #expect(business.docsCovered == 2)
             #expect(business.companiesCovered == 2)
-            // 現行版扱いは segment_info_llm 側の1件のみ（xbrl_facts の旧版はカウントしない）。
-            #expect(business.currentVersionPct == 50.0)
+            // 旧版の LLM / xbrl_facts はどちらも現行版に数えない。
+            #expect(business.currentVersionPct == 0.0)
         }
     }
 

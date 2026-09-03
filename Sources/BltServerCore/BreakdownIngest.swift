@@ -15,13 +15,10 @@
 // `filingSectionsIngestYears` を渡す想定（内訳取り込み専用の別値は持たない）。
 //
 // staleness 判定は有報セクション取り込みと異なる（docs/breakdown.md）。
-// - xbrl_facts / not_applicable（決定的）: cache_version が現行と不一致なら再計算してよい
-//   （安価・再現可能）。needs_review=true だけでは再試行しない（RD の未タグ残差など、
-//   同じ入力では結果が変わらないフラグが limit を埋め続けるため）。
-// - LLM 経由（source != xbrl_facts）: cache_version のバンプだけでは再計算しない。needs_review が
-//   true の行のみ再試行対象にする（同一 docID の入力は不変のため、content_hash は書き込むが
-//   スキップ判定には使わない。抽出ロジックが非決定的になった場合はこの前提が崩れるため、
-//   そのときは content_hash 一致チェックの追加を検討する）。
+// - version-gated な source（決定論 + LLM）: cache_version が現行と不一致なら再計算する。
+//   clean な segment_info_llm がバンプを無視すると誤 profit が残るため、LLM も対象。
+// - 決定論の needs_review=true だけでは再試行しない（同じ入力では結果が変わらないフラグが
+//   limit を埋め続けるため）。LLM の needs_review=true は現行版でも再試行する。
 
 import BlueTickerCore
 import Fluent
@@ -338,7 +335,7 @@ enum BreakdownLoadResult {
 /// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
 /// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
-/// read 可否は `isServableBreakdown`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
+/// read 可否は `isServableBreakdown`（決定論・LLM とも cache_version の床でゲート）。
 /// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
