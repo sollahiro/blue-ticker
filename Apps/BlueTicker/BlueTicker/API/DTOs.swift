@@ -93,15 +93,33 @@ struct FinancialsResponse: Codable {
     }
 }
 
+/// 公開 JSON の手書き。Summary（`/financials`）は水準値、Waterfall（`/waterfall`）はそれに増減分解を足す。
+/// Core の内部型はコピーしない。画面が読むキーだけ持つ。
 struct FinancialsYear: Codable, Hashable, Identifiable {
     var fyEnd: String?
+    var financialPeriod: String?
+    var docId: String?
+
     var sales: Double?
+    var grossProfit: Double?
+    var grossProfitMargin: Double?
+    var sga: Double?
     var operatingProfit: Double?
     var operatingMargin: Double?
     var netProfit: Double?
     var roic: Double?
     var roe: Double?
     var netDe: Double?
+    var netCash: Double?
+    var cfo: Double?
+    var cfi: Double?
+    var capex: Double?
+    var totalAssets: Double?
+    var currentAssets: Double?
+    var nonCurrentAssets: Double?
+    var currentLiabilities: Double?
+    var netAssets: Double?
+
     var businessProfit: Double?
     var businessProfitMargin: Double?
     var businessProfitChange: Double?
@@ -116,16 +134,30 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var roeAssetTurnoverEffect: Double?
     var roeLeverageEffect: Double?
 
-    var id: String { fyEnd ?? UUID().uuidString }
+    var id: String { fyEnd ?? docId ?? financialPeriod ?? "" }
 
     enum CodingKeys: String, CodingKey {
         case fyEnd = "fy_end"
+        case financialPeriod = "financial_period"
+        case docId = "doc_id"
         case sales
+        case grossProfit = "gross_profit"
+        case grossProfitMargin = "gross_profit_margin"
+        case sga
         case operatingProfit = "operating_profit"
         case operatingMargin = "operating_margin"
         case netProfit = "net_profit"
         case roic, roe
         case netDe = "net_de"
+        case netCash = "net_cash"
+        case cfo
+        case cfi
+        case capex
+        case totalAssets = "total_assets"
+        case currentAssets = "current_assets"
+        case nonCurrentAssets = "non_current_assets"
+        case currentLiabilities = "current_liabilities"
+        case netAssets = "net_assets"
         case businessProfit = "business_profit"
         case businessProfitMargin = "business_profit_margin"
         case businessProfitChange = "business_profit_change"

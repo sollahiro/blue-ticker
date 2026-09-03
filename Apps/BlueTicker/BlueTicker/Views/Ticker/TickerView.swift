@@ -56,6 +56,7 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .background { InteractivePopGestureEnabler() }
+        .onAppear { CompanyHistory.record(company) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: {
@@ -81,24 +82,24 @@ struct TickerView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 10) {
-            CompanyIconView(company, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 8) {
+            CompanyIconView(company, size: 38)
+            VStack(alignment: .leading, spacing: 0) {
                 Text(Format.displayName(company.name, fallback: company.code))
-                    .font(.title3.weight(.bold))
+                    .font(.headline.weight(.bold))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 Text(company.code)
                     .font(.subheadline)
                     .foregroundStyle(Theme.textMuted)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 6) {
+            VStack(alignment: .trailing, spacing: 4) {
                 if !company.sector.isEmpty {
                     Text(company.sector)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
                         .background(Theme.sectorColor(company.sector))
                         .foregroundStyle(.white)
                 }
@@ -106,7 +107,7 @@ struct TickerView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
     }
 
     private var watchButton: some View {
@@ -146,7 +147,7 @@ struct TickerView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: page)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
     }
 
     private func toggleWatch() {

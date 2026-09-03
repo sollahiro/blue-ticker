@@ -10,6 +10,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
+            .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("名称検索", systemImage: "magnifyingglass") }
             .tag(0)
 
@@ -18,6 +19,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
+            .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("条件検索", systemImage: "slider.horizontal.3") }
             .tag(1)
 
@@ -26,6 +28,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
+            .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("リスト", systemImage: "list.bullet") }
             .tag(2)
 
@@ -33,13 +36,13 @@ struct RootView: View {
                 SettingsPlaceholder()
                     .exploreToolbar()
             }
+            .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("設定", systemImage: "gearshape") }
             .tag(3)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
-        .toolbarBackground(Theme.shell, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.hidden, for: .tabBar)
     }
 
     private func ticker(_ company: CompanyRef) -> some View {

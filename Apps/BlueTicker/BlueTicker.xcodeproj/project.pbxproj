@@ -7,26 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001; };
-		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002; };
-		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003; };
-		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004; };
-		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005; };
-		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006; };
-		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007; };
-		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008; };
-		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009; };
-		AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010; };
-		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021; };
-		AA0000000000000000000011 /* DualRangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011; };
-		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012; };
-		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013; };
-		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014; };
-		AA0000000000000000000015 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015; };
-		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016; };
-		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017; };
-		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018; };
-		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019; };
+		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* BlueTickerApp.swift */; };
+		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Theme.swift */; };
+		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Format.swift */; };
+		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* APIConfiguration.swift */; };
+		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* DTOs.swift */; };
+		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* APIClient.swift */; };
+		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* WatchedCompany.swift */; };
+		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
+		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
+		AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* SettingsPlaceholder.swift */; };
+		AA0000000000000000000011 /* DualRangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011 /* DualRangeSlider.swift */; };
+		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012 /* CompanyRowView.swift */; };
+		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013 /* TopView.swift */; };
+		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* ScreenView.swift */; };
+		AA0000000000000000000015 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015 /* WatchlistView.swift */; };
+		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016 /* TickerView.swift */; };
+		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* SummaryView.swift */; };
+		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
+		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
+		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,7 +41,6 @@
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000010 /* SettingsPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPlaceholder.swift; sourceTree = "<group>"; };
-		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		BB0000000000000000000011 /* DualRangeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualRangeSlider.swift; sourceTree = "<group>"; };
 		BB0000000000000000000012 /* CompanyRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRowView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000013 /* TopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopView.swift; sourceTree = "<group>"; };
@@ -52,6 +51,7 @@
 		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -253,7 +253,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_TESTABILITY = YES;
 				GCC_DYNAMIC_NO_PIC = NO;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -270,7 +270,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -291,6 +291,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueTicker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -303,6 +304,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -321,6 +324,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueTicker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -333,6 +337,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
