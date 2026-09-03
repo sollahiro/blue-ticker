@@ -40,7 +40,7 @@ struct SummaryView: View {
     }
 
     private func columnColor(index: Int) -> Color {
-        index.isMultiple(of: 2) ? Color.clear : Theme.elevated.opacity(0.18)
+        index.isMultiple(of: 2) ? Color.clear : Color.white.opacity(0.06)
     }
 
     private func summaryTable(_ response: FinancialsResponse) -> some View {

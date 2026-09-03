@@ -115,11 +115,20 @@ struct BreakdownView: View {
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
         let band = metricBand
         let labels = years.map { Format.fy($0.fyEnd) }
+        let values = years.map(metricValue)
+        let xMin = min(values.min() ?? 0, 0)
+        let xMax = max(values.max() ?? 0, 0)
         return Chart {
-            RuleMark(x: .value("zero", 0))
-                .foregroundStyle(Theme.text)
-                .lineStyle(StrokeStyle(lineWidth: 1))
             ForEach(ratioSegments(years), id: \.id) { segment in
+                if let start = segment.points.first?.index, let end = segment.points.last?.index, xMin < xMax {
+                    RectangleMark(
+                        xStart: .value(metric.title, xMin),
+                        xEnd: .value(metric.title, xMax),
+                        yStart: .value("年度", start),
+                        yEnd: .value("年度", end)
+                    )
+                    .foregroundStyle(segment.color.opacity(0.12))
+                }
                 ForEach(segment.points, id: \.id) { point in
                     LineMark(
                         x: .value(metric.title, point.value),
@@ -129,6 +138,9 @@ struct BreakdownView: View {
                     .lineStyle(StrokeStyle(lineWidth: 3))
                 }
             }
+            RuleMark(x: .value("zero", 0))
+                .foregroundStyle(Theme.text)
+                .lineStyle(StrokeStyle(lineWidth: 1))
             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                 PointMark(
                     x: .value(metric.title, metricValue(year)),
@@ -182,7 +194,7 @@ struct BreakdownView: View {
                     }
             }
         }
-        .frame(height: CGFloat(max(160, years.count * 36)))
+        .frame(height: CGFloat(max(160, years.count * 35)))
         .padding(.top, 4)
     }
 

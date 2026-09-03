@@ -2,26 +2,26 @@ import SwiftUI
 import UIKit
 
 enum Theme {
-    /// 指標の黒（`control`）より白寄りのグレー。紺はやめる。
-    static let shell = Color(red: 0.47, green: 0.49, blue: 0.52)
-    static let elevated = Color(red: 0.38, green: 0.40, blue: 0.43)
+    /// 背景は黒。カードは濃いグレー。
+    static let shell = Color(red: 0.03, green: 0.03, blue: 0.04)
+    static let elevated = Color(red: 0.20, green: 0.21, blue: 0.22)
     static let text = Color(red: 0.98, green: 0.98, blue: 0.99)
-    static let textMuted = Color(red: 0.86, green: 0.87, blue: 0.89)
+    static let textMuted = Color(red: 0.70, green: 0.72, blue: 0.75)
     static let accent = Color(red: 0.35, green: 0.70, blue: 0.95)
     static let selectedTab = Color(red: 0.18, green: 0.42, blue: 0.65)
-    static let idleTab = Color(red: 0.40, green: 0.42, blue: 0.45)
-    /// 指標スライダー。シェルより黒寄り。
-    static let control = Color(red: 16 / 255, green: 20 / 255, blue: 26 / 255)
-    /// 銘柄カード。条件検索の指標と同じ黒。
-    static let card = control
-    static let positive = Color(red: 0.30, green: 0.62, blue: 0.92)
-    static let negative = Color(red: 0.88, green: 0.32, blue: 0.36)
+    static let idleTab = Color(red: 0.35, green: 0.36, blue: 0.38)
+    /// リスト行・コントロール背景。カードより黒寄り。
+    static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
+    /// 銘柄カード・概要カード。背景から浮かぶ濃いグレー。
+    static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
+    static let positive = Color(red: 0.28, green: 0.78, blue: 0.42)
+    static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
     static let margin = Color(red: 0.35, green: 0.78, blue: 0.82)
 
     static let bandLow = SIMD3<Double>(0.95, 0.08, 0.08)
     static let bandMid = SIMD3<Double>(0.98, 0.82, 0.12)
-    static let bandHigh = SIMD3<Double>(0.18, 0.78, 0.28)
+    static let bandHigh = SIMD3<Double>(0.28, 0.78, 0.42)
 
     static var bandLowColor: Color { color(bandLow) }
     static var bandMidColor: Color { color(bandMid) }
@@ -29,9 +29,9 @@ enum Theme {
 
     static func applyChrome() {
         let textColor = UIColor(red: 0.98, green: 0.98, blue: 0.99, alpha: 1)
-        let muted = UIColor(red: 0.86, green: 0.87, blue: 0.89, alpha: 1)
-        let shell = UIColor(red: 0.47, green: 0.49, blue: 0.52, alpha: 1)
-        let elevated = UIColor(red: 0.38, green: 0.40, blue: 0.43, alpha: 1)
+        let muted = UIColor(red: 0.70, green: 0.72, blue: 0.75, alpha: 1)
+        let shell = UIColor(red: 0.03, green: 0.03, blue: 0.04, alpha: 1)
+        let elevated = UIColor(red: 0.20, green: 0.21, blue: 0.22, alpha: 1)
         let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: textColor]
         let bar = UINavigationBarAppearance()
         bar.configureWithOpaqueBackground()
