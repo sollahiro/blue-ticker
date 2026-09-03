@@ -260,4 +260,21 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
             Issue.record("想定外のエラー: \(error)")
         }
     }
+
+    @Test func withOperationTimeoutCancelsOperationWhenTimedOut() async throws {
+        let counter = Counter()
+        await #expect(throws: OperationTimeoutError.self) {
+            try await withOperationTimeout(label: "cancel test", seconds: 0.2) {
+                do {
+                    try await Task.sleep(nanoseconds: 3_600_000_000_000)
+                } catch is CancellationError {
+                    counter.increment()
+                    throw CancellationError()
+                }
+                return "unreachable"
+            }
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(counter.calls == 1)
+    }
 }

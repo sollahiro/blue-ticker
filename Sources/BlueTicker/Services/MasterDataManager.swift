@@ -190,19 +190,6 @@ actor MasterDataManager {
         self.isLoaded = true
     }
 
-    private func parseCSVRow(_ line: String) -> [String] {
-        var fields: [String] = []
-        var current = ""
-        var inQuotes = false
-        for ch in line {
-            if ch == "\"" { inQuotes.toggle() }
-            else if ch == "," && !inQuotes { fields.append(current); current = "" }
-            else { current.append(ch) }
-        }
-        fields.append(current)
-        return fields
-    }
-
     private func normalizeForSearch(_ name: String) -> String {
         // NFKC 正規化 + 大文字 + 中点除去 + スペース除去
         let nfkc = name.precomposedStringWithCompatibilityMapping.uppercased()
@@ -235,6 +222,34 @@ actor MasterDataManager {
 }
 
 let masterDataManager = MasterDataManager()
+
+/// RFC 4180 の `""` エスケープを含む 1 行をフィールドへ分割する。
+func parseCSVRow(_ line: String) -> [String] {
+    var fields: [String] = []
+    var current = ""
+    var inQuotes = false
+    var i = line.startIndex
+    while i < line.endIndex {
+        let ch = line[i]
+        let next = line.index(after: i)
+        if ch == "\"" {
+            if inQuotes, next < line.endIndex, line[next] == "\"" {
+                current.append("\"")
+                i = line.index(after: next)
+                continue
+            }
+            inQuotes.toggle()
+        } else if ch == ",", !inQuotes {
+            fields.append(current)
+            current = ""
+        } else {
+            current.append(ch)
+        }
+        i = next
+    }
+    fields.append(current)
+    return fields
+}
 
 /// Neon 等の外部ストアから取得した EDINET コードリスト CSV（生バイト列）を反映する。
 /// 書き込み用パスへ保存してから MasterDataManager をリロードする。

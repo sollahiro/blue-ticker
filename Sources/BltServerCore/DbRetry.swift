@@ -29,20 +29,38 @@ struct OperationTimeoutError: Error, CustomStringConvertible {
 
 /// 継続を高々1回だけ resume することを保証する箱。
 /// タイムアウト・操作完了のどちらが先着しても、後着側は無視する。
+/// 先着側は相手 Task を `cancel()` する（待ち合わせはしない）。
 private final class ContinuationBox<T: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<T, Error>?
+    private var peers: [Task<Void, Never>] = []
 
     init(_ continuation: CheckedContinuation<T, Error>) {
         self.continuation = continuation
+    }
+
+    /// resume より後に呼ばれた場合は、すでに勝者が決まっているので渡された Task をすぐ cancel する。
+    func attachPeers(_ tasks: [Task<Void, Never>]) {
+        lock.lock()
+        let alreadyResumed = continuation == nil
+        if alreadyResumed {
+            lock.unlock()
+            for task in tasks { task.cancel() }
+            return
+        }
+        peers.append(contentsOf: tasks)
+        lock.unlock()
     }
 
     func resume(with result: Result<T, Error>) {
         lock.lock()
         let pending = continuation
         continuation = nil
+        let toCancel = peers
+        peers = []
         lock.unlock()
         pending?.resume(with: result)
+        for task in toCancel { task.cancel() }
     }
 }
 
@@ -54,20 +72,18 @@ private struct UncheckedSendableBox<T>: @unchecked Sendable {
     let value: T
 }
 
-/// `operation` の応答待ちに上限を設ける。超過時は `OperationTimeoutError` を投げて先に返る
-/// （元の `operation` タスクは待ち合わせず切り離す＝無応答のまま死んだ接続を待ち続けない）。
+/// `operation` の応答待ちに上限を設ける。超過時は `OperationTimeoutError` を投げて先に返る。
 ///
 /// TaskGroup による構造化並行処理は使わない: グループのスコープを抜ける際に未完了の子タスクを
 /// 暗黙に待ち合わせる仕様のため、キャンセルに応答しない無応答タスク（本関数が対処したい対象）を
 /// 待ち続けてしまい、タイムアウトの意味がなくなる。
 ///
-/// 既知のトレードオフ: タイムアウトした `operation` は明示的に停止させず、切り離したまま裏で
-/// 走らせ続ける（無応答のまま死んだ接続の場合は永久に完了しない＝実害なし）。ただし「本当は生きて
-/// いるが遅いだけ」の接続だった場合、切り離したタスクが後から完了することがあり得る。呼び出し元が
-/// 同一の可変オブジェクト（例: Fluent モデルインスタンス）を複数回のリトライ試行にまたがって
-/// 再利用していると、切り離されたタスクの遅延完了とリトライ試行が当該オブジェクトへ同時にアクセス
-/// する競合窓が理論上ありうる。`withDbRetry` の呼び出し元はいずれも冪等な find/upsert で、かつ
-/// タイムアウトは滅多に起きない前提（既定は `Api.dbOperationTimeoutSeconds`）のため許容している。
+/// 操作 Task とタイマー Task は unstructured のまま走らせ、先着側が相手を `cancel()` する
+/// （待ち合わせはしない）。タイマーは操作完了後に `Task.sleep` が `CancellationError` で終わる。
+/// 操作側は協調的キャンセルに応答する処理（`Task.sleep` / URLSession 等）なら打ち切れる。
+/// Fluent の TCP 無応答のようにキャンセルを見ない待ちは、従来どおり呼び出し元を先に返して裏に残る。
+/// 呼び出し元はリトライ試行ごとに新しい Fluent インスタンスを使うこと（同一インスタンスの再利用は
+/// 遅延完了との競合窓になる）。
 ///
 /// `withDbRetry` 専用ではなく、単発の操作に上限を設けたい他の呼び出し元（MCP ルートの HTTP
 /// タイムアウト等）からも再利用する。`label` はタイムアウト時のエラーメッセージに使う対象名。
@@ -79,7 +95,7 @@ func withOperationTimeout<T>(
     let box: UncheckedSendableBox<T> = try await withCheckedThrowingContinuation {
         (continuation: CheckedContinuation<UncheckedSendableBox<T>, Error>) in
         let resultBox = ContinuationBox(continuation)
-        Task {
+        let work = Task {
             do {
                 let result = try await operation()
                 resultBox.resume(with: .success(UncheckedSendableBox(value: result)))
@@ -87,10 +103,15 @@ func withOperationTimeout<T>(
                 resultBox.resume(with: .failure(error))
             }
         }
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            resultBox.resume(with: .failure(OperationTimeoutError(label: label, seconds: seconds)))
+        let timer = Task {
+            do {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                resultBox.resume(with: .failure(OperationTimeoutError(label: label, seconds: seconds)))
+            } catch {
+                // 操作完了側が先着したのでタイマーは不要。
+            }
         }
+        resultBox.attachPeers([work, timer])
     }
     return box.value
 }

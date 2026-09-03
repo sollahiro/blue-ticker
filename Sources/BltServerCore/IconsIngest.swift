@@ -101,7 +101,9 @@ func runIconsIngest(
             try await withDbRetry(
                 logger: logger, context: "code=\(cand.code)", onRetry: { unhealthyRetries += 1 }
             ) {
-                try await storeCompanyIcon(existing: existing, code: cand.code, result: result, db: db)
+                try await storeCompanyIcon(
+                    existing: try await CompanyIcon.find(cand.code, on: db),
+                    code: cand.code, result: result, db: db)
             }
             stored += 1
         }
@@ -116,7 +118,7 @@ func latestAnnualReportPerCompany(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
 ) async throws -> [(docID: String, code: String)] {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
-        try await EdinetDocument.query(on: db)
+        try await EdinetDocumentListing.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
             .all()
     }

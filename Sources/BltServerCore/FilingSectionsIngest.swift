@@ -129,7 +129,8 @@ func runFilingSectionsIngest(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await storeCompanyFilingSections(
-                existing: existing, docID: cand.docID, code: cand.code,
+                existing: try await CompanyFilingSections.find(cand.docID, on: db),
+                docID: cand.docID, code: cand.code,
                 submitDateTime: cand.submitDateTime, payload: payload,
                 sectionKeys: sectionKeys, db: db)
         }
@@ -190,7 +191,7 @@ func filingSectionCandidates(
     logger: Logger? = nil
 ) async throws -> FilingSectionCandidateSets {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
-        try await EdinetDocument.query(on: db)
+        try await EdinetDocumentListing.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
             .all()
     }

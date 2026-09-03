@@ -16,6 +16,8 @@ import Foundation
 public enum BltServerResponse {
     /// 成功。JSON 値（オブジェクト or 配列）。
     case ok(Any)
+    /// リクエストが不正（400 相当）。
+    case badRequest(String)
     /// 対象が見つからない（404 相当）。
     case notFound(String)
     /// 外部取得の失敗（502 相当）。

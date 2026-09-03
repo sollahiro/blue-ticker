@@ -35,6 +35,8 @@ public enum Api {
     // REST API クエリの省略時デフォルト（BltServerCore から参照するため public）。
     // 値は既存の直書きと同一（挙動不変）。
     public static let filingsMaxYearsDefault = 5
+    /// filings の `max_years` 上限。ライブ探索の年次並列取得を無制限にしない。
+    public static let filingsMaxYearsMax = 10
     public static let financialsYearsDefault = 5
     /// Feed Update の返却件数省略時。
     public static let feedLimitDefault = 50

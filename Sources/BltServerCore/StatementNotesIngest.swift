@@ -136,7 +136,8 @@ func runStatementNotesIngest(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
                 try await storeStatementNote(
-                    existing: existing, docID: cand.docID, noteType: noteType,
+                    existing: try await CompanyStatementNote.find(key, on: db),
+                    docID: cand.docID, noteType: noteType,
                     code: cand.code, submitDateTime: cand.submitDateTime, payload: payload,
                     source: source, contentHash: contentHash, cacheVersion: currentCacheVersion,
                     db: db)
@@ -155,7 +156,8 @@ func runStatementNotesIngest(
                     logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
                 ) {
                     try await storeStatementNote(
-                        existing: existing, docID: cand.docID, noteType: noteType,
+                        existing: try await CompanyStatementNote.find(key, on: db),
+                        docID: cand.docID, noteType: noteType,
                         code: cand.code, submitDateTime: cand.submitDateTime,
                         payload: placeholder, source: statementNoteSourceNotApplicable,
                         contentHash: "", cacheVersion: currentCacheVersion,

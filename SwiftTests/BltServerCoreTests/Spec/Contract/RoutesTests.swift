@@ -609,6 +609,21 @@ private func send(
         }
     }
 
+    @Test func filingsRejectsInvalidCodeBeforeLiveSearch() async throws {
+        try await withApp { app in
+            for path in [
+                "/v1/companies/72030/filings",
+                "/v1/companies/%20/filings",
+                "/v1/companies/abcd!/filings",
+            ] {
+                let (status, json) = try await send(app, path)
+                #expect(status == .badRequest)
+                #expect(json?["error"] as? String == "code は4桁の銘柄コードです")
+                #expect(json?["status"] as? Int == 400)
+            }
+        }
+    }
+
     @Test func restSearchAndFinancialsRecordTrendButFeedDoesNot() async throws {
         let sink = RecordingFeedTrendSink()
         try await withApp(feedTrendSink: sink) { app in

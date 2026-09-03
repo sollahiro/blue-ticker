@@ -276,7 +276,7 @@ private func dispatchMcpTool(
 
     case "get_filings":
         let code = args["code"]?.stringValue ?? ""
-        let maxYears = args["max_years"]?.intValue ?? Api.filingsMaxYearsDefault
+        let maxYears = parseFilingsMaxYears(args["max_years"]?.intValue)
         return mapBltResponse(
             await serveFilings(
                 code: code, maxYears: maxYears, db: db, logger: logger, context: context))
@@ -357,6 +357,8 @@ private func mapBltResponse(_ response: BltServerResponse) -> CallTool.Result {
     switch response {
     case .ok(let value):
         return jsonToolResult(value)
+    case .badRequest(let message):
+        return errorToolResult(message)
     case .notFound(let message):
         return errorToolResult(message)
     case .upstreamFailure(let message):

@@ -170,8 +170,9 @@ func runBreakdownIngest(
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
-                try await storeBreakdown(
-                    existing: existing, docID: cand.docID, axis: axis,
+                    try await storeBreakdown(
+                    existing: try await CompanyBreakdown.find(key, on: db),
+                    docID: cand.docID, axis: axis,
                     code: cand.code, submitDateTime: cand.submitDateTime, payload: payload,
                     source: source, contentHash: contentHash, cacheVersion: currentCacheVersion,
                     llmAudit: audit, db: db)
@@ -205,7 +206,8 @@ func runBreakdownIngest(
                     logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
                 ) {
                     try await storeBreakdown(
-                        existing: existing, docID: cand.docID, axis: axis,
+                        existing: try await CompanyBreakdown.find(key, on: db),
+                        docID: cand.docID, axis: axis,
                         code: cand.code, submitDateTime: cand.submitDateTime, payload: placeholder,
                         source: breakdownSourceNotApplicable, contentHash: "",
                         cacheVersion: currentCacheVersion, llmAudit: nil,
