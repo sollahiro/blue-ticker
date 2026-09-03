@@ -43,7 +43,7 @@ fly ssh console -C "/app/blt-server sync --from 2024-01-01"
 
 | ワークフロー | 役割 |
 |---|---|
-| `ci.yml` | macOS/Linux test・product/serviceless ガード |
+| `ci.yml` | macOS/Linux test・iOS シミュレータ向けコンパイル（`ios` ジョブは `Apps/BlueTicker/` または `ci.yml` 差分時のみ、`macos-26`）・product/serviceless ガード |
 | `deploy.yml` | CI 成功後の Fly 自動デプロイ（`v*` タグでは起動しない） |
 | `feed-trend-worker.yml` | Feed Trend Worker デプロイ + Fly origin の URL/token |
 | `edge-security-smoke.yml` | Access / serviceless 外形監視 |

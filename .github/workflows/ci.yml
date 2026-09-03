@@ -1,8 +1,9 @@
 name: CI
 
 # 配布 `ticker` / Homebrew release / 開発 CLI `TickerDev` は廃止済み。
-# 検証対象は blt-server（唯一の product）とテストスイート、
-# および fly.toml の serviceless 不変条件。デプロイは deploy.yml（CI 成功後）。
+# 検証対象は blt-server（唯一の product）とテストスイート、iOS クライアントの
+# シミュレータ向けコンパイル、および fly.toml の serviceless 不変条件。
+# デプロイは deploy.yml（CI 成功後）。
 
 on:
   push:
@@ -38,6 +39,106 @@ jobs:
           swift test --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
           swift test --filter 'SmokeTests|SegmentParityTests'
           swift test --filter StatelessTransportHangMitigationTests
+
+  ios-paths:
+    # macos-26 を毎回起こさない。iOS アプリ本体と、このワークフロー（ios ジョブ定義）の
+    # 変更だけを見る。docs やサーバー側 DTO はコンパイルに影響しないので対象外。
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.detect.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import subprocess
+          import sys
+
+          FILES = frozenset({".github/workflows/ci.yml"})
+          PREFIXES = ("Apps/BlueTicker/",)
+
+          def relevant(path: str) -> bool:
+              path = path.replace("\\", "/")
+              return path in FILES or path.startswith(PREFIXES)
+
+          def write(run: bool) -> None:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                  fh.write(f"run={'true' if run else 'false'}\n")
+              print("ios job:", "run" if run else "skip")
+
+          event = os.environ.get("EVENT", "")
+          if event == "pull_request":
+              base = os.environ.get("BASE_SHA", "")
+          elif event == "push":
+              base = os.environ.get("BEFORE_SHA", "")
+              if not base or set(base) <= {"0"}:
+                  print("push の before が無いため iOS ジョブを実行します")
+                  write(True)
+                  sys.exit(0)
+          else:
+              write(True)
+              sys.exit(0)
+
+          if not base:
+              print("比較基点が空のため iOS ジョブを実行します")
+              write(True)
+              sys.exit(0)
+
+          if subprocess.call(["git", "cat-file", "-e", f"{base}^{{commit}}"]) != 0:
+              print(f"{base} を取得できないため iOS ジョブを実行します")
+              write(True)
+              sys.exit(0)
+
+          diff = subprocess.check_output(
+              ["git", "diff", "--name-only", "--no-renames", base, "HEAD"],
+              text=True,
+          )
+          changed = [line for line in diff.splitlines() if line]
+          hits = [path for path in changed if relevant(path)]
+          for path in changed:
+              print(f"{'*' if path in hits else ' '} {path}")
+          write(bool(hits))
+          PYEOF
+
+  ios:
+    # Apps/BlueTicker は SwiftPM 外。Cloud Agent の Linux VM では xcodebuild が無い。
+    # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
+    # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
+    # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
+    # 署名はしない（DEVELOPMENT_TEAM は空）。
+    needs: ios-paths
+    if: needs.ios-paths.outputs.run == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Build BlueTicker for iOS Simulator
+        working-directory: Apps/BlueTicker
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project BlueTicker.xcodeproj \
+            -scheme BlueTicker \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            | xcbeautify --quieter
 
   swift-linux:
     # SQLite では検証できない Postgres 固有挙動（JSONB・索引・String PK）も同一ジョブの
