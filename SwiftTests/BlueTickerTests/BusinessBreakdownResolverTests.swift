@@ -177,6 +177,34 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 1)
     }
 
+    /// 富士フイルム（積み上げセグメント損益表）: 決定論寄せで解決し、LLM を呼ばない。
+    /// 研究開発費ブロックを profit に誤寄せしないこと（S100W3XJ / S100YIBH 同型）。
+    @Test func fujifilmStackedSegmentPnLResolvesWithoutCallingLLM() async throws {
+        let segments = try Self.segmentsResult(docID: "S100W3XJ")
+        #expect(segments.method == "html_table")
+        let sales = try #require(try Self.loadSales(code: "4901"))
+        let client = MockChatCompleting(responseJSON: nil)
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .stackedSegmentPnL)
+        #expect(audit == nil)
+        #expect(await client.timesCalled() == 0)
+        let snap = try #require(snapshot)
+        #expect(snap.sourceKind == "stacked_segment_pnl")
+        let byLabel = Dictionary(
+            uniqueKeysWithValues: snap.rows.filter { $0.rowKind == "segment" }.map {
+                ($0.labelRaw, $0)
+            })
+        #expect(byLabel["ヘルスケア"]?.profit == 77_635 * Financial.millionYen)
+        #expect(byLabel["ヘルスケア"]?.profit != 60_698 * Financial.millionYen)  // 研究開発費でない
+        #expect(byLabel["エレクトロニクス"]?.profit == 77_315 * Financial.millionYen)
+        #expect(byLabel["ビジネスイノベーション"]?.profit == 74_614 * Financial.millionYen)
+        #expect(byLabel["イメージング"]?.profit == 139_214 * Financial.millionYen)
+    }
+
     /// キヤノン（segments が html_table。US-GAAP 注23、見出しが「セグメント情報」で振り分けて
     /// SegmentInfoLLMNormalizer 経由で解決する）。
     @Test func canonSegmentInfoResolvesViaSegmentInfoLLM() async throws {

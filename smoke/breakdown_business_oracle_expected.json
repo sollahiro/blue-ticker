@@ -31,9 +31,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100VXJA" : {
     "axis" : "business",
@@ -74,9 +72,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100VYA0" : {
     "axis" : "business",
@@ -131,9 +127,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100W0S7" : {
     "axis" : "business",
@@ -174,9 +168,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100W3XJ" : {
     "code" : "4901",
@@ -258,9 +250,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100W4MT" : {
     "axis" : "business",
@@ -301,9 +291,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100W043" : {
     "code" : "6103",
@@ -360,9 +348,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100XRD8" : {
     "axis" : "business",
@@ -389,9 +375,7 @@
       }
     ],
     "source" : "xbrl_facts",
-    "warnings" : [
-
-    ]
+    "warnings" : []
   },
   "S100XTLJ" : {
     "code" : "7751",
@@ -410,5 +394,47 @@
         "period" : "当期"
       }
     ]
+  },
+  "S100YIBH" : {
+    "axis" : "business",
+    "code" : "4901",
+    "denominator" : 3356969000000.0,
+    "denominator_tag" : "income_statement.sales",
+    "name" : "富士フイルム",
+    "needs_review" : false,
+    "path" : "stacked_segment_pnl",
+    "fiscal_year_end" : "2026-03-31",
+    "rows" : [
+      {
+        "amount" : 1098925000000.0,
+        "label" : "ヘルスケア",
+        "label_raw" : "ヘルスケア",
+        "profit" : 63637000000.0,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 456157000000.0,
+        "label" : "エレクトロニクス",
+        "label_raw" : "エレクトロニクス",
+        "profit" : 100883000000.0,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 1174800000000.0,
+        "label" : "ビジネスイノベーション",
+        "label_raw" : "ビジネスイノベーション",
+        "profit" : 63712000000.0,
+        "row_kind" : "segment"
+      },
+      {
+        "amount" : 627087000000.0,
+        "label" : "イメージング",
+        "label_raw" : "イメージング",
+        "profit" : 160003000000.0,
+        "row_kind" : "segment"
+      }
+    ],
+    "source" : "stacked_segment_pnl",
+    "warnings" : []
   }
 }

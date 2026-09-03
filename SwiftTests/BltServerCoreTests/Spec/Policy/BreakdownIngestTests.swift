@@ -3,12 +3,10 @@
 // 解決（resolveBusinessBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
 // ネットワーク非依存で見る。
 //
-// 有報セクション取り込み との最大の違い（意図的に重点検証する）:
-// - xbrl_facts / not_applicable（決定的）の行は cache_version のバージョン不一致で再試行してよい。
-//   needs_review=true だけでは再試行しない。
-// - LLM 経由（source != xbrl_facts）の行は cache_version のバンプだけでは再試行しない
-//   （needs_review=true のときのみ）。read の servable 判定も同じ非対称性を持つ
-//   （xbrl_facts はバージョン床、LLM 経由は存在すれば常に servable）。
+// staleness: 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）も LLM 経由
+// （segment_info_llm 等）も cache_version 不一致で再試行する。決定論の needs_review=true
+// だけでは現行版は再試行しない。LLM の needs_review=true は現行版でも再試行する。
+// read の servable 判定も同じ version gate を共有する。
 
 import Fluent
 import FluentSQLiteDriver
@@ -397,9 +395,9 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version のバンプだけでは再試行しない
-    /// （needs_review=false なら据え置き）。
-    @Test func ingestDoesNotReattemptLLMRowOnVersionBumpAloneWhenNotFlagged() async throws {
+    /// clean な segment_info_llm も cache_version 不一致なら再試行する
+    /// （バンプ無視の空配線で誤 profit が残らないようにする）。
+    @Test func ingestReattemptsCleanLLMRowWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
@@ -410,12 +408,18 @@ extension BreakdownLoadResult {
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in
-                Issue.record("LLM-sourced row without needs_review must not be re-resolved on version bump")
-                return .failed
+                .resolved(
+                    payload: fakePayload(needsReview: false),
+                    source: breakdownSourceStackedSegmentPnL,
+                    contentHash: "h-stacked", audit: nil)
             }
 
-            #expect(summary.skipped == 1)
-            #expect(summary.attempted == 0)
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.cacheVersion == businessBreakdownCacheVersion)
+            #expect(row.source == breakdownSourceStackedSegmentPnL)
         }
     }
 
@@ -631,16 +635,16 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version が古くても常に servable。
-    @Test func countServableAlwaysCountsLLMRowsRegardlessOfVersion() async throws {
+    /// パース不能な cache_version の LLM 行は非 servable（version gate 対象）。
+    @Test func countServableTreatsUnparseableLLMVersionAsUnservable() async throws {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
 
             let coverage = try await countServableBreakdowns(db: app.db)
-            #expect(coverage.servable == 1)
-            #expect(coverage.unservable == 0)
+            #expect(coverage.servable == 0)
+            #expect(coverage.unservable == 1)
         }
     }
 
@@ -761,16 +765,15 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// 有報セクション取り込み との最大の差分: LLM 経由の行は cache_version が古くても read 可能。
-    @Test func loadReturnsLLMRowEvenWithOldCacheVersion() async throws {
+    /// パース不能な cache_version の LLM 行は read しない。
+    @Test func loadOmitsLLMRowWithUnparseableCacheVersion() async throws {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
             let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "business", db: app.db)
-            let json = try #require(result.foundJSON)
-            #expect(json["doc_id"] as? String == "S1")
+            #expect(result.isAbsent)
         }
     }
 
@@ -977,8 +980,8 @@ extension BreakdownLoadResult {
         }
     }
 
-    /// LLM 経由（geography_llm）の geography 行は business と同じく cache_version が古くても read 可能。
-    @Test func loadReturnsGeographyLLMRowEvenWithOldCacheVersion() async throws {
+    /// geography_llm も version gate 対象（パース不能な cache_version は非 servable）。
+    @Test func loadOmitsGeographyLLMRowWithUnparseableCacheVersion() async throws {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
@@ -987,8 +990,7 @@ extension BreakdownLoadResult {
 
             let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
-            let json = try #require(result.foundJSON)
-            #expect(json["doc_id"] as? String == "S1")
+            #expect(result.isAbsent)
         }
     }
 

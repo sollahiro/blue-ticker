@@ -54,10 +54,11 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 9. `segments` の軸は member 名キーワード。全一致→geography、0一致→business、特定地域名の部分一致のみ混在扱いで `needs_review`（Domestic/Overseas だけの一致では立てない）。
 10. 連結優先・非連結フォールバック必須。member ラベル選択は Dictionary 走査順に依存させない。
 11. LLM の `profit == nil` だけでは未開示と見落としを区別できない → `profit_disclosed`＋決定的ガード。
-12. LLM 行は `cache_version` バンプだけでは再計算しない（`needs_review` または削除）。決定論（`xbrl_facts` / `not_applicable`）は逆で、`needs_review` だけでは再計算せずバンプ（または欠測・行削除）のみ。`content_hash` は生入力＋分母のみ（プロンプト/モデルを含めない）。
+12. 決定論（`xbrl_facts` / `stacked_segment_pnl` / `not_applicable`）も LLM（`segment_info_llm` 等）も `cache_version` バンプで再計算する（clean な LLM がバンプを無視すると誤 profit が残る）。決定論の `needs_review` だけでは再計算しない。LLM の `needs_review=true` は現行版でも再試行する。`content_hash` は生入力＋分母のみ（プロンプト/モデルを含めない）。
 13. 同一表が改ページで `<table>` 分割されることがある。縦（列見出し一致・行ラベルほぼ素・期間同じ）も横（行ラベル一致・右表の合計列が左列＋右の事業列と数値一致）も抽出時に結合する。LLM に複数表から選べと頼まない。
 14. 製品・サービス別専用 TextBlock が Prior / Current に分かれるとき、HTML に期間見出しが無い。`contextRef` を `period` にする（地域 dedicated と同じ）。事業セグメント dedicated には付けない。
 15. 単一セグメント開示（F）は表が無いときだけ確定する。単一セグメント省略の文言があっても地域別・主要顧客表が残る場合は収益認識の製品別へ寄せる。
+16. 同一事業ラベルが指標ブロックごとに繰り返し、末尾「XXX計」だけが指標名を持つ積み上げセグメント損益表（売上高→研究開発費→営業利益等）は、決定論で売上／営業利益ブロックへ行寄せする（`StackedSegmentPnLNormalizer`）。研究開発費ブロックを `profit` に使わない。銘柄特例は作らない。会計基準（US-GAAP/IFRS）の差ではなく表構造の問題として扱い、推測せず実XBRLでブロック順を確認する。
 
 ## Spec 層（テスト資産）
 

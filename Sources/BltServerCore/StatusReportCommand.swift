@@ -374,8 +374,7 @@ public func buildIngestStatusReport(
     let breakdownBusiness = buildDocumentLevelStage(
         key: "breakdown_business", label: "事業別の売上内訳",
         rows: businessRows.map { row in
-            // LLM 経由（segment_info_llm 等）は cache_version でゲートしない
-            // （isVersionGatedBreakdownSource が false の source は常に「現行」扱い）。
+            // version-gated source（決定論・LLM）は cache_version 一致で「現行」判定。
             let isCurrent =
                 !isVersionGatedBreakdownSource(row.source)
                 || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisBusiness)

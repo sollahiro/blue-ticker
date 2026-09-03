@@ -60,14 +60,14 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 }
 
 /// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
-/// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の xbrl_facts /
-/// not_applicable 全件再計算を起こさない。blueTickerVersion 非連動。
-/// LLM 経由の行（source != "xbrl_facts"）は本バージョンのバンプだけでは再計算しない
-/// （needs_review=true または削除。docs/breakdown.md 参照）。決定論は逆で needs_review
-/// だけでは再計算せず、バンプで再計算する。
+/// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の全件再計算を起こさない。
+/// blueTickerVersion 非連動。
+/// 決定論・LLM とも、`needs_review` だけでは再計算せず、本バージョンのバンプ（または欠測・行削除）
+/// で再計算する。clean な `segment_info_llm` がバンプを無視すると、誤った profit が再 ingest でも残る。
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
-public let businessBreakdownCacheVersion = "breakdown-business-v9"
+/// v10: 積み上げセグメント損益表の決定論寄せ（研究開発費→profit 誤寄せを構造側で防止）。
+public let businessBreakdownCacheVersion = "breakdown-business-v10"
 public let geographyBreakdownCacheVersion = "breakdown-geography-v10"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
@@ -103,11 +103,13 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
 
 /// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
 /// `GeographyBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`BreakdownNormalizer`）で
-/// 解決した経路。監査・再計算方針の判断に使う（xbrl_facts は決定的でバンプ全件再計算してよいが、
-/// LLM 経由（*_llm）は content_hash + needs_review でのみ再計算する）。
+/// 解決した経路。監査・再計算方針の判断に使う。決定論・LLM とも `cache_version` バンプで
+/// 再計算する（clean な `segment_info_llm` がバンプを無視すると誤 profit が残る）。
 /// `.notFound` は行を作らない方針のため、この文字列が DB に書かれることはない
 /// （欠ける軸は出さない）。
 public let breakdownSourceXbrlFacts = "xbrl_facts"
+/// 積み上げセグメント損益表の決定論寄せ（`StackedSegmentPnLNormalizer`）。
+public let breakdownSourceStackedSegmentPnL = "stacked_segment_pnl"
 public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
 public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
@@ -145,11 +147,9 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
         || reason == breakdownNotApplicableNotFound
 }
 
-/// breakdown read（REST/MCP）が xbrl_facts / not_applicable 経由の行に適用する最低スキーマ
-/// バージョン番号（軸別 `…-vN` の N）。**明示指定**。LLM 経由の行（segment_info_llm 等）には
-/// 適用しない（`isServableBreakdown` 参照。content_hash + needs_review でのみ再計算する据え置き
-/// 運用のため、cache_version の世代でゲートすると正しい行まで 404 になってしまう）。
-/// 不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
+/// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。
+/// **明示指定**。決定論・LLM とも `isServableBreakdown` でこの床を見る（パース不能な
+/// cache_version は非 servable）。不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
 public let businessBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
@@ -204,16 +204,28 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     return nil
 }
 
-/// xbrl_facts と同じく決定的ロジックで解決され、`cache_version` 世代で再計算・read 可否を
-/// 判定すべき source かどうか。LLM 経由（segment_info_llm 等）は content_hash + needs_review
-/// でのみ扱うためここには含めない（`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
+/// `cache_version` 世代で再計算・read 可否を判定すべき source か。
+/// 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）に加え、LLM 経由
+/// （segment_info_llm / revenue_recognition_llm / geography_llm）も含める。
+/// clean な LLM 行がバンプを無視すると誤った profit が再 ingest でも残るため
+/// （`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
 public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
-    source == breakdownSourceXbrlFacts || source == breakdownSourceNotApplicable
+    source == breakdownSourceXbrlFacts
+        || source == breakdownSourceStackedSegmentPnL
+        || source == breakdownSourceNotApplicable
+        || isLLMBreakdownSource(source)
 }
 
-/// 格納行が read 可能か。xbrl_facts / not_applicable 経由（決定的）は cache_version が当該軸の床以上の
-/// ときのみ（バンプで全件再計算してよい）。LLM 経由は存在すれば常に read 可能（据え置き運用。
-/// docs/breakdown.md参照）。
+/// LLM 経由の breakdown source か。version gate に加え、現行版でも `needs_review=true`
+/// なら再試行する（決定論の needs_review だけでは再試行しない方針と非対称）。
+public func isLLMBreakdownSource(_ source: String) -> Bool {
+    source == breakdownSourceSegmentInfoLLM
+        || source == breakdownSourceRevenueRecognitionLLM
+        || source == breakdownSourceGeographyLLM
+}
+
+/// 格納行が read 可能か。version-gated な source は cache_version が当該軸の床以上のときのみ。
+/// パース不能な cache_version は非 servable（誤った clean LLM 行を古い版のまま出し続けない）。
 /// `axis` 省略時は business（現行 REST/MCP 公開軸）。
 public func isServableBreakdown(source: String, cacheVersion: String, axis: String = "business") -> Bool {
     guard isVersionGatedBreakdownSource(source) else { return true }
