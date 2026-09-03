@@ -82,6 +82,7 @@ func runFinancialsIngest(
             skipped += 1
         }
     }
+    let missingCodes = Set(missing.map(\.code))
     let candidates = prioritized(
         interleaved([missing, staleHighWater, staleYears, staleVersion]), codeOf: \.code,
         priorityCodes: priorityCodes)
@@ -99,10 +100,15 @@ func runFinancialsIngest(
             )
             break
         }
-        let existing = try await withDbRetry(
-            logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await CompanyFinancials.find(code, on: db)
+        let existing: CompanyFinancials?
+        if missingCodes.contains(code) {
+            existing = nil
+        } else {
+            existing = try await withDbRetry(
+                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await CompanyFinancials.find(code, on: db)
+            }
         }
         if let row = existing, row.cacheVersion == companyFinancialsCacheVersion,
             row.requestedYears >= years, row.highWater == highWater,
@@ -119,7 +125,8 @@ func runFinancialsIngest(
                 logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
             ) {
                 try await storeCompanyFinancials(
-                    existing: existing, code: code, years: years, response: response,
+                    existing: try await CompanyFinancials.find(code, on: db),
+                    code: code, years: years, response: response,
                     highWater: highWater, db: db)
             }
             stored += 1
@@ -132,7 +139,8 @@ func runFinancialsIngest(
                 logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
             ) {
                 try await storeCompanyFinancials(
-                    existing: existing, code: code, years: years,
+                    existing: try await CompanyFinancials.find(code, on: db),
+                    code: code, years: years,
                     response: .notApplicablePlaceholder(code: code), highWater: highWater, db: db)
             }
             notApplicable += 1
@@ -157,7 +165,7 @@ func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
 ) async throws -> (codes: [String], highWater: [String: String]) {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
-        try await EdinetDocument.query(on: db).all()
+        try await EdinetDocumentListing.query(on: db).all()
     }
     var seen = Set<String>()
     var codes: [String] = []

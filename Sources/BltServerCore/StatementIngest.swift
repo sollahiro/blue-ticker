@@ -119,7 +119,8 @@ func runStatementIngest(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
                 try await storeCompanyStatement(
-                    existing: existing, docID: cand.docID, code: cand.code,
+                    existing: try await CompanyStatement.find(cand.docID, on: db),
+                    docID: cand.docID, code: cand.code,
                     submitDateTime: cand.submitDateTime, payload: payload, db: db)
             }
             stored += 1
@@ -130,7 +131,8 @@ func runStatementIngest(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
                 try await storeCompanyStatement(
-                    existing: existing, docID: cand.docID, code: cand.code,
+                    existing: try await CompanyStatement.find(cand.docID, on: db),
+                    docID: cand.docID, code: cand.code,
                     submitDateTime: cand.submitDateTime,
                     payload: statementNotApplicablePlaceholderYear(docID: cand.docID), db: db)
             }

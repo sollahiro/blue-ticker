@@ -32,7 +32,7 @@ func runFactsIngest(
     parse: XbrlFactParser
 ) async throws -> FactsIngestSummary {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
-        try await EdinetDocument.query(on: db)
+        try await EdinetDocumentListing.query(on: db)
             .sort(\.$submitDateTime, .descending)
             .all()
     }
@@ -98,7 +98,9 @@ func runFactsIngest(
         try await withDbRetry(
             logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await storeXbrlFacts(existing: existing, docID: docID, facts: payload, db: db)
+            try await storeXbrlFacts(
+                existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID, facts: payload,
+                db: db)
         }
         stored += 1
     }
@@ -108,7 +110,7 @@ func runFactsIngest(
 }
 
 /// fact インデックスを edinet_xbrl_facts へ書き込む（既存行があれば更新、無ければ作成）。
-/// `existing` は呼び出し側で取得済みの行（再 find を避ける）。cache_version に現行 xbrlFactsCacheVersion を埋め込む。
+/// `existing` は当該リトライ試行内で find した行。試行をまたいでインスタンスを再利用しない。
 func storeXbrlFacts(
     existing: EdinetXbrlFacts?, docID: String, facts: XbrlFactIndexPayload, db: Database
 ) async throws {
