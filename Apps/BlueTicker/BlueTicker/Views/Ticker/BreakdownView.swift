@@ -119,6 +119,7 @@ struct BreakdownView: View {
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
         let labels = years.map { Format.fy($0.fyEnd) }
         let points = ratioPoints(years)
+        let anchors = ratioAnchors(years)
         let segments = ratioSegments(points)
         let xMin = min(points.map(\.value).min() ?? 0, 0)
         let xMax = max(points.map(\.value).max() ?? 0, 0)
@@ -149,6 +150,14 @@ struct BreakdownView: View {
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
+            // 欠損年も年度軸の domain に含め、目盛りと行間隔を全年度分保つ。
+            ForEach(anchors, id: \.self) { index in
+                PointMark(
+                    x: .value(metric.title, 0),
+                    y: .value("年度", index)
+                )
+                .opacity(0)
+            }
             ForEach(points, id: \.id) { point in
                 PointMark(
                     x: .value(metric.title, point.value),
@@ -228,6 +237,11 @@ struct BreakdownView: View {
         years.enumerated().compactMap { index, year in
             metricValue(year).map { SegmentPoint(id: index, index: index, value: $0) }
         }
+    }
+
+    /// 値のない年の位置。年度軸が縮まないよう不可視マークを置くために使う。
+    private func ratioAnchors(_ years: [FinancialsYear]) -> [Int] {
+        years.indices.filter { metricValue(years[$0]) == nil }
     }
 
     /// 隣り合う年どうしだけを結ぶ。欠損年を挟む区間は線を引かない。
