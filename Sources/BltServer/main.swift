@@ -40,27 +40,6 @@ private func printError(_ message: String) {
     FileHandle.standardError.write(Data(message.utf8))
 }
 
-/// エラーメッセージに紛れ込みうるシークレットをマスクする。
-/// - EDINET: `Subscription-Key=<key>`（URLSession 系エラーの userInfo 経由。EdinetAPIClient で
-///   発生源でも無害化済みだが、ここでも多層防御する）
-/// - DATABASE_URL: `postgres(ql)://user:password@host` の password 部分
-///   （`SQLPostgresConfiguration(url:)` のパースエラーが URL 文字列を含みうるため）
-private func redactSecrets(_ message: String) -> String {
-    var result = message
-    let patterns: [(pattern: String, template: String)] = [
-        (#"(Subscription-Key=)[^&\s"]+"#, "$1***"),
-        (#"((?:postgres(?:ql)?://[^:/@\s]+:))[^@\s]+@"#, "$1***@"),
-    ]
-    for (pattern, template) in patterns {
-        if let regex = try? NSRegularExpression(pattern: pattern) {
-            result = regex.stringByReplacingMatches(
-                in: result, range: NSRange(result.startIndex..., in: result),
-                withTemplate: template)
-        }
-    }
-    return result
-}
-
 /// 名前付きオプション（--key value）を argv から取り出す。
 private func optionValue(_ name: String, in argv: [String]) -> String? {
     guard let i = argv.firstIndex(of: name), i + 1 < argv.count else { return nil }

@@ -1,7 +1,7 @@
 // 匿名 Feed Trend カウンター。origin からの fire-and-forget ingest を Analytics Engine に書き、
 // GET /trend で SQL API からランキングを返す。IP / ユーザー / cookie は受け取らない。
 
-import { parseIngestBody, parseTrendQuery, sqlString } from "./validate.js";
+import { parseIngestBody, parseTrendQuery, sqlString, bearerOk } from "./validate.js";
 
 export default {
   async fetch(request, env) {
@@ -24,7 +24,7 @@ export default {
 
 async function ingest(request, env) {
   const token = env.INGEST_TOKEN || env.TOKEN;
-  if (!bearerOk(request, token)) {
+  if (!bearerOk(request.headers.get("Authorization"), token)) {
     return json({ error: "unauthorized" }, 401);
   }
   let body;
@@ -49,7 +49,7 @@ async function ingest(request, env) {
 
 async function trend(request, env, searchParams) {
   const token = env.QUERY_TOKEN || env.TOKEN;
-  if (!bearerOk(request, token)) {
+  if (!bearerOk(request.headers.get("Authorization"), token)) {
     return json({ error: "unauthorized" }, 401);
   }
   const parsed = parseTrendQuery(searchParams);
@@ -159,14 +159,6 @@ async function runSql(accountId, sqlToken, sql) {
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.result?.data)) return payload.result.data;
   return [];
-}
-
-function bearerOk(request, expected) {
-  if (!expected) return false;
-  const header = request.headers.get("Authorization") || "";
-  const prefix = "Bearer ";
-  if (!header.startsWith(prefix)) return false;
-  return header.slice(prefix.length) === expected;
 }
 
 function toCount(value) {

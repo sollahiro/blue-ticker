@@ -83,3 +83,24 @@ export function parseTrendQuery(searchParams) {
 export function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
+
+// Bearer トークンを長さ揃えの XOR で比較する（早期 return で長さ以外の内容を漏らさない）。
+export function timingSafeEqualString(left, right) {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(String(left));
+  const b = encoder.encode(String(right));
+  const n = Math.max(a.length, b.length, 1);
+  let diff = a.length === b.length ? 0 : 1;
+  for (let i = 0; i < n; i++) {
+    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+export function bearerOk(authorizationHeader, expected) {
+  if (!expected) return false;
+  const header = authorizationHeader || "";
+  const prefix = "Bearer ";
+  if (!header.startsWith(prefix)) return false;
+  return timingSafeEqualString(header.slice(prefix.length), expected);
+}

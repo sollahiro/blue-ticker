@@ -7,6 +7,8 @@ import {
   clipQuery,
   sqlString,
   QUERY_MAX_LENGTH,
+  bearerOk,
+  timingSafeEqualString,
 } from "./validate.js";
 
 test("tickerCode accepts 4-character JP codes", () => {
@@ -75,4 +77,18 @@ test("parseTrendQuery clamps and validates code", () => {
 test("sqlString escapes quotes", () => {
   assert.equal(sqlString("7203"), "'7203'");
   assert.equal(sqlString("a'b"), "'a''b'");
+});
+
+test("bearerOk compares tokens without accepting missing prefix", () => {
+  assert.equal(bearerOk("Bearer secret", "secret"), true);
+  assert.equal(bearerOk("Bearer secretx", "secret"), false);
+  assert.equal(bearerOk("secret", "secret"), false);
+  assert.equal(bearerOk("Bearer secret", ""), false);
+  assert.equal(bearerOk("Bearer secret", undefined), false);
+});
+
+test("timingSafeEqualString rejects different lengths and values", () => {
+  assert.equal(timingSafeEqualString("ab", "ab"), true);
+  assert.equal(timingSafeEqualString("ab", "abc"), false);
+  assert.equal(timingSafeEqualString("ab", "ac"), false);
 });

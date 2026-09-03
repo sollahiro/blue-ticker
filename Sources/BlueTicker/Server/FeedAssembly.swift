@@ -9,6 +9,12 @@ public func parseFeedLimit(_ raw: Int?) -> Int {
     return min(raw, Api.feedLimitMax)
 }
 
+/// filings の `max_years` を [1, filingsMaxYearsMax] に閉じる。省略・0 以下は既定。
+public func parseFilingsMaxYears(_ raw: Int?) -> Int {
+    guard let raw, raw > 0 else { return Api.filingsMaxYearsDefault }
+    return min(raw, Api.filingsMaxYearsMax)
+}
+
 /// クエリ `days` を [1, feedTrendDaysMax] に閉じる。省略・0 以下は既定。
 public func parseFeedDays(_ raw: Int?) -> Int {
     guard let raw, raw > 0 else { return Api.feedTrendDaysDefault }

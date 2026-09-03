@@ -65,6 +65,42 @@ import Testing
         logIngestSummary(logger, target: "financials", attempted: 3, stored: 3, failed: 0, skipped: 0)
         #expect(handler.messages[0].level == .notice)
     }
+
+    @Test func redactsPostgresPasswordAndBearerInMessageAndMetadata() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blt-json-log-redact-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        FileManager.default.createFile(atPath: tmp.path, contents: nil)
+        guard let handle = FileHandle(forWritingAtPath: tmp.path) else {
+            Issue.record("failed to open temp log file")
+            return
+        }
+        defer { try? handle.close() }
+
+        let handler = JsonLogHandler(label: "test.logger", handle: handle)
+        handler.logLevel = .trace
+        handler.log(
+            event: LogEvent(
+                level: .error,
+                message: "Unhandled error: postgres://app:s3cret@db.example/blt",
+                metadata: [
+                    "error": .string("Bearer sk-live-abcdef Authorization failed"),
+                    "event": "db_retry",
+                ],
+                source: "test",
+                file: #file,
+                function: #function,
+                line: #line
+            ))
+        try handle.synchronize()
+
+        let raw = try String(contentsOf: tmp, encoding: .utf8)
+        #expect(!raw.contains("s3cret"))
+        #expect(!raw.contains("sk-live-abcdef"))
+        #expect(raw.contains("postgres://app:***@db.example/blt"))
+        #expect(raw.contains("Bearer ***"))
+    }
 }
 
 private final class CapturingHandler: LogHandler, @unchecked Sendable {

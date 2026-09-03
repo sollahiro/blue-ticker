@@ -89,17 +89,20 @@ func applyDocuments(
             )
             return (created, updated, completed: false)
         }
-        let existing = try await withDbRetry(
+        let existingID = try await withDbRetry(
             logger: logger, context: "docID=\(record.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await EdinetDocument.find(record.docID, on: db)
         }
-        if let existing {
-            existing.apply(record)
+        if existingID != nil {
             try await withDbRetry(
                 logger: logger, context: "docID=\(record.docID)",
                 onRetry: { unhealthyRetries += 1 }
-            ) { try await existing.update(on: db) }
+            ) {
+                guard let row = try await EdinetDocument.find(record.docID, on: db) else { return }
+                row.apply(record)
+                try await row.update(on: db)
+            }
             updated += 1
         } else {
             try await withDbRetry(
@@ -168,27 +171,27 @@ func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async 
 
 /// synced_through を upsert する（単一行）。
 func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil) async throws {
-    let state = try await withDbRetry(logger: logger, context: "sync_state") {
-        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
-    } ?? EdinetSyncState()
-    state.id = EdinetSyncState.singletonID
-    state.syncedThrough = syncedThrough
-    try await withDbRetry(logger: logger, context: "sync_state") { try await state.save(on: db) }
+    try await withDbRetry(logger: logger, context: "sync_state") {
+        let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db) ?? EdinetSyncState()
+        state.id = EdinetSyncState.singletonID
+        state.syncedThrough = syncedThrough
+        try await state.save(on: db)
+    }
 }
 
 // MARK: - read 経路（REST filings）
 
 /// 指定銘柄（4 桁証券コード）の 書類同期 書類を DB から引いて正規化レコードで返す。
-/// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため LIKE プレフィックスで突き合わせる
-/// （ライブ探索の hasPrefix(code4) と同条件）。該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
+/// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため、`XXXX0`…`XXXX9` の等価比較で突き合わせる
+/// （ライブ探索の hasPrefix(code4) と同条件。btree 索引が LIKE 前方一致に使えないロケールでも効く）。
+/// 該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 /// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
-    let code4 = String(code.prefix(4))
-    // 証券コードは英数字のみ。LIKE プレフィックス突き合わせのため、ワイルドカード
-    // （% / _）等の混入を弾く（不正コードは空 → 呼び出し側がライブ探索へフォールバック）。
-    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
+    let code4 = String(code.prefix(4)).uppercased()
+    guard code4.count == 4, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
+    let secCodes = (0...9).map { "\(code4)\($0)" }
     let rows = try await EdinetDocument.query(on: db)
-        .filter(\.$secCode, .contains(inverse: false, .prefix), code4)
+        .filter(\.$secCode ~~ secCodes)
         .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
         .all()
     return rows.map { $0.toRecord() }

@@ -59,7 +59,7 @@ final class JsonLogHandler: LogHandler, @unchecked Sendable {
             "timestamp": isoFormatter.string(from: Date()),
             "level": event.level.rawValue,
             "logger": label,
-            "message": event.message.description,
+            "message": redactSecrets(event.message.description),
         ]
         if !merged.isEmpty {
             object["metadata"] = Self.jsonObject(from: merged)
@@ -84,9 +84,9 @@ final class JsonLogHandler: LogHandler, @unchecked Sendable {
     private static func jsonValue(from value: Logger.Metadata.Value) -> Any {
         switch value {
         case .string(let s):
-            return s
+            return redactSecrets(s)
         case .stringConvertible(let s):
-            return s.description
+            return redactSecrets(s.description)
         case .array(let values):
             return values.map { jsonValue(from: $0) }
         case .dictionary(let dict):

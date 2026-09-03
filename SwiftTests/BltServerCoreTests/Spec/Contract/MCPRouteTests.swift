@@ -112,6 +112,19 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
+    @Test func getFilingsReturnsErrorResultWhenCodeInvalid() async throws {
+        try await withMcpApp { app in
+            let (status, json) = try await postMcp(
+                app, toolCallBody(name: "get_filings", arguments: ["code": "72030"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            #expect(text?.contains("4桁") == true)
+        }
+    }
+
     @Test func getWaterfallReturnsErrorResultWhenNotStored() async throws {
         try await withMcpApp(databases: true) { app in
             let (status, json) = try await postMcp(

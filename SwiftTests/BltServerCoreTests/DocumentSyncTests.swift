@@ -96,6 +96,18 @@ private func record(
         }
     }
 
+    @Test func loadStoredFilingRecordsMatchesAnyFifthDigit() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("LISTED", secCode: "85910"),
+                    record("OTHERTYPE", secCode: "85911"),
+                ], db: app.db)
+            let records = try await loadStoredFilingRecords(code: "8591", db: app.db)
+            #expect(Set(records.map(\.docID)) == ["LISTED", "OTHERTYPE"])
+        }
+    }
+
     @Test func loadStoredFilingRecordsExcludesTrustOrdinance030() async throws {
         try await withMigratedApp { app in
             _ = try await applyDocuments(

@@ -116,7 +116,7 @@ func registerRoutes(
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_filings", code: code)
-        let maxYears = req.query[Int.self, at: "max_years"] ?? Api.filingsMaxYearsDefault
+        let maxYears = parseFilingsMaxYears(req.query[Int.self, at: "max_years"])
         return makeResponse(
             await serveFilings(
                 code: code, maxYears: maxYears, db: dbAvailable ? req.db : nil,
@@ -562,6 +562,10 @@ func serveFilings(
     code: String, maxYears: Int, db: Database?, logger: Logger,
     context: BltServerContext
 ) async -> BltServerResponse {
+    guard let code = feedTrendTickerCode(code) else {
+        return .badRequest("code は4桁の銘柄コードです")
+    }
+    let maxYears = parseFilingsMaxYears(maxYears)
     if let db {
         do {
             let records = try await withDbRetry(
@@ -635,11 +639,13 @@ private struct BltErrorMiddleware: AsyncMiddleware {
 // MARK: - レスポンス変換
 
 /// ファサードの戻り値パターン（BltServerResponse）を HTTP レスポンスへ変換する。
-/// ステータス対応: ok→200 / notFound→404 / upstreamFailure→502。
+/// ステータス対応: ok→200 / badRequest→400 / notFound→404 / upstreamFailure→502。
 private func makeResponse(_ response: BltServerResponse) -> Response {
     switch response {
     case .ok(let value):
         return jsonResponse(value, status: .ok)
+    case .badRequest(let message):
+        return errorResponse(.badRequest, message: message)
     case .notFound(let message):
         return errorResponse(.notFound, message: message)
     case .upstreamFailure(let message):

@@ -30,6 +30,14 @@ private func rec(
         #expect(parseFeedLimit(Api.feedLimitMax + 50) == Api.feedLimitMax)
     }
 
+    @Test func parseFilingsMaxYearsClampsAndDefaults() {
+        #expect(parseFilingsMaxYears(nil) == Api.filingsMaxYearsDefault)
+        #expect(parseFilingsMaxYears(0) == Api.filingsMaxYearsDefault)
+        #expect(parseFilingsMaxYears(-1) == Api.filingsMaxYearsDefault)
+        #expect(parseFilingsMaxYears(3) == 3)
+        #expect(parseFilingsMaxYears(Api.filingsMaxYearsMax + 50) == Api.filingsMaxYearsMax)
+    }
+
     @Test func parseDaysClampsAndDefaults() {
         #expect(parseFeedDays(nil) == Api.feedTrendDaysDefault)
         #expect(parseFeedDays(0) == Api.feedTrendDaysDefault)
