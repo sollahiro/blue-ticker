@@ -166,12 +166,22 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         [.netCash, .cfo, .cfi].contains(self)
     }
 
+    private var isPercent: Bool {
+        [.grossMargin, .operatingMargin, .netProfitMargin, .roic, .roe, .equityRatio, .currentRatio, .fixedRatio].contains(self)
+    }
+
     func displayTitle(plUnit: String, cashUnit: String) -> String {
         if isPlMoney, !plUnit.isEmpty {
             return "\(title)（\(plUnit)）"
         }
         if isCashMoney, !cashUnit.isEmpty {
             return "\(title)（\(cashUnit)）"
+        }
+        if isPercent {
+            return "\(title)（％）"
+        }
+        if self == .netDe {
+            return "\(title)（倍）"
         }
         return title
     }
@@ -201,20 +211,20 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         switch self {
         case .sales: return yenString(year.sales, scale: plScale)
         case .grossProfit: return yenString(year.grossProfit, scale: plScale)
-        case .grossMargin: return Format.percent(year.grossProfitMargin)
+        case .grossMargin: return Format.percent(year.grossProfitMargin, includeUnit: false)
         case .operatingProfit: return yenString(year.operatingProfit, scale: plScale)
-        case .operatingMargin: return Format.percent(year.operatingMargin)
+        case .operatingMargin: return Format.percent(year.operatingMargin, includeUnit: false)
         case .netProfit: return yenString(year.netProfit, scale: plScale)
-        case .netProfitMargin: return Format.percent(Format.netProfitMargin(year))
-        case .roic: return Format.percent(year.roic)
-        case .roe: return Format.percent(year.roe)
+        case .netProfitMargin: return Format.percent(Format.netProfitMargin(year), includeUnit: false)
+        case .roic: return Format.percent(year.roic, includeUnit: false)
+        case .roe: return Format.percent(year.roe, includeUnit: false)
         case .netCash: return yenString(year.netCash, scale: cashScale)
-        case .netDe: return Format.times(year.netDe)
+        case .netDe: return Format.times(year.netDe, includeUnit: false)
         case .cfo: return yenString(year.cfo, scale: cashScale)
         case .cfi: return yenString(year.cfi, scale: cashScale)
-        case .equityRatio: return Format.percent(Format.equityRatio(year))
-        case .currentRatio: return Format.percent(Format.currentRatio(year))
-        case .fixedRatio: return Format.percent(Format.fixedRatio(year))
+        case .equityRatio: return Format.percent(Format.equityRatio(year), includeUnit: false)
+        case .currentRatio: return Format.percent(Format.currentRatio(year), includeUnit: false)
+        case .fixedRatio: return Format.percent(Format.fixedRatio(year), includeUnit: false)
         }
     }
 

@@ -40,14 +40,16 @@ enum Format {
         years.sorted { ($0.fyEnd ?? "") < ($1.fyEnd ?? "") }
     }
 
-    static func percent(_ value: Double?, digits: Int = 1) -> String {
+    static func percent(_ value: Double?, digits: Int = 1, includeUnit: Bool = true) -> String {
         guard let value else { return "—" }
-        return String(format: "%.\(digits)f%%", value)
+        let unit = includeUnit ? "%" : ""
+        return String(format: "%.\(digits)f\(unit)", value)
     }
 
-    static func times(_ value: Double?) -> String {
+    static func times(_ value: Double?, includeUnit: Bool = true) -> String {
         guard let value else { return "—" }
-        return String(format: "%.2f倍", value)
+        let unit = includeUnit ? "倍" : ""
+        return String(format: "%.2f\(unit)", value)
     }
 
     static func percentPoints(_ value: Double?) -> String {
