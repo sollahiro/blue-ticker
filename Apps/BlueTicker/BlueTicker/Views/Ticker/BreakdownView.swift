@@ -115,10 +115,16 @@ struct BreakdownView: View {
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
         let band = metricBand
         let labels = years.map { Format.fy($0.fyEnd) }
+        let selectedIndex = years.firstIndex { $0.id == selectedYearID }
         return Chart {
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
+            if let selectedIndex {
+                RuleMark(y: .value("年度", selectedIndex))
+                    .foregroundStyle(band.color(for: metricValue(years[selectedIndex])).opacity(0.25))
+                    .lineStyle(StrokeStyle(lineWidth: 18))
+            }
             ForEach(ratioSegments(years), id: \.id) { segment in
                 ForEach(segment.points, id: \.id) { point in
                     LineMark(

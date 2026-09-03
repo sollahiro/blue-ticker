@@ -20,39 +20,55 @@ struct SummaryView: View {
         .task { await load() }
     }
 
-    private func commonScale(for response: FinancialsResponse) -> Format.YenScale? {
-        let values = response.years.flatMap { [
+    private struct MoneyScales {
+        var pl: Format.YenScale?
+        var cash: Format.YenScale?
+    }
+
+    private func moneyScales(for response: FinancialsResponse) -> MoneyScales {
+        let plValues = response.years.flatMap { [
             $0.sales, $0.grossProfit, $0.operatingProfit, $0.netProfit,
         ] }
-        return Format.commonScale(for: values)
+        let cashValues = response.years.flatMap { [
+            $0.netCash, $0.cfo, $0.cfi,
+        ] }
+        return MoneyScales(
+            pl: Format.commonScale(for: plValues),
+            cash: Format.commonScale(for: cashValues)
+        )
+    }
+
+    private func columnColor(index: Int) -> Color {
+        index.isMultiple(of: 2) ? Color.clear : Theme.elevated.opacity(0.18)
     }
 
     private func summaryTable(_ response: FinancialsResponse) -> some View {
         let years = Format.chronological(response.years)
-        let scale = commonScale(for: response)
-        let unit = scale?.unit ?? ""
+        let scales = moneyScales(for: response)
         return ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 8) {
                     GridRow {
                         Text("")
                             .frame(minWidth: 88, alignment: .leading)
-                        ForEach(years) { year in
+                        ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                             Text(Format.fy(year.fyEnd))
                                 .gridHeader()
+                                .background(columnColor(index: index))
                         }
                     }
                     ForEach(SummaryRow.allCases) { row in
                         GridRow {
-                            Text(row.displayTitle(unit: unit))
+                            Text(row.displayTitle(plUnit: scales.pl?.unit ?? "", cashUnit: scales.cash?.unit ?? ""))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Theme.text)
                                 .frame(minWidth: 88, alignment: .leading)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
-                            ForEach(years) { year in
-                                Text(row.format(year, scale: scale))
+                            ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
+                                Text(row.format(year, plScale: scales.pl, cashScale: scales.cash))
                                     .gridCell(color: row.color(year))
+                                    .background(columnColor(index: index))
                             }
                         }
                     }
@@ -87,6 +103,7 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
     case operatingProfit
     case operatingMargin
     case netProfit
+    case netProfitMargin
     case roic
     case roe
     case netCash
@@ -107,6 +124,7 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingProfit: "営業利益"
         case .operatingMargin: "営業利益率"
         case .netProfit: "純利益"
+        case .netProfitMargin: "純利益率"
         case .roic: "ROIC"
         case .roe: "ROE"
         case .netCash: "ネットキャッシュ"
@@ -119,28 +137,39 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         }
     }
 
-    func displayTitle(unit: String) -> String {
-        let moneyRows: [SummaryRow] = [.sales, .grossProfit, .operatingProfit, .netProfit]
-        if moneyRows.contains(self) && !unit.isEmpty {
-            return "\(title)（\(unit)）"
+    private var isPlMoney: Bool {
+        [.sales, .grossProfit, .operatingProfit, .netProfit].contains(self)
+    }
+
+    private var isCashMoney: Bool {
+        [.netCash, .cfo, .cfi].contains(self)
+    }
+
+    func displayTitle(plUnit: String, cashUnit: String) -> String {
+        if isPlMoney, !plUnit.isEmpty {
+            return "\(title)（\(plUnit)）"
+        }
+        if isCashMoney, !cashUnit.isEmpty {
+            return "\(title)（\(cashUnit)）"
         }
         return title
     }
 
-    func format(_ year: FinancialsYear, scale: Format.YenScale?) -> String {
+    func format(_ year: FinancialsYear, plScale: Format.YenScale?, cashScale: Format.YenScale?) -> String {
         switch self {
-        case .sales: return yenString(year.sales, scale: scale)
-        case .grossProfit: return yenString(year.grossProfit, scale: scale)
+        case .sales: return yenString(year.sales, scale: plScale)
+        case .grossProfit: return yenString(year.grossProfit, scale: plScale)
         case .grossMargin: return Format.percent(year.grossProfitMargin)
-        case .operatingProfit: return yenString(year.operatingProfit, scale: scale)
+        case .operatingProfit: return yenString(year.operatingProfit, scale: plScale)
         case .operatingMargin: return Format.percent(year.operatingMargin)
-        case .netProfit: return yenString(year.netProfit, scale: scale)
+        case .netProfit: return yenString(year.netProfit, scale: plScale)
+        case .netProfitMargin: return Format.percent(Format.netProfitMargin(year))
         case .roic: return Format.percent(year.roic)
         case .roe: return Format.percent(year.roe)
-        case .netCash: return Format.autoYen(year.netCash)
+        case .netCash: return yenString(year.netCash, scale: cashScale)
         case .netDe: return Format.times(year.netDe)
-        case .cfo: return Format.autoYen(year.cfo)
-        case .cfi: return Format.autoYen(year.cfi)
+        case .cfo: return yenString(year.cfo, scale: cashScale)
+        case .cfi: return yenString(year.cfi, scale: cashScale)
         case .equityRatio: return Format.percent(Format.equityRatio(year))
         case .currentRatio: return Format.percent(Format.currentRatio(year))
         case .fixedRatio: return Format.percent(Format.fixedRatio(year))
@@ -158,6 +187,8 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
             return deficitColor(year.operatingProfit)
         case .netProfit:
             return deficitColor(year.netProfit)
+        case .netProfitMargin:
+            return deficitColor(Format.netProfitMargin(year))
         case .netDe:
             return netDeColor(year.netDe)
         case .equityRatio:
@@ -209,7 +240,7 @@ private extension Text {
     func gridHeader() -> some View {
         self.font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textMuted)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
     }
@@ -217,7 +248,7 @@ private extension Text {
     func gridCell(color: Color) -> some View {
         self.font(.caption.monospacedDigit())
             .foregroundStyle(color)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
     }

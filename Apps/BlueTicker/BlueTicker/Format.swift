@@ -79,6 +79,11 @@ enum Format {
         ratio(year.nonCurrentAssets, dividedBy: year.netAssets)
     }
 
+    /// 純利益率 = 純利益 ÷ 売上高 × 100
+    static func netProfitMargin(_ year: FinancialsYear) -> Double? {
+        ratio(year.netProfit, dividedBy: year.sales)
+    }
+
     /// 検索結果・銘柄ヘッダ用。法人格の「株式会社」は出さない。
     static func displayName(_ name: String, fallback: String = "") -> String {
         let stripped = name
