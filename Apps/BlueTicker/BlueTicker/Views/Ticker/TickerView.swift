@@ -56,6 +56,7 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .background { InteractivePopGestureEnabler() }
+        .onAppear { CompanyHistory.record(company) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: {

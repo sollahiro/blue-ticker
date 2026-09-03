@@ -1,6 +1,6 @@
 import Foundation
 
-struct CompanyRef: Hashable, Identifiable {
+struct CompanyRef: Hashable, Identifiable, Codable {
     var code: String
     var name: String
     var sector: String
