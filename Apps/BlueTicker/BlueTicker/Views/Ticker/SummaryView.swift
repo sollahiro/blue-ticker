@@ -47,12 +47,13 @@ struct SummaryView: View {
         let years = Format.chronological(response.years)
         let scales = moneyScales(for: response)
         return ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("")
                             .frame(minWidth: 88, alignment: .leading)
                             .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
                         ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                             Text(Format.fy(year.fyEnd))
                                 .gridHeader()
@@ -67,6 +68,7 @@ struct SummaryView: View {
                                 .frame(minWidth: 88, alignment: .leading)
                                 .lineLimit(2)
                                 .padding(.vertical, 6)
+                                .padding(.horizontal, 8)
                             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                                 Text(row.format(year, plScale: scales.pl, cashScale: scales.cash))
                                     .gridCell(color: row.color(year))
@@ -89,12 +91,11 @@ struct SummaryView: View {
                             .font(.caption)
                             .foregroundStyle(Theme.text)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .padding(.top, 16)
-            .padding(.bottom, 16)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -147,7 +148,7 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .netProfitMargin: "純利益率"
         case .roic: "ROIC"
         case .roe: "ROE"
-        case .netCash: "ネットキャッシュ"
+        case .netCash: "正味現金"
         case .netDe: "ネットD/E"
         case .cfo: "営業CF"
         case .cfi: "投資CF"
@@ -186,7 +187,7 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .netProfitMargin: "純利益 ÷ 売上高です。"
         case .roic: "投下資本に対する利益率です。"
         case .roe: "自己資本に対する利益率です。"
-        case .netCash: "現預金などから有利子負債を差し引いた正味の資金です。"
+        case .netCash: "現預金などから有利子負債を差し引いた正味の手元資金です。"
         case .netDe: "純借入金 ÷ 自己資本。低いほど財務リスクが小さいです。"
         case .cfo: "営業活動によるキャッシュフローです。"
         case .cfi: "投資活動によるキャッシュフローです。"
@@ -282,6 +283,7 @@ private extension Text {
         self.font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textMuted)
             .padding(.vertical, 6)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -291,6 +293,7 @@ private extension Text {
         self.font(.caption.monospacedDigit())
             .foregroundStyle(color)
             .padding(.vertical, 6)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
