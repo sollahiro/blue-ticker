@@ -118,17 +118,21 @@ struct BreakdownView: View {
         let values = years.map(metricValue)
         let xMin = min(values.min() ?? 0, 0)
         let xMax = max(values.max() ?? 0, 0)
+        let selectedIndex = years.firstIndex { $0.id == selectedYearID }
+        let selectedSegment = selectedIndex.flatMap { index in
+            ratioSegments(years).first { $0.points.last?.index == index }
+        }
         return Chart {
+            if let segment = selectedSegment, let start = segment.points.first?.index, let end = segment.points.last?.index, xMin < xMax {
+                RectangleMark(
+                    xStart: .value(metric.title, xMin),
+                    xEnd: .value(metric.title, xMax),
+                    yStart: .value("年度", start),
+                    yEnd: .value("年度", end)
+                )
+                .foregroundStyle(segment.color.opacity(0.15))
+            }
             ForEach(ratioSegments(years), id: \.id) { segment in
-                if let start = segment.points.first?.index, let end = segment.points.last?.index, xMin < xMax {
-                    RectangleMark(
-                        xStart: .value(metric.title, xMin),
-                        xEnd: .value(metric.title, xMax),
-                        yStart: .value("年度", start),
-                        yEnd: .value("年度", end)
-                    )
-                    .foregroundStyle(segment.color.opacity(0.12))
-                }
                 ForEach(segment.points, id: \.id) { point in
                     LineMark(
                         x: .value(metric.title, point.value),
@@ -148,6 +152,11 @@ struct BreakdownView: View {
                 )
                 .foregroundStyle(year.id == selectedYearID ? Theme.accent : Theme.text)
                 .symbolSize(year.id == selectedYearID ? 90 : 45)
+                .annotation(position: .trailing, alignment: .leading, spacing: 4) {
+                    Text(Format.percent(metricValue(year), digits: 1))
+                        .font(.caption2)
+                        .foregroundStyle(Theme.text)
+                }
             }
         }
         .chartYScale(domain: .automatic(includesZero: false, reversed: true))
@@ -259,6 +268,7 @@ struct BreakdownView: View {
                         .frame(height: 16)
                     Text(spec.format(factor.value))
                         .font(.caption.monospacedDigit())
+                        .foregroundStyle(factorColor(factor.value))
                         .frame(width: 88, alignment: .trailing)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -328,6 +338,11 @@ struct BreakdownView: View {
         case .businessProfit:
             return .none
         }
+    }
+
+    private func factorColor(_ value: Double?) -> Color {
+        guard let value, value < 0 else { return Theme.text }
+        return Theme.negative
     }
 
     private func metricValue(_ year: FinancialsYear) -> Double {

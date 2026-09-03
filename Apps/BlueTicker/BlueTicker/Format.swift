@@ -86,6 +86,12 @@ enum Format {
         ratio(year.netProfit, dividedBy: year.sales)
     }
 
+    /// フリーCF = 営業CF + 投資CF
+    static func freeCashFlow(_ year: FinancialsYear) -> Double? {
+        guard let cfo = year.cfo, let cfi = year.cfi else { return nil }
+        return cfo + cfi
+    }
+
     /// 検索結果・銘柄ヘッダ用。法人格の「株式会社」は出さない。
     static func displayName(_ name: String, fallback: String = "") -> String {
         let stripped = name

@@ -31,7 +31,7 @@ struct SummaryView: View {
             $0.sales, $0.grossProfit, $0.operatingProfit, $0.netProfit,
         ] }
         let cashValues = response.years.flatMap { [
-            $0.netCash, $0.cfo, $0.cfi,
+            $0.netCash, $0.cfo, $0.cfi, Format.freeCashFlow($0),
         ] }
         return MoneyScales(
             pl: Format.commonScale(for: plValues),
@@ -47,7 +47,7 @@ struct SummaryView: View {
         let years = Format.chronological(response.years)
         let scales = moneyScales(for: response)
         return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("")
@@ -67,8 +67,8 @@ struct SummaryView: View {
                                 .foregroundStyle(selectedRow == row ? Theme.accent : Theme.text)
                                 .frame(minWidth: 88, alignment: .leading)
                                 .lineLimit(2)
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 6)
                             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
                                 Text(row.format(year, plScale: scales.pl, cashScale: scales.cash))
                                     .gridCell(color: row.color(year))
@@ -83,7 +83,7 @@ struct SummaryView: View {
                     }
                 }
                 if let selectedRow {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(selectedRow.title)
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Theme.accent)
@@ -91,17 +91,17 @@ struct SummaryView: View {
                             .font(.caption)
                             .foregroundStyle(Theme.text)
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 6)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .padding(16)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
-        .padding(16)
+        .padding(12)
     }
 
     private func load() async {
@@ -125,12 +125,11 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
     case operatingMargin
     case netProfit
     case netProfitMargin
-    case roic
-    case roe
     case netCash
     case netDe
     case cfo
     case cfi
+    case fcf
     case equityRatio
     case currentRatio
     case fixedRatio
@@ -146,12 +145,11 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingMargin: "営業利益率"
         case .netProfit: "純利益"
         case .netProfitMargin: "純利益率"
-        case .roic: "ROIC"
-        case .roe: "ROE"
         case .netCash: "正味現金"
         case .netDe: "ネットD/E"
         case .cfo: "営業CF"
         case .cfi: "投資CF"
+        case .fcf: "フリーCF"
         case .equityRatio: "自己資本比率"
         case .currentRatio: "流動比率"
         case .fixedRatio: "固定比率"
@@ -163,11 +161,11 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
     }
 
     private var isCashMoney: Bool {
-        [.netCash, .cfo, .cfi].contains(self)
+        [.netCash, .cfo, .cfi, .fcf].contains(self)
     }
 
     private var isPercent: Bool {
-        [.grossMargin, .operatingMargin, .netProfitMargin, .roic, .roe, .equityRatio, .currentRatio, .fixedRatio].contains(self)
+        [.grossMargin, .operatingMargin, .netProfitMargin, .equityRatio, .currentRatio, .fixedRatio].contains(self)
     }
 
     func displayTitle(plUnit: String, cashUnit: String) -> String {
@@ -195,12 +193,11 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingMargin: "営業利益 ÷ 売上高です。"
         case .netProfit: "税引き後の最終的な当期純利益です。"
         case .netProfitMargin: "純利益 ÷ 売上高です。"
-        case .roic: "投下資本に対する利益率です。"
-        case .roe: "自己資本に対する利益率です。"
         case .netCash: "現預金などから有利子負債を差し引いた正味の手元資金です。"
         case .netDe: "純借入金 ÷ 自己資本。低いほど財務リスクが小さいです。"
         case .cfo: "営業活動によるキャッシュフローです。"
         case .cfi: "投資活動によるキャッシュフローです。"
+        case .fcf: "営業CFに投資CFを加えたフリーキャッシュフローです。"
         case .equityRatio: "自己資本 ÷ 総資産。高いほど財務が安定します。"
         case .currentRatio: "流動資産 ÷ 流動負債。200%以上が望ましいとされます。"
         case .fixedRatio: "固定資産 ÷ 自己資本。低いほど安全です。"
@@ -216,12 +213,11 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingMargin: return Format.percent(year.operatingMargin, includeUnit: false)
         case .netProfit: return yenString(year.netProfit, scale: plScale)
         case .netProfitMargin: return Format.percent(Format.netProfitMargin(year), includeUnit: false)
-        case .roic: return Format.percent(year.roic, includeUnit: false)
-        case .roe: return Format.percent(year.roe, includeUnit: false)
         case .netCash: return yenString(year.netCash, scale: cashScale)
         case .netDe: return Format.times(year.netDe, includeUnit: false)
         case .cfo: return yenString(year.cfo, scale: cashScale)
         case .cfi: return yenString(year.cfi, scale: cashScale)
+        case .fcf: return yenString(Format.freeCashFlow(year), scale: cashScale)
         case .equityRatio: return Format.percent(Format.equityRatio(year), includeUnit: false)
         case .currentRatio: return Format.percent(Format.currentRatio(year), includeUnit: false)
         case .fixedRatio: return Format.percent(Format.fixedRatio(year), includeUnit: false)
@@ -241,6 +237,8 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
             return deficitColor(year.netProfit)
         case .netProfitMargin:
             return deficitColor(Format.netProfitMargin(year))
+        case .fcf:
+            return deficitColor(Format.freeCashFlow(year))
         case .netDe:
             return netDeColor(year.netDe)
         case .equityRatio:
@@ -292,8 +290,8 @@ private extension Text {
     func gridHeader() -> some View {
         self.font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textMuted)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -302,8 +300,8 @@ private extension Text {
     func gridCell(color: Color) -> some View {
         self.font(.caption.monospacedDigit())
             .foregroundStyle(color)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
