@@ -98,8 +98,12 @@ import Testing
         let raw = try String(contentsOf: tmp, encoding: .utf8)
         #expect(!raw.contains("s3cret"))
         #expect(!raw.contains("sk-live-abcdef"))
-        #expect(raw.contains("postgres://app:***@db.example/blt"))
-        #expect(raw.contains("Bearer ***"))
+        let line = try #require(raw.split(separator: "\n").first.map(String.init))
+        let data = try #require(line.data(using: .utf8))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["message"] as? String == "Unhandled error: postgres://app:***@db.example/blt")
+        let metadata = try #require(json["metadata"] as? [String: Any])
+        #expect(metadata["error"] as? String == "Bearer *** Authorization failed")
     }
 }
 
