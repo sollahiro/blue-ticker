@@ -6,6 +6,7 @@
 - 市場は `JP` / `EU`、開示 Source は `EDINET` / `ESEF` として混同しない。
 - 本番 write は `BLT_NEON_WRITE_DATABASE_URL` の明示指定時だけ行う。RO への書き込みと本番 schema の削除は禁止。
 - Cursor Cloud の build / test は `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を付ける。
+- iOS（`Apps/BlueTicker`）の型検査・ビルドは GitHub Actions の `ios` ジョブ（`macos-26` / `xcodebuild`）で行う。Cloud Agent の Linux VM ではシミュレータも Xcode も無い。
 - 新機能・XBRL・本番 ingest・release・tracker・デプロイ操作は対応する `.agents/skills/` に従う。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
 - MCP（`BltMcpServerCore`）は開発時（Cursor / 手元）専用。製品面は REST と iOS。ChatGPT Apps は凍結。コードは削除せず、MCP を製品面として拡張しない。

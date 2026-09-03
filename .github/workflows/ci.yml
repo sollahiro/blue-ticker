@@ -1,8 +1,9 @@
 name: CI
 
 # 配布 `ticker` / Homebrew release / 開発 CLI `TickerDev` は廃止済み。
-# 検証対象は blt-server（唯一の product）とテストスイート、
-# および fly.toml の serviceless 不変条件。デプロイは deploy.yml（CI 成功後）。
+# 検証対象は blt-server（唯一の product）とテストスイート、iOS クライアントの
+# シミュレータ向けコンパイル、および fly.toml の serviceless 不変条件。
+# デプロイは deploy.yml（CI 成功後）。
 
 on:
   push:
@@ -38,6 +39,36 @@ jobs:
           swift test --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
           swift test --filter 'SmokeTests|SegmentParityTests'
           swift test --filter StatelessTransportHangMitigationTests
+
+  ios:
+    # Apps/BlueTicker は SwiftPM 外。Cloud Agent の Linux VM では xcodebuild が無い。
+    # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
+    # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
+    # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
+    # 署名はしない（DEVELOPMENT_TEAM は空）。
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Build BlueTicker for iOS Simulator
+        working-directory: Apps/BlueTicker
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project BlueTicker.xcodeproj \
+            -scheme BlueTicker \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            | xcbeautify --quieter
 
   swift-linux:
     # SQLite では検証できない Postgres 固有挙動（JSONB・索引・String PK）も同一ジョブの
