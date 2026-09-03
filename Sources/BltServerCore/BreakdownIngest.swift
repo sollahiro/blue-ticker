@@ -18,7 +18,8 @@
 // - version-gated な source（決定論 + LLM）: cache_version が現行と不一致なら再計算する。
 //   clean な segment_info_llm がバンプを無視すると誤 profit が残るため、LLM も対象。
 // - 決定論の needs_review=true だけでは再試行しない（同じ入力では結果が変わらないフラグが
-//   limit を埋め続けるため）。LLM の needs_review=true は現行版でも再試行する。
+//   limit を埋め続けるため）。
+// - LLM の needs_review=true は現行版でも再試行する（一時失敗の再キュー）。
 
 import BlueTickerCore
 import Fluent
@@ -113,6 +114,9 @@ func runBreakdownIngest(
         if isVersionGatedBreakdownSource(existing.source) {
             if existing.cacheVersion != currentCacheVersion {
                 staleVersion.append(cand)
+            } else if isLLMBreakdownSource(existing.source), existing.needsReview {
+                // LLM は現行版でも needs_review で再試行（決定論とは非対称）。
+                flaggedForReview.append(cand)
             } else {
                 skipped += 1
             }
@@ -145,8 +149,11 @@ func runBreakdownIngest(
         if let row = existing {
             let versionGated = isVersionGatedBreakdownSource(row.source)
             if versionGated, row.cacheVersion == currentCacheVersion {
-                skipped += 1
-                continue
+                // 現行版の決定論は skip。LLM の needs_review は再試行する。
+                if !(isLLMBreakdownSource(row.source) && row.needsReview) {
+                    skipped += 1
+                    continue
+                }
             }
             if !versionGated, row.needsReview == false {
                 skipped += 1

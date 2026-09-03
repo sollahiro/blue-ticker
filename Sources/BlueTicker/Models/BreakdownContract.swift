@@ -213,7 +213,13 @@ public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
     source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
-        || source == breakdownSourceSegmentInfoLLM
+        || isLLMBreakdownSource(source)
+}
+
+/// LLM 経由の breakdown source か。version gate に加え、現行版でも `needs_review=true`
+/// なら再試行する（決定論の needs_review だけでは再試行しない方針と非対称）。
+public func isLLMBreakdownSource(_ source: String) -> Bool {
+    source == breakdownSourceSegmentInfoLLM
         || source == breakdownSourceRevenueRecognitionLLM
         || source == breakdownSourceGeographyLLM
 }

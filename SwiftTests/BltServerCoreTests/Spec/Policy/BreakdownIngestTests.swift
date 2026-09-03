@@ -4,8 +4,8 @@
 // ネットワーク非依存で見る。
 //
 // staleness: 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）も LLM 経由
-// （segment_info_llm 等）も cache_version 不一致で再試行する。needs_review=true だけでは
-// 現行版の決定論行は再試行しない（LLM の needs_review=true は現行版でも再試行する）。
+// （segment_info_llm 等）も cache_version 不一致で再試行する。決定論の needs_review=true
+// だけでは現行版は再試行しない。LLM の needs_review=true は現行版でも再試行する。
 // read の servable 判定も同じ version gate を共有する。
 
 import Fluent
