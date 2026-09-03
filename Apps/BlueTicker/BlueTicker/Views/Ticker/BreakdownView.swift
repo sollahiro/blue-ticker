@@ -113,27 +113,32 @@ struct BreakdownView: View {
     }
 
     private func ratioChart(_ years: [FinancialsYear]) -> some View {
+        let band = metricBand
         let labels = years.map { Format.fy($0.fyEnd) }
         return Chart {
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
+            ForEach(ratioSegments(years), id: \.id) { segment in
+                ForEach(segment.points, id: \.id) { point in
+                    LineMark(
+                        x: .value(metric.title, point.value),
+                        y: .value("年度", point.index)
+                    )
+                    .foregroundStyle(segment.color)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                }
+            }
             ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
-                LineMark(
-                    x: .value(metric.title, metricValue(year)),
-                    y: .value("年度", index)
-                )
-                .foregroundStyle(Theme.accent)
-                .interpolationMethod(.catmullRom)
                 PointMark(
                     x: .value(metric.title, metricValue(year)),
                     y: .value("年度", index)
                 )
-                .foregroundStyle(year.id == selectedYearID ? Theme.text : Theme.accent)
-                .symbolSize(year.id == selectedYearID ? 80 : 40)
+                .foregroundStyle(band.color(for: metricValue(year)))
+                .symbolSize(year.id == selectedYearID ? 90 : 45)
             }
         }
-        .chartYScale(domain: .automatic(reversed: true))
+        .chartYScale(domain: .automatic(includesZero: false, reversed: true))
         .chartXAxis {
             AxisMarks(position: .bottom) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
@@ -162,23 +167,56 @@ struct BreakdownView: View {
                     .fill(.clear)
                     .contentShape(Rectangle())
                     .onTapGesture { location in
-                        guard let plot = proxy.plotFrame else { return }
-                        let y = location.y - geo[plot].origin.y
-                        let index: Int?
-                        if let i: Int = proxy.value(atY: y) {
-                            index = i
-                        } else if let d: Double = proxy.value(atY: y) {
-                            index = Int(d.rounded())
+                        guard let plot = proxy.plotFrame, !years.isEmpty else { return }
+                        let plotRect = geo[plot]
+                        let y = location.y - plotRect.origin.y
+                        var selected: Int?
+                        if let dataY: Double = proxy.value(atY: y) {
+                            selected = Int(dataY.rounded())
                         } else {
-                            index = nil
+                            let normalized = max(0, min(1, y / plotRect.height))
+                            selected = Int((Double(years.count - 1) * (1.0 - normalized)).rounded())
                         }
-                        guard let index, years.indices.contains(index) else { return }
-                        selectedYearID = years[index].id
+                        guard let selected, years.indices.contains(selected) else { return }
+                        selectedYearID = years[selected].id
                     }
             }
         }
         .frame(height: CGFloat(max(160, years.count * 36)))
         .padding(.top, 4)
+    }
+
+    private struct Segment: Identifiable {
+        var id: Int
+        var points: [SegmentPoint]
+        var color: Color
+    }
+
+    private struct SegmentPoint: Identifiable {
+        var id: Int
+        var index: Int
+        var value: Double
+    }
+
+    private func ratioSegments(_ years: [FinancialsYear]) -> [Segment] {
+        guard years.count >= 2 else { return [] }
+        let band = metricBand
+        var segments: [Segment] = []
+        for i in 0..<years.count - 1 {
+            let start = years[i]
+            let end = years[i + 1]
+            let midValue = (metricValue(start) + metricValue(end)) / 2
+            let color = band.color(for: midValue)
+            segments.append(Segment(
+                id: i,
+                points: [
+                    SegmentPoint(id: i * 2, index: i, value: metricValue(start)),
+                    SegmentPoint(id: i * 2 + 1, index: i + 1, value: metricValue(end)),
+                ],
+                color: color
+            ))
+        }
+        return segments
     }
 
     private var factorPrompt: String {
@@ -266,6 +304,17 @@ struct BreakdownView: View {
                 format: Format.percentPoints,
                 summary: year.roeDelta.map { "ROE 前年差 \(Format.percentPoints($0))" }
             )
+        }
+    }
+
+    private var metricBand: MetricBand {
+        switch metric {
+        case .roic:
+            return .higherBetter(lowBelow: 4, midFrom: 6, midTo: 8, highFrom: 10)
+        case .roe:
+            return .higherBetter(lowBelow: 5, midFrom: 8, midTo: 10, highFrom: 15)
+        case .businessProfit:
+            return .none
         }
     }
 

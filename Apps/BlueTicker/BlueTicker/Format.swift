@@ -13,8 +13,21 @@ enum Format {
     static func autoYen(_ millionYen: Double?) -> String {
         guard let millionYen else { return "—" }
         let scale = yenScale(abs(millionYen))
-        let signed = millionYen < 0 ? -scale.value : scale.value
-        return groupedNumber(signed, fractionDigits: scale.fractionDigits) + scale.unit
+        return scaledYen(millionYen, scale: scale) + scale.unit
+    }
+
+    /// 指定の単位で金額文字列を返す。単位サフィックスは付けない。
+    static func scaledYen(_ millionYen: Double?, scale: YenScale) -> String {
+        guard let millionYen else { return "—" }
+        let scaled = millionYen / scale.divisor
+        return groupedNumber(scaled, fractionDigits: scale.fractionDigits)
+    }
+
+    /// 指定した値群から最適な共通の金額単位を返す。
+    static func commonScale(for values: [Double?]) -> YenScale? {
+        let maxValue = values.compactMap { $0 }.map(abs).max() ?? 0
+        guard maxValue > 0 else { return nil }
+        return yenScale(maxValue)
     }
 
     /// 百万円 → 億円。サフィックス付き（条件検索のスライダー用）。
@@ -82,8 +95,8 @@ enum Format {
         return numerator / denominator * 100
     }
 
-    private struct YenScale {
-        var value: Double
+    struct YenScale {
+        var divisor: Double
         var unit: String
         var fractionDigits: Int
     }
@@ -111,7 +124,7 @@ enum Format {
         }
         let scaled = absMillion / chosen.divisor
         return YenScale(
-            value: scaled,
+            divisor: chosen.divisor,
             unit: chosen.name,
             fractionDigits: scaled < 100 ? 1 : 0
         )
