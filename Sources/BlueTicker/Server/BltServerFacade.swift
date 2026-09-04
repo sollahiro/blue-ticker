@@ -41,12 +41,17 @@ public struct BltServerContext: Sendable {
     /// 内訳取り込み geography 軸の html_table 正規化（LLM）に使うクライアント。
     /// `OPENAI_GEOGRAPHY_*` / `XAI_GEOGRAPHY_*` 未設定時は `UnavailableChatClient`。
     let geographyChatClient: ChatCompleting
+    /// Overview 生成。`OPENROUTER_API_KEY` 未設定時は `UnavailableChatClient`（mock キーは読まない）。
+    let overviewChatClient: ChatCompleting
+    let overviewModel: String
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
     init(
         apiKey: String, cacheDir: URL, businessChatClient: ChatCompleting,
         geographyChatClient: ChatCompleting,
+        overviewChatClient: ChatCompleting = UnavailableChatClient(),
+        overviewModel: String = companyOverviewDefaultModel,
         esefSearch: EsefSearchService? = nil
     ) {
         self.cacheDir = cacheDir
@@ -59,6 +64,8 @@ public struct BltServerContext: Sendable {
         self.esefSearch = esefSearch ?? EsefSearchService(cacheDir: esefCacheDir(cacheDir))
         self.businessChatClient = businessChatClient
         self.geographyChatClient = geographyChatClient
+        self.overviewChatClient = overviewChatClient
+        self.overviewModel = overviewModel
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -112,13 +119,20 @@ func resolveBreakdownLLMEndpoint(axis: BreakdownLLMAxis) -> ChatCompletionEndpoi
     return provider.endpoint(axis: axis.rawValue, env: env)
 }
 
-/// LLM 未設定時のプレースホルダ。xbrl_facts 経路では client に触れないため、
-/// html_table 経路（LLM 必須）に到達した場合のみネットワーク I/O なしで即座に失敗する
-/// （呼び出し側は notApplicable / unknown として扱う）。
-private struct UnavailableChatClient: ChatCompleting {
-    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-        throw ChatCompletionError.invalidResponse
+/// Overview 生成の OpenRouter エンドポイント。`OPENROUTER_API_KEY` のみ（mock キーは使わない）。
+func resolveOverviewLLMEndpoint(
+    _ env: [String: String] = ProcessInfo.processInfo.environment
+) -> ChatCompletionEndpoint? {
+    func nonEmpty(_ key: String) -> String? {
+        let value = env[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
     }
+    guard let apiKey = nonEmpty("OPENROUTER_API_KEY") else { return nil }
+    let model = nonEmpty("OPENROUTER_MODEL") ?? companyOverviewDefaultModel
+    let baseURL = nonEmpty("OPENROUTER_BASE_URL") ?? Api.openrouterBaseURL
+    return ChatCompletionEndpoint(
+        baseURL: baseURL, apiKey: apiKey, model: model, timeoutSeconds: 90,
+        provider: .openrouter, maxTokens: 200)
 }
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
@@ -145,9 +159,13 @@ public func makeBltServerContext() async -> BltServerContext? {
     let geographyChatClient: ChatCompleting =
         resolveBreakdownLLMEndpoint(axis: .geography).map { ChatCompletionClient(endpoint: $0) }
         ?? UnavailableChatClient()
+    let overviewEndpoint = resolveOverviewLLMEndpoint(env)
+    let overviewChatClient: ChatCompleting =
+        overviewEndpoint.map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
-        geographyChatClient: geographyChatClient)
+        geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
+        overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel)
 }
 
 // MARK: - REST Facade
@@ -405,6 +423,18 @@ public enum BreakdownResolveResult: Sendable {
 }
 
 public extension BltServerContext {
+    /// Overview 生成（ingest 用）。Filing `texts` には足さない。serving / 別 EP は未配線。
+    func generateCompanyOverview(docID: String, code: String, name: String, sector: String)
+        async -> CompanyOverviewDraft?
+    {
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+        let sourceText = DescriptionOfBusinessExtractor.extract(in: xbrlDir)
+        let input = CompanyOverviewInput(
+            code: code, name: name, sector: sector, docID: docID, sourceText: sourceText)
+        return await CompanyOverviewGenerator.generate(
+            input: input, client: overviewChatClient, model: overviewModel)
+    }
+
     /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。

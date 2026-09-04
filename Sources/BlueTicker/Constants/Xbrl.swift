@@ -1198,6 +1198,9 @@ enum Xbrl {
     /// 四半期報告書（q2r等）にはこの節自体が存在しない（有報のみ）。
     /// 実データ検証（2026-08-08）: 有報14社サンプルで「公告掲載方法」ラベルの行を確認。
     static let overviewOfOperationalProceduresForSharesTextblockTag = "OverviewOfOperationalProceduresForSharesTextBlock"
+
+    /// 有報「企業の概況」の「事業の内容」。Filing 公開 `texts` には載せない（Overview 入力専用）。
+    static let descriptionOfBusinessTextblockTag = "DescriptionOfBusinessTextBlock"
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）
