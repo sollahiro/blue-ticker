@@ -41,7 +41,7 @@ public struct BltServerContext: Sendable {
     /// 内訳取り込み geography 軸の html_table 正規化（LLM）に使うクライアント。
     /// `OPENAI_GEOGRAPHY_*` / `XAI_GEOGRAPHY_*` 未設定時は `UnavailableChatClient`。
     let geographyChatClient: ChatCompleting
-    /// Overview 生成。`OPENROUTER_MOCK_KEY` を優先し、無ければ本番名 `OPENROUTER_API_KEY`。
+    /// Overview 生成。現在の VM は `OPENROUTER_MOCK_KEY`、本番名は `OPENROUTER_OVERVIEW_API_KEY`。
     let overviewChatClient: ChatCompleting
     let overviewModel: String
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
@@ -120,7 +120,7 @@ func resolveBreakdownLLMEndpoint(axis: BreakdownLLMAxis) -> ChatCompletionEndpoi
 }
 
 /// Overview 生成の OpenRouter エンドポイント。
-/// 今回は `OPENROUTER_MOCK_KEY` を流用。本番名は `OPENROUTER_API_KEY`（新 VM 再登録用）。
+/// 本番名は `OPENROUTER_OVERVIEW_API_KEY`。現在の VM だけ `OPENROUTER_MOCK_KEY` があればそれを使う。
 func resolveOverviewLLMEndpoint(
     _ env: [String: String] = ProcessInfo.processInfo.environment
 ) -> ChatCompletionEndpoint? {
@@ -130,8 +130,8 @@ func resolveOverviewLLMEndpoint(
     }
     guard let apiKey = nonEmpty(companyOverviewMockAPIKeyEnv) ?? nonEmpty(companyOverviewAPIKeyEnv)
     else { return nil }
-    let model = nonEmpty("OPENROUTER_MODEL") ?? companyOverviewDefaultModel
-    let baseURL = nonEmpty("OPENROUTER_BASE_URL") ?? Api.openrouterBaseURL
+    let model = nonEmpty(companyOverviewModelEnv) ?? companyOverviewDefaultModel
+    let baseURL = nonEmpty(companyOverviewBaseURLEnv) ?? Api.openrouterBaseURL
     return ChatCompletionEndpoint(
         baseURL: baseURL, apiKey: apiKey, model: model, timeoutSeconds: 90,
         provider: .openrouter, maxTokens: 200)
