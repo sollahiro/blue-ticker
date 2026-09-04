@@ -64,7 +64,11 @@
       font: inherit;
       cursor: pointer;
     }
-    .toggles button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
+    .toggles button[aria-pressed="true"] {
+      color: #000;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
     .phone {
       width: 390px;
       background: var(--shell);
@@ -239,6 +243,8 @@
         + (company.input_thin ? " / 薄い入力" : "")
         + (company.applicable ? "" : ` / ${company.reason}`);
       document.getElementById("icon").textContent = (company.display_name || "?").slice(0, 1);
+      document.getElementById("mode-mock").setAttribute("aria-pressed", String(showGenerated));
+      document.getElementById("mode-empty").setAttribute("aria-pressed", String(!showGenerated));
       for (const button of document.querySelectorAll("#chips button")) {
         button.setAttribute("aria-pressed", String(button.dataset.code === company.code));
       }
