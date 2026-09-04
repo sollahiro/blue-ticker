@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -111,6 +112,11 @@ EXTRACT_FIXTURE = """<div>
 <h3>４ 【関係会社の状況】</h3>
 <p>子会社の一覧。</p>
 </div>"""
+EXTRACT_FIXTURE_ESCAPED = """<div>
+<ix:nonNumeric contextRef="FilingDateInstant" name="jpcrp_cor:DescriptionOfBusinessTextBlock" escape="true">
+&lt;h3&gt;３ 【事業の内容】&lt;/h3&gt;&lt;p&gt;当社は自動車の設計、製造および販売を行っています。&lt;/p&gt;
+</ix:nonNumeric>
+</div>"""
 
 
 def api_key() -> str:
@@ -133,6 +139,7 @@ def model_name() -> str:
 
 
 def html_to_text(raw: str) -> str:
+    raw = htmlmod.unescape(raw)
     raw = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", raw)
     raw = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", raw)
     raw = re.sub(r"(?i)<br\s*/?>", "\n", raw)
@@ -296,7 +303,7 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
     if COMPANY_SUFFIX_RE.search(text):
         return False, "株式会社が残っている"
     sentences = [part for part in SENTENCE_END_RE.split(text) if part.strip()]
-    if text and not SENTENCE_END_RE.search(text):
+    if not SENTENCE_END_RE.fullmatch(text[-1:]):
         return False, "言い切りの句点がない"
     if len(sentences) > 2:
         return False, f"文が{len(sentences)}つある"
@@ -525,6 +532,9 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
         errors.append(f"extract fixture: {extracted!r}")
     if "子会社の一覧" in extracted:
         errors.append("extract leaked next section")
+    escaped = extract_description_of_business(EXTRACT_FIXTURE_ESCAPED)
+    if "自動車の設計、製造および販売" not in escaped:
+        errors.append(f"escaped fixture: {escaped!r}")
 
     style_ok = [
         "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスなどを国内海外で提供。",
@@ -563,15 +573,23 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     ok, _ = overview_ok({"applicable": True, "overview": many})
     if ok:
         errors.append("three sentences accepted")
+    unfinished = "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸などを提供。バイオファーマサービスも手がける"
+    ok, _ = overview_ok({"applicable": True, "overview": unfinished})
+    if ok:
+        errors.append("unfinished tail accepted")
     if clip_overview("あ" * 90) is not None:
         errors.append("mid-word clip accepted")
     cost = listed_universe_estimate(0.000561)
     if cost["universe_usd"] != 2.244 or cost["per_company_usd"] != 0.000561:
         errors.append(f"cost rounding {cost}")
-    bad_zip = Path("/tmp/overview_mock_corrupt.zip")
-    bad_zip.write_bytes(b"not-a-zip" + b"x" * 2000)
-    if cached_zip_ok(bad_zip):
-        errors.append("corrupt zip accepted")
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as handle:
+        bad_zip = Path(handle.name)
+        handle.write(b"not-a-zip" + b"x" * 2000)
+    try:
+        if cached_zip_ok(bad_zip):
+            errors.append("corrupt zip accepted")
+    finally:
+        bad_zip.unlink(missing_ok=True)
 
     payload = json.loads(DEFAULT_OUT.read_text(encoding="utf-8"))
     if payload.get("title") != "Overview mock":
