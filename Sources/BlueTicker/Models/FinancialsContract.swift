@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v14"
+public let companyFinancialsCacheVersion = "fin-v15"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -83,7 +83,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 //
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
-// | sales, operating_profit, net_profit | statement（income_statement 行） | StatementFinancialsResolver（#5b-1: 旧経路フォールバックなし） | done |
+// | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
 // | gross_profit, sga | statement（income_statement 行） | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
