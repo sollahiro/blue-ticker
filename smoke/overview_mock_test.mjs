@@ -10,10 +10,20 @@ assert.match(html, /だ・である/);
 assert.match(html, /を提供。/);
 assert.match(html, /を手がける。/);
 assert.doesNotMatch(html, /\/v1\/companies/);
+assert.doesNotMatch(html, /BLT-\d+/);
 
 const payload = JSON.parse(
   fs.readFileSync(new URL("./overview_mock_expected.json", import.meta.url), "utf8")
 );
+
+assert.equal(payload.title, "Overview mock");
+assert.doesNotMatch(JSON.stringify(payload), /BLT-\d+/);
+const source = fs.readFileSync(new URL("./overview_mock.py", import.meta.url), "utf8");
+assert.doesNotMatch(source, /BLT-\d+/);
+const ios = fs.readFileSync(new URL("../docs/ios-client.md", import.meta.url), "utf8");
+const overviewRow = ios.split("\n").find(line => line.startsWith("| 概要 | Summary"));
+assert.ok(overviewRow);
+assert.doesNotMatch(overviewRow, /BLT-\d+/);
 
 assert.equal(payload.schema_version, 1);
 assert.equal(payload.product_path, false);

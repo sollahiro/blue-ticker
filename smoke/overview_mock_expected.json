@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "title": "BLT-58 Overview mock",
+  "title": "Overview mock",
   "product_path": false,
   "provider": "openrouter",
   "model": "google/gemini-2.5-flash",

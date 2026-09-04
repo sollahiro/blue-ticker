@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BLT-58 Overview mock (spike).
+"""Overview mock (spike).
 
 有報「企業の概況」の「事業の内容」（XBRL `DescriptionOfBusinessTextBlock`）から
 50〜80 字の会社説明を OpenRouter で生成する。
@@ -91,8 +91,12 @@ AMOUNT_RE = re.compile(
     r"(?:\d[\d,\.]*)\s*(?:円|億円|兆円|百万円|千万円|%|％|倍|人|件|社)"
     r"|(?:売上|営業利益|純利益|時価総額)\s*\d"
 )
-BUY_RE = re.compile(r"買い推奨|買い判断|割安|投資せよ|おすすめ銘柄")
+BUY_RE = re.compile(r"買い推奨|買い判断|割安|投資せよ|おすすめ銘柄|投資判断")
 DESUMASU_RE = re.compile(r"です|ます|でした|ました|ません|でしょう|ください")
+YEAR_RE = re.compile(r"(?:19|20)\d{2}\s*年|令和|平成|年度")
+GOAL_RE = re.compile(r"中計|目標を|目指し")
+COMPANY_SUFFIX_RE = re.compile(r"株式会社")
+SENTENCE_END_RE = re.compile(r"[。！？]")
 IX_BLOCK_RE = re.compile(
     rf"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*{re.escape(XBRL_TAG)}['\"][^>]*>(.*?)</ix:nonNumeric>",
     re.DOTALL | re.IGNORECASE,
@@ -172,11 +176,27 @@ def extract_from_zip(zip_path: Path) -> str:
     return ""
 
 
+def cached_zip_ok(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size < 1000:
+        return False
+    if not zipfile.is_zipfile(path):
+        return False
+    try:
+        with zipfile.ZipFile(path) as zf:
+            if zf.testzip() is not None:
+                return False
+    except zipfile.BadZipFile:
+        return False
+    return True
+
+
 def download_edinet_zip(doc_id: str) -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = CACHE_DIR / f"{doc_id}.zip"
-    if dest.exists() and dest.stat().st_size > 1000:
+    if cached_zip_ok(dest):
         return dest
+    if dest.exists():
+        dest.unlink()
     query = urllib.parse.urlencode({"type": "1", "Subscription-Key": edinet_key()})
     url = EDINET_DOCUMENT_URL.format(doc_id=doc_id) + "?" + query
     last_error: Exception | None = None
@@ -188,6 +208,9 @@ def download_edinet_zip(doc_id: str) -> Path:
             if len(data) < 1000:
                 raise RuntimeError(f"{doc_id}: EDINET 応答が小さすぎます ({len(data)} bytes)")
             dest.write_bytes(data)
+            if not cached_zip_ok(dest):
+                dest.unlink(missing_ok=True)
+                raise RuntimeError(f"{doc_id}: ZIP ではない応答")
             return dest
         except Exception as exc:  # noqa: BLE001 — retry network/EDINET flakes
             last_error = exc
@@ -266,24 +289,66 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
         return False, "買い推奨が混ざっている"
     if DESUMASU_RE.search(text):
         return False, "ですます調になっている"
+    if YEAR_RE.search(text):
+        return False, "年度が入っている"
+    if GOAL_RE.search(text):
+        return False, "目標・中計が入っている"
+    if COMPANY_SUFFIX_RE.search(text):
+        return False, "株式会社が残っている"
+    sentences = [part for part in SENTENCE_END_RE.split(text) if part.strip()]
+    if text and not SENTENCE_END_RE.search(text):
+        return False, "言い切りの句点がない"
+    if len(sentences) > 2:
+        return False, f"文が{len(sentences)}つある"
     return True, ""
 
 
-def clip_overview(text: str) -> str:
+def clip_overview(text: str) -> str | None:
     text = text.strip()
     if len(text) <= MAX_CHARS:
         return text
     window = text[:MAX_CHARS]
-    for sep in ("。", "！", "？", "、"):
+    for sep in ("。", "！", "？"):
         idx = window.rfind(sep)
         if idx + 1 >= MIN_CHARS:
-            return window[: idx + 1]
-    return window
+            clipped = window[: idx + 1]
+            ok, _ = overview_ok({"applicable": True, "overview": clipped})
+            if ok:
+                return clipped
+    return None
+
+
+def empty_result(company: dict[str, Any], raw: str, reason: str) -> dict[str, Any]:
+    return {
+        "code": company["code"],
+        "name": company["name"],
+        "display_name": company["name"].replace("株式会社", "").strip(),
+        "sector": company["sector"],
+        "doc_id": company.get("doc_id"),
+        "input_key": company.get("input_key", INPUT_KEY),
+        "input_chars_total": len(raw),
+        "input_chars_used": 0,
+        "input_thin": True,
+        "applicable": False,
+        "overview": "",
+        "char_count": 0,
+        "reason": reason,
+        "ok": True,
+        "ok_detail": "",
+        "clipped": False,
+        "attempts": 0,
+        "model": model_name(),
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0,
+    }
 
 
 def generate_one(company: dict[str, Any]) -> dict[str, Any]:
     raw = company.get("text") or ""
     text = raw[:MAX_INPUT_CHARS]
+    if not raw.strip():
+        return empty_result(company, raw, "入力が空")
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt(company, text)},
@@ -298,59 +363,65 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
         n = len(parsed["overview"])
         style = (
             "文体はだ・である調。です・ます・でした・ましたは使わない。"
-            "「を提供。」「を手がける。」の言い切りも可。"
+            "「を提供。」「を手がける。」の言い切りも可。applicable は true のまま。"
         )
         if DESUMASU_RE.search(parsed["overview"]) and MIN_CHARS <= n <= MAX_CHARS:
             repair = (
-                f"{style} 字数は{MIN_CHARS}以上{MAX_CHARS}以下のまま。新しい事実は足さない。applicable は true。\n"
+                f"{style} 字数は{MIN_CHARS}以上{MAX_CHARS}以下のまま。新しい事実は足さない。\n"
                 f"{parsed['overview']}"
             )
         elif n < MIN_CHARS:
             repair = (
                 f"次の日本語は{n}字で短い。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下になるまで、"
                 "事業の内容にある主力の製品・サービス名を足して具体化する。"
-                f"{style} 新しい事実は作らず、数字・年度・目標は書かない。applicable は true。\n"
+                f"{style} 新しい事実は作らず、数字・年度・目標は書かない。\n"
                 f"いまの文: {parsed['overview']}\n"
                 f"事業の内容（抜粋）:\n{text[:1800]}"
             )
         else:
             repair = (
                 f"次の日本語は{n}字。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下に短縮する。"
-                f"{style} 新しい事業を足さず、数字・年度・目標は残さない。applicable は true。\n"
+                f"{style} 新しい事業を足さず、数字・年度・目標は残さない。\n"
                 f"{parsed['overview']}"
             )
-        parsed, extra, resolved_model = complete(
+        previous = parsed
+        candidate, extra, resolved_model = complete(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": repair},
             ]
         )
-        parsed["overview"] = str(parsed.get("overview") or "").strip()
-        parsed["char_count"] = len(parsed["overview"])
         usage = {
             "prompt_tokens": int(usage.get("prompt_tokens") or 0) + int(extra.get("prompt_tokens") or 0),
             "completion_tokens": int(usage.get("completion_tokens") or 0)
             + int(extra.get("completion_tokens") or 0),
             "cost": float(usage.get("cost") or 0) + float(extra.get("cost") or 0),
         }
+        candidate["overview"] = str(candidate.get("overview") or "").strip()
+        candidate["char_count"] = len(candidate["overview"])
+        if not candidate.get("applicable"):
+            parsed = previous
+            ok, why = overview_ok(parsed)
+            continue
+        parsed = candidate
         ok, why = overview_ok(parsed)
 
     overview = str(parsed.get("overview") or "").strip()
     clipped = False
     if parsed.get("applicable") and not ok:
         n = len(overview)
+        clipped_text = None
         if n > MAX_CHARS:
             clipped_text = clip_overview(overview)
         elif n < MIN_CHARS and n >= MIN_CHARS - 2:
             clipped_text = overview + "。"
-        else:
-            clipped_text = overview
-        parsed["overview"] = clipped_text
-        parsed["char_count"] = len(clipped_text)
-        ok, why = overview_ok(parsed)
-        if ok:
-            overview = clipped_text
-            clipped = True
+        if clipped_text:
+            parsed["overview"] = clipped_text
+            parsed["char_count"] = len(clipped_text)
+            ok, why = overview_ok(parsed)
+            if ok:
+                overview = clipped_text
+                clipped = True
     return {
         "code": company["code"],
         "name": company["name"],
@@ -377,10 +448,11 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
 
 
 def listed_universe_estimate(per_company_usd: float, n: int = 4000) -> dict[str, Any]:
+    per = round(per_company_usd, 6)
     return {
         "assumed_listed_count": n,
-        "per_company_usd": round(per_company_usd, 6),
-        "universe_usd": round(per_company_usd * n, 4),
+        "per_company_usd": per,
+        "universe_usd": round(per * n, 4),
     }
 
 
@@ -427,7 +499,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     mean = sum(costs) / len(costs) if costs else 0.0
     payload = {
         "schema_version": SCHEMA_VERSION,
-        "title": "BLT-58 Overview mock",
+        "title": "Overview mock",
         "product_path": False,
         "provider": "openrouter",
         "model": model_name(),
@@ -473,7 +545,39 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     if ok:
         errors.append("style ng accepted ですます")
 
+    empty = generate_one(
+        {"code": "0000", "name": "空株式会社", "sector": "その他", "doc_id": "X", "text": "  "}
+    )
+    if empty["applicable"] or empty["overview"] or empty["attempts"] != 0 or empty["cost_usd"] != 0:
+        errors.append("empty input must skip model")
+
+    year = "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスを2026年に提供。"
+    ok, _ = overview_ok({"applicable": True, "overview": year})
+    if ok:
+        errors.append("year accepted")
+    corp = "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスを提供する株式会社。"
+    ok, _ = overview_ok({"applicable": True, "overview": corp})
+    if ok:
+        errors.append("company suffix accepted")
+    many = "調味料と冷凍食品などを国内外で提供。医薬用アミノ酸を製造販売する。バイオファーマサービスも手がける。"
+    ok, _ = overview_ok({"applicable": True, "overview": many})
+    if ok:
+        errors.append("three sentences accepted")
+    if clip_overview("あ" * 90) is not None:
+        errors.append("mid-word clip accepted")
+    cost = listed_universe_estimate(0.000561)
+    if cost["universe_usd"] != 2.244 or cost["per_company_usd"] != 0.000561:
+        errors.append(f"cost rounding {cost}")
+    bad_zip = Path("/tmp/overview_mock_corrupt.zip")
+    bad_zip.write_bytes(b"not-a-zip" + b"x" * 2000)
+    if cached_zip_ok(bad_zip):
+        errors.append("corrupt zip accepted")
+
     payload = json.loads(DEFAULT_OUT.read_text(encoding="utf-8"))
+    if payload.get("title") != "Overview mock":
+        errors.append("title")
+    if re.search(r"BLT-\d+", json.dumps(payload, ensure_ascii=False)):
+        errors.append("linear id in expected json")
     if payload.get("schema_version") != SCHEMA_VERSION:
         errors.append("schema_version")
     if payload.get("product_path") is not False:
