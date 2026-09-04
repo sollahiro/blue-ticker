@@ -15,9 +15,7 @@ public let companyOverviewInputThinChars = 80
 public let companyOverviewMaxAttempts = 3
 public let companyOverviewDefaultModel = "google/gemini-2.5-flash"
 public let companyOverviewJSONSchemaName = "company_overview"
-/// 現在の VM だけで読む開発用キー。`.env.example` には載せない。
-public let companyOverviewMockAPIKeyEnv = "OPENROUTER_MOCK_KEY"
-/// 本番・新 VM に発行する Overview 用キー（機能名入り）。
+/// Overview 用キー（機能名入り）。
 public let companyOverviewAPIKeyEnv = "OPENROUTER_OVERVIEW_API_KEY"
 public let companyOverviewModelEnv = "OPENROUTER_OVERVIEW_MODEL"
 public let companyOverviewBaseURLEnv = "OPENROUTER_OVERVIEW_BASE_URL"
@@ -107,7 +105,7 @@ enum CompanyOverviewRules {
         if text.contains("株式会社") {
             return .invalid("株式会社が残っている")
         }
-        guard let last = text.last, "。！？".contains(last) else {
+        guard endsWithSentenceStop(text) else {
             return .invalid("言い切りの句点がない")
         }
         let sentences = sentenceCount(text)
@@ -117,13 +115,15 @@ enum CompanyOverviewRules {
         return .ok
     }
 
-    /// 80字超を末尾の句点で切る。途中切れは捨てる。
+    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。
     static func clip(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count <= companyOverviewMaxChars { return trimmed }
         let window = String(trimmed.prefix(companyOverviewMaxChars))
-        for sep: Character in ["。", "！", "？"] {
-            guard let idx = window.lastIndex(of: sep) else { continue }
+        var idx = window.endIndex
+        while idx > window.startIndex {
+            idx = window.index(before: idx)
+            guard isSentenceStop(window[idx]) else { continue }
             let clipped = String(window[...idx])
             guard clipped.count >= companyOverviewMinChars else { continue }
             if case .ok = evaluate(applicable: true, overview: clipped) {
@@ -133,11 +133,20 @@ enum CompanyOverviewRules {
         return nil
     }
 
+    static func endsWithSentenceStop(_ text: String) -> Bool {
+        guard let last = text.last else { return false }
+        return isSentenceStop(last)
+    }
+
+    private static func isSentenceStop(_ ch: Character) -> Bool {
+        "。！？".contains(ch)
+    }
+
     private static func sentenceCount(_ text: String) -> Int {
         var count = 0
         var current = ""
         for ch in text {
-            if "。！？".contains(ch) {
+            if isSentenceStop(ch) {
                 if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     count += 1
                 }

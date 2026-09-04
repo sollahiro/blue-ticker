@@ -102,4 +102,38 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 3)
         #expect(draft.attempts == 3)
     }
+
+    @Test func padsUnpunctuatedShortReply() async throws {
+        let short = String(repeating: "あ", count: 49)
+        #expect(short.count == 49)
+        let client = try ScriptedChat(replies: [
+            reply(overview: short),
+            reply(overview: short),
+            reply(overview: short),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.clipped)
+        #expect(draft.overview == short + "。")
+        #expect(draft.charCount == 50)
+        #expect(await client.callCount() == 3)
+    }
+
+    @Test func doesNotDoublePunctuationOnShortReply() async throws {
+        let short = String(repeating: "あ", count: 48) + "。"
+        #expect(short.count == 49)
+        let client = try ScriptedChat(replies: [
+            reply(overview: short),
+            reply(overview: short),
+            reply(overview: short),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
+        #expect(!draft.ok)
+        #expect(!draft.clipped)
+        #expect(draft.overview == short)
+        #expect(!draft.overview.hasSuffix("。。"))
+        #expect(await client.callCount() == 3)
+    }
 }

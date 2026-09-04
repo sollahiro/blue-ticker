@@ -56,6 +56,27 @@ import Testing
         #expect(ok(clipped ?? ""))
     }
 
+    @Test func clipPrefersLaterExclamationOverEarlierStop() {
+        let first = String(repeating: "あ", count: 50) + "。"
+        let second = String(repeating: "い", count: 20) + "！"
+        let overflow = String(repeating: "う", count: 20) + "。"
+        #expect(first.count == 51)
+        #expect((first + second).count == 72)
+        #expect((first + second + overflow).count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(first + second + overflow)
+        #expect(clipped == first + second)
+        #expect(ok(clipped ?? ""))
+    }
+
+    @Test func clipPrefersLaterQuestionOverEarlierStop() {
+        let first = String(repeating: "あ", count: 50) + "。"
+        let second = String(repeating: "い", count: 20) + "？"
+        let overflow = String(repeating: "う", count: 20) + "。"
+        let clipped = CompanyOverviewRules.clip(first + second + overflow)
+        #expect(clipped == first + second)
+        #expect(ok(clipped ?? ""))
+    }
+
     @Test func smokeExpectedOverviewsSatisfyRules() throws {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("smoke/overview_mock_expected.json")

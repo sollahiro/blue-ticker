@@ -90,7 +90,9 @@ enum CompanyOverviewGenerator {
             var clippedText: String?
             if n > companyOverviewMaxChars {
                 clippedText = CompanyOverviewRules.clip(overview)
-            } else if n < companyOverviewMinChars && n >= companyOverviewMinChars - 2 {
+            } else if n < companyOverviewMinChars && n >= companyOverviewMinChars - 2,
+                !CompanyOverviewRules.endsWithSentenceStop(overview)
+            {
                 clippedText = overview + "。"
             }
             if let clippedText {

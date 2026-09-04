@@ -1,5 +1,4 @@
-// Overview の OpenRouter キー解決。本番名は OPENROUTER_OVERVIEW_API_KEY。
-// 現在の VM だけ OPENROUTER_MOCK_KEY があればそれを使う（.env.example には載せない）。
+// Overview の OpenRouter キー解決。読むのは OPENROUTER_OVERVIEW_API_KEY のみ。
 
 import Foundation
 import Testing
@@ -11,27 +10,9 @@ import Testing
         #expect(companyOverviewAPIKeyEnv == "OPENROUTER_OVERVIEW_API_KEY")
         #expect(companyOverviewModelEnv == "OPENROUTER_OVERVIEW_MODEL")
         #expect(companyOverviewBaseURLEnv == "OPENROUTER_OVERVIEW_BASE_URL")
-        #expect(companyOverviewMockAPIKeyEnv == "OPENROUTER_MOCK_KEY")
     }
 
-    @Test func usesMockKeyOnCurrentVM() throws {
-        let endpoint = try #require(
-            resolveOverviewLLMEndpoint([
-                companyOverviewMockAPIKeyEnv: "mock-key",
-            ]))
-        #expect(endpoint.apiKey == "mock-key")
-    }
-
-    @Test func mockKeyWinsOverFeatureKey() throws {
-        let endpoint = try #require(
-            resolveOverviewLLMEndpoint([
-                companyOverviewMockAPIKeyEnv: "mock-key",
-                companyOverviewAPIKeyEnv: "overview-prod-key",
-            ]))
-        #expect(endpoint.apiKey == "mock-key")
-    }
-
-    @Test func featureKeyWorksWhenMockIsAbsent() throws {
+    @Test func featureKeyWorks() throws {
         let endpoint = try #require(
             resolveOverviewLLMEndpoint([
                 companyOverviewAPIKeyEnv: "overview-prod-key",
@@ -39,18 +20,26 @@ import Testing
         #expect(endpoint.apiKey == "overview-prod-key")
     }
 
-    @Test func genericOpenRouterApiKeyIsNotRead() {
+    @Test func mockAndGenericOpenRouterKeysAreNotRead() {
+        #expect(
+            resolveOverviewLLMEndpoint([
+                "OPENROUTER_MOCK_KEY": "mock-key",
+            ]) == nil)
         #expect(
             resolveOverviewLLMEndpoint([
                 "OPENROUTER_API_KEY": "generic-key",
             ]) == nil)
+        let endpoint = resolveOverviewLLMEndpoint([
+            "OPENROUTER_MOCK_KEY": "mock-key",
+            companyOverviewAPIKeyEnv: "overview-prod-key",
+        ])
+        #expect(endpoint?.apiKey == "overview-prod-key")
     }
 
     @Test func missingKeysDisablesOverview() {
         #expect(resolveOverviewLLMEndpoint([:]) == nil)
         #expect(
             resolveOverviewLLMEndpoint([
-                companyOverviewMockAPIKeyEnv: "",
                 companyOverviewAPIKeyEnv: "  ",
             ]) == nil)
     }
