@@ -82,6 +82,18 @@ enum Xbrl {
 
     // MARK: - 当期純利益タグ
 
+    /// 親会社株主に帰属する当期純利益。Summary `net_profit` はこれらのタグを
+    /// PL → SS の順で優先し、無いときだけ `netProfitTags` の `ProfitLoss` 等へ戻る。
+    static let parentAttributableNetProfitTags: [String] = [
+        "ProfitLossAttributableToOwnersOfParentIFRS",
+        "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+        "ProfitLossAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
+        "NetIncomeLossAttributableToOwnersOfParentUSGAAP",
+        "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+        "ProfitLossAttributableToOwnersOfParent",
+        "ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults",
+    ]
+
     static let netProfitTags: [String] = [
         "ProfitLossAttributableToOwnersOfParentIFRS",
         "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",

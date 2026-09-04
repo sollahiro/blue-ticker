@@ -69,7 +69,8 @@ enum StatementFinancialsResolver {
         // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
         // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
         // （行値だけを辞書化すると先勝ちで期首や計算派生値に引きずられる）。
-        // SS は dividend_ss / buyback 専用。済み本表 Extractor（sales 等）の候補に混ぜない。
+        // SS は dividend_ss / buyback と、PL に親会社帰属純利益が無いときの net_profit 用。
+        // 済み本表 Extractor（sales 等）の候補には混ぜない。
         let mainTags = Set(
             (year.balanceSheet + year.incomeStatement + year.cashFlow).map(\.tag))
         let equityTags = Set(year.changesInEquity.map(\.tag))
@@ -123,7 +124,10 @@ enum StatementFinancialsResolver {
             salesLabel: salesLabel,
             operatingProfit: operatingProfit,
             operatingProfitLabel: operatingProfitLabel,
-            netProfit: is_.netProfit,
+            netProfit: resolveParentAttributableNetProfit(
+                incomeStatement: year.incomeStatement,
+                changesInEquity: year.changesInEquity,
+                fallback: is_.netProfit),
             totalAssets: bs.totalAssets,
             currentAssets: bs.currentAssets,
             nonCurrentAssets: bs.nonCurrentAssets,
@@ -209,7 +213,9 @@ enum StatementFinancialsResolver {
             durationFS["NetSales"] = FieldValue(current: sales.value, prior: nil)
             salesLabelOverride = sales.labelOverride
         }
-        if let np = resolveUSGAAPNetProfit(year.incomeStatement) {
+        if let np = resolveUSGAAPNetProfit(year.incomeStatement)
+            ?? resolveUSGAAPNetProfit(year.changesInEquity)
+        {
             durationFS["NetIncomeLossAttributableToOwnersOfParentUSGAAP"] = FieldValue(
                 current: np, prior: nil)
         }
@@ -246,7 +252,10 @@ enum StatementFinancialsResolver {
             salesLabel: salesLabelOverride ?? is_.salesLabel ?? "売上高",
             operatingProfit: op.operatingProfit ?? is_.operatingProfit,
             operatingProfitLabel: op.operatingProfit != nil ? op.label : nil,
-            netProfit: is_.netProfit,
+            netProfit: resolveParentAttributableNetProfit(
+                incomeStatement: year.incomeStatement,
+                changesInEquity: year.changesInEquity,
+                fallback: is_.netProfit),
             totalAssets: bs.totalAssets,
             currentAssets: bs.currentAssets,
             nonCurrentAssets: nonCurrent,
@@ -451,6 +460,30 @@ enum StatementFinancialsResolver {
             last = item.value
         }
         return last.map { -$0 }
+    }
+
+    /// Summary `net_profit` は親会社株主に帰属する当期純利益を正とする。
+    /// PL に親会社帰属タグがあればそれを使い、無ければ SS を見る。
+    /// どちらにも無いときだけ既存の `ProfitLoss` 等（`fallback`）に戻る。
+    static func resolveParentAttributableNetProfit(
+        incomeStatement: [StatementLineItem],
+        changesInEquity: [StatementLineItem],
+        fallback: Double?
+    ) -> Double? {
+        firstTaggedValue(incomeStatement, tags: Xbrl.parentAttributableNetProfitTags)
+            ?? firstTaggedValue(changesInEquity, tags: Xbrl.parentAttributableNetProfitTags)
+            ?? fallback
+    }
+
+    private static func firstTaggedValue(
+        _ items: [StatementLineItem], tags: [String]
+    ) -> Double? {
+        for tag in tags {
+            if let item = items.first(where: { $0.tag == tag && $0.unit != "JPYPerShares" }) {
+                return item.value
+            }
+        }
+        return nil
     }
 
     /// US-GAAP 売掛相当。単一行（受取債権合計 / 売上債権）を優先し、無ければ流動資産内の
