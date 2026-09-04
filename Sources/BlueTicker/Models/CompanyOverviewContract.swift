@@ -15,6 +15,10 @@ public let companyOverviewInputThinChars = 80
 public let companyOverviewMaxAttempts = 3
 public let companyOverviewDefaultModel = "google/gemini-2.5-flash"
 public let companyOverviewJSONSchemaName = "company_overview"
+/// 今回の実装が読むキー（スパイク `smoke/overview_mock.py` と同じ）。
+public let companyOverviewMockAPIKeyEnv = "OPENROUTER_MOCK_KEY"
+/// 本番用。新 VM に発行・再登録する名前。mock 未設定時のフォールバック。
+public let companyOverviewAPIKeyEnv = "OPENROUTER_API_KEY"
 
 /// LLM 呼び出し前の入力。空ならモデルを呼ばない。
 public struct CompanyOverviewInput: Sendable, Equatable {
