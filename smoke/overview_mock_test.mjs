@@ -5,6 +5,7 @@ import vm from "node:vm";
 const html = fs.readFileSync(new URL("./overview_mock.html", import.meta.url), "utf8");
 assert.match(html, /overview_mock_expected\.json/);
 assert.match(html, /会社説明はまだありません/);
+assert.match(html, /事業の内容/);
 assert.doesNotMatch(html, /\/v1\/companies/);
 
 const payload = JSON.parse(
@@ -14,21 +15,22 @@ const payload = JSON.parse(
 assert.equal(payload.schema_version, 1);
 assert.equal(payload.product_path, false);
 assert.equal(payload.provider, "openrouter");
-assert.equal(payload.input_key, "management_policy");
+assert.equal(payload.input_key, "description_of_business");
+assert.equal(payload.section_title, "事業の内容");
+assert.equal(payload.xbrl_tag, "DescriptionOfBusinessTextBlock");
 assert.deepEqual(payload.char_range, [50, 80]);
 assert.ok(Array.isArray(payload.findings) && payload.findings.length >= 3);
+assert.match(payload.findings.join("\n"), /事業の内容/);
 assert.equal(typeof payload.cost.per_company_usd, "number");
 assert.ok(payload.cost.per_company_usd > 0);
 assert.ok(payload.cost.universe_usd > 0);
 
 const amountRe = /(?:\d[\d,\.]*)\s*(?:円|億円|兆円|百万円|%|％|倍)/;
 let applicable = 0;
-let empty = 0;
 for (const row of payload.companies) {
-  assert.equal(row.input_key, "management_policy");
+  assert.equal(row.input_key, "description_of_business");
   assert.equal(row.char_count, row.overview.length);
   if (!row.applicable) {
-    empty += 1;
     assert.equal(row.overview, "");
     continue;
   }
@@ -37,13 +39,17 @@ for (const row of payload.companies) {
   assert.equal(amountRe.test(row.overview), false, row.code);
   assert.doesNotMatch(row.overview, /買い推奨|割安/);
 }
-assert.ok(applicable >= 1);
-assert.ok(empty >= 1);
+assert.equal(applicable, payload.companies.length);
+
+const toyota = payload.companies.find(item => item.code === "7203");
+assert.ok(toyota);
+assert.match(toyota.overview, /自動車|金融/);
 
 const mufg = payload.companies.find(item => item.code === "8306");
 assert.ok(mufg);
-assert.equal(mufg.applicable, false);
-assert.equal(mufg.input_thin, true);
+assert.equal(mufg.applicable, true);
+assert.equal(mufg.input_thin, false);
+assert.match(mufg.overview, /銀行|信託|証券|金融/);
 
 const context = vm.createContext({ console });
 const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
