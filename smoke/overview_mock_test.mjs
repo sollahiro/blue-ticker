@@ -6,6 +6,7 @@ const html = fs.readFileSync(new URL("./overview_mock.html", import.meta.url), "
 assert.match(html, /overview_mock_expected\.json/);
 assert.match(html, /会社説明はまだありません/);
 assert.match(html, /事業の内容/);
+assert.match(html, /だ・である/);
 assert.doesNotMatch(html, /\/v1\/companies/);
 
 const payload = JSON.parse(
@@ -21,6 +22,7 @@ assert.equal(payload.xbrl_tag, "DescriptionOfBusinessTextBlock");
 assert.deepEqual(payload.char_range, [50, 80]);
 assert.ok(Array.isArray(payload.findings) && payload.findings.length >= 3);
 assert.match(payload.findings.join("\n"), /事業の内容/);
+assert.match(payload.findings.join("\n"), /だ・である/);
 assert.equal(typeof payload.cost.per_company_usd, "number");
 assert.ok(payload.cost.per_company_usd > 0);
 assert.ok(payload.cost.universe_usd > 0);
@@ -38,6 +40,7 @@ for (const row of payload.companies) {
   assert.ok(row.overview.length >= 50 && row.overview.length <= 80, row.code);
   assert.equal(amountRe.test(row.overview), false, row.code);
   assert.doesNotMatch(row.overview, /買い推奨|割安/);
+  assert.doesNotMatch(row.overview, /です|ます|でした|ました/, `${row.code} だ・である調`);
 }
 assert.equal(applicable, payload.companies.length);
 

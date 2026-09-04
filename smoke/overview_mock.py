@@ -67,6 +67,7 @@ SYSTEM_PROMPT = """あなたは日本の有価証券報告書「企業の概況�
 - 「何をしている会社か」だけ。金額・件数・比率・成長率・目標・年度を書かない。
 - 買い推奨・投資判断・銘柄コードを書かない。
 - 社名は必要なら一度だけ。株式会社は付けない。
+- 文体はだ・である調で統一する。です・ます・でした・ましたは使わない。終止は「する」「行う」「手掛ける」「である」など。体言止めにしない。
 出力は JSON のみ。"""
 
 JSON_SCHEMA: dict[str, Any] = {
@@ -90,6 +91,7 @@ AMOUNT_RE = re.compile(
     r"|(?:売上|営業利益|純利益|時価総額)\s*\d"
 )
 BUY_RE = re.compile(r"買い推奨|買い判断|割安|投資せよ|おすすめ銘柄")
+DESUMASU_RE = re.compile(r"です|ます|でした|ました|ません|でしょう|ください")
 IX_BLOCK_RE = re.compile(
     rf"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*{re.escape(XBRL_TAG)}['\"][^>]*>(.*?)</ix:nonNumeric>",
     re.DOTALL | re.IGNORECASE,
@@ -261,6 +263,8 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
         return False, "金額・件数・比率らしい数字が入っている"
     if BUY_RE.search(text):
         return False, "買い推奨が混ざっている"
+    if DESUMASU_RE.search(text):
+        return False, "ですます調になっている"
     return True, ""
 
 
@@ -291,18 +295,24 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
     while not ok and attempts < 3 and parsed.get("applicable"):
         attempts += 1
         n = len(parsed["overview"])
-        if n < MIN_CHARS:
+        style = "文体はだ・である調。です・ます・でした・ましたは使わない。終止はする／行う／手掛ける／である。"
+        if DESUMASU_RE.search(parsed["overview"]) and MIN_CHARS <= n <= MAX_CHARS:
             repair = (
-                f"次の日本語は{n}字で短すぎます。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下になるまで、"
-                "事業の内容にある主力の製品・サービス名を足して具体化してください。"
-                "新しい事実は作らず、数字・年度・目標は書かない。applicable は true のまま。\n"
+                f"{style} 字数は{MIN_CHARS}以上{MAX_CHARS}以下のまま。新しい事実は足さない。applicable は true。\n"
+                f"{parsed['overview']}"
+            )
+        elif n < MIN_CHARS:
+            repair = (
+                f"次の日本語は{n}字で短い。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下になるまで、"
+                "事業の内容にある主力の製品・サービス名を足して具体化する。"
+                f"{style} 新しい事実は作らず、数字・年度・目標は書かない。applicable は true。\n"
                 f"いまの文: {parsed['overview']}\n"
                 f"事業の内容（抜粋）:\n{text[:1800]}"
             )
         else:
             repair = (
-                f"次の日本語は{n}字です。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下に短縮してください。"
-                "新しい事業を足さず、数字・年度・目標は残さない。applicable は true のまま。\n"
+                f"次の日本語は{n}字。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下に短縮する。"
+                f"{style} 新しい事業を足さず、数字・年度・目標は残さない。applicable は true。\n"
                 f"{parsed['overview']}"
             )
         parsed, extra, resolved_model = complete(
@@ -376,6 +386,7 @@ def findings() -> list[str]:
         "入力は有報「企業の概況」の「事業の内容」（XBRL DescriptionOfBusinessTextBlock）。Filing texts キーは増やさない",
         "management_policy（経営方針）だと理念・中計になり、事業内容にならない。8306 は方針が前置きだけで空だった",
         "google/gemini-2.5-flash-lite は日本語字数を守りにくい。flash は概ね 50〜80 字",
+        "会社説明の文体はだ・である調。ですますは使わない",
         "1 社あたりコストは OpenRouter usage.cost の平均。上場 4000 社は概算",
     ]
 
