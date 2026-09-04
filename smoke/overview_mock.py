@@ -67,7 +67,8 @@ SYSTEM_PROMPT = """あなたは日本の有価証券報告書「企業の概況�
 - 「何をしている会社か」だけ。金額・件数・比率・成長率・目標・年度を書かない。
 - 買い推奨・投資判断・銘柄コードを書かない。
 - 社名は必要なら一度だけ。株式会社は付けない。
-- 文体はだ・である調で統一する。です・ます・でした・ましたは使わない。終止は「する」「行う」「手掛ける」「である」など。体言止めにしない。
+- 文体はだ・である調。です・ます・でした・ましたは使わない。
+- 終止は「する」「行う」「手がける」「である」のほか、「を提供。」「を手がける。」のような言い切りでよい。どちらも可。
 出力は JSON のみ。"""
 
 JSON_SCHEMA: dict[str, Any] = {
@@ -295,7 +296,10 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
     while not ok and attempts < 3 and parsed.get("applicable"):
         attempts += 1
         n = len(parsed["overview"])
-        style = "文体はだ・である調。です・ます・でした・ましたは使わない。終止はする／行う／手掛ける／である。"
+        style = (
+            "文体はだ・である調。です・ます・でした・ましたは使わない。"
+            "「を提供。」「を手がける。」の言い切りも可。"
+        )
         if DESUMASU_RE.search(parsed["overview"]) and MIN_CHARS <= n <= MAX_CHARS:
             repair = (
                 f"{style} 字数は{MIN_CHARS}以上{MAX_CHARS}以下のまま。新しい事実は足さない。applicable は true。\n"
@@ -386,7 +390,7 @@ def findings() -> list[str]:
         "入力は有報「企業の概況」の「事業の内容」（XBRL DescriptionOfBusinessTextBlock）。Filing texts キーは増やさない",
         "management_policy（経営方針）だと理念・中計になり、事業内容にならない。8306 は方針が前置きだけで空だった",
         "google/gemini-2.5-flash-lite は日本語字数を守りにくい。flash は概ね 50〜80 字",
-        "会社説明の文体はだ・である調。ですますは使わない",
+        "会社説明の文体はだ・である調。ですますは使わない。「を提供。」「を手がける。」の言い切りも可",
         "1 社あたりコストは OpenRouter usage.cost の平均。上場 4000 社は概算",
     ]
 
@@ -449,6 +453,25 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
         errors.append(f"extract fixture: {extracted!r}")
     if "子会社の一覧" in extracted:
         errors.append("extract leaked next section")
+
+    style_ok = [
+        "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスなどを国内海外で提供。",
+        "銀行業務、信託銀行業務、証券業務を中心に、カード・リース・資産運用などの幅広い金融サービスを手がける。",
+    ]
+    for sample in style_ok:
+        ok, why = overview_ok(
+            {"applicable": True, "overview": sample, "char_count": len(sample), "reason": ""}
+        )
+        if not ok:
+            errors.append(f"style ok rejected ({len(sample)}字): {sample!r} {why}")
+    polite = (
+        "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスなどを国内海外で提供しています。"
+    )
+    ok, why = overview_ok(
+        {"applicable": True, "overview": polite, "char_count": len(polite), "reason": ""}
+    )
+    if ok:
+        errors.append("style ng accepted ですます")
 
     payload = json.loads(DEFAULT_OUT.read_text(encoding="utf-8"))
     if payload.get("schema_version") != SCHEMA_VERSION:

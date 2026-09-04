@@ -7,6 +7,8 @@ assert.match(html, /overview_mock_expected\.json/);
 assert.match(html, /会社説明はまだありません/);
 assert.match(html, /事業の内容/);
 assert.match(html, /だ・である/);
+assert.match(html, /を提供。/);
+assert.match(html, /を手がける。/);
 assert.doesNotMatch(html, /\/v1\/companies/);
 
 const payload = JSON.parse(
@@ -23,6 +25,8 @@ assert.deepEqual(payload.char_range, [50, 80]);
 assert.ok(Array.isArray(payload.findings) && payload.findings.length >= 3);
 assert.match(payload.findings.join("\n"), /事業の内容/);
 assert.match(payload.findings.join("\n"), /だ・である/);
+assert.match(payload.findings.join("\n"), /を提供。/);
+assert.match(payload.findings.join("\n"), /を手がける。/);
 assert.equal(typeof payload.cost.per_company_usd, "number");
 assert.ok(payload.cost.per_company_usd > 0);
 assert.ok(payload.cost.universe_usd > 0);

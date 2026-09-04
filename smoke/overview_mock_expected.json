@@ -22,7 +22,7 @@
     "入力は有報「企業の概況」の「事業の内容」（XBRL DescriptionOfBusinessTextBlock）。Filing texts キーは増やさない",
     "management_policy（経営方針）だと理念・中計になり、事業内容にならない。8306 は方針が前置きだけで空だった",
     "google/gemini-2.5-flash-lite は日本語字数を守りにくい。flash は概ね 50〜80 字",
-    "会社説明の文体はだ・である調。ですますは使わない",
+    "会社説明の文体はだ・である調。ですますは使わない。「を提供。」「を手がける。」の言い切りも可",
     "1 社あたりコストは OpenRouter usage.cost の平均。上場 4000 社は概算"
   ],
   "companies": [
