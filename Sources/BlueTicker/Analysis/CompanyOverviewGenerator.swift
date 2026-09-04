@@ -46,19 +46,28 @@ enum CompanyOverviewGenerator {
         }
 
         var attempts = 0
-        var parsed = LLMOverviewReply(applicable: false, overview: "", reason: "")
+        let parsedFirst: LLMOverviewReply
         do {
-            parsed = try await complete(
+            parsedFirst = try await complete(
                 client: client, schema: schema, user: userPrompt(input: input, text: text, repair: nil))
             attempts = 1
-            var verdict = CompanyOverviewRules.evaluate(
-                applicable: parsed.applicable, overview: parsed.overview)
+        } catch {
+            printError("CompanyOverviewGenerator: LLM呼び出し失敗: \(error)\n")
+            return failedDraft(
+                input: input, raw: raw, used: text, model: model, reason: String(describing: error),
+                attempts: 1)
+        }
 
-            while case .invalid(let why) = verdict, attempts < companyOverviewMaxAttempts,
-                  parsed.applicable
-            {
-                attempts += 1
-                let repair = repairPrompt(current: parsed.overview, source: text, detail: why)
+        var parsed = parsedFirst
+        var verdict = CompanyOverviewRules.evaluate(
+            applicable: parsed.applicable, overview: parsed.overview)
+
+        while case .invalid(let why) = verdict, attempts < companyOverviewMaxAttempts,
+              parsed.applicable
+        {
+            attempts += 1
+            let repair = repairPrompt(current: parsed.overview, source: text, detail: why)
+            do {
                 let candidate = try await complete(client: client, schema: schema, user: repair)
                 if !candidate.applicable {
                     verdict = CompanyOverviewRules.evaluate(
@@ -68,53 +77,51 @@ enum CompanyOverviewGenerator {
                 parsed = candidate
                 verdict = CompanyOverviewRules.evaluate(
                     applicable: parsed.applicable, overview: parsed.overview)
+            } catch {
+                printError("CompanyOverviewGenerator: repair LLM呼び出し失敗: \(error)\n")
+                break
             }
-
-            var overview = parsed.overview
-            var clipped = false
-            if parsed.applicable, case .invalid = verdict {
-                let n = overview.count
-                var clippedText: String?
-                if n > companyOverviewMaxChars {
-                    clippedText = CompanyOverviewRules.clip(overview)
-                } else if n < companyOverviewMinChars && n >= companyOverviewMinChars - 2 {
-                    clippedText = overview + "。"
-                }
-                if let clippedText {
-                    let clippedVerdict = CompanyOverviewRules.evaluate(
-                        applicable: true, overview: clippedText)
-                    if case .ok = clippedVerdict {
-                        overview = clippedText
-                        parsed.overview = clippedText
-                        clipped = true
-                        verdict = .ok
-                    }
-                }
-            }
-
-            let ok: Bool
-            let okDetail: String
-            switch verdict {
-            case .ok:
-                ok = true
-                okDetail = ""
-            case .invalid(let why):
-                ok = false
-                okDetail = why
-            }
-            return CompanyOverviewDraft(
-                applicable: parsed.applicable, overview: overview, charCount: overview.count,
-                reason: parsed.reason, ok: ok, okDetail: okDetail, clipped: clipped,
-                attempts: attempts, model: model, inputCharsTotal: raw.count,
-                inputCharsUsed: text.count,
-                inputThin: raw.trimmingCharacters(in: .whitespacesAndNewlines).count
-                    < companyOverviewInputThinChars)
-        } catch {
-            printError("CompanyOverviewGenerator: LLM呼び出し失敗: \(error)\n")
-            return failedDraft(
-                input: input, raw: raw, used: text, model: model, reason: String(describing: error),
-                attempts: max(attempts, 1))
         }
+
+        var overview = parsed.overview
+        var clipped = false
+        if parsed.applicable, case .invalid = verdict {
+            let n = overview.count
+            var clippedText: String?
+            if n > companyOverviewMaxChars {
+                clippedText = CompanyOverviewRules.clip(overview)
+            } else if n < companyOverviewMinChars && n >= companyOverviewMinChars - 2 {
+                clippedText = overview + "。"
+            }
+            if let clippedText {
+                let clippedVerdict = CompanyOverviewRules.evaluate(
+                    applicable: true, overview: clippedText)
+                if case .ok = clippedVerdict {
+                    overview = clippedText
+                    parsed.overview = clippedText
+                    clipped = true
+                    verdict = .ok
+                }
+            }
+        }
+
+        let ok: Bool
+        let okDetail: String
+        switch verdict {
+        case .ok:
+            ok = true
+            okDetail = ""
+        case .invalid(let why):
+            ok = false
+            okDetail = why
+        }
+        return CompanyOverviewDraft(
+            applicable: parsed.applicable, overview: overview, charCount: overview.count,
+            reason: parsed.reason, ok: ok, okDetail: okDetail, clipped: clipped,
+            attempts: attempts, model: model, inputCharsTotal: raw.count,
+            inputCharsUsed: text.count,
+            inputThin: raw.trimmingCharacters(in: .whitespacesAndNewlines).count
+                < companyOverviewInputThinChars)
     }
 
     private struct LLMOverviewReply {

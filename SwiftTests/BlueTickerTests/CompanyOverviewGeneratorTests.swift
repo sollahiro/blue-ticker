@@ -93,11 +93,13 @@ private actor ScriptedChat: ChatCompleting {
         let client = try ScriptedChat(replies: [
             reply(overview: good + "です"),
             reply(overview: "", applicable: false),
+            reply(overview: "", applicable: false),
         ])
         let draft = await CompanyOverviewGenerator.generate(
             input: input("調味料の製造販売。"), client: client, model: companyOverviewDefaultModel)
         #expect(draft.applicable)
         #expect(draft.overview.contains("調味料"))
-        #expect(await client.callCount() == 2)
+        #expect(await client.callCount() == 3)
+        #expect(draft.attempts == 3)
     }
 }
