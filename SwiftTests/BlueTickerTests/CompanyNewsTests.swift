@@ -72,6 +72,7 @@ import Testing
         #expect(q.contains("site:reuters.com"))
         #expect(q.contains("site:bloomberg.co.jp"))
         #expect(q.contains("site:release.tdnet.info"))
+        #expect(q.contains("site:prtimes.jp"))
         #expect(q.contains("site:plantdb.jp"))
         #expect(q.contains("site:logi-today.com"))
         #expect(q.contains("site:semi-journal.jp/news"))
@@ -82,12 +83,13 @@ import Testing
             CompanyNewsItem(title: "日経", url: "https://www.nikkei.com/article/1"),
             CompanyNewsItem(title: "東洋経済", url: "https://toyokeizai.net/articles/-/1"),
             CompanyNewsItem(title: "Yahoo", url: "https://news.yahoo.co.jp/articles/1"),
+            CompanyNewsItem(title: "PR TIMES", url: "https://prtimes.jp/main/html/rd/p/000000001.000000001.html"),
             CompanyNewsItem(title: "SEMI news", url: "https://semi-journal.jp/news/latest.html"),
             CompanyNewsItem(title: "SEMI basics", url: "https://semi-journal.jp/basics/water/edi.html"),
             CompanyNewsItem(title: "PlantDB", url: "https://plantdb.jp/article/abc"),
             CompanyNewsItem(title: "LOGI", url: "https://www.logi-today.com/123"),
         ]
         let kept = filterCompanyNewsByAllowedSources(items).map(\.title)
-        #expect(kept == ["日経", "東洋経済", "SEMI news", "PlantDB", "LOGI"])
+        #expect(kept == ["日経", "東洋経済", "PR TIMES", "SEMI news", "PlantDB", "LOGI"])
     }
 }

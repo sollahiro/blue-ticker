@@ -65,7 +65,7 @@ public func decodeBraveNewsSearch(from data: Data) throws -> CompanyNewsPage {
 }
 
 /// 許可するニュースソースのホスト末尾（サブドメイン可）。
-/// ロイター / 日経 / ブルームバーグ / TDnet / 東洋経済 / PlantDB / LOGI-TODAY / SEMI Journal。
+/// ロイター / 日経 / ブルームバーグ / TDnet / 東洋経済 / PR TIMES / PlantDB / LOGI-TODAY / SEMI Journal。
 public let companyNewsAllowedHostSuffixes: [String] = [
     "reuters.com",
     "nikkei.com",
@@ -73,6 +73,7 @@ public let companyNewsAllowedHostSuffixes: [String] = [
     "bloomberg.co.jp",
     "release.tdnet.info",
     "toyokeizai.net",
+    "prtimes.jp",
     "plantdb.jp",
     "logi-today.com",
     "semi-journal.jp",
@@ -86,6 +87,7 @@ public let companyNewsSiteFilterHosts: [String] = [
     "bloomberg.co.jp",
     "release.tdnet.info",
     "toyokeizai.net",
+    "prtimes.jp",
     "plantdb.jp",
     "logi-today.com",
     "semi-journal.jp/news",
