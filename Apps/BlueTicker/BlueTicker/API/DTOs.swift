@@ -77,6 +77,38 @@ struct FeedTrendItem: Codable, Hashable, Identifiable {
     }
 }
 
+struct CompanyNewsResponse: Codable {
+    var schemaVersion: Int
+    var date: String
+    var code: String
+    var name: String
+    var query: String
+    var items: [CompanyNewsItem]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case date, code, name, query, items
+    }
+}
+
+struct CompanyNewsItem: Codable, Hashable, Identifiable {
+    var title: String
+    var url: String
+    var source: String?
+    var age: String?
+    var publishedAt: String?
+    var description: String?
+    var thumbnailURL: String?
+
+    var id: String { url }
+
+    enum CodingKeys: String, CodingKey {
+        case title, url, source, age, description
+        case publishedAt = "published_at"
+        case thumbnailURL = "thumbnail_url"
+    }
+}
+
 struct FinancialsResponse: Codable {
     var schemaVersion: Int
     var code: String

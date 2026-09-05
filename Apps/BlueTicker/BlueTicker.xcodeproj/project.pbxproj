@@ -27,6 +27,7 @@
 		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
 		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
+		AA0000000000000000000022 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* NewsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +53,7 @@
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
+		BB0000000000000000000022 /* NewsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,6 +147,7 @@
 				BB0000000000000000000016 /* TickerView.swift */,
 				BB0000000000000000000017 /* SummaryView.swift */,
 				BB0000000000000000000018 /* BreakdownView.swift */,
+				BB0000000000000000000022 /* NewsView.swift */,
 			);
 			path = Ticker;
 			sourceTree = "<group>";
@@ -238,6 +241,7 @@
 				AA0000000000000000000016 /* TickerView.swift in Sources */,
 				AA0000000000000000000017 /* SummaryView.swift in Sources */,
 				AA0000000000000000000018 /* BreakdownView.swift in Sources */,
+				AA0000000000000000000022 /* NewsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -70,6 +70,7 @@ func registerRoutes(
     // filings は軽量な EDINET 一覧取得のため未格納時のライブ取得を許容する。
     let dbAvailable = !app.databases.ids().isEmpty
     installFeedTrendDefaults(app)
+    installCompanyNewsDefaults(app)
 
     // GET /v1/companies?q={query}
     // icon_url は company_icons（R2格納済み favicon）のバッチ lookup で合成する（未格納・R2未設定・
@@ -259,6 +260,19 @@ func registerRoutes(
             db: dbAvailable ? req.db : nil)
     }
 
+    // GET /v1/companies/{code}/news?limit=10
+    // Brave News Search のプレビュー（skills / MCP 未掲載）。キー未設定・上流失敗は 503。
+    v1.get("companies", ":code", "news") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let limit = parseCompanyNewsLimit(req.query[Int.self, at: "limit"])
+        return companyNewsJSONResponse(
+            await serveCompanyNews(
+                codeRaw: code,
+                limit: limit,
+                client: companyNewsBox(for: req.application).client,
+                logger: req.logger))
+    }
+
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
@@ -291,6 +305,20 @@ private func feedTrendJSONResponse(_ result: FeedTrendServeResult, db: Database?
         return errorResponse(.badRequest, message: message)
     case .unavailable:
         return errorResponse(.serviceUnavailable, message: feedTrendUnavailableMessage)
+    }
+}
+
+/// 銘柄ニュース応答。未設定・Brave 失敗は 503。未知銘柄は 404。
+private func companyNewsJSONResponse(_ result: CompanyNewsServeResult) -> Response {
+    switch result {
+    case .ok(let body):
+        return jsonResponse(body, status: .ok)
+    case .badRequest(let message):
+        return errorResponse(.badRequest, message: message)
+    case .notFound(let message):
+        return errorResponse(.notFound, message: message)
+    case .unavailable:
+        return errorResponse(.serviceUnavailable, message: companyNewsUnavailableMessage)
     }
 }
 

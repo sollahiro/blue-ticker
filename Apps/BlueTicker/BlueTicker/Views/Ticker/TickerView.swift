@@ -35,12 +35,9 @@ struct TickerView: View {
                     BreakdownView(code: company.code)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .tag(TickerPage.breakdown)
-                    TickerStubView(
-                        title: "ニュース",
-                        detail: "外部ニュースの置き場です。ソースは未決のため、v1 はページ枠のみです。"
-                    )
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .tag(TickerPage.news)
+                    NewsView(code: company.code)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .tag(TickerPage.news)
                     TickerStubView(
                         title: "レポート",
                         detail: "有報一覧の置き場です。v1 はページ枠のみです。"

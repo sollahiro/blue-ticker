@@ -27,7 +27,7 @@
 | 条件 | Screen。キーワードは正本にしない。Figma の業種チップ列は未完成で、インタラクティブな条件設定ができればよい |
 | フロー | Sankey。未実装。銘柄カードからは外し、ロードマップに残す |
 | インタビュー | 構想。銘柄カードからは外し、ロードマップに残す |
-| ニュース | 外部ニュース。ソース未決。v1 はページ枠 |
+| ニュース | 外部ニュース。Brave News Search をサーバー経由（キーはアプリに埋め込まない） |
 | 概要の中タブ | `売上` / `利益率` / `CF` / `BS` / `投資` はフロー側の metric 切替へ移す（フロー実装時） |
 | 概要 | Summary の水準値（損益など）。年度は古い順に左から右。単位は PL 系・キャッシュ系それぞれで表全体に共通のものを自動選択し、行ラベルに出す。`ROIC` / `ROE` は水準より推移が要るので概要には置かず分解へ回す。銘柄の短い会社説明（Overview）の入力は有報「企業の概況」の「事業の内容」。長さは 50〜80 字が目安で、情報量が少なければ無理に足さない。生成・検証は `BlueTickerCore`。格納契約は `company_overviews`（会社1社=1行。由来の有報は `doc_id`。Filing texts キーは増やさない）。ingest stage / 公開 REST / iOS 製品面は未配線。 |
 | 分解 | Waterfall の `事業利益` / `ROIC` / `ROE` のみ。ネットキャッシュ・CCC は出さない。`ROIC` / `ROE` は年度別の折れ線。未算出の年は点も線も描かない |
@@ -47,7 +47,7 @@
 | リスト | （クライアント） | ウォッチリスト |
 | 概要 | Summary | 年次の水準値。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ |
-| ニュース | （外部。未接続） | Brave 等は未決。v1 はページ枠 |
+| ニュース | News（Brave） | サーバー経由 preview。`GET /v1/companies/{code}/news`。キー未設定は空 |
 | レポート | Filing | 有報一覧。v1 はページ枠 |
 | フロー | Sankey | ロードマップ。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | Report（構想） | ロードマップ。本来クライアント責務 |
@@ -88,11 +88,11 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 ## ニュース（Brave）
 
-候補は [Brave News Search](https://api-dashboard.search.brave.com/documentation/services/news-search)。EDINET の代替ではない。JP / `ja`、料金、キー管理、iOS 直叩きかサーバー経由かは未決。サーバーに載せるなら外部 API 追加になる。
+候補は [Brave News Search](https://api-dashboard.search.brave.com/documentation/services/news-search)。EDINET の代替ではない。JP / `ja`、キーはサーバー側 `BLT_NEWS_CURATION_KEY`。iOS は公開 REST `GET /v1/companies/{code}/news` のみ（直叩きしない）。skills / MCP には未掲載の preview。
 
 ## 未決
 
-- ニュースを iOS から Brave 直呼び出しか、サーバー経由か
+- ニュースのキュレーション（広告・通販結果の除外、freshness、件数）をどこまでやるか
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
 - `設定` の中身（開発用の base URL 以外）
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか

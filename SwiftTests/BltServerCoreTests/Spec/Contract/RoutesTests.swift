@@ -41,6 +41,7 @@ private func withApp(
     cfAccessTeamDomain: String? = nil,
     feedTrendSink: (any FeedTrendSink)? = nil,
     feedTrendQuery: (any FeedTrendQueryClient)? = nil,
+    companyNewsClient: (any CompanyNewsClient)? = nil,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -64,6 +65,9 @@ private func withApp(
                 app,
                 sink: feedTrendSink ?? NoopFeedTrendSink(),
                 query: feedTrendQuery ?? UnconfiguredFeedTrendQueryClient())
+        }
+        if let companyNewsClient {
+            setCompanyNewsClient(app, client: companyNewsClient)
         }
         try await registerRoutes(
             app, context: makeContext(), cfAccessTeamDomain: cfAccessTeamDomain)
@@ -644,6 +648,56 @@ private func send(
         let financials = try #require(sink.events.first { $0.tool == "get_financial_summary" })
         #expect(financials.code == "6758")
         #expect(financials.q == nil)
+    }
+
+    // MARK: - Company News（Brave preview）
+
+    @Test func companyNewsReturns503WhenUnconfigured() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/news")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == companyNewsUnavailableMessage)
+        }
+    }
+
+    @Test func companyNewsReturns400ForInvalidCode() async throws {
+        let stub = StubCompanyNewsClient(
+            page: CompanyNewsPage(query: "x", items: []))
+        try await withApp(companyNewsClient: stub) { app in
+            let (status, json) = try await send(app, "/v1/companies/72030/news")
+            #expect(status == .badRequest)
+            #expect((json?["error"] as? String)?.contains("4桁") == true)
+        }
+    }
+
+    @Test func companyNewsReturnsRankingFromStubWithoutHittingNetwork() async throws {
+        await masterDataManager.reload()
+        let stub = StubCompanyNewsClient(
+            page: CompanyNewsPage(
+                query: "トヨタ自動車",
+                items: [
+                    CompanyNewsItem(
+                        title: "トヨタが新型車を発表",
+                        url: "https://example.com/a",
+                        source: "Example News",
+                        age: "2 hours ago",
+                        publishedAt: "2026-09-04T10:00:00",
+                        description: "概要",
+                        thumbnailURL: "https://example.com/t.jpg"),
+                ]))
+        try await withApp(companyNewsClient: stub) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/news?limit=5")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == Api.companyNewsSchemaVersion)
+            #expect(json?["code"] as? String == "7203")
+            #expect((json?["name"] as? String)?.contains("トヨタ") == true)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.count == 1)
+            #expect(items?.first?["title"] as? String == "トヨタが新型車を発表")
+            #expect(items?.first?["url"] as? String == "https://example.com/a")
+            #expect(items?.first?["source"] as? String == "Example News")
+            #expect(items?.first?["thumbnail_url"] as? String == "https://example.com/t.jpg")
+        }
     }
 }
 

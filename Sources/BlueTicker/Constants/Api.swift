@@ -57,6 +57,15 @@ public enum Api {
     /// 検索クエリ `q` の蓄積上限（文字）。超えた分は切る。
     public static let feedTrendQueryMaxLength = 128
 
+    /// 銘柄ニュース（Brave News Search）応答の公開契約バージョン。preview。
+    public static let companyNewsSchemaVersion = 1
+    /// ニュース返却件数の省略時。
+    public static let companyNewsLimitDefault = 10
+    /// ニュース返却件数の上限（Brave News Search の count 上限に揃える）。
+    public static let companyNewsLimitMax = 20
+    /// Brave News Search の既定ベース（末尾スラッシュなし）。
+    public static let braveNewsSearchBaseURL = "https://api.search.brave.com/res"
+
     /// filings のライブ EDINET 探索フォールバック（DB 未同期銘柄）の応答待ち上限（秒）。
     /// URLSession 既定（60s）より長めに取りつつ、リクエストが無期限に待たないようにする。
     public static let filingsLiveTimeoutSeconds: Double = 90

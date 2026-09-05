@@ -31,6 +31,16 @@ actor APIClient {
         }
     }
 
+    /// キー未設定・Brave 未到達の 503 は空リストとして扱う。
+    func companyNews(code: String) async throws -> CompanyNewsResponse {
+        do {
+            return try await get(path("v1/companies/\(code)/news"))
+        } catch APIClientError.http(let status, _) where status == 503 {
+            return CompanyNewsResponse(
+                schemaVersion: 1, date: "", code: code, name: "", query: "", items: [])
+        }
+    }
+
     func financials(code: String) async throws -> FinancialsResponse {
         try await get(path("v1/companies/\(code)/financials"))
     }

@@ -137,6 +137,7 @@ flowchart LR
 | `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement（上場） / Notes（日経225） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 7 日。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
+| `GET /v1/companies/{code}/news` | 銘柄ニュース（Brave News Search。**preview**。skills 未掲載。キー未設定は 503） |
 
 エラー封筒: `{"error":...,"status":N}`。
 
@@ -158,6 +159,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
 | `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
 | `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
+| `BLT_NEWS_CURATION_KEY` | Brave News Search の subscription token（未設定＝`GET /v1/companies/{code}/news` は 503）。任意で `BLT_NEWS_CURATION_BASE_URL`（既定 `https://api.search.brave.com/res`） |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。Bearer は廃止済み。
 
