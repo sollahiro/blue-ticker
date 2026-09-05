@@ -52,6 +52,7 @@ import Testing
         #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "！？") != .ok)
         #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "、。") != .ok)
         #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "・・・。") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "①。") != .ok)
     }
 
     @Test func applicableFalseRequiresEmptyOverview() {
