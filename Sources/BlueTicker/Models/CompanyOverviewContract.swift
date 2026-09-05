@@ -1,10 +1,18 @@
 // 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
-// Filing 公開 `texts` には載せない。生成・検証は ingest 時。serving / 別 EP / iOS 要約は未配線。
+// Filing 公開 `texts` には載せない。生成・検証は ingest 時。格納は `company_overviews`
+// （書類1件=1行）。ingest stage / serving / 別 EP / healthz / iOS 要約は未配線。
 
+import Crypto
 import Foundation
 
-/// Overview 生成キャッシュ（将来の別格納）。serving / healthz にはまだ載せない。
+/// Overview 格納キャッシュ（`company_overviews.cache_version`）。blueTickerVersion 非連動。
+/// プロンプト・検証規則・本 payload の意味を変えたときだけバンプする。
+/// serving / healthz にはまだ載せない。
 public let companyOverviewCacheVersion = "overview-v1"
+/// LLM 生成行。入力が読めてモデルを呼んだとき。
+public let companyOverviewSourceLLM = "llm"
+/// 入力が空、または事業内容が全く読めず applicable=false のとき。
+public let companyOverviewSourceNotApplicable = "not_applicable"
 
 public let companyOverviewInputKey = "description_of_business"
 public let companyOverviewSectionTitle = "事業の内容"
@@ -72,6 +80,79 @@ public struct CompanyOverviewDraft: Sendable, Equatable {
         self.inputCharsUsed = inputCharsUsed
         self.inputThin = inputThin
     }
+}
+
+/// `company_overviews.payload`。生成結果の格納契約（公開 REST の形ではない）。
+public struct CompanyOverviewPayload: Codable, Sendable, Equatable {
+    public var applicable: Bool
+    public var overview: String
+    public var charCount: Int
+    public var reason: String
+    public var ok: Bool
+    public var okDetail: String
+    public var clipped: Bool
+    public var attempts: Int
+    public var model: String
+    public var inputCharsTotal: Int
+    public var inputCharsUsed: Int
+    public var inputThin: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case applicable
+        case overview
+        case charCount = "char_count"
+        case reason
+        case ok
+        case okDetail = "ok_detail"
+        case clipped
+        case attempts
+        case model
+        case inputCharsTotal = "input_chars_total"
+        case inputCharsUsed = "input_chars_used"
+        case inputThin = "input_thin"
+    }
+
+    public init(
+        applicable: Bool, overview: String, charCount: Int, reason: String, ok: Bool,
+        okDetail: String, clipped: Bool, attempts: Int, model: String, inputCharsTotal: Int,
+        inputCharsUsed: Int, inputThin: Bool
+    ) {
+        self.applicable = applicable
+        self.overview = overview
+        self.charCount = charCount
+        self.reason = reason
+        self.ok = ok
+        self.okDetail = okDetail
+        self.clipped = clipped
+        self.attempts = attempts
+        self.model = model
+        self.inputCharsTotal = inputCharsTotal
+        self.inputCharsUsed = inputCharsUsed
+        self.inputThin = inputThin
+    }
+
+    public init(draft: CompanyOverviewDraft) {
+        self.init(
+            applicable: draft.applicable, overview: draft.overview, charCount: draft.charCount,
+            reason: draft.reason, ok: draft.ok, okDetail: draft.okDetail, clipped: draft.clipped,
+            attempts: draft.attempts, model: draft.model, inputCharsTotal: draft.inputCharsTotal,
+            inputCharsUsed: draft.inputCharsUsed, inputThin: draft.inputThin)
+    }
+
+    /// `ok=false` を再処理キューへ載せるための複製元。JSONB を掘らない。
+    public var needsReview: Bool { !ok }
+
+    public var source: String {
+        applicable ? companyOverviewSourceLLM : companyOverviewSourceNotApplicable
+    }
+
+    /// `source == not_applicable` の行だけ理由をトップレベル列へ出す。
+    public var notApplicableReason: String? { applicable ? nil : reason }
+}
+
+/// 生入力（事業の内容本文）のみのハッシュ。プロンプト・モデルは含めない。
+public func companyOverviewContentHash(_ sourceText: String) -> String {
+    SHA256.hash(data: Data(sourceText.utf8)).map { String(format: "%02x", $0) }.joined()
 }
 
 enum CompanyOverviewEvaluation: Equatable {
