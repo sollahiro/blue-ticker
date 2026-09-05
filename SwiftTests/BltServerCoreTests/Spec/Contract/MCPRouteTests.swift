@@ -500,6 +500,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
 
     @Test func getFeedUpdatesReturnsEmptyItemsWithoutErrorWhenDatabaseEmpty() async throws {
         try await withMcpApp(databases: true) { app in
+            let dateBefore = feedDateString()
             let (status, json) = try await postMcp(
                 app, toolCallBody(name: "get_feed_updates", arguments: [:]))
             #expect(status == .ok)
@@ -511,7 +512,8 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             #expect(body?["schema_version"] as? Int == Api.feedSchemaVersion)
             #expect(body?["days"] as? Int == 7)
-            #expect(body?["date"] as? String == feedDateString())
+            let date = try #require(body?["date"] as? String)
+            #expect(date == dateBefore || date == feedDateString())
             let total = body?["total"] as? [String: Any]
             #expect(total?["day"] as? Int == 0)
             #expect(total?["week"] as? Int == 0)

@@ -465,11 +465,13 @@ private func send(
 
     @Test func feedUpdatesReturnsEmptyItemsWhenNoDocuments() async throws {
         try await withApp(databases: true) { app in
+            let dateBefore = feedDateString()
             let (status, json) = try await send(app, "/v1/feed/updates")
             #expect(status == .ok)
             #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
             #expect(json?["days"] as? Int == 7)
-            #expect(json?["date"] as? String == feedDateString())
+            let date = try #require(json?["date"] as? String)
+            #expect(date == dateBefore || date == feedDateString())
             let total = json?["total"] as? [String: Any]
             #expect(total?["day"] as? Int == 0)
             #expect(total?["week"] as? Int == 0)
