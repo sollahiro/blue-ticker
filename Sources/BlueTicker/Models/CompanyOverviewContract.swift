@@ -171,6 +171,9 @@ enum CompanyOverviewRules {
         if text.isEmpty {
             return .invalid("applicable=true なのに overview が空")
         }
+        if !hasSubstantiveBody(text) {
+            return .invalid("本文がない")
+        }
         let n = text.count
         if n > companyOverviewMaxChars {
             return .invalid("字数 \(n) が目安上限 \(companyOverviewMaxChars) を超えている")
@@ -230,6 +233,13 @@ enum CompanyOverviewRules {
 
     private static func isSentenceStop(_ ch: Character) -> Bool {
         "。！？".contains(ch)
+    }
+
+    /// 句読点・空白だけは本文と見ない。漢字・かな・英数字があれば通す。
+    private static func hasSubstantiveBody(_ text: String) -> Bool {
+        text.unicodeScalars.contains {
+            CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
+        }
     }
 
     private static func sentenceCount(_ text: String) -> Int {
