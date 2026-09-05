@@ -7,7 +7,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-private struct OverviewSmokeCompany: Sendable, CustomTestStringConvertible {
+struct OverviewSmokeCompany: Sendable, CustomTestStringConvertible {
     let code: String
     let name: String
     let sector: String
