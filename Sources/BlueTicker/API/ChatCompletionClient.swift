@@ -1,7 +1,7 @@
 // OpenAI Chat Completions 互換の汎用 LLM クライアント。
-// 内訳取り込み の html_table 正規化（Analysis/GeographyBreakdownLLMNormalizer.swift）専用。
-// プロバイダ非依存（xAI Grok / ローカル OpenAI 互換サーバーいずれも ChatCompletionEndpoint の
-// 差し替えだけで動く想定。docs/breakdown.md 参照）。
+// 内訳取り込み の html_table 正規化と、銘柄 Overview 生成で使う。
+// プロバイダ非依存（xAI Grok / OpenAI / OpenRouter / ローカル互換サーバーは
+// ChatCompletionEndpoint の差し替えだけで動く想定。docs/breakdown.md 参照）。
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -13,11 +13,13 @@ import FoundationNetworking
 enum LLMProvider: String, Sendable {
     case openai
     case xai
+    case openrouter
 
     var defaultBaseURL: String {
         switch self {
         case .openai: return Api.openaiBaseURL
         case .xai: return Api.xaiBaseURL
+        case .openrouter: return Api.openrouterBaseURL
         }
     }
 
@@ -27,10 +29,12 @@ enum LLMProvider: String, Sendable {
         switch self {
         case .openai: return "OPENAI_\(axisPart)"
         case .xai: return "XAI_\(axisPart)"
+        case .openrouter: return "OPENROUTER_\(axisPart)"
         }
     }
 
-    /// `LLM_PROVIDER`。未設定は `.xai`（既存 .env 互換）。不正値は nil。
+    /// 内訳 LLM の `LLM_PROVIDER`。未設定は `.xai`（既存 .env 互換）。不正値は nil。
+    /// Overview の OpenRouter はここには含めない（`resolveOverviewLLMEndpoint`）。
     static func fromEnv(_ env: [String: String]) -> LLMProvider? {
         let raw = env["LLM_PROVIDER"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if raw.isEmpty { return .xai }
@@ -75,6 +79,8 @@ struct ChatCompletionEndpoint: Sendable {
     var supportsJsonSchema: Bool = true
     var timeoutSeconds: Double = 60
     var provider: LLMProvider = .xai
+    /// 省略時はプロバイダ既定。Overview は 200（スパイクと同じ）。
+    var maxTokens: Int? = nil
 }
 
 /// Analysis/ 層はこのプロトコルだけを見る。具体の HTTP 実装は API/ に閉じ込め、
@@ -126,6 +132,9 @@ actor ChatCompletionClient: ChatCompleting {
         } else {
             body["temperature"] = 0
         }
+        if let maxTokens = endpoint.maxTokens {
+            body["max_tokens"] = maxTokens
+        }
         if endpoint.supportsJsonSchema {
             body["response_format"] = [
                 "type": "json_schema",
@@ -143,6 +152,10 @@ actor ChatCompletionClient: ChatCompleting {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
+        if endpoint.provider == .openrouter {
+            request.setValue("https://github.com/sollahiro/blue-ticker", forHTTPHeaderField: "HTTP-Referer")
+            request.setValue("BLUE TICKER Overview", forHTTPHeaderField: "X-OpenRouter-Title")
+        }
         request.timeoutInterval =
             endpoint.provider == .openai
             ? max(endpoint.timeoutSeconds, 180)
@@ -184,5 +197,12 @@ actor ChatCompletionClient: ChatCompleting {
         let stripped = String(content[start...end])
         guard let data = stripped.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+}
+
+/// LLM 未設定時のプレースホルダ。ネットワーク I/O なしで即座に失敗する。
+struct UnavailableChatClient: ChatCompleting {
+    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
+        throw ChatCompletionError.invalidResponse
     }
 }

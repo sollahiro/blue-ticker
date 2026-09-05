@@ -6,6 +6,8 @@ public enum Api {
     /// 明示 `*_BASE_URL` があればそちらが勝つ。
     static let xaiBaseURL = "https://api.x.ai/v1"
     static let openaiBaseURL = "https://api.openai.com/v1"
+    /// Overview 生成（OpenRouter / Chat Completions 互換）。内訳 LLM の `LLM_PROVIDER` とは別。
+    static let openrouterBaseURL = "https://openrouter.ai/api/v1"
 
     /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
     static let defaultRemoteServerURL = "https://api.sollahiro.com"
