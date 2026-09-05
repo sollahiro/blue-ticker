@@ -9,7 +9,7 @@ enum CompanyOverviewGenerator {
     ルール:
     - 入力テキストに書かれている主力事業・主な製品・サービスだけを使う。社名や業種欄から補わない。一般知識で足さない。
     - 会計基準の前置き、子会社数、セグメント注記への参照、沿革、関係会社一覧、事業系統図の会社名羅列は使わない。
-    - 複数事業があるときは主要なものを2〜3個までに絞る。
+    - 複数事業があるときは主要なものを2〜3個までに絞る。2〜3個でも50字未満なら、入力にある別の主力製品・サービス名を足して50字以上にする。
     - 入力が空、または事業内容が全く読めないときは applicable を false にし overview を空文字にする。
     - 日本語。1〜2文。全体で50字以上80字以下（句読点・空白を含む。Python の len と同じ文字数。80を1字でも超えたら失敗。49字以下も失敗）。短くしすぎない。主力の製品・サービス名を入れて必ず50字を超える。
     - 「何をしている会社か」だけ。金額・件数・比率・成長率・目標・年度を書かない。
@@ -172,8 +172,9 @@ enum CompanyOverviewGenerator {
                 """
         }
         if n < companyOverviewMinChars {
+            let missing = companyOverviewMinChars - n
             return """
-                次の日本語は\(n)字で短い。句読点込みで\(companyOverviewMinChars)字以上\(companyOverviewMaxChars)字以下になるまで、事業の内容にある主力の製品・サービス名を足して具体化する。\(style) 新しい事実は作らず、数字・年度・目標は書かない。
+                不合格: いま\(n)字。最低\(companyOverviewMinChars)字まであと\(missing)字。文を短くしない。入力の事業の内容にある、まだ書いていない主力の製品・サービス名を足して、句読点込みで\(companyOverviewMinChars)字以上\(companyOverviewMaxChars)字以下にする。\(style) 新しい事実は作らず、数字・年度・目標は書かない。
                 いまの文: \(current)
                 事業の内容（抜粋）:
                 \(String(source.prefix(1800)))

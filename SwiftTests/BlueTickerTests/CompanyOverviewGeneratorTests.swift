@@ -103,6 +103,28 @@ private actor ScriptedChat: ChatCompleting {
         #expect(draft.attempts == 3)
     }
 
+    @Test func repairsPunctuatedShortReply() async throws {
+        let short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
+        #expect(short.count == 45)
+        let fixed =
+            "デジタルソフトウェア・アドオンコンテンツ、家庭用ゲーム機、音楽制作、映画製作、テレビ番組制作を手がける。"
+        #expect(fixed.count >= companyOverviewMinChars)
+        let client = try ScriptedChat(replies: [
+            reply(overview: short),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("ゲーム、音楽、映画の制作販売。"), client: client,
+            model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.overview == fixed)
+        #expect(draft.attempts == 2)
+        let users = await client.users
+        #expect(users.count == 2)
+        #expect(users[1].contains("不合格"))
+        #expect(users[1].contains("あと\(companyOverviewMinChars - short.count)字"))
+    }
+
     @Test func padsUnpunctuatedShortReply() async throws {
         let short = String(repeating: "あ", count: 49)
         #expect(short.count == 49)
