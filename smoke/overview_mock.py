@@ -318,7 +318,9 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
 
 
 def has_substantive_body(text: str) -> bool:
-    return any(unicodedata.category(ch)[:1] in "LN" for ch in text)
+    return any(
+        unicodedata.category(ch).startswith("L") or unicodedata.category(ch) == "Nd" for ch in text
+    )
 
 
 def clip_overview(text: str) -> str | None:
@@ -572,7 +574,7 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     ok, _ = overview_ok({"applicable": True, "overview": ""})
     if ok:
         errors.append("empty applicable overview accepted")
-    for punct in ("。", "！？", "、。", "・・・。"):
+    for punct in ("。", "！？", "、。", "・・・。", "①。"):
         ok, _ = overview_ok({"applicable": True, "overview": punct})
         if ok:
             errors.append(f"punctuation-only accepted {punct!r}")
