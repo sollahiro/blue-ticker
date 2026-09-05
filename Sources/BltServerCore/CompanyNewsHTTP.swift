@@ -78,8 +78,10 @@ struct HTTPCompanyNewsClient: CompanyNewsClient, @unchecked Sendable {
             URLQueryItem(name: "country", value: "JP"),
             URLQueryItem(name: "search_lang", value: "jp"),
             URLQueryItem(name: "ui_lang", value: "ja-JP"),
-            URLQueryItem(name: "count", value: String(limit)),
-            URLQueryItem(name: "freshness", value: "pw"),
+            // 許可ソースで落ちる分を見越し、要求件数より多めに取る（上限は契約の max）。
+            URLQueryItem(name: "count", value: String(min(max(limit, 1), Api.companyNewsLimitMax))),
+            // 許可ソースは流通が細いので 1 週間より 1 か月を既定にする。
+            URLQueryItem(name: "freshness", value: "pm"),
             URLQueryItem(name: "spellcheck", value: "true"),
             URLQueryItem(name: "text_decorations", value: "false"),
         ]
@@ -121,10 +123,11 @@ func serveCompanyNews(
     guard let company = await companyNewsResolvedCompany(for: code) else {
         return .notFound("銘柄が見つかりません")
     }
-    let query = companyNewsSearchQuery(name: company.name, code: code)
+    let query = companyNewsBraveQuery(name: company.name, code: code)
     do {
-        let page = try await client.search(query: query, limit: limit)
-        let items = Array(page.items.prefix(limit))
+        // Brave から多めに取り、許可ソースで絞ってから limit する。
+        let page = try await client.search(query: query, limit: Api.companyNewsLimitMax)
+        let items = Array(filterCompanyNewsByAllowedSources(page.items).prefix(limit))
         return .ok(
             assembleCompanyNews(
                 code: code,

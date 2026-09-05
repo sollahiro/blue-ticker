@@ -90,9 +90,11 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 候補は [Brave News Search](https://api-dashboard.search.brave.com/documentation/services/news-search)。EDINET の代替ではない。JP / `ja`、キーはサーバー側 `BLT_NEWS_CURATION_KEY`。iOS は公開 REST `GET /v1/companies/{code}/news` のみ（直叩きしない）。skills / MCP には未掲載の preview。
 
+許可ソース（ホスト）: ロイター / 日経 / ブルームバーグ / TDnet（`release.tdnet.info`） / 東洋経済 / [PlantDB](https://plantdb.jp) / [LOGI-TODAY](https://www.logi-today.com/) / [SEMI Journal news](https://semi-journal.jp/news/latest.html)。クエリに `site:` を付け、応答でも同リスト以外は落とす。Brave 索引に載らないソース（TDnet 等）は 0 件になりうる。
+
 ## 未決
 
-- ニュースのキュレーション（広告・通販結果の除外、freshness、件数）をどこまでやるか
+- 許可ソースの追加・除外と、TDnet など Brave 非索引の扱い
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
 - `設定` の中身（開発用の base URL 以外）
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか

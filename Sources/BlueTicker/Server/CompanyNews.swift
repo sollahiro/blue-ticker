@@ -3,7 +3,7 @@
 
 import Foundation
 
-/// ニュース応答の公開契約バージョン。
+/// ニュース未設定・上流失敗時の公開メッセージ。
 public let companyNewsUnavailableMessage = "ニュース検索に接続できません"
 
 /// Brave / モック共通の 1 件。
@@ -64,6 +64,33 @@ public func decodeBraveNewsSearch(from data: Data) throws -> CompanyNewsPage {
     return CompanyNewsPage(query: query, items: items)
 }
 
+/// 許可するニュースソースのホスト末尾（サブドメイン可）。
+/// ロイター / 日経 / ブルームバーグ / TDnet / 東洋経済 / PlantDB / LOGI-TODAY / SEMI Journal。
+public let companyNewsAllowedHostSuffixes: [String] = [
+    "reuters.com",
+    "nikkei.com",
+    "bloomberg.com",
+    "bloomberg.co.jp",
+    "release.tdnet.info",
+    "toyokeizai.net",
+    "plantdb.jp",
+    "logi-today.com",
+    "semi-journal.jp",
+]
+
+/// Brave `site:` 句に使うホスト（パス付き可）。クエリ側の一次絞り込み用。
+public let companyNewsSiteFilterHosts: [String] = [
+    "reuters.com",
+    "nikkei.com",
+    "bloomberg.com",
+    "bloomberg.co.jp",
+    "release.tdnet.info",
+    "toyokeizai.net",
+    "plantdb.jp",
+    "logi-today.com",
+    "semi-journal.jp/news",
+]
+
 /// 検索クエリ用の社名。法人格「株式会社」を落とし、空なら code を返す。
 public func companyNewsSearchQuery(name: String, code: String) -> String {
     let stripped = name
@@ -71,6 +98,30 @@ public func companyNewsSearchQuery(name: String, code: String) -> String {
         .trimmingCharacters(in: .whitespacesAndNewlines)
     if stripped.isEmpty { return code }
     return stripped
+}
+
+/// 社名＋許可ソースの `site:` OR。Brave 側で一次絞り込みする。
+public func companyNewsBraveQuery(name: String, code: String) -> String {
+    let base = companyNewsSearchQuery(name: name, code: code)
+    let sites = companyNewsSiteFilterHosts.map { "site:\($0)" }.joined(separator: " OR ")
+    return "\(base) (\(sites))"
+}
+
+/// URL が許可ソースか。`semi-journal.jp` は `/news` 配下のみ。
+public func companyNewsURLIsAllowed(_ urlString: String) -> Bool {
+    guard let url = URL(string: urlString), let host = url.host?.lowercased() else { return false }
+    let path = url.path
+    if host == "semi-journal.jp" || host.hasSuffix(".semi-journal.jp") {
+        return path == "/news" || path.hasPrefix("/news/")
+    }
+    return companyNewsAllowedHostSuffixes.contains { suffix in
+        host == suffix || host.hasSuffix(".\(suffix)")
+    }
+}
+
+/// 許可ソース以外を落とす（契約の最終ガード）。
+public func filterCompanyNewsByAllowedSources(_ items: [CompanyNewsItem]) -> [CompanyNewsItem] {
+    items.filter { companyNewsURLIsAllowed($0.url) }
 }
 
 /// `limit` クエリ。省略時・不正は既定、上限で切る。

@@ -678,12 +678,16 @@ private func send(
                 items: [
                     CompanyNewsItem(
                         title: "トヨタが新型車を発表",
-                        url: "https://example.com/a",
-                        source: "Example News",
+                        url: "https://www.nikkei.com/article/a",
+                        source: "Nikkei",
                         age: "2 hours ago",
                         publishedAt: "2026-09-04T10:00:00",
                         description: "概要",
-                        thumbnailURL: "https://example.com/t.jpg"),
+                        thumbnailURL: "https://www.nikkei.com/t.jpg"),
+                    CompanyNewsItem(
+                        title: "無関係",
+                        url: "https://news.yahoo.co.jp/articles/x",
+                        source: "Yahoo"),
                 ]))
         try await withApp(companyNewsClient: stub) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/news?limit=5")
@@ -694,9 +698,9 @@ private func send(
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.count == 1)
             #expect(items?.first?["title"] as? String == "トヨタが新型車を発表")
-            #expect(items?.first?["url"] as? String == "https://example.com/a")
-            #expect(items?.first?["source"] as? String == "Example News")
-            #expect(items?.first?["thumbnail_url"] as? String == "https://example.com/t.jpg")
+            #expect(items?.first?["url"] as? String == "https://www.nikkei.com/article/a")
+            #expect(items?.first?["source"] as? String == "Nikkei")
+            #expect(items?.first?["thumbnail_url"] as? String == "https://www.nikkei.com/t.jpg")
         }
     }
 }

@@ -53,7 +53,7 @@ import Testing
             name: "富士フイルムホールディングス株式会社",
             query: "富士フイルムホールディングス",
             items: [
-                CompanyNewsItem(title: "t", url: "https://example.com", source: "s")
+                CompanyNewsItem(title: "t", url: "https://www.nikkei.com/article/x", source: "s")
             ],
             now: Date(timeIntervalSince1970: 1_778_000_000))
         #expect(body["schema_version"] as? Int == Api.companyNewsSchemaVersion)
@@ -62,5 +62,32 @@ import Testing
         let items = body["items"] as? [[String: Any]]
         #expect(items?.first?["source"] as? String == "s")
         #expect(items?.first?["age"] == nil)
+    }
+
+    @Test func braveQueryAppendsSiteAllowlist() {
+        let q = companyNewsBraveQuery(name: "富士フイルムホールディングス株式会社", code: "4901")
+        #expect(q.hasPrefix("富士フイルムホールディングス ("))
+        #expect(q.contains("site:nikkei.com"))
+        #expect(q.contains("site:toyokeizai.net"))
+        #expect(q.contains("site:reuters.com"))
+        #expect(q.contains("site:bloomberg.co.jp"))
+        #expect(q.contains("site:release.tdnet.info"))
+        #expect(q.contains("site:plantdb.jp"))
+        #expect(q.contains("site:logi-today.com"))
+        #expect(q.contains("site:semi-journal.jp/news"))
+    }
+
+    @Test func allowedURLFilterKeepsCuratedHostsOnly() {
+        let items = [
+            CompanyNewsItem(title: "日経", url: "https://www.nikkei.com/article/1"),
+            CompanyNewsItem(title: "東洋経済", url: "https://toyokeizai.net/articles/-/1"),
+            CompanyNewsItem(title: "Yahoo", url: "https://news.yahoo.co.jp/articles/1"),
+            CompanyNewsItem(title: "SEMI news", url: "https://semi-journal.jp/news/latest.html"),
+            CompanyNewsItem(title: "SEMI basics", url: "https://semi-journal.jp/basics/water/edi.html"),
+            CompanyNewsItem(title: "PlantDB", url: "https://plantdb.jp/article/abc"),
+            CompanyNewsItem(title: "LOGI", url: "https://www.logi-today.com/123"),
+        ]
+        let kept = filterCompanyNewsByAllowedSources(items).map(\.title)
+        #expect(kept == ["日経", "東洋経済", "SEMI news", "PlantDB", "LOGI"])
     }
 }
