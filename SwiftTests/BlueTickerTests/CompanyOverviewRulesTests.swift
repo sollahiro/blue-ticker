@@ -55,6 +55,13 @@ import Testing
         #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "①。") != .ok)
     }
 
+    @Test func rejectsPunctuationOnlySentenceSegments() {
+        #expect(!ok("自動車。・・・。"))
+        #expect(!ok("・・・。自動車。"))
+        #expect(!ok("自動車。、。"))
+        #expect(ok("自動車の製造販売を手がける。金融事業も行う。"))
+    }
+
     @Test func applicableFalseRequiresEmptyOverview() {
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "") == .ok)
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "残文。") != .ok)
