@@ -25,6 +25,7 @@ import re
 import sys
 import tempfile
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -290,6 +291,8 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
     n = len(text)
     if not text:
         return False, "applicable=true なのに overview が空"
+    if not has_substantive_body(text):
+        return False, "本文がない"
     if n > MAX_CHARS:
         return False, f"字数 {n} が目安上限 {MAX_CHARS} を超えている"
     if AMOUNT_RE.search(text):
@@ -312,6 +315,10 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
     if len(sentences) > 2:
         return False, f"文が{len(sentences)}つある"
     return True, ""
+
+
+def has_substantive_body(text: str) -> bool:
+    return any(unicodedata.category(ch)[:1] in "LN" for ch in text)
 
 
 def clip_overview(text: str) -> str | None:
@@ -565,7 +572,7 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     ok, _ = overview_ok({"applicable": True, "overview": ""})
     if ok:
         errors.append("empty applicable overview accepted")
-    for punct in ("。", "！？"):
+    for punct in ("。", "！？", "、。", "・・・。"):
         ok, _ = overview_ok({"applicable": True, "overview": punct})
         if ok:
             errors.append(f"punctuation-only accepted {punct!r}")
