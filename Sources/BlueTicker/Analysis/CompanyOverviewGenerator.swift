@@ -68,7 +68,9 @@ enum CompanyOverviewGenerator {
             attempts += 1
             let repair = repairPrompt(current: parsed.overview, source: text, detail: why)
             do {
-                let candidate = try await complete(client: client, schema: schema, user: repair)
+                let candidate = try await complete(
+                    client: client, schema: schema,
+                    user: userPrompt(input: input, text: text, repair: repair))
                 if !candidate.applicable {
                     verdict = CompanyOverviewRules.evaluate(
                         applicable: parsed.applicable, overview: parsed.overview)

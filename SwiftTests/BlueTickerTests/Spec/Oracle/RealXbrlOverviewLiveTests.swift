@@ -1,6 +1,7 @@
 // Overview の本番キー（`OPENROUTER_OVERVIEW_API_KEY`）での実 XBRL 生成。
 // smoke 固定11社（`SmokeTests` / `BreakdownSmokeOracleSupport.smokeDocs` と同じ docID）。
 // 数字混入なし・だ・である調。50〜80字は目安。文面は非決定なのでオラクル凍結しない。
+// `BLT_OVERVIEW_LIVE=1` かつ `OPENROUTER_OVERVIEW_API_KEY` があるときだけ走る。
 // `BLT_OVERVIEW_LIVE_DUMP` があれば JSON 一覧を書く（golden ではない）。
 
 import Foundation
@@ -42,8 +43,15 @@ struct OverviewSmokeCompany: Sendable {
         return resolveOverviewLLMEndpoint() != nil
     }
 
+    private static var liveEnabled: Bool {
+        ProcessInfo.processInfo.environment["BLT_OVERVIEW_LIVE"] == "1" && liveKeyAvailable
+    }
+
     @Test(
-        .enabled(if: liveKeyAvailable, "OPENROUTER_OVERVIEW_API_KEY not available"),
+        .enabled(
+            if: liveEnabled,
+            "BLT_OVERVIEW_LIVE=1 and OPENROUTER_OVERVIEW_API_KEY required"
+        ),
         .timeLimit(.minutes(10))
     )
     func liveGenerateSmoke11() async throws {
