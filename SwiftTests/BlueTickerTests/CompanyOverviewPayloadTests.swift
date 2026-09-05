@@ -43,6 +43,16 @@ import Testing
         #expect(failed.source == companyOverviewSourceLLM)
         #expect(failed.needsReview == true)
         #expect(failed.notApplicableReason == nil)
+
+        let llmFailed = CompanyOverviewPayload(
+            draft: CompanyOverviewDraft(
+                applicable: false, overview: "", charCount: 0, reason: "timeout",
+                ok: false, okDetail: "timeout", clipped: false, attempts: 1,
+                model: companyOverviewDefaultModel, inputCharsTotal: 40, inputCharsUsed: 40,
+                inputThin: true))
+        #expect(llmFailed.source == companyOverviewSourceLLM)
+        #expect(llmFailed.needsReview == true)
+        #expect(llmFailed.notApplicableReason == nil)
     }
 
     @Test func jsonUsesSnakeCaseKeys() throws {

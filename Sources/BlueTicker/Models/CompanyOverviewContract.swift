@@ -142,12 +142,14 @@ public struct CompanyOverviewPayload: Codable, Sendable, Equatable {
     /// `ok=false` を再処理キューへ載せるための複製元。JSONB を掘らない。
     public var needsReview: Bool { !ok }
 
+    /// 入力空など「対象外で確定」したときだけ `not_applicable`。生成失敗（`ok=false`）は
+    /// `applicable` が false でも `llm` のまま残し、再処理対象にする。
     public var source: String {
-        applicable ? companyOverviewSourceLLM : companyOverviewSourceNotApplicable
+        !applicable && ok ? companyOverviewSourceNotApplicable : companyOverviewSourceLLM
     }
 
     /// `source == not_applicable` の行だけ理由をトップレベル列へ出す。
-    public var notApplicableReason: String? { applicable ? nil : reason }
+    public var notApplicableReason: String? { !applicable && ok ? reason : nil }
 }
 
 /// 生入力（事業の内容本文）のみのハッシュ。プロンプト・モデルは含めない。

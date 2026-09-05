@@ -71,6 +71,12 @@ private func samplePayload(
                 payload: failed, contentHash: companyOverviewContentHash("残文"))
             try await failedRow.create(on: app.db)
 
+            let llmFailed = samplePayload(applicable: false, overview: "", ok: false)
+            let llmFailedRow = CompanyOverview(
+                code: "0003", docID: "S100LLM", submitDateTime: "2025-01-03 00:00",
+                payload: llmFailed, contentHash: companyOverviewContentHash("残文"))
+            try await llmFailedRow.create(on: app.db)
+
             let storedEmpty = try #require(try await CompanyOverview.find("0001", on: app.db))
             #expect(storedEmpty.source == companyOverviewSourceNotApplicable)
             #expect(storedEmpty.needsReview == false)
@@ -81,6 +87,11 @@ private func samplePayload(
             #expect(storedFailed.source == companyOverviewSourceLLM)
             #expect(storedFailed.needsReview == true)
             #expect(storedFailed.notApplicableReason == nil)
+
+            let storedLLMFailed = try #require(try await CompanyOverview.find("0003", on: app.db))
+            #expect(storedLLMFailed.source == companyOverviewSourceLLM)
+            #expect(storedLLMFailed.needsReview == true)
+            #expect(storedLLMFailed.notApplicableReason == nil)
         }
     }
 
