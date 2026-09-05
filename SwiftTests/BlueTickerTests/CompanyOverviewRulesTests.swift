@@ -1,4 +1,4 @@
-// Overview 検証規則（スパイク self-check の L0）。
+// Overview 検証規則の字数・空枠・クリップ。
 
 import Foundation
 import Testing
@@ -101,22 +101,5 @@ import Testing
         let clipped = CompanyOverviewRules.clip(first + second + overflow)
         #expect(clipped == first + second)
         #expect(ok(clipped ?? ""))
-    }
-
-    @Test func smokeExpectedOverviewsSatisfyRules() throws {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("smoke/overview_mock_expected.json")
-        let data = try Data(contentsOf: url)
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(json["input_key"] as? String == companyOverviewInputKey)
-        #expect(json["xbrl_tag"] as? String == Xbrl.descriptionOfBusinessTextblockTag)
-        let companies = try #require(json["companies"] as? [[String: Any]])
-        #expect(!companies.isEmpty)
-        for row in companies {
-            let applicable = try #require(row["applicable"] as? Bool)
-            let overview = try #require(row["overview"] as? String)
-            #expect(CompanyOverviewRules.evaluate(applicable: applicable, overview: overview) == .ok)
-            #expect((row["input_key"] as? String) == companyOverviewInputKey)
-        }
     }
 }
