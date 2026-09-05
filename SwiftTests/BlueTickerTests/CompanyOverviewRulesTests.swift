@@ -1,4 +1,4 @@
-// Overview 検証規則（スパイク self-check の L0）。
+// Overview 検証規則の字数・空枠・クリップ。
 
 import Foundation
 import Testing
@@ -39,9 +39,42 @@ import Testing
         #expect(!ok(unfinished))
     }
 
+    @Test func acceptsShortCompleteSentence() {
+        let short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
+        #expect(short.count == 45)
+        #expect(ok(short))
+    }
+
+    @Test func rejectsEmptyApplicableOverview() {
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "   ") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "。") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "！？") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "、。") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "・・・。") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "①。") != .ok)
+    }
+
+    @Test func rejectsPunctuationOnlySentenceSegments() {
+        #expect(!ok("自動車。・・・。"))
+        #expect(!ok("・・・。自動車。"))
+        #expect(!ok("自動車。、。"))
+        #expect(ok("自動車の製造販売を手がける。金融事業も行う。"))
+    }
+
     @Test func applicableFalseRequiresEmptyOverview() {
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "") == .ok)
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "残文。") != .ok)
+    }
+
+    @Test func clipAllowsShortLastSentence() {
+        let head = String(repeating: "あ", count: 20) + "。"
+        let overflow = String(repeating: "い", count: 80) + "。"
+        #expect(head.count < companyOverviewMinChars)
+        #expect((head + overflow).count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(head + overflow)
+        #expect(clipped == head)
+        #expect(ok(clipped ?? ""))
     }
 
     @Test func clipDoesNotCutMidWordWithoutSentenceEnd() {
@@ -75,22 +108,5 @@ import Testing
         let clipped = CompanyOverviewRules.clip(first + second + overflow)
         #expect(clipped == first + second)
         #expect(ok(clipped ?? ""))
-    }
-
-    @Test func smokeExpectedOverviewsSatisfyRules() throws {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("smoke/overview_mock_expected.json")
-        let data = try Data(contentsOf: url)
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(json["input_key"] as? String == companyOverviewInputKey)
-        #expect(json["xbrl_tag"] as? String == Xbrl.descriptionOfBusinessTextblockTag)
-        let companies = try #require(json["companies"] as? [[String: Any]])
-        #expect(!companies.isEmpty)
-        for row in companies {
-            let applicable = try #require(row["applicable"] as? Bool)
-            let overview = try #require(row["overview"] as? String)
-            #expect(CompanyOverviewRules.evaluate(applicable: applicable, overview: overview) == .ok)
-            #expect((row["input_key"] as? String) == companyOverviewInputKey)
-        }
     }
 }

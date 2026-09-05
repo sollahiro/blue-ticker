@@ -1,5 +1,5 @@
-// 銘柄 Overview（50〜80字の会社説明）。Filing 公開 `texts` には載せない。
-// 生成・検証は ingest 時。serving / 別 EP / iOS 要約は未配線。格納スキーマは後続。
+// 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
+// Filing 公開 `texts` には載せない。生成・検証は ingest 時。serving / 別 EP / iOS 要約は未配線。
 
 import Foundation
 
@@ -8,7 +8,9 @@ public let companyOverviewCacheVersion = "overview-v1"
 
 public let companyOverviewInputKey = "description_of_business"
 public let companyOverviewSectionTitle = "事業の内容"
+/// ヘッダ用の目安下限。情報量が少なければこれより短くてよい（不合格にしない）。
 public let companyOverviewMinChars = 50
+/// ヘッダ用の目安上限。超えたら句点で切り、切れなければ不合格。
 public let companyOverviewMaxChars = 80
 public let companyOverviewMaxInputChars = 6000
 public let companyOverviewInputThinChars = 80
@@ -83,9 +85,19 @@ enum CompanyOverviewRules {
         if !applicable {
             return text.isEmpty ? .ok : .invalid("applicable=false なのに overview が空でない")
         }
+        if text.isEmpty {
+            return .invalid("applicable=true なのに overview が空")
+        }
+        guard endsWithSentenceStop(text) else {
+            return .invalid("言い切りの句点がない")
+        }
+        let sentences = sentenceBodies(text)
+        if sentences.isEmpty || sentences.contains(where: { !hasSubstantiveBody($0) }) {
+            return .invalid("本文がない")
+        }
         let n = text.count
-        if n < companyOverviewMinChars || n > companyOverviewMaxChars {
-            return .invalid("字数 \(n) が \(companyOverviewMinChars)〜\(companyOverviewMaxChars) の外")
+        if n > companyOverviewMaxChars {
+            return .invalid("字数 \(n) が目安上限 \(companyOverviewMaxChars) を超えている")
         }
         if matches(Self.amountRegex, in: text) {
             return .invalid("金額・件数・比率らしい数字が入っている")
@@ -105,17 +117,13 @@ enum CompanyOverviewRules {
         if text.contains("株式会社") {
             return .invalid("株式会社が残っている")
         }
-        guard endsWithSentenceStop(text) else {
-            return .invalid("言い切りの句点がない")
-        }
-        let sentences = sentenceCount(text)
-        if sentences > 2 {
-            return .invalid("文が\(sentences)つある")
+        if sentences.count > 2 {
+            return .invalid("文が\(sentences.count)つある")
         }
         return .ok
     }
 
-    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。
+    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。短い完成文は残してよい。
     static func clip(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count <= companyOverviewMaxChars { return trimmed }
@@ -125,7 +133,6 @@ enum CompanyOverviewRules {
             idx = window.index(before: idx)
             guard isSentenceStop(window[idx]) else { continue }
             let clipped = String(window[...idx])
-            guard clipped.count >= companyOverviewMinChars else { continue }
             if case .ok = evaluate(applicable: true, overview: clipped) {
                 return clipped
             }
@@ -142,20 +149,29 @@ enum CompanyOverviewRules {
         "。！？".contains(ch)
     }
 
-    private static func sentenceCount(_ text: String) -> Int {
-        var count = 0
+    /// 句読点・空白だけは本文と見ない。漢字・かな・英数字があれば通す。
+    private static func hasSubstantiveBody(_ text: String) -> Bool {
+        text.unicodeScalars.contains {
+            CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
+        }
+    }
+
+    /// 句点で区切った文の本体。空白だけの区間は飛ばす。句読点だけの区間は残す。
+    private static func sentenceBodies(_ text: String) -> [String] {
+        var bodies: [String] = []
         var current = ""
         for ch in text {
             if isSentenceStop(ch) {
-                if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    count += 1
+                let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !body.isEmpty {
+                    bodies.append(body)
                 }
                 current = ""
             } else {
                 current.append(ch)
             }
         }
-        return count
+        return bodies
     }
 
     private static func matches(_ regex: NSRegularExpression, in text: String) -> Bool {
