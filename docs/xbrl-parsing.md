@@ -98,7 +98,7 @@ smoke/
 | 注記(lease_liabilities)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/LeaseLiabilitiesOracleFormatTests.swift` | `smoke/statement_notes_lease_liabilities_expected.json`（smoke固定11社。IFRS連結3社は TextBlock 抽出、BSタグありは `available_via_statement`、借入金等明細表のリース債務は `available_via_notes`、US-GAAPは `us_gaap_unsupported`。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(sga_expense_breakdown)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/SgaExpenseBreakdownOracleFormatTests.swift` | `smoke/statement_notes_sga_expense_breakdown_expected.json`（smoke固定11社。2026-08-27 ユーザー全件目視確認・golden化承認。**未公開・未配線**＝ingest / REST / MCP / job-03 に載せない。連結の `*SGA` / IFRS 販管費費目。発生支出・`AmortizationOfGoodwillSGA` は除外。銀行・クボタは `not_found`、US-GAAPは `us_gaap_unsupported`。深さは S100YFQC / S100YFG2。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | IBD⇔借入金等明細表 横断INVARIANT | `SwiftTests/BlueTickerTests/Spec/Invariant/CrossModuleInvariantTests.swift` | borrowings_schedule 解決 docID は合計一致、field_parser（SOMPO）は不一致自体を固定 |
-| Overview ライブ生成 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlOverviewLiveTests.swift` | smoke固定11社（`SmokeTests` と同じ docID）。実 XBRL「事業の内容」→ 数字混入なし・だ・である調。50〜80字は目安（情報量が少なければ短くてよい）。文面は非決定なのでオラクル凍結しない。`OPENROUTER_OVERVIEW_API_KEY` と `tmp_cache/edinet` が無いとき SKIP |
+| Overview ライブ生成 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlOverviewLiveTests.swift` | smoke固定11社（`SmokeTests` と同じ docID）。実 XBRL「事業の内容」→ 数字混入なし・だ・である調。50〜80字は目安（情報量が少なければ短くてよい）。文面は非決定なのでオラクル凍結しない。`BLT_OVERVIEW_LIVE=1` と `OPENROUTER_OVERVIEW_API_KEY` と `tmp_cache/edinet` が無いとき SKIP |
 
 一部テストは `SwiftTests/.../Spec/{Oracle,Invariant,Contract,Policy}/` に配置（`.agents/skills/xbrl-development/SKILL.md`（Spec 層））。ラベル混在ファイルは元の場所のまま。SwiftPM はサブフォルダを再帰含むため `Package.swift` 変更不要。
 

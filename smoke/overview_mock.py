@@ -307,6 +307,8 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
     sentences = [part for part in SENTENCE_END_RE.split(text) if part.strip()]
     if not SENTENCE_END_RE.fullmatch(text[-1:]):
         return False, "言い切りの句点がない"
+    if not sentences:
+        return False, "本文がない"
     if len(sentences) > 2:
         return False, f"文が{len(sentences)}つある"
     return True, ""
@@ -317,10 +319,9 @@ def clip_overview(text: str) -> str | None:
     if len(text) <= MAX_CHARS:
         return text
     window = text[:MAX_CHARS]
-    for sep in ("。", "！", "？"):
-        idx = window.rfind(sep)
-        if idx >= 0:
-            clipped = window[: idx + 1]
+    for i in range(len(window) - 1, -1, -1):
+        if window[i] in "。！？":
+            clipped = window[: i + 1]
             ok, _ = overview_ok({"applicable": True, "overview": clipped})
             if ok:
                 return clipped
@@ -395,7 +396,7 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
         candidate, extra, resolved_model = complete(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": repair},
+                {"role": "user", "content": user_prompt(company, text, repair=repair)},
             ]
         )
         usage = {
@@ -564,6 +565,16 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     ok, _ = overview_ok({"applicable": True, "overview": ""})
     if ok:
         errors.append("empty applicable overview accepted")
+    for punct in ("。", "！？"):
+        ok, _ = overview_ok({"applicable": True, "overview": punct})
+        if ok:
+            errors.append(f"punctuation-only accepted {punct!r}")
+    first = "あ" * 50 + "。"
+    second = "い" * 20 + "！"
+    overflow = "う" * 20 + "。"
+    clipped = clip_overview(first + second + overflow)
+    if clipped != first + second:
+        errors.append(f"clip should keep later ！ got {clipped!r}")
 
     empty = generate_one(
         {"code": "0000", "name": "空株式会社", "sector": "その他", "doc_id": "X", "text": "  "}

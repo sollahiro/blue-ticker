@@ -85,6 +85,27 @@ private actor ScriptedChat: ChatCompleting {
         #expect(users.count == 2)
         #expect(users[1].contains("だ・である"))
         #expect(users[1].contains("applicable は true のまま"))
+        #expect(users[1].contains("調味料と冷凍食品の製造販売。"))
+    }
+
+    @Test func repairsEmptyApplicableOverviewUsingSource() async throws {
+        let source = "当社は自動車の製造販売を行う。"
+        let fixed = "自動車の製造販売を手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: ""),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input(source), client: client, model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.overview == fixed)
+        #expect(draft.attempts == 2)
+        let users = await client.users
+        #expect(users.count == 2)
+        #expect(users[1].contains(source))
+        #expect(users[1].contains("applicable=true なのに overview が空")
+            || users[1].contains("本文がない")
+            || users[1].contains("overview が空"))
     }
 
     @Test func repairApplicableFalseKeepsPrevious() async throws {

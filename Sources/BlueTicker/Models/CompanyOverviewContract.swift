@@ -114,6 +114,9 @@ enum CompanyOverviewRules {
             return .invalid("言い切りの句点がない")
         }
         let sentences = sentenceCount(text)
+        if sentences < 1 {
+            return .invalid("本文がない")
+        }
         if sentences > 2 {
             return .invalid("文が\(sentences)つある")
         }
