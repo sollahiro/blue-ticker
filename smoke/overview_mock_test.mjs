@@ -51,7 +51,7 @@ for (const row of payload.companies) {
     continue;
   }
   applicable += 1;
-  assert.ok(row.overview.length >= 50 && row.overview.length <= 80, row.code);
+  assert.ok(row.overview.length > 0 && row.overview.length <= 80, row.code);
   assert.equal(amountRe.test(row.overview), false, row.code);
   assert.doesNotMatch(row.overview, /買い推奨|割安/);
   assert.doesNotMatch(row.overview, /です|ます|でした|ました/, `${row.code} だ・である調`);

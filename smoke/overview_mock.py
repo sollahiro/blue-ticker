@@ -2,7 +2,7 @@
 """Overview mock (spike).
 
 有報「企業の概況」の「事業の内容」（XBRL `DescriptionOfBusinessTextBlock`）から
-50〜80 字の会社説明を OpenRouter で生成する。
+短い会社説明を OpenRouter で生成する。50〜80 字は目安。情報量が少なければ無理に足さない。
 公開 REST / ingest / iOS 製品面には載せない。Filing texts キーは増やさない。
 
 Key: `OPENROUTER_MOCK_KEY`（未設定なら `OPENROUTER_API_KEY`）。
@@ -64,7 +64,7 @@ SYSTEM_PROMPT = """あなたは日本の有価証券報告書「企業の概況�
 - 会計基準の前置き、子会社数、セグメント注記への参照、沿革、関係会社一覧、事業系統図の会社名羅列は使わない。
 - 複数事業があるときは主要なものを2〜3個までに絞る。
 - 入力が空、または事業内容が全く読めないときは applicable を false にし overview を空文字にする。
-- 日本語。1〜2文。全体で50字以上80字以下（句読点・空白を含む。Python の len と同じ文字数。80を1字でも超えたら失敗。49字以下も失敗）。短くしすぎない。主力の製品・サービス名を入れて必ず50字を超える。
+- 日本語。1〜2文。長さの目安は50〜80字（句読点・空白を含む。Python の len と同じ文字数）。必要な主力の製品・サービスが揃っていれば、情報量が少ないときに無理に足して長くしない。80字を超えたら失敗。
 - 「何をしている会社か」だけ。金額・件数・比率・成長率・目標・年度を書かない。
 - 買い推奨・投資判断・銘柄コードを書かない。
 - 社名は必要なら一度だけ。株式会社は付けない。
@@ -288,8 +288,10 @@ def overview_ok(parsed: dict[str, Any]) -> tuple[bool, str]:
         return True, ""
     text = str(parsed.get("overview") or "").strip()
     n = len(text)
-    if n < MIN_CHARS or n > MAX_CHARS:
-        return False, f"字数 {n} が {MIN_CHARS}〜{MAX_CHARS} の外"
+    if not text:
+        return False, "applicable=true なのに overview が空"
+    if n > MAX_CHARS:
+        return False, f"字数 {n} が目安上限 {MAX_CHARS} を超えている"
     if AMOUNT_RE.search(text):
         return False, "金額・件数・比率らしい数字が入っている"
     if BUY_RE.search(text):
@@ -317,7 +319,7 @@ def clip_overview(text: str) -> str | None:
     window = text[:MAX_CHARS]
     for sep in ("。", "！", "？"):
         idx = window.rfind(sep)
-        if idx + 1 >= MIN_CHARS:
+        if idx >= 0:
             clipped = window[: idx + 1]
             ok, _ = overview_ok({"applicable": True, "overview": clipped})
             if ok:
@@ -372,23 +374,21 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
             "文体はだ・である調。です・ます・でした・ましたは使わない。"
             "「を提供。」「を手がける。」の言い切りも可。applicable は true のまま。"
         )
-        if DESUMASU_RE.search(parsed["overview"]) and MIN_CHARS <= n <= MAX_CHARS:
+        if DESUMASU_RE.search(parsed["overview"]):
             repair = (
-                f"{style} 字数は{MIN_CHARS}以上{MAX_CHARS}以下のまま。新しい事実は足さない。\n"
+                f"{style} 長さは変えず、新しい事実は足さない。情報量が少なければ無理に長くしない。\n"
                 f"{parsed['overview']}"
             )
-        elif n < MIN_CHARS:
+        elif n > MAX_CHARS:
             repair = (
-                f"次の日本語は{n}字で短い。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下になるまで、"
-                "事業の内容にある主力の製品・サービス名を足して具体化する。"
-                f"{style} 新しい事実は作らず、数字・年度・目標は書かない。\n"
-                f"いまの文: {parsed['overview']}\n"
-                f"事業の内容（抜粋）:\n{text[:1800]}"
+                f"次の日本語は{n}字。句読点込みで{MAX_CHARS}字以下に短縮する。"
+                f"{style} 新しい事業を足さず、数字・年度・目標は残さない。情報量が少なければ無理に長くしない。\n"
+                f"{parsed['overview']}"
             )
         else:
             repair = (
-                f"次の日本語は{n}字。句読点込みで{MIN_CHARS}字以上{MAX_CHARS}字以下に短縮する。"
-                f"{style} 新しい事業を足さず、数字・年度・目標は残さない。\n"
+                f"内容が不適です。直し: {why}。{style} 新しい事実は足さない。"
+                "情報量が少なければ無理に長くしない。\n"
                 f"{parsed['overview']}"
             )
         previous = parsed
@@ -420,7 +420,7 @@ def generate_one(company: dict[str, Any]) -> dict[str, Any]:
         clipped_text = None
         if n > MAX_CHARS:
             clipped_text = clip_overview(overview)
-        elif n < MIN_CHARS and n >= MIN_CHARS - 2:
+        elif why == "言い切りの句点がない":
             clipped_text = overview + "。"
         if clipped_text:
             parsed["overview"] = clipped_text
@@ -468,7 +468,7 @@ def findings() -> list[str]:
         "公開 REST・ingest・iOS 製品面には載せない（空枠のまま。ニュースと同じ）",
         "入力は有報「企業の概況」の「事業の内容」（XBRL DescriptionOfBusinessTextBlock）。Filing texts キーは増やさない",
         "management_policy（経営方針）だと理念・中計になり、事業内容にならない。8306 は方針が前置きだけで空だった",
-        "google/gemini-2.5-flash-lite は日本語字数を守りにくい。flash は概ね 50〜80 字",
+        "google/gemini-2.5-flash-lite は日本語字数を守りにくい。flash は概ね 50〜80 字。50〜80 は目安で、情報量が少なければ短くてよい",
         "会社説明の文体はだ・である調。ですますは使わない。「を提供。」「を手がける。」の言い切りも可",
         "1 社あたりコストは OpenRouter usage.cost の平均。上場 4000 社は概算",
     ]
@@ -554,6 +554,16 @@ def cmd_self_check(_args: argparse.Namespace) -> int:
     )
     if ok:
         errors.append("style ng accepted ですます")
+
+    short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
+    if len(short) != 45:
+        errors.append(f"short fixture length {len(short)}")
+    ok, why = overview_ok({"applicable": True, "overview": short})
+    if not ok:
+        errors.append(f"short complete sentence rejected: {why}")
+    ok, _ = overview_ok({"applicable": True, "overview": ""})
+    if ok:
+        errors.append("empty applicable overview accepted")
 
     empty = generate_one(
         {"code": "0000", "name": "空株式会社", "sector": "その他", "doc_id": "X", "text": "  "}

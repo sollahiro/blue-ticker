@@ -1,5 +1,5 @@
-// 銘柄 Overview（50〜80字の会社説明）。Filing 公開 `texts` には載せない。
-// 生成・検証は ingest 時。serving / 別 EP / iOS 要約は未配線。格納スキーマは後続。
+// 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
+// Filing 公開 `texts` には載せない。生成・検証は ingest 時。serving / 別 EP / iOS 要約は未配線。
 
 import Foundation
 
@@ -8,7 +8,9 @@ public let companyOverviewCacheVersion = "overview-v1"
 
 public let companyOverviewInputKey = "description_of_business"
 public let companyOverviewSectionTitle = "事業の内容"
+/// ヘッダ用の目安下限。情報量が少なければこれより短くてよい（不合格にしない）。
 public let companyOverviewMinChars = 50
+/// ヘッダ用の目安上限。超えたら句点で切り、切れなければ不合格。
 public let companyOverviewMaxChars = 80
 public let companyOverviewMaxInputChars = 6000
 public let companyOverviewInputThinChars = 80
@@ -83,9 +85,12 @@ enum CompanyOverviewRules {
         if !applicable {
             return text.isEmpty ? .ok : .invalid("applicable=false なのに overview が空でない")
         }
+        if text.isEmpty {
+            return .invalid("applicable=true なのに overview が空")
+        }
         let n = text.count
-        if n < companyOverviewMinChars || n > companyOverviewMaxChars {
-            return .invalid("字数 \(n) が \(companyOverviewMinChars)〜\(companyOverviewMaxChars) の外")
+        if n > companyOverviewMaxChars {
+            return .invalid("字数 \(n) が目安上限 \(companyOverviewMaxChars) を超えている")
         }
         if matches(Self.amountRegex, in: text) {
             return .invalid("金額・件数・比率らしい数字が入っている")
@@ -115,7 +120,7 @@ enum CompanyOverviewRules {
         return .ok
     }
 
-    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。
+    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。短い完成文は残してよい。
     static func clip(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count <= companyOverviewMaxChars { return trimmed }
@@ -125,7 +130,6 @@ enum CompanyOverviewRules {
             idx = window.index(before: idx)
             guard isSentenceStop(window[idx]) else { continue }
             let clipped = String(window[...idx])
-            guard clipped.count >= companyOverviewMinChars else { continue }
             if case .ok = evaluate(applicable: true, overview: clipped) {
                 return clipped
             }

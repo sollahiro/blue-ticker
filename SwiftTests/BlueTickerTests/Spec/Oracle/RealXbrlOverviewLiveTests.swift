@@ -1,6 +1,6 @@
 // Overview の本番キー（`OPENROUTER_OVERVIEW_API_KEY`）での実 XBRL 生成。
-// 字数・数字混入なし・だ・である調を回帰する。文面は非決定なのでオラクル凍結しない。
-// キーまたは XBRL キャッシュが無ければ SKIP（CI 既定では走らない）。
+// 数字混入なし・だ・である調を回帰する。50〜80字は目安で、完成文なら短くてよい。
+// 文面は非決定なのでオラクル凍結しない。キーまたは XBRL キャッシュが無ければ SKIP。
 
 import Foundation
 import Testing
@@ -85,7 +85,7 @@ struct OverviewSmokeCompany: Sendable, CustomTestStringConvertible {
         #expect(draft.attempts >= 1)
         #expect(draft.applicable)
         #expect(draft.ok, "\(company.code): \(draft.okDetail) overview=\(draft.overview)")
-        #expect(draft.charCount >= companyOverviewMinChars)
+        #expect(draft.charCount > 0)
         #expect(draft.charCount <= companyOverviewMaxChars)
         #expect(
             CompanyOverviewRules.evaluate(applicable: draft.applicable, overview: draft.overview)

@@ -103,59 +103,48 @@ private actor ScriptedChat: ChatCompleting {
         #expect(draft.attempts == 3)
     }
 
-    @Test func repairsPunctuatedShortReply() async throws {
+    @Test func acceptsPunctuatedShortReplyWithoutPadding() async throws {
         let short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
         #expect(short.count == 45)
-        let fixed =
-            "デジタルソフトウェア・アドオンコンテンツ、家庭用ゲーム機、音楽制作、映画製作、テレビ番組制作を手がける。"
-        #expect(fixed.count >= companyOverviewMinChars)
-        let client = try ScriptedChat(replies: [
-            reply(overview: short),
-            reply(overview: fixed),
-        ])
+        let client = try ScriptedChat(replies: [reply(overview: short)])
         let draft = await CompanyOverviewGenerator.generate(
-            input: input("ゲーム、音楽、映画の制作販売。"), client: client,
+            input: input("ゲーム、音楽の制作販売。"), client: client,
             model: companyOverviewDefaultModel)
         #expect(draft.ok)
-        #expect(draft.overview == fixed)
-        #expect(draft.attempts == 2)
-        let users = await client.users
-        #expect(users.count == 2)
-        #expect(users[1].contains("不合格"))
-        #expect(users[1].contains("あと\(companyOverviewMinChars - short.count)字"))
+        #expect(draft.overview == short)
+        #expect(draft.charCount == 45)
+        #expect(draft.attempts == 1)
+        #expect(await client.callCount() == 1)
     }
 
-    @Test func padsUnpunctuatedShortReply() async throws {
-        let short = String(repeating: "あ", count: 49)
-        #expect(short.count == 49)
+    @Test func addsSentenceStopWithoutPaddingForLength() async throws {
+        let short = "ゲーム機と音楽制作を手がける"
+        #expect(short.count < companyOverviewMinChars)
         let client = try ScriptedChat(replies: [
             reply(overview: short),
             reply(overview: short),
             reply(overview: short),
         ])
         let draft = await CompanyOverviewGenerator.generate(
-            input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
+            input: input("ゲームと音楽。"), client: client, model: companyOverviewDefaultModel)
         #expect(draft.ok)
         #expect(draft.clipped)
         #expect(draft.overview == short + "。")
-        #expect(draft.charCount == 50)
+        #expect(draft.charCount == short.count + 1)
         #expect(await client.callCount() == 3)
     }
 
     @Test func doesNotDoublePunctuationOnShortReply() async throws {
         let short = String(repeating: "あ", count: 48) + "。"
         #expect(short.count == 49)
-        let client = try ScriptedChat(replies: [
-            reply(overview: short),
-            reply(overview: short),
-            reply(overview: short),
-        ])
+        let client = try ScriptedChat(replies: [reply(overview: short)])
         let draft = await CompanyOverviewGenerator.generate(
             input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
-        #expect(!draft.ok)
+        #expect(draft.ok)
         #expect(!draft.clipped)
         #expect(draft.overview == short)
         #expect(!draft.overview.hasSuffix("。。"))
-        #expect(await client.callCount() == 3)
+        #expect(draft.attempts == 1)
+        #expect(await client.callCount() == 1)
     }
 }

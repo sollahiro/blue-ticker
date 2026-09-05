@@ -39,9 +39,30 @@ import Testing
         #expect(!ok(unfinished))
     }
 
+    @Test func acceptsShortCompleteSentence() {
+        let short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
+        #expect(short.count == 45)
+        #expect(ok(short))
+    }
+
+    @Test func rejectsEmptyApplicableOverview() {
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "") != .ok)
+        #expect(CompanyOverviewRules.evaluate(applicable: true, overview: "   ") != .ok)
+    }
+
     @Test func applicableFalseRequiresEmptyOverview() {
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "") == .ok)
         #expect(CompanyOverviewRules.evaluate(applicable: false, overview: "残文。") != .ok)
+    }
+
+    @Test func clipAllowsShortLastSentence() {
+        let head = String(repeating: "あ", count: 20) + "。"
+        let overflow = String(repeating: "い", count: 80) + "。"
+        #expect(head.count < companyOverviewMinChars)
+        #expect((head + overflow).count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(head + overflow)
+        #expect(clipped == head)
+        #expect(ok(clipped ?? ""))
     }
 
     @Test func clipDoesNotCutMidWordWithoutSentenceEnd() {

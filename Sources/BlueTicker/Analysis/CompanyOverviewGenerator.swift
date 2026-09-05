@@ -1,4 +1,4 @@
-// 有報「事業の内容」から 50〜80 字の会社説明を生成する。
+// 有報「事業の内容」から短い会社説明を生成する。50〜80字は目安。
 // 公開 REST / Filing `texts` には載せない。空入力はモデルを呼ばない。
 
 import Foundation
@@ -9,9 +9,9 @@ enum CompanyOverviewGenerator {
     ルール:
     - 入力テキストに書かれている主力事業・主な製品・サービスだけを使う。社名や業種欄から補わない。一般知識で足さない。
     - 会計基準の前置き、子会社数、セグメント注記への参照、沿革、関係会社一覧、事業系統図の会社名羅列は使わない。
-    - 複数事業があるときは主要なものを2〜3個までに絞る。2〜3個でも50字未満なら、入力にある別の主力製品・サービス名を足して50字以上にする。
+    - 複数事業があるときは主要なものを2〜3個までに絞る。
     - 入力が空、または事業内容が全く読めないときは applicable を false にし overview を空文字にする。
-    - 日本語。1〜2文。全体で50字以上80字以下（句読点・空白を含む。Python の len と同じ文字数。80を1字でも超えたら失敗。49字以下も失敗）。短くしすぎない。主力の製品・サービス名を入れて必ず50字を超える。
+    - 日本語。1〜2文。長さの目安は50〜80字（句読点・空白を含む）。必要な主力の製品・サービスが揃っていれば、情報量が少ないときに無理に足して長くしない。80字を超えたら失敗。
     - 「何をしている会社か」だけ。金額・件数・比率・成長率・目標・年度を書かない。
     - 買い推奨・投資判断・銘柄コードを書かない。
     - 社名は必要なら一度だけ。株式会社は付けない。
@@ -85,14 +85,11 @@ enum CompanyOverviewGenerator {
 
         var overview = parsed.overview
         var clipped = false
-        if parsed.applicable, case .invalid = verdict {
-            let n = overview.count
+        if parsed.applicable, case .invalid(let why) = verdict {
             var clippedText: String?
-            if n > companyOverviewMaxChars {
+            if overview.count > companyOverviewMaxChars {
                 clippedText = CompanyOverviewRules.clip(overview)
-            } else if n < companyOverviewMinChars && n >= companyOverviewMinChars - 2,
-                !CompanyOverviewRules.endsWithSentenceStop(overview)
-            {
+            } else if why.contains("言い切りの句点") {
                 clippedText = overview + "。"
             }
             if let clippedText {
@@ -160,28 +157,25 @@ enum CompanyOverviewGenerator {
             """
     }
 
-    private static func repairPrompt(current: String, source: String, detail: String) -> String {
+    private static func repairPrompt(current: String, source _: String, detail: String) -> String {
         let n = current.count
         let style = """
             文体はだ・である調。です・ます・でした・ましたは使わない。「を提供。」「を手がける。」の言い切りも可。applicable は true のまま。
             """
-        if detail.contains("ですます") && n >= companyOverviewMinChars && n <= companyOverviewMaxChars {
+        if detail.contains("ですます") {
             return """
-                \(style) 字数は\(companyOverviewMinChars)以上\(companyOverviewMaxChars)以下のまま。新しい事実は足さない。
+                \(style) 長さは変えず、新しい事実は足さない。情報量が少なければ無理に長くしない。
                 \(current)
                 """
         }
-        if n < companyOverviewMinChars {
-            let missing = companyOverviewMinChars - n
+        if n > companyOverviewMaxChars {
             return """
-                不合格: いま\(n)字。最低\(companyOverviewMinChars)字まであと\(missing)字。文を短くしない。入力の事業の内容にある、まだ書いていない主力の製品・サービス名を足して、句読点込みで\(companyOverviewMinChars)字以上\(companyOverviewMaxChars)字以下にする。\(style) 新しい事実は作らず、数字・年度・目標は書かない。
-                いまの文: \(current)
-                事業の内容（抜粋）:
-                \(String(source.prefix(1800)))
+                次の日本語は\(n)字。句読点込みで\(companyOverviewMaxChars)字以下に短縮する。\(style) 新しい事業を足さず、数字・年度・目標は残さない。情報量が少なければ無理に長くしない。
+                \(current)
                 """
         }
         return """
-            次の日本語は\(n)字。句読点込みで\(companyOverviewMinChars)字以上\(companyOverviewMaxChars)字以下に短縮する。\(style) 新しい事業を足さず、数字・年度・目標は残さない。
+            内容が不適です。直し: \(detail)。\(style) 新しい事実は足さない。情報量が少なければ無理に長くしない。
             \(current)
             """
     }
