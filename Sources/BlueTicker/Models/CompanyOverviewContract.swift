@@ -171,7 +171,11 @@ enum CompanyOverviewRules {
         if text.isEmpty {
             return .invalid("applicable=true なのに overview が空")
         }
-        if !hasSubstantiveBody(text) {
+        guard endsWithSentenceStop(text) else {
+            return .invalid("言い切りの句点がない")
+        }
+        let sentences = sentenceBodies(text)
+        if sentences.isEmpty || sentences.contains(where: { !hasSubstantiveBody($0) }) {
             return .invalid("本文がない")
         }
         let n = text.count
@@ -196,15 +200,8 @@ enum CompanyOverviewRules {
         if text.contains("株式会社") {
             return .invalid("株式会社が残っている")
         }
-        guard endsWithSentenceStop(text) else {
-            return .invalid("言い切りの句点がない")
-        }
-        let sentences = sentenceCount(text)
-        if sentences < 1 {
-            return .invalid("本文がない")
-        }
-        if sentences > 2 {
-            return .invalid("文が\(sentences)つある")
+        if sentences.count > 2 {
+            return .invalid("文が\(sentences.count)つある")
         }
         return .ok
     }
@@ -242,20 +239,22 @@ enum CompanyOverviewRules {
         }
     }
 
-    private static func sentenceCount(_ text: String) -> Int {
-        var count = 0
+    /// 句点で区切った文の本体。空白だけの区間は飛ばす。句読点だけの区間は残す。
+    private static func sentenceBodies(_ text: String) -> [String] {
+        var bodies: [String] = []
         var current = ""
         for ch in text {
             if isSentenceStop(ch) {
-                if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    count += 1
+                let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !body.isEmpty {
+                    bodies.append(body)
                 }
                 current = ""
             } else {
                 current.append(ch)
             }
         }
-        return count
+        return bodies
     }
 
     private static func matches(_ regex: NSRegularExpression, in text: String) -> Bool {
