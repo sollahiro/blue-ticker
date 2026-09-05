@@ -137,7 +137,7 @@ flowchart LR
 | `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement（上場） / Notes（日経225） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 7 日。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
-| `GET /v1/companies/{code}/news` | 銘柄ニュース（Brave News Search。**preview**。skills 未掲載。キー未設定は 503） |
+| `GET /v1/companies/{code}/news` | 銘柄ニュース（Brave News Search。**preview**。skills 未掲載。キー未設定は 503。許可ソースのみ） |
 
 エラー封筒: `{"error":...,"status":N}`。
 
