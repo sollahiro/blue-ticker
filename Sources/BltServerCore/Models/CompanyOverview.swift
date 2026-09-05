@@ -1,5 +1,6 @@
-// 銘柄 Overview 取り込み: 有報1件分の短い会社説明（CompanyOverviewPayload）= 1 行。
-// Filing 公開 `texts` には載せない。company_filing_sections と同じ「1書類=1行」。
+// 銘柄 Overview 取り込み: 会社1社分の短い会社説明（CompanyOverviewPayload）= 1 行。
+// Filing 公開 `texts` には載せない。company_icons / company_financials と同じ「会社1社=1行」。
+// 生成は最新有報の「事業の内容」。由来 doc_id は列として持ち、同一 code は上書きする。
 // 生成は LLM（`source=llm`）。入力が空で applicable=false の行は `not_applicable`。
 // ingest stage / serving / 別 EP は未配線。スキーマだけ先に置く。
 
@@ -7,19 +8,19 @@ import BlueTickerCore
 import Fluent
 import Foundation
 
-/// 有報1件分の Overview。EDINET docID を主キー（user 生成）とする。
+/// 会社1社分の Overview。証券コードを主キー（user 生成）とする。
 final class CompanyOverview: Model, @unchecked Sendable {
     static let schema = "company_overviews"
 
-    /// EDINET docID（例: S100XXXX）。抽出元書類。
-    @ID(custom: "doc_id", generatedBy: .user)
+    /// 4 桁証券コード（例: 7203）。
+    @ID(custom: "code", generatedBy: .user)
     var id: String?
 
-    /// 4 桁証券コード（例: 7203）。read-by-code の突き合わせに使う。
-    @Field(key: "code")
-    var code: String
+    /// 生成に使った EDINET docID（最新有報）。skip 判定と由来表示用。
+    @Field(key: "doc_id")
+    var docID: String
 
-    /// 提出日時（EDINET の submitDateTime 文字列）。同一 code の最新書類選択に使う。
+    /// 提出日時（EDINET の submitDateTime 文字列）。由来書類の鮮度。
     @Field(key: "submit_date_time")
     var submitDateTime: String
 
@@ -54,11 +55,11 @@ final class CompanyOverview: Model, @unchecked Sendable {
     init() {}
 
     init(
-        docID: String, code: String, submitDateTime: String, payload: CompanyOverviewPayload,
+        code: String, docID: String, submitDateTime: String, payload: CompanyOverviewPayload,
         contentHash: String, cacheVersion: String = companyOverviewCacheVersion
     ) {
-        self.id = docID
-        self.code = code
+        self.id = code
+        self.docID = docID
         self.submitDateTime = submitDateTime
         self.payload = payload
         self.needsReview = payload.needsReview

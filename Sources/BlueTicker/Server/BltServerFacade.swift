@@ -425,7 +425,7 @@ public enum BreakdownResolveResult: Sendable {
 
 public extension BltServerContext {
     /// Overview 生成（ingest 用）。Filing `texts` には足さない。格納先は `company_overviews`
-    /// （スキーマのみ。stage / serving / 別 EP は未配線）。
+    /// （会社1社=1行。スキーマのみ。stage / serving / 別 EP は未配線）。
     func generateCompanyOverview(docID: String, code: String, name: String, sector: String)
         async -> CompanyOverviewDraft?
     {

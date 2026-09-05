@@ -40,12 +40,12 @@ private func samplePayload(
         try await withMigratedApp { app in
             let payload = samplePayload()
             let row = CompanyOverview(
-                docID: "S100W4MT", code: "7269", submitDateTime: "2025-06-20 09:00",
+                code: "7269", docID: "S100W4MT", submitDateTime: "2025-06-20 09:00",
                 payload: payload, contentHash: companyOverviewContentHash("事業の内容"))
             try await row.create(on: app.db)
 
-            let fetched = try #require(try await CompanyOverview.find("S100W4MT", on: app.db))
-            #expect(fetched.code == "7269")
+            let fetched = try #require(try await CompanyOverview.find("7269", on: app.db))
+            #expect(fetched.docID == "S100W4MT")
             #expect(fetched.submitDateTime == "2025-06-20 09:00")
             #expect(fetched.payload == payload)
             #expect(fetched.needsReview == false)
@@ -61,26 +61,49 @@ private func samplePayload(
         try await withMigratedApp { app in
             let empty = samplePayload(applicable: false, overview: "", ok: true)
             let emptyRow = CompanyOverview(
-                docID: "S100EMPTY", code: "0001", submitDateTime: "2025-01-01 00:00",
+                code: "0001", docID: "S100EMPTY", submitDateTime: "2025-01-01 00:00",
                 payload: empty, contentHash: companyOverviewContentHash(""))
             try await emptyRow.create(on: app.db)
 
             let failed = samplePayload(ok: false)
             let failedRow = CompanyOverview(
-                docID: "S100FAIL", code: "0002", submitDateTime: "2025-01-02 00:00",
+                code: "0002", docID: "S100FAIL", submitDateTime: "2025-01-02 00:00",
                 payload: failed, contentHash: companyOverviewContentHash("残文"))
             try await failedRow.create(on: app.db)
 
-            let storedEmpty = try #require(try await CompanyOverview.find("S100EMPTY", on: app.db))
+            let storedEmpty = try #require(try await CompanyOverview.find("0001", on: app.db))
             #expect(storedEmpty.source == companyOverviewSourceNotApplicable)
             #expect(storedEmpty.needsReview == false)
             #expect(storedEmpty.notApplicableReason == "empty_source")
             #expect(storedEmpty.payload.overview.isEmpty)
 
-            let storedFailed = try #require(try await CompanyOverview.find("S100FAIL", on: app.db))
+            let storedFailed = try #require(try await CompanyOverview.find("0002", on: app.db))
             #expect(storedFailed.source == companyOverviewSourceLLM)
             #expect(storedFailed.needsReview == true)
             #expect(storedFailed.notApplicableReason == nil)
+        }
+    }
+
+    @Test func companyOverviewKeepsOneRowPerCodeWhenDocIDChanges() async throws {
+        try await withMigratedApp { app in
+            let first = CompanyOverview(
+                code: "7269", docID: "S100OLD", submitDateTime: "2024-06-20 09:00",
+                payload: samplePayload(overview: "旧文。"),
+                contentHash: companyOverviewContentHash("旧"))
+            try await first.create(on: app.db)
+
+            let stored = try #require(try await CompanyOverview.find("7269", on: app.db))
+            stored.docID = "S100W4MT"
+            stored.submitDateTime = "2025-06-20 09:00"
+            stored.payload = samplePayload()
+            stored.contentHash = companyOverviewContentHash("新")
+            try await stored.update(on: app.db)
+
+            let rows = try await CompanyOverview.query(on: app.db).all()
+            #expect(rows.count == 1)
+            #expect(rows[0].id == "7269")
+            #expect(rows[0].docID == "S100W4MT")
+            #expect(rows[0].payload.overview == "四輪車、二輪車の製造販売を手がける。")
         }
     }
 }

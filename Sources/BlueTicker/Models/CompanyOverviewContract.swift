@@ -1,6 +1,6 @@
 // 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
 // Filing 公開 `texts` には載せない。生成・検証は ingest 時。格納は `company_overviews`
-// （書類1件=1行）。ingest stage / serving / 別 EP / healthz / iOS 要約は未配線。
+// （会社1社=1行。由来の有報は doc_id 列）。ingest stage / serving / 別 EP / healthz / iOS 要約は未配線。
 
 import Crypto
 import Foundation

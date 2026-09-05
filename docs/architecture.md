@@ -171,7 +171,8 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、`BLT_R2_XBRL_BUCKET` 未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
 | facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない |
 | financials | `company_financials` |
-| filing-sections / breakdowns / statements / notes / overview | 各テーブル。overview は `company_overviews`（スキーマのみ。ingest stage / 公開 REST は未配線。Filing `texts` には載せない） |
+| filing-sections / breakdowns / statements / notes | 各テーブル（書類単位） |
+| overview | `company_overviews`（会社1社=1行。由来 doc_id は列。スキーマのみ。ingest stage / 公開 REST は未配線。Filing `texts` には載せない） |
 
 ## キャッシュとデプロイ
 
