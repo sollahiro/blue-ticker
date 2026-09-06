@@ -11,9 +11,10 @@ enum AccessSession {
         return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]"
     }
 
-    /// https かつ loopback 以外。端末から LAN の http origin を叩く開発は無認証のまま。
+    /// 本番 `api.sollahiro.com` だけ Access する。任意の https には載せない。
     static func usesAccess(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == "https" && !isLoopback(url)
+        url.scheme?.lowercased() == "https"
+            && url.host?.lowercased() == APIConfiguration.productionBaseURL.host?.lowercased()
     }
 
     static func jwt(for url: URL) -> String? {
@@ -174,6 +175,11 @@ final class AccessRedirectDelegate: NSObject, URLSessionTaskDelegate, Sendable {
         newRequest request: URLRequest
     ) async -> URLRequest? {
         if AccessChallenge.isLoginURL(request.url) {
+            return nil
+        }
+        let fromHost = task.originalRequest?.url?.host?.lowercased()
+        let toHost = request.url?.host?.lowercased()
+        guard fromHost != nil, fromHost == toHost else {
             return nil
         }
         return request

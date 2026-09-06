@@ -53,7 +53,7 @@ struct SettingsPlaceholder: View {
                 }
             } else {
                 Section {
-                    Text("このサーバーは無認証です（loopback または http）。https の本番ホストでは Access ログインが必要です。")
+                    Text("このサーバーは無認証です（loopback / http、または本番以外の https）。Access ログインは https://api.sollahiro.com のときだけ出ます。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -62,8 +62,7 @@ struct SettingsPlaceholder: View {
         .navigationTitle("設定")
         .bltChrome()
         .sheet(isPresented: $showLogin, onDismiss: { loginStatus = LoginStatus.read() }) {
-            AccessLoginView(baseURL: APIConfiguration.baseURL) { jwt in
-                try? AccessSession.save(jwt: jwt, for: APIConfiguration.baseURL)
+            AccessLoginView(baseURL: APIConfiguration.baseURL) {
                 loginStatus = LoginStatus.read()
             }
         }

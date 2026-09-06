@@ -16,7 +16,7 @@
 | MCP（開発用） | `mcp.*` | Managed OAuth |
 | ローカル | `127.0.0.1` | 無認証（`CF_ACCESS_TEAM_DOMAIN` 未設定） |
 | 第三者 REST | `api.*` | 段階 B / x402 |
-| iOS | loopback / `api.*` | 開発は loopback / http 無認証。実機プレビューで https の `api.*` を叩くときだけ Access SSO の短命 JWT（`CF_Authorization`）。Service Token は埋め込まない |
+| iOS | loopback / `api.sollahiro.com` | 開発は loopback / http 無認証。実機プレビューで `https://api.sollahiro.com` を叩くときだけ Access SSO の短命 JWT（`CF_Authorization`）。Service Token は埋め込まない |
 
 `api.*` は同一 Access アプリで **SSO Allow OR Service Auth**。
 

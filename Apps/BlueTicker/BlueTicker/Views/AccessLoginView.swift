@@ -5,7 +5,7 @@ import WebKit
 /// `api.*` 直叩きは 403 interstitial なので App Launcher から入る。途中で healthz には飛ばさない。
 struct AccessLoginView: View {
     let baseURL: URL
-    let onComplete: (String) -> Void
+    let onComplete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var errorMessage: String?
@@ -16,8 +16,13 @@ struct AccessLoginView: View {
                 AccessLoginWebView(baseURL: baseURL) { result in
                     switch result {
                     case .success(let jwt):
-                        onComplete(jwt)
-                        dismiss()
+                        do {
+                            try AccessSession.save(jwt: jwt, for: baseURL)
+                            onComplete()
+                            dismiss()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
                     case .failure(let error):
                         errorMessage = error.localizedDescription
                     }

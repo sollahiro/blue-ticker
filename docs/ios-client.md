@@ -83,7 +83,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 段階 | 方針 |
 |---|---|
 | 開発 | loopback / http は無認証。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証 |
-| 自社プレビュー（段階 A） | https の `api.*` は Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。Store 配布の口ではない |
+| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
 | 段階 B | 未決。この変更では変えない |
 
 設定の SSO はプレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。MCP は製品認証に使わない。
