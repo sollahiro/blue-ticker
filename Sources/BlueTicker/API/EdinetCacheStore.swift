@@ -104,9 +104,17 @@ final class EdinetCacheStore: Sendable {
 
     // MARK: - XBRL
 
+    /// EDINET の docID（例: `S100LM4N`）は英数字。テスト用の `_` / `-` も許容し、
+    /// `/` `.` 等のパス構成文字は拒否する。
+    static func isValidDocID(_ docID: String) -> Bool {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+        return !docID.isEmpty && docID.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
     func xbrlDir(_ docID: String, saveDir: URL? = nil) -> URL {
         let root = saveDir ?? xbrlRootDir
-        return root.appendingPathComponent("\(docID)_xbrl", isDirectory: true)
+        let safe = Self.isValidDocID(docID) ? docID : "_"
+        return root.appendingPathComponent("\(safe)_xbrl", isDirectory: true)
     }
 
     /// 展開完了後にのみ書き込む。並列テスト／プロセスが ZIP 展開途中の
@@ -142,6 +150,7 @@ final class EdinetCacheStore: Sendable {
     }
 
     func storeXbrlZip(_ docID: String, content: Data, saveDir: URL? = nil) throws -> URL {
+        guard Self.isValidDocID(docID) else { throw XbrlZipError.invalidDocID }
         let root = saveDir ?? xbrlRootDir
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         let dest = xbrlDir(docID, saveDir: root)
@@ -305,9 +314,11 @@ enum LockError: Error {
 }
 
 /// XBRL ZIP の安全性検査エラー（展開前の事前チェック。ZIP 爆弾対策）。
-enum XbrlZipError: Error {
+enum XbrlZipError: Error, Equatable {
     /// ZIP として開けない（中央ディレクトリが読めない等）。
     case invalidArchive
     /// エントリ数または非圧縮サイズ合計が上限超過。
     case tooLarge(entries: Int, uncompressedBytes: Int64)
+    /// docID がパス構成に使えない文字を含む。
+    case invalidDocID
 }

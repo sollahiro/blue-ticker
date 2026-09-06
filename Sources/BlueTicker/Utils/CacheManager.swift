@@ -52,9 +52,9 @@ actor CacheManager {
     }
 
     private func safeName(_ key: String) -> String {
-        key.replacingOccurrences(of: "/", with: "_")
-           .replacingOccurrences(of: "\\", with: "_")
-           .replacingOccurrences(of: " ", with: "_")
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+        let mapped = String(key.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
+        return mapped.isEmpty ? "_" : mapped
     }
 
     private func categoryDir(_ key: String) -> URL {

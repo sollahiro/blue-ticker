@@ -69,4 +69,18 @@ import Foundation
         }
         #expect(present == 20)
     }
+
+    @Test func testSafeNameKeepsPathTraversalInsideCacheDir() async {
+        let cm = CacheManager(cacheDir: tmpDir)
+        await cm.setJSON("individual_analysis_../etc", value: ["v": 1])
+        #expect(await cm.getJSON("individual_analysis_../etc")?["v"] as? Int == 1)
+
+        let analysis = tmpDir.appendingPathComponent("analysis")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: analysis.path)) ?? []
+        #expect(names.allSatisfy { !$0.contains("..") && !$0.contains("/") })
+        #expect(names.contains { $0.hasPrefix("individual_analysis_") && $0.hasSuffix(".json") })
+
+        let escaped = tmpDir.deletingLastPathComponent().appendingPathComponent("etc.json")
+        #expect(!FileManager.default.fileExists(atPath: escaped.path))
+    }
 }

@@ -94,12 +94,19 @@ enum BorrowingsSchedule {
     /// （例: コンコルディア「　　借入金」、しずおかFG「　借入金」。①②のインデントが検出できない
     /// 場合はこちらにフォールバックする）。`<p>` が無い（インデント情報自体が無い）行は 0
     /// （トップレベル）として扱う。単位混在（px/pt）はテーブル間で比較しないため問題にならない。
+    private static let indentOffsetRegex = try! NSRegularExpression(
+        pattern: "(?:margin-left|padding-left):\\s*([\\d.]+)(?:px|pt)")
+    private static let jpDateRegex = try! NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
+    private static let debtHeadingRegex = try! NSRegularExpression(pattern: "社債及び借入金.*(内訳|帳簿価額)")
+
+    private static func jpDateMatchCount(_ text: String) -> Int {
+        jpDateRegex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+    }
+
     private static func indentLevel(of p: Element?) -> Double {
         guard let p else { return 0 }
         if let style = try? p.attr("style"),
-           let regex = try? NSRegularExpression(
-               pattern: "(?:margin-left|padding-left):\\s*([\\d.]+)(?:px|pt)"),
-           let match = regex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
+           let match = indentOffsetRegex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
            let numRange = Range(match.range(at: 1), in: style),
            let value = Double(style[numRange]), value > 0 {
             return value
@@ -310,11 +317,6 @@ enum BorrowingsSchedule {
         // ソフトバンクグループ S100QZOM 実データ検証（2026-08-03）: 列見出しが「前」「当」ではなく
         // 西暦日付そのもの（"2022年３月31日"／"2023年３月31日"）の会社がある。「前」「当」で
         // 見つからない場合は日付パターンが2つ以上ある表にフォールバックする。
-        let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
-        func jpDateMatchCount(_ text: String) -> Int {
-            guard let jpDatePattern else { return 0 }
-            return jpDatePattern.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-        }
         // ファーストリテイリング S100X6X6 実データ検証（2026-08-04）: 「その他の金融資産及びその他の
         // 金融負債」のように資産・負債セクションが同一タグ内に併存する会社がある。資産側の表も
         // 「前」「当」列を持つため銘柄除外だけでは資産表を誤選択する。社債・借入金・リース・
@@ -401,12 +403,6 @@ enum BorrowingsSchedule {
         let scale: Double = tableText.contains("千円") ? 1_000
             : tableText.contains("億円") ? 100_000_000
             : Financial.millionYen
-
-        let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
-        func jpDateMatchCount(_ text: String) -> Int {
-            guard let jpDatePattern else { return 0 }
-            return jpDatePattern.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-        }
 
         // ヘッダー行（前期/当期/平均利率列を持つ行）から列位置を解決する。固定インデックス禁止
         // （スペーサー列の有無で位置が会社ごとに変わるため）。
@@ -559,15 +555,14 @@ enum BorrowingsSchedule {
     /// テキストをアンカーにして直後の表だけを対象にする。
     /// 実データ検証（2026-08-04: アステラス S100R0I6・丸紅 S100VYGC）。
     private static func parseHeadingAnchoredComparisonTable(in document: Document) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        guard let headingPattern = try? NSRegularExpression(pattern: "社債及び借入金.*(内訳|帳簿価額)"),
-              let all = (try? document.getAllElements())?.array() else { return nil }
+        guard let all = (try? document.getAllElements())?.array() else { return nil }
 
         var passedHeading = false
         for element in all {
             if !passedHeading {
                 guard element.tagName() == "p" else { continue }
                 let text = (try? element.text()) ?? ""
-                if headingPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
+                if debtHeadingRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
                     passedHeading = true
                 }
                 continue
@@ -586,8 +581,7 @@ enum BorrowingsSchedule {
         in document: Document, minMatchingRows: Int = 2
     ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         guard let allElements = (try? document.getAllElements())?.array(),
-              let tables = (try? document.select("table"))?.array(),
-              let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日") else { return nil }
+              let tables = (try? document.select("table"))?.array() else { return nil }
 
         // テーブル自身の1行目に日付が無い場合、直前の見出し段落まで遡って日付を探す。
         // パナソニックHD S100YETA・三菱電機 S100YD3V 実データ検証（2026-08-04）: 「①　前連結会計
@@ -606,7 +600,7 @@ enum BorrowingsSchedule {
                     if rowCount > 1 { return nil }
                 } else if el.tagName() == "p" {
                     let text = (try? el.text()) ?? ""
-                    if let match = jpDatePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                    if let match = jpDateRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                        let range = Range(match.range, in: text) {
                         return String(text[range])
                     }
@@ -678,7 +672,7 @@ enum BorrowingsSchedule {
             // 日付は2行目（「帳簿残高」等の列見出しと同じ行の先頭セル）にある。先頭数行をまとめて探す。
             let headerRowsText = trs.prefix(3).compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }.joined(separator: " ")
             let dateText: String
-            if let match = jpDatePattern.firstMatch(in: headerRowsText, range: NSRange(headerRowsText.startIndex..., in: headerRowsText)),
+            if let match = jpDateRegex.firstMatch(in: headerRowsText, range: NSRange(headerRowsText.startIndex..., in: headerRowsText)),
                let dateRange = Range(match.range, in: headerRowsText) {
                 dateText = String(headerRowsText[dateRange])
             } else if let fallback = precedingDate(before: table) {
@@ -769,8 +763,7 @@ enum BorrowingsSchedule {
     private static func parseRollforwardEndingBalancePairTables(
         in document: Document
     ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        guard let tables = (try? document.select("table"))?.array(),
-              let jpDatePattern = try? NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日") else { return nil }
+        guard let tables = (try? document.select("table"))?.array() else { return nil }
 
         struct EndingBalanceTable { let closingDate: String; let rows: [(label: String, value: Double)]; let total: Double }
         var candidates: [EndingBalanceTable] = []
@@ -780,7 +773,7 @@ enum BorrowingsSchedule {
             // セル内で別々の<p>に分かれており、text()が間に空白を挟むため空白を除去してから日付照合する。
             let headerText = trs.prefix(2).compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
                 .joined(separator: " ").replacingOccurrences(of: " ", with: "")
-            let dateMatches = jpDatePattern.matches(in: headerText, range: NSRange(headerText.startIndex..., in: headerText))
+            let dateMatches = jpDateRegex.matches(in: headerText, range: NSRange(headerText.startIndex..., in: headerText))
                 .compactMap { Range($0.range, in: headerText).map { String(headerText[$0]) } }
             guard dateMatches.count >= 2, let closingDate = dateMatches.last else { continue }
 
@@ -1177,8 +1170,8 @@ enum BorrowingsSchedule {
             if let last = merged.last, last.label == row.label {
                 merged[merged.count - 1] = Row(
                     label: last.label,
-                    current: sumOptional(last.current, row.current),
-                    prior: sumOptional(last.prior, row.prior),
+                    current: XBRLUtils.sumOptional(last.current, row.current),
+                    prior: XBRLUtils.sumOptional(last.prior, row.prior),
                     averageInterestRatePercent: nil
                 )
             } else {
@@ -1186,13 +1179,6 @@ enum BorrowingsSchedule {
             }
         }
         return merged
-    }
-
-    private static func sumOptional(_ a: Double?, _ b: Double?) -> Double? {
-        switch (a, b) {
-        case (nil, nil): return nil
-        default: return (a ?? 0) + (b ?? 0)
-        }
     }
 
     /// トヨタ自動車 S100Y8NY 実データ検証（2026-08-04）: `ifrsInterestBearingLiabilitiesTextblockTag`は

@@ -89,4 +89,16 @@ import Testing
             FaviconFetcher.wordPressDefaultIconSHA256.contains(
                 "c965a500f698483526faf92ac286047cecd825608cd1d83276de392b30a13a83"))
     }
+
+    @Test func exceedsByteLimitWhenContentLengthIsOverCap() {
+        #expect(FaviconFetcher.exceedsByteLimit(expectedContentLength: 3_000_000, accumulated: 0, incoming: 0))
+        #expect(!FaviconFetcher.exceedsByteLimit(expectedContentLength: -1, accumulated: 0, incoming: 100))
+        #expect(!FaviconFetcher.exceedsByteLimit(expectedContentLength: 100, accumulated: 0, incoming: 0))
+    }
+
+    @Test func exceedsByteLimitWhenAccumulatedChunksCrossCap() {
+        #expect(FaviconFetcher.exceedsByteLimit(accumulated: 2 * 1024 * 1024, incoming: 1))
+        #expect(!FaviconFetcher.exceedsByteLimit(accumulated: 2 * 1024 * 1024 - 10, incoming: 10))
+        #expect(FaviconFetcher.exceedsByteLimit(accumulated: 100, incoming: 50, limit: 149))
+    }
 }

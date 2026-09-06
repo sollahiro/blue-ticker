@@ -73,6 +73,7 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanyOverviews())
     // Feed Update: 提出日時の読み取り索引。
     app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
+    app.migrations.add(AddCodeSubmitDateTimeIndexes())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

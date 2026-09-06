@@ -755,13 +755,10 @@ enum XBRLUtils {
 
     /// 指定タグの TextBlock 要素内のHTML（エンティティ復号済み）を最初に一致したファイルから返す。
     static func extractTextblockHtml(in dir: URL, textblockTag: String) -> String? {
-        let pattern = try? NSRegularExpression(
-            pattern: "<[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "(?:\\s|>|/)[^>]*>(.*?)</[^>]*:" + NSRegularExpression.escapedPattern(for: textblockTag) + "[^>]*>",
-            options: [.dotMatchesLineSeparators]
-        )
+        guard let pattern = textblockHtmlPattern(for: textblockTag) else { return nil }
         for xbrlFile in findXbrlFiles(in: dir) {
             guard let raw = try? String(contentsOf: xbrlFile, encoding: .utf8) else { continue }
-            guard let match = pattern?.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+            guard let match = pattern.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
                   let range = Range(match.range(at: 1), in: raw) else { continue }
             return String(raw[range]).htmlEntityDecoded
         }
@@ -803,6 +800,7 @@ enum XBRLUtils {
         }
 
         guard let rows = try? element.select("tr") else { return fieldSet }
+        let labelsByLength = remaining.sorted { $0.count > $1.count }
         for row in rows {
             guard !remaining.isEmpty else { break }
             guard let cells = try? row.select("td, th"), !cells.isEmpty else { continue }
@@ -813,7 +811,7 @@ enum XBRLUtils {
             var matched: String?
             for label in remaining where texts[0] == label { matched = label; break }
             if matched == nil {
-                for label in remaining.sorted(by: { $0.count > $1.count }) {
+                for label in labelsByLength where remaining.contains(label) {
                     if texts[0].contains(label) { matched = label; break }
                 }
             }
@@ -831,6 +829,42 @@ enum XBRLUtils {
         }
         return fieldSet
     }
+
+    /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
+    /// 複数該当する場合は dimension キー名の辞書順で先頭を採用し、Dictionary の走査順不定に依存しない。
+    static func primaryBreakdownMember(_ dimensions: [String: String]) -> String? {
+        dimensions
+            .filter { $0.key != "ConsolidatedOrNonConsolidatedAxis" }
+            .sorted { $0.key < $1.key }
+            .first?.value
+    }
+
+    /// `a`・`b`のうち存在する方を足す（両方 nil なら nil）。単純な `(a ?? 0) + (b ?? 0)` だと
+    /// 「両方未開示」を `0` として返してしまう。
+    static func sumOptional(_ a: Double?, _ b: Double?) -> Double? {
+        switch (a, b) {
+        case (nil, nil): return nil
+        case (let a?, nil): return a
+        case (nil, let b?): return b
+        case (let a?, let b?): return a + b
+        }
+    }
+}
+
+private let _textblockPatternLock = NSLock()
+nonisolated(unsafe) private var _textblockPatterns: [String: NSRegularExpression] = [:]
+
+private func textblockHtmlPattern(for tag: String) -> NSRegularExpression? {
+    _textblockPatternLock.lock()
+    defer { _textblockPatternLock.unlock() }
+    if let cached = _textblockPatterns[tag] { return cached }
+    let escaped = NSRegularExpression.escapedPattern(for: tag)
+    let regex = try? NSRegularExpression(
+        pattern: "<[^>]*:" + escaped + "(?:\\s|>|/)[^>]*>(.*?)</[^>]*:" + escaped + "[^>]*>",
+        options: [.dotMatchesLineSeparators]
+    )
+    if let regex { _textblockPatterns[tag] = regex }
+    return regex
 }
 
 // MARK: - SAX Parsers (private)
