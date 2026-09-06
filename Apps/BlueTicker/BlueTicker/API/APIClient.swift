@@ -39,6 +39,10 @@ actor APIClient {
         try await get(path("v1/companies/\(code)/waterfall"))
     }
 
+    func overview(code: String) async throws -> CompanyOverviewResponse {
+        try await get(path("v1/companies/\(code)/overview"))
+    }
+
     private func path(_ suffix: String) -> URL {
         APIConfiguration.baseURL.appending(path: suffix)
     }

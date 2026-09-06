@@ -10,11 +10,13 @@ import Testing
         let ids = apiSkillsCatalog().map(\.id)
         #expect(Set(ids).count == ids.count)
         #expect(ids.contains("search-companies"))
+        #expect(ids.contains("get-overview"))
         #expect(ids.contains("get-breakdown"))
         #expect(ids.contains("get-statement"))
         #expect(ids.contains("get-feed-updates"))
         #expect(ids.contains("get-feed-trend"))
-        #expect(ids.contains("get-feed-trend"))
+        let overview = apiSkillsCatalog().first { $0.id == "get-overview" }
+        #expect(overview?.mcpTool == nil)
     }
 
     @Test func mcpToolNamesMatchExpectedSet() {

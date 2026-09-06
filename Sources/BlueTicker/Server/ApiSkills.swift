@@ -157,6 +157,31 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """
         ),
         ApiSkill(
+            id: "get-overview",
+            name: "会社説明",
+            description: "銘柄の短い会社説明を返します（有報「事業の内容」由来。最大90字。格納済みのみ）。",
+            method: "GET",
+            path: "/v1/companies/{code}/overview",
+            mcpTool: nil,
+            feature: "overview",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 7203）",
+                    required: true
+                ),
+            ],
+            instructions: """
+                概要カード上部用の短い会社説明。数値・買い推奨は含まない。
+                格納済みデータのみ。未算出・対象外は 404、DB 非接続は 503。ライブ生成へはフォールバックしない。
+                MCP には出さない。
+                例: GET /v1/companies/7203/overview
+                """,
+            mcpOutputSchema: nil
+        ),
+        ApiSkill(
             id: "get-filings",
             name: "提出書類一覧",
             description: "銘柄コードに紐づく EDINET 書類一覧を取得します。",

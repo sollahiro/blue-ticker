@@ -1,10 +1,13 @@
 import SwiftUI
+import UIKit
+import CoreText
 
 struct SummaryView: View {
     var code: String
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
     @State private var selectedRow: SummaryRow?
+    @State private var overview: String?
 
     var body: some View {
         Group {
@@ -48,6 +51,20 @@ struct SummaryView: View {
         let scales = moneyScales(for: response)
         return ScrollView {
             VStack(alignment: .leading, spacing: 4) {
+                if let overview, !overview.isEmpty {
+                    Text(overview)
+                        .font(.footnote)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .hidden()
+                        .overlay {
+                            JustifiedOverviewText(text: overview)
+                                .allowsHitTesting(false)
+                        }
+                        .padding(.bottom, 8)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(overview)
+                }
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("")
@@ -105,14 +122,125 @@ struct SummaryView: View {
     }
 
     private func load() async {
+        async let financials = APIClient.shared.financials(code: code)
+        async let overviewText = loadOverview()
         do {
-            response = try await APIClient.shared.financials(code: code)
+            response = try await financials
             errorMessage = nil
         } catch APIClientError.http(let status, let message) where status == 404 {
             errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
             errorMessage = error.localizedDescription
         }
+        overview = await overviewText
+    }
+
+    private func loadOverview() async -> String? {
+        do {
+            let loaded = try await APIClient.shared.overview(code: code)
+            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
+        } catch {
+            return nil
+        }
+    }
+}
+
+/// 表と同じ幅で折り返し、途中の行は文字間隔で両端揃え、最終行は左揃え。
+private struct JustifiedOverviewText: UIViewRepresentable {
+    var text: String
+
+    func makeUIView(context: Context) -> JustifiedOverviewLabel {
+        JustifiedOverviewLabel()
+    }
+
+    func updateUIView(_ view: JustifiedOverviewLabel, context: Context) {
+        view.text = text
+    }
+}
+
+private final class JustifiedOverviewLabel: UIView {
+    var text = "" {
+        didSet {
+            guard oldValue != text else { return }
+            setNeedsDisplay()
+        }
+    }
+
+    private var font: UIFont { UIFont.preferredFont(forTextStyle: .footnote) }
+    private var color: UIColor { UIColor(Theme.textMuted) }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        contentMode = .redraw
+        isAccessibilityElement = false
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext(), !text.isEmpty, bounds.width > 0 else { return }
+        ctx.saveGState()
+        ctx.textMatrix = .identity
+        ctx.translateBy(x: 0, y: bounds.height)
+        ctx.scaleBy(x: 1, y: -1)
+        let attributed = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                .foregroundColor: color,
+            ]
+        )
+        let path = CGPath(rect: bounds, transform: nil)
+        let frame = CTFramesetterCreateFrame(
+            CTFramesetterCreateWithAttributedString(attributed),
+            CFRange(location: 0, length: 0),
+            path,
+            nil
+        )
+        let lines = CTFrameGetLines(frame) as? [CTLine] ?? []
+        var origins = Array(repeating: CGPoint.zero, count: lines.count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: lines.count), &origins)
+        for (index, line) in lines.enumerated() {
+            let drawn = index == lines.count - 1
+                ? line
+                : Self.justifiedLine(line, from: attributed, width: bounds.width, font: font, color: color)
+            ctx.textPosition = origins[index]
+            CTLineDraw(drawn, ctx)
+        }
+        ctx.restoreGState()
+    }
+
+    private static func justifiedLine(
+        _ line: CTLine, from attributed: NSAttributedString, width: CGFloat, font: UIFont, color: UIColor
+    ) -> CTLine {
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let used = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
+        let slack = width - used
+        let range = CTLineGetStringRange(line)
+        guard slack > 0.5, range.length > 1 else { return line }
+        let nsText = attributed.string as NSString
+        let substring = nsText.substring(with: NSRange(location: range.location, length: range.length))
+        let kern = slack / CGFloat(range.length - 1)
+        let filled = NSMutableAttributedString(
+            string: substring,
+            attributes: [.font: font, .foregroundColor: color]
+        )
+        filled.addAttribute(.kern, value: kern, range: NSRange(location: 0, length: filled.length - 1))
+        return CTLineCreateWithAttributedString(filled)
     }
 }
 
@@ -186,21 +314,36 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .sales: "当期の売上高です。前期比での伸びを確認できます。"
-        case .grossProfit: "売上高から売上原価を差し引いた粗利益です。"
-        case .grossMargin: "粗利益 ÷ 売上高。原価効率を示します。"
-        case .operatingProfit: "営業活動で得た利益です。"
-        case .operatingMargin: "営業利益 ÷ 売上高です。"
-        case .netProfit: "税引き後の最終的な当期純利益です。"
-        case .netProfitMargin: "純利益 ÷ 売上高です。"
-        case .netCash: "現預金などから有利子負債を差し引いた正味の手元資金です。"
-        case .netDe: "純借入金 ÷ 自己資本。低いほど財務リスクが小さいです。"
-        case .cfo: "営業活動によるキャッシュフローです。"
-        case .cfi: "投資活動によるキャッシュフローです。"
-        case .fcf: "営業CFに投資CFを加えたフリーキャッシュフローです。"
-        case .equityRatio: "自己資本 ÷ 総資産。高いほど財務が安定します。"
-        case .currentRatio: "流動資産 ÷ 流動負債。200%以上が望ましいとされます。"
-        case .fixedRatio: "固定資産 ÷ 自己資本。低いほど安全です。"
+        case .sales:
+            return "当期の売上高です。前期比で規模の伸び縮みを見ます。業種で桁が違うので他社比較は同業が本筋です。"
+        case .grossProfit:
+            return "売上高から売上原価を差し引いた粗利益です。原価高や値下げで縮小します。"
+        case .grossMargin:
+            return "粗利益 ÷ 売上高。原価効率です。製造業はおおむね 20〜40%、小売・商社は低め、ソフトは高めが多いです。急落は価格競争や原価高のサインです。"
+        case .operatingProfit:
+            return "本業で得た利益です。赤字は本業が回っていないことを示します。一時費用でも赤字になり得ます。"
+        case .operatingMargin:
+            return "営業利益 ÷ 売上高です。製造業は 5〜10% 前後、小売は数%、IT はより高いことが多いです。0% 近傍や赤字は要注意です。同業比較が本筋です。"
+        case .netProfit:
+            return "税引き後の最終的な当期純利益です。特別損益でぶれるので、営業利益と切り分けて見ます。"
+        case .netProfitMargin:
+            return "純利益 ÷ 売上高です。最終的な効率です。赤字は資本を毀損します。業種差が大きいので同業比較が本筋です。"
+        case .netCash:
+            return "現預金などから有利子負債を差し引いた正味の手元資金です。ネットキャッシュとも呼ばれます。プラスは実質無借金、マイナスは純有利子負債です。成長投資で意図的にマイナスの業種（不動産・通信など）もあります。銀行は解釈が異なります。"
+        case .netDe:
+            return "純借入金 ÷ 自己資本です。1 倍超は負債が自己資本を上回る目安で要注意とされることが多いです。マイナスはネットキャッシュです。金融・商社・不動産は高くなりやすく、製造業は低めが一般的です。"
+        case .cfo:
+            return "営業活動で稼いだ現金です。利益が出ていても営業 CF が弱いと回収遅れです。継続赤字は資金繰り懸念です。"
+        case .cfi:
+            return "投資活動によるキャッシュフローです。通常はマイナス（設備投資）です。大きくマイナスは成長投資、プラスは資産売却が多いです。"
+        case .fcf:
+            return "営業 CF に投資 CF を加えたフリーキャッシュフローです。株主還元や返済に回せる余力です。成長期は意図的にマイナスもあり、継続的なマイナスは外部資金依存です。"
+        case .equityRatio:
+            return "自己資本 ÷ 総資産です。高いほど財務が安定します。40% 以上が安定、20% 未満は要注意とされることが多いです。銀行は規制上低め、装置産業も低めになりやすいです。"
+        case .currentRatio:
+            return "流動資産 ÷ 流動負債です。200% 以上が望ましいとされ、100% 未満は短期の支払い余力不足です。小売は在庫回転が速く、低めでも回ることがあります。"
+        case .fixedRatio:
+            return "固定資産 ÷ 自己資本です。100% 以下が望ましく、150% 超は要注意とされることが多いです。装置産業は高くなりやすいです。"
         }
     }
 

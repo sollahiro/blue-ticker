@@ -23,6 +23,7 @@ struct BreakdownView: View {
     @State private var errorMessage: String?
     @State private var metric: BreakdownMetric = .businessProfit
     @State private var selectedYearID: String?
+    @State private var selectedFactor: FactorKind?
 
     var body: some View {
         Group {
@@ -41,12 +42,9 @@ struct BreakdownView: View {
 
     private func content(_ response: FinancialsResponse) -> some View {
         let years = Format.chronological(response.years)
-        let selectedYear = years.first { $0.id == selectedYearID }
+        let selectedYear = years.first { $0.id == selectedYearID && isYearSelectable($0, years: years) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("事業利益は売上総利益 − 販管費です。開示の営業利益行ではありません。")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.textMuted)
                 HStack(spacing: 8) {
                     ForEach(BreakdownMetric.allCases) { item in
                         Button(item.title) { metric = item }
@@ -67,9 +65,14 @@ struct BreakdownView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
                 if let selectedYear {
-                    factorChart(selectedYear)
+                    factorChart(selectedYear, years: years)
                 } else {
                     Text(factorPrompt)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textMuted)
+                }
+                if metric == .businessProfit {
+                    Text("事業利益は売上総利益 − 販管費です。開示の営業利益行ではありません。")
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
                 }
@@ -81,37 +84,46 @@ struct BreakdownView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card)
         .padding(16)
+        .onChange(of: metric) { _, _ in
+            selectedFactor = nil
+        }
     }
 
     private func yearBars(_ years: [FinancialsYear]) -> some View {
         let peak = years.compactMap(metricValue).map(abs).max() ?? 0
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(years) { year in
-                let selected = year.id == selectedYearID
-                Button {
-                    selectedYearID = year.id
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(Format.fy(year.fyEnd))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Theme.text)
-                            .frame(width: 48, alignment: .leading)
-                        SignedBar(value: metricValue(year) ?? 0, peak: peak)
-                            .frame(height: 18)
-                        Text(metricLabel(year))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(Theme.text)
-                            .frame(width: 88, alignment: .trailing)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
-                    .background(selected ? Theme.accent.opacity(0.18) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                let selectable = isYearSelectable(year, years: years)
+                let selected = selectable && year.id == selectedYearID
+                let row = HStack(spacing: 8) {
+                    Text(Format.fy(year.fyEnd))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 48, alignment: .leading)
+                    SignedBar(value: metricValue(year) ?? 0, peak: peak)
+                        .frame(height: 18)
+                    Text(metricLabel(year))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 88, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(selected ? Theme.accent.opacity(0.18) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                if selectable {
+                    Button {
+                        selectedYearID = year.id
+                    } label: {
+                        row
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                } else {
+                    row
+                }
             }
         }
     }
@@ -123,7 +135,7 @@ struct BreakdownView: View {
         let segments = ratioSegments(points)
         let xMin = min(points.map(\.value).min() ?? 0, 0)
         let xMax = max(points.map(\.value).max() ?? 0, 0)
-        let selectedIndex = years.firstIndex { $0.id == selectedYearID }
+        let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0, years: years) }
         let selectedSegment = selectedIndex.flatMap { index in
             segments.first { $0.points.last?.index == index }
         }
@@ -213,7 +225,9 @@ struct BreakdownView: View {
                             let normalized = max(0, min(1, y / plotRect.height))
                             selected = Int((Double(years.count - 1) * (1.0 - normalized)).rounded())
                         }
-                        guard let selected, years.indices.contains(selected) else { return }
+                        guard let selected, years.indices.contains(selected),
+                            isYearSelectable(years[selected], years: years)
+                        else { return }
                         selectedYearID = years[selected].id
                     }
             }
@@ -275,48 +289,211 @@ struct BreakdownView: View {
         }
     }
 
-    private func factorChart(_ year: FinancialsYear) -> some View {
+    private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
         let spec = factorSpec(year)
-        let peak = spec.factors.map { abs($0.value ?? 0) }.max() ?? 0
+        let peak = (spec.factors.map { abs($0.value ?? 0) } + [abs(spec.totalValue ?? 0)]).max() ?? 0
+        let prior = priorYear(of: year, in: years)
         return VStack(alignment: .leading, spacing: 8) {
             Text("\(Format.fy(year.fyEnd)) の要因分解")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
             ForEach(spec.factors) { factor in
-                HStack(spacing: 8) {
-                    Text(factor.name)
-                        .font(.caption)
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 88, alignment: .leading)
-                    MagnitudeBar(value: factor.value ?? 0, peak: peak)
-                        .frame(height: 16)
-                    Text(spec.format(factor.value))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(factorColor(factor.value))
-                        .frame(width: 88, alignment: .trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                let selected = selectedFactor == factor.kind
+                factorRow(
+                    title: factor.kind.title,
+                    value: factor.value,
+                    peak: peak,
+                    format: spec.format,
+                    selected: selected,
+                    emphasized: false
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedFactor = (selectedFactor == factor.kind ? nil : factor.kind)
                 }
             }
-            if let summary = spec.summary {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(Theme.textMuted)
+            Rectangle()
+                .fill(Theme.textMuted.opacity(0.45))
+                .frame(height: 1)
+                .padding(.vertical, 2)
+            factorRow(
+                title: spec.totalTitle,
+                value: spec.totalValue,
+                peak: peak,
+                format: spec.format,
+                selected: false,
+                emphasized: true
+            )
+            .accessibilityLabel("\(spec.totalTitle) \(spec.format(spec.totalValue))")
+            if let selectedFactor, spec.factors.contains(where: { $0.kind == selectedFactor }) {
+                let detail = selectedFactor.detail(year: year, prior: prior)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedFactor.title)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.accent)
+                    ForEach(Array(detail.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.caption)
+                            .foregroundStyle(Theme.text)
+                    }
+                }
+                .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
         .padding(.top, 8)
     }
 
+    private func factorRow(
+        title: String,
+        value: Double?,
+        peak: Double,
+        format: (Double?) -> String,
+        selected: Bool,
+        emphasized: Bool
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption.weight(selected || emphasized ? .bold : .regular))
+                .foregroundStyle(selected ? Theme.accent : Theme.text)
+                .frame(width: 88, alignment: .leading)
+            MagnitudeBar(value: value ?? 0, peak: peak)
+                .frame(height: 16)
+            Text(format(value))
+                .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
+                .foregroundStyle(factorColor(value))
+                .frame(width: 88, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, 2)
+        .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+    }
+
+    private enum FactorKind: String, CaseIterable {
+        case salesChange
+        case grossMarginChange
+        case sgaChange
+        case roicMargin
+        case roicTurnover
+        case roeNetMargin
+        case roeTurnover
+        case roeLeverage
+
+        var title: String {
+            switch self {
+            case .salesChange: "売上要因"
+            case .grossMarginChange, .roicMargin: "利益率要因"
+            case .sgaChange: "販管費要因"
+            case .roicTurnover, .roeTurnover: "回転率要因"
+            case .roeNetMargin: "純利益率要因"
+            case .roeLeverage: "レバレッジ要因"
+            }
+        }
+
+        func detail(year: FinancialsYear, prior: FinancialsYear?) -> [String] {
+            var lines = [blurb]
+            lines.append(formula)
+            if let substitution = substitution(year: year, prior: prior) {
+                lines.append("= \(substitution)")
+            }
+            return lines
+        }
+
+        private var blurb: String {
+            switch self {
+            case .salesChange:
+                return "売上高の増減を、前期の粗利率で利益に換算した寄与です。"
+            case .grossMarginChange:
+                return "同じ売上でも粗利率が変わった分の寄与です。"
+            case .sgaChange:
+                return "販管費の増減が事業利益を押し上げ・押し下げた分です。販管費が増えるとマイナスになります。"
+            case .roicMargin:
+                return "NOPATマージン（税引後営業利益率）の変化が ROIC に効いた分です。"
+            case .roicTurnover:
+                return "投下資本回転率の変化が ROIC に効いた分です。"
+            case .roeNetMargin:
+                return "純利益率の変化が ROE に効いた分です。"
+            case .roeTurnover:
+                return "総資産回転率の変化が ROE に効いた分です。"
+            case .roeLeverage:
+                return "財務レバレッジ（総資産 ÷ 自己資本）の変化が ROE に効いた分です。"
+            }
+        }
+
+        private var formula: String {
+            switch self {
+            case .salesChange:
+                return "(当期売上 − 前期売上) × 前期粗利率"
+            case .grossMarginChange:
+                return "当期売上 × (当期粗利率 − 前期粗利率)"
+            case .sgaChange:
+                return "−(当期販管費 − 前期販管費)"
+            case .roicMargin:
+                return "(当期NOPATマージン − 前期NOPATマージン) × 前期投下資本回転率"
+            case .roicTurnover:
+                return "当期NOPATマージン × (当期回転率 − 前期回転率)"
+            case .roeNetMargin:
+                return "(当期純利益率 − 前期純利益率) × 前期総資産回転率 × 前期財務レバレッジ"
+            case .roeTurnover:
+                return "当期純利益率 × (当期回転率 − 前期回転率) × 前期財務レバレッジ"
+            case .roeLeverage:
+                return "当期純利益率 × 当期総資産回転率 × (当期レバレッジ − 前期レバレッジ)"
+            }
+        }
+
+        private func substitution(year: FinancialsYear, prior: FinancialsYear?) -> String? {
+            guard let prior else { return nil }
+            switch self {
+            case .salesChange:
+                guard year.sales != nil, prior.sales != nil, prior.grossProfitMargin != nil else { return nil }
+                return "(\(Format.autoYen(year.sales)) − \(Format.autoYen(prior.sales))) × \(Format.percent(prior.grossProfitMargin))"
+            case .grossMarginChange:
+                guard year.sales != nil, year.grossProfitMargin != nil, prior.grossProfitMargin != nil else { return nil }
+                return "\(Format.autoYen(year.sales)) × (\(Format.percent(year.grossProfitMargin)) − \(Format.percent(prior.grossProfitMargin)))"
+            case .sgaChange:
+                guard year.sga != nil, prior.sga != nil else { return nil }
+                return "−(\(Format.autoYen(year.sga)) − \(Format.autoYen(prior.sga)))"
+            case .roicMargin:
+                guard year.nopatMargin != nil, prior.nopatMargin != nil, prior.investedCapitalTurnover != nil else {
+                    return nil
+                }
+                return "(\(Format.percent(year.nopatMargin)) − \(Format.percent(prior.nopatMargin))) × \(Format.times(prior.investedCapitalTurnover))"
+            case .roicTurnover:
+                guard year.nopatMargin != nil, year.investedCapitalTurnover != nil,
+                    prior.investedCapitalTurnover != nil
+                else { return nil }
+                return "\(Format.percent(year.nopatMargin)) × (\(Format.times(year.investedCapitalTurnover)) − \(Format.times(prior.investedCapitalTurnover)))"
+            case .roeNetMargin:
+                guard year.netMargin != nil, prior.netMargin != nil, prior.assetTurnover != nil,
+                    prior.financialLeverage != nil
+                else { return nil }
+                return "(\(Format.percent(year.netMargin)) − \(Format.percent(prior.netMargin))) × \(Format.times(prior.assetTurnover)) × \(Format.times(prior.financialLeverage))"
+            case .roeTurnover:
+                guard year.netMargin != nil, year.assetTurnover != nil, prior.assetTurnover != nil,
+                    prior.financialLeverage != nil
+                else { return nil }
+                return "\(Format.percent(year.netMargin)) × (\(Format.times(year.assetTurnover)) − \(Format.times(prior.assetTurnover))) × \(Format.times(prior.financialLeverage))"
+            case .roeLeverage:
+                guard year.netMargin != nil, year.assetTurnover != nil, year.financialLeverage != nil,
+                    prior.financialLeverage != nil
+                else { return nil }
+                return "\(Format.percent(year.netMargin)) × \(Format.times(year.assetTurnover)) × (\(Format.times(year.financialLeverage)) − \(Format.times(prior.financialLeverage)))"
+            }
+        }
+    }
+
     private struct FactorRow: Identifiable {
-        var name: String
+        var kind: FactorKind
         var value: Double?
-        var id: String { name }
+        var id: String { kind.rawValue }
     }
 
     private struct FactorSpec {
         var factors: [FactorRow]
         var format: (Double?) -> String
-        var summary: String?
+        var totalTitle: String
+        var totalValue: Double?
     }
 
     private func factorSpec(_ year: FinancialsYear) -> FactorSpec {
@@ -324,31 +501,34 @@ struct BreakdownView: View {
         case .businessProfit:
             return FactorSpec(
                 factors: [
-                    FactorRow(name: "売上要因", value: year.salesChangeImpact),
-                    FactorRow(name: "利益率要因", value: year.grossMarginChangeImpact),
-                    FactorRow(name: "販管費要因", value: year.sgaChangeImpact),
+                    FactorRow(kind: .salesChange, value: year.salesChangeImpact),
+                    FactorRow(kind: .grossMarginChange, value: year.grossMarginChangeImpact),
+                    FactorRow(kind: .sgaChange, value: year.sgaChangeImpact),
                 ],
                 format: Format.autoYen,
-                summary: year.businessProfitChange.map { "事業利益 前年差 \(Format.autoYen($0))" }
+                totalTitle: "前年差",
+                totalValue: year.businessProfitChange
             )
         case .roic:
             return FactorSpec(
                 factors: [
-                    FactorRow(name: "利益率要因", value: year.roicMarginEffect),
-                    FactorRow(name: "回転率要因", value: year.roicTurnoverEffect),
+                    FactorRow(kind: .roicMargin, value: year.roicMarginEffect),
+                    FactorRow(kind: .roicTurnover, value: year.roicTurnoverEffect),
                 ],
                 format: Format.percentPoints,
-                summary: year.roicDelta.map { "ROIC 前年差 \(Format.percentPoints($0))" }
+                totalTitle: "前年差",
+                totalValue: year.roicDelta
             )
         case .roe:
             return FactorSpec(
                 factors: [
-                    FactorRow(name: "純利益率要因", value: year.roeNetMarginEffect),
-                    FactorRow(name: "回転率要因", value: year.roeAssetTurnoverEffect),
-                    FactorRow(name: "レバレッジ要因", value: year.roeLeverageEffect),
+                    FactorRow(kind: .roeNetMargin, value: year.roeNetMarginEffect),
+                    FactorRow(kind: .roeTurnover, value: year.roeAssetTurnoverEffect),
+                    FactorRow(kind: .roeLeverage, value: year.roeLeverageEffect),
                 ],
                 format: Format.percentPoints,
-                summary: year.roeDelta.map { "ROE 前年差 \(Format.percentPoints($0))" }
+                totalTitle: "前年差",
+                totalValue: year.roeDelta
             )
         }
     }
@@ -367,6 +547,22 @@ struct BreakdownView: View {
     private func factorColor(_ value: Double?) -> Color {
         guard let value, value < 0 else { return Theme.text }
         return Theme.negative
+    }
+
+    /// 前年差が無い最古の点／年度は選べない。折れ線は値のある最古の点、棒は最古年度。
+    private func isYearSelectable(_ year: FinancialsYear, years: [FinancialsYear]) -> Bool {
+        switch metric {
+        case .businessProfit:
+            return year.id != years.first?.id
+        case .roic, .roe:
+            guard metricValue(year) != nil else { return false }
+            return year.id != years.first(where: { metricValue($0) != nil })?.id
+        }
+    }
+
+    private func priorYear(of year: FinancialsYear, in years: [FinancialsYear]) -> FinancialsYear? {
+        guard let index = years.firstIndex(where: { $0.id == year.id }), index > 0 else { return nil }
+        return years[index - 1]
     }
 
     private func metricValue(_ year: FinancialsYear) -> Double? {
@@ -394,7 +590,8 @@ struct BreakdownView: View {
             response = loaded
             errorMessage = nil
             if selectedYearID == nil {
-                selectedYearID = Format.chronological(loaded.years).last?.id
+                let years = Format.chronological(loaded.years)
+                selectedYearID = years.last { isYearSelectable($0, years: years) }?.id
             }
         } catch APIClientError.http(let status, let message) where status == 404 {
             errorMessage = message.isEmpty ? "財務データは未集計です" : message
