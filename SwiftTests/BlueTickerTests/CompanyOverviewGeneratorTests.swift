@@ -265,7 +265,7 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 2)
     }
 
-    @Test func overflowConnectiveCommaGoesToRepair() async throws {
+    @Test func overflowConnectiveShiCommaGoesToRepair() async throws {
         let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
         let fixed = "自動車の製造販売を手がける。"
         let client = try ScriptedChat(replies: [

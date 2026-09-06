@@ -237,7 +237,7 @@ enum CompanyOverviewRules {
         var idx = window.endIndex
         while idx > window.startIndex {
             idx = window.index(before: idx)
-            guard isSentenceStop(window[idx]) else { continue }
+            guard isBoundarySentenceStop(window, at: idx) else { continue }
             let clipped = String(window[...idx])
             if case .ok = evaluate(applicable: true, overview: clipped) {
                 return clipped
@@ -247,7 +247,15 @@ enum CompanyOverviewRules {
         while idx > window.startIndex {
             idx = window.index(before: idx)
             guard window[idx] == "、" else { continue }
-            let candidate = String(window[..<idx]) + "。"
+            if idx > window.startIndex {
+                let prev = window.index(before: idx)
+                if window[prev] == "！" || window[prev] == "？" { continue }
+            }
+            var prefix = String(window[..<idx])
+            while let stripped = strippingTrailingConnective(prefix), !stripped.isEmpty {
+                prefix = stripped
+            }
+            let candidate = prefix + "。"
             if candidate.count > companyOverviewMaxChars { continue }
             if case .ok = evaluate(applicable: true, overview: candidate) {
                 return candidate
@@ -265,6 +273,17 @@ enum CompanyOverviewRules {
         "。！？".contains(ch)
     }
 
+    /// 「ロリポップ！、」の感嘆符は文末ではない。
+    private static func isBoundarySentenceStop(_ text: String, at idx: String.Index) -> Bool {
+        let ch = text[idx]
+        guard isSentenceStop(ch) else { return false }
+        let next = text.index(after: idx)
+        if (ch == "！" || ch == "？"), next < text.endIndex, text[next] == "、" {
+            return false
+        }
+        return true
+    }
+
     /// 句読点・空白だけは本文と見ない。漢字・かな・英数字があれば通す。
     private static func hasSubstantiveBody(_ text: String) -> Bool {
         text.unicodeScalars.contains {
@@ -273,11 +292,15 @@ enum CompanyOverviewRules {
     }
 
     /// 句点で区切った文の本体。空白だけの区間は飛ばす。句読点だけの区間は残す。
+    /// 「ロリポップ！、」のように感嘆符の直後が読点なら文を切らない。
     private static func sentenceBodies(_ text: String) -> [String] {
         var bodies: [String] = []
         var current = ""
-        for ch in text {
-            if isSentenceStop(ch) {
+        var idx = text.startIndex
+        while idx < text.endIndex {
+            let ch = text[idx]
+            let next = text.index(after: idx)
+            if isBoundarySentenceStop(text, at: idx) {
                 let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !body.isEmpty {
                     bodies.append(body)
@@ -286,12 +309,22 @@ enum CompanyOverviewRules {
             } else {
                 current.append(ch)
             }
+            idx = next
         }
         return bodies
     }
 
     private static func matches(_ regex: NSRegularExpression, in text: String) -> Bool {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    /// 読点クリップ後の「と。」「し。」を言い切りにしない。
+    private static func strippingTrailingConnective(_ text: String) -> String? {
+        let suffixes = ["と", "や"]
+        for suffix in suffixes where text.hasSuffix(suffix) {
+            return String(text.dropLast(suffix.count))
+        }
+        return nil
     }
 
     private static let amountRegex = try! NSRegularExpression(

@@ -133,6 +133,49 @@ import Testing
         #expect(CompanyOverviewRules.clip(overflow) == nil)
     }
 
+    @Test func clipDoesNotStripNounEndingKatsu() {
+        let overflow = "とんかつ、" + String(repeating: "あ", count: 80) + "を提供する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "とん。")
+        #expect(clipped == nil)
+    }
+
+    @Test func clipDoesNotStripNagaraContinuative() {
+        let overflow = "宿泊施設を営みながら、" + String(repeating: "あ", count: 80) + "を提供する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "宿泊施設を営み。")
+        #expect(clipped == nil)
+    }
+
+    @Test func acceptsProductNameExclamationBeforeComma() {
+        #expect(
+            ok("ドメイン・レンタルサーバー、EC支援、ハンドメイドの3事業を展開。ロリポップ！、カラーミーショップ、minneなどのサービスを提供する。")
+        )
+    }
+
+    @Test func clipDoesNotStopAtProductNameBangComma() {
+        let overflow =
+            "ロリポップ！、カラーミーショップ、minneなどのサービスを提供し、" + String(repeating: "あ", count: 80)
+            + "を行う。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "ロリポップ！")
+        #expect(!(clipped ?? "").hasSuffix("ロリポップ！"))
+        #expect(!(clipped ?? "").hasSuffix("！。"))
+        #expect(!(clipped ?? "").hasSuffix("？。"))
+    }
+
+    @Test func clipStripsTrailingToBeforeComma() {
+        let overflow =
+            "海外カスタマー向け購入支援サービス「WorldShopping」と、国内ECサイト向け越境EC支援サービス「WorldShoppingBIZ」からなる越境ECプラットフォームを提供する。"
+        #expect(overflow.count == 93)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped == "海外カスタマー向け購入支援サービス「WorldShopping」。")
+        #expect(ok(clipped ?? ""))
+    }
+
     @Test func clipKeepsLastSentenceWithinMax() {
         let head = String(repeating: "あ", count: 55) + "。"
         let tail = String(repeating: "い", count: 40) + "。"
