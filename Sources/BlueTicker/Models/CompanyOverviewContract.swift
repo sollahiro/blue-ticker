@@ -23,7 +23,7 @@ public let companyOverviewSegmentOverviewInputKey = "reportable_segments_overvie
 public let companyOverviewSegmentOverviewSectionTitle = "報告セグメントの概要"
 /// ヘッダ用の目安下限。情報量が少なければこれより短くてよい（不合格にしない）。
 public let companyOverviewMinChars = 50
-/// ヘッダ用の目安上限。超えたら句点で切り、切れなければ不合格。
+/// ヘッダ用の目安上限。超えたら句点、なければ読点の直前で切る。切れなければ不合格。
 public let companyOverviewMaxChars = 80
 public let companyOverviewMaxInputChars = 6000
 public let companyOverviewInputThinChars = 80
@@ -225,7 +225,8 @@ enum CompanyOverviewRules {
         return .ok
     }
 
-    /// 80字超を窓内の最も右の句点で切る。途中切れは捨てる。短い完成文は残してよい。
+    /// 80字超を窓内の最も右の句点で切る。無ければ読点の直前で切って句点を付ける。
+    /// 途中切れは捨てる。短い完成文は残してよい。
     static func clip(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count <= companyOverviewMaxChars { return trimmed }
@@ -237,6 +238,16 @@ enum CompanyOverviewRules {
             let clipped = String(window[...idx])
             if case .ok = evaluate(applicable: true, overview: clipped) {
                 return clipped
+            }
+        }
+        idx = window.endIndex
+        while idx > window.startIndex {
+            idx = window.index(before: idx)
+            guard window[idx] == "、" else { continue }
+            let candidate = String(window[..<idx]) + "。"
+            if candidate.count > companyOverviewMaxChars { continue }
+            if case .ok = evaluate(applicable: true, overview: candidate) {
+                return candidate
             }
         }
         return nil

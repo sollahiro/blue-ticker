@@ -100,6 +100,18 @@ import Testing
         #expect(CompanyOverviewRules.clip(String(repeating: "あ", count: 90)) == nil)
     }
 
+    @Test func clipFallsBackToLastCommaInWindow() {
+        let overflow =
+            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを手がける。"
+        #expect(overflow.count == 82)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(
+            clipped
+                == "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション。")
+        #expect(ok(clipped ?? ""))
+        #expect((clipped ?? "").count <= companyOverviewMaxChars)
+    }
+
     @Test func clipKeepsLastSentenceWithinMax() {
         let head = String(repeating: "あ", count: 55) + "。"
         let tail = String(repeating: "い", count: 40) + "。"

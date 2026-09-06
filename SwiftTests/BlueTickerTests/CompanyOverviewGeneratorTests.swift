@@ -221,18 +221,32 @@ private actor ScriptedChat: ChatCompleting {
     @Test func addsSentenceStopWithoutPaddingForLength() async throws {
         let short = "ゲーム機と音楽制作を手がける"
         #expect(short.count < companyOverviewMinChars)
-        let client = try ScriptedChat(replies: [
-            reply(overview: short),
-            reply(overview: short),
-            reply(overview: short),
-        ])
+        let client = try ScriptedChat(replies: [reply(overview: short)])
         let draft = await CompanyOverviewGenerator.generate(
             input: input("ゲームと音楽。"), client: client, model: companyOverviewDefaultModel)
         #expect(draft.ok)
         #expect(draft.clipped)
         #expect(draft.overview == short + "。")
         #expect(draft.charCount == short.count + 1)
-        #expect(await client.callCount() == 3)
+        #expect(draft.attempts == 1)
+        #expect(await client.callCount() == 1)
+    }
+
+    @Test func clipsOverflowAtCommaWithoutRepair() async throws {
+        let overflow =
+            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを手がける。"
+        #expect(overflow.count == 82)
+        let client = try ScriptedChat(replies: [reply(overview: overflow)])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("IoT通信プラットフォームの提供。"), client: client,
+            model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.clipped)
+        #expect(
+            draft.overview
+                == "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション。")
+        #expect(draft.attempts == 1)
+        #expect(await client.callCount() == 1)
     }
 
     @Test func doesNotDoublePunctuationOnShortReply() async throws {

@@ -62,6 +62,26 @@ enum CompanyOverviewGenerator {
 
         var parsed = parsedFirst
         var verdict = evaluateReply(parsed, raw: raw)
+        var clipped = false
+        func salvageOverflowOrStop() {
+            guard parsed.applicable, case .invalid(let why) = verdict else { return }
+            let clippedText: String?
+            if parsed.overview.count > companyOverviewMaxChars {
+                clippedText = CompanyOverviewRules.clip(parsed.overview)
+            } else if why.contains("言い切りの句点") {
+                clippedText = parsed.overview + "。"
+            } else {
+                clippedText = nil
+            }
+            guard let clippedText,
+                case .ok = CompanyOverviewRules.evaluate(applicable: true, overview: clippedText)
+            else { return }
+            parsed.overview = clippedText
+            clipped = true
+            verdict = .ok
+        }
+        // 句点・読点で切れる長さ超過は書き直し LLM に回さず、ここで確定する。
+        salvageOverflowOrStop()
         // 系統図のみ等で applicable=false のときは同じ本文を3回直さず、呼び出し側の
         // 「報告セグメントの概要」フォールバックへ渡す。
         let retrySameSource = parsed.applicable || isThinInput(raw)
@@ -83,32 +103,15 @@ enum CompanyOverviewGenerator {
                 }
                 parsed = candidate
                 verdict = evaluateReply(parsed, raw: raw)
+                salvageOverflowOrStop()
             } catch {
                 printError("CompanyOverviewGenerator: repair LLM呼び出し失敗: \(error)\n")
                 break
             }
         }
 
-        var overview = parsed.overview
-        var clipped = false
-        if parsed.applicable, case .invalid(let why) = verdict {
-            var clippedText: String?
-            if overview.count > companyOverviewMaxChars {
-                clippedText = CompanyOverviewRules.clip(overview)
-            } else if why.contains("言い切りの句点") {
-                clippedText = overview + "。"
-            }
-            if let clippedText {
-                let clippedVerdict = CompanyOverviewRules.evaluate(
-                    applicable: true, overview: clippedText)
-                if case .ok = clippedVerdict {
-                    overview = clippedText
-                    parsed.overview = clippedText
-                    clipped = true
-                    verdict = .ok
-                }
-            }
-        }
+        salvageOverflowOrStop()
+        let overview = parsed.overview
 
         let ok: Bool
         let okDetail: String
