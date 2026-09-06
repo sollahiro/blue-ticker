@@ -41,6 +41,7 @@ import Testing
             ok("100円ショップを直営展開し、日用消耗品を中心とした卸販売も行う。雑貨店やディスカウントショップも運営する。"))
         #expect(!ok("日用品を100円で販売する。"))
         #expect(!ok("客単価100円の小売を手がける。"))
+        #expect(!ok("100円均一で販売する。"))
     }
 
     @Test func rejectsYearCompanySuffixThreeSentencesAndUnfinishedTail() {
