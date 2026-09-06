@@ -78,20 +78,20 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 
 ## 認証
 
-iOS は第三者と同じ公開 REST のクライアント。privileged にしない。
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。Service Token は埋め込まない。
 
 | 段階 | 方針 |
 |---|---|
-| 開発 | `127.0.0.1` 無認証（既存のローカル規則。既定ポートは `BLT_PORT` 未設定時 3000） |
-| 自社本番（段階 A） | Access ユーザー SSO / OTP の短命 JWT。curl 用 Service Token はアプリに埋め込まない |
-| 段階 B | iOS も第三者も x402。機能マスクはしない |
+| 開発 | loopback / http は無認証。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証 |
+| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
+| 段階 B | 未決。この変更では変えない |
 
-`api-auth.md` のクライアント表はまだ変えない。MCP は製品認証に使わない。
+設定の SSO はプレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。MCP は製品認証に使わない。
 
 ## 未決
 
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
-- `設定` の中身（開発用の base URL 以外）
+- 設定の、開発用サーバーと Access ログイン以外
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
 - Screen REST を skills カタログに載せるか（BLT-49。listed drain 後でも別判断）
 

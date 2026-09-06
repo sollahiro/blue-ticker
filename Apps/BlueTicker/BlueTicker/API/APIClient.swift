@@ -5,9 +5,21 @@ actor APIClient {
 
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let redirectDelegate: AccessRedirectDelegate?
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+            redirectDelegate = nil
+        } else {
+            let config = URLSessionConfiguration.ephemeral
+            config.httpShouldSetCookies = false
+            config.httpCookieAcceptPolicy = .never
+            let delegate = AccessRedirectDelegate()
+            redirectDelegate = delegate
+            self.session = URLSession(
+                configuration: config, delegate: delegate, delegateQueue: nil)
+        }
         decoder = JSONDecoder()
     }
 
@@ -51,6 +63,16 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if AccessSession.usesAccess(url) {
+            if let jwt = AccessSession.jwt(for: url) {
+                if AccessSession.isExpired(jwt) {
+                    AccessSession.clear(for: url)
+                    throw APIClientError.needsAccessLogin
+                }
+                request.setValue(
+                    "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
+            }
+        }
         let data: Data
         let response: URLResponse
         do {
@@ -62,7 +84,11 @@ actor APIClient {
         } catch {
             throw APIClientError.transport(error)
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let http = response as? HTTPURLResponse
+        if let http, AccessChallenge.isChallenge(http) {
+            throw APIClientError.needsAccessLogin
+        }
+        let status = http?.statusCode ?? 0
         if status == 404 {
             let message = (try? decoder.decode(APIErrorBody.self, from: data))?.error
                 ?? "見つかりません"

@@ -207,6 +207,7 @@ enum APIClientError: LocalizedError {
     case http(status: Int, message: String)
     case decoding(Error)
     case transport(Error)
+    case needsAccessLogin
 
     var errorDescription: String? {
         switch self {
@@ -218,6 +219,8 @@ enum APIClientError: LocalizedError {
             return "応答の形式を解釈できません"
         case .transport(let error):
             return error.localizedDescription
+        case .needsAccessLogin:
+            return "Cloudflare Access のログインが必要です。設定からログインしてください"
         }
     }
 }

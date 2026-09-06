@@ -144,7 +144,7 @@ flowchart LR
 
 ### MCP（開発用 `POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（Service Token を埋め込まない。開発は `127.0.0.1` 無認証）。`api-auth.md` のクライアント表はまだ変えない。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。`api-auth.md`）。
 
 ## 環境変数（薄い表）
 

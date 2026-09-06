@@ -2,9 +2,14 @@ import Foundation
 
 enum APIConfiguration {
     static let defaultBaseURL = URL(string: "http://127.0.0.1:3000")!
+    static let productionBaseURL = URL(string: "https://api.sollahiro.com")!
+    /// Access のログイン UI（App Launcher）。`api.*` 直叩きは 403 interstitial になる。
+    static let accessLauncherURL = URL(string: "https://sollahiro.cloudflareaccess.com")!
     /// REST が `icon_url: null` のときの公開ホスト（秘密ではない。拡張子は会社ごとに違う）。
     static let defaultIconBaseURL = URL(string: "https://icons.sollahiro.com")!
     private static let storageKey = "blt.api.baseURL"
+
+    static var usesAccess: Bool { AccessSession.usesAccess(baseURL) }
 
     static var baseURL: URL {
         get {

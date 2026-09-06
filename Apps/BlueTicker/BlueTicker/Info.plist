@@ -7,5 +7,7 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>同じ Wi-Fi 上の開発サーバーに接続します。</string>
 </dict>
 </plist>

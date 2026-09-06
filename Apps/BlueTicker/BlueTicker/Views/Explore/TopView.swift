@@ -176,6 +176,9 @@ struct TopView: View {
         do {
             updates = try await APIClient.shared.feedUpdates().items
             updatesError = nil
+        } catch APIClientError.needsAccessLogin {
+            updates = []
+            updatesError = APIClientError.needsAccessLogin.errorDescription
         } catch {
             updates = []
             updatesError = "有報一覧を取得できませんでした"

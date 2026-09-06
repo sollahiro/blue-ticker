@@ -13,6 +13,8 @@
 		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* APIConfiguration.swift */; };
 		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* DTOs.swift */; };
 		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* APIClient.swift */; };
+		AA0000000000000000000022 /* AccessSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* AccessSession.swift */; };
+		AA0000000000000000000023 /* AccessLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000023 /* AccessLoginView.swift */; };
 		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* WatchedCompany.swift */; };
 		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
 		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
@@ -37,6 +39,8 @@
 		BB0000000000000000000004 /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
 		BB0000000000000000000005 /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		BB0000000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		BB0000000000000000000022 /* AccessSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSession.swift; sourceTree = "<group>"; };
+		BB0000000000000000000023 /* AccessLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessLoginView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000007 /* WatchedCompany.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedCompany.swift; sourceTree = "<group>"; };
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -100,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000004 /* APIConfiguration.swift */,
+				BB0000000000000000000022 /* AccessSession.swift */,
 				BB0000000000000000000005 /* DTOs.swift */,
 				BB0000000000000000000006 /* APIClient.swift */,
 			);
@@ -121,6 +126,7 @@
 				BB0000000000000000000009 /* RootView.swift */,
 				BB0000000000000000000021 /* BrandMark.swift */,
 				BB0000000000000000000010 /* SettingsPlaceholder.swift */,
+				BB0000000000000000000023 /* AccessLoginView.swift */,
 				DD0000000000000000000007 /* Explore */,
 				DD0000000000000000000008 /* Ticker */,
 			);
@@ -225,6 +231,8 @@
 				AA0000000000000000000004 /* APIConfiguration.swift in Sources */,
 				AA0000000000000000000005 /* DTOs.swift in Sources */,
 				AA0000000000000000000006 /* APIClient.swift in Sources */,
+				AA0000000000000000000022 /* AccessSession.swift in Sources */,
+				AA0000000000000000000023 /* AccessLoginView.swift in Sources */,
 				AA0000000000000000000007 /* WatchedCompany.swift in Sources */,
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
 				AA0000000000000000000009 /* RootView.swift in Sources */,
