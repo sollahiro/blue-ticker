@@ -42,7 +42,7 @@ struct BreakdownView: View {
 
     private func content(_ response: FinancialsResponse) -> some View {
         let years = Format.chronological(response.years)
-        let selectedYear = years.first { $0.id == selectedYearID && isYearSelectable($0, years: years) }
+        let selectedYear = years.first { $0.id == selectedYearID && isYearSelectable($0) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
@@ -93,7 +93,7 @@ struct BreakdownView: View {
         let peak = years.compactMap(metricValue).map(abs).max() ?? 0
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(years) { year in
-                let selectable = isYearSelectable(year, years: years)
+                let selectable = isYearSelectable(year)
                 let selected = selectable && year.id == selectedYearID
                 let row = HStack(spacing: 8) {
                     Text(Format.fy(year.fyEnd))
@@ -135,7 +135,7 @@ struct BreakdownView: View {
         let segments = ratioSegments(points)
         let xMin = min(points.map(\.value).min() ?? 0, 0)
         let xMax = max(points.map(\.value).max() ?? 0, 0)
-        let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0, years: years) }
+        let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0) }
         let selectedSegment = selectedIndex.flatMap { index in
             segments.first { $0.points.last?.index == index }
         }
@@ -226,7 +226,7 @@ struct BreakdownView: View {
                             selected = Int((Double(years.count - 1) * (1.0 - normalized)).rounded())
                         }
                         guard let selected, years.indices.contains(selected),
-                            isYearSelectable(years[selected], years: years)
+                            isYearSelectable(years[selected])
                         else { return }
                         selectedYearID = years[selected].id
                     }
@@ -549,14 +549,15 @@ struct BreakdownView: View {
         return Theme.negative
     }
 
-    /// 前年差が無い最古の点／年度は選べない。折れ線は値のある最古の点、棒は最古年度。
-    private func isYearSelectable(_ year: FinancialsYear, years: [FinancialsYear]) -> Bool {
+    /// 前年差（要因分解の合計）がある年度だけ選べる。
+    private func isYearSelectable(_ year: FinancialsYear) -> Bool {
         switch metric {
         case .businessProfit:
-            return year.id != years.first?.id
-        case .roic, .roe:
-            guard metricValue(year) != nil else { return false }
-            return year.id != years.first(where: { metricValue($0) != nil })?.id
+            return year.businessProfitChange != nil
+        case .roic:
+            return year.roicDelta != nil
+        case .roe:
+            return year.roeDelta != nil
         }
     }
 
@@ -591,7 +592,7 @@ struct BreakdownView: View {
             errorMessage = nil
             if selectedYearID == nil {
                 let years = Format.chronological(loaded.years)
-                selectedYearID = years.last { isYearSelectable($0, years: years) }?.id
+                selectedYearID = years.last { isYearSelectable($0) }?.id
             }
         } catch APIClientError.http(let status, let message) where status == 404 {
             errorMessage = message.isEmpty ? "財務データは未集計です" : message

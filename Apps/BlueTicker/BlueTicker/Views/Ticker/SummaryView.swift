@@ -52,18 +52,12 @@ struct SummaryView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 if let overview, !overview.isEmpty {
-                    Text(overview)
-                        .font(.footnote)
-                        .lineLimit(5)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .hidden()
-                        .overlay {
-                            JustifiedOverviewText(text: overview)
-                                .allowsHitTesting(false)
-                        }
-                        .padding(.bottom, 8)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(overview)
+                    FillWidth {
+                        JustifiedOverviewText(text: overview)
+                    }
+                    .padding(.bottom, 8)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(overview)
                 }
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
@@ -127,12 +121,12 @@ struct SummaryView: View {
         do {
             response = try await financials
             errorMessage = nil
+            overview = await overviewText
         } catch APIClientError.http(let status, let message) where status == 404 {
             errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
             errorMessage = error.localizedDescription
         }
-        overview = await overviewText
     }
 
     private func loadOverview() async -> String? {
@@ -146,16 +140,47 @@ struct SummaryView: View {
     }
 }
 
+/// 親の提案幅を子に渡し、Overview がカード幅まで広がるようにする。
+private struct FillWidth: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let width = proposal.width ?? 0
+        return subview.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+    }
+
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
+        guard let subview = subviews.first else { return }
+        subview.place(
+            at: bounds.origin,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
+    }
+}
+
 /// 表と同じ幅で折り返し、途中の行は文字間隔で両端揃え、最終行は左揃え。
+/// 高さ計算と描画は同じ UIFont を使う。
 private struct JustifiedOverviewText: UIViewRepresentable {
     var text: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func makeUIView(context: Context) -> JustifiedOverviewLabel {
         JustifiedOverviewLabel()
     }
 
     func updateUIView(_ view: JustifiedOverviewLabel, context: Context) {
+        _ = dynamicTypeSize
         view.text = text
+    }
+
+    func sizeThatFits(
+        _ proposal: ProposedViewSize, uiView: JustifiedOverviewLabel, context: Context
+    ) -> CGSize? {
+        let width = proposal.width ?? 0
+        guard width > 0 else { return .zero }
+        uiView.text = text
+        return uiView.fittingSize(width: width)
     }
 }
 
@@ -167,6 +192,7 @@ private final class JustifiedOverviewLabel: UIView {
         }
     }
 
+    private let maxLines = 5
     private var font: UIFont { UIFont.preferredFont(forTextStyle: .footnote) }
     private var color: UIColor { UIColor(Theme.textMuted) }
 
@@ -189,19 +215,25 @@ private final class JustifiedOverviewLabel: UIView {
         setNeedsDisplay()
     }
 
+    func fittingSize(width: CGFloat) -> CGSize {
+        var fitRange = CFRange()
+        let size = CTFramesetterSuggestFrameSizeWithConstraints(
+            CTFramesetterCreateWithAttributedString(attributedText()),
+            CFRange(location: 0, length: 0),
+            nil,
+            CGSize(width: width, height: font.lineHeight * CGFloat(maxLines)),
+            &fitRange
+        )
+        return CGSize(width: width, height: ceil(size.height))
+    }
+
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext(), !text.isEmpty, bounds.width > 0 else { return }
         ctx.saveGState()
         ctx.textMatrix = .identity
         ctx.translateBy(x: 0, y: bounds.height)
         ctx.scaleBy(x: 1, y: -1)
-        let attributed = NSAttributedString(
-            string: text,
-            attributes: [
-                .font: font,
-                .foregroundColor: color,
-            ]
-        )
+        let attributed = attributedText()
         let path = CGPath(rect: bounds, transform: nil)
         let frame = CTFramesetterCreateFrame(
             CTFramesetterCreateWithAttributedString(attributed),
@@ -220,6 +252,16 @@ private final class JustifiedOverviewLabel: UIView {
             CTLineDraw(drawn, ctx)
         }
         ctx.restoreGState()
+    }
+
+    private func attributedText() -> NSAttributedString {
+        NSAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                .foregroundColor: color,
+            ]
+        )
     }
 
     private static func justifiedLine(
