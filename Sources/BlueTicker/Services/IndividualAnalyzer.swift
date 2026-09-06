@@ -65,7 +65,9 @@ struct IndividualAnalyzer {
         )
         guard !docs.isEmpty else { return .notApplicable }
 
-        let targetDocs = Array(docs.prefix(analysisYears))
+        // 訂正(130)は索引・high-water 用。年次行は 120 のみ（有報年数が analysisYears 未満だと
+        // prefix が末尾の訂正を拾い、同一 fy_end が二重になる。くふう 4376 / 2022-09）。
+        let targetDocs = financialsAnnualDocuments(docs)
 
         // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーで渡す
         struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
@@ -274,6 +276,11 @@ struct IndividualAnalyzer {
 }
 
 // MARK: - Testable helpers
+
+/// 通期 financials の年次計算対象。訂正(130)は索引・high-water 用で、年次行にしない。
+func financialsAnnualDocuments(_ docs: [[String: Any]]) -> [[String: Any]] {
+    docs.filter { ($0["_is_amendment"] as? Bool) != true }
+}
 
 /// individual_analysis キャッシュが再利用可能か判定する。
 ///
