@@ -101,4 +101,10 @@ import Testing
         #expect(!FaviconFetcher.exceedsByteLimit(accumulated: 2 * 1024 * 1024 - 10, incoming: 10))
         #expect(FaviconFetcher.exceedsByteLimit(accumulated: 100, incoming: 50, limit: 149))
     }
+
+    @Test func fetchImageURLRejectsPrivateAndNonHTTP() async {
+        #expect(await FaviconFetcher.fetch(imageURL: "http://127.0.0.1/logo.png") == nil)
+        #expect(await FaviconFetcher.fetch(imageURL: "not-a-url") == nil)
+        #expect(await FaviconFetcher.fetch(imageURL: "ftp://example.com/logo.png") == nil)
+    }
 }

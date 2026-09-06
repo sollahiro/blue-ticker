@@ -4,7 +4,8 @@
 //
 // 抽出元行（「公告掲載方法」）が紙媒体のみ・別注記委譲などで URL 抽出できない会社（実データ検証で
 // 148件中12件）は、直近有報が同一内容である限り毎回 failed として再試行され続ける
-// （既知の制約。company_breakdowns の not_applicable のような永続プレースホルダは未実装）。
+// （既知の制約。公式 HP を `CompanyIconOriginOverride.manualSources` に足せば XBRL を使わず
+// `icons-manual` で格納でき、自動 ingest の cache_version バンプ対象外になる）。
 
 import BlueTickerCore
 import Fluent
@@ -61,7 +62,9 @@ func runIconsIngest(
             missing.append(cand)
             continue
         }
-        if existing.cacheVersion != companyIconsCacheVersion {
+        if companyIconShouldRefresh(
+            code: cand.code, cacheVersion: existing.cacheVersion, sourceURL: existing.sourceURL)
+        {
             staleVersion.append(cand)
         } else {
             skipped += 1
@@ -85,7 +88,10 @@ func runIconsIngest(
         ) {
             try await CompanyIcon.find(cand.code, on: db)
         }
-        if let row = existing, row.cacheVersion == companyIconsCacheVersion {
+        if let row = existing,
+            !companyIconShouldRefresh(
+                code: cand.code, cacheVersion: row.cacheVersion, sourceURL: row.sourceURL)
+        {
             skipped += 1
             continue
         }
@@ -148,7 +154,7 @@ func storeCompanyIcon(
         row.sourceURL = result.sourceURL
         row.r2ObjectKey = result.r2ObjectKey
         row.contentType = result.contentType
-        row.cacheVersion = companyIconsCacheVersion
+        row.cacheVersion = result.cacheVersion
     }
     if let row = existing {
         applyFields(row)
@@ -156,7 +162,7 @@ func storeCompanyIcon(
     } else {
         let model = CompanyIcon(
             code: code, sourceURL: result.sourceURL, r2ObjectKey: result.r2ObjectKey,
-            contentType: result.contentType, cacheVersion: companyIconsCacheVersion)
+            contentType: result.contentType, cacheVersion: result.cacheVersion)
         try await createIdempotently(
             create: { try await model.create(on: db) },
             recover: {
@@ -169,7 +175,7 @@ func storeCompanyIcon(
     }
 }
 
-/// `cache_version` のみを対象にした軽量射影（分類の N+1 find 回避用）。
+/// `cache_version` と `source_url` の軽量射影（分類の N+1 find 回避用。手動 origin 照合にも使う）。
 final class CompanyIconCacheVersionOnly: Model, @unchecked Sendable {
     static let schema = CompanyIcon.schema
 
@@ -178,6 +184,9 @@ final class CompanyIconCacheVersionOnly: Model, @unchecked Sendable {
 
     @Field(key: "cache_version")
     var cacheVersion: String
+
+    @Field(key: "source_url")
+    var sourceURL: String
 
     init() {}
 }

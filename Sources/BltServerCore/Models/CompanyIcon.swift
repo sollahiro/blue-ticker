@@ -14,7 +14,8 @@ final class CompanyIcon: Model, @unchecked Sendable {
     @ID(custom: "code", generatedBy: .user)
     var id: String?
 
-    /// 抽出元の電子公告URL（`CorporateWebsiteExtractor` が返す scheme://host）。
+    /// 取得元 URL。自動行は電子公告 origin（`CorporateWebsiteExtractor` の scheme://host）。
+    /// 手動行は公式サイト origin または公式画像の直 URL。
     @Field(key: "source_url")
     var sourceURL: String
 

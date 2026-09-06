@@ -28,6 +28,16 @@ import Testing
             #expect(url?.query == nil, "code=\(code)")
             #expect(origin == "https://\(url!.host!)", "code=\(code)")
         }
+        for (code, source) in CompanyIconOriginOverride.manualSources {
+            guard case .homepageOrigin(let origin) = source else { continue }
+            let url = URL(string: origin)
+            #expect(url != nil, "code=\(code)")
+            #expect(url?.scheme == "https", "code=\(code)")
+            #expect(url?.host != nil, "code=\(code)")
+            #expect(url?.path == "" || url?.path == "/", "code=\(code) path=\(url?.path ?? "")")
+            #expect(url?.query == nil, "code=\(code)")
+            #expect(origin == "https://\(url!.host!)", "code=\(code)")
+        }
     }
 
     @Test func remapsPronexusDisclosureOriginToCompanyHomepage() {
@@ -52,12 +62,27 @@ import Testing
                 == "https://www.pronexus.co.jp")
         #expect(
             CompanyIconOriginOverride.originForFavicon(
-                code: "7203", extractedOrigin: "https://www.toyota.co.jp")
-                == "https://www.toyota.co.jp")
+                code: "6758", extractedOrigin: "https://www.sony.com")
+                == "https://www.sony.com")
         #expect(
             CompanyIconOriginOverride.originForFavicon(
                 code: "8766", extractedOrigin: "https://www.tokiomarinehd.com")
                 == "https://www.tokiomarinehd.com")
+    }
+
+    @Test func remapsToyotaManualHomepageRegardlessOfExtractedOrigin() {
+        #expect(CompanyIconOriginOverride.manualSources["7203"] == .homepageOrigin("https://toyota.jp"))
+        #expect(
+            Set(CompanyIconOriginOverride.manualSources.keys)
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        #expect(
+            CompanyIconOriginOverride.originForFavicon(
+                code: "7203", extractedOrigin: "https://www.toyota.co.jp")
+                == "https://toyota.jp")
+        #expect(
+            CompanyIconOriginOverride.originForFavicon(
+                code: "7203", extractedOrigin: "https://global.toyota")
+                == "https://toyota.jp")
     }
 
     @Test func detectsPronexusDisclosureHosts() {
@@ -66,5 +91,38 @@ import Testing
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://kmasterplus.pronexus.co.jp"))
         #expect(!CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.tokiomarinehd.com"))
         #expect(!CompanyIconOriginOverride.isPronexusDisclosureHost("not-a-url"))
+    }
+
+    @Test func manualCacheVersionIsExcludedFromAutomaticRefresh() {
+        #expect(
+            !companyIconShouldRefresh(
+                code: "6758", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://www.sony.com"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "6758", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://www.sony.com"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "6758", cacheVersion: "icons-v0", sourceURL: "https://www.sony.com"))
+    }
+
+    @Test func toyotaRefreshesUntilManualOriginIsStored() {
+        #expect(
+            companyIconShouldRefresh(
+                code: "7203", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://www.toyota.co.jp"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "7203", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://www.toyota.co.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "7203", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://toyota.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "7203", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://toyota.jp/"))
     }
 }
