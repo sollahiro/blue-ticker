@@ -17,14 +17,17 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
 ## Setup
 
 1. Build with `swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility`.
-2. If psql/PostgreSQL is absent but Docker is available, run a disposable `postgres:16`
-   container with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` set to local-only
-   values and map an unused port on **127.0.0.1**, not all interfaces.
+2. If psql/PostgreSQL is absent, run disposable `postgres:16` with Apple `container`
+   (`docs/architecture.md` / `.agents/rules/architecture.md`。手元のテスト Postgres は Docker にしない)。
+   `container system start` if needed. Set `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+   to local-only values and publish an unused port on **127.0.0.1**, not all interfaces.
+   Example: `container run -d --name blt-pg-test -p 127.0.0.1:<pg-port>:5432 -e POSTGRES_USER=...
+   -e POSTGRES_PASSWORD=... -e POSTGRES_DB=... postgres:16`
 3. Start `.build/debug/blt-server --host 127.0.0.1 --port <unused-port>` with
    `DATABASE_URL=postgres://<local-user>:<local-password>@127.0.0.1:<pg-port>/<db>?sslmode=disable`
    and the dummy `BLT_EDINET_API_KEY`. Migrations apply automatically.
 4. Verify the server log reports startup and migration completion. Seed via
-   `docker exec -i <container> psql -v ON_ERROR_STOP=1 -U <user> -d <db>`.
+   `container exec -i blt-pg-test psql -v ON_ERROR_STOP=1 -U <user> -d <db>`.
    Never inherit a production DATABASE_URL; explicitly override it with loopback.
 5. To test storage absence, start a second process on another port using
    `env -u DATABASE_URL BLT_EDINET_API_KEY=local-test-not-real ...`.
@@ -51,4 +54,5 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
   backfill, or their best-effort error handling. State that limitation explicitly.
 
 Capture curl status, headers, JSON, and expected-vs-actual assertions. No recording
-is needed for shell-only API checks. Stop local server processes and container afterward.
+is needed for shell-only API checks. Stop local server processes and the Postgres
+container afterward (`container stop blt-pg-test`).
