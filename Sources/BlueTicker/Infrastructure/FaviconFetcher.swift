@@ -28,7 +28,7 @@ import SwiftSoup
 
 enum FaviconFetcher {
 
-    struct FetchedIcon {
+    struct FetchedIcon: Equatable {
         let data: Data
         let contentType: String
     }
@@ -55,6 +55,15 @@ enum FaviconFetcher {
 
         if let htmlIcon = await fetchViaHtmlLink(origin: originURL) { return htmlIcon }
         return await fetchDirect(origin: originURL)
+    }
+
+    /// 公式画像の直 URL を取得する（HTML `<link rel="icon">` 探索はしない）。
+    static func fetch(imageURL: String) async -> FetchedIcon? {
+        guard let url = URL(string: imageURL),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host, PrivateNetworkGuard.isPublicHost(host)
+        else { return nil }
+        return await fetchImage(url)
     }
 
     private static func fetchDirect(origin: URL) async -> FetchedIcon? {

@@ -1,4 +1,5 @@
 // 電子公告 URL の origin が Pronexus 掲載ドメインのとき、favicon 取得先を会社公式サイトへ差し替える。
+// 手動指定（XBRL を使わない公式 HP / 公式画像）もここに置く。格納は `icons-manual`。
 //
 // 実データ検証（2026-09-02、Neon RO company_icons）: Pronexus origin は 17 件。うち 7893 プロネクサス
 // 本体は公式サイトが `www.pronexus.co.jp` なので差し替えない。残り 16 件の公告 URL は
@@ -8,6 +9,21 @@
 // 有報本文に公式 URL がある会社はそれを採用し、無い会社は公式トップの社名表記で照合した。
 
 import Foundation
+
+/// 手動アイコンの取得元。XBRL 電子公告は使わない。
+enum CompanyIconManualSource: Equatable, Sendable {
+    /// 公式サイト origin（scheme+host）。favicon を取る。
+    case homepageOrigin(String)
+    /// 公式画像の直 URL。favicon 探索はしない。
+    case imageURL(String)
+
+    var storedSourceURL: String {
+        switch self {
+        case .homepageOrigin(let origin): return origin
+        case .imageURL(let url): return url
+        }
+    }
+}
 
 enum CompanyIconOriginOverride {
 
@@ -34,8 +50,21 @@ enum CompanyIconOriginOverride {
         "9684": "https://www.hd.square-enix.com",  // スクエニHD。ライブタイトル照合
     ]
 
-    /// 抽出 origin が Pronexus 掲載ドメインなら公式サイト origin を返す。それ以外はそのまま。
+    /// XBRL 電子公告を使わず favicon / 公式画像を取る決め打ち。格納は `icons-manual`。
+    /// 7203: トヨタ自動車。公式コンシューマサイト `https://toyota.jp/index.html`（origin のみ保持）。
+    static let manualSources: [String: CompanyIconManualSource] = [
+        "7203": .homepageOrigin("https://toyota.jp"),
+    ]
+
+    static func manualSource(for code: String) -> CompanyIconManualSource? {
+        manualSources[code]
+    }
+
+    /// 手動 homepage があればそれを返す。Pronexus 掲載ドメインなら公式サイト origin。それ以外はそのまま。
     static func originForFavicon(code: String, extractedOrigin: String) -> String {
+        if case .homepageOrigin(let origin)? = manualSources[code] {
+            return origin
+        }
         guard isPronexusDisclosureHost(extractedOrigin),
             let mapped = pronexusDisclosureHomepages[code]
         else { return extractedOrigin }

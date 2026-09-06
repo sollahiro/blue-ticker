@@ -1,7 +1,8 @@
-// 会社アイコン取り込み（EDINET電子公告URL→favicon→R2）の格納用バージョン定数。
-// company_icons.cache_version（Neon）に埋め込む。blueTickerVersion 非連動（fin-v2 / facts-v1 と
-// 同思想）。CorporateWebsiteExtractor の抽出ロジック、または FaviconFetcher の取得・判定ロジックを
-// 変更したときのみバンプする。
+// 会社アイコン取り込み（EDINET電子公告URL→favicon→R2、または手動 origin / 公式画像）の
+// 格納用バージョン定数。company_icons.cache_version（Neon）に埋め込む。blueTickerVersion
+// 非連動（fin-v2 / facts-v1 と同思想）。CorporateWebsiteExtractor の抽出ロジック、または
+// FaviconFetcher の取得・判定ロジックを変更したときのみ `companyIconsCacheVersion` をバンプする。
+// 手動行は `icons-manual` で、自動 ingest のバンプ対象外。
 
 import Foundation
 
@@ -10,17 +11,26 @@ import Foundation
 /// HTML `<link rel="icon">` を先に取る。
 public let companyIconsCacheVersion = "icons-v2"
 
+/// 手動 origin / 公式画像で格納した行の cache_version。`icons-vN` バンプでは再取得しない。
+/// マップの origin / 画像 URL が変わったときだけ再取得する。
+public let companyIconsManualCacheVersion = "icons-manual"
+
 /// 会社アイコン取り込み（1書類分）の抽出・アップロード結果。R2への格納が完了した状態のみを表す
 /// （途中失敗は `CompanyIconExtractFailure`。`BltServerContext.extractAndUploadCompanyIcon` が返す）。
 public struct CompanyIconExtractResult: Sendable, Equatable {
     public let sourceURL: String
     public let r2ObjectKey: String
     public let contentType: String
+    public let cacheVersion: String
 
-    public init(sourceURL: String, r2ObjectKey: String, contentType: String) {
+    public init(
+        sourceURL: String, r2ObjectKey: String, contentType: String,
+        cacheVersion: String = companyIconsCacheVersion
+    ) {
         self.sourceURL = sourceURL
         self.r2ObjectKey = r2ObjectKey
         self.contentType = contentType
+        self.cacheVersion = cacheVersion
     }
 }
 
@@ -45,3 +55,29 @@ public enum CompanyIconExtractFailure: Error, Sendable, Equatable, CustomStringC
     }
 }
 
+/// 自動 ingest がこの行を再取得すべきか。手動行は `icons-vN` 不一致では動かない。
+public func companyIconShouldRefresh(code: String, cacheVersion: String, sourceURL: String) -> Bool {
+    if let source = CompanyIconOriginOverride.manualSource(for: code) {
+        return cacheVersion != companyIconsManualCacheVersion
+            || !companyIconSourceURLsMatch(sourceURL, source.storedSourceURL)
+    }
+    if cacheVersion == companyIconsManualCacheVersion {
+        return false
+    }
+    return cacheVersion != companyIconsCacheVersion
+}
+
+func companyIconSourceURLsMatch(_ stored: String, _ expected: String) -> Bool {
+    normalizedIconSourceURL(stored) == normalizedIconSourceURL(expected)
+}
+
+func normalizedIconSourceURL(_ urlString: String) -> String {
+    guard let url = URL(string: urlString), let scheme = url.scheme, let host = url.host else {
+        return urlString
+    }
+    var path = url.path
+    if path == "/" { path = "" }
+    var result = "\(scheme.lowercased())://\(host.lowercased())\(path)"
+    if let query = url.query, !query.isEmpty { result += "?\(query)" }
+    return result
+}

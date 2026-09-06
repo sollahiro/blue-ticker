@@ -45,10 +45,13 @@ private func seedDoc(
     try await model.create(on: db)
 }
 
-private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
+private func fakeResult(
+    _ marker: String = "icon", sourceURL: String = "https://example.com",
+    cacheVersion: String = companyIconsCacheVersion
+) -> CompanyIconExtractResult {
     CompanyIconExtractResult(
-        sourceURL: "https://example.com", r2ObjectKey: "company-icons/\(marker).png",
-        contentType: "image/png")
+        sourceURL: sourceURL, r2ObjectKey: "company-icons/\(marker).png",
+        contentType: "image/png", cacheVersion: cacheVersion)
 }
 
 @Suite struct IconsIngestTests {
@@ -152,10 +155,74 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
 
     @Test func ingestSkipsCompanyAlreadyStoredWithCurrentVersion() async throws {
         try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "67580", db: app.db)
+            let existing = CompanyIcon(
+                code: "6758", sourceURL: "https://old.example.com", r2ObjectKey: "old.png",
+                contentType: "image/png", cacheVersion: companyIconsCacheVersion)
+            try await existing.create(on: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["6758"], limit: nil
+            ) { _, _ in .success(fakeResult()) }
+
+            #expect(summary.attempted == 0)
+            #expect(summary.skipped == 1)
+            let row = try #require(try await CompanyIcon.find("6758", on: app.db))
+            #expect(row.sourceURL == "https://old.example.com")  // 上書きされていない
+        }
+    }
+
+    @Test func ingestReattemptsRowWhenVersionStale() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "67580", db: app.db)
+            let existing = CompanyIcon(
+                code: "6758", sourceURL: "https://old.example.com", r2ObjectKey: "old.png",
+                contentType: "image/png", cacheVersion: "icons-v0")
+            try await existing.create(on: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["6758"], limit: nil
+            ) { _, _ in .success(fakeResult("new")) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyIcon.find("6758", on: app.db))
+            #expect(row.r2ObjectKey == "company-icons/new.png")
+            #expect(row.cacheVersion == companyIconsCacheVersion)
+        }
+    }
+
+    @Test func ingestReplacesAutomaticToyotaIconWithManualHomepage() async throws {
+        try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
             let existing = CompanyIcon(
-                code: "7203", sourceURL: "https://old.example.com", r2ObjectKey: "old.png",
+                code: "7203", sourceURL: "https://www.toyota.co.jp", r2ObjectKey: "old.png",
                 contentType: "image/png", cacheVersion: companyIconsCacheVersion)
+            try await existing.create(on: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: ["7203"], limit: nil
+            ) { _, _ in
+                .success(
+                    fakeResult(
+                        "toyota", sourceURL: "https://toyota.jp",
+                        cacheVersion: companyIconsManualCacheVersion))
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyIcon.find("7203", on: app.db))
+            #expect(row.sourceURL == "https://toyota.jp")
+            #expect(row.cacheVersion == companyIconsManualCacheVersion)
+        }
+    }
+
+    @Test func ingestSkipsToyotaWhenManualOriginAlreadyMatches() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let existing = CompanyIcon(
+                code: "7203", sourceURL: "https://toyota.jp", r2ObjectKey: "toyota.png",
+                contentType: "image/png", cacheVersion: companyIconsManualCacheVersion)
             try await existing.create(on: app.db)
 
             let summary = try await runIconsIngest(
@@ -165,27 +232,27 @@ private func fakeResult(_ marker: String = "icon") -> CompanyIconExtractResult {
             #expect(summary.attempted == 0)
             #expect(summary.skipped == 1)
             let row = try #require(try await CompanyIcon.find("7203", on: app.db))
-            #expect(row.sourceURL == "https://old.example.com")  // 上書きされていない
+            #expect(row.r2ObjectKey == "toyota.png")
         }
     }
 
-    @Test func ingestReattemptsRowWhenVersionStale() async throws {
+    @Test func ingestDoesNotOverwriteManualIconWhenAutomaticVersionChanges() async throws {
         try await withMigratedApp { app in
-            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedDoc("S1", secCode: "67580", db: app.db)
             let existing = CompanyIcon(
-                code: "7203", sourceURL: "https://old.example.com", r2ObjectKey: "old.png",
-                contentType: "image/png", cacheVersion: "icons-v0")
+                code: "6758", sourceURL: "https://www.sony.com", r2ObjectKey: "manual.png",
+                contentType: "image/png", cacheVersion: companyIconsManualCacheVersion)
             try await existing.create(on: app.db)
 
             let summary = try await runIconsIngest(
-                db: app.db, listedCodes: ["7203"], limit: nil
-            ) { _, _ in .success(fakeResult("new")) }
+                db: app.db, listedCodes: ["6758"], limit: nil
+            ) { _, _ in .success(fakeResult("overwrite")) }
 
-            #expect(summary.attempted == 1)
-            #expect(summary.stored == 1)
-            let row = try #require(try await CompanyIcon.find("7203", on: app.db))
-            #expect(row.r2ObjectKey == "company-icons/new.png")
-            #expect(row.cacheVersion == companyIconsCacheVersion)
+            #expect(summary.attempted == 0)
+            #expect(summary.skipped == 1)
+            let row = try #require(try await CompanyIcon.find("6758", on: app.db))
+            #expect(row.r2ObjectKey == "manual.png")
+            #expect(row.cacheVersion == companyIconsManualCacheVersion)
         }
     }
 

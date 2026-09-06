@@ -6,7 +6,8 @@
 // パス・クエリはfavicon取得に不要かつ年度間で変わりやすいため、scheme+hostのみへ正規化する
 // （www有無は開示どおり保持し、勝手に剥がさない）。Pronexus 掲載ページ（`/koukoku/{code}`）は
 // origin だけだとプロネクサスのファビコンになる。会社公式サイトへの差し替えは
-// `CompanyIconOriginOverride`（アイコン取得時、証券コード決め打ち）。
+// `CompanyIconOriginOverride`（Pronexus は電子公告 origin 差し替え、トヨタ等の手動は
+// XBRL を使わず `icons-manual`）。
 //
 // レーザーテック（S100JRT9等、複数年度で再現）実データ検証: `https：//www.lasertec.co.jp` のように
 // スキーム直後が全角コロンの会社がある。半角`:`のみ許容すると取りこぼすため両方受理し、
