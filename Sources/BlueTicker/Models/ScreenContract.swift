@@ -3,7 +3,8 @@
 // `company_financials` の最新 FY を 1 社 1 行へ投影した検索用 Read Model（Neon `screen_index`）の
 // 行定義と、REST `GET /v1/screen` のクエリ解析。`company_financials` の契約は複製しない。
 // 数値キーは Summary `years[]` の公開キーのうち Screen が受け付ける許可リストだけ。
-// `sales_growth` は Summary に無い派生列（最新 FY と直前 FY の売上高から ingest 時に計算）。
+// `sales_growth` は Summary `years[]` に無い派生列（最新 FY と直前 FY の売上高から ingest 時に計算）。
+// BLT-49 初稿は v1 対象外としたが、横断検索用の派生列として v1 許可リストに入れる。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 

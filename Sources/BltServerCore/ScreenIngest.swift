@@ -1,10 +1,11 @@
 // Screen（BLT-49）: company_financials → screen_index の派生更新と、REST `GET /v1/screen` の read 経路。
 //
 // - 財務取り込み が company_financials を UPSERT した直後に 1 社分を派生更新する（Screen 側の失敗で
-//   ingest は落とさない。次回 ingest か `screen-rebuild` で追いつく）。
-// - `blt-server screen-rebuild` は company_financials をページングで走査して全件再生成する
-//   （`.all()` で全 JSONB を一度に載せない）。
+//   ingest は落とさない。欠落は次回 ingest の skip 時に補完、残るずれは `screen-rebuild`）。
+// - `blt-server screen-rebuild` は company_financials を code の keyset ページングで走査して全件再生成する
+//   （offset は使わない。`.all()` で全 JSONB を一度に載せない）。
 // - read は screen_index の型付き列に対する AND フィルタ + 1 キーソート + LIMIT のみ。
+//   行が 1 件も無い（未生成）は 404。フィルタ 0 件は 200 で空配列。
 
 import BlueTickerCore
 import Fluent
@@ -46,7 +47,7 @@ func refreshScreenIndexAfterFinancials(
         try await upsertScreenIndex(code: code, response: response, db: db)
     } catch {
         logger?.warning(
-            "screen_index 更新失敗（次回 ingest / screen-rebuild で再試行）: code=\(code) \(redactSecrets(String(reflecting: error)))"
+            "screen_index 更新失敗（欠落は次回 ingest で再試行、残るずれは screen-rebuild）: code=\(code) \(redactSecrets(String(reflecting: error)))"
         )
     }
 }
@@ -61,8 +62,9 @@ public struct ScreenRebuildSummary: Sendable, Equatable {
     public let removed: Int
 }
 
-/// company_financials 全件から screen_index を再生成する。code 昇順にページングして走査する。
-/// 既存 screen_index にあって company_financials に無い code は削除する。
+/// company_financials 全件から screen_index を再生成する。code 昇順の keyset ページングで走査する。
+/// 既存 screen_index にあって company_financials に無い code は削除する（走査後に再確認し、
+/// 同時 ingest で増えた行は孤児にしない）。
 func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil) async throws
     -> ScreenRebuildSummary
 {
@@ -70,11 +72,15 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
     var indexed = 0
     var removed = 0
     var seen = Set<String>()
-    var offset = 0
+    var afterCode: String? = nil
     while true {
-        let pageRange = offset..<(offset + pageSize)
-        let page = try await withDbRetry(logger: logger, context: "screen-rebuild offset=\(offset)") {
-            try await CompanyFinancials.query(on: db).sort(\.$id).range(pageRange).all()
+        let last = afterCode
+        let page = try await withDbRetry(
+            logger: logger, context: "screen-rebuild after=\(last ?? "")"
+        ) {
+            var query = CompanyFinancials.query(on: db).sort(\.$id)
+            if let last { query = query.filter(\.$id > last) }
+            return try await query.limit(pageSize).all()
         }
         if page.isEmpty { break }
         for fin in page {
@@ -94,13 +100,21 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
             }
             if row != nil { indexed += 1 } else { removed += 1 }
         }
+        afterCode = page.last?.id
         if page.count < pageSize { break }
-        offset += pageSize
     }
-    let orphans = try await ScreenIndexCodeOnly.query(on: db).all().compactMap(\.id).filter { !seen.contains($0) }
-    if !orphans.isEmpty {
-        try await ScreenIndex.query(on: db).filter(\.$id ~~ orphans).delete()
-        removed += orphans.count
+    let candidates = try await ScreenIndexCodeOnly.query(on: db).all().compactMap(\.id).filter {
+        !seen.contains($0)
+    }
+    if !candidates.isEmpty {
+        let present = Set(
+            try await CompanyFinancialsCacheVersionOnly.query(on: db).filter(\.$id ~~ candidates).all()
+                .compactMap(\.id))
+        let orphans = candidates.filter { !present.contains($0) }
+        if !orphans.isEmpty {
+            try await ScreenIndex.query(on: db).filter(\.$id ~~ orphans).delete()
+            removed += orphans.count
+        }
     }
     return ScreenRebuildSummary(scanned: scanned, indexed: indexed, removed: removed)
 }
@@ -143,7 +157,9 @@ final class ScreenIndexCodeOnly: Model, @unchecked Sendable {
 
 /// screen_index を AND フィルタ + 1 キーソート + LIMIT で検索する。
 /// フィルタ・ソート対象が null の行は結果に載せない（0 扱いにしない）。
-func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any] {
+/// 索引が未生成（0 行）なら nil（呼び出し側は 404）。フィルタ 0 件は空配列。
+func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any]? {
+    guard try await ScreenIndex.query(on: db).limit(1).first() != nil else { return nil }
     func base() -> QueryBuilder<ScreenIndex> {
         var builder = ScreenIndex.query(on: db)
         if let sector = query.sector {
@@ -171,6 +187,26 @@ func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any] 
     return screenResponseJSON(rows: rows.map { $0.toRow() }, matched: matched, query: query)
 }
 
+/// 財務取り込みが current 判定で skip した社のうち、screen_index が無いものだけを格納済み JSON から補完する。
+/// JSONB は欠落 code だけ読む。Screen 失敗で ingest は落とさない。
+func backfillMissingScreenIndex(codes: [String], db: Database, logger: Logger?) async {
+    guard !codes.isEmpty else { return }
+    do {
+        let indexed = Set(
+            try await ScreenIndexCodeOnly.query(on: db).filter(\.$id ~~ codes).all().compactMap(\.id))
+        for code in codes where !indexed.contains(code) {
+            let fin = try await CompanyFinancials.find(code, on: db)
+            guard let fin else { continue }
+            await refreshScreenIndexAfterFinancials(
+                code: code, response: fin.response, db: db, logger: logger)
+        }
+    } catch {
+        logger?.warning(
+            "screen_index 欠落補完失敗（screen-rebuild で再試行）: \(redactSecrets(String(reflecting: error)))"
+        )
+    }
+}
+
 /// `screen` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 func serveScreen(query: ScreenQuery, db: Database?, logger: Logger) async -> StoredDataServeResult {
     guard let db else { return .dbUnavailable }
@@ -182,6 +218,7 @@ func serveScreen(query: ScreenQuery, db: Database?, logger: Logger) async -> Sto
         ) {
             try await loadScreen(query: query, db: db)
         }
+        guard let body else { return .notFound }
         return .ok(body)
     } catch {
         return .dbUnavailable

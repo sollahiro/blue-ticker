@@ -118,6 +118,55 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func ingestSkipBackfillsMissingScreenIndex() async throws {
+        try await withApp { app in
+            let doc = EdinetDocument()
+            doc.id = "S1"
+            doc.edinetCode = "E00001"
+            doc.secCode = "67580"
+            doc.filerName = "テスト"
+            doc.docTypeCode = "120"
+            doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+            doc.formCode = "030000"
+            doc.submitDateTime = "2025-06-20 09:00"
+            try await doc.create(on: app.db)
+
+            let fin = CompanyFinancials()
+            fin.id = "6758"
+            fin.response = try makeResponse(
+                code: "6758", latest: ["sales": 1200.0, "roic": 12.0])
+            fin.cacheVersion = companyFinancialsCacheVersion
+            fin.requestedYears = 5
+            fin.highWater = "2025-06-20 09:00"
+            fin.assemblyFingerprint = financialsAssemblyFingerprint()
+            try await fin.create(on: app.db)
+            #expect(try await ScreenIndex.find("6758", on: app.db) == nil)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run for a current company")
+                return .failed
+            }
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.roic == 12)
+            #expect(row.sales == 1200)
+        }
+    }
+
+    @Test func screenEndpointReturnsEmptyOkWhenIndexHasRowsButNoMatch() async throws {
+        try await withApp { app in
+            try await upsertScreenIndex(
+                code: "0001",
+                response: try makeResponse(code: "0001", latest: ["roic": 5.0]),
+                db: app.db)
+            let (status, json) = try await send(app, "/v1/screen?sector=%E8%BC%B8%E9%80%81%E7%94%A8%E6%A9%9F%E5%99%A8")
+            #expect(status == .ok)
+            #expect(codes(json) == [])
+            #expect(json?["matched"] as? Int == 0)
+        }
+    }
+
     @Test func screenEndpointFiltersSortsAndLimits() async throws {
         try await withApp { app in
             let rows: [(String, String, [String: Any])] = [
@@ -156,6 +205,10 @@ private func codes(_ json: [String: Any]?) -> [String] {
 
     @Test func screenEndpointRejectsUnknownKeysAndServes503WithoutDb() async throws {
         try await withApp { app in
+            let (emptyStatus, emptyJson) = try await send(app, "/v1/screen")
+            #expect(emptyStatus == .notFound)
+            #expect(emptyJson?["status"] as? Int == 404)
+
             let (status, json) = try await send(app, "/v1/screen?ccc_min=1")
             #expect(status == .badRequest)
             #expect(json?["status"] as? Int == 400)
