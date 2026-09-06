@@ -669,9 +669,38 @@ enum IBDExtractor {
             xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
         ), !year.balanceSheet.isEmpty {
             let statementTags = Set(year.balanceSheet.map(\.tag))
-            return fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
+            var fs = fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
+            overlayStatementCurrentValues(&fs, lines: year.balanceSheet)
+            return fs
         }
         return fieldSetFromInstant(allTags)
+    }
+
+    private static let statementIBDTags: Set<String> = {
+        var tags = Set(Xbrl.ibdDirectTags)
+        tags.formUnion(Xbrl.ibdIFRSCLTags)
+        tags.formUnion(Xbrl.ibdIFRSNCLTags)
+        tags.formUnion(Xbrl.leaseLiabilitiesBSTags)
+        for group in Xbrl.ibdCurrentComponents { tags.formUnion(group) }
+        for group in Xbrl.ibdNonCurrentComponents { tags.formUnion(group) }
+        for comp in Xbrl.bankIBDComponents { tags.formUnion(comp.tags) }
+        return tags
+    }()
+
+    /// statement 本表の IBD 当期値で Instant FieldSet を上書きする。
+    /// `extractCanonical` の fact 収集は `nilAsZero: false` のため、当期 `xsi:nil` は落ちる。
+    /// statement 組立は既定 `nilAsZero: true` で同じ fact を 0 として載せる（借入金 0 円の
+    /// 日東電工 6988 / S100YCAR）。prior だけ残ると resolveIBD が tag あり・current nil になり
+    /// zero_debt へ落ちず ROIC が欠測する。
+    static func overlayStatementCurrentValues(
+        _ fieldSet: inout FieldSet, lines: [StatementLineItem]
+    ) {
+        for item in lines {
+            guard statementIBDTags.contains(item.tag) else { continue }
+            var fv = fieldSet[item.tag] ?? FieldValue(current: nil, prior: nil)
+            fv.current = item.value
+            fieldSet[item.tag] = fv
+        }
     }
 
     private static let usgaapIBDLabelMap: [String: String] = [

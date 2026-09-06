@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v15"
+public let companyFinancialsCacheVersion = "fin-v16"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -547,7 +547,7 @@ extension FinancialsResponse {
         self.market = market
         currency = "JPY"
         unit = "百万円"
-        years = (result.years ?? []).map { FinancialsYear($0) }
+        years = uniquedYearsByFyEnd((result.years ?? []).map { FinancialsYear($0) })
     }
 
     /// 公開契約レスポンス → 内部モデル（MetricsResult）。
@@ -652,15 +652,39 @@ extension FinancialsResponse {
     /// 多めの年数で計算してから縮めるので、縮めた集合の最古年（より古い年を落とした結果）は
     /// 前年依存値を保持してしまう。両経路の出力を一致させるため、縮めて最古になった年の
     /// 前年依存フィールドを null へ戻す（実際に古い年を落とした＝n 未満に縮めた場合のみ）。
+    ///
+    /// 同一 `fy_end` の重複行（訂正有報が年次行に混入した格納済み応答）は先勝ちで 1 行にする。
     public func trimmed(toYears n: Int) -> FinancialsResponse {
-        guard n >= 0, years.count > n else { return self }
-        var copy = self
-        copy.years = Array(years.prefix(n))
+        let base = uniquedByFyEnd()
+        guard n >= 0, base.years.count > n else { return base }
+        var copy = base
+        copy.years = Array(base.years.prefix(n))
         if n > 0 {
             copy.years[n - 1].clearPriorDependentMetrics()
         }
         return copy
     }
+
+    /// 同一 `fy_end` は配列先頭（新しい順の先勝ち）だけ残す。`fy_end` が空の行は落とさない。
+    public func uniquedByFyEnd() -> FinancialsResponse {
+        var copy = self
+        copy.years = uniquedYearsByFyEnd(years)
+        return copy
+    }
+}
+
+/// 同一 `fy_end` は先頭だけ残す。空の期末はキーにしない（誤って 1 行に畳まない）。
+func uniquedYearsByFyEnd(_ years: [FinancialsYear]) -> [FinancialsYear] {
+    var seen = Set<String>()
+    var unique: [FinancialsYear] = []
+    unique.reserveCapacity(years.count)
+    for year in years {
+        if let fyEnd = year.fyEnd, !fyEnd.isEmpty {
+            guard seen.insert(fyEnd).inserted else { continue }
+        }
+        unique.append(year)
+    }
+    return unique
 }
 
 extension FinancialsYear {
