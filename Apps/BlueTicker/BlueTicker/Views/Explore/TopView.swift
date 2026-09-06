@@ -11,6 +11,7 @@ struct TopView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var searchGeneration = 0
     @State private var showHistory = false
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -57,16 +58,23 @@ struct TopView: View {
             .contentMargins(.top, 0, for: .scrollContent)
             .safeAreaPadding(.bottom, 0)
             .ignoresSafeArea(.container, edges: .bottom)
+            .scrollDismissesKeyboard(.immediately)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    searchFocused = false
+                }
+            )
 
             nameSearchBar
         }
         .background { InlineNavigationTitle() }
         .navigationTitle("名称検索")
         .bltChrome()
-        .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboard(.immediately)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("履歴") {
+                    searchFocused = false
                     showHistory = true
                 }
                 .foregroundStyle(Theme.text)
@@ -136,7 +144,11 @@ struct TopView: View {
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .foregroundStyle(Theme.text)
-                .onSubmit { scheduleSearch(query) }
+                .focused($searchFocused)
+                .onSubmit {
+                    searchFocused = false
+                    scheduleSearch(query)
+                }
             if !query.isEmpty {
                 Button {
                     query = ""

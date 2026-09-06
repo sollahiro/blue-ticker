@@ -1,22 +1,27 @@
 import SwiftUI
 
 enum ScreenMetric: String, CaseIterable, Identifiable {
-    case sales
-    case grossMargin = "gross_profit_margin"
     case operatingMargin = "operating_margin"
     case roic
     case roe
+    case sales
+    case salesGrowth = "sales_growth"
+    case grossMargin = "gross_profit_margin"
     case netDe = "net_de"
 
     var id: String { rawValue }
 
+    static let alwaysShown: [ScreenMetric] = [.operatingMargin, .roic, .roe]
+    static let optional: [ScreenMetric] = [.sales, .salesGrowth, .grossMargin, .netDe]
+
     var title: String {
         switch self {
-        case .sales: "売上高"
-        case .grossMargin: "粗利率"
         case .operatingMargin: "営業利益率"
         case .roic: "ROIC"
         case .roe: "ROE"
+        case .sales: "売上高"
+        case .salesGrowth: "売上増加率"
+        case .grossMargin: "粗利率"
         case .netDe: "ネットD/E"
         }
     }
@@ -24,6 +29,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
     var sliderMin: Double {
         switch self {
         case .sales: 0
+        case .salesGrowth: -30
         case .grossMargin: 0
         case .operatingMargin: -20
         case .roic: -20
@@ -35,6 +41,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
     var sliderMax: Double {
         switch self {
         case .sales: 20_000_000
+        case .salesGrowth: 80
         case .grossMargin: 80
         case .operatingMargin: 50
         case .roic: 50
@@ -46,7 +53,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
     var step: Double {
         switch self {
         case .sales: 10_000
-        case .grossMargin, .operatingMargin, .roic, .roe: 0.5
+        case .grossMargin, .operatingMargin, .roic, .roe, .salesGrowth: 0.5
         case .netDe: 0.1
         }
     }
@@ -55,6 +62,8 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
         switch self {
         case .sales:
             return .yellowThenGreen(greenFrom: 10_000)
+        case .salesGrowth:
+            return .higherBetter(lowBelow: -5, midFrom: 0, midTo: 8, highFrom: 15)
         case .grossMargin:
             return .higherBetter(lowBelow: 15, midFrom: 20, midTo: 40, highFrom: 50)
         case .operatingMargin:
@@ -72,7 +81,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
         switch self {
         case .sales:
             return Format.okuYen(value)
-        case .grossMargin, .operatingMargin, .roic, .roe:
+        case .grossMargin, .operatingMargin, .roic, .roe, .salesGrowth:
             return String(format: "%.1f%%", value)
         case .netDe:
             return String(format: "%.1f倍", value)
@@ -83,7 +92,12 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
 struct ScreenView: View {
     @State private var selectedSectors: Set<String> = []
     @State private var ranges: [ScreenMetric: [Double]] = [:]
+    @State private var extraMetrics: [ScreenMetric] = []
     @State private var showResults = false
+
+    private var availableOptional: [ScreenMetric] {
+        ScreenMetric.optional.filter { !extraMetrics.contains($0) }
+    }
 
     var body: some View {
         Form {
@@ -99,28 +113,24 @@ struct ScreenView: View {
             }
 
             Section {
-                ForEach(ScreenMetric.allCases) { metric in
-                    VStack(alignment: .leading, spacing: 8) {
+                ForEach(ScreenMetric.alwaysShown) { metric in
+                    metricBlock(metric) {
                         Text(metric.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.text)
-                        DualRangeSlider(
-                            rangeMin: metric.sliderMin,
-                            rangeMax: metric.sliderMax,
-                            step: metric.step,
-                            values: rangeBinding(metric),
-                            formatValue: metric.format,
-                            band: metric.band
-                        )
                     }
-                    .padding(.vertical, 8)
                     .listRowBackground(Theme.control)
+                }
+                ForEach(extraMetrics) { metric in
+                    extraMetricRow(metric)
+                        .listRowBackground(Theme.control)
+                }
+                if !availableOptional.isEmpty {
+                    addMetricRow
+                        .listRowBackground(Theme.control)
                 }
             } header: {
                 Text("指標")
-                    .foregroundStyle(Theme.textMuted)
-            } footer: {
-                Text("ソートは ROIC 降順、件数は 50 件で固定です。売上増加率は横断検索の対象外です。")
                     .foregroundStyle(Theme.textMuted)
             }
         }
@@ -139,8 +149,85 @@ struct ScreenView: View {
         }
     }
 
+    private var addMetricRow: some View {
+        Button {
+            guard let next = availableOptional.first else { return }
+            extraMetrics.append(next)
+        } label: {
+            HStack {
+                Image(systemName: "plus")
+                    .font(.body.weight(.semibold))
+                Text("追加")
+                    .font(.body.weight(.semibold))
+                Spacer()
+            }
+            .foregroundStyle(Theme.accent)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func extraMetricRow(_ metric: ScreenMetric) -> some View {
+        metricBlock(metric) {
+            extraMetricTitle(metric)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                removeExtra(metric)
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .tint(Theme.negative)
+        }
+    }
+
+    private func extraMetricTitle(_ metric: ScreenMetric) -> some View {
+        let choices = [metric] + availableOptional
+        return Menu {
+            ForEach(choices) { option in
+                Button {
+                    replaceExtra(metric, with: option)
+                } label: {
+                    if option == metric {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(metric.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Theme.text)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func metricBlock<Title: View>(
+        _ metric: ScreenMetric,
+        @ViewBuilder title: () -> Title
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            title()
+            DualRangeSlider(
+                rangeMin: metric.sliderMin,
+                rangeMax: metric.sliderMax,
+                step: metric.step,
+                values: rangeBinding(metric),
+                formatValue: metric.format,
+                band: metric.band
+            )
+        }
+        .padding(.vertical, 8)
+    }
+
     private var sectorChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let shape = RoundedRectangle(cornerRadius: Theme.groupedCornerRadius, style: .continuous)
+        return ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: 6) {
@@ -150,8 +237,15 @@ struct ScreenView: View {
                     }
                 }
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
         }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .scrollClipDisabled()
+        .clipShape(shape)
+        .padding(Theme.groupedContentInset)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Theme.elevated)
+        .containerShape(shape)
     }
 
     private var packedSectorRows: [[String]] {
@@ -175,22 +269,7 @@ struct ScreenView: View {
                 selectedSectors.insert(sector)
             }
         } label: {
-            Text(sector)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Theme.sectorColor(sector)
-                        .saturation(selected ? 1 : 0.22)
-                )
-                .foregroundStyle(.white)
-                .overlay {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Theme.accent, lineWidth: 2)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+            SectorTag(sector: sector, selected: selected)
         }
         .buttonStyle(.plain)
     }
@@ -200,6 +279,19 @@ struct ScreenView: View {
             get: { ranges[metric] ?? [metric.sliderMin, metric.sliderMax] },
             set: { ranges[metric] = $0 }
         )
+    }
+
+    private func replaceExtra(_ current: ScreenMetric, with metric: ScreenMetric) {
+        guard let index = extraMetrics.firstIndex(of: current) else { return }
+        extraMetrics[index] = metric
+        if current != metric {
+            ranges[current] = nil
+        }
+    }
+
+    private func removeExtra(_ metric: ScreenMetric) {
+        extraMetrics.removeAll { $0 == metric }
+        ranges[metric] = nil
     }
 }
 
