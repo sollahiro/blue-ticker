@@ -31,4 +31,22 @@ import Testing
                 text.contains("調味料") || text.contains("アミノ酸") || text.contains("冷凍"))
         }
     }
+
+    @Test func panasonicBusinessDescriptionHasElectronicsBody() async throws {
+        try await StatementNotesOracleSupport.withSmokeCache("S100YETA") { dir in
+            let text = DescriptionOfBusinessExtractor.extract(in: dir)
+            #expect(text.count >= companyOverviewInputThinChars)
+            #expect(text.contains("エレクトロニクス") || text.contains("コネクト"))
+            #expect(!text.contains("【関係会社の状況】"))
+        }
+    }
+
+    @Test func bandaiNamcoReportableSegmentOverviewMentionsToyHobby() async throws {
+        try await StatementNotesOracleSupport.withSmokeCache("S100YBXE") { dir in
+            let text = ReportableSegmentsOverviewExtractor.extract(in: dir)
+            #expect(text.contains("トイホビー"))
+            #expect(text.contains("デジタル") || text.contains("アミューズメント"))
+            #expect(!text.contains("【関連情報】"))
+        }
+    }
 }

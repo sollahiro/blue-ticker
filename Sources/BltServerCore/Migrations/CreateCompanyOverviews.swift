@@ -1,5 +1,5 @@
 // company_overviews テーブルの作成。会社1社=1行の短い会社説明を JSONB 1 セルに持つ。
-// 由来の有報は doc_id 列。Filing 公開 `texts` には載せない。ingest stage / serving は未配線。
+// 由来の有報は doc_id 列。Filing 公開 `texts` には載せない。ingest stage は `overviews`。serving は未配線。
 
 import Fluent
 

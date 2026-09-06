@@ -11,7 +11,7 @@
 # limit / write は ingest.local.env を編集（PR 不要）。
 # 実運用ラッパー（ingest-run-cycle.local.sh）は gitignore。雛形は
 # scripts/jp/edinet/ingest-run-cycle.local.sh を cp して使う（caffeinate・
-# job-03 日次 skip・post 1 回化を含む）。
+# job-03 / job-06 日次 skip・post 1 回化を含む）。
 
 set -euo pipefail
 
@@ -32,12 +32,14 @@ set +a
 export BLT_INGEST_SKIP_POST=1
 if [[ $(date +%H) -ne 0 ]]; then
   export BLT_INGEST_SKIP_03=1
+  export BLT_INGEST_SKIP_06=1
 else
   unset BLT_INGEST_SKIP_03
+  unset BLT_INGEST_SKIP_06
 fi
 
 {
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest-run-cycle 開始 (SKIP_03=${BLT_INGEST_SKIP_03:-0}) ====="
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest-run-cycle 開始 (SKIP_03=${BLT_INGEST_SKIP_03:-0} SKIP_06=${BLT_INGEST_SKIP_06:-0}) ====="
   "$REPO/scripts/jp/edinet/ingest-run-cycle.sh"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest-run-cycle 本体完了。post hooks ====="
   source "$REPO/scripts/jp/edinet/ingest-common.sh"

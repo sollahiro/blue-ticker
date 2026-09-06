@@ -24,6 +24,15 @@ import Testing
         let polite =
             "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスなどを国内海外で提供しています。"
         #expect(!ok(polite))
+        #expect(!ok("主力は調味料の製造販売です。"))
+        #expect(!ok("主力は調味料の製造販売でしょう。"))
+        #expect(!ok("主力は調味料の製造販売です！"))
+    }
+
+    @Test func acceptsShoyuWithoutDesumasuFalsePositive() {
+        let kikkoman =
+            "国内外でしょうゆ、つゆ・たれ等の調味料、デルモンテトマト加工品、豆乳飲料、酒類の製造・販売を手がける。"
+        #expect(ok(kikkoman))
     }
 
     @Test func rejectsYearCompanySuffixThreeSentencesAndUnfinishedTail() {
@@ -39,10 +48,20 @@ import Testing
         #expect(!ok(unfinished))
     }
 
-    @Test func acceptsShortCompleteSentence() {
-        let short = "デジタルソフトウェア・アドオンコンテンツの制作・販売、家庭用ゲーム機、音楽制作を手がける。"
-        #expect(short.count == 45)
-        #expect(ok(short))
+    @Test func rejectsReportableSegmentWrapper() {
+        #expect(
+            !ok(
+                "半導体・電子材料、モビリティ、イノベーション材料、ケミカル、クラサスケミカルの5つの報告セグメントで事業を行う。"
+            ))
+        #expect(
+            !ok(
+                "コネクト、エレクトリックワークス、HVAC & CC、エナジー、インダストリー、スマートライフの6つの報告セグメントで事業を展開する。"
+            ))
+        #expect(!ok("燃料油と基礎化学品の３つの事業セグメントで展開する。"))
+        #expect(!ok("トイホビー事業とデジタル事業のセグメントから構成される。"))
+        #expect(
+            ok("半導体・電子材料、モビリティ、イノベーション材料、ケミカル、クラサスケミカルを手がける。"))
+        #expect(ok("燃料油と基礎化学品の2つの事業を手がける。"))
     }
 
     @Test func rejectsEmptyApplicableOverview() {
@@ -79,6 +98,30 @@ import Testing
 
     @Test func clipDoesNotCutMidWordWithoutSentenceEnd() {
         #expect(CompanyOverviewRules.clip(String(repeating: "あ", count: 90)) == nil)
+    }
+
+    @Test func clipFallsBackToLastCommaInWindow() {
+        let overflow =
+            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを手がける。"
+        #expect(overflow.count == 82)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(
+            clipped
+                == "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション。")
+        #expect(ok(clipped ?? ""))
+        #expect((clipped ?? "").count <= companyOverviewMaxChars)
+    }
+
+    @Test func rejectsConnectiveStemBeforeStop() {
+        #expect(!ok("自動車を製造し。"))
+        #expect(!ok("自動車を製造して。"))
+        #expect(ok("自動車の製造販売を手がける。"))
+    }
+
+    @Test func clipSkipsConnectiveCommaWithoutEarlierStop() {
+        let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        #expect(CompanyOverviewRules.clip(overflow) == nil)
     }
 
     @Test func clipKeepsLastSentenceWithinMax() {

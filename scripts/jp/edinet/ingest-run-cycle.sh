@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 推奨順に ingest ジョブ 0–5 を連続実行する。
+# 推奨順に ingest ジョブ 0–6 を連続実行する。
 #
 # 手元: ingest.local.env（limit/skip/write）を編集してから
 #   ./scripts/jp/edinet/ingest-run-cycle.local.sh
@@ -35,5 +35,6 @@ run_job 02 "$SCRIPTS/ingest-job-02-notes-core.sh"
 run_job 03 "$SCRIPTS/ingest-job-03-notes-heavy.sh"
 run_job 04 "$SCRIPTS/ingest-job-04-breakdowns.sh"
 run_job 05 "$SCRIPTS/ingest-job-05-financials.sh"
+run_job 06 "$SCRIPTS/ingest-job-06-overviews.sh"
 
 echo "=== ingest-run-cycle: complete ==="

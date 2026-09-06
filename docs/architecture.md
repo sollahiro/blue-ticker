@@ -172,11 +172,11 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない |
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル（書類単位） |
-| overview | `company_overviews`（会社1社=1行。由来 doc_id は列。スキーマのみ。ingest stage / 公開 REST は未配線。Filing `texts` には載せない） |
+| overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は未配線。Filing `texts` には載せない） |
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`.agents/rules/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons / overviews は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 

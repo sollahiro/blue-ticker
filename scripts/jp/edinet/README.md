@@ -21,8 +21,8 @@ Region `JP` · Source `EDINET`。命名規約は `.agents/rules/regions.md`。
 | スクリプト | 内容 |
 |---|---|
 | `ingest-common.sh` | 共通（source 専用・`ingest.local.env` 自動 load） |
-| `ingest-job-00` … `05` | stage 別ジョブ |
-| `ingest-run-cycle.sh` | 0–5 を順実行 |
+| `ingest-job-00` … `06` | stage 別ジョブ |
+| `ingest-run-cycle.sh` | 0–6 を順実行 |
 
 サイクル末尾の `ingest_post_hooks`（status ページ・Linear 件数・RO reset）は各 job でも呼ぶ。手元ラッパーは job 中 `BLT_INGEST_SKIP_POST=1`、末尾で 1 回だけ実行する。Linear 投稿は `.env` の `LINEAR_API_KEY` と `BLT_INGEST_WRITE=1` が揃ったときだけ。
 
