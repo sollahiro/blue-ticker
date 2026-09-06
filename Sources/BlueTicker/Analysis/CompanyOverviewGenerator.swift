@@ -9,6 +9,7 @@ enum CompanyOverviewGenerator {
     ルール:
     - 入力テキストに書かれている主力事業・報告セグメント名・主な製品・サービスだけを使う。社名や業種欄から補わない。一般知識で足さない。
     - 製品名・サービス名が無くても、報告セグメント名や事業分野の名前があればそれで書く。製品名は必須ではない。
+    - 「単一セグメントであるため記載を省略」でも、そこに事業・製品の名前があれば applicable は true。省略の旨自体は書かない。
     - 「5つの報告セグメントで事業を行う」のような開示枠のまとめは書かない。「報告セグメント」という語も出さない。名前は事業・製品・サービスの列挙として使う。
     - 会計基準の前置き、子会社数、「詳細は注記○」などの参照、沿革、関係会社一覧、事業系統図の会社名羅列は使わない。本文に既に出ているセグメント名は参照先ではなく材料として使う。
     - 複数事業があるときは主要なものを2〜3個までに絞る。
@@ -35,7 +36,8 @@ enum CompanyOverviewGenerator {
     ]
 
     static func generate(
-        input: CompanyOverviewInput, client: ChatCompleting, model: String
+        input: CompanyOverviewInput, client: ChatCompleting, model: String,
+        retryWhenApplicableFalse: Bool = false
     ) async -> CompanyOverviewDraft {
         let raw = input.sourceText
         let text = String(raw.prefix(companyOverviewMaxInputChars))
@@ -83,8 +85,9 @@ enum CompanyOverviewGenerator {
         // 句点・読点で切れる長さ超過は書き直し LLM に回さず、ここで確定する。
         salvageOverflowOrStop()
         // 系統図のみ等で applicable=false のときは同じ本文を3回直さず、呼び出し側の
-        // 「報告セグメントの概要」フォールバックへ渡す。
-        let retrySameSource = parsed.applicable || isThinInput(raw)
+        // 「報告セグメントの概要」フォールバックへ渡す。最後の入力（フォールバック本体、
+        // またはフォールバックが空の本文）は retryWhenApplicableFalse で書き直す。
+        let retrySameSource = parsed.applicable || isThinInput(raw) || retryWhenApplicableFalse
 
         while retrySameSource, case .invalid(let why) = verdict, attempts < companyOverviewMaxAttempts {
             attempts += 1

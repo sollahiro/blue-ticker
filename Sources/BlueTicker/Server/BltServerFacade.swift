@@ -464,7 +464,12 @@ public extension BltServerContext {
                     inputKey: companyOverviewSegmentOverviewInputKey,
                     sectionTitle: companyOverviewSegmentOverviewSectionTitle)
                 draft = await CompanyOverviewGenerator.generate(
-                    input: input, client: overviewChatClient, model: overviewModel)
+                    input: input, client: overviewChatClient, model: overviewModel,
+                    retryWhenApplicableFalse: true)
+            } else if !draft.ok, draft.attempts < companyOverviewMaxAttempts {
+                draft = await CompanyOverviewGenerator.generate(
+                    input: input, client: overviewChatClient, model: overviewModel,
+                    retryWhenApplicableFalse: true)
             }
         }
         return .generated(draft: draft, sourceText: sourceText)

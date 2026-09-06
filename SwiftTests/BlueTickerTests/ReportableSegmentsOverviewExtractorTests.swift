@@ -48,4 +48,18 @@ import Testing
         #expect(text.contains("トイホビー"))
         #expect(text.contains("デジタル"))
     }
+
+    @Test func extractFallsBackToSingleSegmentDisclosure() {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">当社グループは、医薬品・化粧品等を中心とした物販事業の単一セグメントであるため、記載を省略しております。</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let text = ReportableSegmentsOverviewExtractor.extract(in: dir)
+            #expect(text.contains("医薬品"))
+            #expect(text.contains("化粧品"))
+            #expect(text.contains("物販事業"))
+        }
+    }
 }

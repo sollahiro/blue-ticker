@@ -1,5 +1,6 @@
 // 有報「セグメント情報」の「報告セグメントの概要」（`DescriptionOfReportableSegmentsTextBlock`）。
 // 事業の内容が系統図だけで読めないときの Overview 入力。Filing 公開 `texts` には載せない。
+// 報告セグメント開示を省略する単一セグメント企業は、専用タグの省略文を返す。
 
 import Foundation
 
@@ -22,6 +23,10 @@ enum ReportableSegmentsOverviewExtractor {
             in: xbrlDir, textblockTag: Xbrl.descriptionOfReportableSegmentsTextblockTag)
         {
             let text = DescriptionOfBusinessExtractor.htmlToText(inner)
+            if !text.isEmpty { return text }
+        }
+        if let disclosure = BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: xbrlDir) {
+            let text = disclosure.trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty { return text }
         }
         return ""
