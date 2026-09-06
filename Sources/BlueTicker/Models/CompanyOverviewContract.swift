@@ -296,7 +296,7 @@ enum CompanyOverviewRules {
 
     private static let amountRegex = try! NSRegularExpression(
         pattern:
-            #"(?:\d[\d,\.]*)\s*(?:円|億円|兆円|百万円|千万円|%|％|倍|人|件|社)|(?:売上|営業利益|純利益|時価総額)\s*\d"#
+            #"(?:\d[\d,\.]*)\s*(?:億円|兆円|百万円|千万円|円(?!ショップ|均一ショップ)|%|％|倍|人|件|社)|(?:売上|営業利益|純利益|時価総額)\s*\d"#
     )
     private static let buyRegex = try! NSRegularExpression(
         pattern: #"買い推奨|買い判断|割安|投資せよ|おすすめ銘柄|投資判断"#)
