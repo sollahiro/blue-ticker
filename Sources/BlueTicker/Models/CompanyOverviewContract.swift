@@ -247,6 +247,10 @@ enum CompanyOverviewRules {
         while idx > window.startIndex {
             idx = window.index(before: idx)
             guard window[idx] == "、" else { continue }
+            if idx > window.startIndex {
+                let prev = window.index(before: idx)
+                if window[prev] == "！" || window[prev] == "？" { continue }
+            }
             var prefix = String(window[..<idx])
             while let stripped = strippingTrailingConnective(prefix), !stripped.isEmpty {
                 prefix = stripped

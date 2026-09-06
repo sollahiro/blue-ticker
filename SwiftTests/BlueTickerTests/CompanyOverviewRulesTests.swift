@@ -163,6 +163,8 @@ import Testing
         let clipped = CompanyOverviewRules.clip(overflow)
         #expect(clipped != "ロリポップ！")
         #expect(!(clipped ?? "").hasSuffix("ロリポップ！"))
+        #expect(!(clipped ?? "").hasSuffix("！。"))
+        #expect(!(clipped ?? "").hasSuffix("？。"))
     }
 
     @Test func clipStripsTrailingToBeforeComma() {
