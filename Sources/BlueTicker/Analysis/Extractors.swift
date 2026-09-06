@@ -914,13 +914,14 @@ enum InterestExpenseExtractor {
 
     /// IFRS注記テキストブロックから支払利息を抽出する。
     /// 「支払利息は、…それぞれ X百万円 および Y百万円」の文章パターン（前期・当期の順）。
+    private static let ifrsInterestExpenseTextPattern = try! NSRegularExpression(
+        pattern: "支払利息は、.*?それぞれ\\s*([0-9,]+)百万円\\s*および\\s*([0-9,]+)百万円",
+        options: [.dotMatchesLineSeparators]
+    )
+
     private static func extractIfrsIEFromTextblock(in xbrlDir: URL) -> InterestExpenseResult? {
-        let pattern = try? NSRegularExpression(
-            pattern: "支払利息は、.*?それぞれ\\s*([0-9,]+)百万円\\s*および\\s*([0-9,]+)百万円",
-            options: [.dotMatchesLineSeparators]
-        )
-        guard let pattern = pattern,
-              let enumerator = FileManager.default.enumerator(at: xbrlDir, includingPropertiesForKeys: nil)
+        let pattern = ifrsInterestExpenseTextPattern
+        guard let enumerator = FileManager.default.enumerator(at: xbrlDir, includingPropertiesForKeys: nil)
         else { return nil }
 
         let candidates = enumerator.compactMap { $0 as? URL }

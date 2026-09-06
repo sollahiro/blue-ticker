@@ -170,6 +170,7 @@ actor EdinetAPIClient {
     // MARK: - XBRL ダウンロード
 
     func downloadDocument(_ docID: String, saveDir: URL? = nil) async -> URL? {
+        guard EdinetCacheStore.isValidDocID(docID) else { return nil }
         let dir = saveDir ?? cacheStore.xbrlRootDir
         let dest = cacheStore.xbrlDir(docID, saveDir: dir)
 

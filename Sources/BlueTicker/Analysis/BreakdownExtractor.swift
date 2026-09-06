@@ -604,7 +604,7 @@ enum BreakdownExtractor {
     private static func isGeographyAxis(_ facts: [BreakdownFact]) -> Bool {
         let segmentMembers = facts.compactMap { fact -> String? in
             guard factsContainRecognizedAmountTag([fact]),
-                  let member = primaryMember(fact.dimensions),
+                  let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
                   !Xbrl.segmentReconcilingMemberNames.contains(member),
                   !Xbrl.segmentOtherBusinessMemberNames.contains(member)
@@ -615,15 +615,6 @@ enum BreakdownExtractor {
         // 独立した簡易版チェックを持っており、キッコーマン型「国内食品製造販売」等の事業区分×
         // 国内海外クロス集計を誤って地域軸と判定し、classifyAxis 側の修正が反映されなかった）。
         return BreakdownNormalizer.allMembersAreGeography(Array(Set(segmentMembers)))
-    }
-
-    /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
-    /// `BreakdownNormalizer.primaryMember` と同じ規約（dimension キー名の辞書順で先頭を採用）。
-    private static func primaryMember(_ dimensions: [String: String]) -> String? {
-        dimensions
-            .filter { $0.key != "ConsolidatedOrNonConsolidatedAxis" }
-            .sorted { $0.key < $1.key }
-            .first?.value
     }
 
     // MARK: - HTML 表の構造化
@@ -1207,23 +1198,27 @@ enum BreakdownExtractor {
         headingLikeOnly: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
+        guard let elems = try? soup.select("*") else { return [] }
+        var headings: [(elem: Element, text: String, matchText: String)] = []
+        for elem in elems {
+            let text = bs4Text(elem, strip: false)
+            guard text.unicodeScalars.count <= 300 else { continue }
+            // 句点付き散文は原則見出しではないが、「〜は以下のとおりです。」等の表導入文は残す
+            // （オリックス S100YG5L: 注記番号見出しの直後は定義表で、本表は導入文の直後）。
+            if headingLikeOnly, text.contains("。"), !isTableIntroCaption(text) { continue }
+            // 「…」内は他注記・基準書名の引用なので除いてから判定（【…】は見出し自体に使う）
+            let matchText = headingLikeOnly ? stripQuotedSpans(text) : text
+            headings.append((elem, text, matchText))
+        }
         var tables: [BreakdownTable] = []
         var seen = Set<ObjectIdentifier>()
         for keyword in keywords {
-            guard let elems = try? soup.select("*") else { continue }
-            for elem in elems {
-                let text = bs4Text(elem, strip: false)
-                guard text.unicodeScalars.count <= 300 else { continue }
-                // 句点付き散文は原則見出しではないが、「〜は以下のとおりです。」等の表導入文は残す
-                // （オリックス S100YG5L: 注記番号見出しの直後は定義表で、本表は導入文の直後）。
-                if headingLikeOnly, text.contains("。"), !isTableIntroCaption(text) { continue }
-                // 「…」内は他注記・基準書名の引用なので除いてから判定（【…】は見出し自体に使う）
-                let matchText = headingLikeOnly ? stripQuotedSpans(text) : text
-                guard matchText.contains(keyword) else { continue }
-                if headingExclusionKeywords.contains(where: text.contains) { continue }
+            for heading in headings {
+                guard heading.matchText.contains(keyword) else { continue }
+                if headingExclusionKeywords.contains(where: heading.text.contains) { continue }
                 // 直後の表が除外対象（ノイズ）だった場合、同じ見出しの下にある次の表を
                 // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
-                var candidate = findNextTable(after: elem)
+                var candidate = findNextTable(after: heading.elem)
                 var attempts = 0
                 while let table = candidate, attempts < Xbrl.noteTableLookaheadLimit {
                     attempts += 1
@@ -1353,8 +1348,11 @@ enum BreakdownExtractor {
     /// 『…』で囲まれた部分は他注記・基準書名の引用であり見出しではない
     /// （例: 注記23「セグメント情報」に記載…、基準書2023-07「セグメント情報開示の改善」）。
     /// 【…】は見出し自体に使われる（実データ: 【事業別セグメント情報】）ため対象外。
+    private static let quotedSpanRegex = try! NSRegularExpression(pattern: "「[^」]*」")
+
     private static func stripQuotedSpans(_ text: String) -> String {
-        text.replacingOccurrences(of: "「[^」]*」", with: "", options: .regularExpression)
+        quotedSpanRegex.stringByReplacingMatches(
+            in: text, options: [], range: NSRange(text.startIndex..., in: text), withTemplate: "")
     }
 
     /// 句点付きでも表の直前キャプションとして使う定型導入文か。

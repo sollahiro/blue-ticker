@@ -377,4 +377,45 @@ import Foundation
             #expect(components.first?.weight == 1)
         }
     }
+
+    @Test func findXbrlFilesOnEmptyDirectoryReturnsEmpty() throws {
+        let dir = try ServiceTestSupport.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(XBRLUtils.findXbrlFiles(in: dir).isEmpty)
+        #expect(XBRLUtils.collectAllNumericElements(in: dir).isEmpty)
+        #expect(XBRLUtils.extractTextblockHtml(in: dir, textblockTag: "DescriptionOfBusinessTextBlock") == nil)
+    }
+
+    @Test func collectNumericElementsOnBrokenXmlReturnsEmpty() throws {
+        let dir = try ServiceTestSupport.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("broken.xbrl")
+        try Data("<xbrl><not-closed".utf8).write(to: file)
+        #expect(XBRLUtils.collectNumericElements(in: file).isEmpty)
+    }
+
+    @Test func primaryBreakdownMemberIgnoresConsolidatedAxisAndSortsKeys() {
+        #expect(XBRLUtils.primaryBreakdownMember([:]) == nil)
+        #expect(
+            XBRLUtils.primaryBreakdownMember([
+                "ConsolidatedOrNonConsolidatedAxis": "ConsolidatedMember"
+            ]) == nil)
+        #expect(
+            XBRLUtils.primaryBreakdownMember([
+                "OperatingSegmentsAxis": "FoodsMember",
+                "ConsolidatedOrNonConsolidatedAxis": "ConsolidatedMember",
+            ]) == "FoodsMember")
+        #expect(
+            XBRLUtils.primaryBreakdownMember([
+                "ZAxis": "Second",
+                "AAxis": "First",
+            ]) == "First")
+    }
+
+    @Test func sumOptionalTreatsBothNilAsNil() {
+        #expect(XBRLUtils.sumOptional(nil, nil) == nil)
+        #expect(XBRLUtils.sumOptional(1.5, nil) == 1.5)
+        #expect(XBRLUtils.sumOptional(nil, 2.5) == 2.5)
+        #expect(XBRLUtils.sumOptional(1.0, 2.0) == 3.0)
+    }
 }

@@ -39,13 +39,6 @@ enum FaviconFetcher {
     private static let userAgent =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
-    private static let session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = requestTimeout
-        config.httpCookieStorage = nil
-        return URLSession(configuration: config, delegate: RedirectGuard(), delegateQueue: nil)
-    }()
-
     /// WordPress コア同梱の既定サイトアイコン（`w-logo-blue-white-bg.png` / `w-logo-gray-white-bg.png`）。
     /// `/favicon.ico` がここに 301 するサイトを会社ロゴと誤認しないための棄却リスト。
     static let wordPressDefaultIconSHA256: Set<String> = [
@@ -126,9 +119,8 @@ enum FaviconFetcher {
         guard let host = url.host, PrivateNetworkGuard.isPublicHost(host) else { return nil }
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              data.count <= maxBytes
+        guard let (data, response) = await fetchBounded(request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode)
         else { return nil }
         return data
     }
@@ -137,13 +129,37 @@ enum FaviconFetcher {
         guard let host = url.host, PrivateNetworkGuard.isPublicHost(host) else { return nil }
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await session.data(for: request),
+        guard let (data, response) = await fetchBounded(request),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              data.count <= maxBytes,
               let html = String(data: data, encoding: .utf8) ?? decodeCP932(data),
               let finalURL = response.url
         else { return nil }
         return (html, finalURL)
+    }
+
+    /// Content-Length または累積受信量が上限を超えるか。ストリーム受信の打ち切り判定に使う。
+    static func exceedsByteLimit(
+        expectedContentLength: Int64 = -1,
+        accumulated: Int,
+        incoming: Int,
+        limit: Int = 2 * 1024 * 1024
+    ) -> Bool {
+        if expectedContentLength > Int64(limit) { return true }
+        return accumulated + incoming > limit
+    }
+
+    /// 全受信後判定だと巨大応答で OOM するため、チャンク受信中に上限超過で中断する。
+    /// Linux（FoundationNetworking）でも動くよう `URLSession.bytes` には依存しない。
+    private static func fetchBounded(_ request: URLRequest) async -> (Data, URLResponse)? {
+        await withCheckedContinuation { continuation in
+            let delegate = BoundedFetchDelegate(maxBytes: maxBytes, continuation: continuation)
+            let config = URLSessionConfiguration.ephemeral
+            config.timeoutIntervalForRequest = requestTimeout
+            config.httpCookieStorage = nil
+            let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+            delegate.session = session
+            session.dataTask(with: request).resume()
+        }
     }
 
     /// Content-Typeヘッダーは信用せず、先頭バイトのマジックシグネチャで画像形式を判定する
@@ -162,9 +178,33 @@ enum FaviconFetcher {
         return nil
     }
 
-    /// リダイレクト先ホストごとにSSRFガードを適用する。private/loopback等へのリダイレクトは
-    /// completionHandler(nil)で追従を止める（＝そのレスポンスを最終応答として扱わせる）。
-    private final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    /// リダイレクト先ホストごとにSSRFガードを適用し、受信サイズ上限で打ち切る。
+    private final class BoundedFetchDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        private let maxBytes: Int
+        var session: URLSession?
+        private var buffer = Data()
+        private var response: URLResponse?
+        private var continuation: CheckedContinuation<(Data, URLResponse)?, Never>?
+        private let lock = NSLock()
+        private var resumed = false
+
+        init(maxBytes: Int, continuation: CheckedContinuation<(Data, URLResponse)?, Never>) {
+            self.maxBytes = maxBytes
+            self.continuation = continuation
+        }
+
+        private func finish(_ result: (Data, URLResponse)?) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !resumed else { return }
+            resumed = true
+            let cont = continuation
+            continuation = nil
+            session?.finishTasksAndInvalidate()
+            session = nil
+            cont?.resume(returning: result)
+        }
+
         func urlSession(
             _ session: URLSession, task: URLSessionTask,
             willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
@@ -175,6 +215,53 @@ enum FaviconFetcher {
                 return
             }
             completionHandler(request)
+        }
+
+        func urlSession(
+            _ session: URLSession, dataTask: URLSessionDataTask,
+            didReceive response: URLResponse,
+            completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+        ) {
+            if FaviconFetcher.exceedsByteLimit(
+                expectedContentLength: response.expectedContentLength, accumulated: 0, incoming: 0,
+                limit: maxBytes)
+            {
+                completionHandler(.cancel)
+                finish(nil)
+                return
+            }
+            self.response = response
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            lock.lock()
+            let wouldExceed = FaviconFetcher.exceedsByteLimit(
+                accumulated: buffer.count, incoming: data.count, limit: maxBytes)
+            if !wouldExceed {
+                buffer.append(data)
+            }
+            lock.unlock()
+            if wouldExceed {
+                dataTask.cancel()
+            }
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            lock.lock()
+            let data = buffer
+            let resp = response
+            let overLimit = data.count > maxBytes
+            lock.unlock()
+            if error != nil || overLimit {
+                finish(nil)
+                return
+            }
+            guard let resp else {
+                finish(nil)
+                return
+            }
+            finish((data, resp))
         }
     }
 }

@@ -737,7 +737,7 @@ enum BreakdownNormalizer {
 
         var perMember: [String: BreakdownFact] = [:]
         for fact in source {
-            guard let member = primaryMember(fact.dimensions), perMember[member] == nil else { continue }
+            guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions), perMember[member] == nil else { continue }
             perMember[member] = fact
         }
         return perMember
@@ -748,7 +748,7 @@ enum BreakdownNormalizer {
     /// employees / rd の人数・費用基準は呼ばない（既存の全社合計は呼び出し側の `total`）。
     private static func resolveEntityTotal(facts: [BreakdownFact], tag: String) -> BreakdownFact? {
         let candidateFacts = facts.filter {
-            $0.tag == tag && isCurrentPeriod($0.contextRef) && primaryMember($0.dimensions) == nil
+            $0.tag == tag && isCurrentPeriod($0.contextRef) && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
         }
         let consolidatedFacts = candidateFacts.filter(isConsolidated)
         let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
@@ -833,16 +833,6 @@ enum BreakdownNormalizer {
     private static func isCurrentPeriod(_ contextRef: String) -> Bool {
         Xbrl.durationContextPatterns.contains(where: contextRef.contains)
             || Xbrl.instantContextPatterns.contains(where: contextRef.contains)
-    }
-
-    /// dimensions のうち ConsolidatedOrNonConsolidatedAxis 以外の member を行ラベルとする。
-    /// 複数該当する場合は dimension キー名の辞書順で先頭を採用し、Dictionary の走査順不定に依存しない
-    /// （smoke 実データでは OperatingSegmentsAxis 系1本のみだが、将来複数軸が絡む書類のための決定的化）。
-    private static func primaryMember(_ dimensions: [String: String]) -> String? {
-        dimensions
-            .filter { $0.key != "ConsolidatedOrNonConsolidatedAxis" }
-            .sorted { $0.key < $1.key }
-            .first?.value
     }
 
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、

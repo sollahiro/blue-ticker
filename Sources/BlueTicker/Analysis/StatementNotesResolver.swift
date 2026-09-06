@@ -314,20 +314,13 @@ enum StatementNotesResolver {
     ) -> [String: String] {
         var consolidated: [String: String] = [:]
         var nonconsolidated: [String: String] = [:]
-        let factPattern = try? NSRegularExpression(
-            pattern: #"<ix:nonFraction\b([^>]*)>"#,
-            options: [.caseInsensitive])
-        let namePattern = try? NSRegularExpression(
-            pattern: #"name\s*=\s*["'](?:[\w]+:)?([A-Za-z0-9]+)["']"#)
-        let ctxPattern = try? NSRegularExpression(
-            pattern: #"contextRef\s*=\s*["']([^"']+)["']"#)
-        let cellPattern = try? NSRegularExpression(
-            pattern: #"<t[dh]\b[^>]*>(.*?)</t[dh]>"#,
-            options: [.caseInsensitive, .dotMatchesLineSeparators])
+        let factPattern = sgaNonFractionPattern
+        let namePattern = sgaFactNamePattern
+        let ctxPattern = sgaContextRefPattern
+        let cellPattern = sgaTableCellPattern
 
         for file in sgaExpenseBreakdownHtmlFiles(in: xbrlDir) {
-            guard let raw = try? String(contentsOf: file, encoding: .utf8),
-                  let factPattern, let namePattern, let ctxPattern, let cellPattern
+            guard let raw = try? String(contentsOf: file, encoding: .utf8)
             else { continue }
             let ns = NSRange(raw.startIndex..., in: raw)
             for fact in factPattern.matches(in: raw, range: ns) {
@@ -658,13 +651,13 @@ enum StatementNotesResolver {
         var listedAmount: Double?
 
         for variant in policyHoldingHolderVariants {
-            unlistedCount = sumOptional(
+            unlistedCount = XBRLUtils.sumOptional(
                 unlistedCount, numericElements[policyHoldingUnlistedIssueCountPrefix + variant]?["CurrentYearInstant"])
-            unlistedAmount = sumOptional(
+            unlistedAmount = XBRLUtils.sumOptional(
                 unlistedAmount, numericElements[policyHoldingUnlistedAmountPrefix + variant]?["CurrentYearInstant"])
-            listedCount = sumOptional(
+            listedCount = XBRLUtils.sumOptional(
                 listedCount, numericElements[policyHoldingListedIssueCountPrefix + variant]?["CurrentYearInstant"])
-            listedAmount = sumOptional(
+            listedAmount = XBRLUtils.sumOptional(
                 listedAmount, numericElements[policyHoldingListedAmountPrefix + variant]?["CurrentYearInstant"])
         }
 
@@ -674,17 +667,6 @@ enum StatementNotesResolver {
         return PolicyHoldingAggregateSummaryPayload(
             unlistedIssueCount: unlistedCount.map { Int($0) }, unlistedCarryingAmount: unlistedAmount,
             listedIssueCount: listedCount.map { Int($0) }, listedCarryingAmount: listedAmount)
-    }
-
-    /// `a`・`b`のうち存在する方を足す（両方nilならnil）。`nilAsZero: false`で読んだ値を跨いで
-    /// 合算するため、単純な`(a ?? 0) + (b ?? 0)`だと「両方未開示」を`0`として返してしまう。
-    private static func sumOptional(_ a: Double?, _ b: Double?) -> Double? {
-        switch (a, b) {
-        case (nil, nil): return nil
-        case (let a?, nil): return a
-        case (nil, let b?): return b
-        case (let a?, let b?): return a + b
-        }
     }
 
     private static let policyHoldingUnlistedIssueCountPrefix =
@@ -739,6 +721,17 @@ enum StatementNotesResolver {
         if variant == "LargestHoldingCompany" && tag.hasSuffix("SecondLargestHoldingCompany") { return false }
         return true
     }
+
+    private static let sgaNonFractionPattern = try! NSRegularExpression(
+        pattern: #"<ix:nonFraction\b([^>]*)>"#,
+        options: [.caseInsensitive])
+    private static let sgaFactNamePattern = try! NSRegularExpression(
+        pattern: #"name\s*=\s*["'](?:[\w]+:)?([A-Za-z0-9]+)["']"#)
+    private static let sgaContextRefPattern = try! NSRegularExpression(
+        pattern: #"contextRef\s*=\s*["']([^"']+)["']"#)
+    private static let sgaTableCellPattern = try! NSRegularExpression(
+        pattern: #"<t[dh]\b[^>]*>(.*?)</t[dh]>"#,
+        options: [.caseInsensitive, .dotMatchesLineSeparators])
 
     private static let policyHoldingRowContextRegex = try? NSRegularExpression(
         pattern: "^CurrentYearInstant_Row([0-9]+)Member$")

@@ -354,4 +354,18 @@ private func makeZipWithEntryCount(_ count: Int) throws -> Data {
 
         #expect(!(FileManager.default.fileExists(atPath: lockPath.path)))
     }
+
+    @Test func storeXbrlZipRejectsPathTraversalDocID() throws {
+        let store = makeStore()
+        let zip = try ServiceTestSupport.makeXbrlZip(files: ["a.txt": "x"])
+        #expect(throws: XbrlZipError.self) {
+            _ = try store.storeXbrlZip("../evil", content: zip)
+        }
+        #expect(!EdinetCacheStore.isValidDocID("../evil"))
+        #expect(!EdinetCacheStore.isValidDocID("S100/LM4"))
+        #expect(EdinetCacheStore.isValidDocID("S100LM4N"))
+        #expect(!store.hasXbrlDir("../evil"))
+        let escaped = tmpDir.deletingLastPathComponent().appendingPathComponent("evil_xbrl")
+        #expect(!FileManager.default.fileExists(atPath: escaped.path))
+    }
 }
