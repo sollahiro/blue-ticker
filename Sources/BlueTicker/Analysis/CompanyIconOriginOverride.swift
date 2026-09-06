@@ -52,8 +52,19 @@ enum CompanyIconOriginOverride {
 
     /// XBRL 電子公告を使わず favicon / 公式画像を取る決め打ち。格納は `icons-manual`。
     /// 7203: トヨタ自動車。公式コンシューマサイト `https://toyota.jp/index.html`（origin のみ保持）。
+    /// 2026-09-06: 未格納10社の公式HPをライブ照合。阪急阪神HD（9042）は公式トップに
+    /// favicon / ラスター公式画像が無く（ヘッダーは SVG のみ）、ここでは載せない。
     static let manualSources: [String: CompanyIconManualSource] = [
-        "7203": .homepageOrigin("https://toyota.jp"),
+        "1605": .homepageOrigin("https://www.inpex.com"),  // ＩＮＰＥＸ。公式トップ照合
+        "2433": .homepageOrigin("https://www.hakuhodody-holdings.co.jp"),  // 博報堂ＤＹ HD。ライブタイトル照合
+        "4188": .homepageOrigin("https://www.mcgc.com"),  // 三菱ケミカルグループ。ライブタイトル照合
+        "4912": .homepageOrigin("https://www.lion.co.jp"),  // ライオン。ライブタイトル照合
+        "6501": .homepageOrigin("https://www.hitachi.com"),  // 日立製作所。短信 URL origin
+        "7203": .homepageOrigin("https://toyota.jp"),  // トヨタ自動車。公式コンシューマサイト
+        "7550": .imageURL("https://www.zensho.co.jp/jp/resource/img/favicon.ico"),  // ゼンショーHD。ルートは /jp/ 誘導のみ
+        "7832": .homepageOrigin("https://www.bandainamco.co.jp"),  // バンダイナムコHD。ライブタイトル照合
+        "9404": .homepageOrigin("https://www.ntvhd.co.jp"),  // 日本テレビHD。ライブタイトル照合
+        "9861": .homepageOrigin("https://www.yoshinoya-holdings.com"),  // 吉野家HD。ライブタイトル照合
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {

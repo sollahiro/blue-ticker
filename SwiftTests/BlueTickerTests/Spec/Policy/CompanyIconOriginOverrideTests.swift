@@ -85,6 +85,30 @@ import Testing
                 == "https://toyota.jp")
     }
 
+    @Test func manualSourcesCoverVerifiedMissingHomepagesAndZenshoImage() {
+        let codes = Array(CompanyIconOriginOverride.manualSources.keys).sorted()
+        #expect(
+            codes == [
+                "1605", "2433", "4188", "4912", "6501", "7203", "7550", "7832", "9404", "9861",
+            ])
+        #expect(CompanyIconOriginOverride.manualSources["9042"] == nil)
+        #expect(
+            CompanyIconOriginOverride.manualSources["7550"]
+                == .imageURL("https://www.zensho.co.jp/jp/resource/img/favicon.ico"))
+        #expect(
+            CompanyIconOriginOverride.originForFavicon(
+                code: "6501", extractedOrigin: "https://www.hitachi.co.jp")
+                == "https://www.hitachi.com")
+        #expect(
+            companyIconShouldRefresh(
+                code: "7550", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://www.zensho.co.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "7550", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://www.zensho.co.jp/jp/resource/img/favicon.ico"))
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
