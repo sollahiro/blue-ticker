@@ -245,6 +245,23 @@ func registerRoutes(
             notFoundMessage: "指定された note_type の注記は未算出です")
     }
 
+    // GET /v1/screen?sector=電気機器&roic_min=15&sales_min=10000&sort=roic&order=desc&limit=50
+    // Summary 横断検索（BLT-49）。DB（screen_index、company_financials の最新 FY 派生）を AND フィルタ +
+    // 1 キーソート + LIMIT で読む。数値は `{metric}_min` / `{metric}_max`（許可リストは `ScreenMetric`）。
+    // 不明キー・不正値は 400。REST のみ（skills カタログ・MCP には載せない）。
+    v1.get("screen") { req async -> Response in
+        let query: ScreenQuery
+        switch parseScreenQuery(rawQueryItems(req)) {
+        case .success(let parsed):
+            query = parsed
+        case .failure(let error):
+            return errorResponse(.badRequest, message: error.message)
+        }
+        return makeStoredDataResponse(
+            await serveScreen(query: query, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "Screen 索引は未生成です")
+    }
+
     // GET /v1/feed/updates?limit=50&doc_type=120
     // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
     v1.get("feed", "updates") { req async -> Response in
@@ -274,6 +291,17 @@ func registerRoutes(
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
+}
+
+/// クエリ文字列をキー→値の辞書へ落とす（同一キー重複は後勝ち）。Screen の `{metric}_min` 等、
+/// キー集合が動的なクエリを許可リスト検証へ渡すために使う。
+private func rawQueryItems(_ req: Request) -> [String: String] {
+    guard let query = req.url.query,
+        let items = URLComponents(string: "?\(query)")?.queryItems
+    else { return [:] }
+    var result: [String: String] = [:]
+    for item in items { result[item.name] = item.value ?? "" }
+    return result
 }
 
 /// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成。MCP には出さない）。

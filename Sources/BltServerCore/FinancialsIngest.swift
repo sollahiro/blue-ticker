@@ -56,6 +56,7 @@ func runFinancialsIngest(
     var staleVersion: [(code: String, highWater: String?)] = []
     var staleYears: [(code: String, highWater: String?)] = []
     var staleHighWater: [(code: String, highWater: String?)] = []
+    var skippedCurrent: [String] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "財務取り込み 分類", onRetry: { unhealthyRetries += 1 }
@@ -80,6 +81,7 @@ func runFinancialsIngest(
             staleVersion.append((code, highWater))
         } else {
             skipped += 1
+            skippedCurrent.append(code)
         }
     }
     let missingCodes = Set(missing.map(\.code))
@@ -115,6 +117,7 @@ func runFinancialsIngest(
             isCurrentFinancialsAssemblyFingerprint(row.assemblyFingerprint)
         {
             skipped += 1
+            skippedCurrent.append(code)
             continue
         }
         if let lim = limit, attempted >= lim { break }
@@ -130,6 +133,7 @@ func runFinancialsIngest(
                     highWater: highWater, db: db)
             }
             stored += 1
+            await refreshScreenIndexAfterFinancials(code: code, response: response, db: db, logger: logger)
         case .notApplicable:
             // 有価証券報告書未提出等、設計通りの対象外。プレースホルダ行（years 空）を保存し、
             // 次回 ingest で highWater 一致のまま無駄な再試行を繰り返さないようにする
@@ -144,11 +148,15 @@ func runFinancialsIngest(
                     response: .notApplicablePlaceholder(code: code), highWater: highWater, db: db)
             }
             notApplicable += 1
+            await refreshScreenIndexAfterFinancials(
+                code: code, response: .notApplicablePlaceholder(code: code), db: db, logger: logger)
         case .failed:
             failed += 1
             logger?.warning("財務取り込み失敗: code=\(code)")
         }
     }
+
+    await backfillMissingScreenIndex(codes: skippedCurrent, db: db, logger: logger)
 
     return FinancialsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,

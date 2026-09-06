@@ -40,6 +40,10 @@ public enum Api {
     /// filings の `max_years` 上限。ライブ探索の年次並列取得を無制限にしない。
     public static let filingsMaxYearsMax = 10
     public static let financialsYearsDefault = 5
+    /// Screen（`GET /v1/screen`）の返却件数省略時。
+    public static let screenLimitDefault = 50
+    /// Screen の返却件数上限。フィルタ無し全件は返さない。
+    public static let screenLimitMax = 200
     /// Feed Update の返却件数省略時。
     public static let feedLimitDefault = 50
     /// Feed Update の返却件数上限。

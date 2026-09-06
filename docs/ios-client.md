@@ -67,11 +67,11 @@
   - ネット D/E `net_de`
 - スライダーのハンドル色は水準帯を赤→黄→緑で表す（文言ラベルは出さない）。数値はハンドルに追従し、近いときは重ならない。背景から横にはみ出さない。指標セクションの背景は設定のサーバー入力欄に近い黒寄り。Screen REST の許可リストは変えない
 - 条件の実行はツールバーの `検索`。結果画面へ遷移する。Screen REST 未接続時は空状態。`絞り込む` は置かない
-- **売上増加率は入れない。** Summary の `years[]` に YoY キーは無く、Screen v1 の 1 社 1 行（最新 FY）にも前年が無い。単体の概要では隣接 FY からクライアント計算できる。横断に載せるなら `screen_index` の派生列（公開契約）
+- 売上増加率 `sales_growth` は `screen_index` の派生列（最新 FY と直前 FY の `sales` から `%`。直前 FY が無い / 売上 0 以下なら null）。Summary の `years[]` には YoY キーを足さない
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST（`screen_index`、横断エンドポイント、skills 掲載）はまだ無い。今は実装・カタログ追加をしない（BLT-49）。結果面は未接続の空状態。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 7 指標。応答は `items[]`（メタ + フィルタ / ソートに使った指標だけ）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、`blt-server screen-rebuild` で全件再生成する。skills カタログには載せない（BLT-49）。
 
 ## 認証
 
@@ -90,7 +90,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
 - `設定` の中身（開発用の base URL 以外）
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
-- Screen REST をいつ公開するか（BLT-49。listed drain 後でもカタログ追加は別判断）
+- Screen REST を skills カタログに載せるか（BLT-49。listed drain 後でも別判断）
 
 ## Figma の途中
 
