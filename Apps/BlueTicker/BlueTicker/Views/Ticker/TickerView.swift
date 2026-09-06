@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 enum TickerPage: Int, CaseIterable, Identifiable {
-    case summary, breakdown, report
+    case summary, breakdown
 
     var id: Int { rawValue }
 
@@ -11,7 +11,6 @@ enum TickerPage: Int, CaseIterable, Identifiable {
         switch self {
         case .summary: "概要"
         case .breakdown: "分解"
-        case .report: "レポート"
         }
     }
 }
@@ -34,12 +33,6 @@ struct TickerView: View {
                     BreakdownView(code: company.code)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .tag(TickerPage.breakdown)
-                    TickerStubView(
-                        title: "レポート",
-                        detail: "有報一覧の置き場です。v1 はページ枠のみです。"
-                    )
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .tag(TickerPage.report)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
@@ -89,12 +82,7 @@ struct TickerView: View {
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
                 if !company.sector.isEmpty {
-                    Text(company.sector)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Theme.sectorColor(company.sector))
-                        .foregroundStyle(.white)
+                    SectorTag(sector: company.sector, compact: true)
                 }
                 watchButton
             }

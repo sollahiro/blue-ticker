@@ -14,6 +14,10 @@ enum Theme {
     static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
     /// 銘柄カード・概要カード。背景から浮かぶ濃いグレー。
     static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
+    /// iOS 26 の inset grouped セクションに近い連続円弧。業種チップの見切れマスクも同じ。
+    static let groupedCornerRadius: CGFloat = 26
+    /// セクション枠と見切れマスクのあいだ。曲率は `groupedCornerRadius` のまま内側へずらす。
+    static let groupedContentInset: CGFloat = 12
     static let positive = Color(red: 0.28, green: 0.78, blue: 0.42)
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
@@ -59,25 +63,9 @@ enum Theme {
     }
 
     static func sectorColor(_ sector: String) -> Color {
-        switch sector {
-        case "建設業":
-            return Color(red: 0.70, green: 0.28, blue: 0.32)
-        case "サービス業":
-            return Color(red: 0.35, green: 0.52, blue: 0.68)
-        case "電気機器":
-            return Color(red: 0.22, green: 0.48, blue: 0.62)
-        case "食料品":
-            return Color(red: 0.22, green: 0.42, blue: 0.72)
-        case "化学":
-            return Color(red: 0.22, green: 0.55, blue: 0.62)
-        default:
-            let hash = abs(sector.hashValue)
-            return Color(
-                hue: Double(hash % 360) / 360.0,
-                saturation: 0.45,
-                brightness: 0.48
-            )
-        }
+        let index = TSESector.catalog.firstIndex(of: sector) ?? sector.utf8.reduce(0) { $0 &+ Int($1) }
+        let hue = (Double(index) * 0.6180339887).truncatingRemainder(dividingBy: 1)
+        return Color(hue: hue, saturation: 0.78, brightness: 0.88)
     }
 
     static func bandColor(quality: Double) -> Color {

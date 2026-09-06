@@ -18,15 +18,26 @@ struct CompanyRowView: View {
             }
             Spacer()
             if !company.sector.isEmpty {
-                Text(company.sector)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Theme.sectorColor(company.sector))
-                    .foregroundStyle(.white)
+                SectorTag(sector: company.sector)
             }
         }
         .padding(0)
+    }
+}
+
+struct SectorTag: View {
+    var sector: String
+    var selected: Bool = false
+    var compact: Bool = false
+
+    var body: some View {
+        Text(sector)
+            .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 6)
+            .background(selected ? Theme.sectorColor(sector) : Theme.idleTab)
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
     }
 }
 
@@ -44,30 +55,25 @@ struct CompanyIconView: View {
     }
 
     var body: some View {
-        Group {
+        let corner = max(6, size * 0.22)
+        ZStack {
+            Color.white
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
+                    .padding(size * 0.08)
             } else {
-                placeholder
+                Image(systemName: "building.2")
+                    .font(.system(size: size * 0.38, weight: .medium))
+                    .foregroundStyle(Color.gray.opacity(0.55))
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .task(id: "\(code)|\(url ?? "")") {
             image = await CompanyIconLoader.shared.image(code: code, preferredURL: url)
         }
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(Color.gray.opacity(0.25))
-            .overlay {
-                Image(systemName: "building.2")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
     }
 }
 

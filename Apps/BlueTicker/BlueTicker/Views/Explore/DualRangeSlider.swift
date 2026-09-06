@@ -11,11 +11,10 @@ struct DualRangeSlider: View {
     var band: MetricBand = .none
 
     private let handleSize: CGFloat = 28
+    private let hitSize: CGFloat = 44
     private let trackHeight: CGFloat = 6
     private let valueHeight: CGFloat = 16
     private let labelGap: CGFloat = 8
-
-    @State private var dragging: Handle?
 
     private enum Handle {
         case lower
@@ -32,12 +31,12 @@ struct DualRangeSlider: View {
         snapped(values.count > 1 ? values[1] : rangeMax)
     }
 
-    private var controlHeight: CGFloat { handleSize + valueHeight + 4 }
+    private var controlHeight: CGFloat { hitSize + valueHeight + 4 }
 
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
-            let trackY = geo.size.height - handleSize / 2
+            let trackY = geo.size.height - hitSize / 2
             let lowerX = x(for: lower, width: width)
             let upperX = x(for: upper, width: width)
             let lowerText = formatValue(lower)
@@ -63,6 +62,7 @@ struct DualRangeSlider: View {
                     .opacity(0.4)
                     .frame(width: width, height: trackHeight)
                     .position(x: width / 2, y: trackY)
+                    .allowsHitTesting(false)
 
                 Capsule()
                     .fill(LinearGradient(
@@ -72,19 +72,23 @@ struct DualRangeSlider: View {
                     ))
                     .frame(width: max(upperX - lowerX, 0), height: trackHeight)
                     .position(x: (lowerX + upperX) / 2, y: trackY)
+                    .allowsHitTesting(false)
 
                 valueLabel(lowerText, color: band.color(for: lower), width: lowerWidth)
                     .position(x: labels.lower, y: valueHeight / 2)
+                    .allowsHitTesting(false)
                 valueLabel(upperText, color: band.color(for: upper), width: upperWidth)
                     .position(x: labels.upper, y: valueHeight / 2)
+                    .allowsHitTesting(false)
 
                 handle(isLower: true)
                     .position(x: lowerX, y: trackY)
+                    .highPriorityGesture(handleDrag(.lower, width: width))
                 handle(isLower: false)
                     .position(x: upperX, y: trackY)
+                    .highPriorityGesture(handleDrag(.upper, width: width))
             }
-            .contentShape(Rectangle())
-            .highPriorityGesture(dragGesture(width: width))
+            .coordinateSpace(name: "slider")
             .accessibilityElement(children: .contain)
             .accessibilityLabel("\(lowerText)から\(upperText)")
         }
@@ -108,6 +112,8 @@ struct DualRangeSlider: View {
             .fill(fill)
             .shadow(color: fill.opacity(0.45), radius: 3, y: 1)
             .frame(width: handleSize, height: handleSize)
+            .padding((hitSize - handleSize) / 2)
+            .contentShape(Rectangle())
             .accessibilityLabel(isLower ? "下限" : "上限")
             .accessibilityValue(formatValue(value))
             .accessibilityAdjustableAction { direction in
@@ -130,13 +136,10 @@ struct DualRangeSlider: View {
             .accessibilityHidden(true)
     }
 
-    private func dragGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+    /// ハンドル上の横ドラッグだけ拾う。トラックや余白のタップ、縦スクロールは動かさない。
+    private func handleDrag(_ handle: Handle, width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("slider"))
             .onChanged { drag in
-                let handle = dragging ?? nearestHandle(at: drag.startLocation.x, width: width)
-                if dragging == nil {
-                    dragging = handle
-                }
                 let next = value(forX: drag.location.x, width: width)
                 switch handle {
                 case .lower:
@@ -145,18 +148,6 @@ struct DualRangeSlider: View {
                     publish(lower, max(next, lower))
                 }
             }
-            .onEnded { _ in
-                dragging = nil
-            }
-    }
-
-    private func nearestHandle(at rawX: CGFloat, width: CGFloat) -> Handle {
-        let lowerX = x(for: lower, width: width)
-        let upperX = x(for: upper, width: width)
-        if abs(rawX - lowerX) == abs(rawX - upperX) {
-            return rawX <= lowerX ? .lower : .upper
-        }
-        return abs(rawX - lowerX) < abs(rawX - upperX) ? .lower : .upper
     }
 
     private func x(for value: Double, width: CGFloat) -> CGFloat {
