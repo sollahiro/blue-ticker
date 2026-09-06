@@ -265,16 +265,19 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 2)
     }
 
-    @Test func clipsOverflowAfterStrippingConnectiveWithoutRepair() async throws {
+    @Test func overflowConnectiveShiCommaGoesToRepair() async throws {
         let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
-        let client = try ScriptedChat(replies: [reply(overview: overflow)])
+        let fixed = "自動車の製造販売を手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: overflow),
+            reply(overview: fixed),
+        ])
         let draft = await CompanyOverviewGenerator.generate(
             input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
         #expect(draft.ok)
-        #expect(draft.clipped)
-        #expect(draft.overview == "自動車を製造。")
-        #expect(draft.attempts == 1)
-        #expect(await client.callCount() == 1)
+        #expect(draft.overview == fixed)
+        #expect(!draft.clipped)
+        #expect(await client.callCount() == 2)
     }
 
     @Test func doesNotDoublePunctuationOnShortReply() async throws {

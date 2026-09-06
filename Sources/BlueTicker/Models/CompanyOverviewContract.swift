@@ -300,10 +300,7 @@ enum CompanyOverviewRules {
 
     /// 読点クリップ後の「と。」「し。」を言い切りにしない。
     private static func strippingTrailingConnective(_ text: String) -> String? {
-        let suffixes = [
-            "ならびに", "または", "および", "しつつ", "ながら", "かつ",
-            "し", "て", "で", "を", "に", "が", "は", "と", "の", "も", "ば", "や",
-        ]
+        let suffixes = ["ならびに", "または", "および", "しつつ", "ながら", "と", "や"]
         for suffix in suffixes where text.hasSuffix(suffix) {
             return String(text.dropLast(suffix.count))
         }

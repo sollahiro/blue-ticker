@@ -130,8 +130,15 @@ import Testing
     @Test func clipSkipsConnectiveCommaWithoutEarlierStop() {
         let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
         #expect(overflow.count > companyOverviewMaxChars)
-        #expect(CompanyOverviewRules.clip(overflow) == "自動車を製造。")
-        #expect(ok("自動車を製造。"))
+        #expect(CompanyOverviewRules.clip(overflow) == nil)
+    }
+
+    @Test func clipDoesNotStripNounEndingKatsu() {
+        let overflow = "とんかつ、" + String(repeating: "あ", count: 80) + "を提供する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "とん。")
+        #expect(clipped == nil)
     }
 
     @Test func clipStripsTrailingToBeforeComma() {
