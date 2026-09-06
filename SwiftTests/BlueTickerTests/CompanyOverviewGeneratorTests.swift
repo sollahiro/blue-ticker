@@ -108,6 +108,69 @@ private actor ScriptedChat: ChatCompleting {
             || users[1].contains("overview が空"))
     }
 
+    @Test func doesNotRetryApplicableFalseWhenInputHasBody() async throws {
+        let source = """
+            当社グループは総合エレクトロニクスメーカーとして開発・生産・販売・サービスを展開する。\
+            製品の範囲は電気機械器具のほとんどすべてにわたっており、コネクト、エナジー、インダストリー、\
+            スマートライフの報告セグメントから構成される。
+            """
+        #expect(source.count >= companyOverviewInputThinChars)
+        let client = try ScriptedChat(replies: [
+            reply(overview: "", applicable: false),
+            reply(overview: "呼ばれてはいけない文。"),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input(source), client: client, model: companyOverviewDefaultModel)
+        #expect(!draft.ok)
+        #expect(!draft.applicable)
+        #expect(draft.attempts == 1)
+        #expect(await client.callCount() == 1)
+    }
+
+    @Test func systemPromptTreatsSegmentNamesAsEnough() {
+        #expect(CompanyOverviewGenerator.systemPrompt.contains("製品名は必須ではない"))
+        #expect(CompanyOverviewGenerator.systemPrompt.contains("セグメント名"))
+        #expect(CompanyOverviewGenerator.systemPrompt.contains("報告セグメントの概要"))
+        #expect(CompanyOverviewGenerator.systemPrompt.contains("「報告セグメント」という語も出さない"))
+    }
+
+    @Test func repairsReportableSegmentWrapper() async throws {
+        let wrapped =
+            "半導体・電子材料、モビリティ、イノベーション材料、ケミカル、クラサスケミカルの5つの報告セグメントで事業を行う。"
+        let fixed = "半導体・電子材料、モビリティ、イノベーション材料、ケミカル、クラサスケミカルを手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: wrapped),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("半導体・電子材料とモビリティ等を報告セグメントとしている。"), client: client,
+            model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.overview == fixed)
+        #expect(draft.attempts == 2)
+        let users = await client.users
+        #expect(users[1].contains("報告セグメント"))
+        #expect(users[1].contains("枠は書かない"))
+    }
+
+    @Test func userPromptUsesSegmentOverviewHeadingWhenFallback() async throws {
+        let overview = "トイホビー、デジタル、映像音楽、アミューズメントの企画・製造・販売を手がける。"
+        let client = try ScriptedChat(replies: [reply(overview: overview)])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: CompanyOverviewInput(
+                code: "7832", name: "バンダイナムコホールディングス", sector: "その他製品",
+                docID: "S100YBXE",
+                sourceText: "トイホビー事業、デジタル事業を報告セグメントとしている。",
+                inputKey: companyOverviewSegmentOverviewInputKey,
+                sectionTitle: companyOverviewSegmentOverviewSectionTitle),
+            client: client, model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        let users = await client.users
+        #expect(users[0].contains(companyOverviewSegmentOverviewInputKey))
+        #expect(users[0].contains(companyOverviewSegmentOverviewSectionTitle))
+        #expect(!users[0].contains("企業の概況 / \(companyOverviewSectionTitle)"))
+    }
+
     @Test func repairApplicableFalseKeepsPrevious() async throws {
         let good =
             "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスなどを国内海外で提供。"

@@ -48,6 +48,24 @@ import Testing
         #expect(!text.contains("子会社の一覧"))
     }
 
+    @Test func panasonicLikeBodyIsExtractedEvenWithBoilerplate() {
+        let html = """
+            <ix:nonNumeric name="jpcrp_cor:DescriptionOfBusinessTextBlock" contextRef="FilingDateInstant" escape="true">
+            <h3>３【事業の内容】</h3>
+            <p>当社グループは、当社及び連結子会社446社を中心に構成され、総合エレクトロニクスメーカーとして関連する事業分野について国内外のグループ各社との緊密な連携のもとに、開発・生産・販売・サービス活動を展開しています。</p>
+            <p>当社は、有価証券の取引等の規制に関する内閣府令第49条第２項に規定する特定上場会社等に該当しており、これにより、インサイダー取引規制の重要事実の軽微基準については連結ベースの数値に基づいて判断することとなります。</p>
+            <p>当社の製品の範囲は、電気機械器具のほとんどすべてにわたっており、「コネクト」「エレクトリックワークス」「HVAC &amp; CC」「エナジー」「インダストリー」「スマートライフ」の６つの報告セグメントから構成されています。各セグメントの詳細については注記４に記載しています。</p>
+            </ix:nonNumeric>
+            <h3>４【関係会社の状況】</h3>
+            """
+        let text = DescriptionOfBusinessExtractor.extract(html: html)
+        #expect(text.contains("総合エレクトロニクスメーカー"))
+        #expect(text.contains("コネクト"))
+        #expect(text.contains("エナジー"))
+        #expect(text.count >= companyOverviewInputThinChars)
+        #expect(!text.contains("関係会社の状況"))
+    }
+
     @Test func extractsFromXbrlDirHtmlThenXml() throws {
         let dir = try ServiceTestSupport.makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

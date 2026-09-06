@@ -46,8 +46,8 @@ func runIconsIngest(
     var failed = 0
     var skipped = 0
     var unhealthyRetries = 0
-    var missing: [(docID: String, code: String)] = []
-    var staleVersion: [(docID: String, code: String)] = []
+    var missing: [(docID: String, code: String, submitDateTime: String)] = []
+    var staleVersion: [(docID: String, code: String, submitDateTime: String)] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "会社アイコン取り込み 分類", onRetry: { unhealthyRetries += 1 }
@@ -116,7 +116,7 @@ func runIconsIngest(
 /// docType 120 でも特定有価証券府令(030)の信託受益証券等は除外（statements / filings と同じ）。
 func latestAnnualReportPerCompany(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
-) async throws -> [(docID: String, code: String)] {
+) async throws -> [(docID: String, code: String, submitDateTime: String)] {
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocumentListing.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
@@ -135,7 +135,9 @@ func latestAnnualReportPerCompany(
         if let current = byCode[code], current.submitDateTime >= doc.submitDateTime { continue }
         byCode[code] = (docID, doc.submitDateTime)
     }
-    return byCode.map { (docID: $0.value.docID, code: $0.key) }.sorted { $0.code < $1.code }
+    return byCode.map {
+        (docID: $0.value.docID, code: $0.key, submitDateTime: $0.value.submitDateTime)
+    }.sorted { $0.code < $1.code }
 }
 
 /// 抽出・アップロード済みの会社アイコンを company_icons へ書き込む（既存行があれば更新、無ければ作成）。

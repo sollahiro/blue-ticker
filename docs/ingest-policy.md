@@ -20,6 +20,7 @@
 | 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（残り6種。`sga_expense_breakdown` は未公開のため省略） | 225 | 80 | 日次 |
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全5軸） | business/geo=上場、他=225 | 50 | 6h |
 | 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2・3の後） |
+| 6 | `scripts/jp/edinet/ingest-job-06-overviews.sh` | `overviews` | 上場（225は処理順） | 80 | 日次 |
 
 1 周まとめて回す: `scripts/jp/edinet/ingest-run-cycle.sh`（各ジョブ間に短い sleep。個別 skip 可）。
 
@@ -63,13 +64,14 @@ set -a; . ./.env; set +a
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
 | `BLT_INGEST_SKIP_POST` | `1` で status ページ・Linear 投稿・RO reset をスキップ |
-| `BLT_INGEST_SKIP_00` … `05` | `ingest-run-cycle` で該当 job を飛ばす |
+| `BLT_INGEST_SKIP_00` … `06` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
 | `BLT_INGEST_STATEMENTS_LIMIT` | job-01（既定 80） |
 | `BLT_INGEST_NOTES_LIMIT` | job-02/03（既定 80） |
 | `BLT_INGEST_BREAKDOWN_LIMIT` | job-04 business/geography 用（既定 50。employees/rd/goodwill はコード側 30/回） |
 | `BLT_INGEST_FINANCIALS_LIMIT` | job-05（既定 80） |
+| `BLT_INGEST_OVERVIEW_LIMIT` | job-06（既定 80） |
 | `BLT_R2_XBRL_BUCKET` | 設定時 ingest が R2 L2 に PUT（未設定でも ingest は可） |
 
 ## 実行順（1サイクル内）
@@ -87,10 +89,12 @@ breakdowns               … LLM 軸は時間がかかるため financials と�
         ↓
 financials               … 組立スナップショット再計算
         ↓
+overviews                … 銘柄の短い会社説明（LLM。最新有報1件。financials 非依存。cache_version バンプでは再生成せず、最新 doc_id 変更と needs_review だけ）
+        ↓
 （任意）status ページ / Linear 投稿 / RO reset
 ```
 
-`notes-heavy` と `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。
+`notes-heavy` と `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。
 
 サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)。ingest 後は `post-ingest-linear.sh` が status update に件数を載せる）。Git に件数や段階番号を書かない。
 

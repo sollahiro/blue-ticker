@@ -1,14 +1,15 @@
 // 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
 // Filing 公開 `texts` には載せない。生成・検証は ingest 時。格納は `company_overviews`
-// （会社1社=1行。由来の有報は doc_id 列）。ingest stage / serving / 別 EP / healthz / iOS 要約は未配線。
+// （会社1社=1行。由来の有報は doc_id 列）。ingest stage は `overviews`。serving / 別 EP / healthz / iOS 要約は未配線。
 
 import Crypto
 import Foundation
 
 /// Overview 格納キャッシュ（`company_overviews.cache_version`）。blueTickerVersion 非連動。
 /// プロンプト・検証規則・本 payload の意味を変えたときだけバンプする。
+/// ingest はバンプだけでは再生成しない（最新有報の doc_id 変更と needs_review のみ）。
 /// serving / healthz にはまだ載せない。
-public let companyOverviewCacheVersion = "overview-v1"
+public let companyOverviewCacheVersion = "overview-v3"
 /// LLM 生成行。入力が読めてモデルを呼んだとき。
 public let companyOverviewSourceLLM = "llm"
 /// 入力が空、または事業内容が全く読めず applicable=false のとき。
@@ -16,6 +17,9 @@ public let companyOverviewSourceNotApplicable = "not_applicable"
 
 public let companyOverviewInputKey = "description_of_business"
 public let companyOverviewSectionTitle = "事業の内容"
+/// 事業の内容が系統図だけで読めないときのフォールバック入力。
+public let companyOverviewSegmentOverviewInputKey = "reportable_segments_overview"
+public let companyOverviewSegmentOverviewSectionTitle = "報告セグメントの概要"
 /// ヘッダ用の目安下限。情報量が少なければこれより短くてよい（不合格にしない）。
 public let companyOverviewMinChars = 50
 /// ヘッダ用の目安上限。超えたら句点で切り、切れなければ不合格。
@@ -37,13 +41,21 @@ public struct CompanyOverviewInput: Sendable, Equatable {
     public var sector: String
     public var docID: String
     public var sourceText: String
+    public var inputKey: String
+    public var sectionTitle: String
 
-    public init(code: String, name: String, sector: String, docID: String, sourceText: String) {
+    public init(
+        code: String, name: String, sector: String, docID: String, sourceText: String,
+        inputKey: String = companyOverviewInputKey,
+        sectionTitle: String = companyOverviewSectionTitle
+    ) {
         self.code = code
         self.name = name
         self.sector = sector
         self.docID = docID
         self.sourceText = sourceText
+        self.inputKey = inputKey
+        self.sectionTitle = sectionTitle
     }
 }
 
@@ -197,6 +209,12 @@ enum CompanyOverviewRules {
         if matches(Self.goalRegex, in: text) {
             return .invalid("目標・中計が入っている")
         }
+        if text.contains("報告セグメント") {
+            return .invalid("報告セグメントという枠でまとめている")
+        }
+        if matches(Self.segmentCountRegex, in: text) {
+            return .invalid("セグメントの数え上げでまとめている")
+        }
         if text.contains("株式会社") {
             return .invalid("株式会社が残っている")
         }
@@ -267,8 +285,12 @@ enum CompanyOverviewRules {
     )
     private static let buyRegex = try! NSRegularExpression(
         pattern: #"買い推奨|買い判断|割安|投資せよ|おすすめ銘柄|投資判断"#)
+    /// 文末のですますだけ見る。直後の句点が無い「でしょうゆ」は対象外。
     private static let desumasuRegex = try! NSRegularExpression(
-        pattern: #"です|ます|でした|ました|ません|でしょう|ください"#)
+        pattern: #"(?:でした|ました|ません|でしょう|ください|です|ます)[。！？]"#)
     private static let yearRegex = try! NSRegularExpression(pattern: #"(?:19|20)\d{2}\s*年|令和|平成|年度"#)
     private static let goalRegex = try! NSRegularExpression(pattern: #"中計|目標を|目指し"#)
+    /// 「5つのセグメントで事業を行う」のような開示枠。報告セグメントは contains で別途見る。
+    private static let segmentCountRegex = try! NSRegularExpression(
+        pattern: #"(?:[0-9０-９]+|[一二三四五六七八九十]+)[つ個]の(?:事業)?セグメント|セグメントから構成"#)
 }

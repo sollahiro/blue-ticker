@@ -169,8 +169,9 @@ let unpublishedBreakdownIngestLimit = 30
 /// `--with-facts`（`includeFacts`）は残存 CLI で製品経路ではない。財務取り込みの
 /// `computeFinancials` は自前で生 XBRL を読むため、facts 行が無くても自足する。
 ///
-/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons の集合
-/// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時はスキップされる。
+/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons/overviews の集合
+/// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時は
+/// スキップされる。overviews は `OPENROUTER_OVERVIEW_API_KEY` 未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// 数値 fact 取り込みは `targets` に含めない。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
@@ -604,6 +605,31 @@ public func runFactsIngestCommand(
                 app.logger.notice(
                     "会社アイコン取り込み skipped (BLT_R2_* 環境変数未設定)",
                     metadata: ["event": "ingest_skipped", "target": "icons", "reason": "r2_config_missing"])
+            }
+        }
+        if targets.contains(.overviews) {
+            // 銘柄 Overview 取り込み: OpenRouter キーが無い環境では対象に含めてもスキップし、
+            // 他ステージの ingest を妨げない。
+            let overviewKey = Environment.get(companyOverviewAPIKeyEnv)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if overviewKey.isEmpty {
+                app.logger.notice(
+                    "銘柄 Overview 取り込み skipped (\(companyOverviewAPIKeyEnv) 未設定)",
+                    metadata: [
+                        "event": "ingest_skipped", "target": "overviews",
+                        "reason": "overview_api_key_missing",
+                    ])
+            } else {
+                let s10 = try await runOverviewIngest(
+                    db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
+                    priorityCodes: priority, cachedDocIDs: cachedDocIDs,
+                    logger: app.logger
+                ) { docID, code in
+                    await context.generateCompanyOverview(docID: docID, code: code)
+                }
+                logIngestSummary(
+                    app.logger, target: "overviews", attempted: s10.attempted, stored: s10.stored,
+                    failed: s10.failed, skipped: s10.skipped, notApplicable: s10.notApplicable)
             }
         }
     } catch {

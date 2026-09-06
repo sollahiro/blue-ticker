@@ -79,7 +79,7 @@ struct ChatCompletionEndpoint: Sendable {
     var supportsJsonSchema: Bool = true
     var timeoutSeconds: Double = 60
     var provider: LLMProvider = .xai
-    /// 省略時はプロバイダ既定。Overview は 200（スパイクと同じ）。
+    /// 省略時はプロバイダ既定。Overview は 1024（Gemini 2.5 の思考と JSON が 200 だと切れる）。
     var maxTokens: Int? = nil
 }
 

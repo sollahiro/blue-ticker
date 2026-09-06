@@ -20,6 +20,9 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 会社アイコン（company_icons、favicon の R2 格納先メタデータ）。`BLT_R2_*` 環境変数未設定時は
     /// 対象に含めてもスキップされる（`runFactsIngestCommand` 参照）。
     case icons
+    /// 銘柄 Overview（company_overviews、会社1社=1行の短い会社説明）。
+    /// `OPENROUTER_OVERVIEW_API_KEY` 未設定時は対象に含めてもスキップされる。
+    case overviews
 }
 
 /// `--note-types` の CSV 値を note_type の集合へ変換する（`statement-notes` ステージ専用）。

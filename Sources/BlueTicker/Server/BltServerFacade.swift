@@ -133,7 +133,7 @@ func resolveOverviewLLMEndpoint(
     let baseURL = nonEmpty(companyOverviewBaseURLEnv) ?? Api.openrouterBaseURL
     return ChatCompletionEndpoint(
         baseURL: baseURL, apiKey: apiKey, model: model, timeoutSeconds: 90,
-        provider: .openrouter, maxTokens: 200)
+        provider: .openrouter, maxTokens: 1024)
 }
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
@@ -406,6 +406,17 @@ public extension BltServerContext {
     }
 }
 
+// MARK: - Overview
+
+/// Overview 生成結果（ingest 用）。ダウンロード失敗と生成完了を分ける。
+/// 入力空（applicable=false）も `.generated`（行を残して次回 skip する）。
+public enum CompanyOverviewResolveResult: Sendable {
+    /// 生成できた（検証失敗の `ok=false` も含む。`needs_review` で再試行する）。
+    case generated(draft: CompanyOverviewDraft, sourceText: String)
+    /// 書類取得自体が失敗。行は作らない。
+    case failed
+}
+
 // MARK: - 内訳取り込み（事業別・地域別内訳）
 
 /// 内訳取り込み 内訳（business / geography）の解決結果（`computeFinancials` と同じ3値パターン）。
@@ -425,16 +436,38 @@ public enum BreakdownResolveResult: Sendable {
 
 public extension BltServerContext {
     /// Overview 生成（ingest 用）。Filing `texts` には足さない。格納先は `company_overviews`
-    /// （会社1社=1行。スキーマのみ。stage / serving / 別 EP は未配線）。
+    /// （会社1社=1行。stage は `overviews`。serving / 別 EP は未配線）。
+    /// 社名・業種はマスタから引く（プロンプト用。本文からの補完には使わない）。
+    func generateCompanyOverview(docID: String, code: String) async -> CompanyOverviewResolveResult {
+        let stock = await masterDataManager.getByCode(code)
+        return await generateCompanyOverview(
+            docID: docID, code: code, name: stock?.coName ?? "", sector: stock?.s33nm ?? "")
+    }
+
+    /// Overview 生成（ingest 用）。社名・業種を呼び出し側が渡す。
     func generateCompanyOverview(docID: String, code: String, name: String, sector: String)
-        async -> CompanyOverviewDraft?
+        async -> CompanyOverviewResolveResult
     {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
-        let sourceText = DescriptionOfBusinessExtractor.extract(in: xbrlDir)
-        let input = CompanyOverviewInput(
+        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        let businessText = DescriptionOfBusinessExtractor.extract(in: xbrlDir)
+        var sourceText = businessText
+        var input = CompanyOverviewInput(
             code: code, name: name, sector: sector, docID: docID, sourceText: sourceText)
-        return await CompanyOverviewGenerator.generate(
+        var draft = await CompanyOverviewGenerator.generate(
             input: input, client: overviewChatClient, model: overviewModel)
+        if !draft.applicable {
+            let fallback = ReportableSegmentsOverviewExtractor.extract(in: xbrlDir)
+            if !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sourceText = fallback
+                input = CompanyOverviewInput(
+                    code: code, name: name, sector: sector, docID: docID, sourceText: fallback,
+                    inputKey: companyOverviewSegmentOverviewInputKey,
+                    sectionTitle: companyOverviewSegmentOverviewSectionTitle)
+                draft = await CompanyOverviewGenerator.generate(
+                    input: input, client: overviewChatClient, model: overviewModel)
+            }
+        }
+        return .generated(draft: draft, sourceText: sourceText)
     }
 
     /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /

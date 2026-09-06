@@ -2,7 +2,7 @@
 // Filing 公開 `texts` には載せない。company_icons / company_financials と同じ「会社1社=1行」。
 // 生成は最新有報の「事業の内容」。由来 doc_id は列として持ち、同一 code は上書きする。
 // 生成は LLM（`source=llm`）。入力が空で applicable=false の行は `not_applicable`。
-// ingest stage / serving / 別 EP は未配線。スキーマだけ先に置く。
+// ingest stage は `overviews`。serving / 別 EP は未配線。スキーマは CreateCompanyOverviews。
 
 import BlueTickerCore
 import Fluent

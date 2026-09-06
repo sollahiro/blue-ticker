@@ -1213,6 +1213,8 @@ enum Xbrl {
 
     /// 有報「企業の概況」の「事業の内容」。Filing 公開 `texts` には載せない（Overview 入力専用）。
     static let descriptionOfBusinessTextblockTag = "DescriptionOfBusinessTextBlock"
+    /// 有報「セグメント情報」の「報告セグメントの概要」。事業の内容が系統図のみのときの Overview 入力。
+    static let descriptionOfReportableSegmentsTextblockTag = "DescriptionOfReportableSegmentsTextBlock"
 }
 
 // MARK: - XBRL セクション定義（filing コマンドで使用）

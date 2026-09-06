@@ -55,7 +55,7 @@ import Testing
         #expect(endpoint.model == "google/gemini-2.5-flash")
         #expect(endpoint.baseURL == "https://openrouter.example/v1")
         #expect(endpoint.provider == .openrouter)
-        #expect(endpoint.maxTokens == 200)
+        #expect(endpoint.maxTokens == 1024)
     }
 
     @Test func defaultsModelAndBaseURL() throws {
