@@ -249,6 +249,37 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 1)
     }
 
+    @Test func doesNotSalvageConnectiveStemWithStop() async throws {
+        let stem = "自動車を製造し"
+        let fixed = "自動車の製造販売を手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: stem),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.overview == fixed)
+        #expect(!draft.clipped)
+        #expect(draft.attempts == 2)
+        #expect(await client.callCount() == 2)
+    }
+
+    @Test func overflowConnectiveCommaGoesToRepair() async throws {
+        let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
+        let fixed = "自動車の製造販売を手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: overflow),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input("自動車の製造販売。"), client: client, model: companyOverviewDefaultModel)
+        #expect(draft.ok)
+        #expect(draft.overview == fixed)
+        #expect(!draft.clipped)
+        #expect(await client.callCount() == 2)
+    }
+
     @Test func doesNotDoublePunctuationOnShortReply() async throws {
         let short = String(repeating: "あ", count: 48) + "。"
         #expect(short.count == 49)

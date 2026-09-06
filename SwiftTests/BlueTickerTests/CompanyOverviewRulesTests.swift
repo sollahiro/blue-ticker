@@ -112,6 +112,18 @@ import Testing
         #expect((clipped ?? "").count <= companyOverviewMaxChars)
     }
 
+    @Test func rejectsConnectiveStemBeforeStop() {
+        #expect(!ok("自動車を製造し。"))
+        #expect(!ok("自動車を製造して。"))
+        #expect(ok("自動車の製造販売を手がける。"))
+    }
+
+    @Test func clipSkipsConnectiveCommaWithoutEarlierStop() {
+        let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        #expect(CompanyOverviewRules.clip(overflow) == nil)
+    }
+
     @Test func clipKeepsLastSentenceWithinMax() {
         let head = String(repeating: "あ", count: 55) + "。"
         let tail = String(repeating: "い", count: 40) + "。"

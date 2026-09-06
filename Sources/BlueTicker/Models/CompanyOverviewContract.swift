@@ -222,6 +222,9 @@ enum CompanyOverviewRules {
         if sentences.count > 2 {
             return .invalid("文が\(sentences.count)つある")
         }
+        if sentences.contains(where: { matches(Self.incompleteEndingRegex, in: $0) }) {
+            return .invalid("言い切りになっていない")
+        }
         return .ok
     }
 
@@ -305,4 +308,7 @@ enum CompanyOverviewRules {
     /// 「5つのセグメントで事業を行う」のような開示枠。報告セグメントは contains で別途見る。
     private static let segmentCountRegex = try! NSRegularExpression(
         pattern: #"(?:[0-9０-９]+|[一二三四五六七八九十]+)[つ個]の(?:事業)?セグメント|セグメントから構成"#)
+    /// 連用中止・助詞で終わった文。「製造し。」「製造して。」を言い切りとしない。
+    private static let incompleteEndingRegex = try! NSRegularExpression(
+        pattern: #"(?:しつつ|ながら|かつ|および|ならびに|または|し|て|で|を|に|が|は|と|の|も|ば)$"#)
 }
