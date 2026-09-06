@@ -316,7 +316,7 @@ private final class DualRangeSliderHitView: UIView, UIGestureRecognizerDelegate 
         nearHandle(point)
     }
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
         let velocity = pan.velocity(in: self)
         guard abs(velocity.x) >= abs(velocity.y) else { return false }
