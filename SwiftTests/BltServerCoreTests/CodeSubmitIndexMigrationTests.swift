@@ -9,7 +9,10 @@ import Vapor
 
 @testable import BltServerCore
 
-private func withMigratedApp(_ body: (Application) async throws -> Void) async throws {
+private func withMigratedApp(
+    includeIndexMigration: Bool = true,
+    _ body: (Application) async throws -> Void
+) async throws {
     let app = try await Application.make(.testing)
     do {
         app.databases.use(.sqlite(.memory), as: .sqlite)
@@ -19,7 +22,9 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
         app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
-        app.migrations.add(AddCodeSubmitDateTimeIndexes())
+        if includeIndexMigration {
+            app.migrations.add(AddCodeSubmitDateTimeIndexes())
+        }
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -33,17 +38,41 @@ private struct SQLiteIndexName: Decodable, Sendable {
     let name: String
 }
 
+private func indexNames(on sql: SQLDatabase) async throws -> Set<String> {
+    let rows = try await sql.raw("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all(decoding: SQLiteIndexName.self)
+    return Set(rows.map(\.name))
+}
+
+private let expectedIndexNames: Set<String> = [
+    "idx_company_statements_code_submit",
+    "idx_company_filing_sections_code_submit",
+    "idx_company_statement_notes_code_note_submit",
+    "idx_company_breakdowns_code_axis_submit",
+]
+
 @Suite struct CodeSubmitIndexMigrationTests {
     @Test func addsCompositeIndexesOnServingTables() async throws {
         try await withMigratedApp { app in
             let sql = try #require(app.db as? SQLDatabase)
-            let rows = try await sql.raw("SELECT name FROM sqlite_master WHERE type = 'index'")
-                .all(decoding: SQLiteIndexName.self)
-            let names = Set(rows.map(\.name))
-            #expect(names.contains("idx_company_statements_code_submit"))
-            #expect(names.contains("idx_company_filing_sections_code_submit"))
-            #expect(names.contains("idx_company_statement_notes_code_note_submit"))
-            #expect(names.contains("idx_company_breakdowns_code_axis_submit"))
+            let names = try await indexNames(on: sql)
+            #expect(expectedIndexNames.isSubset(of: names))
+        }
+    }
+
+    @Test func autoMigrateSucceedsWhenSomeIndexesAlreadyExist() async throws {
+        try await withMigratedApp(includeIndexMigration: false) { app in
+            let sql = try #require(app.db as? SQLDatabase)
+            try await sql.raw(
+                """
+                CREATE INDEX idx_company_statements_code_submit
+                ON company_statements (code, submit_date_time)
+                """
+            ).run()
+            app.migrations.add(AddCodeSubmitDateTimeIndexes())
+            try await app.autoMigrate()
+            let names = try await indexNames(on: sql)
+            #expect(expectedIndexNames.isSubset(of: names))
         }
     }
 }
