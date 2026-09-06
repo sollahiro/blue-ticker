@@ -113,7 +113,7 @@ jobs:
     # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
     # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
-    # 署名はしない（DEVELOPMENT_TEAM は空）。
+    # 署名はしない（CODE_SIGNING_ALLOWED=NO。プロジェクトの DEVELOPMENT_TEAM は実機用）。
     needs: ios-paths
     if: needs.ios-paths.outputs.run == 'true'
     runs-on: macos-26
