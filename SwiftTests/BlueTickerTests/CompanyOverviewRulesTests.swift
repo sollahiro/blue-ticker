@@ -141,6 +141,20 @@ import Testing
         #expect(clipped == nil)
     }
 
+    @Test func clipDoesNotStripNagaraContinuative() {
+        let overflow = "宿泊施設を営みながら、" + String(repeating: "あ", count: 80) + "を提供する。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "宿泊施設を営み。")
+        #expect(clipped == nil)
+    }
+
+    @Test func acceptsProductNameExclamationBeforeComma() {
+        #expect(
+            ok("ドメイン・レンタルサーバー、EC支援、ハンドメイドの3事業を展開。ロリポップ！、カラーミーショップ、minneなどのサービスを提供する。")
+        )
+    }
+
     @Test func clipStripsTrailingToBeforeComma() {
         let overflow =
             "海外カスタマー向け購入支援サービス「WorldShopping」と、国内ECサイト向け越境EC支援サービス「WorldShoppingBIZ」からなる越境ECプラットフォームを提供する。"

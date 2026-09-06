@@ -277,19 +277,29 @@ enum CompanyOverviewRules {
     }
 
     /// 句点で区切った文の本体。空白だけの区間は飛ばす。句読点だけの区間は残す。
+    /// 「ロリポップ！、」のように感嘆符の直後が読点なら文を切らない。
     private static func sentenceBodies(_ text: String) -> [String] {
         var bodies: [String] = []
         var current = ""
-        for ch in text {
+        var idx = text.startIndex
+        while idx < text.endIndex {
+            let ch = text[idx]
+            let next = text.index(after: idx)
             if isSentenceStop(ch) {
-                let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !body.isEmpty {
-                    bodies.append(body)
+                let skipSplit = (ch == "！" || ch == "？") && next < text.endIndex && text[next] == "、"
+                if skipSplit {
+                    current.append(ch)
+                } else {
+                    let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !body.isEmpty {
+                        bodies.append(body)
+                    }
+                    current = ""
                 }
-                current = ""
             } else {
                 current.append(ch)
             }
+            idx = next
         }
         return bodies
     }
@@ -300,7 +310,7 @@ enum CompanyOverviewRules {
 
     /// 読点クリップ後の「と。」「し。」を言い切りにしない。
     private static func strippingTrailingConnective(_ text: String) -> String? {
-        let suffixes = ["ならびに", "または", "および", "しつつ", "ながら", "と", "や"]
+        let suffixes = ["と", "や"]
         for suffix in suffixes where text.hasSuffix(suffix) {
             return String(text.dropLast(suffix.count))
         }
