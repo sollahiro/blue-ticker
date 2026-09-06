@@ -6,12 +6,12 @@
 
 | 面 | 位置づけ |
 |---|---|
-| REST `/v1` | **製品の契約の正**。認証の住み分けは `api-auth.md`。第三者公開は `public-api.md` |
+| REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B は `public-api.md` |
 | iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗は Linear Team `blue-ticker`） |
 | MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore` は残す。製品として伸ばさない。ChatGPT Apps は凍結 |
 | Web / RSS | 将来候補（優先度低） |
 
-REST をエンドポイント単位で有料マスクしない。iOS の一部画面は IAP（`ios-client.md`）。公開ゲートは Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
+機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）は Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
 
 ## Class 依存
 
@@ -144,7 +144,7 @@ flowchart LR
 
 ### MCP（開発用 `POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。いま `mcp.*` は Managed OAuth（パス付きホストでは不可）。目指す門は Access OTP（`api-auth.md`）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（Service Token を埋め込まない。開発は loopback / http 無認証。https の `api.*` プレビューは Access JWT。`api-auth.md`）。
 
 ## 環境変数（薄い表）
 

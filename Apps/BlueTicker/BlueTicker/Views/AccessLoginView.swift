@@ -5,7 +5,7 @@ import WebKit
 /// `api.*` 直叩きは 403 interstitial なので App Launcher から入る。途中で healthz には飛ばさない。
 struct AccessLoginView: View {
     let baseURL: URL
-    let onComplete: (String?) -> Void
+    let onComplete: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var errorMessage: String?
@@ -48,7 +48,7 @@ struct AccessLoginView: View {
 
 private struct AccessLoginWebView: UIViewControllerRepresentable {
     let baseURL: URL
-    let onResult: (Result<String?, Error>) -> Void
+    let onResult: (Result<String, Error>) -> Void
 
     func makeUIViewController(context: Context) -> AccessLoginController {
         let controller = AccessLoginController(
@@ -64,11 +64,11 @@ final class AccessLoginController: UIViewController, WKNavigationDelegate, WKUID
     WKHTTPCookieStoreObserver
 {
     let apiHost: String
-    let onResult: (Result<String?, Error>) -> Void
+    let onResult: (Result<String, Error>) -> Void
     private var webView: WKWebView?
     private var finished = false
 
-    init(apiHost: String, onResult: @escaping (Result<String?, Error>) -> Void) {
+    init(apiHost: String, onResult: @escaping (Result<String, Error>) -> Void) {
         self.apiHost = apiHost
         self.onResult = onResult
         super.init(nibName: nil, bundle: nil)
@@ -80,16 +80,16 @@ final class AccessLoginController: UIViewController, WKNavigationDelegate, WKUID
         super.viewDidLoad()
         view.backgroundColor = .white
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
+        config.websiteDataStore = .nonPersistent()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         let webView = WKWebView(frame: view.bounds, configuration: config)
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        // Access は既定の WKWebView UA を弾くことがある。貼り付け経路を正とし、WebView は補助。
         webView.customUserAgent =
             "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
         webView.scrollView.contentInsetAdjustmentBehavior = .never
-        webView.isInspectable = true
         self.webView = webView
         view.addSubview(webView)
         webView.configuration.websiteDataStore.httpCookieStore.add(self)
@@ -136,6 +136,7 @@ final class AccessLoginController: UIViewController, WKNavigationDelegate, WKUID
 
     private func captureAPICookie(_ cookies: [HTTPCookie]) {
         guard let jwt = cookies.first(where: isAPICookie)?.value else { return }
+        guard AccessSession.isLikelyJWT(jwt), !AccessSession.isExpired(jwt) else { return }
         complete(.success(jwt))
     }
 
@@ -146,7 +147,7 @@ final class AccessLoginController: UIViewController, WKNavigationDelegate, WKUID
         return host == domain || host.hasSuffix(".\(domain)")
     }
 
-    private func complete(_ result: Result<String?, Error>) {
+    private func complete(_ result: Result<String, Error>) {
         guard !finished else { return }
         finished = true
         DispatchQueue.main.async { self.onResult(result) }

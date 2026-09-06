@@ -8,7 +8,7 @@
 
 - **REST `/v1` が契約の正**。製品面は REST と iOS。MCP は開発専用で凍結（コードは残す）。
 - Core はサーバー専用にしない（テスト・ingest 計算と共有）。
-- 第三者公開（段階 B）は `public-api.md`（API キーまたは x402）。REST のエンドポイント課金はしない。認証の表は `api-auth.md`。iOS の一部画面は IAP。
+- 第三者公開（段階 B）と x402 は `public-api.md`。機能単位の有料マスクは採らない。
 - Summary の水準値は **Statement / Note / Breakdown → financials** 組立（`financials-summary-separation.md`）。Waterfall も同行走査のため同じ切替に乗る。
 
 read 床・バンプ規則は `.agents/rules/versioning.md` のみ（ここへ値を書かない）。床の引き上げは旧版 stale 消化後。

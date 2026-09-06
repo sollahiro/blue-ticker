@@ -25,7 +25,11 @@ enum AccessSession {
         guard let host = url.host, !host.isEmpty else {
             throw AccessSessionError.missingHost
         }
-        try writeKeychain(account: host, value: jwt)
+        let trimmed = jwt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isLikelyJWT(trimmed), !isExpired(trimmed) else {
+            throw AccessSessionError.invalidJWT
+        }
+        try writeKeychain(account: host, value: trimmed)
     }
 
     static func clear(for url: URL) {
@@ -34,8 +38,8 @@ enum AccessSession {
     }
 
     static func expiry(of jwt: String) -> Date? {
+        guard isLikelyJWT(jwt) else { return nil }
         let parts = jwt.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count >= 2 else { return nil }
         var payload = String(parts[1])
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
@@ -49,7 +53,9 @@ enum AccessSession {
             return nil
         }
         let exp: TimeInterval?
-        if let value = json["exp"] as? TimeInterval {
+        if let value = json["exp"] as? NSNumber {
+            exp = value.doubleValue
+        } else if let value = json["exp"] as? TimeInterval {
             exp = value
         } else if let value = json["exp"] as? Int {
             exp = TimeInterval(value)
@@ -60,9 +66,15 @@ enum AccessSession {
         return Date(timeIntervalSince1970: exp)
     }
 
+    /// 形が JWT でない、または `exp` が読めない・過ぎているものは期限切れとして扱う。
     static func isExpired(_ jwt: String) -> Bool {
-        guard let expiry = expiry(of: jwt) else { return false }
+        guard let expiry = expiry(of: jwt) else { return true }
         return expiry <= Date()
+    }
+
+    static func isLikelyJWT(_ jwt: String) -> Bool {
+        let parts = jwt.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 3 && parts.allSatisfy { !$0.isEmpty }
     }
 
     private static func readKeychain(account: String) -> String? {
@@ -114,6 +126,7 @@ enum AccessSessionError: LocalizedError {
     case missingHost
     case keychain(OSStatus)
     case cookieMissing
+    case invalidJWT
 
     var errorDescription: String? {
         switch self {
@@ -123,6 +136,8 @@ enum AccessSessionError: LocalizedError {
             return "ログイン状態を保存できませんでした"
         case .cookieMissing:
             return "Access の Cookie を取得できませんでした"
+        case .invalidJWT:
+            return "CF_Authorization が JWT として読めないか、期限切れです"
         }
     }
 }

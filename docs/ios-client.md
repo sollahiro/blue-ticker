@@ -19,7 +19,7 @@
 | キーワード検索 | 名称検索の下部検索欄（タブバーの直上）。`GET /v1/companies?q=` |
 | 銘柄面 | 探索から `NavigationStack` で push。タブの入れ子にしない |
 | 銘柄ヘッダ | ブランドマークは中央（探索の左マークと同じツールバー段）。`探す` は出さない。業種とウォッチ操作は右端に上下。未追加は `リストに追加`（青地・黒文字）、追加後は `追加済み`（青枠・抜き・青文字） |
-| 銘柄ページ | `概要` / `分解` の 2 枚。タイルは出さない。左右スライドのみ。下部の円（現行を大きく）で枚数と位置を示す。各カード内は縦スクロール可。概要の表はカード幅に収める。`レポート` は v1 では出さない（IAP 想定のロードマップ） |
+| 銘柄ページ | `概要` / `分解` の 2 枚。タイルは出さない。左右スライドのみ。下部の円（現行を大きく）で枚数と位置を示す。各カード内は縦スクロール可。概要の表はカード幅に収める。`レポート` は廃止 |
 | 会社アイコン | 角丸四角・白背景。リスト行と銘柄ヘッダで同じ |
 | App Icon | `assets/blt-icon/icons_ios_light.png` / `icons_ios_dark.png` を 1024・不透明 PNG にして `AppIcon` に載せる。角まで絵の色。`bb_mark.png` はツールバー用 |
 | 社名表示 | 検索結果・銘柄ヘッダから「株式会社」を除く |
@@ -49,7 +49,7 @@
 | リスト | （クライアント） | ウォッチリスト |
 | 概要 | Summary | 年次の水準値。表の上に Overview。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ。要因を選ぶと計算式（と可能な範囲で計算に使った数値）を出す |
-| レポート | Filing | v1 は銘柄カードから外す。一般配布では **IAP ユーザだけ**に出す想定。未実装 |
+| レポート | Filing | 銘柄カードから廃止。有報一覧は当面出さない |
 | フロー | Sankey | 銘柄の次カード。ロードマップ。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | Report（構想） | ロードマップ。本来クライアント責務 |
 
@@ -76,18 +76,17 @@
 
 Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 7 指標。応答は `items[]`（メタ + フィルタ / ソートに使った指標だけ）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、`blt-server screen-rebuild` で全件再生成する。skills カタログには載せない（BLT-49）。
 
-## 認証と課金
+## 認証
 
-一般配布の iOS は **ログインなし**。Service Token も API キーも埋め込まない。第三者 REST（キー / x402）とは口を分ける（`api-auth.md`）。
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。Service Token は埋め込まない。
 
 | 段階 | 方針 |
 |---|---|
-| 開発 | loopback / http は無認証。既定 `http://127.0.0.1:3000` |
-| 自社プレビュー（いま） | https の `api.*` は Access SSO。設定の WebView で `CF_Authorization` を取る |
-| 一般配布 | Access なしのアプリ用ホスト。レート制限。アカウントなし |
-| 一部機能 | **IAP**（StoreKit）。第一候補はレポート。自前ログインは足さない |
+| 開発 | loopback / http は無認証。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証 |
+| 自社プレビュー（段階 A） | https の `api.*` は Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。Store 配布の口ではない |
+| 段階 B | 未決。この変更では変えない |
 
-設定の SSO はプレビュー用。Store では出さない。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。MCP は製品認証に使わない。
+設定の SSO はプレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。MCP は製品認証に使わない。
 
 ## 未決
 

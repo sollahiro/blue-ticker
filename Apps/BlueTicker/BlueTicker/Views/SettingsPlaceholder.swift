@@ -63,9 +63,7 @@ struct SettingsPlaceholder: View {
         .bltChrome()
         .sheet(isPresented: $showLogin, onDismiss: { loginStatus = LoginStatus.read() }) {
             AccessLoginView(baseURL: APIConfiguration.baseURL) { jwt in
-                if let jwt {
-                    try? AccessSession.save(jwt: jwt, for: APIConfiguration.baseURL)
-                }
+                try? AccessSession.save(jwt: jwt, for: APIConfiguration.baseURL)
                 loginStatus = LoginStatus.read()
             }
         }
