@@ -35,6 +35,14 @@ import Testing
         #expect(ok(kikkoman))
     }
 
+    @Test func acceptsHundredYenShopNameButRejectsYenAmounts() {
+        #expect(ok("100円ショップの小売業と卸売業を手がけ、雑貨や菓子食品などを取り扱う。"))
+        #expect(
+            ok("100円ショップを直営展開し、日用消耗品を中心とした卸販売も行う。雑貨店やディスカウントショップも運営する。"))
+        #expect(!ok("日用品を100円で販売する。"))
+        #expect(!ok("客単価100円の小売を手がける。"))
+    }
+
     @Test func rejectsYearCompanySuffixThreeSentencesAndUnfinishedTail() {
         let year = "調味料、栄養・加工食品、冷凍食品、医薬用・食品用アミノ酸、バイオファーマサービスを2026年に提供。"
         #expect(!ok(year))
