@@ -8,7 +8,8 @@ export INGEST_JOB_NAME="job-06-overviews"
 
 ingest_require_ready
 
-if [[ -z "${OPENROUTER_OVERVIEW_API_KEY//[[:space:]]/}" ]]; then
+key="${OPENROUTER_OVERVIEW_API_KEY-}"
+if [[ -z "${key//[[:space:]]/}" ]]; then
   echo "ERROR: OPENROUTER_OVERVIEW_API_KEY が未設定です" >&2
   exit 1
 fi
