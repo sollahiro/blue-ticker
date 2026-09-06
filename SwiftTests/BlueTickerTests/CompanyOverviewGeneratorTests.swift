@@ -257,8 +257,8 @@ private actor ScriptedChat: ChatCompleting {
 
     @Test func clipsOverflowAtCommaWithoutRepair() async throws {
         let overflow =
-            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを手がける。"
-        #expect(overflow.count == 82)
+            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを国内および海外向けで手がける。"
+        #expect(overflow.count > companyOverviewMaxChars)
         let client = try ScriptedChat(replies: [reply(overview: overflow)])
         let draft = await CompanyOverviewGenerator.generate(
             input: input("IoT通信プラットフォームの提供。"), client: client,
