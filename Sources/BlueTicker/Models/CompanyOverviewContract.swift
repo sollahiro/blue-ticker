@@ -1,4 +1,4 @@
-// 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない）。
+// 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない。合格上限は90字）。
 // Filing 公開 `texts` には載せない。生成・検証は ingest 時。格納は `company_overviews`
 // （会社1社=1行。由来の有報は doc_id 列）。ingest stage は `overviews`。serving / 別 EP / healthz / iOS 要約は未配線。
 
@@ -23,8 +23,8 @@ public let companyOverviewSegmentOverviewInputKey = "reportable_segments_overvie
 public let companyOverviewSegmentOverviewSectionTitle = "報告セグメントの概要"
 /// ヘッダ用の目安下限。情報量が少なければこれより短くてよい（不合格にしない）。
 public let companyOverviewMinChars = 50
-/// ヘッダ用の目安上限。超えたら句点、なければ読点の直前で切る。切れなければ不合格。
-public let companyOverviewMaxChars = 80
+/// 合格上限。目安は 50〜80 字。超えたら句点、なければ読点の直前で切る。切れなければ不合格。
+public let companyOverviewMaxChars = 90
 public let companyOverviewMaxInputChars = 6000
 public let companyOverviewInputThinChars = 80
 public let companyOverviewMaxAttempts = 3
@@ -228,7 +228,7 @@ enum CompanyOverviewRules {
         return .ok
     }
 
-    /// 80字超を窓内の最も右の句点で切る。無ければ読点の直前で切って句点を付ける。
+    /// 上限超を窓内の最も右の句点で切る。無ければ読点の直前で切って句点を付ける。
     /// 途中切れは捨てる。短い完成文は残してよい。
     static func clip(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

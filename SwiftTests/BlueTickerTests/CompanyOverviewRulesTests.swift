@@ -106,13 +106,20 @@ import Testing
     }
 
     @Test func clipDoesNotCutMidWordWithoutSentenceEnd() {
-        #expect(CompanyOverviewRules.clip(String(repeating: "あ", count: 90)) == nil)
+        #expect(CompanyOverviewRules.clip(String(repeating: "あ", count: companyOverviewMaxChars + 1)) == nil)
+    }
+
+    @Test func acceptsEightyEightCharTwoBusinessOverview() {
+        let text =
+            "メディア事業として「ライブドアブログ」「ライブドアニュース」などを、ソリューション事業として「Kabutan（株探）」の運営や金融機関向け情報ソリューションサービスを手がける。"
+        #expect(text.count == 88)
+        #expect(ok(text))
     }
 
     @Test func clipFallsBackToLastCommaInWindow() {
         let overflow =
-            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを手がける。"
-        #expect(overflow.count == 82)
+            "IoTプラットフォーム「SORACOM」を提供し、IoTデバイス、IoT SIM、通信回線、データ保存・可視化アプリケーション、ネットワークサービスなどを国内および海外向けで手がける。"
+        #expect(overflow.count > companyOverviewMaxChars)
         let clipped = CompanyOverviewRules.clip(overflow)
         #expect(
             clipped
