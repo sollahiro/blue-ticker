@@ -109,6 +109,11 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var netProfit: Double?
     var roic: Double?
     var roe: Double?
+    var nopatMargin: Double?
+    var investedCapitalTurnover: Double?
+    var netMargin: Double?
+    var assetTurnover: Double?
+    var financialLeverage: Double?
     var netDe: Double?
     var netCash: Double?
     var cfo: Double?
@@ -148,6 +153,11 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case operatingMargin = "operating_margin"
         case netProfit = "net_profit"
         case roic, roe
+        case nopatMargin = "nopat_margin"
+        case investedCapitalTurnover = "invested_capital_turnover"
+        case netMargin = "net_margin"
+        case assetTurnover = "asset_turnover"
+        case financialLeverage = "financial_leverage"
         case netDe = "net_de"
         case netCash = "net_cash"
         case cfo
@@ -171,6 +181,19 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case roeNetMarginEffect = "roe_net_margin_effect"
         case roeAssetTurnoverEffect = "roe_asset_turnover_effect"
         case roeLeverageEffect = "roe_leverage_effect"
+    }
+}
+
+struct CompanyOverviewResponse: Codable {
+    var schemaVersion: Int
+    var code: String
+    var overview: String
+    var docId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case code, overview
+        case docId = "doc_id"
     }
 }
 

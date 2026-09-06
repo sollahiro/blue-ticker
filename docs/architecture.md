@@ -130,6 +130,7 @@ flowchart LR
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills 未掲載） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
+| `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。MCP には出さない） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
@@ -172,7 +173,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | facts | 閉じた。スキーマ `edinet_xbrl_facts` は残るが取り込みしない |
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル（書類単位） |
-| overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は未配線。Filing `texts` には載せない） |
+| overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は `GET /v1/companies/{code}/overview`。read 床は `overview-v1`。Filing `texts` には載せない） |
 
 ## キャッシュとデプロイ
 

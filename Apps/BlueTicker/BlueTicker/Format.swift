@@ -103,6 +103,13 @@ enum Format {
         return stripped
     }
 
+    /// Feed の `submitted_at`（`YYYY-MM-DD HH:mm`）を公開日として出す。
+    static func submittedDate(_ raw: String) -> String {
+        let prefix = String(raw.prefix(10))
+        guard prefix.count == 10 else { return raw }
+        return prefix.replacingOccurrences(of: "-", with: "/")
+    }
+
     private static func ratio(_ numerator: Double?, dividedBy denominator: Double?) -> Double? {
         guard let numerator, let denominator, denominator != 0 else { return nil }
         return numerator / denominator * 100

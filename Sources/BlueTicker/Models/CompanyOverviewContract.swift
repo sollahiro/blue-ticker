@@ -1,6 +1,7 @@
 // 銘柄 Overview（短い会社説明。50〜80字は目安で、下限は不合格にしない。合格上限は90字）。
 // Filing 公開 `texts` には載せない。生成・検証は ingest 時。格納は `company_overviews`
-// （会社1社=1行。由来の有報は doc_id 列）。ingest stage は `overviews`。serving / 別 EP / healthz / iOS 要約は未配線。
+// （会社1社=1行。由来の有報は doc_id 列）。ingest stage は `overviews`。
+// 公開 REST は `GET /v1/companies/{code}/overview`（MCP には出さない。iOS は Summary 上部）。
 
 import Crypto
 import Foundation
@@ -9,8 +10,31 @@ import Foundation
 /// プロンプト・検証規則・本 payload の意味を変えたときだけバンプする。
 /// ingest は LLM 成功行をバンプだけでは再生成しない（最新有報の doc_id 変更と needs_review）。
 /// `not_applicable` は決定論行なので版ずれで再実行する。
-/// serving / healthz にはまだ載せない。
 public let companyOverviewCacheVersion = "overview-v3"
+
+/// overview read（REST）が 200 を返す最低世代番号（`overview-vN` の N）。
+/// **明示指定**であり、「現行から N つ前」の機械オフセットではない。人手で上げる。
+/// ingest の stale 判定・書き込みは常に `companyOverviewCacheVersion`。床未満の行は 404。
+/// 床の引き上げは、該当旧版の stale 消化が終わってから行う。
+/// 不変条件: `companyOverviewMinServableVersion` ≤ 現行 `overview-vN` の N。
+public let companyOverviewMinServableVersion = 1
+
+/// `overview-vN` 形式から世代番号 N を取り出す。パース不能なら nil（非 servable 扱い）。
+public func companyOverviewCacheVersionNumber(_ version: String) -> Int? {
+    guard version.hasPrefix("overview-v") else { return nil }
+    let suffix = version.dropFirst("overview-v".count)
+    guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber), let n = Int(suffix) else { return nil }
+    return n
+}
+
+/// 格納行の `cache_version` が read 床以上か。文字列辞書順比較は使わない。
+public func isServableCompanyOverviewCacheVersion(_ version: String) -> Bool {
+    guard let n = companyOverviewCacheVersionNumber(version) else { return false }
+    return n >= companyOverviewMinServableVersion
+}
+
+/// 公開 REST の `schema_version`。応答形を破壊的に変えたときのみ +1。
+public let companyOverviewServeSchemaVersion = 1
 /// LLM 生成行。入力が読めてモデルを呼んだとき。
 public let companyOverviewSourceLLM = "llm"
 /// 入力が空、または事業内容が全く読めず applicable=false のとき。
@@ -344,4 +368,14 @@ enum CompanyOverviewRules {
     /// 連用中止・助詞で終わった文。「製造し。」「製造して。」を言い切りとしない。
     private static let incompleteEndingRegex = try! NSRegularExpression(
         pattern: #"(?:しつつ|ながら|かつ|および|ならびに|または|し|て|で|を|に|が|は|と|の|も|ば)$"#)
+}
+
+/// 公開 REST の Overview 応答。ingest 内部フィールド（model / attempts 等）は出さない。
+public func companyOverviewServeJSON(code: String, overview: String, docID: String) -> [String: Any] {
+    [
+        "schema_version": companyOverviewServeSchemaVersion,
+        "code": code,
+        "overview": overview,
+        "doc_id": docID,
+    ]
 }

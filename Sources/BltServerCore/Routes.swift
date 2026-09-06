@@ -46,6 +46,8 @@ func registerRoutes(
                 "breakdown_geography_min_servable": geographyBreakdownMinServableVersion,
                 "statement": statementCacheVersion,
                 "statement_min_servable": statementMinServableVersion,
+                "company_overviews": companyOverviewCacheVersion,
+                "company_overviews_min_servable": companyOverviewMinServableVersion,
             ],
         ], status: .ok)
     }
@@ -162,6 +164,16 @@ func registerRoutes(
             await serveStoredAnalysis(
                 code: code, years: years, db: dbAvailable ? req.db : nil, logger: req.logger),
             notFoundMessage: "財務データは未集計です")
+    }
+
+    // GET /v1/companies/{code}/overview
+    // DB（company_overviews）の格納済み短い会社説明のみを返す。ライブ生成へはフォールバックしない。
+    // 未格納・床未満・対象外は 404。MCP には出さない（製品面は REST と iOS）。
+    v1.get("companies", ":code", "overview") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        return makeStoredDataResponse(
+            await serveStoredOverview(code: code, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "会社説明は未算出です")
     }
 
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
@@ -382,6 +394,26 @@ func serveStoredAnalysis(
             logger: logger
         ) {
             try await loadStoredAnalysis(code: code, years: years, db: db)
+        }
+        guard let stored else { return .notFound }
+        return .ok(stored)
+    } catch {
+        return .dbUnavailable
+    }
+}
+
+/// `overview` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+func serveStoredOverview(
+    code: String, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    guard let db else { return .dbUnavailable }
+    do {
+        let stored = try await withDbRetry(
+            maxAttempts: Api.dbReadRetryMaxAttempts,
+            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
+            logger: logger
+        ) {
+            try await loadStoredOverview(code: code, db: db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)

@@ -57,6 +57,7 @@ private func withApp(
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
             app.migrations.add(CreateCompanyIcons())
+            app.migrations.add(CreateCompanyOverviews())
             try await app.autoMigrate()
         }
         if feedTrendSink != nil || feedTrendQuery != nil {
@@ -107,6 +108,10 @@ private func send(
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
             #expect(versions?["breakdown_business"] as? String == businessBreakdownCacheVersion)
             #expect(versions?["breakdown_business_min_servable"] as? Int == businessBreakdownMinServableVersion)
+            #expect(versions?["statement"] as? String == statementCacheVersion)
+            #expect(versions?["statement_min_servable"] as? Int == statementMinServableVersion)
+            #expect(versions?["company_overviews"] as? String == companyOverviewCacheVersion)
+            #expect(versions?["company_overviews_min_servable"] as? Int == companyOverviewMinServableVersion)
             #expect(versions?["breakdown_geography"] as? String == geographyBreakdownCacheVersion)
             #expect(versions?["breakdown_geography_min_servable"] as? Int == geographyBreakdownMinServableVersion)
         }
@@ -169,6 +174,70 @@ private func send(
             // errorResponse の reason 引数は breakdown 専用の拡張（issue #132）。
             // 他エンドポイントの 404 ボディへ漏れ出さないことを確認する。
             #expect(json?["reason"] == nil)
+        }
+    }
+
+    // MARK: - overview
+
+    @Test func overviewReturns503WithoutDatabase() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "財務データベースに接続できません")
+        }
+    }
+
+    @Test func overviewReturns404WhenMissing() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "会社説明は未算出です")
+        }
+    }
+
+    @Test func overviewReturnsStoredText() async throws {
+        try await withApp(databases: true) { app in
+            try await seedOverview(
+                app, code: "7203", overview: "自動車とその部品の設計、製造、販売を行う。",
+                applicable: true, ok: true)
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == companyOverviewServeSchemaVersion)
+            #expect(json?["code"] as? String == "7203")
+            #expect(json?["overview"] as? String == "自動車とその部品の設計、製造、販売を行う。")
+            #expect(json?["doc_id"] as? String == "S100OV")
+            #expect(json?["model"] == nil)
+        }
+    }
+
+    @Test func overviewReturns404WhenNotApplicable() async throws {
+        try await withApp(databases: true) { app in
+            try await seedOverview(app, code: "7203", overview: "", applicable: false, ok: true)
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "会社説明は未算出です")
+        }
+    }
+
+    @Test func overviewReturnsStoredTextWhenVersionIsV1() async throws {
+        try await withApp(databases: true) { app in
+            try await seedOverview(
+                app, code: "7203", overview: "自動車とその部品の設計、製造、販売を行う。",
+                applicable: true, ok: true, cacheVersion: "overview-v1")
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .ok)
+            #expect(json?["overview"] as? String == "自動車とその部品の設計、製造、販売を行う。")
+        }
+    }
+
+    @Test func overviewReturns404WhenVersionBelowFloor() async throws {
+        try await withApp(databases: true) { app in
+            try await seedOverview(
+                app, code: "7203", overview: "自動車とその部品の設計、製造、販売を行う。",
+                applicable: true, ok: true, cacheVersion: "overview-v0")
+            let (status, json) = try await send(app, "/v1/companies/7203/overview")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "会社説明は未算出です")
         }
     }
 
@@ -645,6 +714,22 @@ private func send(
         #expect(financials.code == "6758")
         #expect(financials.q == nil)
     }
+}
+
+private func seedOverview(
+    _ app: Application, code: String, overview: String, applicable: Bool, ok: Bool,
+    cacheVersion: String = companyOverviewCacheVersion
+) async throws {
+    let payload = CompanyOverviewPayload(
+        applicable: applicable, overview: overview, charCount: overview.count,
+        reason: applicable ? "" : "empty_source", ok: ok, okDetail: "", clipped: false,
+        attempts: 1, model: companyOverviewDefaultModel, inputCharsTotal: 80,
+        inputCharsUsed: 80, inputThin: false)
+    let row = CompanyOverview(
+        code: code, docID: "S100OV", submitDateTime: "2025-06-20 09:00",
+        payload: payload, contentHash: companyOverviewContentHash("事業の内容"))
+    row.cacheVersion = cacheVersion
+    try await row.create(on: app.db)
 }
 
 private func seedFeedDocument(

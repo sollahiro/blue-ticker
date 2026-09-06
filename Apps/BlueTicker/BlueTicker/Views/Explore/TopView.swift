@@ -47,7 +47,7 @@ struct TopView: View {
                         }
                     } else {
                         ForEach(updates.prefix(8)) { item in
-                            companyLink(CompanyRef(item))
+                            companyLink(CompanyRef(item), submittedAt: item.submittedAt)
                         }
                     }
                 }
@@ -91,10 +91,22 @@ struct TopView: View {
             .padding(.bottom, 6)
     }
 
-    private func companyLink(_ company: CompanyRef) -> some View {
+    private func companyLink(_ company: CompanyRef, submittedAt: String? = nil) -> some View {
         NavigationLink(value: company) {
             HStack(spacing: 8) {
                 CompanyRowView(company: company)
+                if let submittedAt {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text("提出日")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
+                        Text(Format.submittedDate(submittedAt))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(Theme.text)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("提出日 \(Format.submittedDate(submittedAt))")
+                }
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.textMuted)
