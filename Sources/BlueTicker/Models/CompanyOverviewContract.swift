@@ -237,7 +237,7 @@ enum CompanyOverviewRules {
         var idx = window.endIndex
         while idx > window.startIndex {
             idx = window.index(before: idx)
-            guard isSentenceStop(window[idx]) else { continue }
+            guard isBoundarySentenceStop(window, at: idx) else { continue }
             let clipped = String(window[...idx])
             if case .ok = evaluate(applicable: true, overview: clipped) {
                 return clipped
@@ -269,6 +269,17 @@ enum CompanyOverviewRules {
         "。！？".contains(ch)
     }
 
+    /// 「ロリポップ！、」の感嘆符は文末ではない。
+    private static func isBoundarySentenceStop(_ text: String, at idx: String.Index) -> Bool {
+        let ch = text[idx]
+        guard isSentenceStop(ch) else { return false }
+        let next = text.index(after: idx)
+        if (ch == "！" || ch == "？"), next < text.endIndex, text[next] == "、" {
+            return false
+        }
+        return true
+    }
+
     /// 句読点・空白だけは本文と見ない。漢字・かな・英数字があれば通す。
     private static func hasSubstantiveBody(_ text: String) -> Bool {
         text.unicodeScalars.contains {
@@ -285,17 +296,12 @@ enum CompanyOverviewRules {
         while idx < text.endIndex {
             let ch = text[idx]
             let next = text.index(after: idx)
-            if isSentenceStop(ch) {
-                let skipSplit = (ch == "！" || ch == "？") && next < text.endIndex && text[next] == "、"
-                if skipSplit {
-                    current.append(ch)
-                } else {
-                    let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !body.isEmpty {
-                        bodies.append(body)
-                    }
-                    current = ""
+            if isBoundarySentenceStop(text, at: idx) {
+                let body = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !body.isEmpty {
+                    bodies.append(body)
                 }
+                current = ""
             } else {
                 current.append(ch)
             }

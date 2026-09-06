@@ -155,6 +155,16 @@ import Testing
         )
     }
 
+    @Test func clipDoesNotStopAtProductNameBangComma() {
+        let overflow =
+            "ロリポップ！、カラーミーショップ、minneなどのサービスを提供し、" + String(repeating: "あ", count: 80)
+            + "を行う。"
+        #expect(overflow.count > companyOverviewMaxChars)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped != "ロリポップ！")
+        #expect(!(clipped ?? "").hasSuffix("ロリポップ！"))
+    }
+
     @Test func clipStripsTrailingToBeforeComma() {
         let overflow =
             "海外カスタマー向け購入支援サービス「WorldShopping」と、国内ECサイト向け越境EC支援サービス「WorldShoppingBIZ」からなる越境ECプラットフォームを提供する。"
