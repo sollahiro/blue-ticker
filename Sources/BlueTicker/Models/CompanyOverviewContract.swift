@@ -247,7 +247,11 @@ enum CompanyOverviewRules {
         while idx > window.startIndex {
             idx = window.index(before: idx)
             guard window[idx] == "、" else { continue }
-            let candidate = String(window[..<idx]) + "。"
+            var prefix = String(window[..<idx])
+            while let stripped = strippingTrailingConnective(prefix), !stripped.isEmpty {
+                prefix = stripped
+            }
+            let candidate = prefix + "。"
             if candidate.count > companyOverviewMaxChars { continue }
             if case .ok = evaluate(applicable: true, overview: candidate) {
                 return candidate
@@ -292,6 +296,18 @@ enum CompanyOverviewRules {
 
     private static func matches(_ regex: NSRegularExpression, in text: String) -> Bool {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    /// 読点クリップ後の「と。」「し。」を言い切りにしない。
+    private static func strippingTrailingConnective(_ text: String) -> String? {
+        let suffixes = [
+            "ならびに", "または", "および", "しつつ", "ながら", "かつ",
+            "し", "て", "で", "を", "に", "が", "は", "と", "の", "も", "ば", "や",
+        ]
+        for suffix in suffixes where text.hasSuffix(suffix) {
+            return String(text.dropLast(suffix.count))
+        }
+        return nil
     }
 
     private static let amountRegex = try! NSRegularExpression(

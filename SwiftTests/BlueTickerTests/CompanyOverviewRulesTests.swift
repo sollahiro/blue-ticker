@@ -130,7 +130,17 @@ import Testing
     @Test func clipSkipsConnectiveCommaWithoutEarlierStop() {
         let overflow = "自動車を製造し、" + String(repeating: "販", count: 80) + "する。"
         #expect(overflow.count > companyOverviewMaxChars)
-        #expect(CompanyOverviewRules.clip(overflow) == nil)
+        #expect(CompanyOverviewRules.clip(overflow) == "自動車を製造。")
+        #expect(ok("自動車を製造。"))
+    }
+
+    @Test func clipStripsTrailingToBeforeComma() {
+        let overflow =
+            "海外カスタマー向け購入支援サービス「WorldShopping」と、国内ECサイト向け越境EC支援サービス「WorldShoppingBIZ」からなる越境ECプラットフォームを提供する。"
+        #expect(overflow.count == 93)
+        let clipped = CompanyOverviewRules.clip(overflow)
+        #expect(clipped == "海外カスタマー向け購入支援サービス「WorldShopping」。")
+        #expect(ok(clipped ?? ""))
     }
 
     @Test func clipKeepsLastSentenceWithinMax() {
