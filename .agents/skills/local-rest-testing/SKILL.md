@@ -1,0 +1,48 @@
+---
+name: local-rest-testing
+description: Test BlueTicker DB-backed REST endpoints and rebuild commands against disposable local PostgreSQL without production writes.
+---
+
+# Local DB-backed REST testing
+
+Use this for HTTP/CLI end-to-end checks, not live EDINET ingest or production Neon operations.
+Existing production-ingest skill covers those separate operations.
+
+## Devin Secrets Needed
+
+None for isolated seeded DB reads/rebuilds. Startup requires `BLT_EDINET_API_KEY`;
+use an explicit dummy value only when the tested path never calls EDINET.
+Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test setup.
+
+## Setup
+
+1. Build with `swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility`.
+2. If psql/PostgreSQL is absent but Docker is available, run a disposable `postgres:16`
+   container with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` set to local-only
+   values and map an unused port on **127.0.0.1**, not all interfaces.
+3. Start `.build/debug/blt-server --host 127.0.0.1 --port <unused-port>` with
+   `DATABASE_URL=postgres://<local-user>:<local-password>@127.0.0.1:<pg-port>/<db>?sslmode=disable`
+   and the dummy `BLT_EDINET_API_KEY`. Migrations apply automatically.
+4. Verify the server log reports startup and migration completion. Seed via
+   `docker exec -i <container> psql -v ON_ERROR_STOP=1 -U <user> -d <db>`.
+   Never inherit a production DATABASE_URL; explicitly override it with loopback.
+5. To test storage absence, start a second process on another port using
+   `env -u DATABASE_URL BLT_EDINET_API_KEY=local-test-not-real ...`.
+
+## Financial fixture/rebuild checks
+
+- `company_financials` requires code, response JSONB, cache_version, requested_years.
+- Minimal response: schema_version=2, code/name/market/sector/currency/unit, years.
+  Annual objects accept fy_end and metric fields (e.g. sales/roic).
+- Read current `companyFinancialsCacheVersion` from FinancialsContract.swift; do not
+  hardcode a version into a reusable test. Below-floor rows should be excluded.
+- Execute `blt-server screen-rebuild` with the same explicit local DATABASE_URL.
+  Assert both CLI summary and subsequent real HTTP response.
+- Seed more than 200 rows to exercise pagination and default/max query limits.
+- Seed prior-first year arrays to distinguish latest-FY selection from array order.
+- Screen empty/valueless/whitespace-only range bounds intentionally mean omitted filters.
+- SQL seeding plus rebuild does **not** prove the live financial ingest hook or its
+  best-effort error handling. State that limitation explicitly.
+
+Capture curl status, headers, JSON, and expected-vs-actual assertions. No recording
+is needed for shell-only API checks. Stop local server processes and container afterward.
