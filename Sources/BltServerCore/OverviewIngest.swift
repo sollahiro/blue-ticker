@@ -2,7 +2,8 @@
 // company_overviews へ upsert する。1社=1行（icons と同じ。過去書類の履歴保持・purgeは不要）。
 // 生成は LLM（`source=llm`）。入力が空で applicable=false の行は `not_applicable`。
 // `ok=false` は needs_review として再試行する。最新有報の doc_id が変わったら上書きする。
-// cache_version バンプだけでは再生成しない（有報が同じなら skip。icons / breakdowns とは違う）。
+// cache_version バンプだけでは LLM 成功行は再生成しない（有報が同じなら skip）。
+// 決定論の not_applicable だけは版ずれで再実行する。
 
 import BlueTickerCore
 import Fluent
@@ -19,7 +20,7 @@ public struct OverviewIngestSummary: Sendable, Equatable {
     public let failed: Int
     /// 入力空など設計通りの対象外（プレースホルダ行を格納）。
     public let notApplicable: Int
-    /// 同一 doc_id・要再試行なしのためスキップした会社数（cache_version が古くても含む）。
+    /// 同一 doc_id・要再試行なしのためスキップした会社数（LLM 成功行は cache_version が古くても含む）。
     public let skipped: Int
 }
 
@@ -28,8 +29,8 @@ public struct OverviewIngestSummary: Sendable, Equatable {
 public typealias CompanyOverviewGenerating =
     @Sendable (String, String) async -> CompanyOverviewResolveResult
 
-/// 上場企業の直近有報1件ずつを走査し、未生成 / 最新 doc 変更 / needs_review の
-/// Overview を生成・格納する。`limit` は新規生成件数の上限（LLM 呼び出しのためバッチ実行用）。
+/// 上場企業の直近有報1件ずつを走査し、未生成 / 最新 doc 変更 / needs_review /
+/// 版ずれの not_applicable の Overview を生成・格納する。
 /// `explicitCodes` / `priorityCodes` / `cachedDocIDs` は icons と同じ意味。
 func runOverviewIngest(
     db: Database, listedCodes: Set<String>, limit: Int?, explicitCodes: Set<String>? = nil,
@@ -48,6 +49,7 @@ func runOverviewIngest(
     var missing: [(docID: String, code: String, submitDateTime: String)] = []
     var flaggedForReview: [(docID: String, code: String, submitDateTime: String)] = []
     var staleDoc: [(docID: String, code: String, submitDateTime: String)] = []
+    var staleNotApplicable: [(docID: String, code: String, submitDateTime: String)] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "銘柄 Overview 取り込み 分類", onRetry: { unhealthyRetries += 1 }
@@ -65,12 +67,16 @@ func runOverviewIngest(
             staleDoc.append(cand)
         } else if existing.needsReview {
             flaggedForReview.append(cand)
+        } else if existing.source == companyOverviewSourceNotApplicable,
+            existing.cacheVersion != companyOverviewCacheVersion
+        {
+            staleNotApplicable.append(cand)
         } else {
             skipped += 1
         }
     }
     let candidates = ingestOrdered(
-        interleaved([missing, flaggedForReview, staleDoc]),
+        interleaved([missing, flaggedForReview, staleDoc, staleNotApplicable]),
         docIDOf: \.docID, codeOf: \.code, cachedDocIDs: cachedDocIDs, priorityCodes: priorityCodes)
     unhealthyRetries = 0
 
@@ -87,8 +93,13 @@ func runOverviewIngest(
             try await CompanyOverview.find(cand.code, on: db)
         }
         if let row = existing, row.docID == cand.docID, !row.needsReview {
-            skipped += 1
-            continue
+            let staleNotApplicable =
+                row.source == companyOverviewSourceNotApplicable
+                && row.cacheVersion != companyOverviewCacheVersion
+            if !staleNotApplicable {
+                skipped += 1
+                continue
+            }
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
@@ -171,6 +182,9 @@ final class CompanyOverviewClassifyRow: Model, @unchecked Sendable {
 
     @Field(key: "needs_review")
     var needsReview: Bool
+
+    @Field(key: "source")
+    var source: String
 
     init() {}
 }

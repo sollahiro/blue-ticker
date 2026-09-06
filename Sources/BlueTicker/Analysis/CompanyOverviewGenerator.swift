@@ -201,12 +201,15 @@ enum CompanyOverviewGenerator {
         raw.trimmingCharacters(in: .whitespacesAndNewlines).count < companyOverviewInputThinChars
     }
 
-    /// 本文がある入力でモデルが applicable=false にしたときは対象外に確定せず、書き直しへ回す。
+    /// 空以外の入力でモデルが applicable=false にしたときは対象外に確定せず、書き直しへ回す。
     private static func evaluateReply(_ parsed: LLMOverviewReply, raw: String)
         -> CompanyOverviewEvaluation
     {
-        if !parsed.applicable && !isThinInput(raw) {
-            return .invalid("入力があるのに applicable=false")
+        if !parsed.applicable {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return .invalid("入力があるのに applicable=false")
+            }
         }
         return CompanyOverviewRules.evaluate(
             applicable: parsed.applicable, overview: parsed.overview)

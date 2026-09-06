@@ -7,7 +7,8 @@ import Foundation
 
 /// Overview 格納キャッシュ（`company_overviews.cache_version`）。blueTickerVersion 非連動。
 /// プロンプト・検証規則・本 payload の意味を変えたときだけバンプする。
-/// ingest はバンプだけでは再生成しない（最新有報の doc_id 変更と needs_review のみ）。
+/// ingest は LLM 成功行をバンプだけでは再生成しない（最新有報の doc_id 変更と needs_review）。
+/// `not_applicable` は決定論行なので版ずれで再実行する。
 /// serving / healthz にはまだ載せない。
 public let companyOverviewCacheVersion = "overview-v3"
 /// LLM 生成行。入力が読めてモデルを呼んだとき。

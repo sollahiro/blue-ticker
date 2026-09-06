@@ -127,6 +127,23 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 1)
     }
 
+    @Test func thinApplicableFalseIsNotConfirmedNotApplicable() async throws {
+        let source = "事業の内容の記載は省略する。"
+        #expect(source.count < companyOverviewInputThinChars)
+        #expect(!source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        let client = try ScriptedChat(replies: [
+            reply(overview: "", applicable: false),
+            reply(overview: "", applicable: false),
+            reply(overview: "", applicable: false),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input(source), client: client, model: companyOverviewDefaultModel)
+        #expect(!draft.ok)
+        #expect(!draft.applicable)
+        #expect(draft.okDetail.contains("applicable=false"))
+        #expect(await client.callCount() == 3)
+    }
+
     @Test func systemPromptTreatsSegmentNamesAsEnough() {
         #expect(CompanyOverviewGenerator.systemPrompt.contains("製品名は必須ではない"))
         #expect(CompanyOverviewGenerator.systemPrompt.contains("セグメント名"))

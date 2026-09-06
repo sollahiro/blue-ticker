@@ -89,7 +89,7 @@ breakdowns               … LLM 軸は時間がかかるため financials と�
         ↓
 financials               … 組立スナップショット再計算
         ↓
-overviews                … 銘柄の短い会社説明（LLM。最新有報1件。financials 非依存。cache_version バンプでは再生成せず、最新 doc_id 変更と needs_review だけ）
+overviews                … 銘柄の短い会社説明（LLM。最新有報1件。financials 非依存。LLM 成功行は cache_version バンプでは再生成せず、最新 doc_id 変更と needs_review。`not_applicable` は版ずれで再実行）
         ↓
 （任意）status ページ / Linear 投稿 / RO reset
 ```

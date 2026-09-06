@@ -203,6 +203,54 @@ private func generated(
         }
     }
 
+    @Test func ingestReattemptsNotApplicableWhenVersionStale() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let existing = CompanyOverview(
+                code: "7203", docID: "S1", submitDateTime: "2025-06-20 09:00",
+                payload: CompanyOverviewPayload(
+                    draft: sampleDraft(overview: "", applicable: false, ok: true)),
+                contentHash: companyOverviewContentHash(""))
+            existing.cacheVersion = "overview-v0"
+            try await existing.create(on: app.db)
+            #expect(existing.source == companyOverviewSourceNotApplicable)
+
+            let summary = try await runOverviewIngest(
+                db: app.db, listedCodes: ["7203"], limit: nil
+            ) { _, _ in generated(overview: "短い事業説明を手がける。") }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyOverview.find("7203", on: app.db))
+            #expect(row.payload.overview == "短い事業説明を手がける。")
+            #expect(row.cacheVersion == companyOverviewCacheVersion)
+            #expect(row.source == companyOverviewSourceLLM)
+        }
+    }
+
+    @Test func ingestSkipsCurrentNotApplicableWhenSameDoc() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let existing = CompanyOverview(
+                code: "7203", docID: "S1", submitDateTime: "2025-06-20 09:00",
+                payload: CompanyOverviewPayload(
+                    draft: sampleDraft(overview: "", applicable: false, ok: true)),
+                contentHash: companyOverviewContentHash(""))
+            try await existing.create(on: app.db)
+            #expect(existing.source == companyOverviewSourceNotApplicable)
+
+            let summary = try await runOverviewIngest(
+                db: app.db, listedCodes: ["7203"], limit: nil
+            ) { _, _ in generated(overview: "呼ばれてはいけない文。") }
+
+            #expect(summary.attempted == 0)
+            #expect(summary.skipped == 1)
+            let row = try #require(try await CompanyOverview.find("7203", on: app.db))
+            #expect(row.source == companyOverviewSourceNotApplicable)
+            #expect(row.payload.overview.isEmpty)
+        }
+    }
+
     @Test func ingestReattemptsNeedsReviewEvenWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
