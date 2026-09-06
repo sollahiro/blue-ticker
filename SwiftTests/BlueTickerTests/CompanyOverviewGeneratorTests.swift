@@ -127,6 +127,28 @@ private actor ScriptedChat: ChatCompleting {
         #expect(await client.callCount() == 1)
     }
 
+    @Test func retriesApplicableFalseWhenLastSource() async throws {
+        let source = """
+            当社グループは総合エレクトロニクスメーカーとして開発・生産・販売・サービスを展開する。\
+            製品の範囲は電気機械器具のほとんどすべてにわたっており、コネクト、エナジー、インダストリー、\
+            スマートライフの報告セグメントから構成される。
+            """
+        #expect(source.count >= companyOverviewInputThinChars)
+        let fixed = "コネクト、エナジー、インダストリー、スマートライフの電機製品を手がける。"
+        let client = try ScriptedChat(replies: [
+            reply(overview: "", applicable: false),
+            reply(overview: fixed),
+        ])
+        let draft = await CompanyOverviewGenerator.generate(
+            input: input(source), client: client, model: companyOverviewDefaultModel,
+            retryWhenApplicableFalse: true)
+        #expect(draft.ok)
+        #expect(draft.applicable)
+        #expect(draft.overview == fixed)
+        #expect(draft.attempts == 2)
+        #expect(await client.callCount() == 2)
+    }
+
     @Test func thinApplicableFalseIsNotConfirmedNotApplicable() async throws {
         let source = "事業の内容の記載は省略する。"
         #expect(source.count < companyOverviewInputThinChars)
@@ -149,6 +171,7 @@ private actor ScriptedChat: ChatCompleting {
         #expect(CompanyOverviewGenerator.systemPrompt.contains("セグメント名"))
         #expect(CompanyOverviewGenerator.systemPrompt.contains("報告セグメントの概要"))
         #expect(CompanyOverviewGenerator.systemPrompt.contains("「報告セグメント」という語も出さない"))
+        #expect(CompanyOverviewGenerator.systemPrompt.contains("単一セグメントであるため記載を省略"))
     }
 
     @Test func repairsReportableSegmentWrapper() async throws {
