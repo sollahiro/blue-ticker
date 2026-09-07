@@ -332,7 +332,7 @@ private func dispatchMcpTool(
 
     case "get_feed_updates":
         let limit = parseFeedLimit(args["limit"]?.intValue)
-        let days = parseFeedDays(args["days"]?.intValue)
+        let days = parseFeedUpdateDays(args["days"]?.intValue)
         let docTypes = parseFeedDocTypes(args["doc_type"]?.stringValue)
         return mapStoredResult(
             await serveFeedUpdates(
@@ -340,8 +340,8 @@ private func dispatchMcpTool(
             notFoundMessage: "フィードを組み立てできません")
 
     case "get_feed_trend":
-        let limit = parseFeedLimit(args["limit"]?.intValue)
-        let days = parseFeedDays(args["days"]?.intValue)
+        let limit = parseFeedTrendLimit(args["limit"]?.intValue)
+        let days = parseFeedTrendDays(args["days"]?.intValue)
         let codeParam = parseFeedTrendCodeParam(args["code"]?.stringValue)
         return mapFeedTrendResult(
             await serveFeedTrend(

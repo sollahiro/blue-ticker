@@ -179,8 +179,7 @@ func distinctCompanyCodesWithHighWater(
     var codes: [String] = []
     var highWater: [String: String] = [:]
     for doc in documents {
-        guard let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0") else { continue }
-        let code = String(sec.dropLast())
+        guard let code = listedTickerCode(fromSecCode: doc.secCode) else { continue }
         if seen.insert(code).inserted { codes.append(code) }
 
         guard let docType = doc.docTypeCode, docTypes.contains(docType),

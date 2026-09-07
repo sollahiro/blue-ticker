@@ -538,7 +538,7 @@ private func send(
             let (status, json) = try await send(app, "/v1/feed/updates")
             #expect(status == .ok)
             #expect(json?["schema_version"] as? Int == Api.feedSchemaVersion)
-            #expect(json?["days"] as? Int == 7)
+            #expect(json?["days"] as? Int == Api.feedUpdateDaysDefault)
             let date = try #require(json?["date"] as? String)
             #expect(date == dateBefore || date == feedDateString())
             let total = json?["total"] as? [String: Any]
@@ -569,7 +569,7 @@ private func send(
 
             let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
             #expect(status == .ok)
-            #expect(json?["days"] as? Int == 7)
+            #expect(json?["days"] as? Int == Api.feedUpdateDaysDefault)
             let items = json?["items"] as? [[String: Any]]
             #expect(items?.compactMap { $0["doc_id"] as? String } == ["S-new", "S-old"])
             let total = json?["total"] as? [String: Any]
@@ -621,7 +621,7 @@ private func send(
             #expect(ids.contains("D-today-2"))
             #expect(ids.contains("D-yday"))
             #expect(ids.contains("D-week"))
-            #expect(ids.contains("D-old") == false)
+            #expect(ids.contains("D-old"))
         }
     }
 

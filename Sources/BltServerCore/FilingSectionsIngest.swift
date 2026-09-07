@@ -200,10 +200,9 @@ func filingSectionCandidates(
     var byCode: [String: [(docID: String, submitDateTime: String)]] = [:]
     for doc in documents {
         guard let docID = doc.id,
-            let sec = doc.secCode, sec.count == 5, sec.hasSuffix("0"),
+            let code = listedTickerCode(fromSecCode: doc.secCode),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
-        let code = String(sec.dropLast())
         guard listedCodes.contains(code) else { continue }
         if let explicit = explicitCodes, !explicit.contains(code) { continue }
         byCode[code, default: []].append((docID, doc.submitDateTime))

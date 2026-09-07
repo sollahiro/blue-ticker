@@ -511,7 +511,7 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
             let body = text.flatMap { $0.data(using: .utf8) }
                 .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
             #expect(body?["schema_version"] as? Int == Api.feedSchemaVersion)
-            #expect(body?["days"] as? Int == 7)
+            #expect(body?["days"] as? Int == Api.feedUpdateDaysDefault)
             let date = try #require(body?["date"] as? String)
             #expect(date == dateBefore || date == feedDateString())
             let total = body?["total"] as? [String: Any]
