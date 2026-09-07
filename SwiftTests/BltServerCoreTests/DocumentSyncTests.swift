@@ -94,6 +94,42 @@ private func record(
         }
     }
 
+    @Test func purgeForeignFilerDocumentsRemovesLeftoversFromFilingsAndFeed() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S-FOREIGN", secCode: "17730"),
+                    record("S-DOMESTIC", secCode: "72030"),
+                ], db: app.db)
+
+            let filingsBefore = try await loadStoredFilingRecords(code: "1773", db: app.db)
+            #expect(filingsBefore.map(\.docID) == ["S-FOREIGN"])
+            let feedBefore = try await loadFeedRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 10)
+            #expect(Set(feedBefore.map(\.docID)) == ["S-FOREIGN", "S-DOMESTIC"])
+
+            let purged = try await purgeForeignFilerDocuments(
+                excludedCodes: ["1773"], db: app.db)
+            #expect(purged == 1)
+            #expect(try await EdinetDocument.find("S-FOREIGN", on: app.db) == nil)
+            #expect(try await EdinetDocument.find("S-DOMESTIC", on: app.db) != nil)
+
+            let filingsAfter = try await loadStoredFilingRecords(code: "1773", db: app.db)
+            #expect(filingsAfter.isEmpty)
+            let domesticFilings = try await loadStoredFilingRecords(code: "7203", db: app.db)
+            #expect(domesticFilings.map(\.docID) == ["S-DOMESTIC"])
+            let feedAfter = try await loadFeedRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 10)
+            #expect(feedAfter.map(\.docID) == ["S-DOMESTIC"])
+        }
+    }
+
+    @Test func edinetSecCodesExpandsFourthDigitAcrossFifth() {
+        #expect(edinetSecCodes(forIssuerCode: "1773").contains("17730"))
+        #expect(edinetSecCodes(forIssuerCode: "1773").count == 10)
+        #expect(edinetSecCodes(forIssuerCode: "12").isEmpty)
+    }
+
     @Test func upsertSyncStateInsertsThenUpdatesSingleRow() async throws {
         try await withMigratedApp { app in
             try await upsertSyncState(syncedThrough: "2025-06-01", db: app.db)

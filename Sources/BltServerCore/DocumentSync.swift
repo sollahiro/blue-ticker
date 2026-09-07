@@ -2,7 +2,8 @@
 // 同期高水位（edinet_sync_state.synced_through）を進める。
 // 取得・正規化は BlueTickerCore のファサード（fetchDocumentsForSync）に委譲し、
 // ここでは DB への upsert と高水位更新のみを担う。
-// 外国法人・組合は master の提出者種別（`foreignFilerCodes()`）で fetch と apply の両方から落とす。
+// 外国法人・組合は master の提出者種別（`foreignFilerCodes()`）で fetch / apply から落とし、
+// 既存行は sync 時に `edinet_documents` から削除する。
 
 import BlueTickerCore
 import Fluent
@@ -53,6 +54,8 @@ func runDocumentSync(
     let previousSyncedThrough = try await loadSyncedThrough(db: db, logger: logger)
     let fetchResult = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
     let excludedCodes = await context.foreignFilerCodes()
+    _ = try await purgeForeignFilerDocuments(
+        excludedCodes: excludedCodes, db: db, logger: logger)
     let counts = try await applyDocuments(
         fetchResult.records, db: db, excludedCodes: excludedCodes, logger: logger)
     let syncedThrough = computeDocumentSyncedThrough(
@@ -153,6 +156,42 @@ func applyDocuments(
     return (created, updated, completed: true)
 }
 
+/// 4 桁証券コードに対応する EDINET 5 桁 secCode（末尾 0–9）。
+/// filings の突き合わせと外国法人・組合の既存行削除で同じ集合を使う。
+func edinetSecCodes(forIssuerCode code: String) -> [String] {
+    let code4 = String(code.prefix(4)).uppercased()
+    guard code4.count == 4, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
+    return (0...9).map { "\(code4)\($0)" }
+}
+
+/// 既存の外国法人・組合行を `edinet_documents` から削除する。
+/// 他テーブルの `doc_id` は論理参照のみ（FK なし）。ingest は `listedCodes()` で対象外のため
+/// statements / notes / breakdowns は作られない想定で、ここでは書類一覧だけを落とす。
+/// Feed / filings の DB 経路はこのテーブルだけを読む。
+func purgeForeignFilerDocuments(
+    excludedCodes: Set<String>, db: Database, logger: Logger? = nil
+) async throws -> Int {
+    let secCodes = Set(excludedCodes.flatMap(edinetSecCodes(forIssuerCode:)))
+    guard !secCodes.isEmpty else { return 0 }
+    return try await withDbRetry(logger: logger, context: "purge_foreign_filers") {
+        let rows = try await EdinetDocument.query(on: db)
+            .filter(\.$secCode ~~ Array(secCodes))
+            .all()
+        for row in rows {
+            try await row.delete(on: db)
+        }
+        if !rows.isEmpty {
+            logger?.notice(
+                "書類同期: 外国法人・組合の既存行 \(rows.count) 件を削除",
+                metadata: [
+                    "event": "sync_foreign_filer_purged",
+                    "purged": .stringConvertible(rows.count),
+                ])
+        }
+        return rows.count
+    }
+}
+
 /// 部分失敗時は高水位を進めない（または取得失敗日の前日までに留める）。
 func computeDocumentSyncedThrough(
     from: String,
@@ -207,9 +246,8 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 /// 該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 /// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
-    let code4 = String(code.prefix(4)).uppercased()
-    guard code4.count == 4, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
-    let secCodes = (0...9).map { "\(code4)\($0)" }
+    let secCodes = edinetSecCodes(forIssuerCode: code)
+    guard !secCodes.isEmpty else { return [] }
     let rows = try await EdinetDocument.query(on: db)
         .filter(\.$secCode ~~ secCodes)
         .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
