@@ -225,4 +225,19 @@ import Testing
         #expect(trimmed.years.count == 2)
         #expect(trimmed.years.map(\.docId) == ["S100XC6R", "S100PUYZ"])
     }
+
+    @Test func uniquedByFyEndKeepsFirstWhenAmendmentPrecedesOriginal() throws {
+        let dict: [String: Any] = [
+            "schema_version": 2, "code": "4376", "name": "くふう",
+            "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
+            "years": [
+                ["fy_end": "2022-09-30", "doc_id": "S100PYLV", "sales": 18625.0],
+                ["fy_end": "2022-09-30", "doc_id": "S100PUYZ", "sales": 18625.0],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        let resp = try JSONDecoder().decode(FinancialsResponse.self, from: data)
+        let uniqued = resp.uniquedByFyEnd()
+        #expect(uniqued.years.map(\.docId) == ["S100PYLV"])
+    }
 }

@@ -225,7 +225,10 @@ public extension BltServerContext {
     /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
-        switch await analyzer.analyze(code: code, analysisYears: years) {
+        // Ingest は derived `individual_analysis_*` を使わない。そのキーは
+        // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
+        // 既定 `useCache: true` のままだと fin-v16 ingest が古 IBD/ROIC を現行として書く。
+        switch await analyzer.analyze(code: code, analysisYears: years, useCache: false) {
         case .result(let result):
             let stock = await masterDataManager.getByCode(code)
             return .success(

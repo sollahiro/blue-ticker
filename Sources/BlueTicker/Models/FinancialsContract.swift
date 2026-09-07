@@ -673,7 +673,11 @@ extension FinancialsResponse {
     }
 }
 
-/// 同一 `fy_end` は先頭だけ残す。空の期末はキーにしない（誤って 1 行に畳まない）。
+/// 同一 `fy_end` は配列先頭だけ残す。空の期末はキーにしない（誤って 1 行に畳まない）。
+///
+/// ingest 後は 120 のみなのでこのガードは格納済み 120+130 重複向け。Core は `doc_type`
+/// を持たず、同じ fy_end の並びは `withBoundedTaskGroup` 由来で 120/130 の tie-break は
+/// しない。くふう 4376 の 22/09 は 120 と 130 の数値が同一なので first-wins で足りる。
 func uniquedYearsByFyEnd(_ years: [FinancialsYear]) -> [FinancialsYear] {
     var seen = Set<String>()
     var unique: [FinancialsYear] = []
