@@ -412,4 +412,24 @@ import Foundation
             #expect(result.total == 60_000_000_000)
         }
     }
+
+    /// 日東電工 6988 / S100YCAR: 当期借入金が `xsi:nil`（開示 0）で prior だけ残ると
+    /// resolveIBD が tag あり・current nil になり ROIC が欠測する。statement の 0 で上書きする。
+    @Test func overlayStatementZeroCurrentYieldsZeroIBD() {
+        var fs: FieldSet = [
+            "BondsAndBorrowingsCLIFRS": FieldValue(current: nil, prior: 455_000_000)
+        ]
+        let before = IBDExtractor.extract(fieldSet: fs, accountingStandard: "IFRS", xbrlDir: nil)
+        #expect(before.total == nil)
+        #expect(before.priorTotal == 455_000_000)
+
+        IBDExtractor.overlayStatementCurrentValues(&fs, lines: [
+            StatementLineItem(
+                tag: "BondsAndBorrowingsCLIFRS", label: "借入金", value: 0, unit: "JPY", order: 28)
+        ])
+        let after = IBDExtractor.extract(fieldSet: fs, accountingStandard: "IFRS", xbrlDir: nil)
+        #expect(after.total == 0)
+        #expect(after.priorTotal == 455_000_000)
+        #expect(after.method == "field_parser")
+    }
 }

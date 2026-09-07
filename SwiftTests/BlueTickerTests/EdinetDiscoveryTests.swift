@@ -449,4 +449,17 @@ import Foundation
         #expect(found?["docID"] as? String == "S100X4JS")
         #expect(docs.contains { ($0["docID"] as? String) == "S100XQ9U" } == false)
     }
+
+    @Test func financialsAnnualDocumentsDropsAmendments() {
+        let annual: [String: Any] = [
+            "docID": "S100PUYZ", "docTypeCode": "120", "edinet_fy_end": "2022-09-30",
+        ]
+        var amendment: [String: Any] = [
+            "docID": "S100PYLV", "docTypeCode": "130", "edinet_fy_end": "2022-09-30",
+        ]
+        amendment["_is_amendment"] = true
+        let docs = financialsAnnualDocuments([annual, amendment])
+        #expect(docs.count == 1)
+        #expect(docs.first?["docID"] as? String == "S100PUYZ")
+    }
 }

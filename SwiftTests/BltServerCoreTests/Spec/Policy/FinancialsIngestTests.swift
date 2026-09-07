@@ -935,4 +935,31 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             #expect(years[2]["business_profit_change"] as? Double != nil)
         }
     }
+
+    @Test func loadStoredFinancialsDropsDuplicateFyEndYears() async throws {
+        try await withMigratedApp { app in
+            let dict: [String: Any] = [
+                "schema_version": 2, "code": "4376", "name": "くふう",
+                "sector": "", "market": "上場", "currency": "JPY", "unit": "百万円",
+                "years": [
+                    ["fy_end": "2025-09-30", "doc_id": "S100XC6R", "sales": 14110.0],
+                    ["fy_end": "2022-09-30", "doc_id": "S100PUYZ", "sales": 18625.0],
+                    ["fy_end": "2022-09-30", "doc_id": "S100PYLV", "sales": 18625.0],
+                ],
+            ]
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            let row = CompanyFinancials()
+            row.id = "4376"
+            row.response = try JSONDecoder().decode(FinancialsResponse.self, from: data)
+            row.cacheVersion = companyFinancialsCacheVersion
+            row.requestedYears = 5
+            try await row.create(on: app.db)
+
+            let json = try #require(
+                try await loadStoredFinancials(code: "4376", years: 5, db: app.db))
+            let years = try #require(json["years"] as? [[String: Any]])
+            #expect(years.count == 2)
+            #expect(years.map { $0["doc_id"] as? String } == ["S100XC6R", "S100PUYZ"])
+        }
+    }
 }
