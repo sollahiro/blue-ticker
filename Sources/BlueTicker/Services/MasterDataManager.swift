@@ -141,10 +141,10 @@ actor MasterDataManager {
         for line in lines {
             let fields = parseCSVRow(line)
             guard fields.count > max(codeIdx, nameIdx) else { continue }
-            // EDINET証券コードは5桁（4桁TSEコード + "0"）。ユーザー向けは末尾を除いた4桁
+            // EDINET証券コードは5桁（4桁TSEコード + "0"）。ユーザー向けは末尾を除いた4桁。
+            // 00000 は未割当なので listedTickerCode が落とす。
             let secCode = normalizeSecurityCode(fields[codeIdx])
-            guard secCode.count == 5, secCode.last == "0" else { continue }
-            let code = String(secCode.dropLast())
+            guard let code = listedTickerCode(fromSecCode: secCode) else { continue }
             let name = fields[nameIdx].trimmingCharacters(in: CharacterSet.whitespaces)
             guard !name.isEmpty else { continue }
             let industry: String

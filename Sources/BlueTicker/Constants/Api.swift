@@ -45,12 +45,16 @@ public enum Api {
     /// Screen の返却件数上限。フィルタ無し全件は返さない。
     public static let screenLimitMax = 200
     /// Feed Update の返却件数省略時。
-    public static let feedLimitDefault = 50
+    public static let feedLimitDefault = 10
+    /// Feed Trend の返却件数省略時。
+    public static let feedTrendLimitDefault = 50
     /// Feed Update の返却件数上限。
     public static let feedLimitMax = 100
-    /// Feed Update の items 窓（日）省略時。
+    /// Feed Update の items 窓（日）省略時。`total.week` とは独立。
+    public static let feedUpdateDaysDefault = 90
+    /// Feed Trend の集計窓（日）省略時。
     public static let feedTrendDaysDefault = 7
-    /// Feed Update の items 窓（日）上限。
+    /// Feed Update / Trend の `days` 上限。
     public static let feedTrendDaysMax = 90
     /// Update の `total.week` 窓（日）。クエリ `days`（items の窓）とは独立。
     public static let feedUpdateWeekDays = 7

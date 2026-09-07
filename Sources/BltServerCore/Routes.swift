@@ -262,11 +262,11 @@ func registerRoutes(
             notFoundMessage: "Screen 索引は未生成です")
     }
 
-    // GET /v1/feed/updates?limit=50&doc_type=120
+    // GET /v1/feed/updates?limit=10&doc_type=120
     // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
     v1.get("feed", "updates") { req async -> Response in
         let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
-        let days = parseFeedDays(req.query[Int.self, at: "days"])
+        let days = parseFeedUpdateDays(req.query[Int.self, at: "days"])
         let docTypes = parseFeedDocTypes(req.query[String.self, at: "doc_type"])
         return await feedJSONResponse(
             await serveFeedUpdates(
@@ -278,8 +278,8 @@ func registerRoutes(
     // GET /v1/feed/trend?limit=50&days=7&code=
     // 匿名の検索・ツールヒット件数ランキング（Cloudflare Analytics Engine）。書類件数ではない。
     v1.get("feed", "trend") { req async -> Response in
-        let limit = parseFeedLimit(req.query[Int.self, at: "limit"])
-        let days = parseFeedDays(req.query[Int.self, at: "days"])
+        let limit = parseFeedTrendLimit(req.query[Int.self, at: "limit"])
+        let days = parseFeedTrendDays(req.query[Int.self, at: "days"])
         let codeParam = parseFeedTrendCodeParam(req.query[String.self, at: "code"])
         return await feedTrendJSONResponse(
             await serveFeedTrend(

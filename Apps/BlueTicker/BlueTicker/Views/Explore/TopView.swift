@@ -47,7 +47,7 @@ struct TopView: View {
                                 .foregroundStyle(Theme.textMuted)
                         }
                     } else {
-                        ForEach(updates.prefix(8)) { item in
+                        ForEach(updates.prefix(10)) { item in
                             companyLink(CompanyRef(item), submittedAt: item.submittedAt)
                         }
                     }

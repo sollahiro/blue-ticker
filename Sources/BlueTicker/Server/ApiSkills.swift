@@ -560,7 +560,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             id: "get-feed-updates",
             name: "開示更新フィード",
             description: """
-                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近7日）。
+                直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近90日・最大10件）。
                 件数は当日（total.day）と直近1週間（total.week）。銘柄横断の更新情報です。
                 1 社の書類一覧は get_filings を使ってください。
                 """,
@@ -581,9 +581,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "days",
                     location: .query,
                     type: .integer,
-                    description: "items の窓（日。最大 \(Api.feedTrendDaysMax)。total.week は常に直近7日）",
+                    description: "items の窓（日。最大 \(Api.feedTrendDaysMax)。省略時 \(Api.feedUpdateDaysDefault)。total.week は常に直近7日）",
                     required: false,
-                    defaultValue: .int(Api.feedTrendDaysDefault)
+                    defaultValue: .int(Api.feedUpdateDaysDefault)
                 ),
                 ApiSkillParameter(
                     name: "doc_type",
@@ -595,12 +595,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0）のみ。
-                items はクエリ days 窓の提出日時降順（既定 7 日）。
+                Feed Update。sync 済み `edinet_documents` の上場提出（証券コード末尾 0。00000 は除く）のみ。
+                items はクエリ days 窓を新しい暦日から limit 件埋める（既定 90 日・10 件）。同日が残り枠を超えるとその日から安定サンプリングする。
                 `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
                 RSS は未提供（REST が契約の正。MCP は追従）。
-                例: GET /v1/feed/updates?days=7&limit=20
+                例: GET /v1/feed/updates?days=90&limit=10
                 例: GET /v1/feed/updates?doc_type=120,160
                 """,
             mcpOutputSchema:
@@ -634,7 +634,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .integer,
                     description: "返却件数（最大 \(Api.feedLimitMax)）",
                     required: false,
-                    defaultValue: .int(Api.feedLimitDefault)
+                    defaultValue: .int(Api.feedTrendLimitDefault)
                 ),
                 ApiSkillParameter(
                     name: "days",
