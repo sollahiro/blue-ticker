@@ -297,6 +297,9 @@ struct BreakdownView: View {
             Text("\(Format.fy(year.fyEnd)) の要因分解")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
+            Text("プラス（緑）はその要因が前年より押し上げた分、マイナス（赤）は押し下げた分です。行を選ぶと詳しく見られます。")
+                .font(.footnote)
+                .foregroundStyle(Theme.textMuted)
             ForEach(spec.factors) { factor in
                 let selected = selectedFactor == factor.kind
                 factorRow(
@@ -334,7 +337,7 @@ struct BreakdownView: View {
                     ForEach(Array(detail.enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(.caption)
-                            .foregroundStyle(Theme.text)
+                            .foregroundStyle(factorLineColor(line))
                     }
                 }
                 .padding(.top, 4)
@@ -392,7 +395,13 @@ struct BreakdownView: View {
         }
 
         func detail(year: FinancialsYear, prior: FinancialsYear?) -> [String] {
+            let inverted = isDriverInverted(year: year, prior: prior)
             var lines = [blurb]
+            if inverted, let note = inversionNote {
+                lines.append(note)
+            }
+            lines.append(plusMeaning(inverted: inverted))
+            lines.append(minusMeaning(inverted: inverted))
             lines.append(formula)
             if let substitution = substitution(year: year, prior: prior) {
                 lines.append("= \(substitution)")
@@ -400,24 +409,119 @@ struct BreakdownView: View {
             return lines
         }
 
+        /// 計算の掛け算側がマイナスだと、売上・回転・レバレッジの増減と寄与の符号が逆になる。
+        private func isDriverInverted(year: FinancialsYear, prior: FinancialsYear?) -> Bool {
+            switch self {
+            case .salesChange:
+                return (prior?.grossProfitMargin ?? 0) < 0
+            case .roicTurnover:
+                return (year.nopatMargin ?? 0) < 0
+            case .roeTurnover:
+                return ((year.netMargin ?? 0) * (prior?.financialLeverage ?? 1)) < 0
+            case .roeLeverage:
+                return ((year.netMargin ?? 0) * (year.assetTurnover ?? 1)) < 0
+            case .grossMarginChange, .sgaChange, .roicMargin, .roeNetMargin:
+                return false
+            }
+        }
+
+        private var inversionNote: String? {
+            switch self {
+            case .salesChange:
+                return "粗利率がマイナスのときは、売上が増えると赤字も増えます。"
+            case .roicTurnover:
+                return "利益率がマイナスのときは、回転が上がると損失も増えます。"
+            case .roeTurnover, .roeLeverage:
+                return "純利益率がマイナスのときは、回転や借入が増えると損失も増えます。"
+            default:
+                return nil
+            }
+        }
+
         private var blurb: String {
             switch self {
             case .salesChange:
-                return "売上高の増減を、前期の粗利率で利益に換算した寄与です。"
+                return "売上が増えたか減ったかが、利益にどれだけ効いたかです。"
             case .grossMarginChange:
-                return "同じ売上でも粗利率が変わった分の寄与です。"
+                return "同じ売上でも、原価のあとに残る利益の割合が変わった分です。"
             case .sgaChange:
-                return "販管費の増減が事業利益を押し上げ・押し下げた分です。販管費が増えるとマイナスになります。"
+                return "人件費・家賃・広告費などの経費の増減が、利益に効いた分です。経費は増えると利益が減ります。"
             case .roicMargin:
-                return "NOPATマージン（税引後営業利益率）の変化が ROIC に効いた分です。"
+                return "事業に使っているお金に対して、どれだけ利益を出せるかが変わった分です。"
             case .roicTurnover:
-                return "投下資本回転率の変化が ROIC に効いた分です。"
+                return "事業に使っているお金を、どれだけ効率よく売上に変えられたかが変わった分です。"
             case .roeNetMargin:
-                return "純利益率の変化が ROE に効いた分です。"
+                return "売上のうち、最終的に株主の手元に残る利益の割合が変わった分です。"
             case .roeTurnover:
-                return "総資産回転率の変化が ROE に効いた分です。"
+                return "会社の資産全体を使って、どれだけ売上を出せるかが変わった分です。"
             case .roeLeverage:
-                return "財務レバレッジ（総資産 ÷ 自己資本）の変化が ROE に効いた分です。"
+                return "借入などを使って、自分たちのお金（自己資本）に対する収益をどれだけ膨らませたかの変化です。プラスが必ずしも良いとは限りません。"
+            }
+        }
+
+        private func plusMeaning(inverted: Bool) -> String {
+            if inverted {
+                switch self {
+                case .salesChange:
+                    return "+ 売上の変化が、利益を押し上げた"
+                case .roicTurnover, .roeTurnover:
+                    return "+ 回転率の変化が、収益性を押し上げた"
+                case .roeLeverage:
+                    return "+ レバレッジの変化が、収益性を押し上げた"
+                default:
+                    break
+                }
+            }
+            switch self {
+            case .salesChange:
+                return "+ 売上が増えて、利益を押し上げた"
+            case .grossMarginChange:
+                return "+ 仕入れや製造の効率が良くなり、同じ売上から残る利益が増えた"
+            case .sgaChange:
+                return "+ 経費が減り、利益が増えた"
+            case .roicMargin:
+                return "+ 同じお金でも、より多く稼げるようになった"
+            case .roicTurnover:
+                return "+ 同じ資金で、より多くの売上を回せるようになった"
+            case .roeNetMargin:
+                return "+ 売上に対して、残る利益の割合が上がった"
+            case .roeTurnover:
+                return "+ 資産の使い方が良くなり、同じ資産でも売上が増えた"
+            case .roeLeverage:
+                return "+ 借入などの比率が上がり、自己資本あたりの収益を押し上げた"
+            }
+        }
+
+        private func minusMeaning(inverted: Bool) -> String {
+            if inverted {
+                switch self {
+                case .salesChange:
+                    return "− 売上の変化が、利益を押し下げた"
+                case .roicTurnover, .roeTurnover:
+                    return "− 回転率の変化が、収益性を押し下げた"
+                case .roeLeverage:
+                    return "− レバレッジの変化が、収益性を押し下げた"
+                default:
+                    break
+                }
+            }
+            switch self {
+            case .salesChange:
+                return "− 売上が減って、利益を押し下げた"
+            case .grossMarginChange:
+                return "− 原価がかさみ、同じ売上から残る利益が減った"
+            case .sgaChange:
+                return "− 経費が増え、利益が減った"
+            case .roicMargin:
+                return "− 同じお金でも、稼げる額が減った"
+            case .roicTurnover:
+                return "− 資金が滞り、売上の回りが悪くなった"
+            case .roeNetMargin:
+                return "− 売上に対して、残る利益の割合が下がった"
+            case .roeTurnover:
+                return "− 資産の使い方が悪くなり、同じ資産でも売上が減った"
+            case .roeLeverage:
+                return "− 借入などの比率が下がり、自己資本あたりの収益を押し下げた"
             }
         }
 
@@ -549,6 +653,12 @@ struct BreakdownView: View {
         return Theme.negative
     }
 
+    private func factorLineColor(_ line: String) -> Color {
+        if line.hasPrefix("+") { return Theme.positive }
+        if line.hasPrefix("−") { return Theme.negative }
+        return Theme.text
+    }
+
     /// 前年差（要因分解の合計）がある年度だけ選べる。
     private func isYearSelectable(_ year: FinancialsYear) -> Bool {
         switch metric {
@@ -586,6 +696,14 @@ struct BreakdownView: View {
     }
 
     private func load() async {
+        if let cached = await APIClient.shared.cachedWaterfall(code: code) {
+            response = cached
+            errorMessage = nil
+            if selectedYearID == nil {
+                let years = Format.chronological(cached.years)
+                selectedYearID = years.last { isYearSelectable($0) }?.id
+            }
+        }
         do {
             let loaded = try await APIClient.shared.waterfall(code: code)
             response = loaded
@@ -595,9 +713,12 @@ struct BreakdownView: View {
                 selectedYearID = years.last { isYearSelectable($0) }?.id
             }
         } catch APIClientError.http(let status, let message) where status == 404 {
+            response = nil
             errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
-            errorMessage = error.localizedDescription
+            if response == nil {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }

@@ -1,7 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct RootView: View {
     @State private var tab = 0
+    @Query(sort: \WatchedCompany.addedAt, order: .reverse) private var watched: [WatchedCompany]
 
     var body: some View {
         TabView(selection: $tab) {
@@ -43,6 +45,11 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(.hidden, for: .tabBar)
+        .task(id: watched.map(\.code).joined(separator: ",")) {
+            let codes = watched.map(\.code)
+            await APIClient.shared.setPinnedCodes(Set(codes))
+            await APIClient.shared.prefetchAnalysis(codes: codes)
+        }
     }
 
     private func ticker(_ company: CompanyRef) -> some View {
