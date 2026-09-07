@@ -6,8 +6,11 @@ actor APIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let redirectDelegate: AccessRedirectDelegate?
+    private let cache: ResponseCache
+    private var pinnedCodes: Set<String> = []
 
-    init(session: URLSession? = nil) {
+    init(session: URLSession? = nil, cache: ResponseCache = .shared) {
+        self.cache = cache
         if let session {
             self.session = session
             redirectDelegate = nil
@@ -21,6 +24,18 @@ actor APIClient {
                 configuration: config, delegate: delegate, delegateQueue: nil)
         }
         decoder = JSONDecoder()
+    }
+
+    func setPinnedCodes(_ codes: Set<String>) {
+        pinnedCodes = codes
+    }
+
+    func pinCode(_ code: String) {
+        pinnedCodes.insert(code)
+    }
+
+    func unpinCode(_ code: String) {
+        pinnedCodes.remove(code)
     }
 
     func searchCompanies(query: String) async throws -> [CompanyHit] {
@@ -43,23 +58,87 @@ actor APIClient {
         }
     }
 
+    func cachedFinancials(code: String) async -> FinancialsResponse? {
+        await peek(path("v1/companies/\(code)/financials"))
+    }
+
+    func cachedWaterfall(code: String) async -> FinancialsResponse? {
+        await peek(path("v1/companies/\(code)/waterfall"))
+    }
+
+    func cachedOverview(code: String) async -> CompanyOverviewResponse? {
+        await peek(path("v1/companies/\(code)/overview"))
+    }
+
     func financials(code: String) async throws -> FinancialsResponse {
-        try await get(path("v1/companies/\(code)/financials"))
+        try await get(path("v1/companies/\(code)/financials"), cacheTTL: ttl(for: code))
     }
 
     func waterfall(code: String) async throws -> FinancialsResponse {
-        try await get(path("v1/companies/\(code)/waterfall"))
+        try await get(path("v1/companies/\(code)/waterfall"), cacheTTL: ttl(for: code))
     }
 
     func overview(code: String) async throws -> CompanyOverviewResponse {
-        try await get(path("v1/companies/\(code)/overview"))
+        try await get(path("v1/companies/\(code)/overview"), cacheTTL: ttl(for: code))
+    }
+
+    func prefetchAnalysis(codes: [String]) async {
+        for code in codes {
+            _ = try? await financials(code: code)
+            _ = try? await waterfall(code: code)
+            _ = try? await overview(code: code)
+        }
+    }
+
+    private func ttl(for code: String) -> TimeInterval {
+        pinnedCodes.contains(code) ? ResponseCache.watchlistTTL : ResponseCache.analysisTTL
     }
 
     private func path(_ suffix: String) -> URL {
         APIConfiguration.baseURL.appending(path: suffix)
     }
 
-    private func get<T: Decodable>(_ url: URL) async throws -> T {
+    private func peek<T: Decodable>(_ url: URL) async -> T? {
+        let key = ResponseCache.key(for: url)
+        guard let data = await cache.load(key: key, maxAge: nil) else { return nil }
+        return try? decoder.decode(T.self, from: data)
+    }
+
+    private func get<T: Decodable>(_ url: URL, cacheTTL: TimeInterval? = nil) async throws -> T {
+        let key = ResponseCache.key(for: url)
+        if let cacheTTL, let data = await cache.load(key: key, maxAge: cacheTTL),
+            let decoded = try? decoder.decode(T.self, from: data)
+        {
+            return decoded
+        }
+        do {
+            let data = try await fetchData(url)
+            if cacheTTL != nil {
+                await cache.store(key: key, data: data)
+            }
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                throw APIClientError.decoding(error)
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if let clientError = error as? APIClientError, case .http(let status, _) = clientError,
+                status == 404
+            {
+                throw clientError
+            }
+            if cacheTTL != nil, let data = await cache.load(key: key, maxAge: nil),
+                let decoded = try? decoder.decode(T.self, from: data)
+            {
+                return decoded
+            }
+            throw error
+        }
+    }
+
+    private func fetchData(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -104,10 +183,6 @@ actor APIClient {
                 ?? "HTTP \(status)"
             throw APIClientError.http(status: status, message: message)
         }
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            throw APIClientError.decoding(error)
-        }
+        return data
     }
 }

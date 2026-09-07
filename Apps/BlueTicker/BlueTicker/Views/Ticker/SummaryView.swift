@@ -116,6 +116,14 @@ struct SummaryView: View {
     }
 
     private func load() async {
+        if let cached = await APIClient.shared.cachedFinancials(code: code) {
+            response = cached
+            errorMessage = nil
+        }
+        if let cachedOverview = await APIClient.shared.cachedOverview(code: code) {
+            let text = cachedOverview.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        }
         async let financials = APIClient.shared.financials(code: code)
         async let overviewText = loadOverview()
         do {
@@ -123,9 +131,13 @@ struct SummaryView: View {
             errorMessage = nil
             overview = await overviewText
         } catch APIClientError.http(let status, let message) where status == 404 {
-            errorMessage = message.isEmpty ? "財務データは未集計です" : message
+            if response == nil {
+                errorMessage = message.isEmpty ? "財務データは未集計です" : message
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if response == nil {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

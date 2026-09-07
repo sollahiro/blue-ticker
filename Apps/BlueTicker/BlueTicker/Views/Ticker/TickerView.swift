@@ -134,6 +134,7 @@ struct TickerView: View {
     private func toggleWatch() {
         if let existing = watched.first(where: { $0.code == company.code }) {
             modelContext.delete(existing)
+            Task { await APIClient.shared.unpinCode(company.code) }
         } else {
             modelContext.insert(
                 WatchedCompany(
@@ -143,6 +144,7 @@ struct TickerView: View {
                     iconURL: company.iconURL
                 )
             )
+            Task { await APIClient.shared.pinCode(company.code) }
         }
     }
 }
