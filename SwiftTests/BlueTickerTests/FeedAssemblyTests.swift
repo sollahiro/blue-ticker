@@ -115,12 +115,20 @@ private func rec(
         let expected = Set(feedSampleIDs(records.map(\.docID), count: 10, seed: "2026-06-20"))
         #expect(Set(ids) == expected)
         #expect(ids.count == 10)
-        let newestByTime = Array(records.map(\.docID).prefix(10))
-        #expect(ids != newestByTime)
+        let submitted = items?.compactMap { $0["submitted_at"] as? String } ?? []
+        #expect(submitted == submitted.sorted(by: >))
         let again = assembleFeedUpdates(
             from: records, limit: 10, days: 7, docTypes: ["120"], now: now)
         let againIds = (again["items"] as? [[String: Any]])?.compactMap { $0["doc_id"] as? String }
         #expect(againIds == ids)
+    }
+
+    @Test func feedSampleIDsIsStableAndIgnoresInputOrder() {
+        let ids = (0..<15).map { "DOC\($0)" }
+        let sampled = feedSampleIDs(ids, count: 10, seed: "2026-06-20")
+        #expect(sampled.count == 10)
+        #expect(feedSampleIDs(ids, count: 10, seed: "2026-06-20") == sampled)
+        #expect(Set(sampled) != Set(ids.prefix(10)))
     }
 
     @Test func updatesAreChronologicalDocumentsAndSkipUnlisted() {
