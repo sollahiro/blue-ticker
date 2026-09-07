@@ -410,19 +410,32 @@ struct BreakdownView: View {
         }
 
         /// 計算の掛け算側がマイナスだと、売上・回転・レバレッジの増減と寄与の符号が逆になる。
+        /// 開示の粗利率が無くても、サーバーは事業利益+販管費からマージンを出すので、
+        /// 判定は報告値ではなくドライバー増減と寄与の符号を比べる。
         private func isDriverInverted(year: FinancialsYear, prior: FinancialsYear?) -> Bool {
             switch self {
             case .salesChange:
-                return (prior?.grossProfitMargin ?? 0) < 0
+                return signsDisagree(year.sales, prior?.sales, contribution: year.salesChangeImpact)
             case .roicTurnover:
-                return (year.nopatMargin ?? 0) < 0
+                return signsDisagree(
+                    year.investedCapitalTurnover, prior?.investedCapitalTurnover,
+                    contribution: year.roicTurnoverEffect)
             case .roeTurnover:
-                return ((year.netMargin ?? 0) * (prior?.financialLeverage ?? 1)) < 0
+                return signsDisagree(
+                    year.assetTurnover, prior?.assetTurnover, contribution: year.roeAssetTurnoverEffect)
             case .roeLeverage:
-                return ((year.netMargin ?? 0) * (year.assetTurnover ?? 1)) < 0
+                return signsDisagree(
+                    year.financialLeverage, prior?.financialLeverage, contribution: year.roeLeverageEffect)
             case .grossMarginChange, .sgaChange, .roicMargin, .roeNetMargin:
                 return false
             }
+        }
+
+        private func signsDisagree(_ current: Double?, _ prior: Double?, contribution: Double?) -> Bool {
+            guard let current, let prior, let contribution, current != prior, contribution != 0 else {
+                return false
+            }
+            return (current > prior) != (contribution > 0)
         }
 
         private var inversionNote: String? {
