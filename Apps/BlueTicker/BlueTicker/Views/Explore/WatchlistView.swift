@@ -27,11 +27,6 @@ struct WatchlistView: View {
         }
         .navigationTitle("リスト")
         .bltChrome()
-        .task(id: companies.map(\.code).joined(separator: ",")) {
-            let codes = companies.map(\.code)
-            await APIClient.shared.setPinnedCodes(Set(codes))
-            await APIClient.shared.prefetchAnalysis(codes: codes)
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()

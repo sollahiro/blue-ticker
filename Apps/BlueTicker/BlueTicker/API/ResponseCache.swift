@@ -7,6 +7,7 @@ struct ResponseCacheRecord: Codable {
 
 /// 解析 REST（概要・分解・Overview）の端末キャッシュ。
 /// 有報は年次なので短時間の再取得を避け、ウォッチリスト銘柄はより長く持つ。
+/// iOS は `BlueTickerCore` をリンクしないため、サーバー側の `CacheManager` は使わない。
 actor ResponseCache {
     static let shared = ResponseCache()
 
@@ -39,10 +40,12 @@ actor ResponseCache {
     }
 
     static func key(for url: URL) -> String {
+        let scheme = url.scheme ?? "unknown"
         let host = url.host ?? "local"
+        let port = url.port.map { "_\($0)" } ?? ""
         let path = url.path.replacingOccurrences(of: "/", with: "_")
         let query = url.query.map { "_\($0)" } ?? ""
-        return sanitize("\(host)\(path)\(query)")
+        return sanitize("\(scheme)_\(host)\(port)\(path)\(query)")
     }
 
     func load(key: String, maxAge: TimeInterval?) -> Data? {
@@ -57,6 +60,11 @@ actor ResponseCache {
         let record = ResponseCacheRecord(savedAt: savedAt, data: data)
         memory[key] = record
         persist(key: key, record: record)
+    }
+
+    func remove(key: String) {
+        memory.removeValue(forKey: key)
+        try? FileManager.default.removeItem(at: fileURL(for: key))
     }
 
     private func record(for key: String) -> ResponseCacheRecord? {

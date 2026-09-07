@@ -131,9 +131,9 @@ struct SummaryView: View {
             errorMessage = nil
             overview = await overviewText
         } catch APIClientError.http(let status, let message) where status == 404 {
-            if response == nil {
-                errorMessage = message.isEmpty ? "財務データは未集計です" : message
-            }
+            response = nil
+            overview = nil
+            errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
             if response == nil {
                 errorMessage = error.localizedDescription

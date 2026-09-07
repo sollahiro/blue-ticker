@@ -113,11 +113,12 @@ actor APIClient {
         }
         do {
             let data = try await fetchData(url)
-            if cacheTTL != nil {
-                await cache.store(key: key, data: data)
-            }
             do {
-                return try decoder.decode(T.self, from: data)
+                let decoded = try decoder.decode(T.self, from: data)
+                if cacheTTL != nil {
+                    await cache.store(key: key, data: data)
+                }
+                return decoded
             } catch {
                 throw APIClientError.decoding(error)
             }
@@ -127,6 +128,9 @@ actor APIClient {
             if let clientError = error as? APIClientError, case .http(let status, _) = clientError,
                 status == 404
             {
+                if cacheTTL != nil {
+                    await cache.remove(key: key)
+                }
                 throw clientError
             }
             if cacheTTL != nil, let data = await cache.load(key: key, maxAge: nil),

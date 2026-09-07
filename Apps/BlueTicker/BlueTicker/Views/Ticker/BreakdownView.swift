@@ -395,12 +395,47 @@ struct BreakdownView: View {
         }
 
         func detail(year: FinancialsYear, prior: FinancialsYear?) -> [String] {
-            var lines = [blurb, plusMeaning, minusMeaning]
+            let inverted = isDriverInverted(year: year, prior: prior)
+            var lines = [blurb]
+            if inverted, let note = inversionNote {
+                lines.append(note)
+            }
+            lines.append(plusMeaning(inverted: inverted))
+            lines.append(minusMeaning(inverted: inverted))
             lines.append(formula)
             if let substitution = substitution(year: year, prior: prior) {
                 lines.append("= \(substitution)")
             }
             return lines
+        }
+
+        /// 計算の掛け算側がマイナスだと、売上・回転・レバレッジの増減と寄与の符号が逆になる。
+        private func isDriverInverted(year: FinancialsYear, prior: FinancialsYear?) -> Bool {
+            switch self {
+            case .salesChange:
+                return (prior?.grossProfitMargin ?? 0) < 0
+            case .roicTurnover:
+                return (year.nopatMargin ?? 0) < 0
+            case .roeTurnover:
+                return ((year.netMargin ?? 0) * (prior?.financialLeverage ?? 1)) < 0
+            case .roeLeverage:
+                return ((year.netMargin ?? 0) * (year.assetTurnover ?? 1)) < 0
+            case .grossMarginChange, .sgaChange, .roicMargin, .roeNetMargin:
+                return false
+            }
+        }
+
+        private var inversionNote: String? {
+            switch self {
+            case .salesChange:
+                return "粗利率がマイナスのときは、売上が増えると赤字も増えます。"
+            case .roicTurnover:
+                return "利益率がマイナスのときは、回転が上がると損失も増えます。"
+            case .roeTurnover, .roeLeverage:
+                return "純利益率がマイナスのときは、回転や借入が増えると損失も増えます。"
+            default:
+                return nil
+            }
         }
 
         private var blurb: String {
@@ -424,7 +459,19 @@ struct BreakdownView: View {
             }
         }
 
-        private var plusMeaning: String {
+        private func plusMeaning(inverted: Bool) -> String {
+            if inverted {
+                switch self {
+                case .salesChange:
+                    return "+ 売上の変化が、利益を押し上げた"
+                case .roicTurnover, .roeTurnover:
+                    return "+ 回転率の変化が、収益性を押し上げた"
+                case .roeLeverage:
+                    return "+ レバレッジの変化が、収益性を押し上げた"
+                default:
+                    break
+                }
+            }
             switch self {
             case .salesChange:
                 return "+ 売上が増えて、利益を押し上げた"
@@ -445,7 +492,19 @@ struct BreakdownView: View {
             }
         }
 
-        private var minusMeaning: String {
+        private func minusMeaning(inverted: Bool) -> String {
+            if inverted {
+                switch self {
+                case .salesChange:
+                    return "− 売上の変化が、利益を押し下げた"
+                case .roicTurnover, .roeTurnover:
+                    return "− 回転率の変化が、収益性を押し下げた"
+                case .roeLeverage:
+                    return "− レバレッジの変化が、収益性を押し下げた"
+                default:
+                    break
+                }
+            }
             switch self {
             case .salesChange:
                 return "− 売上が減って、利益を押し下げた"
@@ -654,9 +713,8 @@ struct BreakdownView: View {
                 selectedYearID = years.last { isYearSelectable($0) }?.id
             }
         } catch APIClientError.http(let status, let message) where status == 404 {
-            if response == nil {
-                errorMessage = message.isEmpty ? "財務データは未集計です" : message
-            }
+            response = nil
+            errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
             if response == nil {
                 errorMessage = error.localizedDescription
