@@ -127,8 +127,9 @@ private func rec(
         let ids = (0..<15).map { "DOC\($0)" }
         let sampled = feedSampleIDs(ids, count: 10, seed: "2026-06-20")
         #expect(sampled.count == 10)
+        #expect(Set(sampled).isSubset(of: Set(ids)))
         #expect(feedSampleIDs(ids, count: 10, seed: "2026-06-20") == sampled)
-        #expect(Set(sampled) != Set(ids.prefix(10)))
+        #expect(feedSampleIDs(ids.reversed(), count: 10, seed: "2026-06-20") == sampled)
     }
 
     @Test func updatesAreChronologicalDocumentsAndSkipUnlisted() {
