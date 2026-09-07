@@ -41,7 +41,8 @@ public typealias FilingSectionsExtractor = @Sendable (String) async -> FilingSec
 
 /// 上場企業の有報（直近 years 年ぶん）を走査し、未抽出 or バージョン／セクション集合不一致のものを
 /// 抽出・格納する。`limit` は新規抽出件数の上限（抽出が重いためバッチ実行用）。
-/// `explicitCodes` を渡すと候補をその集合に絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
+/// `explicitCodes` を渡すとその集合を母集団にする（`--codes` 手動指定。listedCodes との積にしない。
+/// 外国法人など定期ジョブ対象外の銘柄を手動再ingestするため。`nil` は listedCodes のみ）。
 /// `priorityCodes` に含まれる企業の書類は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 /// `cachedDocIDs` はローカル XBRL 展開済み。処理順は各社の最新有報 → 前年以降。同一年次内は
 /// 日経225 → キャッシュ済み → 欠測/版ずれのラウンドロビン。
@@ -183,9 +184,9 @@ struct FilingSectionCandidateSets {
 }
 
 /// 取り込み候補（保持窓内）と purge 対象をまとめて返す。
-/// 「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep、
+/// 未指定時は「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep。
+/// `--codes`（explicitCodes）指定時は listedCodes との積にせず、そのコード集合 × 会社有報 × 直近 years 件。
 /// それを超えた分を purge とする。docType 120 でも特定有価証券府令(030)の信託受益証券等は除外。
-/// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
 func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
     logger: Logger? = nil
@@ -203,8 +204,13 @@ func filingSectionCandidates(
             let code = listedTickerCode(fromSecCode: doc.secCode),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
-        guard listedCodes.contains(code) else { continue }
-        if let explicit = explicitCodes, !explicit.contains(code) { continue }
+        // `--codes` は定期ジョブの国内上場ユニバースを上書きする（外国法人の手動再ingest）。
+        // 未指定時だけ listedCodes（上場×国内法人）で絞る。
+        if let explicit = explicitCodes {
+            guard explicit.contains(code) else { continue }
+        } else {
+            guard listedCodes.contains(code) else { continue }
+        }
         byCode[code, default: []].append((docID, doc.submitDateTime))
     }
 

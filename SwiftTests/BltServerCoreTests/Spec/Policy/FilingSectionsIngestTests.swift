@@ -104,6 +104,24 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    /// `--codes` は listedCodes（国内上場ユニバース）との積にしない。
+    /// 外国法人は定期ジョブでは除外されるが、手動再ingestでは対象になる。
+    @Test func ingestIncludesExplicitCodesOutsideListedUniverse() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "17730", db: app.db)  // 外国法人。listedCodes に含めない
+            try await seedDoc("S2", secCode: "72030", db: app.db)
+
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil,
+                explicitCodes: ["1773"]
+            ) { _ in fakePayload() }
+
+            #expect(summary.attempted == 1)
+            #expect(try await CompanyFilingSections.find("S1", on: app.db) != nil)
+            #expect(try await CompanyFilingSections.find("S2", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestExcludesNonAnnualDocTypes() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)  // 有報120
