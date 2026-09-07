@@ -93,6 +93,13 @@ actor MasterDataManager {
         )
     }
 
+    /// 提出者種別が「外国法人・組合」の 4 桁証券コード。書類同期で `edinet_documents` に載せない。
+    /// 上場・非上場を問わず CSV 上の当該種別を返す（`listedCodes()` と同じ master 分類）。
+    func foreignFilerCodes() async -> Set<String> {
+        await loadIfNeeded()
+        return Set(stocks.filter { $0.filerType == foreignFilerType }.map { $0.code })
+    }
+
     // MARK: - Private
 
     private func loadCSV(from url: URL) async {
