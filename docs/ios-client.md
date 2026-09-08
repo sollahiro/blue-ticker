@@ -98,15 +98,17 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 
 ## 認証
 
-iOS は第三者と同じ公開 REST のクライアント。privileged にしない。Service Token は埋め込まない。
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。
 
 | 段階 | 方針 |
 |---|---|
-| 開発 | loopback / http は無認証。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証 |
+| 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
 | 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
-| 段階 B | 未決。この変更では変えない |
+| 段階 B | アカウント不要の本線は HAPIS の短命匿名トークン + 本番 App Attest（ゲートウェイ責務。blt-server は見ない）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
 
-設定の SSO はプレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。MCP は製品認証に使わない。
+段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。Attest / トークン失敗は 2〜3 回自動リトライし、だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない。
+
+設定の SSO は段階 A プレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
 
 ## 未決
 
