@@ -65,6 +65,71 @@ private func record(
         }
     }
 
+    @Test func applyDocumentsSkipsForeignFilerInsertAndUpdate() async throws {
+        try await withMigratedApp { app in
+            let foreign = record("S-FOREIGN", filerName: "旧外国", secCode: "17730")
+            let domestic = record("S-DOMESTIC", secCode: "72030")
+            let noCode = record("S-NOCODE", secCode: nil)
+            let excluded: Set<String> = ["1773"]
+
+            let first = try await applyDocuments(
+                [foreign, domestic, noCode], db: app.db, excludedCodes: excluded)
+            #expect(first.created == 2)
+            #expect(first.updated == 0)
+            #expect(try await EdinetDocument.find("S-FOREIGN", on: app.db) == nil)
+            #expect(try await EdinetDocument.find("S-DOMESTIC", on: app.db) != nil)
+            #expect(try await EdinetDocument.find("S-NOCODE", on: app.db) != nil)
+
+            _ = try await applyDocuments([record("S-FOREIGN", filerName: "既存", secCode: "17730")], db: app.db)
+            let leftover = try #require(try await EdinetDocument.find("S-FOREIGN", on: app.db))
+            #expect(leftover.filerName == "既存")
+
+            let second = try await applyDocuments(
+                [record("S-FOREIGN", filerName: "新外国", secCode: "17730"), domestic],
+                db: app.db, excludedCodes: excluded)
+            #expect(second.created == 0)
+            #expect(second.updated == 1)
+            let still = try #require(try await EdinetDocument.find("S-FOREIGN", on: app.db))
+            #expect(still.filerName == "既存")
+        }
+    }
+
+    @Test func purgeForeignFilerDocumentsRemovesLeftoversFromFilingsAndFeed() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S-FOREIGN", secCode: "17730"),
+                    record("S-DOMESTIC", secCode: "72030"),
+                ], db: app.db)
+
+            let filingsBefore = try await loadStoredFilingRecords(code: "1773", db: app.db)
+            #expect(filingsBefore.map(\.docID) == ["S-FOREIGN"])
+            let feedBefore = try await loadFeedRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 10)
+            #expect(Set(feedBefore.map(\.docID)) == ["S-FOREIGN", "S-DOMESTIC"])
+
+            let purged = try await purgeForeignFilerDocuments(
+                excludedCodes: ["1773"], db: app.db)
+            #expect(purged == 1)
+            #expect(try await EdinetDocument.find("S-FOREIGN", on: app.db) == nil)
+            #expect(try await EdinetDocument.find("S-DOMESTIC", on: app.db) != nil)
+
+            let filingsAfter = try await loadStoredFilingRecords(code: "1773", db: app.db)
+            #expect(filingsAfter.isEmpty)
+            let domesticFilings = try await loadStoredFilingRecords(code: "7203", db: app.db)
+            #expect(domesticFilings.map(\.docID) == ["S-DOMESTIC"])
+            let feedAfter = try await loadFeedRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 10)
+            #expect(feedAfter.map(\.docID) == ["S-DOMESTIC"])
+        }
+    }
+
+    @Test func edinetSecCodesExpandsFourthDigitAcrossFifth() {
+        #expect(edinetSecCodes(forIssuerCode: "1773").contains("17730"))
+        #expect(edinetSecCodes(forIssuerCode: "1773").count == 10)
+        #expect(edinetSecCodes(forIssuerCode: "12").isEmpty)
+    }
+
     @Test func upsertSyncStateInsertsThenUpdatesSingleRow() async throws {
         try await withMigratedApp { app in
             try await upsertSyncState(syncedThrough: "2025-06-01", db: app.db)

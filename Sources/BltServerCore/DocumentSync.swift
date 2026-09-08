@@ -2,6 +2,8 @@
 // 同期高水位（edinet_sync_state.synced_through）を進める。
 // 取得・正規化は BlueTickerCore のファサード（fetchDocumentsForSync）に委譲し、
 // ここでは DB への upsert と高水位更新のみを担う。
+// 外国法人・組合は master の提出者種別（`foreignFilerCodes()`）で fetch / apply から落とし、
+// 既存行は sync 時に `edinet_documents` から削除する。
 
 import BlueTickerCore
 import Fluent
@@ -51,7 +53,11 @@ func runDocumentSync(
     let resolvedFrom = try await resolveStartDate(from: from, db: db, logger: logger)
     let previousSyncedThrough = try await loadSyncedThrough(db: db, logger: logger)
     let fetchResult = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
-    let counts = try await applyDocuments(fetchResult.records, db: db, logger: logger)
+    let excludedCodes = await context.foreignFilerCodes()
+    _ = try await purgeForeignFilerDocuments(
+        excludedCodes: excludedCodes, db: db, logger: logger)
+    let counts = try await applyDocuments(
+        fetchResult.records, db: db, excludedCodes: excludedCodes, logger: logger)
     let syncedThrough = computeDocumentSyncedThrough(
         from: resolvedFrom,
         to: to,
@@ -73,21 +79,30 @@ func runDocumentSync(
 }
 
 /// レコードを edinet_documents へ upsert する（docID 一致で更新、無ければ作成）。
+/// 外国法人・組合（`excludedCodes`＝master の 4 桁コード）は作成も更新もしない。
 /// 各 DB 操作は withDbRetry で一過性の接続断（Neon scale-to-zero 等）に対して再試行する
 /// （EDINET 取得の空白中に suspend され、直後の DB 操作が死んだ接続で失敗するのを回復。ingest と同思想）。
 func applyDocuments(
-    _ records: [EdinetDocumentRecord], db: Database, logger: Logger? = nil
+    _ records: [EdinetDocumentRecord], db: Database,
+    excludedCodes: Set<String> = [], logger: Logger? = nil
 ) async throws -> (created: Int, updated: Int, completed: Bool) {
     var created = 0
     var updated = 0
+    var skipped = 0
     var unhealthyRetries = 0
     for record in records {
-        // 他ステージと同様、各項目の先頭で判定する（本ループに continue は無いが一貫性のため）。
+        // 他ステージと同様、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
             logger?.error(
-                "DB接続が不安定なため 書類同期 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated)件は次回スケジュールで再試行)"
+                "DB接続が不安定なため 書類同期 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated - skipped)件は次回スケジュールで再試行)"
             )
             return (created, updated, completed: false)
+        }
+        if !shouldStoreEdinetDocumentForSync(
+            secCode: record.secCode, excludedCodes: excludedCodes
+        ) {
+            skipped += 1
+            continue
         }
         let existingID = try await withDbRetry(
             logger: logger, context: "docID=\(record.docID)", onRetry: { unhealthyRetries += 1 }
@@ -130,7 +145,51 @@ func applyDocuments(
             created += 1
         }
     }
+    if skipped > 0 {
+        logger?.notice(
+            "書類同期: 外国法人・組合 \(skipped) 件をスキップ",
+            metadata: [
+                "event": "sync_foreign_filer_skipped",
+                "skipped": .stringConvertible(skipped),
+            ])
+    }
     return (created, updated, completed: true)
+}
+
+/// 4 桁証券コードに対応する EDINET 5 桁 secCode（末尾 0–9）。
+/// filings の突き合わせと外国法人・組合の既存行削除で同じ集合を使う。
+func edinetSecCodes(forIssuerCode code: String) -> [String] {
+    let code4 = String(code.prefix(4)).uppercased()
+    guard code4.count == 4, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
+    return (0...9).map { "\(code4)\($0)" }
+}
+
+/// 既存の外国法人・組合行を `edinet_documents` から削除する。
+/// 他テーブルの `doc_id` は論理参照のみ（FK なし）。ingest は `listedCodes()` で対象外のため
+/// statements / notes / breakdowns は作られない想定で、ここでは書類一覧だけを落とす。
+/// Feed / filings の DB 経路はこのテーブルだけを読む。
+func purgeForeignFilerDocuments(
+    excludedCodes: Set<String>, db: Database, logger: Logger? = nil
+) async throws -> Int {
+    let secCodes = Set(excludedCodes.flatMap(edinetSecCodes(forIssuerCode:)))
+    guard !secCodes.isEmpty else { return 0 }
+    return try await withDbRetry(logger: logger, context: "purge_foreign_filers") {
+        let rows = try await EdinetDocument.query(on: db)
+            .filter(\.$secCode ~~ Array(secCodes))
+            .all()
+        for row in rows {
+            try await row.delete(on: db)
+        }
+        if !rows.isEmpty {
+            logger?.notice(
+                "書類同期: 外国法人・組合の既存行 \(rows.count) 件を削除",
+                metadata: [
+                    "event": "sync_foreign_filer_purged",
+                    "purged": .stringConvertible(rows.count),
+                ])
+        }
+        return rows.count
+    }
 }
 
 /// 部分失敗時は高水位を進めない（または取得失敗日の前日までに留める）。
@@ -187,9 +246,8 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 /// 該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 /// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
-    let code4 = String(code.prefix(4)).uppercased()
-    guard code4.count == 4, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return [] }
-    let secCodes = (0...9).map { "\(code4)\($0)" }
+    let secCodes = edinetSecCodes(forIssuerCode: code)
+    guard !secCodes.isEmpty else { return [] }
     let rows = try await EdinetDocument.query(on: db)
         .filter(\.$secCode ~~ secCodes)
         .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)

@@ -115,6 +115,20 @@ import Testing
         #expect(listed.contains("6501"))
     }
 
+    @Test func testForeignFilerCodesIncludesListedForeignIssuers() async throws {
+        let manager = MasterDataManager()
+        let foreign = await manager.foreignFilerCodes()
+        let listed = await manager.listedCodes()
+        // 東証の外国法人・組合は listedCodes から除外し、書類同期でも同じ集合で落とす。
+        for code in ["1773", "7699", "9399"] {
+            let stock = try #require(await manager.getByCode(code))
+            #expect(stock.filerType == "外国法人・組合")
+            #expect(foreign.contains(code))
+            #expect(!listed.contains(code))
+        }
+        #expect(!foreign.contains("6501"))
+    }
+
     @Test func parseCSVRowKeepsCommasInsideQuotes() {
         let fields = parseCSVRow(#"72030,"株式会社 ""例"" 商会",製造業"#)
         #expect(fields.count == 3)

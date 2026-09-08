@@ -276,6 +276,11 @@ public extension BltServerContext {
         await masterDataManager.listedCodes()
     }
 
+    /// 提出者種別が「外国法人・組合」の 4 桁コード。書類同期で `edinet_documents` から除外する。
+    func foreignFilerCodes() async -> Set<String> {
+        await masterDataManager.foreignFilerCodes()
+    }
+
     /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。決定論のみ（LLM不要）。
     /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
@@ -770,7 +775,7 @@ private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedB
 
 public extension BltServerContext {
     /// 書類同期用に、指定期間（YYYY-MM-DD）の EDINET 書類を正規化済みレコードで返す。
-    /// seed 種別（Api.documentSyncDocTypes）に絞り、docID で重複排除する。
+    /// seed 種別（Api.documentSyncDocTypes）に絞り、外国法人・組合を除き、docID で重複排除する。
     /// 取得失敗日は `failedDates` に含め、高水位を進めない判定に使う。
     func fetchDocumentsForSync(from: String, to: String) async -> DocumentFetchResult {
         guard let start = parseDateString(from), let end = parseDateString(to), start <= end else {
@@ -781,16 +786,21 @@ public extension BltServerContext {
             docs == nil ? date : nil
         }
         let allDocs = byDate.values.compactMap { $0 }.flatMap { $0 }
+        let excludedCodes = await masterDataManager.foreignFilerCodes()
         return DocumentFetchResult(
-            records: mapEdinetDocumentRecords(allDocs),
+            records: mapEdinetDocumentRecords(allDocs, excludedCodes: excludedCodes),
             failedDates: failedDates
         )
     }
 }
 
 /// EDINET の動的 JSON（[String: Any]）配列を正規化済みレコードへ写す。
-/// seed 種別フィルタ・docID 重複排除・日付正規化を行う純粋関数（ネットワーク非依存・テスト対象）。
-func mapEdinetDocumentRecords(_ docs: [[String: Any]]) -> [EdinetDocumentRecord] {
+/// seed 種別フィルタ・外国法人・組合除外・docID 重複排除・日付正規化を行う純粋関数
+/// （ネットワーク非依存・テスト対象）。`excludedCodes` は
+/// `MasterDataManager.foreignFilerCodes()`（4 桁）を渡す。
+func mapEdinetDocumentRecords(
+    _ docs: [[String: Any]], excludedCodes: Set<String> = []
+) -> [EdinetDocumentRecord] {
     var seen = Set<String>()
     var records: [EdinetDocumentRecord] = []
     for doc in docs {
@@ -798,10 +808,13 @@ func mapEdinetDocumentRecords(_ docs: [[String: Any]]) -> [EdinetDocumentRecord]
         guard let docType = doc["docTypeCode"] as? String,
               Api.documentSyncDocTypes.contains(docType) else { continue }
         guard seen.insert(docID).inserted else { continue }
+        let secCode = nonEmptyString(doc["secCode"])
+        guard shouldStoreEdinetDocumentForSync(secCode: secCode, excludedCodes: excludedCodes)
+        else { continue }
         records.append(EdinetDocumentRecord(
             docID: docID,
             edinetCode: nonEmptyString(doc["edinetCode"]) ?? "",
-            secCode: nonEmptyString(doc["secCode"]),
+            secCode: secCode,
             filerName: nonEmptyString(doc["filerName"]) ?? "",
             docTypeCode: docType,
             ordinanceCode: nonEmptyString(doc["ordinanceCode"]),
@@ -813,6 +826,15 @@ func mapEdinetDocumentRecords(_ docs: [[String: Any]]) -> [EdinetDocumentRecord]
         ))
     }
     return records
+}
+
+/// 書類同期で `edinet_documents` に載せるか。`excludedCodes` は外国法人・組合の 4 桁コード。
+/// secCode が上場形式（5 桁・末尾 0）で除外集合に入るときだけ落とす。識別できない書類は残す。
+public func shouldStoreEdinetDocumentForSync(
+    secCode: String?, excludedCodes: Set<String>
+) -> Bool {
+    guard let code = listedTickerCode(fromSecCode: secCode) else { return true }
+    return !excludedCodes.contains(code)
 }
 
 /// Any? を String? に落とし、空文字・空白のみは nil 扱いにする。
