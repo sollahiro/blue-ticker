@@ -166,6 +166,9 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // 段階 A: `api.sollahiro.com` だけ Access Cookie。段階 B stub: HAPIS ゲートウェイだけ
+        // 制御面で mint した consumer JWT を Bearer に付ける（ハードコードしない）。
+        // loopback / LAN `http` はどちらも付けない。
         if AccessSession.usesAccess(url) {
             if let jwt = AccessSession.jwt(for: url) {
                 if AccessSession.isExpired(jwt) {

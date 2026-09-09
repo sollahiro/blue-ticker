@@ -4,6 +4,7 @@ import FoundationNetworking
 #endif
 
 /// HAPIS 制御面で consumer JWT を mint / refresh する。blt-server には送らない。
+/// トークンは発行応答からだけ取る。`HAPIS_API_TOKEN` や固定 Bearer は使わない。
 actor HAPISConsumerClient {
     private let issuerURL: @Sendable () -> URL
     private let http: any HAPISHTTPPerforming
