@@ -442,6 +442,73 @@ struct HAPISConsumerClientTests {
         #expect(try await client.validToken() == "after-retry")
         #expect(attempts.value == 3)
     }
+
+    @Test func mintRetriesMalformedSuccessJSON() async throws {
+        let http = MockHAPISHTTP()
+        let attempts = Counter()
+        http.handler = { request in
+            guard (request.url?.path ?? "").hasSuffix("/v1/consumer/sessions") else {
+                return (500, #"{"error":{"code":"unexpected"}}"#)
+            }
+            let n = attempts.increment()
+            if n == 1 {
+                return (201, "{")
+            }
+            return (201, tokenJSON(token: "after-malformed", now: Date(), refreshIn: 3300, expiresIn: 3600))
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock()
+        )
+        #expect(try await client.validToken() == "after-malformed")
+        #expect(attempts.value == 2)
+    }
+
+    @Test func refreshRetriesMalformedSuccessJSON() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = MutableHAPISClock(now: now)
+        let http = MockHAPISHTTP()
+        let store = InMemoryHAPISTokenStore()
+        try store.save(
+            HAPISConsumerToken(
+                token: "old-token",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(-1),
+                subject: "stub:old",
+                attestMode: "stub"
+            ),
+            issuer: issuer
+        )
+        let attempts = Counter()
+        http.handler = { request in
+            guard (request.url?.path ?? "").hasSuffix("/v1/consumer/token/refresh") else {
+                Issue.record("refresh malformed retry must not remint")
+                return (500, #"{"error":{"code":"unexpected"}}"#)
+            }
+            let n = attempts.increment()
+            if n == 1 {
+                return (200, "{")
+            }
+            return (
+                200,
+                tokenJSON(
+                    token: "refreshed-after-malformed", now: now.addingTimeInterval(400),
+                    refreshIn: 3300, expiresIn: 3600)
+            )
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: clock
+        )
+        #expect(try await client.validToken() == "refreshed-after-malformed")
+        #expect(attempts.value == 2)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+    }
 }
 
 private func tokenJSON(token: String, now: Date, refreshIn: Int, expiresIn: Int) -> String {
@@ -457,8 +524,10 @@ private func tokenJSON(token: String, now: Date, refreshIn: Int, expiresIn: Int)
 final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
     struct Call: Sendable {
         var method: String
+        var host: String?
         var path: String
         var authorization: String?
+        var body: Data?
     }
 
     private(set) var calls: [Call] = []
@@ -479,8 +548,10 @@ final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
         calls.append(
             Call(
                 method: request.httpMethod ?? "GET",
+                host: request.url?.host,
                 path: request.url?.path ?? "",
-                authorization: request.value(forHTTPHeaderField: "Authorization")
+                authorization: request.value(forHTTPHeaderField: "Authorization"),
+                body: request.httpBody
             )
         )
         let (status, json) = handler(request)

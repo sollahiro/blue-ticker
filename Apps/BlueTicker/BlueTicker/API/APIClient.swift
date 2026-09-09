@@ -30,7 +30,10 @@ actor APIClient {
         self.hapis = hapis ?? HAPISConsumerClient(
             issuerURL: { APIConfiguration.hapisIssuerURL },
             session: URLSession(configuration: .ephemeral),
-            store: Self.makeTokenStore()
+            store: Self.makeTokenStore(),
+            attestation: HAPISAttestClientMode.make(
+                mode: APIConfiguration.hapisAttestClientMode
+            )
         )
     }
 
@@ -166,9 +169,9 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        // 段階 A: `api.sollahiro.com` だけ Access Cookie。段階 B stub: HAPIS ゲートウェイだけ
+        // 段階 A: `api.sollahiro.com` だけ Access Cookie。段階 B: HAPIS ゲートウェイだけ
         // 制御面で mint した consumer JWT を Bearer に付ける（ハードコードしない）。
-        // loopback / LAN `http` はどちらも付けない。
+        // Debug は stub mint、Release は App Attest。loopback / LAN `http` はどちらも付けない。
         if AccessSession.usesAccess(url) {
             if let jwt = AccessSession.jwt(for: url) {
                 if AccessSession.isExpired(jwt) {

@@ -104,11 +104,11 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 |---|---|
 | 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
 | 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
-| 段階 B（stub、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**本番 App Attest（`ATTEST_MODE=enforce`）は未配線**。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
+| 段階 B（HAPIS、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**クライアントは App Attest を sessions に載せる（Release）。本番サーバーの `ATTEST_MODE=enforce` はまだオフ**（stub のまま。この PR では切替しない）。Debug ビルドは stub mint のまま（Simulator / stub 制御面）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
 
 設定の SSO は段階 A プレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
 
-### HAPIS stub mint（クライアント）
+### HAPIS consumer mint（クライアント）
 
 公開 URL（秘密ではない。ハードコードしてよい）:
 
@@ -117,29 +117,57 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 発行者（制御面） | `https://hapis.sollahiro.workers.dev` |
 | 本番ゲートウェイ（API base） | `https://hapis-blue-ticker-production.sollahiro.workers.dev` |
 
-- `GET /v1/consumer/challenge` — stub では未使用（将来 Attest 用）
-- `POST /v1/consumer/sessions` — ボディ `{}`（stub）。201 で `token` / `refresh_at` / `expires_at`
-- `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）
+- `GET /v1/consumer/challenge` — App Attest の mint / attest / assertion のたびに取る（単回使い切り。stub mint では呼ばない）。応答 `challenge` は 32 バイトの unpadded base64url
+- `POST /v1/consumer/sessions` — 201 で `token` / `refresh_at` / `expires_at`
+  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=stub` のまま受ける。**本番 `ATTEST_MODE=enforce` はこの PR では切替しない**
+  - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
+- `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない。blt-server / Vapor には consumer JWT を付けない
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
 - 設定の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
-- Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない
+- Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Debug は stub なので Simulator 検索は動く）
+
+#### App Attest 証拠（Release / `blt.hapis.attestMode=appAttest`）
+
+`DCAppAttestService`。鍵 ID は発行者 origin と App Attest 環境（Debug `development` / Release `production`）ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
+
+`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。`attestKey` も `generateAssertion` も `SHA256(client_data)`。challenge は attest / assertion のたびに取り直す。hash 対象は decoded challenge バイト列ではなく、この JSON の UTF-8。
+
+1. 初回 mint: `GET /v1/consumer/challenge` → 上記 JSON の SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge` / `client_data`
+2. 以降の remint: 新しい challenge を取り、同じ JSON で `generateAssertion` → sessions に `key_id` / `assertion` / `challenge` / `client_data`
+3. 鍵は sessions 受理まで assertion に使わない。`attestKey` 失敗は同じ未登録鍵で再 attest。`attestKey` 成功後に sessions が落ちたら新しい鍵で attest（Apple は同じ鍵を再 attest できない）
+4. 制御面の mint 一時失敗は challenge + 証拠を取り直して再送する（同じ attestation / assertion は使いまわさない）。challenge GET は mint の再試行に含め、内側で三重化しない。refresh は同じ JWT リクエストを再送してよい
+5. 鍵が無効なら捨て、challenge を取り直して attest
+6. 本番 `ATTEST_MODE=enforce` 時の subject は `app_attest:<keyId>`（サーバー）。今は stub なので `stub:<keyId>` になり得る
+7. challenge の `expires_at` はサーバーが拒否する。クライアントは毎回取り直すだけで、TTL の事前判定はしない
+8. Debug stub で発行したトークンを App Attest 経路（Release、または Debug 上書き再起動）に持ち込んだときは refresh せず取り直す。サーバー `attest_mode` は live stub でも `stub` なので、局所 `clientMintMode` で判定する
+
+Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。`APIClient.shared` は起動時に provider を固定するので、上書きの反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
 
 段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。
 
 ### Mac / Simulator 手動スモーク（この PR では必須にしない）
 
-Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
+Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
 
 1. 設定 → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
-2. 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON が返ること
-3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh 以外に JWT が流れないこと
+2. Debug ビルド → 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
+3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
 4. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
+
+#### 実機 App Attest（後で。Simulator では不可）
+
+本番 `ATTEST_MODE` は stub のまま。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`）:
+
+1. 設定 → HAPIS 本番。検索できること
+2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id`・`challenge`・`client_data`（`{"challenge":…}`）と、初回は `attestation`、2 回目以降は `assertion`
+3. トークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
+4. Access の「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
 
 
 ## 未決
 
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
-- 設定の、開発用サーバー / Access ログイン / HAPIS stub 発行者以外
+- 設定の、開発用サーバー / Access ログイン / HAPIS 発行者以外
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
 - Screen REST を skills カタログに載せるか（BLT-49。listed drain 後でも別判断）
 
