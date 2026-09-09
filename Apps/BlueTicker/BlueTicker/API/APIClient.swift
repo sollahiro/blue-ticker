@@ -7,9 +7,12 @@ actor APIClient {
     private let decoder: JSONDecoder
     private let redirectDelegate: AccessRedirectDelegate?
     private let cache: ResponseCache
+    private let hapis: HAPISConsumerClient
     private var pinnedCodes: Set<String> = []
 
-    init(session: URLSession? = nil, cache: ResponseCache = .shared) {
+    init(
+        session: URLSession? = nil, cache: ResponseCache = .shared, hapis: HAPISConsumerClient? = nil
+    ) {
         self.cache = cache
         if let session {
             self.session = session
@@ -24,6 +27,23 @@ actor APIClient {
                 configuration: config, delegate: delegate, delegateQueue: nil)
         }
         decoder = JSONDecoder()
+        self.hapis = hapis ?? HAPISConsumerClient(
+            issuerURL: { APIConfiguration.hapisIssuerURL },
+            session: URLSession(configuration: .ephemeral),
+            store: Self.makeTokenStore()
+        )
+    }
+
+    func clearHAPISConsumerToken() async {
+        await hapis.invalidate()
+    }
+
+    private static func makeTokenStore() -> any HAPISTokenStoring {
+        #if canImport(Security)
+            return KeychainHAPISTokenStore()
+        #else
+            return InMemoryHAPISTokenStore()
+        #endif
     }
 
     func setPinnedCodes(_ codes: Set<String>) {
@@ -142,10 +162,13 @@ actor APIClient {
         }
     }
 
-    private func fetchData(_ url: URL) async throws -> Data {
+    private func fetchData(_ url: URL, hapisRemintAttempted: Bool = false) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // 段階 A: `api.sollahiro.com` だけ Access Cookie。段階 B stub: HAPIS ゲートウェイだけ
+        // 制御面で mint した consumer JWT を Bearer に付ける（ハードコードしない）。
+        // loopback / LAN `http` はどちらも付けない。
         if AccessSession.usesAccess(url) {
             if let jwt = AccessSession.jwt(for: url) {
                 if AccessSession.isExpired(jwt) {
@@ -154,6 +177,14 @@ actor APIClient {
                 }
                 request.setValue(
                     "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
+            }
+        } else if APIConfiguration.usesHAPISConsumer(url) {
+            do {
+                request = try await hapis.authorize(request)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw APIClientError.hapisUnavailable
             }
         }
         let data: Data
@@ -172,21 +203,37 @@ actor APIClient {
             throw APIClientError.needsAccessLogin
         }
         let status = http?.statusCode ?? 0
+        if status == 401, APIConfiguration.usesHAPISConsumer(url), !hapisRemintAttempted {
+            if GatewayErrorBody.parse(data)?.isTokenExpired == true {
+                do {
+                    _ = try await hapis.forceRemint()
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw APIClientError.hapisUnavailable
+                }
+                return try await fetchData(url, hapisRemintAttempted: true)
+            }
+        }
         if status == 404 {
-            let message = (try? decoder.decode(APIErrorBody.self, from: data))?.error
-                ?? "見つかりません"
+            let message = httpErrorMessage(data, fallback: "見つかりません")
             throw APIClientError.http(status: 404, message: message)
         }
         if status == 503 {
-            let message = (try? decoder.decode(APIErrorBody.self, from: data))?.error
-                ?? "サービスを利用できません"
+            let message = httpErrorMessage(data, fallback: "サービスを利用できません")
             throw APIClientError.http(status: 503, message: message)
         }
         guard (200..<300).contains(status) else {
-            let message = (try? decoder.decode(APIErrorBody.self, from: data))?.error
-                ?? "HTTP \(status)"
+            let message = httpErrorMessage(data, fallback: "HTTP \(status)")
             throw APIClientError.http(status: status, message: message)
         }
         return data
+    }
+
+    private func httpErrorMessage(_ data: Data, fallback: String) -> String {
+        if let body = GatewayErrorBody.parse(data), let message = body.message, !message.isEmpty {
+            return message
+        }
+        return (try? decoder.decode(APIErrorBody.self, from: data))?.error ?? fallback
     }
 }

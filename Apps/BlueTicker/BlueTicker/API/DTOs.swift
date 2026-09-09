@@ -208,6 +208,7 @@ enum APIClientError: LocalizedError {
     case decoding(Error)
     case transport(Error)
     case needsAccessLogin
+    case hapisUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -221,6 +222,8 @@ enum APIClientError: LocalizedError {
             return error.localizedDescription
         case .needsAccessLogin:
             return "Cloudflare Access のログインが必要です。設定からログインしてください"
+        case .hapisUnavailable:
+            return "一時的に更新できません"
         }
     }
 }
