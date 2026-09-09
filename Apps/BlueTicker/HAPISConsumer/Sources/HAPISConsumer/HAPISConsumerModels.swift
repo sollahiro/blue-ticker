@@ -4,14 +4,13 @@ import FoundationNetworking
 #endif
 
 /// HAPIS ゲートウェイへ短命匿名トークンを付ける対象か。loopback / LAN `http` と Access 本番は対象外。
-/// host は設定されたゲートウェイ origin と完全一致だけ（部分一致で sibling Worker に付けない）。
+/// 比較は https origin（host + 非既定 port）。host 部分一致や別ポートには付けない。
 enum HAPISConsumerAuth {
     static func applies(to url: URL, gatewayBases: [URL]) -> Bool {
-        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else {
+        guard let requestOrigin = HAPISIssuer.origin(of: url) else {
             return false
         }
-        let hosts = Set(gatewayBases.compactMap { $0.host?.lowercased() })
-        return hosts.contains(host)
+        return gatewayBases.contains { HAPISIssuer.origin(of: $0) == requestOrigin }
     }
 }
 

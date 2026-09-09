@@ -13,6 +13,7 @@ actor HAPISConsumerClient {
     private let attestation: any HAPISAttestationProviding
     private var inFlight: Task<String, Error>?
     private var epoch = 0
+    private var remintEpoch: Int?
     private let controlPlaneAttempts = 3
 
     init(
@@ -62,16 +63,30 @@ actor HAPISConsumerClient {
 
     func invalidate() {
         epoch += 1
+        remintEpoch = nil
         store.clear(issuer: issuerURL())
         inFlight = nil
     }
 
     @discardableResult
     func forceRemint() async throws -> String {
+        if let remintEpoch, remintEpoch == epoch, let inFlight {
+            return try await inFlight.value
+        }
         epoch += 1
+        let ticket = epoch
+        remintEpoch = ticket
         store.clear(issuer: issuerURL())
-        inFlight = nil
-        return try await coalescedResolve()
+        let task = Task {
+            try await self.resolveToken(ticket: ticket)
+        }
+        inFlight = task
+        let result = await task.result
+        if epoch == ticket {
+            inFlight = nil
+            remintEpoch = nil
+        }
+        return try result.get()
     }
 
     func storedToken() throws -> HAPISConsumerToken? {

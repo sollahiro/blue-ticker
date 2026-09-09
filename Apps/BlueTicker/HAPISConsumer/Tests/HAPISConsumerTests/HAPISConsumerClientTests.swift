@@ -244,6 +244,25 @@ struct HAPISConsumerClientTests {
         #expect(
             HAPISIssuer.origin(of: URL(string: "https://hapis.example.test/v1/foo?x=1")!)
                 == URL(string: "https://hapis.example.test"))
+        #expect(
+            HAPISIssuer.origin(of: URL(string: "https://hapis.example.test:443/v1/foo")!)
+                == URL(string: "https://hapis.example.test"))
+        #expect(
+            HAPISConsumerAuth.applies(
+                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:443/v1/companies")!,
+                gatewayBases: [gateway]
+            ))
+        #expect(
+            !HAPISConsumerAuth.applies(
+                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443/v1/companies")!,
+                gatewayBases: [gateway]
+            ))
+        let gatewayAltPort = URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443")!
+        #expect(
+            HAPISConsumerAuth.applies(
+                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443/v1/companies")!,
+                gatewayBases: [gatewayAltPort]
+            ))
     }
 
     @Test func concurrentValidTokenMintsOnce() async throws {
@@ -270,6 +289,33 @@ struct HAPISConsumerClientTests {
         async let c = client.validToken()
         let tokens = try await [a, b, c]
         #expect(Set(tokens) == ["shared-token"])
+        #expect(sessions.value == 1)
+    }
+
+    @Test func concurrentForceRemintMintsOnce() async throws {
+        let http = MockHAPISHTTP()
+        let store = InMemoryHAPISTokenStore()
+        let sessions = Counter()
+        http.delayNanoseconds = 80_000_000
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/sessions") {
+                sessions.increment()
+                return (201, tokenJSON(token: "remint-shared", now: Date(), refreshIn: 3300, expiresIn: 3600))
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: SystemHAPISClock()
+        )
+        async let a = client.forceRemint()
+        async let b = client.forceRemint()
+        async let c = client.forceRemint()
+        let tokens = try await [a, b, c]
+        #expect(Set(tokens) == ["remint-shared"])
         #expect(sessions.value == 1)
     }
 
