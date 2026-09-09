@@ -344,22 +344,25 @@ import Foundation
     }
 
     @Test func unitOnlyTableDiscardedForOrderingButCaptionCarriesForward() {
-        // 同一 HTML に単位表→前期表→当期表。単位表は候補にしないが両データ表へ単位が残る。
+        // 同一 HTML に単位表→データ表×2。単位表は候補にしないので applyPeriodOrdering が
+        // 前期/当期をずらず、かつ両データ表へ単位が残る。
         let html = """
             <table><tr><td>（単位：千円）</td></tr></table>
             <table>
-              <tr><td>前連結会計年度</td><td>日本</td><td>合計</td></tr>
-              <tr><td></td><td>100</td><td>100</td></tr>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>100</td><td>100</td></tr>
             </table>
             <table>
-              <tr><td>当連結会計年度</td><td>日本</td><td>合計</td></tr>
-              <tr><td></td><td>110</td><td>110</td></tr>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>110</td><td>110</td></tr>
             </table>
             """
         let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
         #expect(tables.count == 2)
         #expect(tables.map(\.period) == ["前期", "当期"])
         #expect(tables.map(\.unitCaption) == ["千円", "千円"])
+        #expect(tables[0].markdown.contains("100"))
+        #expect(tables[1].markdown.contains("110"))
         #expect(!tables.contains { $0.markdown.contains("単位") })
         let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 110_000)
         #expect(prompt.contains("unit=千円"))
