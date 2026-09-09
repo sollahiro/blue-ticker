@@ -195,6 +195,8 @@ import Foundation
         #expect(!current.markdown.contains("うち中国"))
         #expect(!containsAmount(prior.markdown, "6,060"))
         #expect(!prior.markdown.contains("うち中国"))
+        #expect(prior.unitCaption == "百万円")
+        #expect(current.unitCaption == "百万円")
     }
 
     // MARK: - アサヒ S100QG09 geography（2023-03-29、本番 unknown）

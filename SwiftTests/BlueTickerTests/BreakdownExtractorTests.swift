@@ -274,6 +274,12 @@ import Foundation
             #expect(result.tables[0].markdown.contains("40762"))
             #expect(result.tables[1].markdown.contains("38840"))
             #expect(!result.tables.contains { $0.markdown.contains("単位") })
+            #expect(result.tables[0].unitCaption == "百万円")
+            #expect(result.tables[1].unitCaption == "百万円")
+            let prompt = BreakdownExtractor.llmUserPrompt(
+                tables: result.tables, consolidatedSales: 59_479_000_000)
+            #expect(prompt.contains("unit=百万円"))
+            #expect(prompt.contains("単位: 百万円"))
         }
     }
 
@@ -325,6 +331,57 @@ import Foundation
     @Test func gridHasNumericValueRejectsUnitCaptionOnly() {
         #expect(!BreakdownExtractor.gridHasNumericValue([["（単位：百万円）"]]))
         #expect(BreakdownExtractor.gridHasNumericValue([["日本", "100"]]))
+    }
+
+    @Test func parseUnitCaptionExtractsKnownUnits() {
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：百万円）") == "百万円")
+        #expect(BreakdownExtractor.parseUnitCaption("(単位：千円)") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：円）") == "円")
+        #expect(BreakdownExtractor.parseUnitCaption("(Millions of yen)") == "百万円")
+        #expect(BreakdownExtractor.parseUnitCaption("(Thousands of yen)") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("日本 100") == nil)
+        #expect(BreakdownExtractor.unitCaption(from: [["（単位：百万円）"]]) == "百万円")
+    }
+
+    @Test func unitOnlyTableDiscardedForOrderingButCaptionCarriesForward() {
+        // 同一 HTML に単位表→前期表→当期表。単位表は候補にしないが両データ表へ単位が残る。
+        let html = """
+            <table><tr><td>（単位：千円）</td></tr></table>
+            <table>
+              <tr><td>前連結会計年度</td><td>日本</td><td>合計</td></tr>
+              <tr><td></td><td>100</td><td>100</td></tr>
+            </table>
+            <table>
+              <tr><td>当連結会計年度</td><td>日本</td><td>合計</td></tr>
+              <tr><td></td><td>110</td><td>110</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.count == 2)
+        #expect(tables.map(\.period) == ["前期", "当期"])
+        #expect(tables.map(\.unitCaption) == ["千円", "千円"])
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+        let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 110_000)
+        #expect(prompt.contains("unit=千円"))
+        #expect(prompt.contains("単位: 千円"))
+        #expect(prompt.contains("period=前期"))
+        #expect(prompt.contains("period=当期"))
+    }
+
+    @Test func keywordPathCarriesUnitCaptionFromStubTable() {
+        let html = """
+            <p>地域ごとの情報</p>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>アジア</td><td>合計</td></tr>
+              <tr><td>38840</td><td>14246</td><td>59479</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.keywordTablesFromHtml(html, keywords: ["地域ごとの情報"])
+        #expect(tables.count == 1)
+        #expect(tables[0].unitCaption == "百万円")
+        #expect(tables[0].markdown.contains("38840"))
+        #expect(!tables[0].markdown.contains("単位"))
     }
 
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
@@ -2287,6 +2344,8 @@ import Foundation
         let tables = try #require(dict["tables"] as? [[String: Any]])
         #expect(tables[0]["period"] as? String == "当期")
         #expect(tables[1]["period"] == nil)  // nil は出力しない（Python NotRequired と同じ）
+        #expect(tables[0]["unitCaption"] == nil)
+        #expect(tables[1]["unitCaption"] == nil)
 
         let facts = try #require(dict["facts"] as? [[String: Any]])
         #expect(facts[0]["label"] == nil)

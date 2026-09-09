@@ -46,7 +46,7 @@ enum GeographyBreakdownLLMNormalizer {
     - 列を地域行に展開するとき、出力行の順序は元表の列の左から右（または行の上から下）と一致させること。合計を途中の地域より前に動かさないこと
     - 行ラベルは「日本」「米国」「欧州」「アジア」等の地域名であるべきで、事業名・製品名ではないこと。地域別注記のはずが実際には事業別の表（見出しの取り違え）である場合は applicable=false を返すこと
     - **行ラベルから「（注）2」「(注1)」「（注１）」「※1」等の脚注マーカーは除去すること（例: 「米州（注）2」→「米州」、「欧州他（注）3」→「欧州他」）。脚注の定義文（例: 米州は米国を除く）が表外やセルにある場合は、その意味を notes に具体的に残すこと。2段見出しで下位が「その他」のときだけ上位とつなげる既存ルールを除き、表に無い語をラベルへ足さないこと**
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
+    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。各表ヘッダーの unit= および直前の「単位:」行は抽出器が注記から拾った単位である。markdown に単位行が無くてもそれを使うこと。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
     - 該当する地域別データが候補テーブル群に存在しない場合は applicable=false を返すこと
     - notes フィールドに、表選択・期間列選択の根拠と、行ラベルから省いた脚注の意味（定義があれば）を短く日本語で記すこと
@@ -96,7 +96,8 @@ enum GeographyBreakdownLLMNormalizer {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
-        let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
+        let userPrompt = BreakdownExtractor.llmUserPrompt(
+            tables: result.tables, consolidatedSales: consolidatedSales)
 
         guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
 
@@ -224,19 +225,6 @@ enum GeographyBreakdownLLMNormalizer {
             warnings: warnings
         )
         return (snapshot, audit)
-    }
-
-    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
-        var lines: [String] = []
-        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
-        lines.append("")
-        lines.append("候補テーブル:")
-        for (index, table) in tables.enumerated() {
-            lines.append("--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明") ---")
-            lines.append(table.markdown)
-            lines.append("")
-        }
-        return lines.joined(separator: "\n")
     }
 
     /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。

@@ -16,6 +16,9 @@ struct BreakdownTable: Equatable {
     var heading: String
     var markdown: String
     var period: String?  // "当期" | "前期" | "比較"
+    /// 注記の単位キャプション（百万円 / 千円 等）。単位専用表は period 候補から落とすが、
+    /// このフィールドへ引き継いで LLM プロンプトへ載せる。content_hash には含めない。
+    var unitCaption: String? = nil
 }
 
 struct BreakdownFact: Equatable {
@@ -38,6 +41,7 @@ struct ExtractedBreakdown: Equatable {
         let tablesArr: [[String: Any]] = tables.map { t in
             var d: [String: Any] = ["heading": t.heading, "markdown": t.markdown]
             if let p = t.period { d["period"] = p }
+            if let u = t.unitCaption { d["unitCaption"] = u }
             return d
         }
         let factsArr: [[String: Any]] = facts.map { f in
@@ -64,7 +68,8 @@ extension ExtractedBreakdown {
             BreakdownTable(
                 heading: t["heading"] as? String ?? "",
                 markdown: t["markdown"] as? String ?? "",
-                period: t["period"] as? String
+                period: t["period"] as? String,
+                unitCaption: t["unitCaption"] as? String
             )
         }
         facts = (dictionary["facts"] as? [[String: Any]] ?? []).map { f in
@@ -675,6 +680,87 @@ enum BreakdownExtractor {
         grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
     }
 
+    /// グリッドセルから単位キャプションを拾う（単位専用表・データ表ヘッダーの両方）。
+    static func unitCaption(from grid: [[String]]) -> String? {
+        parseUnitCaption(grid.flatMap { $0 }.joined(separator: " "))
+    }
+
+    /// 「（単位：百万円）」「(Thousands of yen)」等から単位語を取り出す。
+    /// 単位専用表を period 候補から落とすとき、この文字列を後続データ表へ引き継ぐ。
+    static func parseUnitCaption(_ text: String) -> String? {
+        let compact = text
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+        guard !compact.isEmpty else { return nil }
+
+        if let regex = try? NSRegularExpression(pattern: #"単位[：:﹕︰]([^）)\]】]{1,40})"#) {
+            let ns = compact as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            if let match = regex.firstMatch(in: compact, options: [], range: range),
+                match.numberOfRanges > 1
+            {
+                let captured = ns.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "：: 　"))
+                if !captured.isEmpty { return captured }
+            }
+        }
+
+        let tokens = [
+            "百万ユーロ", "百万米ドル", "千米ドル", "千ユーロ",
+            "十億円", "百万円", "千円", "億円",
+        ]
+        for token in tokens where compact.contains(token) {
+            return token
+        }
+
+        let lower = compact.lowercased()
+        if lower.contains("million") && (lower.contains("yen") || lower.contains("jpy")) {
+            return "百万円"
+        }
+        if (lower.contains("thousand") || lower.contains("thousands"))
+            && (lower.contains("yen") || lower.contains("jpy"))
+        {
+            return "千円"
+        }
+        // 「（単位：円）」のみ。百万円等は上の token が先に当たる。
+        if compact.contains("単位"), compact.contains("円") {
+            return "円"
+        }
+        return nil
+    }
+
+    /// LLM user prompt の表区切り行。単位専用表は markdown に残さないので unit= で渡す。
+    static func llmUserPromptTableHeader(index: Int, table: BreakdownTable) -> String {
+        var line =
+            "--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明")"
+        if let unit = table.unitCaption, !unit.isEmpty {
+            line += " unit=\(unit)"
+        }
+        line += " ---"
+        return line
+    }
+
+    /// geography / business LLM 正規化器が共有する user prompt 本体。
+    static func llmUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
+        var lines: [String] = []
+        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
+        lines.append("")
+        lines.append("候補テーブル:")
+        for (index, table) in tables.enumerated() {
+            lines.append(llmUserPromptTableHeader(index: index, table: table))
+            if let unit = table.unitCaption, !unit.isEmpty {
+                lines.append("単位: \(unit)")
+            }
+            lines.append(table.markdown)
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// 見出し行に「うち」を含む列は内数（of-which）なので落とす。
     /// 2段見出し「アジア｜うち中国」を finest-grain の並列区分と誤らないための構造側の処理。
     /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
@@ -1064,13 +1150,19 @@ enum BreakdownExtractor {
         var pendingElement: Element?
         var pendingGrid: [[String]]?
         var pendingPeriod: String?
+        // 単位専用表は候補にしないが、キャプションは同じ HTML 内の後続データ表へ残す。
+        var pendingUnitCaption: String?
 
         func flushPending() {
             guard let raw = pendingGrid else { return }
             let grid = dropOfWhichHeaderColumns(raw)
             if gridHasNumericValue(grid) {
                 tables.append(BreakdownTable(
-                    heading: defaultHeading, markdown: gridToMarkdown(grid), period: pendingPeriod))
+                    heading: defaultHeading,
+                    markdown: gridToMarkdown(grid),
+                    period: pendingPeriod,
+                    unitCaption: unitCaption(from: grid) ?? pendingUnitCaption
+                ))
             }
             pendingElement = nil
             pendingGrid = nil
@@ -1078,15 +1170,21 @@ enum BreakdownExtractor {
         }
 
         for table in tableEls {
+            let grid = expandTable(table)
+            // 単位キャプションだけの表は候補にしない（period 交互ラベルをずらす）。
+            // 資産表スキップより先に拾い、後続の売上表へ単位を渡す。
+            if !gridHasNumericValue(grid) {
+                if let caption = unitCaption(from: grid) {
+                    pendingUnitCaption = caption
+                }
+                continue
+            }
             if skipGeographyAssetMetricTables,
                 let metricCaption = nearestGeographyMetricCaption(before: table),
                 isGeographyAssetMetricCaption(metricCaption)
             {
                 continue
             }
-            let grid = expandTable(table)
-            // 単位キャプションだけの表は候補にしない（period 交互ラベルをずらす）。
-            if !gridHasNumericValue(grid) { continue }
             let md = gridToMarkdown(grid)
             if md.isEmpty { continue }
             // 地域売上向け: 有形固定資産合計行など資産専用表を markdown でも落とす
@@ -1253,6 +1351,7 @@ enum BreakdownExtractor {
                 // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
                 var candidate = findNextTable(after: heading.elem)
                 var attempts = 0
+                var pendingUnitCaption = parseUnitCaption(heading.text)
                 while let table = candidate, attempts < Xbrl.noteTableLookaheadLimit {
                     attempts += 1
                     guard !seen.contains(ObjectIdentifier(table)) else {
@@ -1262,6 +1361,9 @@ enum BreakdownExtractor {
                     seen.insert(ObjectIdentifier(table))
                     let grid = expandTable(table)
                     if !gridHasNumericValue(grid) {
+                        if let caption = unitCaption(from: grid) {
+                            pendingUnitCaption = caption
+                        }
                         candidate = findNextTable(after: table)
                         continue
                     }
@@ -1298,7 +1400,11 @@ enum BreakdownExtractor {
                         continue
                     }
                     tables.append(BreakdownTable(
-                        heading: keyword, markdown: gridToMarkdown(published), period: workingPeriod))
+                        heading: keyword,
+                        markdown: gridToMarkdown(published),
+                        period: workingPeriod,
+                        unitCaption: unitCaption(from: published) ?? pendingUnitCaption
+                    ))
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを

@@ -36,7 +36,7 @@ enum SegmentInfoLLMNormalizer {
     - profit_disclosed は「この表に利益情報が存在するか」の申告であり、rows の profit 値と矛盾させないこと（true なら最低1行は profit を埋めること、false なら全行 null のままにすること）
     - 前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
     - 行ラベルは事業名・製品名・サービス名であるべきで、地域名ではないこと。事業別のはずが実際には地域別の表（見出しの取り違え）である場合は applicable=false を返すこと
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること
+    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。各表ヘッダーの unit= および直前の「単位:」行は抽出器が注記から拾った単位である。markdown に単位行が無くてもそれを使うこと
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、純粋な除去・消去・調整だけの行（例:「消去」「調整額」「連結消去」）は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
     - 「その他（消去分を含む）」のように、残りの事業・本社勘定等と消去が一体になった列・行は row_kind="segment" とすること（ラベルに「消去」とあっても、単独の消去行ではない。野村HD等。ユーザー確認 2026-07-25）
     - 該当する事業別データが候補テーブル群に存在しない場合は applicable=false を返すこと
@@ -93,7 +93,8 @@ enum SegmentInfoLLMNormalizer {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
-        let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
+        let userPrompt = BreakdownExtractor.llmUserPrompt(
+            tables: result.tables, consolidatedSales: consolidatedSales)
 
         guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
 
@@ -258,18 +259,5 @@ enum SegmentInfoLLMNormalizer {
         if label.contains("消去分を含む") || label.contains("全社") { return "segment" }
         if label.contains("消去") || label.contains("調整") { return rowKind }
         return "segment"
-    }
-
-    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
-        var lines: [String] = []
-        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
-        lines.append("")
-        lines.append("候補テーブル:")
-        for (index, table) in tables.enumerated() {
-            lines.append("--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明") ---")
-            lines.append(table.markdown)
-            lines.append("")
-        }
-        return lines.joined(separator: "\n")
     }
 }
