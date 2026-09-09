@@ -33,5 +33,7 @@ import Testing
         let sectionsN = try #require(filingSectionsCacheVersionNumber(filingSectionsCacheVersion))
         #expect(sectionsN == 7)
         #expect(try #require(filingSectionsCacheVersionNumber("sections-v6")) < sectionsN)
+        // v12 of-which refinements do not change filing-sections payload shape.
+        #expect(filingSectionsCacheVersion == "sections-v7")
     }
 }
