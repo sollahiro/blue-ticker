@@ -115,13 +115,19 @@ actor HAPISConsumerClient {
         let issuer = issuerURL()
         let now = clock.now
         if let stored = try store.load(issuer: issuer) {
+            if attestation.clientMode == .appAttest,
+                stored.clientMintMode != HAPISAttestClientMode.appAttest.rawValue
+            {
+                store.clear(issuer: issuer)
+                return try await mint(ticket: ticket)
+            }
             if stored.isExpired(at: now) {
                 store.clear(issuer: issuer)
                 return try await mint(ticket: ticket)
             }
             if stored.needsRefresh(at: now) {
                 do {
-                    return try await refresh(stored.token, ticket: ticket)
+                    return try await refresh(stored, ticket: ticket)
                 } catch HAPISConsumerError.tokenExpired {
                     store.clear(issuer: issuer)
                     return try await mint(ticket: ticket)
@@ -168,9 +174,11 @@ actor HAPISConsumerClient {
             }
         }
         guard ticket == epoch else { throw CancellationError() }
-        try store.save(token, issuer: issuer)
+        var minted = token
+        minted.clientMintMode = attestation.clientMode.rawValue
+        try store.save(minted, issuer: issuer)
         try await attestation.noteMintAccepted(issuer: issuer)
-        return token.token
+        return minted.token
     }
 
     private func fetchChallenge(issuer: URL, ticket: Int) async throws -> HAPISChallenge {
@@ -179,37 +187,33 @@ actor HAPISConsumerClient {
         var request = URLRequest(url: try endpoint("v1/consumer/challenge", issuer: issuer))
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let challengeRequest = request
-        return try await withControlPlaneRetry {
-            try Task.checkCancellation()
-            guard ticket == self.epoch else { throw CancellationError() }
-            let data = try await self.controlPlaneDataOnce(challengeRequest, expected: [200])
-            do {
-                let decoded = try HAPISJSON.decoder.decode(HAPISChallenge.self, from: data)
-                let trimmed = decoded.challenge.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else {
-                    throw HAPISConsumerError.decoding("challenge が空です")
-                }
-                return HAPISChallenge(
-                    challenge: trimmed, expiresIn: decoded.expiresIn, expiresAt: decoded.expiresAt)
-            } catch let error as HAPISConsumerError {
-                throw error
-            } catch {
-                throw HAPISConsumerError.decoding(error.localizedDescription)
+        let data = try await controlPlaneDataOnce(request, expected: [200])
+        do {
+            let decoded = try HAPISJSON.decoder.decode(HAPISChallenge.self, from: data)
+            let trimmed = decoded.challenge.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw HAPISConsumerError.decoding("challenge が空です")
             }
+            return HAPISChallenge(
+                challenge: trimmed, expiresIn: decoded.expiresIn, expiresAt: decoded.expiresAt)
+        } catch let error as HAPISConsumerError {
+            throw error
+        } catch {
+            throw HAPISConsumerError.decoding(error.localizedDescription)
         }
     }
 
-    private func refresh(_ token: String, ticket: Int) async throws -> String {
+    private func refresh(_ stored: HAPISConsumerToken, ticket: Int) async throws -> String {
         try Task.checkCancellation()
         guard ticket == epoch else { throw CancellationError() }
         let issuer = issuerURL()
         var request = URLRequest(url: try endpoint("v1/consumer/token/refresh", issuer: issuer))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let refreshed = try await send(request, expected: [200])
+        request.setValue("Bearer \(stored.token)", forHTTPHeaderField: "Authorization")
+        var refreshed = try await send(request, expected: [200])
         guard ticket == epoch else { throw CancellationError() }
+        refreshed.clientMintMode = stored.clientMintMode ?? attestation.clientMode.rawValue
         try store.save(refreshed, issuer: issuer)
         return refreshed.token
     }

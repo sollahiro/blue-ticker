@@ -218,7 +218,8 @@ struct HAPISAttestationTests {
                 expiresAt: now.addingTimeInterval(3600),
                 refreshAt: now.addingTimeInterval(-1),
                 subject: "app_attest:stored",
-                attestMode: "stub"
+                attestMode: "stub",
+                clientMintMode: HAPISAttestClientMode.appAttest.rawValue
             ),
             issuer: issuer
         )
@@ -487,6 +488,79 @@ struct HAPISAttestationTests {
         #endif
         #expect(HAPISIssuer.storageAccount(for: issuer) == "hapis.example.test")
         #expect(HAPISIssuer.attestKeyAccount(for: issuer) != HAPISIssuer.storageAccount(for: issuer))
+    }
+
+    @Test func stubStoredTokenRemintsWhenEnteringAppAttest() async throws {
+        let challenge = Data(repeating: 11, count: 32).hapisBase64URLEncoded
+        let now = Date()
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        let service = MockHAPISAppAttestService()
+        let store = InMemoryHAPISTokenStore()
+        try store.save(
+            HAPISConsumerToken(
+                token: "stub-leftover",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(3300),
+                subject: "stub:old",
+                attestMode: "stub"
+            ),
+            issuer: issuer
+        )
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                #expect(attestObject(request.httpBody)?["attestation"] != nil)
+                return (
+                    201,
+                    tokenJSON(token: "attest-after-stub", now: now, refreshIn: 3300, expiresIn: 3600)
+                )
+            }
+            Issue.record("stub leftover must remint, not refresh")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        #expect(try await client.validToken() == "attest-after-stub")
+        #expect(try store.load(issuer: issuer)?.clientMintMode == HAPISAttestClientMode.appAttest.rawValue)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.isEmpty)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.count == 1)
+    }
+
+    @Test func persistentChallengeFailureRetriesThreeTimesNotNine() async throws {
+        let challenges = Counter()
+        let http = MockHAPISHTTP()
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                challenges.increment()
+                return (503, #"{"error":{"code":"unavailable"}}"#)
+            }
+            Issue.record("challenge 503 must not POST sessions")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(
+                service: MockHAPISAppAttestService(), keyStore: InMemoryHAPISAttestKeyStore())
+        )
+        await #expect(throws: HAPISConsumerError.self) {
+            _ = try await client.validToken()
+        }
+        #expect(challenges.value == 3)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
 }
 

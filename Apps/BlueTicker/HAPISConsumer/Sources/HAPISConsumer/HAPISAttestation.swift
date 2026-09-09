@@ -35,6 +35,10 @@ enum HAPISAttestClientMode: String, Sendable, Equatable {
 }
 
 protocol HAPISAttestationProviding: Sendable {
+    /// この provider が sessions に載せるクライアント側の mint 形態。
+    /// サーバーの `attest_mode` は live stub でも `stub` のままなので、局所 provenance には使わない。
+    var clientMode: HAPISAttestClientMode { get }
+
     /// stub は `nil`（sessions ボディ `{}`、challenge は取らない）。
     /// App Attest は `fetchChallenge` して attestation または assertion を返す。
     func payloadForMint(
@@ -47,6 +51,7 @@ protocol HAPISAttestationProviding: Sendable {
 }
 
 extension HAPISAttestationProviding {
+    var clientMode: HAPISAttestClientMode { .stub }
     func noteMintAccepted(issuer: URL) async throws {}
 }
 
@@ -146,6 +151,7 @@ struct SystemHAPISAppAttestService: HAPISAppAttestServicing {
 struct HAPISAppAttestProvider: HAPISAttestationProviding {
     let service: any HAPISAppAttestServicing
     let keyStore: any HAPISAttestKeyStoring
+    var clientMode: HAPISAttestClientMode { .appAttest }
 
     func payloadForMint(
         issuer: URL,

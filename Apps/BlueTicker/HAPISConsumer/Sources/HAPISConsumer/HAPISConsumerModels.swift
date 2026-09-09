@@ -60,6 +60,8 @@ struct HAPISConsumerToken: Codable, Equatable, Sendable {
     var refreshAt: Date
     var subject: String?
     var attestMode: String?
+    /// クライアントが mint した形態。サーバー `attest_mode` とは別（live 制御面は証拠付きでも `stub`）。
+    var clientMintMode: String? = nil
 
     func isExpired(at now: Date) -> Bool {
         expiresAt <= now
@@ -108,7 +110,8 @@ struct HAPISConsumerTokenResponse: Decodable, Sendable {
             expiresAt: expires,
             refreshAt: min(refresh, expires),
             subject: subject,
-            attestMode: attestMode
+            attestMode: attestMode,
+            clientMintMode: nil
         )
     }
 }
