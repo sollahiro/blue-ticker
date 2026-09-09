@@ -45,7 +45,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(china.rowKind == "of_which")
         #expect(china.parentLabel == "アジア")
         let additive = nested.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
-        #expect(abs(additive - 59_479) < 0.5)
+        #expect(abs(additive - (38_840 + 14_246 + 6_391)) < 0.5)
+        #expect(nested.first { $0.rowKind == "subtotal" }?.amount == 59_479)
     }
 
     @Test("北米のうち米国（高比率）だけネストし、並列の中国はそのまま残す")
@@ -284,7 +285,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(china.rowKind == "of_which")
         #expect(china.parentLabel == "アジア")
         let additive = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
-        #expect(abs(additive - sales) < 1)
+        let expectedAdditive = (38_840.0 + 14_246.0 + 6_391.0) * Financial.millionYen
+        #expect(abs(additive - expectedAdditive) < 1)
         let payload = BreakdownRowPayload(
             labelRaw: china.labelRaw, label: china.labelRaw, amount: china.amount,
             profit: nil, rowKind: china.rowKind, parentLabel: china.parentLabel)

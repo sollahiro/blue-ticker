@@ -436,7 +436,8 @@ import Foundation
         #expect(china.parentLabel == "アジア")
         #expect(china.amount == 8_900_000_000)
         let additive = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
-        #expect(abs(additive - sales) < 1)
+        let expectedAdditive = (38_840.0 + 14_246.0 + 6_391.0) * Financial.millionYen
+        #expect(abs(additive - expectedAdditive) < 1)
         #expect(await client.timesCalled() == 1)
     }
 }

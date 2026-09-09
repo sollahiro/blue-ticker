@@ -68,12 +68,9 @@ enum GeographyBreakdownLLMNormalizer {
                     "properties": [
                         "label": ["type": "string"],
                         "amount": ["type": "number"],
-                        "row_kind": [
-                            "type": "string",
-                            "enum": ["segment", "subtotal", "reconciling", "of_which"],
-                        ],
+                        "row_kind": ["type": "string", "enum": ["segment", "subtotal", "reconciling", "of_which"]],
                         "parent_label": ["type": "string"],
-                    },
+                    ],
                     "required": ["label", "amount", "row_kind"],
                     "additionalProperties": false,
                 ],
