@@ -1273,7 +1273,7 @@ enum BreakdownExtractor {
                     let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
                     var workingGrid = grid
                     var workingTable = table
-                    var workingPeriod = period
+                    let workingPeriod = period
                     // 改ページで割れた同一表は markdown を結合して1候補にする
                     // （縦: 武田製品別売上 / 横: 三菱商事の事業グループ別収益）。
                     // 小松・オリックスは mergedContinuationGrid が nil のため従来どおり
