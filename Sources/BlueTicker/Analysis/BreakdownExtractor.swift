@@ -673,11 +673,37 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 数値セルが1つも無い表（「（単位：百万円）」だけの装飾表）か。
-    /// dedicated 地域売上 TextBlock が Prior/Current に分かれるとき、単位表が1枚目だと
-    /// `applyPeriodOrdering` がデータ表を当期と誤ラベルする（実データ: 6490 / S100YD79）。
+    /// 数値セルが1つも無い表か。
     static func gridHasNumericValue(_ grid: [[String]]) -> Bool {
         grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
+    }
+
+    /// 単位キャプションだけ／空の装飾表か。セグメント↔製品の対応表など、数値の無い定性開示は false。
+    /// dedicated 地域売上 TextBlock が Prior/Current に分かれるとき、単位表が1枚目だと
+    /// `applyPeriodOrdering` がデータ表を当期と誤ラベルする（実データ: 6490 / S100YD79）。
+    static func isUnitCaptionOrDecorativeStub(_ grid: [[String]]) -> Bool {
+        guard !gridHasNumericValue(grid) else { return false }
+        let cells = grid.flatMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if cells.isEmpty { return true }
+        return cells.allSatisfy(isUnitCaptionOrDecorativeCell)
+    }
+
+    private static let decorativeStubCells: Set<String> = ["－", "─", "-", "—", "―", "・"]
+
+    private static func isUnitCaptionOrDecorativeCell(_ cell: String) -> Bool {
+        if decorativeStubCells.contains(cell) { return true }
+        guard cell.unicodeScalars.count <= 40 else { return false }
+        return parseUnitCaption(cell) != nil
+    }
+
+    static func markdownHasNumericValue(_ markdown: String) -> Bool {
+        markdown.split(separator: "\n", omittingEmptySubsequences: false).contains { line in
+            line.split(separator: "|", omittingEmptySubsequences: false).contains {
+                XBRLUtils.parseHtmlNumber(String($0).trimmingCharacters(in: .whitespaces)) != nil
+            }
+        }
     }
 
     /// グリッドの見出し／キャプション行から単位を拾う（数値行は見ない）。
@@ -1090,10 +1116,12 @@ enum BreakdownExtractor {
         return abs(lhs - rhs) <= max(1.0, scale * Xbrl.noteHorizontalContinuationRelativeTolerance)
     }
 
-    /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
+    /// 当期/前期が未ラベルの**数値**テーブルに順序ルール（前期→当期の繰り返し）を適用する。
+    /// 定性の対応表は period 候補にしない（単位スタブと同じく交互ラベルをずらさない）。
     static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
         var i = 0
         for idx in tables.indices where tables[idx].period == nil {
+            guard markdownHasNumericValue(tables[idx].markdown) else { continue }
             tables[idx].period = i % 2 == 0 ? "前期" : "当期"
             i += 1
         }
@@ -1162,7 +1190,7 @@ enum BreakdownExtractor {
         func flushPending() {
             guard let raw = pendingGrid else { return }
             let grid = dropOfWhichHeaderColumns(raw)
-            if gridHasNumericValue(grid) {
+            if !isUnitCaptionOrDecorativeStub(grid) {
                 tables.append(BreakdownTable(
                     heading: defaultHeading,
                     markdown: gridToMarkdown(grid),
@@ -1177,9 +1205,9 @@ enum BreakdownExtractor {
 
         for table in tableEls {
             let grid = expandTable(table)
-            // 単位キャプションだけの表は候補にしない（period 交互ラベルをずらす）。
-            // 資産表スキップより先に拾い、後続の売上表へ単位を渡す。
-            if !gridHasNumericValue(grid) {
+            // 単位キャプション／空の装飾表だけ候補にしない（period 交互ラベルをずらす）。
+            // 定性の対応表は残す。資産表スキップより先に単位を拾い、後続の売上表へ渡す。
+            if isUnitCaptionOrDecorativeStub(grid) {
                 if let caption = unitCaption(from: grid) {
                     pendingUnitCaption = caption
                 }
@@ -1224,7 +1252,9 @@ enum BreakdownExtractor {
         // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
         // 両方を当期で上書きせず applyPeriodOrdering に委ねる。
         if let defaultPeriod {
-            let nilIndices = tables.indices.filter { tables[$0].period == nil }
+            let nilIndices = tables.indices.filter {
+                tables[$0].period == nil && markdownHasNumericValue(tables[$0].markdown)
+            }
             if nilIndices.count == 1 {
                 tables[nilIndices[0]].period = defaultPeriod
             }
@@ -1366,7 +1396,7 @@ enum BreakdownExtractor {
                     }
                     seen.insert(ObjectIdentifier(table))
                     let grid = expandTable(table)
-                    if !gridHasNumericValue(grid) {
+                    if isUnitCaptionOrDecorativeStub(grid) {
                         if let caption = unitCaption(from: grid) {
                             pendingUnitCaption = caption
                         }
@@ -1401,7 +1431,10 @@ enum BreakdownExtractor {
                         workingTable = chained
                     }
                     let published = dropOfWhichHeaderColumns(workingGrid)
-                    guard gridHasNumericValue(published) else {
+                    if isUnitCaptionOrDecorativeStub(published) {
+                        if let caption = unitCaption(from: published) {
+                            pendingUnitCaption = caption
+                        }
                         candidate = findNextTable(after: workingTable)
                         continue
                     }
@@ -1411,6 +1444,12 @@ enum BreakdownExtractor {
                         period: workingPeriod,
                         unitCaption: unitCaption(from: published) ?? pendingUnitCaption
                     ))
+
+                    // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。
+                    if !gridHasNumericValue(published) {
+                        candidate = findNextTable(after: workingTable)
+                        continue
+                    }
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを

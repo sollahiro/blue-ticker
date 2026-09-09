@@ -82,11 +82,21 @@ import Foundation
     // MARK: - applyPeriodOrdering
 
     @Test func periodOrderingUnlabeledGetsAlternatingLabels() {
-        var tables = ["A", "B", "C", "D"].map {
+        var tables = ["10", "20", "30", "40"].map {
             BreakdownTable(heading: "セグメント情報", markdown: "| \($0) |", period: nil)
         }
         BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables.map(\.period) == ["前期", "当期", "前期", "当期"])
+    }
+
+    @Test func periodOrderingSkipsQualitativeTablesWithoutNumbers() {
+        var tables = [
+            BreakdownTable(heading: "X", markdown: "| 報告セグメント | 製品 |", period: nil),
+            BreakdownTable(heading: "X", markdown: "| 100 |", period: nil),
+            BreakdownTable(heading: "X", markdown: "| 110 |", period: nil),
+        ]
+        BreakdownExtractor.applyPeriodOrdering(&tables)
+        #expect(tables.map(\.period) == [nil, "前期", "当期"])
     }
 
     @Test func periodOrderingAlreadyLabeledIsNotChanged() {
@@ -331,6 +341,77 @@ import Foundation
     @Test func gridHasNumericValueRejectsUnitCaptionOnly() {
         #expect(!BreakdownExtractor.gridHasNumericValue([["（単位：百万円）"]]))
         #expect(BreakdownExtractor.gridHasNumericValue([["日本", "100"]]))
+    }
+
+    @Test func isUnitCaptionOrDecorativeStubAcceptsUnitAndEmptyOnly() {
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([["（単位：百万円）"]]))
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([["(単位：千円)"]]))
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([[""], ["－"]]))
+        #expect(!BreakdownExtractor.isUnitCaptionOrDecorativeStub([
+            ["報告セグメント", "主要な製品及びサービス"],
+            ["機械", "農業機械、エンジン、建設機械"],
+            ["水・環境", "パイプシステム"],
+        ]))
+        #expect(!BreakdownExtractor.isUnitCaptionOrDecorativeStub([["日本", "100"]]))
+    }
+
+    @Test func qualitativeMappingTableKeptWhileUnitStubSkipped() {
+        // 定性のセグメント↔製品対応表は残し、単位スタブは捨て、数値表の前期/当期はずらさない。
+        let html = """
+            <table>
+              <tr><td>報告セグメント</td><td>主要な製品及びサービス</td></tr>
+              <tr><td>機械</td><td>農業機械、エンジン</td></tr>
+              <tr><td>水・環境</td><td>パイプシステム</td></tr>
+            </table>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>100</td><td>100</td></tr>
+            </table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>110</td><td>110</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 3)
+        #expect(tables[0].markdown.contains("報告セグメント"))
+        #expect(tables[0].markdown.contains("農業機械、エンジン"))
+        #expect(tables[0].period == nil)
+        #expect(!tables[0].markdown.contains("100"))
+        #expect(tables.map(\.period) == [nil, "前期", "当期"])
+        #expect(tables[1].markdown.contains("100"))
+        #expect(tables[2].markdown.contains("110"))
+        #expect(tables[1].unitCaption == "百万円")
+        #expect(tables[2].unitCaption == "百万円")
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+        let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 110_000_000)
+        #expect(prompt.contains("農業機械、エンジン"))
+        #expect(prompt.contains("unit=百万円"))
+        #expect(prompt.contains("period=前期"))
+        #expect(prompt.contains("period=当期"))
+    }
+
+    @Test func keywordPathKeepsQualitativeMappingAndSkipsUnitStub() {
+        let html = """
+            <p>セグメント情報</p>
+            <table>
+              <tr><td>報告セグメント</td><td>主要な製品及びサービス</td></tr>
+              <tr><td>機械</td><td>農業機械、エンジン</td></tr>
+            </table>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>38840</td><td>59479</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.keywordTablesFromHtml(html, keywords: ["セグメント情報"])
+        #expect(tables.count == 2)
+        #expect(tables[0].markdown.contains("主要な製品及びサービス"))
+        #expect(tables[0].period == nil)
+        #expect(tables[1].markdown.contains("38840"))
+        #expect(tables[1].unitCaption == "百万円")
+        #expect(!tables.contains { $0.markdown.contains("単位") })
     }
 
     @Test func parseUnitCaptionExtractsKnownUnits() {
