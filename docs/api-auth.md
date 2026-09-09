@@ -32,7 +32,7 @@
 
 公開 REST の認証は階層ではなく併存する（詳細は `public-api.md`）。
 
-- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。iOS プレビューの Access JWT は段階 A のまま。段階 B で HAPIS 短命 + Attest に移る。**現行クライアント: Debug は stub mint、Release は App Attest を sessions に載せる。本番制御面の `ATTEST_MODE=enforce` はまだオフ**（Team / Bundle は enforce 時に制御面へ。blt-server は見ない。詳細は `ios-client.md`）
+- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。iOS プレビューの Access JWT は段階 A のまま。段階 B で HAPIS 短命 + Attest に移る。**現行クライアント: Debug は stub mint、Release は App Attest を sessions に載せる。本番制御面の `ATTEST_MODE=enforce` はまだオフ**（Team / Bundle は enforce 時に制御面へ。blt-server は見ない。App Attest の hash は attest = `SHA256(challenge bytes)`、assertion = `SHA256(client_data JSON)`。詳細は `ios-client.md`）
 - 任意 Bearer: 顧客アカウントは有料機能・ウォッチリスト同期が要るときだけ
 - 機械 / エンドポイント直叩き: x402
 - Web: 当面、アカウント不要の無料枠は出さない

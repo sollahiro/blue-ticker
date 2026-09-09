@@ -145,9 +145,9 @@ struct SystemHAPISAppAttestService: HAPISAppAttestServicing {
     }
 }
 
-/// 初回: 新しい challenge の JSON `{"challenge":…}` を SHA256 して `attestKey`。
-/// 以降: 毎回新しい challenge を取って同じ JSON で `generateAssertion`。
-/// 鍵は sessions 受理まで未登録。未対応環境では stub に落とさない。
+/// 初回: 新しい challenge の decoded bytes を SHA256 して `attestKey`。
+/// 以降: 毎回新しい challenge を取り、UTF-8 `client_data` JSON の SHA256 で `generateAssertion`。
+/// `client_data` はどちらも `{"challenge":…}`。鍵は sessions 受理まで未登録。未対応環境では stub に落とさない。
 struct HAPISAppAttestProvider: HAPISAttestationProviding {
     let service: any HAPISAppAttestServicing
     let keyStore: any HAPISAttestKeyStoring
@@ -160,6 +160,7 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
         guard service.isSupported else {
             throw HAPISConsumerError.attestUnavailable
         }
+        try discardStaleHashContractKey(issuer: issuer)
         if let record = try keyStore.load(issuer: issuer), record.registered {
             do {
                 let challenge = try await fetchChallenge()
@@ -175,18 +176,28 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
     }
 
     func noteMintAccepted(issuer: URL) async throws {
-        guard var record = try keyStore.load(issuer: issuer) else { return }
+        guard var record = try keyStore.load(issuer: issuer), record.hasCurrentHashContract else {
+            return
+        }
         record.registered = true
         try keyStore.save(record, issuer: issuer)
+    }
+
+    /// 旧契約（attest も JSON hash。version 欠落 / 0）の鍵は assertion に使わない。
+    private func discardStaleHashContractKey(issuer: URL) throws {
+        guard let record = try keyStore.load(issuer: issuer), !record.hasCurrentHashContract else {
+            return
+        }
+        keyStore.clear(issuer: issuer)
     }
 
     private func attestationPayload(challenge: HAPISChallenge, issuer: URL) async throws
         -> HAPISAttestationPayload
     {
-        let bound = try HAPISAppAttestClientData.bind(challenge: challenge.challenge)
+        let bound = try HAPISAppAttestClientData.bind(challenge)
         let keyId = try await keyIdForAttestation(issuer: issuer)
         do {
-            let attestation = try await service.attestKey(keyId, clientDataHash: bound.hash)
+            let attestation = try await service.attestKey(keyId, clientDataHash: bound.attestationHash)
             try keyStore.save(
                 HAPISAttestKeyRecord(keyId: keyId, registered: false, attested: true),
                 issuer: issuer)
@@ -205,9 +216,11 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
         }
     }
 
-    /// 未登録で未 attest の鍵だけ再利用。`attestKey` 済みは Apple が再 attest できないので捨てて作り直す。
+    /// 未登録で未 attest の現行契約鍵だけ再利用。`attestKey` 済みは Apple が再 attest できないので捨てて作り直す。
     private func keyIdForAttestation(issuer: URL) async throws -> String {
-        if let pending = try keyStore.load(issuer: issuer), !pending.registered, !pending.attested {
+        if let pending = try keyStore.load(issuer: issuer),
+            pending.hasCurrentHashContract, !pending.registered, !pending.attested
+        {
             return pending.keyId
         }
         let keyId = try await service.generateKey()
@@ -219,8 +232,8 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
     private func assertionPayload(keyId: String, challenge: HAPISChallenge) async throws
         -> HAPISAttestationPayload
     {
-        let bound = try HAPISAppAttestClientData.bind(challenge: challenge.challenge)
-        let assertion = try await service.generateAssertion(keyId, clientDataHash: bound.hash)
+        let bound = try HAPISAppAttestClientData.bind(challenge)
+        let assertion = try await service.generateAssertion(keyId, clientDataHash: bound.assertionHash)
         return HAPISAttestationPayload(
             keyId: keyId,
             attestation: nil,
@@ -251,23 +264,35 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
 }
 
 /// `client_data` は challenge を埋め込んだ UTF-8 JSON `{"challenge":"<GET /v1/consumer/challenge>"}`。
-/// `attestKey` / `generateAssertion` の hash は常にこのバイト列の SHA256。Team / Bundle は載せない。
+/// hash は経路で分かれる: `attestKey` = SHA256(decoded challenge bytes)、
+/// `generateAssertion` = SHA256(この JSON)。Team / Bundle は載せない。
 enum HAPISAppAttestClientData {
+    /// 1 = `attestKey` は SHA256(challenge bytes)、`generateAssertion` は SHA256(JSON)。
+    /// 欠落 / 0 = 旧（両方 JSON hash）。保存鍵は捨てて attest し直す。
+    static let hashContractVersion = 1
+
     struct Binding: Equatable, Sendable {
         var clientData: String
-        var hash: Data
+        /// SHA256 of decoded challenge bytes. `attestKey` only.
+        var attestationHash: Data
+        /// SHA256 of UTF-8 `client_data` JSON. `generateAssertion` only.
+        var assertionHash: Data
     }
 
     static func json(challenge: String) throws -> Data {
         try HAPISJSON.encoder.encode(["challenge": challenge])
     }
 
-    static func bind(challenge: String) throws -> Binding {
-        let data = try json(challenge: challenge)
+    static func bind(_ challenge: HAPISChallenge) throws -> Binding {
+        let data = try json(challenge: challenge.challenge)
         guard let text = String(data: data, encoding: .utf8) else {
             throw HAPISConsumerError.decoding("client_data を UTF-8 にできません")
         }
-        return Binding(clientData: text, hash: HAPISSHA256.hash(data))
+        return Binding(
+            clientData: text,
+            attestationHash: HAPISSHA256.hash(challenge.challengeBytes),
+            assertionHash: HAPISSHA256.hash(data)
+        )
     }
 }
 
