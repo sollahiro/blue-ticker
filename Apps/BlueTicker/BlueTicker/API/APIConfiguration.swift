@@ -29,14 +29,16 @@ enum APIConfiguration {
     static var hapisIssuerURL: URL {
         get {
             if let raw = UserDefaults.standard.string(forKey: issuerStorageKey),
-                let url = validatedBaseURL(from: raw)
+                let url = validatedHAPISIssuerURL(from: raw)
             {
                 return url
             }
             return defaultHAPISIssuerURL
         }
         set {
-            UserDefaults.standard.set(newValue.absoluteString, forKey: issuerStorageKey)
+            if let origin = HAPISIssuer.origin(of: newValue) {
+                UserDefaults.standard.set(origin.absoluteString, forKey: issuerStorageKey)
+            }
         }
     }
 
@@ -79,5 +81,11 @@ enum APIConfiguration {
             return nil
         }
         return url
+    }
+
+    /// HAPIS 発行者は https origin だけ。path / query / http は落とす。
+    static func validatedHAPISIssuerURL(from raw: String) -> URL? {
+        guard let url = validatedBaseURL(from: raw) else { return nil }
+        return HAPISIssuer.origin(of: url)
     }
 }

@@ -204,8 +204,7 @@ actor APIClient {
         }
         let status = http?.statusCode ?? 0
         if status == 401, APIConfiguration.usesHAPISConsumer(url), !hapisRemintAttempted {
-            let expired = GatewayErrorBody.parse(data)?.isTokenExpired == true
-            if expired || request.value(forHTTPHeaderField: "Authorization") != nil {
+            if GatewayErrorBody.parse(data)?.isTokenExpired == true {
                 do {
                     _ = try await hapis.forceRemint()
                 } catch is CancellationError {

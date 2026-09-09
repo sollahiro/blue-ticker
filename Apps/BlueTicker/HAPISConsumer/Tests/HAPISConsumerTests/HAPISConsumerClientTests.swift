@@ -34,7 +34,7 @@ struct HAPISConsumerClientTests {
         request = try await client.authorize(request)
 
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer minted-token")
-        let stored = try store.load()
+        let stored = try store.load(issuer: issuer)
         #expect(stored?.token == "minted-token")
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.count == 1)
     }
@@ -52,7 +52,8 @@ struct HAPISConsumerClientTests {
                 refreshAt: now.addingTimeInterval(100),
                 subject: "stub:old",
                 attestMode: "stub"
-            )
+            ),
+            issuer: issuer
         )
         http.handler = { request in
             let path = request.url?.path ?? ""
@@ -80,7 +81,7 @@ struct HAPISConsumerClientTests {
 
         clock.now = now.addingTimeInterval(120)
         #expect(try await client.validToken() == "refreshed-token")
-        #expect(try store.load()?.token == "refreshed-token")
+        #expect(try store.load(issuer: issuer)?.token == "refreshed-token")
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
@@ -98,7 +99,8 @@ struct HAPISConsumerClientTests {
                 refreshAt: now.addingTimeInterval(-310),
                 subject: "stub:expired",
                 attestMode: "stub"
-            )
+            ),
+            issuer: issuer
         )
         http.handler = { request in
             let path = request.url?.path ?? ""
@@ -118,7 +120,7 @@ struct HAPISConsumerClientTests {
         var request = URLRequest(url: gateway.appending(path: "v1/companies"))
         request = try await client.authorize(request)
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer new-token")
-        #expect(try store.load()?.token == "new-token")
+        #expect(try store.load(issuer: issuer)?.token == "new-token")
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.count == 1)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.isEmpty)
     }
@@ -136,7 +138,8 @@ struct HAPISConsumerClientTests {
                 refreshAt: now.addingTimeInterval(-1),
                 subject: "stub:stale",
                 attestMode: "stub"
-            )
+            ),
+            issuer: issuer
         )
         http.handler = { request in
             let path = request.url?.path ?? ""
@@ -196,7 +199,7 @@ struct HAPISConsumerClientTests {
         let http = try #require(response as? HTTPURLResponse)
         #expect(http.statusCode == 200)
         #expect(String(data: data, encoding: .utf8)?.contains("7203") == true)
-        #expect(try store.load()?.token == "proto-token")
+        #expect(try store.load(issuer: issuer)?.token == "proto-token")
     }
 
     @Test func loopbackAndAccessHostsDoNotUseConsumerAuth() {
@@ -221,16 +224,160 @@ struct HAPISConsumerClientTests {
                 to: URL(string: "https://api.sollahiro.com/v1/companies")!,
                 gatewayBases: [gateway]
             ))
+        let preview = URL(string: "https://hapis-blue-ticker-preview.sollahiro.workers.dev")!
+        #expect(
+            !HAPISConsumerAuth.applies(
+                to: URL(string: "https://hapis-blue-ticker-preview.sollahiro.workers.dev/v1/companies")!,
+                gatewayBases: [gateway]
+            ))
         #expect(
             HAPISConsumerAuth.applies(
                 to: URL(string: "https://hapis-blue-ticker-preview.sollahiro.workers.dev/v1/companies")!,
-                gatewayBases: [gateway]
+                gatewayBases: [preview]
             ))
         #expect(
             !HAPISConsumerAuth.applies(
                 to: URL(string: "https://hapis.sollahiro.workers.dev/v1/consumer/sessions")!,
                 gatewayBases: [gateway]
             ))
+        #expect(HAPISIssuer.origin(of: URL(string: "http://hapis.example.test")!) == nil)
+        #expect(
+            HAPISIssuer.origin(of: URL(string: "https://hapis.example.test/v1/foo?x=1")!)
+                == URL(string: "https://hapis.example.test"))
+    }
+
+    @Test func concurrentValidTokenMintsOnce() async throws {
+        let http = MockHAPISHTTP()
+        let store = InMemoryHAPISTokenStore()
+        let sessions = Counter()
+        http.delayNanoseconds = 80_000_000
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/sessions") {
+                sessions.increment()
+                return (201, tokenJSON(token: "shared-token", now: Date(), refreshIn: 3300, expiresIn: 3600))
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: SystemHAPISClock()
+        )
+        async let a = client.validToken()
+        async let b = client.validToken()
+        async let c = client.validToken()
+        let tokens = try await [a, b, c]
+        #expect(Set(tokens) == ["shared-token"])
+        #expect(sessions.value == 1)
+    }
+
+    @Test func refreshTransportFailureKeepsUnexpiredToken() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = MutableHAPISClock(now: now)
+        let http = MockHAPISHTTP()
+        let store = InMemoryHAPISTokenStore()
+        try store.save(
+            HAPISConsumerToken(
+                token: "still-valid",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(-1),
+                subject: "stub:still",
+                attestMode: "stub"
+            ),
+            issuer: issuer
+        )
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/token/refresh") {
+                return (503, #"{"error":{"code":"unavailable"}}"#)
+            }
+            Issue.record("must not remint while stored token is unexpired")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: clock
+        )
+        #expect(try await client.validToken() == "still-valid")
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.count == 3)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+    }
+
+    @Test func issuerChangeDoesNotReuseOtherIssuerToken() async throws {
+        let store = InMemoryHAPISTokenStore()
+        let issuerA = URL(string: "https://issuer-a.example.test")!
+        let issuerB = URL(string: "https://issuer-b.example.test")!
+        let now = Date()
+        try store.save(
+            HAPISConsumerToken(
+                token: "token-a",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(3300),
+                subject: "stub:a",
+                attestMode: "stub"
+            ),
+            issuer: issuerA
+        )
+        let issuerRef = IssuerRef(issuerA)
+        let http = MockHAPISHTTP()
+        http.handler = { request in
+            #expect(request.url?.host == "issuer-b.example.test")
+            return (201, tokenJSON(token: "token-b", now: Date(), refreshIn: 3300, expiresIn: 3600))
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuerRef.url },
+            http: http,
+            store: store,
+            clock: SystemHAPISClock()
+        )
+        #expect(try await client.validToken() == "token-a")
+        issuerRef.url = issuerB
+        #expect(try await client.validToken() == "token-b")
+        #expect(try store.load(issuer: issuerA)?.token == "token-a")
+        #expect(try store.load(issuer: issuerB)?.token == "token-b")
+    }
+
+    @Test func cancelledMintSurfacesCancellationError() async throws {
+        let http = MockHAPISHTTP()
+        http.throwsCancellation = true
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock()
+        )
+        await #expect(throws: CancellationError.self) {
+            _ = try await client.validToken()
+        }
+    }
+
+    @Test func mintRetriesTransientControlPlaneFailures() async throws {
+        let http = MockHAPISHTTP()
+        let attempts = Counter()
+        http.handler = { request in
+            guard (request.url?.path ?? "").hasSuffix("/v1/consumer/sessions") else {
+                return (500, #"{"error":{"code":"unexpected"}}"#)
+            }
+            let n = attempts.increment()
+            if n < 3 {
+                return (503, #"{"error":{"code":"unavailable"}}"#)
+            }
+            return (201, tokenJSON(token: "after-retry", now: Date(), refreshIn: 3300, expiresIn: 3600))
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock()
+        )
+        #expect(try await client.validToken() == "after-retry")
+        #expect(attempts.value == 3)
     }
 }
 
@@ -252,11 +399,20 @@ final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
     }
 
     private(set) var calls: [Call] = []
+    var delayNanoseconds: UInt64 = 0
+    var throwsCancellation = false
     var handler: @Sendable (URLRequest) -> (Int, String) = { _ in
         (500, #"{"error":{"code":"unset"}}"#)
     }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if throwsCancellation {
+            throw CancellationError()
+        }
+        if delayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: delayNanoseconds)
+        }
+        try Task.checkCancellation()
         calls.append(
             Call(
                 method: request.httpMethod ?? "GET",
@@ -271,6 +427,30 @@ final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
             headerFields: ["Content-Type": "application/json"])!
         return (Data(json.utf8), response)
     }
+}
+
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+
+    @discardableResult
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        n += 1
+        return n
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return n
+    }
+}
+
+final class IssuerRef: @unchecked Sendable {
+    var url: URL
+    init(_ url: URL) { self.url = url }
 }
 
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {

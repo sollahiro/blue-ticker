@@ -11,6 +11,9 @@ actor HAPISConsumerClient {
     private let store: any HAPISTokenStoring
     private let clock: any HAPISClock
     private let attestation: any HAPISAttestationProviding
+    private var inFlight: Task<String, Error>?
+    private var epoch = 0
+    private let controlPlaneAttempts = 3
 
     init(
         issuerURL: @escaping @Sendable () -> URL,
@@ -43,23 +46,7 @@ actor HAPISConsumerClient {
     }
 
     func validToken() async throws -> String {
-        let now = clock.now
-        if let stored = try store.load() {
-            if stored.isExpired(at: now) {
-                store.clear()
-                return try await mint()
-            }
-            if stored.needsRefresh(at: now) {
-                do {
-                    return try await refresh(stored.token)
-                } catch HAPISConsumerError.tokenExpired {
-                    store.clear()
-                    return try await mint()
-                }
-            }
-            return stored.token
-        }
-        return try await mint()
+        try await coalescedResolve()
     }
 
     func authorizationHeaderValue() async throws -> String {
@@ -74,47 +61,140 @@ actor HAPISConsumerClient {
     }
 
     func invalidate() {
-        store.clear()
+        epoch += 1
+        store.clear(issuer: issuerURL())
+        inFlight = nil
     }
 
     @discardableResult
     func forceRemint() async throws -> String {
-        store.clear()
-        return try await mint()
+        epoch += 1
+        store.clear(issuer: issuerURL())
+        inFlight = nil
+        return try await coalescedResolve()
     }
 
     func storedToken() throws -> HAPISConsumerToken? {
-        try store.load()
+        try store.load(issuer: issuerURL())
     }
 
-    private func mint() async throws -> String {
-        var request = URLRequest(url: endpoint("v1/consumer/sessions"))
+    private func coalescedResolve() async throws -> String {
+        if let inFlight {
+            return try await inFlight.value
+        }
+        let ticket = epoch
+        let task = Task {
+            try await self.resolveToken(ticket: ticket)
+        }
+        inFlight = task
+        let result = await task.result
+        if epoch == ticket {
+            inFlight = nil
+        }
+        return try result.get()
+    }
+
+    private func resolveToken(ticket: Int) async throws -> String {
+        try Task.checkCancellation()
+        guard ticket == epoch else { throw CancellationError() }
+        let issuer = issuerURL()
+        let now = clock.now
+        if let stored = try store.load(issuer: issuer) {
+            if stored.isExpired(at: now) {
+                store.clear(issuer: issuer)
+                return try await mint(ticket: ticket)
+            }
+            if stored.needsRefresh(at: now) {
+                do {
+                    return try await refresh(stored.token, ticket: ticket)
+                } catch HAPISConsumerError.tokenExpired {
+                    store.clear(issuer: issuer)
+                    return try await mint(ticket: ticket)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    if stored.isExpired(at: clock.now) {
+                        throw error
+                    }
+                    return stored.token
+                }
+            }
+            return stored.token
+        }
+        return try await mint(ticket: ticket)
+    }
+
+    private func mint(ticket: Int) async throws -> String {
+        try Task.checkCancellation()
+        guard ticket == epoch else { throw CancellationError() }
+        let issuer = issuerURL()
+        var request = URLRequest(url: try endpoint("v1/consumer/sessions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let payload = try await attestation.payloadForMint()
         request.httpBody = try HAPISJSON.encoder.encode(HAPISMintRequest(attest: payload))
         let token = try await send(request, expected: [201, 200])
-        try store.save(token)
+        guard ticket == epoch else { throw CancellationError() }
+        try store.save(token, issuer: issuer)
         return token.token
     }
 
-    private func refresh(_ token: String) async throws -> String {
-        var request = URLRequest(url: endpoint("v1/consumer/token/refresh"))
+    private func refresh(_ token: String, ticket: Int) async throws -> String {
+        try Task.checkCancellation()
+        guard ticket == epoch else { throw CancellationError() }
+        let issuer = issuerURL()
+        var request = URLRequest(url: try endpoint("v1/consumer/token/refresh"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let refreshed = try await send(request, expected: [200])
-        try store.save(refreshed)
+        guard ticket == epoch else { throw CancellationError() }
+        try store.save(refreshed, issuer: issuer)
         return refreshed.token
     }
 
     private func send(_ request: URLRequest, expected: Set<Int>) async throws -> HAPISConsumerToken
     {
+        var lastError: Error = HAPISConsumerError.transport("empty")
+        for attempt in 1...controlPlaneAttempts {
+            do {
+                return try await sendOnce(request, expected: expected)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as HAPISConsumerError {
+                switch error {
+                case .tokenExpired:
+                    throw error
+                case .http(let status, _, _) where (400..<500).contains(status):
+                    throw error
+                default:
+                    lastError = error
+                    if attempt == controlPlaneAttempts {
+                        throw error
+                    }
+                }
+            } catch {
+                lastError = error
+                if attempt == controlPlaneAttempts {
+                    throw error
+                }
+            }
+        }
+        throw lastError
+    }
+
+    private func sendOnce(_ request: URLRequest, expected: Set<Int>) async throws
+        -> HAPISConsumerToken
+    {
         let data: Data
         let response: HTTPURLResponse
         do {
             (data, response) = try await http.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch let error as HAPISConsumerError {
             throw error
         } catch {
@@ -128,12 +208,17 @@ actor HAPISConsumerClient {
             return try decoded.materialize(now: clock.now)
         } catch let error as HAPISConsumerError {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw HAPISConsumerError.decoding(error.localizedDescription)
         }
     }
 
-    private func endpoint(_ suffix: String) -> URL {
-        issuerURL().appending(path: suffix)
+    private func endpoint(_ suffix: String) throws -> URL {
+        guard let origin = HAPISIssuer.origin(of: issuerURL()) else {
+            throw HAPISConsumerError.decoding("発行者 URL は https origin である必要があります")
+        }
+        return origin.appending(path: suffix)
     }
 }

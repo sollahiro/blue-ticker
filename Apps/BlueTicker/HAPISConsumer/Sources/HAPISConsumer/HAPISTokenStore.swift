@@ -4,49 +4,46 @@ import Security
 #endif
 
 protocol HAPISTokenStoring: Sendable {
-    func load() throws -> HAPISConsumerToken?
-    func save(_ token: HAPISConsumerToken) throws
-    func clear()
+    func load(issuer: URL) throws -> HAPISConsumerToken?
+    func save(_ token: HAPISConsumerToken, issuer: URL) throws
+    func clear(issuer: URL)
 }
 
 final class InMemoryHAPISTokenStore: HAPISTokenStoring, @unchecked Sendable {
     private let lock = NSLock()
-    private var token: HAPISConsumerToken?
+    private var tokens: [String: HAPISConsumerToken] = [:]
 
-    func load() throws -> HAPISConsumerToken? {
+    func load(issuer: URL) throws -> HAPISConsumerToken? {
         lock.lock()
         defer { lock.unlock() }
-        return token
+        return tokens[HAPISIssuer.storageAccount(for: issuer)]
     }
 
-    func save(_ token: HAPISConsumerToken) throws {
+    func save(_ token: HAPISConsumerToken, issuer: URL) throws {
         lock.lock()
-        self.token = token
+        tokens[HAPISIssuer.storageAccount(for: issuer)] = token
         lock.unlock()
     }
 
-    func clear() {
+    func clear(issuer: URL) {
         lock.lock()
-        token = nil
+        tokens[HAPISIssuer.storageAccount(for: issuer)] = nil
         lock.unlock()
     }
 }
 
 #if canImport(Security)
 /// 発行済み consumer JWT を Keychain に置く。`HAPIS_API_TOKEN` は扱わない。
+/// account は発行者 origin（host）ごと。
 struct KeychainHAPISTokenStore: HAPISTokenStoring {
     var service: String
-    var account: String
 
-    init(
-        service: String = "com.sollahiro.BlueTicker.hapisConsumer",
-        account: String = "issuer"
-    ) {
+    init(service: String = "com.sollahiro.BlueTicker.hapisConsumer") {
         self.service = service
-        self.account = account
     }
 
-    func load() throws -> HAPISConsumerToken? {
+    func load(issuer: URL) throws -> HAPISConsumerToken? {
+        let account = HAPISIssuer.storageAccount(for: issuer)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -62,7 +59,8 @@ struct KeychainHAPISTokenStore: HAPISTokenStoring {
         return try HAPISJSON.decoder.decode(HAPISConsumerToken.self, from: data)
     }
 
-    func save(_ token: HAPISConsumerToken) throws {
+    func save(_ token: HAPISConsumerToken, issuer: URL) throws {
+        let account = HAPISIssuer.storageAccount(for: issuer)
         let data = try HAPISJSON.encoder.encode(token)
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -70,7 +68,7 @@ struct KeychainHAPISTokenStore: HAPISTokenStoring {
             kSecAttrAccount as String: account,
         ]
         let status: OSStatus
-        if (try load()) != nil {
+        if (try load(issuer: issuer)) != nil {
             status = SecItemUpdate(
                 base as CFDictionary,
                 [kSecValueData as String: data] as CFDictionary)
@@ -85,11 +83,11 @@ struct KeychainHAPISTokenStore: HAPISTokenStoring {
         }
     }
 
-    func clear() {
+    func clear(issuer: URL) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: HAPISIssuer.storageAccount(for: issuer),
         ]
         SecItemDelete(query as CFDictionary)
     }

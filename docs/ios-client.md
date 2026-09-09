@@ -122,7 +122,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 - `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
 - 設定の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
-- Attest / トークン失敗は自動 remint 1 回のあと、キャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない
+- Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない
 
 段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。
 

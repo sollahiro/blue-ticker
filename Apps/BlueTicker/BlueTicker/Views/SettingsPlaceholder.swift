@@ -73,7 +73,7 @@ struct SettingsPlaceholder: View {
                 }
             } else {
                 Section {
-                    Text("このサーバーは無認証です（loopback / LAN http）。Access ログインは https://api.sollahiro.com、HAPIS の Bearer は hapis-blue-ticker ゲートウェイのときだけ付きます。")
+                    Text("このサーバーは無認証です（loopback / LAN http）。Access ログインは https://api.sollahiro.com、HAPIS の Bearer は設定した HAPIS ゲートウェイのときだけ付きます。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -107,12 +107,12 @@ struct SettingsPlaceholder: View {
     }
 
     private func saveIssuerURL() {
-        if let url = APIConfiguration.validatedBaseURL(from: issuerURL) {
+        if let url = APIConfiguration.validatedHAPISIssuerURL(from: issuerURL) {
             APIConfiguration.hapisIssuerURL = url
             issuerURL = url.absoluteString
             saveError = nil
         } else {
-            saveError = "http または https の絶対 URL を入力してください"
+            saveError = "発行者 URL は https の origin を入力してください"
         }
     }
 

@@ -4,17 +4,40 @@ import FoundationNetworking
 #endif
 
 /// HAPIS ゲートウェイへ短命匿名トークンを付ける対象か。loopback / LAN `http` と Access 本番は対象外。
+/// host は設定されたゲートウェイ origin と完全一致だけ（部分一致で sibling Worker に付けない）。
 enum HAPISConsumerAuth {
     static func applies(to url: URL, gatewayBases: [URL]) -> Bool {
         guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else {
             return false
         }
         let hosts = Set(gatewayBases.compactMap { $0.host?.lowercased() })
-        if hosts.contains(host) {
-            return true
+        return hosts.contains(host)
+    }
+}
+
+/// 発行者は https origin（scheme + host + 非既定 port）。path / query は使わない。
+enum HAPISIssuer {
+    static func origin(of url: URL) -> URL? {
+        guard url.scheme?.lowercased() == "https", let host = url.host, !host.isEmpty else {
+            return nil
         }
-        // 本番ホスト以外の HAPIS ゲートウェイ（debug / preview Worker）
-        return host.hasSuffix(".sollahiro.workers.dev") && host.contains("hapis-blue-ticker")
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host.lowercased()
+        if let port = url.port, port != 443 {
+            components.port = port
+        }
+        return components.url
+    }
+
+    static func storageAccount(for issuer: URL) -> String {
+        guard let origin = origin(of: issuer) else {
+            return issuer.host?.lowercased() ?? "issuer"
+        }
+        if let port = origin.port {
+            return "\(origin.host ?? "issuer"):\(port)"
+        }
+        return origin.host ?? "issuer"
     }
 }
 
@@ -273,6 +296,10 @@ struct URLSessionHAPISHTTP: HAPISHTTPPerforming {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch {
             throw HAPISConsumerError.transport(error.localizedDescription)
         }
