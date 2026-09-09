@@ -73,6 +73,11 @@ enum BreakdownSmokeOracleSupport {
             let expPeriod = exp["period"] is NSNull ? nil : exp["period"] as? String
             #expect(expPeriod == act.period, Comment(rawValue: "\(label) tables[\(i)].period"))
             #expect(exp["markdown"] as? String == act.markdown, Comment(rawValue: "\(label) tables[\(i)].markdown"))
+            // unitCaption は単位専用表を捨てたあとの引き継ぎ。キーがある oracle だけ突合する。
+            if exp["unitCaption"] != nil {
+                let expUnit = exp["unitCaption"] is NSNull ? nil : exp["unitCaption"] as? String
+                #expect(expUnit == act.unitCaption, Comment(rawValue: "\(label) tables[\(i)].unitCaption"))
+            }
         }
     }
 

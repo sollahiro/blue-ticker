@@ -680,9 +680,13 @@ enum BreakdownExtractor {
         grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
     }
 
-    /// グリッドセルから単位キャプションを拾う（単位専用表・データ表ヘッダーの両方）。
+    /// グリッドの見出し／キャプション行から単位を拾う（数値行は見ない）。
     static func unitCaption(from grid: [[String]]) -> String? {
-        parseUnitCaption(grid.flatMap { $0 }.joined(separator: " "))
+        let captionRows = grid.filter { row in
+            !row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+        }
+        let source = captionRows.isEmpty ? grid : captionRows
+        return parseUnitCaption(source.flatMap { $0 }.joined(separator: " "))
     }
 
     /// 「（単位：百万円）」「(Thousands of yen)」等から単位語を取り出す。
@@ -726,8 +730,10 @@ enum BreakdownExtractor {
         {
             return "千円"
         }
-        // 「（単位：円）」のみ。百万円等は上の token が先に当たる。
-        if compact.contains("単位"), compact.contains("円") {
+        // 「（単位：円）」のみ。百万円等は token が先に当たる。部分一致の「円」は使わない。
+        if compact.contains("単位"), compact == "（単位：円）" || compact == "(単位：円)"
+            || compact == "単位：円" || compact == "単位:円"
+        {
             return "円"
         }
         return nil

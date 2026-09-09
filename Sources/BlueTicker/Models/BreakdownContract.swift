@@ -67,10 +67,10 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 ///
 /// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 /// v10: 積み上げセグメント損益表の決定論寄せ（研究開発費→profit 誤寄せを構造側で防止）。
-public let businessBreakdownCacheVersion = "breakdown-business-v10"
+/// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす
+/// （`allTablesFromHtml` / `keywordTablesFromHtml` の共有決定論経路。geography と同じ変更）。
+public let businessBreakdownCacheVersion = "breakdown-business-v11"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
-/// 単位キャプションの引き継ぎ（unitCaption → LLM prompt）は markdown / period を変えない
-/// プロンプト配線のため v12 には上げない。
 public let geographyBreakdownCacheVersion = "breakdown-geography-v11"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"

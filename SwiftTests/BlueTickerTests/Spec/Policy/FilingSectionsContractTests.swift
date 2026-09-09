@@ -28,4 +28,10 @@ import Testing
         #expect(xbrlSections.values.contains { $0.xbrlElements.contains(Xbrl.descriptionOfBusinessTextblockTag) } == false)
         #expect(currentFilingSectionKeys().contains("description_of_business") == false)
     }
+
+    @Test func htmlExtractorSharedPathBumpsFilingSectionsWithBusinessAndGeography() throws {
+        let sectionsN = try #require(filingSectionsCacheVersionNumber(filingSectionsCacheVersion))
+        #expect(sectionsN == 7)
+        #expect(try #require(filingSectionsCacheVersionNumber("sections-v6")) < sectionsN)
+    }
 }
