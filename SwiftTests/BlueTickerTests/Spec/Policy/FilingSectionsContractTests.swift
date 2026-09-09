@@ -31,9 +31,11 @@ import Testing
 
     @Test func htmlExtractorSharedPathBumpsFilingSectionsWithBusinessAndGeography() throws {
         let sectionsN = try #require(filingSectionsCacheVersionNumber(filingSectionsCacheVersion))
-        #expect(sectionsN == 7)
-        #expect(try #require(filingSectionsCacheVersionNumber("sections-v6")) < sectionsN)
-        // v12 of-which refinements do not change filing-sections payload shape.
-        #expect(filingSectionsCacheVersion == "sections-v7")
+        #expect(sectionsN == 8)
+        #expect(try #require(filingSectionsCacheVersionNumber("sections-v7")) < sectionsN)
+        #expect(filingSectionsCacheVersion == "sections-v8")
+        // breakdown of-which refinements already at v12; this bump is filing-sections specials only.
+        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v12")
+        #expect(businessBreakdownCacheVersion == "breakdown-business-v12")
     }
 }
