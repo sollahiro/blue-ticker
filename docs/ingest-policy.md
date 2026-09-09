@@ -121,6 +121,8 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
 
 `--codes` は `--limit` を無視して全件。定期ジョブでは使わない。
 
+LLM 出力だけの訂正は `cache_version` を上げない。現行版の clean な LLM 行は `--codes` でも skip されるため、対象の `company_breakdowns` 行を消すか `needs_review=true` にしてから個別 ingest する。決定論ロジックを変えたときだけ軸の `cache_version` をバンプする。
+
 ## 関連
 
 `AGENTS.md` · `.agents/skills/production-ingest/SKILL.md` · `.agents/skills/deploy/SKILL.md` · `blt-server-roadmap.md` · `financials-summary-separation.md` · `breakdown.md` · `statement.md` · `scripts/jp/edinet/README.md`

@@ -17,7 +17,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 1. `docs/xbrl-parsing.md` の固定 smoke 企業で実データを取得し、ローカルの `swift test` で床を確認する。
 2. 抽出値と元の開示 HTML、コンテキスト、実タグ名を照合する。推測やモックだけで採否を決めない。
 3. smoke で拾えない失敗事例を該当 `RealXbrl*Tests.swift` の golden に追加する。新しい note type / breakdown 軸は smoke の床も広げる。
-4. 抽出ロジックまたは契約の意味が変わる場合だけ Contract `cache_version` を上げる。細かな連続バンプはマージ前に 1 つへまとめる。
+4. 抽出ロジックまたは契約の意味が変わる場合だけ Contract `cache_version` を上げる。LLM 出力だけの訂正はバンプせず、対象行の削除 / `needs_review=true` と `--codes` 個別 ingest で更新する。細かな連続バンプはマージ前に 1 つへまとめる。
 5. ロジックが安定したら disposable Neon へ日経225限定で ingest し、件数・欠測・`needs_review` と `/v1` の配信契約を確認する。
 6. 本番 write、公開、対象母集団の拡張はユーザー確認後に `.agents/skills/production-ingest/SKILL.md` に従う。
 
@@ -54,7 +54,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 9. `segments` の軸は member 名キーワード。全一致→geography、0一致→business、特定地域名の部分一致のみ混在扱いで `needs_review`（Domestic/Overseas だけの一致では立てない）。
 10. 連結優先・非連結フォールバック必須。member ラベル選択は Dictionary 走査順に依存させない。
 11. LLM の `profit == nil` だけでは未開示と見落としを区別できない → `profit_disclosed`＋決定的ガード。
-12. 決定論（`xbrl_facts` / `stacked_segment_pnl` / `not_applicable`）も LLM（`segment_info_llm` 等）も `cache_version` バンプで再計算する（clean な LLM がバンプを無視すると誤 profit が残る）。決定論の `needs_review` だけでは再計算しない。LLM の `needs_review=true` は現行版でも再試行する。`content_hash` は生入力＋分母のみ（プロンプト/モデルを含めない）。
+12. 決定論（`xbrl_facts` / `stacked_segment_pnl` / `not_applicable`）も LLM（`segment_info_llm` 等）も `cache_version` バンプで再計算する（clean な LLM がバンプを無視すると誤 profit が残る）。だから LLM 出力だけの訂正ではバンプせず個別 ingest する。決定論の `needs_review` だけでは再計算しない。LLM の `needs_review=true` は現行版でも再試行する。`content_hash` は生入力＋分母のみ（プロンプト/モデルを含めない）。
 13. 同一表が改ページで `<table>` 分割されることがある。縦（列見出し一致・行ラベルほぼ素・期間同じ）も横（行ラベル一致・右表の合計列が左列＋右の事業列と数値一致）も抽出時に結合する。LLM に複数表から選べと頼まない。
 14. 製品・サービス別専用 TextBlock が Prior / Current に分かれるとき、HTML に期間見出しが無い。`contextRef` を `period` にする（地域 dedicated と同じ）。事業セグメント dedicated には付けない。
 15. 単一セグメント開示（F）は表が無いときだけ確定する。単一セグメント省略の文言があっても地域別・主要顧客表が残る場合は収益認識の製品別へ寄せる。
