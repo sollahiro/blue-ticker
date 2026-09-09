@@ -147,12 +147,37 @@ actor HAPISConsumerClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let payload = try await attestation.payloadForMint()
+        let payload = try await attestation.payloadForMint {
+            try await self.fetchChallenge(ticket: ticket)
+        }
         request.httpBody = try HAPISJSON.encoder.encode(HAPISMintRequest(attest: payload))
         let token = try await send(request, expected: [201, 200])
         guard ticket == epoch else { throw CancellationError() }
         try store.save(token, issuer: issuer)
         return token.token
+    }
+
+    private func fetchChallenge(ticket: Int) async throws -> HAPISChallenge {
+        try Task.checkCancellation()
+        guard ticket == epoch else { throw CancellationError() }
+        var request = URLRequest(url: try endpoint("v1/consumer/challenge"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let data = try await controlPlaneData(request, expected: [200])
+        guard ticket == epoch else { throw CancellationError() }
+        do {
+            let decoded = try HAPISJSON.decoder.decode(HAPISChallenge.self, from: data)
+            let trimmed = decoded.challenge.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw HAPISConsumerError.decoding("challenge が空です")
+            }
+            return HAPISChallenge(
+                challenge: trimmed, expiresIn: decoded.expiresIn, expiresAt: decoded.expiresAt)
+        } catch let error as HAPISConsumerError {
+            throw error
+        } catch {
+            throw HAPISConsumerError.decoding(error.localizedDescription)
+        }
     }
 
     private func refresh(_ token: String, ticket: Int) async throws -> String {
@@ -171,10 +196,25 @@ actor HAPISConsumerClient {
 
     private func send(_ request: URLRequest, expected: Set<Int>) async throws -> HAPISConsumerToken
     {
+        let data = try await controlPlaneData(request, expected: expected)
+        do {
+            let decoded = try HAPISJSON.decoder.decode(HAPISConsumerTokenResponse.self, from: data)
+            return try decoded.materialize(now: clock.now)
+        } catch let error as HAPISConsumerError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw HAPISConsumerError.decoding(error.localizedDescription)
+        }
+    }
+
+    private func controlPlaneData(_ request: URLRequest, expected: Set<Int>) async throws -> Data
+    {
         var lastError: Error = HAPISConsumerError.transport("empty")
         for attempt in 1...controlPlaneAttempts {
             do {
-                return try await sendOnce(request, expected: expected)
+                return try await controlPlaneDataOnce(request, expected: expected)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as HAPISConsumerError {
@@ -199,8 +239,8 @@ actor HAPISConsumerClient {
         throw lastError
     }
 
-    private func sendOnce(_ request: URLRequest, expected: Set<Int>) async throws
-        -> HAPISConsumerToken
+    private func controlPlaneDataOnce(_ request: URLRequest, expected: Set<Int>) async throws
+        -> Data
     {
         let data: Data
         let response: HTTPURLResponse
@@ -218,16 +258,7 @@ actor HAPISConsumerClient {
         if !expected.contains(response.statusCode) {
             throw HAPISConsumerError.from(status: response.statusCode, data: data)
         }
-        do {
-            let decoded = try HAPISJSON.decoder.decode(HAPISConsumerTokenResponse.self, from: data)
-            return try decoded.materialize(now: clock.now)
-        } catch let error as HAPISConsumerError {
-            throw error
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw HAPISConsumerError.decoding(error.localizedDescription)
-        }
+        return data
     }
 
     private func endpoint(_ suffix: String) throws -> URL {

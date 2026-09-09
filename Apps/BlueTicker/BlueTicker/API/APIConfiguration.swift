@@ -9,6 +9,8 @@ enum APIConfiguration {
     /// 段階 B のクライアント向け本番ゲートウェイ。blt-server origin ではない。
     static let productionHAPISGatewayBaseURL = URL(
         string: "https://hapis-blue-ticker-production.sollahiro.workers.dev")!
+    /// Debug 実機で App Attest を試すときだけ `appAttest`。Release は常に App Attest。
+    private static let attestModeStorageKey = "blt.hapis.attestMode"
     /// Access のログイン UI（App Launcher）。`api.*` 直叩きは 403 interstitial になる。
     static let accessLauncherURL = URL(string: "https://sollahiro.cloudflareaccess.com")!
     /// REST が `icon_url: null` のときの公開ホスト（秘密ではない。拡張子は会社ごとに違う）。
@@ -24,6 +26,20 @@ enum APIConfiguration {
     static func usesHAPISConsumer(_ url: URL) -> Bool {
         HAPISConsumerAuth.applies(
             to: url, gatewayBases: [hapisGatewayBaseURL, productionHAPISGatewayBaseURL])
+    }
+
+    /// Debug 既定は stub mint。Release / 本番ゲートウェイ経路は App Attest（enforce はサーバー側）。
+    static var hapisAttestClientMode: HAPISAttestClientMode {
+        #if DEBUG
+            if let raw = UserDefaults.standard.string(forKey: attestModeStorageKey),
+                let mode = HAPISAttestClientMode(rawValue: raw)
+            {
+                return mode
+            }
+            return .stub
+        #else
+            return .appAttest
+        #endif
     }
 
     static var hapisIssuerURL: URL {

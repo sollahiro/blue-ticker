@@ -100,6 +100,23 @@ struct HAPISConsumerTokenResponse: Decodable, Sendable {
     }
 }
 
+struct HAPISChallenge: Decodable, Equatable, Sendable {
+    var challenge: String
+    var expiresIn: Int?
+    var expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case challenge
+        case expiresIn = "expires_in"
+        case expiresAt = "expires_at"
+    }
+
+    /// GET `/v1/consumer/challenge` は 32 バイトの base64url。読めなければ UTF-8。
+    var challengeBytes: Data {
+        Data.hapisBase64URL(challenge) ?? Data(challenge.utf8)
+    }
+}
+
 struct HAPISMintRequest: Encodable, Sendable {
     var attest: HAPISAttestationPayload?
 
@@ -109,7 +126,7 @@ struct HAPISMintRequest: Encodable, Sendable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        if let attest, attest.keyId != nil {
+        if let attest {
             try container.encode(attest, forKey: .attest)
         }
     }
@@ -214,6 +231,9 @@ enum HAPISConsumerError: LocalizedError, Equatable {
     case http(status: Int, code: String?, message: String)
     case tokenExpired
     case transport(String)
+    case attestUnavailable
+    case attestInvalidKey
+    case attestFailed(String)
 
     static func == (lhs: HAPISConsumerError, rhs: HAPISConsumerError) -> Bool {
         switch (lhs, rhs) {
@@ -224,6 +244,12 @@ enum HAPISConsumerError: LocalizedError, Equatable {
         case (.tokenExpired, .tokenExpired):
             return true
         case (.transport(let a), .transport(let b)):
+            return a == b
+        case (.attestUnavailable, .attestUnavailable):
+            return true
+        case (.attestInvalidKey, .attestInvalidKey):
+            return true
+        case (.attestFailed(let a), .attestFailed(let b)):
             return a == b
         default:
             return false
@@ -239,6 +265,8 @@ enum HAPISConsumerError: LocalizedError, Equatable {
         case .tokenExpired:
             return "一時的に更新できません"
         case .transport:
+            return "一時的に更新できません"
+        case .attestUnavailable, .attestInvalidKey, .attestFailed:
             return "一時的に更新できません"
         }
     }

@@ -459,6 +459,7 @@ final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
         var method: String
         var path: String
         var authorization: String?
+        var body: Data?
     }
 
     private(set) var calls: [Call] = []
@@ -480,7 +481,8 @@ final class MockHAPISHTTP: HAPISHTTPPerforming, @unchecked Sendable {
             Call(
                 method: request.httpMethod ?? "GET",
                 path: request.url?.path ?? "",
-                authorization: request.value(forHTTPHeaderField: "Authorization")
+                authorization: request.value(forHTTPHeaderField: "Authorization"),
+                body: request.httpBody
             )
         )
         let (status, json) = handler(request)

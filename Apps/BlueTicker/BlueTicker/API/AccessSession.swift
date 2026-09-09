@@ -3,7 +3,7 @@ import Security
 
 /// 段階 A プレビュー専用の Cloudflare Access 短命 JWT（`CF_Authorization` Cookie）。
 /// Service Token / `HAPIS_API_TOKEN` / HAPIS consumer JWT は扱わない。
-/// 段階 B のゲートウェイ Bearer は `HAPISConsumerClient`（stub mint。Attest は未配線）。
+/// 段階 B のゲートウェイ Bearer は `HAPISConsumerClient`（Debug は stub、Release は App Attest）。
 enum AccessSession {
     static let cookieName = "CF_Authorization"
     private static let service = "com.sollahiro.BlueTicker.accessJWT"

@@ -60,7 +60,7 @@ struct SettingsPlaceholder: View {
                 }
             } else if APIConfiguration.usesHAPISConsumer {
                 Section("HAPIS") {
-                    Text("短命の匿名トークンを制御面から自動発行します（ATTEST_MODE=stub）。App Attest は未配線です。")
+                    Text(hapisAttestHelp)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     TextField("発行者 URL", text: $issuerURL)
@@ -89,6 +89,15 @@ struct SettingsPlaceholder: View {
         .onAppear {
             loginStatus = LoginStatus.read()
             issuerURL = APIConfiguration.hapisIssuerURL.absoluteString
+        }
+    }
+
+    private var hapisAttestHelp: String {
+        switch APIConfiguration.hapisAttestClientMode {
+        case .stub:
+            return "短命の匿名トークンを制御面から自動発行します（クライアント stub mint。本番 ATTEST_MODE=enforce はまだオフ）。Debug 実機で App Attest を試すときは UserDefaults `blt.hapis.attestMode` = appAttest。"
+        case .appAttest:
+            return "短命の匿名トークンを制御面から自動発行します。mint は App Attest（challenge → attest / assertion）。本番 ATTEST_MODE=enforce はまだオフです。"
         }
     }
 
