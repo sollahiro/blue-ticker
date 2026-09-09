@@ -717,7 +717,8 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
         rows: s.rows.map {
             BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
-                profit: $0.profit, rowKind: $0.rowKind, description: $0.description)
+                profit: $0.profit, rowKind: $0.rowKind, description: $0.description,
+                parentLabel: $0.parentLabel)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
 }

@@ -251,14 +251,16 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var rowKind: String
     /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
     public var description: String?
+    /// 内数行の親ラベル。`rowKind == "of_which"` のときだけ入る。旧 payload には無い。
+    public var parentLabel: String?
 
     private enum CodingKeys: String, CodingKey {
-        case labelRaw, label, amount, profit, rowKind, description
+        case labelRaw, label, amount, profit, rowKind, description, parentLabel
     }
 
     public init(
         labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
-        description: String? = nil
+        description: String? = nil, parentLabel: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -266,13 +268,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.profit = profit
         self.rowKind = rowKind
         self.description = description
-    }
-
-    /// 旧公開initializer。既存の呼び出し側・ビルド済みテストとの互換性を維持する。
-    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
-        self.init(
-            labelRaw: labelRaw, label: label, amount: amount, profit: profit, rowKind: rowKind,
-            description: nil)
+        self.parentLabel = parentLabel
     }
 
     /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
@@ -289,6 +285,18 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         profit = try container.decodeIfPresent(Double.self, forKey: .profit)
         rowKind = try container.decode(String.self, forKey: .rowKind)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        parentLabel = try container.decodeIfPresent(String.self, forKey: .parentLabel)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(labelRaw, forKey: .labelRaw)
+        try container.encode(label, forKey: .label)
+        try container.encode(amount, forKey: .amount)
+        try container.encode(profit, forKey: .profit)
+        try container.encode(rowKind, forKey: .rowKind)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(parentLabel, forKey: .parentLabel)
     }
 }
 
@@ -351,6 +359,10 @@ public extension BreakdownRowPayload {
         // description は Capex Overview 等で値があるときだけ載せる（他軸に null を増やすのを避ける）。
         if let description {
             object["description"] = description
+        }
+        // parent_label は of_which 内数のときだけ（旧 flat 応答にキーを増やさない）。
+        if let parentLabel {
+            object["parent_label"] = parentLabel
         }
         return object
     }

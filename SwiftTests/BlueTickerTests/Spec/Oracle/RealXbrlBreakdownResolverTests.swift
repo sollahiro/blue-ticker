@@ -394,5 +394,50 @@ import Foundation
         #expect(overseas.amount == 1_229_340_000_000)
         #expect(await client.timesCalled() == 1)
     }
+
+    @Test func pillarResolvesOfWhichChinaNestedUnderAsia() async throws {
+        guard await Self.ensureAvailable("S100YD79") else { return }
+        let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100YD79"))
+        #expect(geography.method == "html_table")
+        let tableIndex = Self.preferredTableIndex(geography.tables, containing: "38,840")
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": tableIndex,
+            "period_column": "当期",
+            "rows": [
+                ["label": "日本", "amount": 38_840, "row_kind": "segment"],
+                ["label": "アジア", "amount": 14_246, "row_kind": "segment"],
+                ["label": "うち中国", "amount": 8_900, "row_kind": "segment"],
+                ["label": "その他", "amount": 6_391, "row_kind": "segment"],
+                ["label": "合計", "amount": 59_479, "row_kind": "subtotal"],
+            ],
+            "notes": "当期の地域売上。うち中国はアジアの内数。",
+        ]
+        let client = RealXbrlMockChat(responseJSON: response)
+        let sales = 59_479_000_000.0
+
+        let (snapshot, source, _) = await GeographyBreakdownResolver.resolve(
+            geography: geography, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .geographyLLM)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == "geography")
+        #expect(snap.needsReview == false)
+        #expect(snap.denominator == sales)
+        let segmentLabels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(segmentLabels == ["日本", "アジア", "その他"])
+        #expect(snap.rows.first { $0.labelRaw == "日本" }?.amount == 38_840_000_000)
+        #expect(snap.rows.first { $0.labelRaw == "アジア" }?.amount == 14_246_000_000)
+        #expect(snap.rows.first { $0.labelRaw == "その他" }?.amount == 6_391_000_000)
+        let china = try #require(snap.rows.first { $0.labelRaw == "うち中国" })
+        #expect(china.rowKind == "of_which")
+        #expect(china.parentLabel == "アジア")
+        #expect(china.amount == 8_900_000_000)
+        let additive = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(abs(additive - sales) < 1)
+        #expect(await client.timesCalled() == 1)
+    }
 }
 

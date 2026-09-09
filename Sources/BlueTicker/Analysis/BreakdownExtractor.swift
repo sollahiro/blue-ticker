@@ -446,7 +446,7 @@ enum BreakdownExtractor {
             dedicatedHeading: "地域ごとの情報",
             mixedKeywords: Xbrl.geographyHeadingKeywords,
             skipGeographyAssetMetricTables: true,
-            dropOfWhichRegionColumns: true
+            dropOfWhichRegionColumns: false
         )
         // 地域注記側に売上表が残らない（売上省略＋資産表除外）ときだけ、
         // 収益の分解（NotesNetSales）から地域行のある表を拾う。
@@ -462,7 +462,7 @@ enum BreakdownExtractor {
                 dedicatedHeading: Xbrl.geographyRevenueDecompositionHeading,
                 mixedKeywords: [],
                 skipGeographyAssetMetricTables: true,
-                dropOfWhichRegionColumns: true
+                dropOfWhichRegionColumns: false
             ).filter(tableHasGeographyRegionLabels)
             if !revenueDecomp.isEmpty {
                 tables = revenueDecomp
@@ -795,7 +795,8 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。
+    /// 地域の内数子列を識別して落とす（#351 の flat MCP 防御）。
+    /// geography 抽出はネスト（`of_which` + `parent_label`）へ切り替えるため既定では呼ばない。
     /// 2段見出し（アジア｜うち中国）も1段見出し（日本｜海外｜うち豪州）も、
     /// 地域の親／兄弟があるときだけ落とす。短い `うち…` だけでは落とさない
     /// （うち輸出高、売上高のうち外部顧客への売上高）。
@@ -1227,7 +1228,7 @@ enum BreakdownExtractor {
     /// セグメント情報の golden parity を壊さないよう、既定は false。
     /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
     /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
-    /// `dropOfWhichRegionColumns`: geography 軸だけ、地域の内数子列（うち中国 / うち豪州）を落とす。
+    /// `dropOfWhichRegionColumns`: #351 の flat 防御。geography 抽出はネスト保持のため false。
     /// 事業別経路では呼ばない（うち輸出高を消さない）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
     /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。

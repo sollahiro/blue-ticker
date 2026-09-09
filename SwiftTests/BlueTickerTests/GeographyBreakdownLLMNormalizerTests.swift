@@ -1,4 +1,4 @@
-// GeographyBreakdownLLMNormalizer の決定的後処理（うち内数の二重計上除去）を検証する。
+// GeographyBreakdownLLMNormalizer の決定的後処理（うち内数の of_which ネスト）を検証する。
 
 import Foundation
 import Testing
@@ -8,8 +8,8 @@ import Testing
 @Suite("GeographyBreakdownLLMNormalizer")
 struct GeographyBreakdownLLMNormalizerTests {
 
-    @Test("親地域とうち内数の二重計上を内数側だけ落とす")
-    func dropsOfWhichSubsetSegments() {
+    @Test("親地域とうち内数を of_which にネストし加算対象から外す")
+    func nestsOfWhichSubsetSegments() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 254_181, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 37_897, share: nil, profit: nil, rowKind: "segment"),
@@ -18,14 +18,19 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 21_084, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 351_363, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
-        let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        let nested = GeographyBreakdownLLMNormalizer.nestOfWhichSubsetSegments(rows)
+        let labels = nested.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "北米", "欧州", "その他"])
-        #expect(filtered.contains { $0.rowKind == "subtotal" })
+        let usa = try #require(nested.first { $0.labelRaw == "米国" })
+        #expect(usa.rowKind == "of_which")
+        #expect(usa.parentLabel == "北米")
+        #expect(nested.contains { $0.rowKind == "subtotal" })
+        let additive = nested.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(abs(additive - 351_363) < 0.5)
     }
 
-    @Test("うちラベルは比率が低くても内数として落とす")
-    func dropsUchiLabeledChildEvenWhenRatioIsLow() {
+    @Test("うちラベルは比率が低くても内数としてアジアの下にネストする")
+    func nestsUchiLabeledChildEvenWhenRatioIsLow() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 38_840, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "アジア", amount: 14_246, share: nil, profit: nil, rowKind: "segment"),
@@ -33,13 +38,18 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 6_391, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 59_479, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
-        let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        let nested = GeographyBreakdownLLMNormalizer.nestOfWhichSubsetSegments(rows)
+        let labels = nested.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "アジア", "その他"])
+        let china = try #require(nested.first { $0.labelRaw == "うち中国" })
+        #expect(china.rowKind == "of_which")
+        #expect(china.parentLabel == "アジア")
+        let additive = nested.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(abs(additive - 59_479) < 0.5)
     }
 
-    @Test("北米のうち米国（高比率）だけ落とし、並列の中国はそのまま残す")
-    func dropsOnlyHighRatioAmericasSubset() {
+    @Test("北米のうち米国（高比率）だけネストし、並列の中国はそのまま残す")
+    func nestsOnlyHighRatioAmericasSubset() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 84_769, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 322_540, share: nil, profit: nil, rowKind: "segment"),
@@ -48,10 +58,13 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "中国", amount: 19_341, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 453_294, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
-        let labels = Set(filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        // 米国は北米の内数（比率≈99%）。中国はその他の並列地域なので残す（プロンプト側でうち除外）。
+        let nested = GeographyBreakdownLLMNormalizer.nestOfWhichSubsetSegments(rows)
+        let labels = Set(nested.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        // 米国は北米の内数（比率≈99%）。中国はその他の並列地域なので segment のまま。
         #expect(labels == ["日本", "北米", "その他", "中国"])
+        let usa = try #require(nested.first { $0.labelRaw == "米国" })
+        #expect(usa.rowKind == "of_which")
+        #expect(usa.parentLabel == "北米")
     }
 
     @Test("アジア他と中国が並列のときは中国を落とさない（テルモ型）")
@@ -64,7 +77,7 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "アジア他", amount: 131_902, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 1_131_877, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.nestOfWhichSubsetSegments(rows)
         let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["米州", "日本", "欧州", "中国", "アジア他"])
     }
@@ -76,7 +89,7 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "北米", amount: 200, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "欧州", amount: 300, share: nil, profit: nil, rowKind: "segment"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.nestOfWhichSubsetSegments(rows)
         #expect(filtered.map(\.labelRaw) == ["日本", "北米", "欧州"])
     }
 
@@ -88,8 +101,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         }
     }
 
-    @Test("うち二重計上レスポンスでも分母一致なら needs_review にならない")
-    func normalizeDropsOfWhichBeforeDenominatorCheck() async throws {
+    @Test("うち二重計上レスポンスでもネスト後は分母一致し needs_review にならない")
+    func normalizeNestsOfWhichBeforeDenominatorCheck() async throws {
         let sales = 351_363.0 * Financial.millionYen
         let tables = [
             BreakdownTable(
@@ -120,6 +133,11 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
         let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "北米", "欧州", "その他"])
+        let usa = try #require(snap.rows.first { $0.labelRaw == "米国" })
+        #expect(usa.rowKind == "of_which")
+        #expect(usa.parentLabel == "北米")
+        let additive = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(abs(additive - sales) < 1)
     }
 
     @Test("地域注記合計が IS 売上と乖離しても表内小計で分母を揃える（クレディセゾン型）")
@@ -231,5 +249,47 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(a.notes.contains("米州（注）2→米州"))
         #expect(a.notes.contains("欧州他（注）3→欧州他"))
         #expect(a.notes.contains("帝人型"))
+    }
+
+    @Test("LLM が of_which と parent_label を返しても加算合計は親だけ")
+    func normalizeKeepsExplicitOfWhichUnderParent() async throws {
+        let sales = 59_479.0 * Financial.millionYen
+        let tables = [
+            BreakdownTable(
+                heading: "地域ごとの情報",
+                markdown: "| 日本 | アジア | うち中国 | その他 | 合計 |\n",
+                period: "当期")
+        ]
+        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "rows": [
+                ["label": "日本", "amount": 38_840, "row_kind": "segment"],
+                ["label": "アジア", "amount": 14_246, "row_kind": "segment"],
+                ["label": "中国", "amount": 8_900, "row_kind": "of_which", "parent_label": "アジア"],
+                ["label": "その他", "amount": 6_391, "row_kind": "segment"],
+                ["label": "合計", "amount": 59_479, "row_kind": "subtotal"],
+            ],
+            "notes": "spike nest shape",
+        ]
+        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            geography, consolidatedSales: sales, client: MockChat(response))
+        let snap = try #require(snapshot)
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
+        let china = try #require(snap.rows.first { $0.labelRaw == "中国" })
+        #expect(china.rowKind == "of_which")
+        #expect(china.parentLabel == "アジア")
+        let additive = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(abs(additive - sales) < 1)
+        let payload = BreakdownRowPayload(
+            labelRaw: china.labelRaw, label: china.labelRaw, amount: china.amount,
+            profit: nil, rowKind: china.rowKind, parentLabel: china.parentLabel)
+        let json = payload.jsonObject()
+        #expect(json["row_kind"] as? String == "of_which")
+        #expect(json["parent_label"] as? String == "アジア")
     }
 }

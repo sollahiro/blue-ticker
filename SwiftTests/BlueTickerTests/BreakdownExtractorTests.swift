@@ -293,8 +293,9 @@ import Foundation
         }
     }
 
-    @Test func geographyDropsOfWhichHeaderColumnsFromTwoRowHeader() {
-        // 6490 PILLAR 型: 2段見出し「アジア / うち中国」。うち列は内数なので markdown から落とす。
+    @Test func geographyKeepsOfWhichHeaderColumnsFromTwoRowHeader() {
+        // 6490 PILLAR 型: 2段見出し「アジア / うち中国」。うち列は内数だが markdown に残し、
+        // 後段で of_which ネストする（#351 の列落としは一時防御）。
         let html =
             "&lt;table&gt;" +
             "&lt;tr&gt;" +
@@ -321,8 +322,8 @@ import Foundation
             #expect(md.contains("14246"))
             #expect(md.contains("6391"))
             #expect(md.contains("59479"))
-            #expect(!md.contains("8900"))
-            #expect(!md.contains("うち中国"))
+            #expect(md.contains("8900"))
+            #expect(md.contains("うち中国"))
         }
     }
 
@@ -386,7 +387,7 @@ import Foundation
         #expect(!dropped.joined().joined().contains("500000"))
     }
 
-    @Test func geographyHtmlDropsOneRowOfWhichAustraliaColumn() {
+    @Test func geographyHtmlKeepsOneRowOfWhichAustraliaColumn() {
         let html = """
             <table>
               <tr><td>日本</td><td>海外</td><td>うち豪州</td><td>合計</td></tr>
@@ -394,7 +395,7 @@ import Foundation
             </table>
             """
         let tables = BreakdownExtractor.allTablesFromHtml(
-            html, defaultHeading: "地域ごとの情報", dropOfWhichRegionColumns: true)
+            html, defaultHeading: "地域ごとの情報")
         #expect(tables.count == 1)
         let md = tables[0].markdown
         #expect(md.contains("日本"))
@@ -402,14 +403,13 @@ import Foundation
         #expect(md.contains("1281768"))
         #expect(md.contains("1229340"))
         #expect(md.contains("2511108"))
-        #expect(!md.contains("うち豪州"))
-        #expect(!md.contains("500000"))
+        #expect(md.contains("うち豪州"))
+        #expect(md.contains("500000"))
         let keyword = BreakdownExtractor.keywordTablesFromHtml(
             "<p>地域ごとの情報</p>" + html,
-            keywords: ["地域ごとの情報"],
-            dropOfWhichRegionColumns: true)
+            keywords: ["地域ごとの情報"])
         #expect(keyword.count == 1)
-        #expect(!keyword[0].markdown.contains("うち豪州"))
+        #expect(keyword[0].markdown.contains("うち豪州"))
         #expect(keyword[0].markdown.contains("海外"))
     }
 

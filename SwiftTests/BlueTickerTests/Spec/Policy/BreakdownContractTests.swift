@@ -17,4 +17,21 @@ import Testing
         #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v1")
         #expect(segmentAssetsBreakdownCacheVersion == "breakdown-segment-assets-v2")
     }
+
+    @Test func ofWhichParentLabelDecodesIfPresentAndOmitsWhenNil() throws {
+        let withParent = BreakdownRowPayload(
+            labelRaw: "うち中国", label: "うち中国", amount: 8_900, profit: nil,
+            rowKind: "of_which", parentLabel: "アジア")
+        let encoded = try JSONEncoder().encode(withParent)
+        let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: encoded)
+        #expect(decoded.parentLabel == "アジア")
+        #expect(decoded.rowKind == "of_which")
+
+        let legacy = """
+            {"labelRaw":"日本","label":"日本","amount":38840,"profit":null,"rowKind":"segment"}
+            """.data(using: .utf8)!
+        let old = try JSONDecoder().decode(BreakdownRowPayload.self, from: legacy)
+        #expect(old.parentLabel == nil)
+        #expect(old.rowKind == "segment")
+    }
 }

@@ -16,9 +16,12 @@ struct BreakdownRow: Equatable {
     var amount: Double
     var share: Double?
     var profit: Double?  // 対応する利益タグが無ければ nil（任意フィールド）
-    var rowKind: String  // "segment" | "subtotal" | "reconciling"
+    var rowKind: String  // "segment" | "subtotal" | "reconciling" | "of_which"
     /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
     var description: String? = nil
+    /// 内数（うち中国 等）の親行ラベル。`rowKind == "of_which"` のときだけ入る。
+    /// 分母の加算対象外（親 segment に含まれる）。
+    var parentLabel: String? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
