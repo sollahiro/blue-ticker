@@ -130,7 +130,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 `DCAppAttestService`。鍵 ID は発行者 origin と App Attest 環境（Debug `development` / Release `production`）ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
 
-`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。challenge は attest / assertion のたびに取り直す。**hash は経路で分かれる**（HAPIS サーバーの verify 契約。#354 の共通 JSON hash は attestation 側が合わない）:
+`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。challenge は attest / assertion のたびに取り直す。**hash は経路で分かれる**（HAPIS サーバーの verify 契約）:
 
 | 経路 | Apple API | `clientDataHash` |
 |---|---|---|
