@@ -357,6 +357,23 @@ struct HAPISConsumerClientTests {
         }
     }
 
+    @Test func urlSessionCancelledErrorIsNotTransport() async throws {
+        MockURLProtocol.failWith = URLError(.cancelled)
+        defer {
+            MockURLProtocol.failWith = nil
+            MockURLProtocol.router = nil
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let http = URLSessionHAPISHTTP(session: session)
+        var request = URLRequest(url: issuer.appending(path: "v1/consumer/sessions"))
+        request.httpMethod = "POST"
+        await #expect(throws: CancellationError.self) {
+            _ = try await http.data(for: request)
+        }
+    }
+
     @Test func mintRetriesTransientControlPlaneFailures() async throws {
         let http = MockHAPISHTTP()
         let attempts = Counter()
@@ -460,11 +477,16 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     nonisolated(unsafe) static var router: (@Sendable (URLRequest) -> Stub)?
+    nonisolated(unsafe) static var failWith: Error?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        if let failWith = Self.failWith {
+            client?.urlProtocol(self, didFailWithError: failWith)
+            return
+        }
         guard let router = Self.router else {
             client?.urlProtocol(self, didFailWithError: URLError(.unknown))
             return
