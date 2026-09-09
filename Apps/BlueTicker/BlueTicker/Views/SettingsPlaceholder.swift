@@ -95,9 +95,9 @@ struct SettingsPlaceholder: View {
     private var hapisAttestHelp: String {
         switch APIConfiguration.hapisAttestClientMode {
         case .stub:
-            return "短命の匿名トークンを制御面から自動発行します（クライアント stub mint。本番 ATTEST_MODE=enforce はまだオフ）。Debug 実機で App Attest を試すときは UserDefaults `blt.hapis.attestMode` = appAttest。"
+            return "短命の匿名トークンを制御面から自動発行します（クライアント stub mint。本番 ATTEST_MODE=enforce はまだオフ）。Debug 実機で App Attest を試すときは UserDefaults `blt.hapis.attestMode` = appAttest（反映にはアプリ再起動）。"
         case .appAttest:
-            return "短命の匿名トークンを制御面から自動発行します。mint は App Attest（challenge → attest / assertion）。本番 ATTEST_MODE=enforce はまだオフです。"
+            return "短命の匿名トークンを制御面から自動発行します。mint は App Attest（challenge → attest / assertion）。本番 ATTEST_MODE=enforce はまだオフです。Debug の UserDefaults 上書きはプロセス起動時に読むので、変更後は再起動してください。"
         }
     }
 

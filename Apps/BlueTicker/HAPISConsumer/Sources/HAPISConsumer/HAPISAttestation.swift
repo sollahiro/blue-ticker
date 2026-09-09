@@ -22,7 +22,6 @@ enum HAPISAttestClientMode: String, Sendable, Equatable {
 
     static func make(
         mode: HAPISAttestClientMode,
-        issuerURL: @escaping @Sendable () -> URL,
         service: any HAPISAppAttestServicing = SystemHAPISAppAttestService(),
         keyStore: any HAPISAttestKeyStoring = HAPISAttestKeyStores.make()
     ) -> any HAPISAttestationProviding {
@@ -30,8 +29,7 @@ enum HAPISAttestClientMode: String, Sendable, Equatable {
         case .stub:
             return HAPISStubAttestationProvider()
         case .appAttest:
-            return HAPISAppAttestProvider(
-                issuerURL: issuerURL, service: service, keyStore: keyStore)
+            return HAPISAppAttestProvider(service: service, keyStore: keyStore)
         }
     }
 }
@@ -40,8 +38,16 @@ protocol HAPISAttestationProviding: Sendable {
     /// stub は `nil`（sessions ボディ `{}`、challenge は取らない）。
     /// App Attest は `fetchChallenge` して attestation または assertion を返す。
     func payloadForMint(
+        issuer: URL,
         fetchChallenge: @escaping @Sendable () async throws -> HAPISChallenge
     ) async throws -> HAPISAttestationPayload?
+
+    /// sessions が受理されたあとだけ呼ぶ。これ以前の鍵は assertion に使わない。
+    func noteMintAccepted(issuer: URL) async throws
+}
+
+extension HAPISAttestationProviding {
+    func noteMintAccepted(issuer: URL) async throws {}
 }
 
 struct HAPISAttestationPayload: Encodable, Equatable, Sendable {
@@ -72,6 +78,7 @@ struct HAPISAttestationPayload: Encodable, Equatable, Sendable {
 /// `ATTEST_MODE=stub`。challenge は送らず、mint ボディは `{}`。緊急トークンも出さない。
 struct HAPISStubAttestationProvider: HAPISAttestationProviding {
     func payloadForMint(
+        issuer: URL,
         fetchChallenge: @escaping @Sendable () async throws -> HAPISChallenge
     ) async throws -> HAPISAttestationPayload? {
         nil
@@ -135,25 +142,24 @@ struct SystemHAPISAppAttestService: HAPISAppAttestServicing {
 
 /// 初回: 新しい challenge の JSON `{"challenge":…}` を SHA256 して `attestKey`。
 /// 以降: 毎回新しい challenge を取って同じ JSON で `generateAssertion`。
-/// 鍵が壊れていたら捨て、challenge を取り直して attest。未対応環境では stub に落とさない。
+/// 鍵は sessions 受理まで未登録。未対応環境では stub に落とさない。
 struct HAPISAppAttestProvider: HAPISAttestationProviding {
-    let issuerURL: @Sendable () -> URL
     let service: any HAPISAppAttestServicing
     let keyStore: any HAPISAttestKeyStoring
 
     func payloadForMint(
+        issuer: URL,
         fetchChallenge: @escaping @Sendable () async throws -> HAPISChallenge
     ) async throws -> HAPISAttestationPayload? {
         guard service.isSupported else {
             throw HAPISConsumerError.attestUnavailable
         }
-        let issuer = issuerURL()
-        if let keyId = try keyStore.loadKeyId(issuer: issuer) {
+        if let record = try keyStore.load(issuer: issuer), record.registered {
             do {
                 let challenge = try await fetchChallenge()
-                return try await assertionPayload(keyId: keyId, challenge: challenge)
+                return try await assertionPayload(keyId: record.keyId, challenge: challenge)
             } catch HAPISConsumerError.attestInvalidKey {
-                keyStore.clearKeyId(issuer: issuer)
+                keyStore.clear(issuer: issuer)
             } catch {
                 throw error
             }
@@ -162,14 +168,22 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
         return try await attestationPayload(challenge: challenge, issuer: issuer)
     }
 
+    func noteMintAccepted(issuer: URL) async throws {
+        guard var record = try keyStore.load(issuer: issuer) else { return }
+        record.registered = true
+        try keyStore.save(record, issuer: issuer)
+    }
+
     private func attestationPayload(challenge: HAPISChallenge, issuer: URL) async throws
         -> HAPISAttestationPayload
     {
         let bound = try HAPISAppAttestClientData.bind(challenge: challenge.challenge)
-        let keyId = try await service.generateKey()
-        try keyStore.saveKeyId(keyId, issuer: issuer)
+        let keyId = try await keyIdForAttestation(issuer: issuer)
         do {
             let attestation = try await service.attestKey(keyId, clientDataHash: bound.hash)
+            try keyStore.save(
+                HAPISAttestKeyRecord(keyId: keyId, registered: false, attested: true),
+                issuer: issuer)
             return HAPISAttestationPayload(
                 keyId: keyId,
                 attestation: attestation.hapisBase64URLEncoded,
@@ -178,11 +192,22 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
                 clientData: bound.clientData
             )
         } catch HAPISConsumerError.attestInvalidKey {
-            keyStore.clearKeyId(issuer: issuer)
+            keyStore.clear(issuer: issuer)
             throw HAPISConsumerError.attestInvalidKey
         } catch {
             throw error
         }
+    }
+
+    /// 未登録で未 attest の鍵だけ再利用。`attestKey` 済みは Apple が再 attest できないので捨てて作り直す。
+    private func keyIdForAttestation(issuer: URL) async throws -> String {
+        if let pending = try keyStore.load(issuer: issuer), !pending.registered, !pending.attested {
+            return pending.keyId
+        }
+        let keyId = try await service.generateKey()
+        try keyStore.save(
+            HAPISAttestKeyRecord(keyId: keyId, registered: false, attested: false), issuer: issuer)
+        return keyId
     }
 
     private func assertionPayload(keyId: String, challenge: HAPISChallenge) async throws

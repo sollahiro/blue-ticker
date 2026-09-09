@@ -70,11 +70,12 @@ struct HAPISAttestationTests {
             http: http,
             store: InMemoryHAPISTokenStore(),
             clock: SystemHAPISClock(),
-            attestation: HAPISAppAttestProvider(
-                issuerURL: { issuer }, service: service, keyStore: keys)
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
         )
         #expect(try await client.validToken() == "attest-token")
-        #expect(try keys.loadKeyId(issuer: issuer) == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.keyId == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.registered == true)
+        #expect(try keys.load(issuer: issuer)?.attested == true)
         #expect(service.generateKeyCount == 1)
         #expect(service.attestCalls.count == 1)
         #expect(service.assertionCalls.isEmpty)
@@ -88,7 +89,9 @@ struct HAPISAttestationTests {
         let challenge = Data(repeating: 1, count: 32).hapisBase64URLEncoded
         let http = MockHAPISHTTP()
         let keys = InMemoryHAPISAttestKeyStore()
-        try keys.saveKeyId("stored-key", issuer: issuer)
+        try keys.save(
+            HAPISAttestKeyRecord(keyId: "stored-key", registered: true, attested: true),
+            issuer: issuer)
         let service = MockHAPISAppAttestService()
         http.handler = { request in
             let path = request.url?.path ?? ""
@@ -118,8 +121,7 @@ struct HAPISAttestationTests {
             http: http,
             store: InMemoryHAPISTokenStore(),
             clock: SystemHAPISClock(),
-            attestation: HAPISAppAttestProvider(
-                issuerURL: { issuer }, service: service, keyStore: keys)
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
         )
         #expect(try await client.validToken() == "assert-token")
         #expect(service.generateKeyCount == 0)
@@ -136,7 +138,9 @@ struct HAPISAttestationTests {
         let attestChallenge = Data(repeating: 3, count: 32).hapisBase64URLEncoded
         let http = MockHAPISHTTP()
         let keys = InMemoryHAPISAttestKeyStore()
-        try keys.saveKeyId("dead-key", issuer: issuer)
+        try keys.save(
+            HAPISAttestKeyRecord(keyId: "dead-key", registered: true, attested: true),
+            issuer: issuer)
         let service = MockHAPISAppAttestService()
         service.assertionError = HAPISConsumerError.attestInvalidKey
         let challenges = Counter()
@@ -167,11 +171,11 @@ struct HAPISAttestationTests {
             http: http,
             store: InMemoryHAPISTokenStore(),
             clock: SystemHAPISClock(),
-            attestation: HAPISAppAttestProvider(
-                issuerURL: { issuer }, service: service, keyStore: keys)
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
         )
         #expect(try await client.validToken() == "reattest-token")
-        #expect(try keys.loadKeyId(issuer: issuer) == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.keyId == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.registered == true)
         #expect(service.generateKeyCount == 1)
         #expect(service.assertionCalls.count == 1)
         #expect(service.attestCalls.count == 1)
@@ -194,7 +198,7 @@ struct HAPISAttestationTests {
             store: InMemoryHAPISTokenStore(),
             clock: SystemHAPISClock(),
             attestation: HAPISAppAttestProvider(
-                issuerURL: { issuer }, service: service, keyStore: InMemoryHAPISAttestKeyStore())
+                service: service, keyStore: InMemoryHAPISAttestKeyStore())
         )
         await #expect(throws: HAPISConsumerError.attestUnavailable) {
             _ = try await client.validToken()
@@ -238,7 +242,7 @@ struct HAPISAttestationTests {
             store: store,
             clock: clock,
             attestation: HAPISAppAttestProvider(
-                issuerURL: { issuer }, service: service, keyStore: InMemoryHAPISAttestKeyStore())
+                service: service, keyStore: InMemoryHAPISAttestKeyStore())
         )
         #expect(try await client.validToken() == "refreshed-token")
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
@@ -249,10 +253,10 @@ struct HAPISAttestationTests {
 
     @Test func factoryStubDoesNotUseAppAttestService() {
         let provider = HAPISAttestClientMode.make(
-            mode: .stub, issuerURL: { issuer }, service: MockHAPISAppAttestService())
+            mode: .stub, service: MockHAPISAppAttestService())
         #expect(provider is HAPISStubAttestationProvider)
         let attest = HAPISAttestClientMode.make(
-            mode: .appAttest, issuerURL: { issuer }, service: MockHAPISAppAttestService())
+            mode: .appAttest, service: MockHAPISAppAttestService())
         #expect(attest is HAPISAppAttestProvider)
         #if DEBUG
             #expect(HAPISAttestClientMode.compileDefault == .stub)
@@ -294,6 +298,196 @@ struct HAPISAttestationTests {
         #expect(bound.clientData == "{\"challenge\":\"chg\"}")
         #expect(bound.hash == HAPISSHA256.hash(Data("{\"challenge\":\"chg\"}".utf8)))
     }
+
+    @Test func attestKeyFailureKeepsPendingKeyForAttestation() async throws {
+        let challenge = Data(repeating: 6, count: 32).hapisBase64URLEncoded
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        let service = MockHAPISAppAttestService()
+        service.attestError = HAPISConsumerError.attestFailed("simulated")
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "GET", path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            Issue.record("attestKey failure must not POST sessions")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        await #expect(throws: HAPISConsumerError.attestFailed("simulated")) {
+            _ = try await client.validToken()
+        }
+        #expect(try keys.load(issuer: issuer)?.keyId == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.registered == false)
+        #expect(try keys.load(issuer: issuer)?.attested == false)
+        #expect(service.generateKeyCount == 1)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+
+        service.attestError = nil
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "GET", path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            if request.httpMethod == "POST", path.hasSuffix("/v1/consumer/sessions") {
+                let attest = attestObject(request.httpBody)
+                #expect(attest?["key_id"] as? String == "test-key-id")
+                #expect(attest?["attestation"] != nil)
+                #expect(attest?["assertion"] == nil)
+                return (201, tokenJSON(token: "recovered", now: Date(), refreshIn: 3300, expiresIn: 3600))
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        #expect(try await client.validToken() == "recovered")
+        #expect(service.generateKeyCount == 1)
+        #expect(try keys.load(issuer: issuer)?.registered == true)
+    }
+
+    @Test func sessionsFailureDoesNotMarkKeyAssertionReady() async throws {
+        let challenge = Data(repeating: 7, count: 32).hapisBase64URLEncoded
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        let service = MockHAPISAppAttestService()
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                return (503, #"{"error":{"code":"unavailable"}}"#)
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        await #expect(throws: HAPISConsumerError.self) {
+            _ = try await client.validToken()
+        }
+        #expect(try keys.load(issuer: issuer)?.registered == false)
+        #expect(try keys.load(issuer: issuer)?.attested == true)
+
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                let attest = attestObject(request.httpBody)
+                #expect(attest?["attestation"] != nil)
+                #expect(attest?["assertion"] == nil)
+                return (201, tokenJSON(token: "after-sessions-fail", now: Date(), refreshIn: 3300, expiresIn: 3600))
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        #expect(try await client.validToken() == "after-sessions-fail")
+        #expect(try keys.load(issuer: issuer)?.registered == true)
+        #expect(service.assertionCalls.isEmpty)
+    }
+
+    @Test func mintRetriesSessionsWithFreshChallenge() async throws {
+        let challenge1 = Data(repeating: 8, count: 32).hapisBase64URLEncoded
+        let challenge2 = Data(repeating: 9, count: 32).hapisBase64URLEncoded
+        let challenges = Counter()
+        let sessions = Counter()
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        let service = MockHAPISAppAttestService()
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                let n = challenges.increment()
+                return (200, challengeJSON(n == 1 ? challenge1 : challenge2))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                let n = sessions.increment()
+                let attest = attestObject(request.httpBody)
+                if n == 1 {
+                    #expect(attest?["challenge"] as? String == challenge1)
+                    return (503, #"{"error":{"code":"unavailable"}}"#)
+                }
+                #expect(attest?["challenge"] as? String == challenge2)
+                #expect(attest?["attestation"] != nil)
+                return (
+                    201,
+                    tokenJSON(token: "fresh-evidence", now: Date(), refreshIn: 3300, expiresIn: 3600)
+                )
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        #expect(try await client.validToken() == "fresh-evidence")
+        #expect(challenges.value >= 2)
+        #expect(sessions.value == 2)
+        #expect(service.attestCalls.count == 2)
+        #expect(service.generateKeyCount == 2)
+    }
+
+    @Test func issuerChangeDuringChallengeKeepsOneOrigin() async throws {
+        let issuerA = URL(string: "https://issuer-a.example.test")!
+        let issuerB = URL(string: "https://issuer-b.example.test")!
+        let issuerRef = IssuerRef(issuerA)
+        let challenge = Data(repeating: 10, count: 32).hapisBase64URLEncoded
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        let service = MockHAPISAppAttestService()
+        http.handler = { request in
+            let host = request.url?.host ?? ""
+            let path = request.url?.path ?? ""
+            #expect(host == "issuer-a.example.test")
+            if path.hasSuffix("/v1/consumer/challenge") {
+                issuerRef.url = issuerB
+                return (200, challengeJSON(challenge))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                return (
+                    201,
+                    tokenJSON(token: "origin-a", now: Date(), refreshIn: 3300, expiresIn: 3600)
+                )
+            }
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuerRef.url },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        #expect(try await client.validToken() == "origin-a")
+        #expect(try keys.load(issuer: issuerA)?.keyId == "test-key-id")
+        #expect(try keys.load(issuer: issuerB) == nil)
+        #expect(http.calls.allSatisfy { $0.host == "issuer-a.example.test" })
+    }
+
+    @Test func legacyKeyIdIsUnregisteredAndUnattested() {
+        let record = HAPISAttestKeyRecordCodec.decode(Data("legacy-key".utf8))
+        #expect(record == HAPISAttestKeyRecord(keyId: "legacy-key", registered: false, attested: false))
+        #expect(HAPISIssuer.attestKeyAccount(for: issuer).hasPrefix("hapis.example.test|"))
+        #if DEBUG
+            #expect(HAPISIssuer.attestEnvironment == "development")
+        #else
+            #expect(HAPISIssuer.attestEnvironment == "production")
+        #endif
+        #expect(HAPISIssuer.storageAccount(for: issuer) == "hapis.example.test")
+        #expect(HAPISIssuer.attestKeyAccount(for: issuer) != HAPISIssuer.storageAccount(for: issuer))
+    }
 }
 
 private func challengeJSON(_ challenge: String) -> String {
@@ -328,6 +522,7 @@ final class MockHAPISAppAttestService: HAPISAppAttestServicing, @unchecked Senda
     var attestCalls: [(keyId: String, hash: Data)] = []
     var assertionCalls: [(keyId: String, hash: Data)] = []
     var assertionError: Error?
+    var attestError: Error?
 
     func generateKey() async throws -> String {
         generateKeyCount += 1
@@ -336,6 +531,9 @@ final class MockHAPISAppAttestService: HAPISAppAttestServicing, @unchecked Senda
 
     func attestKey(_ keyId: String, clientDataHash: Data) async throws -> Data {
         attestCalls.append((keyId, clientDataHash))
+        if let attestError {
+            throw attestError
+        }
         return attestResult
     }
 

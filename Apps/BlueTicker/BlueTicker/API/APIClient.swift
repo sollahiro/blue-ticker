@@ -32,8 +32,7 @@ actor APIClient {
             session: URLSession(configuration: .ephemeral),
             store: Self.makeTokenStore(),
             attestation: HAPISAttestClientMode.make(
-                mode: APIConfiguration.hapisAttestClientMode,
-                issuerURL: { APIConfiguration.hapisIssuerURL }
+                mode: APIConfiguration.hapisAttestClientMode
             )
         )
     }

@@ -38,6 +38,19 @@ enum HAPISIssuer {
         }
         return origin.host ?? "issuer"
     }
+
+    /// App Attest 鍵の Keychain account。Debug `development` と Release `production` を混ぜない。
+    static var attestEnvironment: String {
+        #if DEBUG
+            "development"
+        #else
+            "production"
+        #endif
+    }
+
+    static func attestKeyAccount(for issuer: URL) -> String {
+        "\(storageAccount(for: issuer))|\(attestEnvironment)"
+    }
 }
 
 struct HAPISConsumerToken: Codable, Equatable, Sendable {

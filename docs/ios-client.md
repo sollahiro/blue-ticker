@@ -128,16 +128,19 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 #### App Attest 証拠（Release / `blt.hapis.attestMode=appAttest`）
 
-`DCAppAttestService`。鍵 ID は発行者 origin ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
+`DCAppAttestService`。鍵 ID は発行者 origin と App Attest 環境（Debug `development` / Release `production`）ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
 
-`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。`attestKey` も `generateAssertion` も `SHA256(client_data)`。challenge は attest / assertion のたびに取り直す。
+`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。`attestKey` も `generateAssertion` も `SHA256(client_data)`。challenge は attest / assertion のたびに取り直す。hash 対象は decoded challenge バイト列ではなく、この JSON の UTF-8。
 
 1. 初回 mint: `GET /v1/consumer/challenge` → 上記 JSON の SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge` / `client_data`
 2. 以降の remint: 新しい challenge を取り、同じ JSON で `generateAssertion` → sessions に `key_id` / `assertion` / `challenge` / `client_data`
-3. 鍵が無効なら捨て、challenge を取り直して attest
-4. 本番 `ATTEST_MODE=enforce` 時の subject は `app_attest:<keyId>`（サーバー）。今は stub なので `stub:<keyId>` になり得る
+3. 鍵は sessions 受理まで assertion に使わない。`attestKey` 失敗は同じ未登録鍵で再 attest。`attestKey` 成功後に sessions が落ちたら新しい鍵で attest（Apple は同じ鍵を再 attest できない）
+4. 制御面の mint 一時失敗は challenge + 証拠を取り直して再送する（同じ attestation / assertion は使いまわさない）。refresh と challenge GET は同じリクエストを再送してよい
+5. 鍵が無効なら捨て、challenge を取り直して attest
+6. 本番 `ATTEST_MODE=enforce` 時の subject は `app_attest:<keyId>`（サーバー）。今は stub なので `stub:<keyId>` になり得る
+7. challenge の `expires_at` はサーバーが拒否する。クライアントは毎回取り直すだけで、TTL の事前判定はしない
 
-Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
+Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。`APIClient.shared` は起動時に provider を固定するので、上書きの反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
 
 段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。
 
