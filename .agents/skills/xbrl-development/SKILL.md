@@ -17,7 +17,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 1. `docs/xbrl-parsing.md` の固定 smoke 企業で実データを取得し、ローカルの `swift test` で床を確認する。
 2. 抽出値と元の開示 HTML、コンテキスト、実タグ名を照合する。推測やモックだけで採否を決めない。
 3. smoke で拾えない失敗事例を該当 `RealXbrl*Tests.swift` の golden に追加する。新しい note type / breakdown 軸は smoke の床も広げる。
-4. 抽出ロジックまたは契約の意味が変わる場合だけ Contract `cache_version` を上げる。LLM 出力だけの訂正はバンプせず、対象行の削除 / `needs_review=true` と `--codes` 個別 ingest で更新する。細かな連続バンプはマージ前に 1 つへまとめる。
+4. 抽出ロジックまたは契約の意味が変わる場合だけ Contract `cache_version` を上げる。LLM 出力だけの訂正はバンプせず、対象行の削除 / `needs_review=true` と `--codes` 個別 ingest で更新する。LLM 実害は先にコード／プロンプトを変えず当該コードだけ個別 ingest して MCP×有報を突合し、直ればプロンプトは触らない（切り分け順の正本は `AGENTS.md`）。細かな連続バンプはマージ前に 1 つへまとめる。
 5. ロジックが安定したら disposable Neon へ日経225限定で ingest し、件数・欠測・`needs_review` と `/v1` の配信契約を確認する。
 6. 本番 write、公開、対象母集団の拡張はユーザー確認後に `.agents/skills/production-ingest/SKILL.md` に従う。
 

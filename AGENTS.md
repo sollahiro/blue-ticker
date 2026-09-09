@@ -10,4 +10,4 @@
 - 新機能・XBRL・本番 ingest・release・tracker・デプロイ操作は対応する `.agents/skills/` に従う。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
 - MCP（`BltMcpServerCore`）は開発時（Cursor / 手元）専用。製品面は REST と iOS。ChatGPT Apps は凍結。コードは削除せず、MCP を製品面として拡張しない。
-- Contract `cache_version`: LLM 出力だけの訂正はバンプしない。現行版の clean な LLM 行は `--codes` でも skip されるので、対象行を消すか `needs_review=true` にして個別 ingest する。決定論ロジックや契約の意味が変わるときは現行どおりバンプする（曖昧ならバンプ）。
+- Contract `cache_version` と LLM 実害の切り分け: LLM 出力だけの訂正はバンプしない。現行版の clean な LLM 行は `--codes` でも skip されるので、対象行を消すか `needs_review=true` にして個別 ingest する。決定論ロジックや契約の意味が変わるときは現行どおりバンプする（曖昧ならバンプ）。切り分け順は (1) コード／プロンプトを変えず、現行ロジックのまま当該コードだけ個別 ingest して MCP×有報を突合する。直ればプロンプトは触らない (2) 残る場合のみプロンプト／抽出を直す。決定論を触らなければバンプせず、修正後も個別 ingest で更新する。決定論変更時のみバンプ。
