@@ -98,17 +98,43 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 
 ## 認証
 
-iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。`HAPIS_API_TOKEN` も consumer JWT として使わない。
 
 | 段階 | 方針 |
 |---|---|
 | 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
 | 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
-| 段階 B | アカウント不要の本線は HAPIS の短命匿名トークン + 本番 App Attest（ゲートウェイ責務。blt-server は見ない）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
-
-段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。Attest / トークン失敗は 2〜3 回自動リトライし、だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない。
+| 段階 B（stub、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**本番 App Attest（`ATTEST_MODE=enforce`）は未配線**。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
 
 設定の SSO は段階 A プレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
+
+### HAPIS stub mint（クライアント）
+
+公開 URL（秘密ではない。ハードコードしてよい）:
+
+| 役割 | URL |
+|---|---|
+| 発行者（制御面） | `https://hapis.sollahiro.workers.dev` |
+| 本番ゲートウェイ（API base） | `https://hapis-blue-ticker-production.sollahiro.workers.dev` |
+
+- `GET /v1/consumer/challenge` — stub では未使用（将来 Attest 用）
+- `POST /v1/consumer/sessions` — ボディ `{}`（stub）。201 で `token` / `refresh_at` / `expires_at`
+- `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）
+- ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
+- 設定の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
+- Attest / トークン失敗は自動 remint 1 回のあと、キャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない
+
+段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。
+
+### Mac / Simulator 手動スモーク（この PR では必須にしない）
+
+Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
+
+1. 設定 → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
+2. 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON が返ること
+3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh 以外に JWT が流れないこと
+4. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
+
 
 ## 未決
 

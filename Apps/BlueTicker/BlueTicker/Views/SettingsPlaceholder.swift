@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsPlaceholder: View {
     @State private var baseURL = APIConfiguration.baseURL.absoluteString
+    @State private var issuerURL = APIConfiguration.hapisIssuerURL.absoluteString
     @State private var saveError: String?
     @State private var showLogin = false
     @State private var loginStatus = LoginStatus.read()
@@ -15,6 +16,12 @@ struct SettingsPlaceholder: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                 Button("保存") { saveBaseURL() }
+                Button("HAPIS 本番") {
+                    baseURL = APIConfiguration.productionHAPISGatewayBaseURL.absoluteString
+                    APIConfiguration.hapisGatewayBaseURL =
+                        APIConfiguration.productionHAPISGatewayBaseURL
+                    saveBaseURL()
+                }
                 Button("本番サーバー") {
                     baseURL = APIConfiguration.productionBaseURL.absoluteString
                     saveBaseURL()
@@ -51,9 +58,22 @@ struct SettingsPlaceholder: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+            } else if APIConfiguration.usesHAPISConsumer {
+                Section("HAPIS") {
+                    Text("短命の匿名トークンを制御面から自動発行します（ATTEST_MODE=stub）。App Attest は未配線です。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    TextField("発行者 URL", text: $issuerURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                    Button("発行者 URL を保存") { saveIssuerURL() }
+                    Button("トークンを破棄", role: .destructive) {
+                        Task { await APIClient.shared.clearHAPISConsumerToken() }
+                    }
+                }
             } else {
                 Section {
-                    Text("このサーバーは無認証です（loopback / http、または本番以外の https）。Access ログインは https://api.sollahiro.com のときだけ出ます。")
+                    Text("このサーバーは無認証です（loopback / LAN http）。Access ログインは https://api.sollahiro.com、HAPIS の Bearer は hapis-blue-ticker ゲートウェイのときだけ付きます。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -66,15 +86,31 @@ struct SettingsPlaceholder: View {
                 loginStatus = LoginStatus.read()
             }
         }
-        .onAppear { loginStatus = LoginStatus.read() }
+        .onAppear {
+            loginStatus = LoginStatus.read()
+            issuerURL = APIConfiguration.hapisIssuerURL.absoluteString
+        }
     }
 
     private func saveBaseURL() {
         if let url = APIConfiguration.validatedBaseURL(from: baseURL) {
             APIConfiguration.baseURL = url
+            if APIConfiguration.usesHAPISConsumer(url) {
+                APIConfiguration.hapisGatewayBaseURL = url
+            }
             baseURL = url.absoluteString
             saveError = nil
             loginStatus = LoginStatus.read()
+        } else {
+            saveError = "http または https の絶対 URL を入力してください"
+        }
+    }
+
+    private func saveIssuerURL() {
+        if let url = APIConfiguration.validatedBaseURL(from: issuerURL) {
+            APIConfiguration.hapisIssuerURL = url
+            issuerURL = url.absoluteString
+            saveError = nil
         } else {
             saveError = "http または https の絶対 URL を入力してください"
         }
