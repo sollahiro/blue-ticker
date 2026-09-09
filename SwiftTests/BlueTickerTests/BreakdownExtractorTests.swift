@@ -248,6 +248,85 @@ import Foundation
         }
     }
 
+    @Test func geographyDedicatedUnitStubDoesNotStealCurrentPeriodLabel() {
+        // 6490 PILLAR 型: dedicated 地域売上 TextBlock が Prior/Current に分かれ、
+        // 各ブロック先頭に「（単位：百万円）」だけの表がある。単位表を残すと
+        // applyPeriodOrdering が前期データ表を当期と誤ラベルする。
+        let priorHtml =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アジア&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;40762&lt;/td&gt;&lt;td&gt;10869&lt;/td&gt;&lt;td&gt;57988&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let currentHtml =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アジア&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;38840&lt;/td&gt;&lt;td&gt;14246&lt;/td&gt;&lt;td&gt;59479&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="Prior1YearDuration">\(priorHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(currentHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+            #expect(result.tables[0].markdown.contains("40762"))
+            #expect(result.tables[1].markdown.contains("38840"))
+            #expect(!result.tables.contains { $0.markdown.contains("単位") })
+        }
+    }
+
+    @Test func geographyDropsOfWhichHeaderColumnsFromTwoRowHeader() {
+        // 6490 PILLAR 型: 2段見出し「アジア / うち中国」。うち列は内数なので markdown から落とす。
+        let html =
+            "&lt;table&gt;" +
+            "&lt;tr&gt;" +
+            "&lt;td rowspan='2'&gt;日本&lt;/td&gt;" +
+            "&lt;td colspan='2'&gt;アジア&lt;/td&gt;" +
+            "&lt;td rowspan='2'&gt;その他&lt;/td&gt;" +
+            "&lt;td rowspan='2'&gt;合計&lt;/td&gt;" +
+            "&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;うち中国&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;38840&lt;/td&gt;&lt;td&gt;14246&lt;/td&gt;&lt;td&gt;8900&lt;/td&gt;" +
+            "&lt;td&gt;6391&lt;/td&gt;&lt;td&gt;59479&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(html)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            let md = result.tables[0].markdown
+            #expect(md.contains("38840"))
+            #expect(md.contains("14246"))
+            #expect(md.contains("6391"))
+            #expect(md.contains("59479"))
+            #expect(!md.contains("8900"))
+            #expect(!md.contains("うち中国"))
+        }
+    }
+
+    @Test func dropOfWhichHeaderColumnsRemovesNestedChinaColumn() {
+        let grid = [
+            ["日本", "アジア", "アジア", "その他", "合計"],
+            ["日本", "アジア", "うち中国", "その他", "合計"],
+            ["38840", "14246", "8900", "6391", "59479"],
+        ]
+        let dropped = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(dropped.map { $0.count }.allSatisfy { $0 == 4 })
+        #expect(dropped[2] == ["38840", "14246", "6391", "59479"])
+        #expect(!dropped.joined().joined().contains("うち"))
+    }
+
+    @Test func gridHasNumericValueRejectsUnitCaptionOnly() {
+        #expect(!BreakdownExtractor.gridHasNumericValue([["（単位：百万円）"]]))
+        #expect(BreakdownExtractor.gridHasNumericValue([["日本", "100"]]))
+    }
+
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")

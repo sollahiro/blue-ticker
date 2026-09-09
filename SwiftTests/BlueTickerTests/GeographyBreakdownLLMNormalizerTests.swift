@@ -24,6 +24,20 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(filtered.contains { $0.rowKind == "subtotal" })
     }
 
+    @Test("うちラベルは比率が低くても内数として落とす")
+    func dropsUchiLabeledChildEvenWhenRatioIsLow() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 38_840, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: 14_246, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "うち中国", amount: 8_900, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: 6_391, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "合計", amount: 59_479, share: nil, profit: nil, rowKind: "subtotal"),
+        ]
+        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(labels == ["日本", "アジア", "その他"])
+    }
+
     @Test("北米のうち米国（高比率）だけ落とし、並列の中国はそのまま残す")
     func dropsOnlyHighRatioAmericasSubset() {
         let rows: [BreakdownRow] = [

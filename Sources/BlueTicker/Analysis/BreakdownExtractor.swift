@@ -668,6 +668,34 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
+    /// 数値セルが1つも無い表（「（単位：百万円）」だけの装飾表）か。
+    /// dedicated 地域売上 TextBlock が Prior/Current に分かれるとき、単位表が1枚目だと
+    /// `applyPeriodOrdering` がデータ表を当期と誤ラベルする（実データ: 6490 / S100YD79）。
+    static func gridHasNumericValue(_ grid: [[String]]) -> Bool {
+        grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
+    }
+
+    /// 見出し行に「うち」を含む列は内数（of-which）なので落とす。
+    /// 2段見出し「アジア｜うち中国」を finest-grain の並列区分と誤らないための構造側の処理。
+    /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
+    static func dropOfWhichHeaderColumns(_ grid: [[String]]) -> [[String]] {
+        guard !grid.isEmpty else { return grid }
+        let colCount = grid.map(\.count).max() ?? 0
+        guard colCount > 1 else { return grid }
+        var drop = Set<Int>()
+        for row in grid {
+            let hasNumeric = row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+            if hasNumeric { break }
+            for (col, cell) in row.enumerated() where col > 0 {
+                if cell.contains("うち") { drop.insert(col) }
+            }
+        }
+        guard !drop.isEmpty else { return grid }
+        return grid.map { row in
+            row.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+        }
+    }
+
     // MARK: - 当期/前期判定
 
     /// グリッド先頭3行のテキストから当期/前期を判定する。
@@ -1038,9 +1066,12 @@ enum BreakdownExtractor {
         var pendingPeriod: String?
 
         func flushPending() {
-            guard let grid = pendingGrid else { return }
-            tables.append(BreakdownTable(
-                heading: defaultHeading, markdown: gridToMarkdown(grid), period: pendingPeriod))
+            guard let raw = pendingGrid else { return }
+            let grid = dropOfWhichHeaderColumns(raw)
+            if gridHasNumericValue(grid) {
+                tables.append(BreakdownTable(
+                    heading: defaultHeading, markdown: gridToMarkdown(grid), period: pendingPeriod))
+            }
             pendingElement = nil
             pendingGrid = nil
             pendingPeriod = nil
@@ -1054,6 +1085,8 @@ enum BreakdownExtractor {
                 continue
             }
             let grid = expandTable(table)
+            // 単位キャプションだけの表は候補にしない（period 交互ラベルをずらす）。
+            if !gridHasNumericValue(grid) { continue }
             let md = gridToMarkdown(grid)
             if md.isEmpty { continue }
             // 地域売上向け: 有形固定資産合計行など資産専用表を markdown でも落とす
@@ -1228,6 +1261,10 @@ enum BreakdownExtractor {
                     }
                     seen.insert(ObjectIdentifier(table))
                     let grid = expandTable(table)
+                    if !gridHasNumericValue(grid) {
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
                     let md = gridToMarkdown(grid)
                     if md.isEmpty || Xbrl.noteTableExclusionKeywords.contains(where: md.contains) {
                         candidate = findNextTable(after: table)
@@ -1255,8 +1292,13 @@ enum BreakdownExtractor {
                         workingGrid = merged
                         workingTable = chained
                     }
+                    let published = dropOfWhichHeaderColumns(workingGrid)
+                    guard gridHasNumericValue(published) else {
+                        candidate = findNextTable(after: workingTable)
+                        continue
+                    }
                     tables.append(BreakdownTable(
-                        heading: keyword, markdown: gridToMarkdown(workingGrid), period: workingPeriod))
+                        heading: keyword, markdown: gridToMarkdown(published), period: workingPeriod))
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを
