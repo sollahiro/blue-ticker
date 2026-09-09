@@ -147,6 +147,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 6. 本番 `ATTEST_MODE=enforce` 時の subject は `app_attest:<keyId>`（サーバー）。今は stub なので `stub:<keyId>` になり得る
 7. challenge の `expires_at` はサーバーが拒否する。クライアントは毎回取り直すだけで、TTL の事前判定はしない
 8. Debug stub で発行したトークンを App Attest 経路（Release、または Debug 上書き再起動）に持ち込んだときは refresh せず取り直す。サーバー `attest_mode` は live stub でも `stub` なので、局所 `clientMintMode` で判定する
+9. 鍵レコードは `client_data_hash_contract_version`（現行 `1` = attest が challenge bytes）。欠落や古い版は Keychain から捨て、次の mint で新しい `attestKey` をする。assertion の JSON hash は変えない。hash 契約をまた変えるときはこの版を上げる
 
 Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。`APIClient.shared` は起動時に provider を固定するので、上書きの反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
 

@@ -17,21 +17,30 @@ protocol HAPISAttestKeyStoring: Sendable {
 
 /// App Attest 鍵。`registered` は sessions が受理されたあとだけ true（assertion 可能）。
 /// `attested` は `attestKey` 成功済み。Apple は同じ鍵で attest を繰り返せない。
+/// `clientDataHashContractVersion` が現行と違う（欠落は 0）鍵は捨てて attest し直す。
 struct HAPISAttestKeyRecord: Codable, Equatable, Sendable {
     var keyId: String
     var registered: Bool
     var attested: Bool
+    var clientDataHashContractVersion: Int
 
     enum CodingKeys: String, CodingKey {
         case keyId = "key_id"
         case registered
         case attested
+        case clientDataHashContractVersion = "client_data_hash_contract_version"
     }
 
-    init(keyId: String, registered: Bool, attested: Bool = false) {
+    init(
+        keyId: String,
+        registered: Bool,
+        attested: Bool = false,
+        clientDataHashContractVersion: Int = HAPISAppAttestClientData.hashContractVersion
+    ) {
         self.keyId = keyId
         self.registered = registered
         self.attested = attested
+        self.clientDataHashContractVersion = clientDataHashContractVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -39,6 +48,12 @@ struct HAPISAttestKeyRecord: Codable, Equatable, Sendable {
         keyId = try container.decode(String.self, forKey: .keyId)
         registered = try container.decode(Bool.self, forKey: .registered)
         attested = try container.decodeIfPresent(Bool.self, forKey: .attested) ?? false
+        clientDataHashContractVersion =
+            try container.decodeIfPresent(Int.self, forKey: .clientDataHashContractVersion) ?? 0
+    }
+
+    var hasCurrentHashContract: Bool {
+        clientDataHashContractVersion == HAPISAppAttestClientData.hashContractVersion
     }
 }
 

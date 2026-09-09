@@ -513,6 +513,7 @@ struct HAPISAttestationTests {
     @Test func legacyKeyIdIsUnregisteredAndUnattested() {
         let record = HAPISAttestKeyRecordCodec.decode(Data("legacy-key".utf8))
         #expect(record == HAPISAttestKeyRecord(keyId: "legacy-key", registered: false, attested: false))
+        #expect(record?.hasCurrentHashContract == true)
         #expect(HAPISIssuer.attestKeyAccount(for: issuer).hasPrefix("hapis.example.test|"))
         #if DEBUG
             #expect(HAPISIssuer.attestEnvironment == "development")
@@ -521,6 +522,71 @@ struct HAPISAttestationTests {
         #endif
         #expect(HAPISIssuer.storageAccount(for: issuer) == "hapis.example.test")
         #expect(HAPISIssuer.attestKeyAccount(for: issuer) != HAPISIssuer.storageAccount(for: issuer))
+        let staleJSON = Data(#"{"key_id":"old","registered":true,"attested":true}"#.utf8)
+        let stale = HAPISAttestKeyRecordCodec.decode(staleJSON)
+        #expect(stale?.keyId == "old")
+        #expect(stale?.registered == true)
+        #expect(stale?.clientDataHashContractVersion == 0)
+        #expect(stale?.hasCurrentHashContract == false)
+        let current = HAPISAttestKeyRecord(keyId: "k", registered: true, attested: true)
+        #expect(current.clientDataHashContractVersion == HAPISAppAttestClientData.hashContractVersion)
+        #expect(current.hasCurrentHashContract)
+    }
+
+    @Test func staleHashContractKeyIsClearedAndReattested() async throws {
+        let challenge = Data(repeating: 12, count: 32).hapisBase64URLEncoded
+        let http = MockHAPISHTTP()
+        let keys = InMemoryHAPISAttestKeyStore()
+        try keys.save(
+            HAPISAttestKeyRecord(
+                keyId: "json-hash-key",
+                registered: true,
+                attested: true,
+                clientDataHashContractVersion: 0
+            ),
+            issuer: issuer)
+        let service = MockHAPISAppAttestService()
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/v1/consumer/challenge") {
+                return (200, challengeJSON(challenge))
+            }
+            if path.hasSuffix("/v1/consumer/sessions") {
+                guard let attest = attestObject(request.httpBody) else {
+                    Issue.record("sessions body missing attest")
+                    return (500, #"{"error":{"code":"unexpected"}}"#)
+                }
+                #expect(attest["key_id"] as? String == "test-key-id")
+                #expect(attest["attestation"] != nil)
+                #expect(attest["assertion"] == nil)
+                #expect(attest["challenge"] as? String == challenge)
+                return (
+                    201,
+                    tokenJSON(token: "reattest-after-contract", now: Date(), refreshIn: 3300, expiresIn: 3600)
+                )
+            }
+            Issue.record("unexpected \(request.httpMethod ?? "?") \(path)")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: InMemoryHAPISTokenStore(),
+            clock: SystemHAPISClock(),
+            attestation: HAPISAppAttestProvider(service: service, keyStore: keys)
+        )
+        #expect(try await client.validToken() == "reattest-after-contract")
+        #expect(try keys.load(issuer: issuer)?.keyId == "test-key-id")
+        #expect(try keys.load(issuer: issuer)?.registered == true)
+        #expect(try keys.load(issuer: issuer)?.attested == true)
+        #expect(try keys.load(issuer: issuer)?.hasCurrentHashContract == true)
+        #expect(service.generateKeyCount == 1)
+        #expect(service.assertionCalls.isEmpty)
+        #expect(service.attestCalls.count == 1)
+        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(Data(repeating: 12, count: 32)))
+        #expect(
+            service.attestCalls[0].hash
+                != HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge)))
     }
 
     @Test func stubStoredTokenRemintsWhenEnteringAppAttest() async throws {
