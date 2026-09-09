@@ -350,12 +350,40 @@ import Foundation
         #expect(kept[1][2] == "90")
         #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("売上高のうち外部顧客への売上高"))
         #expect(BreakdownExtractor.isOfWhichRegionChildHeader("うち中国"))
-        #expect(
-            BreakdownExtractor.isOfWhichRegionChildHeader(
-                "うち豪州", parentIsRegion: true))
-        #expect(
-            !BreakdownExtractor.isOfWhichRegionChildHeader(
-                "うち豪州", parentIsRegion: false))
+        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("うち豪州"))
+        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("（うち豪州）"))
+    }
+
+    @Test func dropOfWhichHeaderColumnsRemovesOneRowAustraliaSubset() {
+        let grid = [
+            ["日本", "海外", "うち豪州", "合計"],
+            ["1281768", "1229340", "500000", "2511108"],
+        ]
+        let dropped = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(dropped.map { $0.count }.allSatisfy { $0 == 3 })
+        #expect(dropped[0] == ["日本", "海外", "合計"])
+        #expect(dropped[1] == ["1281768", "1229340", "2511108"])
+        #expect(!dropped.joined().joined().contains("うち"))
+        #expect(!dropped.joined().joined().contains("500000"))
+    }
+
+    @Test func geographyHtmlDropsOneRowOfWhichAustraliaColumn() {
+        let html = """
+            <table>
+              <tr><td>日本</td><td>海外</td><td>うち豪州</td><td>合計</td></tr>
+              <tr><td>1281768</td><td>1229340</td><td>500000</td><td>2511108</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.count == 1)
+        let md = tables[0].markdown
+        #expect(md.contains("日本"))
+        #expect(md.contains("海外"))
+        #expect(md.contains("1281768"))
+        #expect(md.contains("1229340"))
+        #expect(md.contains("2511108"))
+        #expect(!md.contains("うち豪州"))
+        #expect(!md.contains("500000"))
     }
 
     @Test func businessHtmlKeepsOfWhichExternalCustomerMetricColumn() {

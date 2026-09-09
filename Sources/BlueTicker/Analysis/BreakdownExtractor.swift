@@ -793,8 +793,8 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 地域親の下の内数子列（アジア｜うち中国）だけ落とす。
-    /// 指標名に助詞の「うち」が含まれる列（売上高のうち外部顧客への売上高）は残す。
+    /// 地域の内数子列だけ落とす。2段見出し（アジア｜うち中国）も1段見出し
+    /// （日本｜海外｜うち豪州）も対象。指標名の助詞「うち」（売上高のうち外部顧客への売上高）は残す。
     /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
     static func dropOfWhichHeaderColumns(_ grid: [[String]]) -> [[String]] {
         guard !grid.isEmpty else { return grid }
@@ -805,13 +805,18 @@ enum BreakdownExtractor {
         for row in grid {
             let hasNumeric = row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
             if hasNumeric { break }
-            for col in 1..<colCount {
+            var rowHasRegion = false
+            for col in 0..<colCount {
                 let cell = col < row.count ? row[col] : ""
                 if isGeographicRegionHeader(cell) {
                     regionParentByColumn[col] = true
+                    rowHasRegion = true
                 }
+            }
+            for col in 1..<colCount {
+                let cell = col < row.count ? row[col] : ""
                 if isOfWhichRegionChildHeader(
-                    cell, parentIsRegion: regionParentByColumn[col])
+                    cell, parentIsRegion: regionParentByColumn[col] || rowHasRegion)
                 {
                     drop.insert(col)
                 }
@@ -837,7 +842,8 @@ enum BreakdownExtractor {
         return Xbrl.segmentGeographyLabelKeywordsJa.contains(where: trimmed.contains)
     }
 
-    /// 地域親の下の内数子見出し（うち中国）か。指標名の助詞「うち」は false。
+    /// 内数の地域子見出し（うち中国 / うち豪州 / （うち米国））か。
+    /// 1段見出しでも `うち…` なら true。指標名の助詞「うち」は false。
     static func isOfWhichRegionChildHeader(
         _ cell: String, parentIsRegion: Bool = false
     ) -> Bool {
@@ -855,13 +861,12 @@ enum BreakdownExtractor {
         guard compact.unicodeScalars.count <= 24 else { return false }
         guard let uchi = compact.range(of: "うち") else { return false }
         let after = String(compact[uchi.upperBound...])
+        // 1段でも「うち豪州」は内数。指標名は上の hint で既に除外済み。
+        if compact.hasPrefix("うち") { return true }
         if Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains) {
             return true
         }
-        if parentIsRegion {
-            return compact.hasPrefix("うち")
-        }
-        return false
+        return parentIsRegion
     }
 
     // MARK: - 当期/前期判定
