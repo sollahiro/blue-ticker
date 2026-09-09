@@ -793,25 +793,75 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 見出し行に「うち」を含む列は内数（of-which）なので落とす。
-    /// 2段見出し「アジア｜うち中国」を finest-grain の並列区分と誤らないための構造側の処理。
+    /// 地域親の下の内数子列（アジア｜うち中国）だけ落とす。
+    /// 指標名に助詞の「うち」が含まれる列（売上高のうち外部顧客への売上高）は残す。
     /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
     static func dropOfWhichHeaderColumns(_ grid: [[String]]) -> [[String]] {
         guard !grid.isEmpty else { return grid }
         let colCount = grid.map(\.count).max() ?? 0
         guard colCount > 1 else { return grid }
         var drop = Set<Int>()
+        var regionParentByColumn = Array(repeating: false, count: colCount)
         for row in grid {
             let hasNumeric = row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
             if hasNumeric { break }
-            for (col, cell) in row.enumerated() where col > 0 {
-                if cell.contains("うち") { drop.insert(col) }
+            for col in 1..<colCount {
+                let cell = col < row.count ? row[col] : ""
+                if isGeographicRegionHeader(cell) {
+                    regionParentByColumn[col] = true
+                }
+                if isOfWhichRegionChildHeader(
+                    cell, parentIsRegion: regionParentByColumn[col])
+                {
+                    drop.insert(col)
+                }
             }
         }
         guard !drop.isEmpty else { return grid }
         return grid.map { row in
             row.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
         }
+    }
+
+    /// 指標名・勘定科目に見える「うち」（売上高のうち外部顧客への売上高 等）。
+    private static let ofWhichMetricHeaderHints: [String] = [
+        "売上", "収益", "利益", "顧客", "外部", "資産", "負債", "費用", "損失",
+        "減価", "のれん", "設備", "投資", "償却", "従業員", "キャッシュ",
+        "調整", "消去", "全社", "営業", "製造", "販管", "契約",
+    ]
+
+    /// 地域区分の見出しセルか（うち内数ラベルは除く）。
+    static func isGeographicRegionHeader(_ cell: String) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("うち") else { return false }
+        return Xbrl.segmentGeographyLabelKeywordsJa.contains(where: trimmed.contains)
+    }
+
+    /// 地域親の下の内数子見出し（うち中国）か。指標名の助詞「うち」は false。
+    static func isOfWhichRegionChildHeader(
+        _ cell: String, parentIsRegion: Bool = false
+    ) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("うち") else { return false }
+        if ofWhichMetricHeaderHints.contains(where: trimmed.contains) { return false }
+        let compact = trimmed
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "（", with: "")
+            .replacingOccurrences(of: "）", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        guard compact.unicodeScalars.count <= 24 else { return false }
+        guard let uchi = compact.range(of: "うち") else { return false }
+        let after = String(compact[uchi.upperBound...])
+        if Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains) {
+            return true
+        }
+        if parentIsRegion {
+            return compact.hasPrefix("うち")
+        }
+        return false
     }
 
     // MARK: - 当期/前期判定
@@ -1208,6 +1258,8 @@ enum BreakdownExtractor {
             // 単位キャプション／空の装飾表だけ候補にしない（period 交互ラベルをずらす）。
             // 定性の対応表は残す。資産表スキップより先に単位を拾い、後続の売上表へ渡す。
             if isUnitCaptionOrDecorativeStub(grid) {
+                // 先に未 flush の数値表を確定させる。後続スタブの単位で前表を上書きしない。
+                flushPending()
                 if let caption = unitCaption(from: grid) {
                     pendingUnitCaption = caption
                 }
@@ -1397,6 +1449,8 @@ enum BreakdownExtractor {
                     seen.insert(ObjectIdentifier(table))
                     let grid = expandTable(table)
                     if isUnitCaptionOrDecorativeStub(grid) {
+                        // この経路は表を即 append するため、後続スタブが既出表の unitCaption を
+                        // 書き換えない。pending は未公開の後続表だけに効く。
                         if let caption = unitCaption(from: grid) {
                             pendingUnitCaption = caption
                         }
