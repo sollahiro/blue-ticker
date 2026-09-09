@@ -16,6 +16,9 @@ struct BreakdownTable: Equatable {
     var heading: String
     var markdown: String
     var period: String?  // "当期" | "前期" | "比較"
+    /// 注記の単位キャプション（百万円 / 千円 等）。単位専用表は period 候補から落とすが、
+    /// このフィールドへ引き継いで LLM プロンプトへ載せる。content_hash には含めない。
+    var unitCaption: String? = nil
 }
 
 struct BreakdownFact: Equatable {
@@ -38,6 +41,7 @@ struct ExtractedBreakdown: Equatable {
         let tablesArr: [[String: Any]] = tables.map { t in
             var d: [String: Any] = ["heading": t.heading, "markdown": t.markdown]
             if let p = t.period { d["period"] = p }
+            if let u = t.unitCaption { d["unitCaption"] = u }
             return d
         }
         let factsArr: [[String: Any]] = facts.map { f in
@@ -64,7 +68,8 @@ extension ExtractedBreakdown {
             BreakdownTable(
                 heading: t["heading"] as? String ?? "",
                 markdown: t["markdown"] as? String ?? "",
-                period: t["period"] as? String
+                period: t["period"] as? String,
+                unitCaption: t["unitCaption"] as? String
             )
         }
         facts = (dictionary["facts"] as? [[String: Any]] ?? []).map { f in
@@ -440,7 +445,8 @@ enum BreakdownExtractor {
             mixedTags: Xbrl.geographyMixedTextBlockTags,
             dedicatedHeading: "地域ごとの情報",
             mixedKeywords: Xbrl.geographyHeadingKeywords,
-            skipGeographyAssetMetricTables: true
+            skipGeographyAssetMetricTables: true,
+            dropOfWhichRegionColumns: true
         )
         // 地域注記側に売上表が残らない（売上省略＋資産表除外）ときだけ、
         // 収益の分解（NotesNetSales）から地域行のある表を拾う。
@@ -455,7 +461,8 @@ enum BreakdownExtractor {
                 mixedTags: [],
                 dedicatedHeading: Xbrl.geographyRevenueDecompositionHeading,
                 mixedKeywords: [],
-                skipGeographyAssetMetricTables: true
+                skipGeographyAssetMetricTables: true,
+                dropOfWhichRegionColumns: true
             ).filter(tableHasGeographyRegionLabels)
             if !revenueDecomp.isEmpty {
                 tables = revenueDecomp
@@ -666,6 +673,201 @@ enum BreakdownExtractor {
             }
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// 数値セルが1つも無い表か。
+    static func gridHasNumericValue(_ grid: [[String]]) -> Bool {
+        grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
+    }
+
+    /// 単位キャプションだけ／空の装飾表か。セグメント↔製品の対応表など、数値の無い定性開示は false。
+    /// dedicated 地域売上 TextBlock が Prior/Current に分かれるとき、単位表が1枚目だと
+    /// `applyPeriodOrdering` がデータ表を当期と誤ラベルする（実データ: 6490 / S100YD79）。
+    static func isUnitCaptionOrDecorativeStub(_ grid: [[String]]) -> Bool {
+        guard !gridHasNumericValue(grid) else { return false }
+        let cells = grid.flatMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if cells.isEmpty { return true }
+        return cells.allSatisfy(isUnitCaptionOrDecorativeCell)
+    }
+
+    private static let decorativeStubCells: Set<String> = ["－", "─", "-", "—", "―", "・"]
+
+    private static func isUnitCaptionOrDecorativeCell(_ cell: String) -> Bool {
+        if decorativeStubCells.contains(cell) { return true }
+        guard cell.unicodeScalars.count <= 40 else { return false }
+        return parseUnitCaption(cell) != nil
+    }
+
+    static func markdownHasNumericValue(_ markdown: String) -> Bool {
+        markdown.split(separator: "\n", omittingEmptySubsequences: false).contains { line in
+            line.split(separator: "|", omittingEmptySubsequences: false).contains {
+                XBRLUtils.parseHtmlNumber(String($0).trimmingCharacters(in: .whitespaces)) != nil
+            }
+        }
+    }
+
+    /// グリッドの見出し／キャプション行から単位を拾う（数値行は見ない）。
+    static func unitCaption(from grid: [[String]]) -> String? {
+        let captionRows = grid.filter { row in
+            !row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+        }
+        let source = captionRows.isEmpty ? grid : captionRows
+        return parseUnitCaption(source.flatMap { $0 }.joined(separator: " "))
+    }
+
+    /// 「（単位：百万円）」「(Thousands of yen)」等から単位語を取り出す。
+    /// 単位専用表を period 候補から落とすとき、この文字列を後続データ表へ引き継ぐ。
+    static func parseUnitCaption(_ text: String) -> String? {
+        let compact = text
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+        guard !compact.isEmpty else { return nil }
+
+        if let regex = try? NSRegularExpression(pattern: #"単位[：:﹕︰]([^）)\]】]{1,40})"#) {
+            let ns = compact as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            if let match = regex.firstMatch(in: compact, options: [], range: range),
+                match.numberOfRanges > 1
+            {
+                let captured = ns.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "：: 　"))
+                if !captured.isEmpty { return captured }
+            }
+        }
+
+        let tokens = [
+            "百万ユーロ", "百万米ドル", "千米ドル", "千ユーロ",
+            "十億円", "百万円", "千円", "億円",
+        ]
+        for token in tokens where compact.contains(token) {
+            return token
+        }
+
+        let lower = compact.lowercased()
+        if lower.contains("million") && (lower.contains("yen") || lower.contains("jpy")) {
+            return "百万円"
+        }
+        if (lower.contains("thousand") || lower.contains("thousands"))
+            && (lower.contains("yen") || lower.contains("jpy"))
+        {
+            return "千円"
+        }
+        // 「（単位：円）」のみ。百万円等は token が先に当たる。部分一致の「円」は使わない。
+        if compact.contains("単位"), compact == "（単位：円）" || compact == "(単位：円)"
+            || compact == "単位：円" || compact == "単位:円"
+        {
+            return "円"
+        }
+        return nil
+    }
+
+    /// LLM user prompt の表区切り行。単位専用表は markdown に残さないので unit= で渡す。
+    static func llmUserPromptTableHeader(index: Int, table: BreakdownTable) -> String {
+        var line =
+            "--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明")"
+        if let unit = table.unitCaption, !unit.isEmpty {
+            line += " unit=\(unit)"
+        }
+        line += " ---"
+        return line
+    }
+
+    /// geography / business LLM 正規化器が共有する user prompt 本体。
+    static func llmUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
+        var lines: [String] = []
+        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
+        lines.append("")
+        lines.append("候補テーブル:")
+        for (index, table) in tables.enumerated() {
+            lines.append(llmUserPromptTableHeader(index: index, table: table))
+            if let unit = table.unitCaption, !unit.isEmpty {
+                lines.append("単位: \(unit)")
+            }
+            lines.append(table.markdown)
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。
+    /// 2段見出し（アジア｜うち中国）も1段見出し（日本｜海外｜うち豪州）も、
+    /// 地域の親／兄弟があるときだけ落とす。短い `うち…` だけでは落とさない
+    /// （うち輸出高、売上高のうち外部顧客への売上高）。
+    /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
+    static func dropOfWhichHeaderColumns(_ grid: [[String]]) -> [[String]] {
+        guard !grid.isEmpty else { return grid }
+        let colCount = grid.map(\.count).max() ?? 0
+        guard colCount > 1 else { return grid }
+        var drop = Set<Int>()
+        var regionParentByColumn = Array(repeating: false, count: colCount)
+        for row in grid {
+            let hasNumeric = row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+            if hasNumeric { break }
+            var rowHasRegion = false
+            for col in 0..<colCount {
+                let cell = col < row.count ? row[col] : ""
+                if isGeographicRegionHeader(cell) {
+                    regionParentByColumn[col] = true
+                    rowHasRegion = true
+                }
+            }
+            for col in 1..<colCount {
+                let cell = col < row.count ? row[col] : ""
+                if isOfWhichRegionChildHeader(
+                    cell, parentIsRegion: regionParentByColumn[col] || rowHasRegion)
+                {
+                    drop.insert(col)
+                }
+            }
+        }
+        guard !drop.isEmpty else { return grid }
+        return grid.map { row in
+            row.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+        }
+    }
+
+    /// 指標名・勘定科目に見える「うち」（売上高のうち外部顧客への売上高 等）。
+    private static let ofWhichMetricHeaderHints: [String] = [
+        "売上", "収益", "利益", "顧客", "外部", "資産", "負債", "費用", "損失",
+        "減価", "のれん", "設備", "投資", "償却", "従業員", "キャッシュ",
+        "調整", "消去", "全社", "営業", "製造", "販管", "契約", "輸出",
+    ]
+
+    /// 地域区分の見出しセルか（うち内数ラベルは除く）。
+    static func isGeographicRegionHeader(_ cell: String) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("うち") else { return false }
+        return Xbrl.segmentGeographyLabelKeywordsJa.contains(where: trimmed.contains)
+    }
+
+    /// 内数の地域子見出しか。短い `うち…` だけでは true にしない（うち輸出高）。
+    /// うち中国（直後が地域名）か、地域親／兄弟があるうち豪州だけ true。
+    static func isOfWhichRegionChildHeader(
+        _ cell: String, parentIsRegion: Bool = false
+    ) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("うち") else { return false }
+        if ofWhichMetricHeaderHints.contains(where: trimmed.contains) { return false }
+        let compact = trimmed
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "（", with: "")
+            .replacingOccurrences(of: "）", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        guard compact.unicodeScalars.count <= 24 else { return false }
+        guard let uchi = compact.range(of: "うち") else { return false }
+        let after = String(compact[uchi.upperBound...])
+        let afterIsRegion = Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains)
+        if afterIsRegion { return true }
+        return parentIsRegion && compact.hasPrefix("うち")
     }
 
     // MARK: - 当期/前期判定
@@ -970,10 +1172,12 @@ enum BreakdownExtractor {
         return abs(lhs - rhs) <= max(1.0, scale * Xbrl.noteHorizontalContinuationRelativeTolerance)
     }
 
-    /// 当期/前期が未ラベルのテーブルに順序ルール（前期→当期の繰り返し）を適用する。
+    /// 当期/前期が未ラベルの**数値**テーブルに順序ルール（前期→当期の繰り返し）を適用する。
+    /// 定性の対応表は period 候補にしない（単位スタブと同じく交互ラベルをずらさない）。
     static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
         var i = 0
         for idx in tables.indices where tables[idx].period == nil {
+            guard markdownHasNumericValue(tables[idx].markdown) else { continue }
             tables[idx].period = i % 2 == 0 ? "前期" : "当期"
             i += 1
         }
@@ -1023,12 +1227,15 @@ enum BreakdownExtractor {
     /// セグメント情報の golden parity を壊さないよう、既定は false。
     /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
     /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
+    /// `dropOfWhichRegionColumns`: geography 軸だけ、地域の内数子列（うち中国 / うち豪州）を落とす。
+    /// 事業別経路では呼ばない（うち輸出高を消さない）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
     /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
         skipGeographyAssetMetricTables: Bool = false,
-        defaultPeriod: String? = nil
+        defaultPeriod: String? = nil,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
@@ -1036,24 +1243,43 @@ enum BreakdownExtractor {
         var pendingElement: Element?
         var pendingGrid: [[String]]?
         var pendingPeriod: String?
+        // 単位専用表は候補にしないが、キャプションは同じ HTML 内の後続データ表へ残す。
+        var pendingUnitCaption: String?
 
         func flushPending() {
-            guard let grid = pendingGrid else { return }
-            tables.append(BreakdownTable(
-                heading: defaultHeading, markdown: gridToMarkdown(grid), period: pendingPeriod))
+            guard let raw = pendingGrid else { return }
+            let grid = dropOfWhichRegionColumns ? dropOfWhichHeaderColumns(raw) : raw
+            if !isUnitCaptionOrDecorativeStub(grid) {
+                tables.append(BreakdownTable(
+                    heading: defaultHeading,
+                    markdown: gridToMarkdown(grid),
+                    period: pendingPeriod,
+                    unitCaption: unitCaption(from: grid) ?? pendingUnitCaption
+                ))
+            }
             pendingElement = nil
             pendingGrid = nil
             pendingPeriod = nil
         }
 
         for table in tableEls {
+            let grid = expandTable(table)
+            // 単位キャプション／空の装飾表だけ候補にしない（period 交互ラベルをずらす）。
+            // 定性の対応表は残す。資産表スキップより先に単位を拾い、後続の売上表へ渡す。
+            if isUnitCaptionOrDecorativeStub(grid) {
+                // 先に未 flush の数値表を確定させる。後続スタブの単位で前表を上書きしない。
+                flushPending()
+                if let caption = unitCaption(from: grid) {
+                    pendingUnitCaption = caption
+                }
+                continue
+            }
             if skipGeographyAssetMetricTables,
                 let metricCaption = nearestGeographyMetricCaption(before: table),
                 isGeographyAssetMetricCaption(metricCaption)
             {
                 continue
             }
-            let grid = expandTable(table)
             let md = gridToMarkdown(grid)
             if md.isEmpty { continue }
             // 地域売上向け: 有形固定資産合計行など資産専用表を markdown でも落とす
@@ -1087,7 +1313,9 @@ enum BreakdownExtractor {
         // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
         // 両方を当期で上書きせず applyPeriodOrdering に委ねる。
         if let defaultPeriod {
-            let nilIndices = tables.indices.filter { tables[$0].period == nil }
+            let nilIndices = tables.indices.filter {
+                tables[$0].period == nil && markdownHasNumericValue(tables[$0].markdown)
+            }
             if nilIndices.count == 1 {
                 tables[nilIndices[0]].period = defaultPeriod
             }
@@ -1195,7 +1423,8 @@ enum BreakdownExtractor {
         _ html: String,
         keywords: [String],
         headingExclusionKeywords: [String] = [],
-        headingLikeOnly: Bool = false
+        headingLikeOnly: Bool = false,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         guard let elems = try? soup.select("*") else { return [] }
@@ -1220,6 +1449,7 @@ enum BreakdownExtractor {
                 // 一定回数まで探す（見出し直後にノイズ表→本表と並ぶ構成を取りこぼさないため）。
                 var candidate = findNextTable(after: heading.elem)
                 var attempts = 0
+                var pendingUnitCaption = parseUnitCaption(heading.text)
                 while let table = candidate, attempts < Xbrl.noteTableLookaheadLimit {
                     attempts += 1
                     guard !seen.contains(ObjectIdentifier(table)) else {
@@ -1228,6 +1458,15 @@ enum BreakdownExtractor {
                     }
                     seen.insert(ObjectIdentifier(table))
                     let grid = expandTable(table)
+                    if isUnitCaptionOrDecorativeStub(grid) {
+                        // この経路は表を即 append するため、後続スタブが既出表の unitCaption を
+                        // 書き換えない。pending は未公開の後続表だけに効く。
+                        if let caption = unitCaption(from: grid) {
+                            pendingUnitCaption = caption
+                        }
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
                     let md = gridToMarkdown(grid)
                     if md.isEmpty || Xbrl.noteTableExclusionKeywords.contains(where: md.contains) {
                         candidate = findNextTable(after: table)
@@ -1236,7 +1475,7 @@ enum BreakdownExtractor {
                     let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
                     var workingGrid = grid
                     var workingTable = table
-                    var workingPeriod = period
+                    let workingPeriod = period
                     // 改ページで割れた同一表は markdown を結合して1候補にする
                     // （縦: 武田製品別売上 / 横: 三菱商事の事業グループ別収益）。
                     // 小松・オリックスは mergedContinuationGrid が nil のため従来どおり
@@ -1255,8 +1494,28 @@ enum BreakdownExtractor {
                         workingGrid = merged
                         workingTable = chained
                     }
+                    let published =
+                        dropOfWhichRegionColumns
+                        ? dropOfWhichHeaderColumns(workingGrid) : workingGrid
+                    if isUnitCaptionOrDecorativeStub(published) {
+                        if let caption = unitCaption(from: published) {
+                            pendingUnitCaption = caption
+                        }
+                        candidate = findNextTable(after: workingTable)
+                        continue
+                    }
                     tables.append(BreakdownTable(
-                        heading: keyword, markdown: gridToMarkdown(workingGrid), period: workingPeriod))
+                        heading: keyword,
+                        markdown: gridToMarkdown(published),
+                        period: workingPeriod,
+                        unitCaption: unitCaption(from: published) ?? pendingUnitCaption
+                    ))
+
+                    // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。
+                    if !gridHasNumericValue(published) {
+                        candidate = findNextTable(after: workingTable)
+                        continue
+                    }
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース
                     // （学び参照）: 直後に短いラベルだけを挟んで続く表があり、かつ次のいずれかを
@@ -1299,7 +1558,8 @@ enum BreakdownExtractor {
         mixedKeywords: [String],
         mixedHeadingExclusionKeywords: [String] = [],
         skipGeographyAssetMetricTables: Bool = false,
-        mixedHeadingLikeOnly: Bool = false
+        mixedHeadingLikeOnly: Bool = false,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -1326,7 +1586,8 @@ enum BreakdownExtractor {
                         block.content, defaultHeading: dedicatedHeading,
                         includeFootnotes: includeFootnotes,
                         skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
-                        defaultPeriod: contextPeriod
+                        defaultPeriod: contextPeriod,
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
                     ))
                 } else if mixedTags.contains(block.tag) {
                     // mixed は1つの contextRef 配下に前期・当期 HTML が同居しうるため
@@ -1337,7 +1598,8 @@ enum BreakdownExtractor {
                         headingExclusionKeywords: mixedHeadingExclusionKeywords
                             + (skipGeographyAssetMetricTables
                                 ? Xbrl.geographyAssetMetricCaptionKeywords : []),
-                        headingLikeOnly: mixedHeadingLikeOnly
+                        headingLikeOnly: mixedHeadingLikeOnly,
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
                     ))
                 }
             }

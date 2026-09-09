@@ -175,6 +175,30 @@ import Foundation
         #expect(current.markdown.contains("7,182,133") || current.markdown.contains("7182133"))
     }
 
+    // MARK: - 6490 PILLAR S100YD79 geography（2026-09-09、BLT-64）
+
+    @Test func pillarGeographyDropsOfWhichChinaAndLabelsPriorThenCurrent() async throws {
+        guard await Self.ensureAvailable("S100YD79") else { return }
+        let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100YD79"))
+        #expect(result.method == "html_table")
+        let prior = try #require(result.tables.first {
+            containsAmount($0.markdown, "40,762") && containsAmount($0.markdown, "57,988")
+        })
+        let current = try #require(result.tables.first {
+            containsAmount($0.markdown, "38,840") && containsAmount($0.markdown, "59,479")
+        })
+        #expect(prior.period == "前期")
+        #expect(current.period == "当期")
+        #expect(containsAmount(current.markdown, "14,246"))
+        #expect(containsAmount(current.markdown, "6,391"))
+        #expect(!containsAmount(current.markdown, "8,900"))
+        #expect(!current.markdown.contains("うち中国"))
+        #expect(!containsAmount(prior.markdown, "6,060"))
+        #expect(!prior.markdown.contains("うち中国"))
+        #expect(prior.unitCaption == "百万円")
+        #expect(current.unitCaption == "百万円")
+    }
+
     // MARK: - アサヒ S100QG09 geography（2023-03-29、本番 unknown）
 
     @Test func asahi2023GeographyExtractionFindsJapanOverseasRevenueTable() async throws {

@@ -22,7 +22,11 @@ import Foundation
 /// v4 → v5（issue #163）: 報告セグメントが地域軸のとき OperatingSegments 売上 facts を
 /// geography へフォールバック（電通型）。`APAC` member キーワード追加を含む。
 /// v5 → v6: 改ページで列方向に割れた同一表（三菱商事の事業グループ別収益）を抽出時に横結合する。
-public let filingSectionsCacheVersion = "sections-v6"
+/// v6 → v7: BreakdownExtractor が単位のみ表を specials 候補から落とし、うち列を落とす
+/// （segments / geography / revenue_recognition が同じ HTML 抽出経路）。
+/// v7 → v8: うち列ドロップの決定論精緻化（geography 軸ゲート、地域親/兄弟、1段うち豪州）。
+/// extractSpecialSection が同じ経路を使うため、clean な sections-v7 行は skip されて stale になる。
+public let filingSectionsCacheVersion = "sections-v8"
 
 /// filing-content read（REST）が 200 を返す最低抽出バージョン番号（`sections-vN` の N）。
 /// **明示指定**であり、「現行から N つ前」の機械オフセットではない。人手で上げる。

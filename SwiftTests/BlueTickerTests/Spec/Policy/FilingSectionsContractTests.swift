@@ -28,4 +28,14 @@ import Testing
         #expect(xbrlSections.values.contains { $0.xbrlElements.contains(Xbrl.descriptionOfBusinessTextblockTag) } == false)
         #expect(currentFilingSectionKeys().contains("description_of_business") == false)
     }
+
+    @Test func htmlExtractorSharedPathBumpsFilingSectionsWithBusinessAndGeography() throws {
+        let sectionsN = try #require(filingSectionsCacheVersionNumber(filingSectionsCacheVersion))
+        #expect(sectionsN == 8)
+        #expect(try #require(filingSectionsCacheVersionNumber("sections-v7")) < sectionsN)
+        #expect(filingSectionsCacheVersion == "sections-v8")
+        // breakdown of-which refinements already at v12; this bump is filing-sections specials only.
+        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v12")
+        #expect(businessBreakdownCacheVersion == "breakdown-business-v12")
+    }
 }

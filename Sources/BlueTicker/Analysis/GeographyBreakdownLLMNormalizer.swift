@@ -38,15 +38,15 @@ enum GeographyBreakdownLLMNormalizer {
     連結の外部売上高（円単位、比較の分母）が与えられます。
 
     ルール:
-    - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・列（多くは「当期」列）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
+    - 候補テーブルが複数ある場合、連結売上高との整合性が最も高い表・列（多くは「当期」列）を選ぶこと。前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと。数値が行方向に前期→当期と並ぶ表では、表合計が連結売上高と一致する行を選ぶこと。period ラベルより数値一致を優先すること
     - **非流動資産・有形固定資産など資産の地域別表は対象外**。候補が資産表のみなら applicable=false を返すこと
     - **「収益の分解」見出しの表**（行が日本・米州等、列が事業セグメント＋合計）は対象内。金額は「合計」（または連結）列を使い、行ラベルは地域名にすること
-    - **見出しが2段以上に分かれている表（例: 1段目が「アジア」「米州」等の広い区分、2段目が「タイ」「その他」「米国」「その他」等の細かい区分）では、必ず最も粒度の細かい行を採用すること。広い区分へ集約してはならない。行ラベルは2段目（最も内側）の区分名をそのまま使うこと（例: 「アジア」「タイ」の2段なら「タイ」、「アジア」「その他」の2段なら「アジアその他」のように、上位区分と下位区分をつなげた名前にすること）**
+    - **見出しが2段以上に分かれている表で、下位が並列の内訳（「タイ」「その他」等、足し合わせて親になる区分）なら、最も粒度の細かい列/行を採用し広い区分へ集約してはならない。下位が「その他」なら「アジアその他」のように上位とつなげる。下位が「うち」「（うち〜）」の列/行は内数であり並列区分ではない。親地域（アジア等）の金額だけを segment にし、うち列/行は出さない。うち金額を「中国」や「アジアその他」として残さないこと**
     - **親地域に金額があり、その下に「うち」「（うち〜）」等の内数行がある表では、内数行は出力しないこと（親地域の金額のみを segment にする）。内数を別 segment に含めると親と二重計上になり分母合計が崩れる**
     - 列を地域行に展開するとき、出力行の順序は元表の列の左から右（または行の上から下）と一致させること。合計を途中の地域より前に動かさないこと
     - 行ラベルは「日本」「米国」「欧州」「アジア」等の地域名であるべきで、事業名・製品名ではないこと。地域別注記のはずが実際には事業別の表（見出しの取り違え）である場合は applicable=false を返すこと
     - **行ラベルから「（注）2」「(注1)」「（注１）」「※1」等の脚注マーカーは除去すること（例: 「米州（注）2」→「米州」、「欧州他（注）3」→「欧州他」）。脚注の定義文（例: 米州は米国を除く）が表外やセルにある場合は、その意味を notes に具体的に残すこと。2段見出しで下位が「その他」のときだけ上位とつなげる既存ルールを除き、表に無い語をラベルへ足さないこと**
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
+    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。各表ヘッダーの unit= および直前の「単位:」行は抽出器が注記から拾った単位である。markdown に単位行が無くてもそれを使うこと。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な地域区分の行は row_kind="segment" とすること
     - 該当する地域別データが候補テーブル群に存在しない場合は applicable=false を返すこと
     - notes フィールドに、表選択・期間列選択の根拠と、行ラベルから省いた脚注の意味（定義があれば）を短く日本語で記すこと
@@ -96,7 +96,8 @@ enum GeographyBreakdownLLMNormalizer {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
-        let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
+        let userPrompt = BreakdownExtractor.llmUserPrompt(
+            tables: result.tables, consolidatedSales: consolidatedSales)
 
         guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
 
@@ -144,6 +145,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         // 脚注マーカー除去はプロンプト指示が本線。ここは LLM が残したときの決定的保険。
+        // 「うち」ラベルの内数除去も同様（プロンプトが「中国」へ言い換えた場合は抽出側の列落としが本線）。
         var rows: [BreakdownRow] = []
         var strippedFootnotes: [String] = []
         for raw in rawRows {
@@ -225,19 +227,6 @@ enum GeographyBreakdownLLMNormalizer {
         return (snapshot, audit)
     }
 
-    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
-        var lines: [String] = []
-        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
-        lines.append("")
-        lines.append("候補テーブル:")
-        for (index, table) in tables.enumerated() {
-            lines.append("--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明") ---")
-            lines.append(table.markdown)
-            lines.append("")
-        }
-        return lines.joined(separator: "\n")
-    }
-
     /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。
     /// 親を残し内数を落とす（注記の加算構造に合わせる。内数は親金額の内訳開示）。
     static func dropOfWhichSubsetSegments(_ rows: [BreakdownRow]) -> [BreakdownRow] {
@@ -294,6 +283,8 @@ enum GeographyBreakdownLLMNormalizer {
         guard child.amount > 0, parent.amount > 0 else { return false }
         // 内数は親以下（丸め誤差のみ許容）。
         guard child.amount <= parent.amount * 1.001 else { return false }
+        // ラベルに「うち」がある行は内数そのもの。比率に関係なく落とす。
+        if child.labelRaw.contains("うち") { return true }
         // 兄弟地域の取りこぼし防止: 真の「うち」は親の大部分を占めることが多い
         // （北米のうち米国 ≈ 95%+）。中国が「アジア他」「その他」と並列な表では比率が低い。
         guard child.amount >= parent.amount * 0.80 else { return false }
@@ -301,7 +292,7 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 高確度の親地域 ↔ 内数地域ラベル組のみ（並列バケット「その他」「アジア他」は扱わない）。
-    /// 「その他のうち中国」等はプロンプト指示に委ね、決定的フィルタでは触らない。
+    /// ラベル自体に「うち」がある行は `isLikelyOfWhichChild` で先に落とす。
     private static func matchesOfWhichLabelPair(parent: String, child: String) -> Bool {
         let pairs: [(parents: [String], children: [String])] = [
             (["北米", "米州", "米大陸", "アメリカ"], ["米国", "アメリカ合衆国"]),

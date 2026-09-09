@@ -762,6 +762,7 @@ private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedB
     ExtractedBreakdownPayload(
         method: r.method,
         tables: r.tables.map {
+            // unitCaption は LLM prompt 専用。hash / 公開 payload の形は変えない。
             BreakdownTablePayload(heading: $0.heading, markdown: $0.markdown, period: $0.period)
         },
         facts: r.facts.map {

@@ -39,7 +39,7 @@ enum RevenueRecognitionLLMNormalizer {
     - 地域別にだけ分解した表（国内／海外のみ等）しか無い場合は applicable=false を返すこと
     - 売上と同じ表内に製品別・事業別の営業利益（またはセグメント利益に相当する指標）が並んで開示されている場合は、対応する profit フィールドに設定し、profit_disclosed を true にすること。該当する利益指標がその表に存在しない場合（収益認識注記の製品別売上高表は利益が開示されていないことが多い）は profit を null のままにし、profit_disclosed を false にすること
     - profit_disclosed は「この表に利益情報が存在するか」の申告であり、rows の profit 値と矛盾させないこと（true なら最低1行は profit を埋めること、false なら全行 null のままにすること）
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
+    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。各表ヘッダーの unit= および直前の「単位:」行は抽出器が注記から拾った単位である。markdown に単位行が無くてもそれを使うこと。日本の有価証券報告書の注記は「（単位：百万円）」の表記が最も一般的
     - 合計・小計・連結合計を表す行（例: 「顧客との契約から生じる収益」「外部顧客への売上高」「合計」「外部収益合計」）は row_kind="subtotal" とし、除去・消去を表す行は row_kind="reconciling" とすること。純粋な製品・事業・部門区分の行は row_kind="segment" とすること
     - 表や注記に「タイヤ(注1)＝タイヤ＋ソリューション」「その他(注2)＝化工品・多角化」のような内訳説明がある場合、rows は注記が示す粗い区分（例: タイヤ／その他）のままにし、細目名（ソリューション、化工品・多角化 等）は notes に具体名で残すこと（「細目は省略」だけでは不十分）
     - 該当する事業別・製品別・部門別データが候補テーブル群に存在しない場合は applicable=false を返すこと
@@ -96,7 +96,8 @@ enum RevenueRecognitionLLMNormalizer {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
-        let userPrompt = buildUserPrompt(tables: result.tables, consolidatedSales: consolidatedSales)
+        let userPrompt = BreakdownExtractor.llmUserPrompt(
+            tables: result.tables, consolidatedSales: consolidatedSales)
 
         guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
 
@@ -222,18 +223,5 @@ enum RevenueRecognitionLLMNormalizer {
             warnings: warnings
         )
         return (snapshot, audit)
-    }
-
-    private static func buildUserPrompt(tables: [BreakdownTable], consolidatedSales: Double) -> String {
-        var lines: [String] = []
-        lines.append("連結外部売上高（円、比較の分母）: \(Int(consolidatedSales))")
-        lines.append("")
-        lines.append("候補テーブル:")
-        for (index, table) in tables.enumerated() {
-            lines.append("--- table_index=\(index) heading=\(table.heading) period=\(table.period ?? "不明") ---")
-            lines.append(table.markdown)
-            lines.append("")
-        }
-        return lines.joined(separator: "\n")
     }
 }

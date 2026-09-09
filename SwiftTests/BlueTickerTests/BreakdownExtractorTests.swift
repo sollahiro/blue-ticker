@@ -82,11 +82,21 @@ import Foundation
     // MARK: - applyPeriodOrdering
 
     @Test func periodOrderingUnlabeledGetsAlternatingLabels() {
-        var tables = ["A", "B", "C", "D"].map {
+        var tables = ["10", "20", "30", "40"].map {
             BreakdownTable(heading: "セグメント情報", markdown: "| \($0) |", period: nil)
         }
         BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables.map(\.period) == ["前期", "当期", "前期", "当期"])
+    }
+
+    @Test func periodOrderingSkipsQualitativeTablesWithoutNumbers() {
+        var tables = [
+            BreakdownTable(heading: "X", markdown: "| 報告セグメント | 製品 |", period: nil),
+            BreakdownTable(heading: "X", markdown: "| 100 |", period: nil),
+            BreakdownTable(heading: "X", markdown: "| 110 |", period: nil),
+        ]
+        BreakdownExtractor.applyPeriodOrdering(&tables)
+        #expect(tables.map(\.period) == [nil, "前期", "当期"])
     }
 
     @Test func periodOrderingAlreadyLabeledIsNotChanged() {
@@ -246,6 +256,364 @@ import Foundation
             #expect(result.tables[0].markdown.contains("| 100 | 20 | 120 |"))
             #expect(result.tables[1].markdown.contains("| 110 | 30 | 140 |"))
         }
+    }
+
+    @Test func geographyDedicatedUnitStubDoesNotStealCurrentPeriodLabel() {
+        // 6490 PILLAR 型: dedicated 地域売上 TextBlock が Prior/Current に分かれ、
+        // 各ブロック先頭に「（単位：百万円）」だけの表がある。単位表を残すと
+        // applyPeriodOrdering が前期データ表を当期と誤ラベルする。
+        let priorHtml =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アジア&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;40762&lt;/td&gt;&lt;td&gt;10869&lt;/td&gt;&lt;td&gt;57988&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let currentHtml =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" +
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アジア&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;38840&lt;/td&gt;&lt;td&gt;14246&lt;/td&gt;&lt;td&gt;59479&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="Prior1YearDuration">\(priorHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(currentHtml)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 2)
+            #expect(result.tables.map(\.period) == ["前期", "当期"])
+            #expect(result.tables[0].markdown.contains("40762"))
+            #expect(result.tables[1].markdown.contains("38840"))
+            #expect(!result.tables.contains { $0.markdown.contains("単位") })
+            #expect(result.tables[0].unitCaption == "百万円")
+            #expect(result.tables[1].unitCaption == "百万円")
+            let prompt = BreakdownExtractor.llmUserPrompt(
+                tables: result.tables, consolidatedSales: 59_479_000_000)
+            #expect(prompt.contains("unit=百万円"))
+            #expect(prompt.contains("単位: 百万円"))
+        }
+    }
+
+    @Test func geographyDropsOfWhichHeaderColumnsFromTwoRowHeader() {
+        // 6490 PILLAR 型: 2段見出し「アジア / うち中国」。うち列は内数なので markdown から落とす。
+        let html =
+            "&lt;table&gt;" +
+            "&lt;tr&gt;" +
+            "&lt;td rowspan='2'&gt;日本&lt;/td&gt;" +
+            "&lt;td colspan='2'&gt;アジア&lt;/td&gt;" +
+            "&lt;td rowspan='2'&gt;その他&lt;/td&gt;" +
+            "&lt;td rowspan='2'&gt;合計&lt;/td&gt;" +
+            "&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;うち中国&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;38840&lt;/td&gt;&lt;td&gt;14246&lt;/td&gt;&lt;td&gt;8900&lt;/td&gt;" +
+            "&lt;td&gt;6391&lt;/td&gt;&lt;td&gt;59479&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(html)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.count == 1)
+            let md = result.tables[0].markdown
+            #expect(md.contains("38840"))
+            #expect(md.contains("14246"))
+            #expect(md.contains("6391"))
+            #expect(md.contains("59479"))
+            #expect(!md.contains("8900"))
+            #expect(!md.contains("うち中国"))
+        }
+    }
+
+    @Test func dropOfWhichHeaderColumnsRemovesNestedChinaColumn() {
+        let grid = [
+            ["日本", "アジア", "アジア", "その他", "合計"],
+            ["日本", "アジア", "うち中国", "その他", "合計"],
+            ["38840", "14246", "8900", "6391", "59479"],
+        ]
+        let dropped = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(dropped.map { $0.count }.allSatisfy { $0 == 4 })
+        #expect(dropped[2] == ["38840", "14246", "6391", "59479"])
+        #expect(!dropped.joined().joined().contains("うち"))
+    }
+
+    @Test func dropOfWhichHeaderColumnsKeepsBusinessExternalCustomerMetric() {
+        let grid = [
+            ["報告セグメント", "売上高", "売上高のうち外部顧客への売上高", "セグメント利益"],
+            ["機械", "100", "90", "10"],
+            ["水・環境", "50", "45", "5"],
+        ]
+        let kept = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(kept == grid)
+        #expect(kept[0][2] == "売上高のうち外部顧客への売上高")
+        #expect(kept[1][2] == "90")
+        #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("売上高のうち外部顧客への売上高"))
+        #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("うち輸出高"))
+        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("うち中国"))
+        #expect(
+            !BreakdownExtractor.isOfWhichRegionChildHeader("うち豪州"))
+        #expect(
+            BreakdownExtractor.isOfWhichRegionChildHeader(
+                "うち豪州", parentIsRegion: true))
+        #expect(
+            BreakdownExtractor.isOfWhichRegionChildHeader(
+                "（うち豪州）", parentIsRegion: true))
+    }
+
+    @Test func dropOfWhichHeaderColumnsKeepsUchiExportMetric() {
+        let grid = [
+            ["報告セグメント", "売上高", "うち輸出高", "セグメント利益"],
+            ["機械", "100", "20", "10"],
+            ["水・環境", "50", "8", "5"],
+        ]
+        let kept = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(kept == grid)
+        #expect(kept[0][2] == "うち輸出高")
+        #expect(kept[1][2] == "20")
+    }
+
+    @Test func dropOfWhichHeaderColumnsRemovesOneRowAustraliaSubset() {
+        let grid = [
+            ["日本", "海外", "うち豪州", "合計"],
+            ["1281768", "1229340", "500000", "2511108"],
+        ]
+        let dropped = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(dropped.map { $0.count }.allSatisfy { $0 == 3 })
+        #expect(dropped[0] == ["日本", "海外", "合計"])
+        #expect(dropped[1] == ["1281768", "1229340", "2511108"])
+        #expect(!dropped.joined().joined().contains("うち"))
+        #expect(!dropped.joined().joined().contains("500000"))
+    }
+
+    @Test func geographyHtmlDropsOneRowOfWhichAustraliaColumn() {
+        let html = """
+            <table>
+              <tr><td>日本</td><td>海外</td><td>うち豪州</td><td>合計</td></tr>
+              <tr><td>1281768</td><td>1229340</td><td>500000</td><td>2511108</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "地域ごとの情報", dropOfWhichRegionColumns: true)
+        #expect(tables.count == 1)
+        let md = tables[0].markdown
+        #expect(md.contains("日本"))
+        #expect(md.contains("海外"))
+        #expect(md.contains("1281768"))
+        #expect(md.contains("1229340"))
+        #expect(md.contains("2511108"))
+        #expect(!md.contains("うち豪州"))
+        #expect(!md.contains("500000"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            "<p>地域ごとの情報</p>" + html,
+            keywords: ["地域ごとの情報"],
+            dropOfWhichRegionColumns: true)
+        #expect(keyword.count == 1)
+        #expect(!keyword[0].markdown.contains("うち豪州"))
+        #expect(keyword[0].markdown.contains("海外"))
+    }
+
+    @Test func businessHtmlKeepsOfWhichExternalCustomerMetricColumn() {
+        let html = """
+            <table>
+              <tr>
+                <td>報告セグメント</td>
+                <td>売上高</td>
+                <td>売上高のうち外部顧客への売上高</td>
+                <td>セグメント利益</td>
+              </tr>
+              <tr><td>機械</td><td>100</td><td>90</td><td>10</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].markdown.contains("売上高のうち外部顧客への売上高"))
+        #expect(tables[0].markdown.contains("90"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            "<p>セグメント情報</p>" + html, keywords: ["セグメント情報"])
+        #expect(keyword.count == 1)
+        #expect(keyword[0].markdown.contains("売上高のうち外部顧客への売上高"))
+    }
+
+    @Test func businessHtmlKeepsUchiExportMetricColumn() {
+        let html = """
+            <table>
+              <tr>
+                <td>報告セグメント</td>
+                <td>売上高</td>
+                <td>うち輸出高</td>
+                <td>セグメント利益</td>
+              </tr>
+              <tr><td>機械</td><td>100</td><td>20</td><td>10</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].markdown.contains("うち輸出高"))
+        #expect(tables[0].markdown.contains("20"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            "<p>セグメント情報</p>" + html, keywords: ["セグメント情報"])
+        #expect(keyword.count == 1)
+        #expect(keyword[0].markdown.contains("うち輸出高"))
+        #expect(keyword[0].markdown.contains("20"))
+    }
+
+    @Test func gridHasNumericValueRejectsUnitCaptionOnly() {
+        #expect(!BreakdownExtractor.gridHasNumericValue([["（単位：百万円）"]]))
+        #expect(BreakdownExtractor.gridHasNumericValue([["日本", "100"]]))
+    }
+
+    @Test func isUnitCaptionOrDecorativeStubAcceptsUnitAndEmptyOnly() {
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([["（単位：百万円）"]]))
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([["(単位：千円)"]]))
+        #expect(BreakdownExtractor.isUnitCaptionOrDecorativeStub([[""], ["－"]]))
+        #expect(!BreakdownExtractor.isUnitCaptionOrDecorativeStub([
+            ["報告セグメント", "主要な製品及びサービス"],
+            ["機械", "農業機械、エンジン、建設機械"],
+            ["水・環境", "パイプシステム"],
+        ]))
+        #expect(!BreakdownExtractor.isUnitCaptionOrDecorativeStub([["日本", "100"]]))
+    }
+
+    @Test func qualitativeMappingTableKeptWhileUnitStubSkipped() {
+        // 定性のセグメント↔製品対応表は残し、単位スタブは捨て、数値表の前期/当期はずらさない。
+        let html = """
+            <table>
+              <tr><td>報告セグメント</td><td>主要な製品及びサービス</td></tr>
+              <tr><td>機械</td><td>農業機械、エンジン</td></tr>
+              <tr><td>水・環境</td><td>パイプシステム</td></tr>
+            </table>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>100</td><td>100</td></tr>
+            </table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>110</td><td>110</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 3)
+        #expect(tables[0].markdown.contains("報告セグメント"))
+        #expect(tables[0].markdown.contains("農業機械、エンジン"))
+        #expect(tables[0].period == nil)
+        #expect(!tables[0].markdown.contains("100"))
+        #expect(tables.map(\.period) == [nil, "前期", "当期"])
+        #expect(tables[1].markdown.contains("100"))
+        #expect(tables[2].markdown.contains("110"))
+        #expect(tables[1].unitCaption == "百万円")
+        #expect(tables[2].unitCaption == "百万円")
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+        let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 110_000_000)
+        #expect(prompt.contains("農業機械、エンジン"))
+        #expect(prompt.contains("unit=百万円"))
+        #expect(prompt.contains("period=前期"))
+        #expect(prompt.contains("period=当期"))
+    }
+
+    @Test func keywordPathKeepsQualitativeMappingAndSkipsUnitStub() {
+        let html = """
+            <p>セグメント情報</p>
+            <table>
+              <tr><td>報告セグメント</td><td>主要な製品及びサービス</td></tr>
+              <tr><td>機械</td><td>農業機械、エンジン</td></tr>
+            </table>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>38840</td><td>59479</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.keywordTablesFromHtml(html, keywords: ["セグメント情報"])
+        #expect(tables.count == 2)
+        #expect(tables[0].markdown.contains("主要な製品及びサービス"))
+        #expect(tables[0].period == nil)
+        #expect(tables[1].markdown.contains("38840"))
+        #expect(tables[1].unitCaption == "百万円")
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+    }
+
+    @Test func parseUnitCaptionExtractsKnownUnits() {
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：百万円）") == "百万円")
+        #expect(BreakdownExtractor.parseUnitCaption("(単位：千円)") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：円）") == "円")
+        #expect(BreakdownExtractor.parseUnitCaption("(Millions of yen)") == "百万円")
+        #expect(BreakdownExtractor.parseUnitCaption("(Thousands of yen)") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("日本 100") == nil)
+        #expect(BreakdownExtractor.unitCaption(from: [["（単位：百万円）"]]) == "百万円")
+    }
+
+    @Test func unitOnlyTableDiscardedForOrderingButCaptionCarriesForward() {
+        // 同一 HTML に単位表→データ表×2。単位表は候補にしないので applyPeriodOrdering が
+        // 前期/当期をずらず、かつ両データ表へ単位が残る。
+        let html = """
+            <table><tr><td>（単位：千円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>100</td><td>100</td></tr>
+            </table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>110</td><td>110</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.count == 2)
+        #expect(tables.map(\.period) == ["前期", "当期"])
+        #expect(tables.map(\.unitCaption) == ["千円", "千円"])
+        #expect(tables[0].markdown.contains("100"))
+        #expect(tables[1].markdown.contains("110"))
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+        let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 110_000)
+        #expect(prompt.contains("unit=千円"))
+        #expect(prompt.contains("単位: 千円"))
+        #expect(prompt.contains("period=前期"))
+        #expect(prompt.contains("period=当期"))
+    }
+
+    @Test func laterUnitStubDoesNotRelabelEarlierNumericTable() {
+        // 数値表を pending のまま後続の単位スタブで pendingUnitCaption を更新すると、
+        // flush 時に前表へ後続単位が付く。flush を先に行うこと。
+        let html = """
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>100</td><td>100</td></tr>
+            </table>
+            <table><tr><td>（単位：千円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>合計</td></tr>
+              <tr><td>200</td><td>200</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.count == 2)
+        #expect(tables[0].markdown.contains("100"))
+        #expect(tables[0].unitCaption == "百万円")
+        #expect(tables[1].markdown.contains("200"))
+        #expect(tables[1].unitCaption == "千円")
+        #expect(tables.map(\.period) == ["前期", "当期"])
+        #expect(!tables.contains { $0.markdown.contains("単位") })
+        let prompt = BreakdownExtractor.llmUserPrompt(tables: tables, consolidatedSales: 200_000)
+        #expect(prompt.contains("unit=百万円"))
+        #expect(prompt.contains("unit=千円"))
+    }
+
+    @Test func keywordPathCarriesUnitCaptionFromStubTable() {
+        let html = """
+            <p>地域ごとの情報</p>
+            <table><tr><td>（単位：百万円）</td></tr></table>
+            <table>
+              <tr><td>日本</td><td>アジア</td><td>合計</td></tr>
+              <tr><td>38840</td><td>14246</td><td>59479</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.keywordTablesFromHtml(html, keywords: ["地域ごとの情報"])
+        #expect(tables.count == 1)
+        #expect(tables[0].unitCaption == "百万円")
+        #expect(tables[0].markdown.contains("38840"))
+        #expect(!tables[0].markdown.contains("単位"))
     }
 
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
@@ -2208,6 +2576,8 @@ import Foundation
         let tables = try #require(dict["tables"] as? [[String: Any]])
         #expect(tables[0]["period"] as? String == "当期")
         #expect(tables[1]["period"] == nil)  // nil は出力しない（Python NotRequired と同じ）
+        #expect(tables[0]["unitCaption"] == nil)
+        #expect(tables[1]["unitCaption"] == nil)
 
         let facts = try #require(dict["facts"] as? [[String: Any]])
         #expect(facts[0]["label"] == nil)
