@@ -117,22 +117,24 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 発行者（制御面） | `https://hapis.sollahiro.workers.dev` |
 | 本番ゲートウェイ（API base） | `https://hapis-blue-ticker-production.sollahiro.workers.dev` |
 
-- `GET /v1/consumer/challenge` — App Attest mint だけ使う。stub mint では呼ばない。応答 `challenge` は 32 バイトの unpadded base64url
+- `GET /v1/consumer/challenge` — App Attest の mint / attest / assertion のたびに取る（単回使い切り。stub mint では呼ばない）。応答 `challenge` は 32 バイトの unpadded base64url
 - `POST /v1/consumer/sessions` — 201 で `token` / `refresh_at` / `expires_at`
-  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=stub` のまま受ける
-  - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + 初回は `attestation`、以降は `assertion` と `client_data`
-- `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない
+  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=stub` のまま受ける。**本番 `ATTEST_MODE=enforce` はこの PR では切替しない**
+  - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
+- `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない。blt-server / Vapor には consumer JWT を付けない
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
 - 設定の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
 - Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Debug は stub なので Simulator 検索は動く）
 
 #### App Attest 証拠（Release / `blt.hapis.attestMode=appAttest`）
 
-`DCAppAttestService`。鍵 ID は発行者 origin ごとに Keychain（JWT とは別）。`com.sollahiro.BlueTicker`。
+`DCAppAttestService`。鍵 ID は発行者 origin ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
 
-1. 初回 mint: `GET /v1/consumer/challenge` → challenge を base64url デコードしたバイトの SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge`
-2. 以降の remint: 新しい challenge を取り、`client_data` は UTF-8 JSON `{"challenge":"<challenge>"}`（sorted keys）。`generateAssertion` の hash は `SHA256(client_data)`。sessions に `key_id` / `assertion` / `challenge` / `client_data`
-3. 鍵が無効なら捨てて attest し直す
+`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。`attestKey` も `generateAssertion` も `SHA256(client_data)`。challenge は attest / assertion のたびに取り直す。
+
+1. 初回 mint: `GET /v1/consumer/challenge` → 上記 JSON の SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge` / `client_data`
+2. 以降の remint: 新しい challenge を取り、同じ JSON で `generateAssertion` → sessions に `key_id` / `assertion` / `challenge` / `client_data`
+3. 鍵が無効なら捨て、challenge を取り直して attest
 4. 本番 `ATTEST_MODE=enforce` 時の subject は `app_attest:<keyId>`（サーバー）。今は stub なので `stub:<keyId>` になり得る
 
 Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
@@ -153,7 +155,7 @@ Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミ�
 本番 `ATTEST_MODE` は stub のまま。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`）:
 
 1. 設定 → HAPIS 本番。検索できること
-2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id` と `attestation`（初回）または `assertion` + `client_data`（2 回目以降）
+2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id`・`challenge`・`client_data`（`{"challenge":…}`）と、初回は `attestation`、2 回目以降は `assertion`
 3. トークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
 4. Access の「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
 

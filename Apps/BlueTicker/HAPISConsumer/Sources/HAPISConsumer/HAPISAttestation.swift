@@ -133,8 +133,9 @@ struct SystemHAPISAppAttestService: HAPISAppAttestServicing {
     }
 }
 
-/// 初回: challenge バイトの SHA256 で `attestKey`。以降: 同じ challenge を `client_data` にして `generateAssertion`。
-/// 鍵が壊れていたら捨てて attest し直す。未対応環境では stub に落とさず失敗する。
+/// 初回: 新しい challenge の JSON `{"challenge":…}` を SHA256 して `attestKey`。
+/// 以降: 毎回新しい challenge を取って同じ JSON で `generateAssertion`。
+/// 鍵が壊れていたら捨て、challenge を取り直して attest。未対応環境では stub に落とさない。
 struct HAPISAppAttestProvider: HAPISAttestationProviding {
     let issuerURL: @Sendable () -> URL
     let service: any HAPISAppAttestServicing
@@ -146,10 +147,10 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
         guard service.isSupported else {
             throw HAPISConsumerError.attestUnavailable
         }
-        let challenge = try await fetchChallenge()
         let issuer = issuerURL()
         if let keyId = try keyStore.loadKeyId(issuer: issuer) {
             do {
+                let challenge = try await fetchChallenge()
                 return try await assertionPayload(keyId: keyId, challenge: challenge)
             } catch HAPISConsumerError.attestInvalidKey {
                 keyStore.clearKeyId(issuer: issuer)
@@ -157,23 +158,24 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
                 throw error
             }
         }
+        let challenge = try await fetchChallenge()
         return try await attestationPayload(challenge: challenge, issuer: issuer)
     }
 
     private func attestationPayload(challenge: HAPISChallenge, issuer: URL) async throws
         -> HAPISAttestationPayload
     {
+        let bound = try HAPISAppAttestClientData.bind(challenge: challenge.challenge)
         let keyId = try await service.generateKey()
         try keyStore.saveKeyId(keyId, issuer: issuer)
-        let hash = HAPISSHA256.hash(challenge.challengeBytes)
         do {
-            let attestation = try await service.attestKey(keyId, clientDataHash: hash)
+            let attestation = try await service.attestKey(keyId, clientDataHash: bound.hash)
             return HAPISAttestationPayload(
                 keyId: keyId,
                 attestation: attestation.hapisBase64URLEncoded,
                 assertion: nil,
                 challenge: challenge.challenge,
-                clientData: nil
+                clientData: bound.clientData
             )
         } catch HAPISConsumerError.attestInvalidKey {
             keyStore.clearKeyId(issuer: issuer)
@@ -186,18 +188,14 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
     private func assertionPayload(keyId: String, challenge: HAPISChallenge) async throws
         -> HAPISAttestationPayload
     {
-        let clientData = try HAPISAppAttestClientData.json(challenge: challenge.challenge)
-        let hash = HAPISSHA256.hash(clientData)
-        let assertion = try await service.generateAssertion(keyId, clientDataHash: hash)
-        guard let clientDataString = String(data: clientData, encoding: .utf8) else {
-            throw HAPISConsumerError.decoding("client_data を UTF-8 にできません")
-        }
+        let bound = try HAPISAppAttestClientData.bind(challenge: challenge.challenge)
+        let assertion = try await service.generateAssertion(keyId, clientDataHash: bound.hash)
         return HAPISAttestationPayload(
             keyId: keyId,
             attestation: nil,
             assertion: assertion.hapisBase64URLEncoded,
             challenge: challenge.challenge,
-            clientData: clientDataString
+            clientData: bound.clientData
         )
     }
 
@@ -221,10 +219,24 @@ struct HAPISAppAttestProvider: HAPISAttestationProviding {
     }
 }
 
-/// Assertion の `client_data`。HAPIS は UTF-8 JSON `{"challenge":"<GET /challenge の値>"}` を SHA256 して検証する。
+/// `client_data` は challenge を埋め込んだ UTF-8 JSON `{"challenge":"<GET /v1/consumer/challenge>"}`。
+/// `attestKey` / `generateAssertion` の hash は常にこのバイト列の SHA256。Team / Bundle は載せない。
 enum HAPISAppAttestClientData {
+    struct Binding: Equatable, Sendable {
+        var clientData: String
+        var hash: Data
+    }
+
     static func json(challenge: String) throws -> Data {
         try HAPISJSON.encoder.encode(["challenge": challenge])
+    }
+
+    static func bind(challenge: String) throws -> Binding {
+        let data = try json(challenge: challenge)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw HAPISConsumerError.decoding("client_data を UTF-8 にできません")
+        }
+        return Binding(clientData: text, hash: HAPISSHA256.hash(data))
     }
 }
 

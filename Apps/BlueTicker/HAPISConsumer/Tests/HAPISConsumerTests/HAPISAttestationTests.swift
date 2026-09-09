@@ -56,7 +56,10 @@ struct HAPISAttestationTests {
                 #expect(attest["challenge"] as? String == challenge)
                 #expect(attest["attestation"] as? String == Data("attest-cbor".utf8).hapisBase64URLEncoded)
                 #expect(attest["assertion"] == nil)
-                #expect(attest["client_data"] == nil)
+                let clientData = attest["client_data"] as? String
+                if let expected = try? HAPISAppAttestClientData.json(challenge: challenge) {
+                    #expect(clientData == String(data: expected, encoding: .utf8))
+                }
                 return (201, tokenJSON(token: "attest-token", now: Date(), refreshIn: 3300, expiresIn: 3600))
             }
             Issue.record("unexpected \(request.httpMethod ?? "?") \(path)")
@@ -75,7 +78,7 @@ struct HAPISAttestationTests {
         #expect(service.generateKeyCount == 1)
         #expect(service.attestCalls.count == 1)
         #expect(service.assertionCalls.isEmpty)
-        let expectedHash = HAPISSHA256.hash(Data(repeating: 0, count: 32))
+        let expectedHash = HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge))
         #expect(service.attestCalls[0].hash == expectedHash)
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/challenge") }.count == 1)
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/sessions") }.count == 1)
@@ -129,16 +132,19 @@ struct HAPISAttestationTests {
     }
 
     @Test func invalidKeyFallsBackToNewAttestation() async throws {
-        let challenge = Data(repeating: 2, count: 32).hapisBase64URLEncoded
+        let assertionChallenge = Data(repeating: 2, count: 32).hapisBase64URLEncoded
+        let attestChallenge = Data(repeating: 3, count: 32).hapisBase64URLEncoded
         let http = MockHAPISHTTP()
         let keys = InMemoryHAPISAttestKeyStore()
         try keys.saveKeyId("dead-key", issuer: issuer)
         let service = MockHAPISAppAttestService()
         service.assertionError = HAPISConsumerError.attestInvalidKey
+        let challenges = Counter()
         http.handler = { request in
             let path = request.url?.path ?? ""
             if path.hasSuffix("/v1/consumer/challenge") {
-                return (200, challengeJSON(challenge))
+                let n = challenges.increment()
+                return (200, challengeJSON(n == 1 ? assertionChallenge : attestChallenge))
             }
             if path.hasSuffix("/v1/consumer/sessions") {
                 guard let attest = attestObject(request.httpBody) else {
@@ -148,6 +154,10 @@ struct HAPISAttestationTests {
                 #expect(attest["key_id"] as? String == "test-key-id")
                 #expect(attest["attestation"] != nil)
                 #expect(attest["assertion"] == nil)
+                #expect(attest["challenge"] as? String == attestChallenge)
+                if let expected = try? HAPISAppAttestClientData.json(challenge: attestChallenge) {
+                    #expect(attest["client_data"] as? String == String(data: expected, encoding: .utf8))
+                }
                 return (201, tokenJSON(token: "reattest-token", now: Date(), refreshIn: 3300, expiresIn: 3600))
             }
             return (500, #"{"error":{"code":"unexpected"}}"#)
@@ -165,6 +175,9 @@ struct HAPISAttestationTests {
         #expect(service.generateKeyCount == 1)
         #expect(service.assertionCalls.count == 1)
         #expect(service.attestCalls.count == 1)
+        #expect(service.assertionCalls[0].hash == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: assertionChallenge)))
+        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: attestChallenge)))
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/challenge") }.count == 2)
     }
 
     @Test func unsupportedAppAttestDoesNotFallBackToStub() async throws {
@@ -265,17 +278,21 @@ struct HAPISAttestationTests {
             attestation: "att",
             assertion: nil,
             challenge: "chg",
-            clientData: nil
+            clientData: "{\"challenge\":\"chg\"}"
         )
         let encoded = try HAPISJSON.encoder.encode(HAPISMintRequest(attest: payload))
-        let json = try #require(String(data: encoded, encoding: .utf8))
-        #expect(json.contains("\"key_id\":\"kid\""))
-        #expect(json.contains("\"attestation\":\"att\""))
-        #expect(json.contains("\"challenge\":\"chg\""))
-        #expect(!json.contains("assertion"))
-        #expect(!json.contains("client_data"))
+        let root = try #require(jsonObject(encoded))
+        let attest = try #require(root["attest"] as? [String: Any])
+        #expect(attest["key_id"] as? String == "kid")
+        #expect(attest["attestation"] as? String == "att")
+        #expect(attest["challenge"] as? String == "chg")
+        #expect(attest["client_data"] as? String == "{\"challenge\":\"chg\"}")
+        #expect(attest["assertion"] == nil)
         let stub = try HAPISJSON.encoder.encode(HAPISMintRequest(attest: nil))
         #expect(String(data: stub, encoding: .utf8) == "{}")
+        let bound = try HAPISAppAttestClientData.bind(challenge: "chg")
+        #expect(bound.clientData == "{\"challenge\":\"chg\"}")
+        #expect(bound.hash == HAPISSHA256.hash(Data("{\"challenge\":\"chg\"}".utf8)))
     }
 }
 
