@@ -79,8 +79,10 @@ struct HAPISAttestationTests {
         #expect(service.generateKeyCount == 1)
         #expect(service.attestCalls.count == 1)
         #expect(service.assertionCalls.isEmpty)
-        let expectedHash = HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge))
-        #expect(service.attestCalls[0].hash == expectedHash)
+        let bound = try HAPISAppAttestClientData.bind(makeChallenge(challenge))
+        #expect(service.attestCalls[0].hash == bound.attestationHash)
+        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(Data(repeating: 0, count: 32)))
+        #expect(service.attestCalls[0].hash != bound.assertionHash)
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/challenge") }.count == 1)
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/sessions") }.count == 1)
     }
@@ -128,8 +130,10 @@ struct HAPISAttestationTests {
         #expect(service.attestCalls.isEmpty)
         #expect(service.assertionCalls.count == 1)
         #expect(service.assertionCalls[0].keyId == "stored-key")
-        let expectedHash = HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge))
-        #expect(service.assertionCalls[0].hash == expectedHash)
+        let bound = try HAPISAppAttestClientData.bind(makeChallenge(challenge))
+        #expect(service.assertionCalls[0].hash == bound.assertionHash)
+        #expect(service.assertionCalls[0].hash == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge)))
+        #expect(service.assertionCalls[0].hash != bound.attestationHash)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.isEmpty)
     }
 
@@ -179,8 +183,11 @@ struct HAPISAttestationTests {
         #expect(service.generateKeyCount == 1)
         #expect(service.assertionCalls.count == 1)
         #expect(service.attestCalls.count == 1)
-        #expect(service.assertionCalls[0].hash == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: assertionChallenge)))
-        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: attestChallenge)))
+        let assertionBound = try HAPISAppAttestClientData.bind(makeChallenge(assertionChallenge))
+        let attestBound = try HAPISAppAttestClientData.bind(makeChallenge(attestChallenge))
+        #expect(service.assertionCalls[0].hash == assertionBound.assertionHash)
+        #expect(service.attestCalls[0].hash == attestBound.attestationHash)
+        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(Data(repeating: 3, count: 32)))
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/challenge") }.count == 2)
     }
 
@@ -295,9 +302,32 @@ struct HAPISAttestationTests {
         #expect(attest["assertion"] == nil)
         let stub = try HAPISJSON.encoder.encode(HAPISMintRequest(attest: nil))
         #expect(String(data: stub, encoding: .utf8) == "{}")
-        let bound = try HAPISAppAttestClientData.bind(challenge: "chg")
+        let bound = try HAPISAppAttestClientData.bind(makeChallenge("chg"))
         #expect(bound.clientData == "{\"challenge\":\"chg\"}")
-        #expect(bound.hash == HAPISSHA256.hash(Data("{\"challenge\":\"chg\"}".utf8)))
+        #expect(bound.assertionHash == HAPISSHA256.hash(Data("{\"challenge\":\"chg\"}".utf8)))
+        #expect(bound.attestationHash == HAPISSHA256.hash(makeChallenge("chg").challengeBytes))
+        #expect(bound.attestationHash != bound.assertionHash)
+    }
+
+    @Test func attestAndAssertionHashesFollowSplitContract() throws {
+        let raw = Data(repeating: 0x5a, count: 32)
+        let challenge = makeChallenge(raw.hapisBase64URLEncoded)
+        let bound = try HAPISAppAttestClientData.bind(challenge)
+        #expect(challenge.challengeBytes == raw)
+        #expect(bound.attestationHash == HAPISSHA256.hash(raw))
+        #expect(
+            bound.assertionHash
+                == HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge.challenge))
+        )
+        #expect(bound.attestationHash != bound.assertionHash)
+        #expect(
+            bound.clientData
+                == String(
+                    data: try HAPISAppAttestClientData.json(challenge: challenge.challenge),
+                    encoding: .utf8)
+        )
+        #expect(bound.attestationHash.count == 32)
+        #expect(bound.assertionHash.count == 32)
     }
 
     @Test func attestKeyFailureKeepsPendingKeyForAttestation() async throws {
@@ -438,6 +468,9 @@ struct HAPISAttestationTests {
         #expect(sessions.value == 2)
         #expect(service.attestCalls.count == 2)
         #expect(service.generateKeyCount == 2)
+        #expect(service.attestCalls[0].hash == HAPISSHA256.hash(Data(repeating: 8, count: 32)))
+        #expect(service.attestCalls[1].hash == HAPISSHA256.hash(Data(repeating: 9, count: 32)))
+        #expect(service.attestCalls[0].hash != HAPISSHA256.hash(try HAPISAppAttestClientData.json(challenge: challenge1)))
     }
 
     @Test func issuerChangeDuringChallengeKeepsOneOrigin() async throws {
@@ -562,6 +595,10 @@ struct HAPISAttestationTests {
         #expect(challenges.value == 3)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
+}
+
+private func makeChallenge(_ challenge: String) -> HAPISChallenge {
+    HAPISChallenge(challenge: challenge, expiresIn: nil, expiresAt: nil)
 }
 
 private func challengeJSON(_ challenge: String) -> String {

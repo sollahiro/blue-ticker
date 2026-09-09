@@ -127,7 +127,8 @@ struct HAPISChallenge: Decodable, Equatable, Sendable {
         case expiresAt = "expires_at"
     }
 
-    /// GET `/v1/consumer/challenge` は 32 バイトの base64url。読めなければ UTF-8。
+    /// GET `/v1/consumer/challenge` は 32 バイトの unpadded base64url。
+    /// `attestKey` の hash 対象はこの decoded bytes。読めなければ UTF-8。
     var challengeBytes: Data {
         Data.hapisBase64URL(challenge) ?? Data(challenge.utf8)
     }

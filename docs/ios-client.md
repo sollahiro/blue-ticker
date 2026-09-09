@@ -130,10 +130,17 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 `DCAppAttestService`。鍵 ID は発行者 origin と App Attest 環境（Debug `development` / Release `production`）ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
 
-`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。`attestKey` も `generateAssertion` も `SHA256(client_data)`。challenge は attest / assertion のたびに取り直す。hash 対象は decoded challenge バイト列ではなく、この JSON の UTF-8。
+`client_data` は常に challenge 埋め込み JSON（UTF-8、sorted keys）`{"challenge":"<GET /v1/consumer/challenge の値>"}`。challenge は attest / assertion のたびに取り直す。**hash は経路で分かれる**（HAPIS サーバーの verify 契約。#354 の共通 JSON hash は attestation 側が合わない）:
 
-1. 初回 mint: `GET /v1/consumer/challenge` → 上記 JSON の SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge` / `client_data`
-2. 以降の remint: 新しい challenge を取り、同じ JSON で `generateAssertion` → sessions に `key_id` / `assertion` / `challenge` / `client_data`
+| 経路 | Apple API | `clientDataHash` |
+|---|---|---|
+| 初回 mint（attestation） | `attestKey` | `SHA256(decoded challenge bytes)`（32 バイト raw。base64url 文字列や `client_data` JSON ではない） |
+| 以降の remint（assertion） | `generateAssertion` | `SHA256(UTF-8 client_data JSON)` |
+
+どちらも sessions には同じ `client_data` JSON を載せる。assertion はサーバーも JSON hash。attestation だけ raw challenge bytes。
+
+1. 初回 mint: `GET /v1/consumer/challenge` → decoded challenge bytes の SHA256 で `attestKey` → sessions に `key_id` / `attestation`（base64url CBOR）/ `challenge` / `client_data`
+2. 以降の remint: 新しい challenge を取り、`client_data` JSON の SHA256 で `generateAssertion` → sessions に `key_id` / `assertion` / `challenge` / `client_data`
 3. 鍵は sessions 受理まで assertion に使わない。`attestKey` 失敗は同じ未登録鍵で再 attest。`attestKey` 成功後に sessions が落ちたら新しい鍵で attest（Apple は同じ鍵を再 attest できない）
 4. 制御面の mint 一時失敗は challenge + 証拠を取り直して再送する（同じ attestation / assertion は使いまわさない）。challenge GET は mint の再試行に含め、内側で三重化しない。refresh は同じ JWT リクエストを再送してよい
 5. 鍵が無効なら捨て、challenge を取り直して attest
