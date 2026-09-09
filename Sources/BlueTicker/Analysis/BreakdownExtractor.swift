@@ -445,7 +445,8 @@ enum BreakdownExtractor {
             mixedTags: Xbrl.geographyMixedTextBlockTags,
             dedicatedHeading: "地域ごとの情報",
             mixedKeywords: Xbrl.geographyHeadingKeywords,
-            skipGeographyAssetMetricTables: true
+            skipGeographyAssetMetricTables: true,
+            dropOfWhichRegionColumns: true
         )
         // 地域注記側に売上表が残らない（売上省略＋資産表除外）ときだけ、
         // 収益の分解（NotesNetSales）から地域行のある表を拾う。
@@ -460,7 +461,8 @@ enum BreakdownExtractor {
                 mixedTags: [],
                 dedicatedHeading: Xbrl.geographyRevenueDecompositionHeading,
                 mixedKeywords: [],
-                skipGeographyAssetMetricTables: true
+                skipGeographyAssetMetricTables: true,
+                dropOfWhichRegionColumns: true
             ).filter(tableHasGeographyRegionLabels)
             if !revenueDecomp.isEmpty {
                 tables = revenueDecomp
@@ -793,8 +795,10 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 地域の内数子列だけ落とす。2段見出し（アジア｜うち中国）も1段見出し
-    /// （日本｜海外｜うち豪州）も対象。指標名の助詞「うち」（売上高のうち外部顧客への売上高）は残す。
+    /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。
+    /// 2段見出し（アジア｜うち中国）も1段見出し（日本｜海外｜うち豪州）も、
+    /// 地域の親／兄弟があるときだけ落とす。短い `うち…` だけでは落とさない
+    /// （うち輸出高、売上高のうち外部顧客への売上高）。
     /// 行ラベル列（先頭）は残す（「うち豪州」が行として並ぶ表は LLM 後処理へ）。
     static func dropOfWhichHeaderColumns(_ grid: [[String]]) -> [[String]] {
         guard !grid.isEmpty else { return grid }
@@ -832,7 +836,7 @@ enum BreakdownExtractor {
     private static let ofWhichMetricHeaderHints: [String] = [
         "売上", "収益", "利益", "顧客", "外部", "資産", "負債", "費用", "損失",
         "減価", "のれん", "設備", "投資", "償却", "従業員", "キャッシュ",
-        "調整", "消去", "全社", "営業", "製造", "販管", "契約",
+        "調整", "消去", "全社", "営業", "製造", "販管", "契約", "輸出",
     ]
 
     /// 地域区分の見出しセルか（うち内数ラベルは除く）。
@@ -842,8 +846,8 @@ enum BreakdownExtractor {
         return Xbrl.segmentGeographyLabelKeywordsJa.contains(where: trimmed.contains)
     }
 
-    /// 内数の地域子見出し（うち中国 / うち豪州 / （うち米国））か。
-    /// 1段見出しでも `うち…` なら true。指標名の助詞「うち」は false。
+    /// 内数の地域子見出しか。短い `うち…` だけでは true にしない（うち輸出高）。
+    /// うち中国（直後が地域名）か、地域親／兄弟があるうち豪州だけ true。
     static func isOfWhichRegionChildHeader(
         _ cell: String, parentIsRegion: Bool = false
     ) -> Bool {
@@ -861,12 +865,9 @@ enum BreakdownExtractor {
         guard compact.unicodeScalars.count <= 24 else { return false }
         guard let uchi = compact.range(of: "うち") else { return false }
         let after = String(compact[uchi.upperBound...])
-        // 1段でも「うち豪州」は内数。指標名は上の hint で既に除外済み。
-        if compact.hasPrefix("うち") { return true }
-        if Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains) {
-            return true
-        }
-        return parentIsRegion
+        let afterIsRegion = Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains)
+        if afterIsRegion { return true }
+        return parentIsRegion && compact.hasPrefix("うち")
     }
 
     // MARK: - 当期/前期判定
@@ -1226,12 +1227,15 @@ enum BreakdownExtractor {
     /// セグメント情報の golden parity を壊さないよう、既定は false。
     /// `skipGeographyAssetMetricTables`: 直前キャプションが非流動資産・有形固定資産の表を除外
     /// （日本精工型: 地域別の情報①売上省略・②非流動資産のみ表あり）。
+    /// `dropOfWhichRegionColumns`: geography 軸だけ、地域の内数子列（うち中国 / うち豪州）を落とす。
+    /// 事業別経路では呼ばない（うち輸出高を消さない）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
     /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
         skipGeographyAssetMetricTables: Bool = false,
-        defaultPeriod: String? = nil
+        defaultPeriod: String? = nil,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
@@ -1244,7 +1248,7 @@ enum BreakdownExtractor {
 
         func flushPending() {
             guard let raw = pendingGrid else { return }
-            let grid = dropOfWhichHeaderColumns(raw)
+            let grid = dropOfWhichRegionColumns ? dropOfWhichHeaderColumns(raw) : raw
             if !isUnitCaptionOrDecorativeStub(grid) {
                 tables.append(BreakdownTable(
                     heading: defaultHeading,
@@ -1419,7 +1423,8 @@ enum BreakdownExtractor {
         _ html: String,
         keywords: [String],
         headingExclusionKeywords: [String] = [],
-        headingLikeOnly: Bool = false
+        headingLikeOnly: Bool = false,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         guard let elems = try? soup.select("*") else { return [] }
@@ -1489,7 +1494,9 @@ enum BreakdownExtractor {
                         workingGrid = merged
                         workingTable = chained
                     }
-                    let published = dropOfWhichHeaderColumns(workingGrid)
+                    let published =
+                        dropOfWhichRegionColumns
+                        ? dropOfWhichHeaderColumns(workingGrid) : workingGrid
                     if isUnitCaptionOrDecorativeStub(published) {
                         if let caption = unitCaption(from: published) {
                             pendingUnitCaption = caption
@@ -1551,7 +1558,8 @@ enum BreakdownExtractor {
         mixedKeywords: [String],
         mixedHeadingExclusionKeywords: [String] = [],
         skipGeographyAssetMetricTables: Bool = false,
-        mixedHeadingLikeOnly: Bool = false
+        mixedHeadingLikeOnly: Bool = false,
+        dropOfWhichRegionColumns: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -1578,7 +1586,8 @@ enum BreakdownExtractor {
                         block.content, defaultHeading: dedicatedHeading,
                         includeFootnotes: includeFootnotes,
                         skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
-                        defaultPeriod: contextPeriod
+                        defaultPeriod: contextPeriod,
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
                     ))
                 } else if mixedTags.contains(block.tag) {
                     // mixed は1つの contextRef 配下に前期・当期 HTML が同居しうるため
@@ -1589,7 +1598,8 @@ enum BreakdownExtractor {
                         headingExclusionKeywords: mixedHeadingExclusionKeywords
                             + (skipGeographyAssetMetricTables
                                 ? Xbrl.geographyAssetMetricCaptionKeywords : []),
-                        headingLikeOnly: mixedHeadingLikeOnly
+                        headingLikeOnly: mixedHeadingLikeOnly,
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
                     ))
                 }
             }

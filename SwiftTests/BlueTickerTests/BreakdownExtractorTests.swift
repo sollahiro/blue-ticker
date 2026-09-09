@@ -349,9 +349,28 @@ import Foundation
         #expect(kept[0][2] == "売上高のうち外部顧客への売上高")
         #expect(kept[1][2] == "90")
         #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("売上高のうち外部顧客への売上高"))
+        #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("うち輸出高"))
         #expect(BreakdownExtractor.isOfWhichRegionChildHeader("うち中国"))
-        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("うち豪州"))
-        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("（うち豪州）"))
+        #expect(
+            !BreakdownExtractor.isOfWhichRegionChildHeader("うち豪州"))
+        #expect(
+            BreakdownExtractor.isOfWhichRegionChildHeader(
+                "うち豪州", parentIsRegion: true))
+        #expect(
+            BreakdownExtractor.isOfWhichRegionChildHeader(
+                "（うち豪州）", parentIsRegion: true))
+    }
+
+    @Test func dropOfWhichHeaderColumnsKeepsUchiExportMetric() {
+        let grid = [
+            ["報告セグメント", "売上高", "うち輸出高", "セグメント利益"],
+            ["機械", "100", "20", "10"],
+            ["水・環境", "50", "8", "5"],
+        ]
+        let kept = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(kept == grid)
+        #expect(kept[0][2] == "うち輸出高")
+        #expect(kept[1][2] == "20")
     }
 
     @Test func dropOfWhichHeaderColumnsRemovesOneRowAustraliaSubset() {
@@ -374,7 +393,8 @@ import Foundation
               <tr><td>1281768</td><td>1229340</td><td>500000</td><td>2511108</td></tr>
             </table>
             """
-        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "地域ごとの情報", dropOfWhichRegionColumns: true)
         #expect(tables.count == 1)
         let md = tables[0].markdown
         #expect(md.contains("日本"))
@@ -384,6 +404,13 @@ import Foundation
         #expect(md.contains("2511108"))
         #expect(!md.contains("うち豪州"))
         #expect(!md.contains("500000"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            "<p>地域ごとの情報</p>" + html,
+            keywords: ["地域ごとの情報"],
+            dropOfWhichRegionColumns: true)
+        #expect(keyword.count == 1)
+        #expect(!keyword[0].markdown.contains("うち豪州"))
+        #expect(keyword[0].markdown.contains("海外"))
     }
 
     @Test func businessHtmlKeepsOfWhichExternalCustomerMetricColumn() {
@@ -406,6 +433,29 @@ import Foundation
             "<p>セグメント情報</p>" + html, keywords: ["セグメント情報"])
         #expect(keyword.count == 1)
         #expect(keyword[0].markdown.contains("売上高のうち外部顧客への売上高"))
+    }
+
+    @Test func businessHtmlKeepsUchiExportMetricColumn() {
+        let html = """
+            <table>
+              <tr>
+                <td>報告セグメント</td>
+                <td>売上高</td>
+                <td>うち輸出高</td>
+                <td>セグメント利益</td>
+              </tr>
+              <tr><td>機械</td><td>100</td><td>20</td><td>10</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].markdown.contains("うち輸出高"))
+        #expect(tables[0].markdown.contains("20"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            "<p>セグメント情報</p>" + html, keywords: ["セグメント情報"])
+        #expect(keyword.count == 1)
+        #expect(keyword[0].markdown.contains("うち輸出高"))
+        #expect(keyword[0].markdown.contains("20"))
     }
 
     @Test func gridHasNumericValueRejectsUnitCaptionOnly() {
