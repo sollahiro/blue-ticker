@@ -137,7 +137,6 @@ struct BreakdownView: View {
         let points = ratioPoints(years)
         let anchors = ratioAnchors(years)
         let segments = ratioSegments(points)
-        let xMin = min(points.map(\.value).min() ?? 0, 0)
         let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0) }
         let selectedSegment = selectedIndex.flatMap { index in
             segments.first { $0.points.last?.index == index }
@@ -146,7 +145,7 @@ struct BreakdownView: View {
             if let segment = selectedSegment {
                 ForEach(segment.points, id: \.id) { point in
                     AreaMark(
-                        xStart: .value(metric.title, xMin),
+                        xStart: .value(metric.title, 0),
                         xEnd: .value(metric.title, point.value),
                         y: .value("年度", point.index)
                     )
