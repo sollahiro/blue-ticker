@@ -82,7 +82,7 @@ enum ScreenMetric: String, CaseIterable, Identifiable {
         case .sales:
             return Format.okuYen(value)
         case .grossMargin, .operatingMargin, .roic, .roe, .salesGrowth:
-            return String(format: "%.1f%%", value)
+            return String(format: "%.1f", value) + "%"
         case .netDe:
             return String(format: "%.1f倍", value)
         }
@@ -226,7 +226,8 @@ struct ScreenView: View {
     }
 
     private var sectorChips: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.groupedCornerRadius, style: .continuous)
+        let outer = RoundedRectangle(cornerRadius: Theme.groupedCornerRadius, style: .continuous)
+        let inner = RoundedRectangle(cornerRadius: Theme.groupedInnerCornerRadius, style: .continuous)
         return ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
@@ -241,11 +242,11 @@ struct ScreenView: View {
             .padding(.horizontal, 8)
         }
         .scrollClipDisabled()
-        .clipShape(shape)
+        .clipShape(inner)
         .padding(Theme.groupedContentInset)
         .listRowInsets(EdgeInsets())
         .listRowBackground(Theme.elevated)
-        .containerShape(shape)
+        .containerShape(outer)
     }
 
     private var packedSectorRows: [[String]] {

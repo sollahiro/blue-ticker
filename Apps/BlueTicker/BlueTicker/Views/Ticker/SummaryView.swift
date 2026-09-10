@@ -4,6 +4,7 @@ import CoreText
 
 struct SummaryView: View {
     var code: String
+    @Binding var section: SummarySection
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
     @State private var selectedRow: SummaryRow?
@@ -42,10 +43,6 @@ struct SummaryView: View {
         )
     }
 
-    private func columnColor(index: Int) -> Color {
-        index.isMultiple(of: 2) ? Color.clear : Color.white.opacity(0.06)
-    }
-
     private func summaryTable(_ response: FinancialsResponse) -> some View {
         let years = Format.chronological(response.years)
         let scales = moneyScales(for: response)
@@ -55,23 +52,30 @@ struct SummaryView: View {
                     FillWidth {
                         JustifiedOverviewText(text: overview)
                     }
+                    .padding(.horizontal, 6)
                     .padding(.bottom, 8)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(overview)
                 }
+                SegmentPills(
+                    items: Array(SummarySection.allCases),
+                    selection: $section,
+                    title: { $0.title }
+                )
+                .padding(.bottom, 8)
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("")
                             .frame(minWidth: 88, alignment: .leading)
                             .padding(.vertical, 6)
-                            .padding(.horizontal, 8)
-                        ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
+                            .padding(.horizontal, 6)
+                        ForEach(years) { year in
                             Text(Format.fy(year.fyEnd))
                                 .gridHeader()
-                                .background(columnColor(index: index))
+                                .fyColumnDivider()
                         }
                     }
-                    ForEach(SummaryRow.allCases) { row in
+                    ForEach(section.rows) { row in
                         GridRow {
                             Text(row.displayTitle(plUnit: scales.pl?.unit ?? "", cashUnit: scales.cash?.unit ?? ""))
                                 .font(.caption.weight(selectedRow == row ? .bold : .semibold))
@@ -80,10 +84,10 @@ struct SummaryView: View {
                                 .lineLimit(2)
                                 .padding(.vertical, 4)
                                 .padding(.horizontal, 6)
-                            ForEach(Array(years.enumerated()), id: \.element.id) { index, year in
+                            ForEach(years) { year in
                                 Text(row.format(year, plScale: scales.pl, cashScale: scales.cash))
                                     .gridCell(color: row.color(year))
-                                    .background(columnColor(index: index))
+                                    .fyColumnDivider()
                             }
                         }
                         .background(selectedRow == row ? Theme.accent.opacity(0.12) : Color.clear)
@@ -111,8 +115,12 @@ struct SummaryView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.card)
-        .padding(12)
+        .bltCardSurface()
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .onChange(of: section) { _, _ in
+            selectedRow = nil
+        }
     }
 
     private func load() async {
@@ -298,8 +306,44 @@ private final class JustifiedOverviewLabel: UIView {
     }
 }
 
-/// 概要に出す Summary 水準値。中タブは置かない（フロー側へ移す）。
-private enum SummaryRow: String, CaseIterable, Identifiable {
+/// 概要カード下部の区分。損益・キャッシュは業績、財政状態は資産、率は効率性。
+enum SummarySection: String, CaseIterable, Identifiable {
+    case performance
+    case assets
+    case efficiency
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .performance: "業績"
+        case .assets: "資産"
+        case .efficiency: "効率性"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .performance: "chart.bar"
+        case .assets: "building.columns"
+        case .efficiency: "percent"
+        }
+    }
+
+    var rows: [SummaryRow] {
+        switch self {
+        case .performance:
+            [.sales, .grossProfit, .operatingProfit, .netProfit, .cfo, .cfi, .fcf]
+        case .assets:
+            [.netCash, .netDe, .equityRatio, .currentRatio, .fixedRatio]
+        case .efficiency:
+            [.grossMargin, .operatingMargin, .netProfitMargin, .roic, .roe]
+        }
+    }
+}
+
+/// 概要に出す Summary 水準値。区分は `SummarySection`。
+enum SummaryRow: String, CaseIterable, Identifiable {
     case sales
     case grossProfit
     case grossMargin
@@ -307,6 +351,8 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
     case operatingMargin
     case netProfit
     case netProfitMargin
+    case roic
+    case roe
     case netCash
     case netDe
     case cfo
@@ -327,6 +373,8 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingMargin: "営業利益率"
         case .netProfit: "純利益"
         case .netProfitMargin: "純利益率"
+        case .roic: "ROIC"
+        case .roe: "ROE"
         case .netCash: "正味現金"
         case .netDe: "ネットD/E"
         case .cfo: "営業CF"
@@ -347,7 +395,7 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
     }
 
     private var isPercent: Bool {
-        [.grossMargin, .operatingMargin, .netProfitMargin, .equityRatio, .currentRatio, .fixedRatio].contains(self)
+        [.grossMargin, .operatingMargin, .netProfitMargin, .roic, .roe, .equityRatio, .currentRatio, .fixedRatio].contains(self)
     }
 
     func displayTitle(plUnit: String, cashUnit: String) -> String {
@@ -382,6 +430,10 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
             return "税引き後の最終的な当期純利益です。特別損益でぶれるので、営業利益と切り分けて見ます。"
         case .netProfitMargin:
             return "純利益 ÷ 売上高です。最終的な効率です。赤字は資本を毀損します。業種差が大きいので同業比較が本筋です。"
+        case .roic:
+            return "事業に使っているお金に対して、どれだけ利益を出せるかです。高いほど資本の使い方が効率的です。業種差が大きいので同業比較が本筋です。推移と要因は分解で見られます。"
+        case .roe:
+            return "自己資本に対して、株主の手元に残る利益の割合です。借入でも膨らみ得るので、利益の質は ROIC と切り分けて見ます。推移と要因は分解で見られます。"
         case .netCash:
             return "現預金などから有利子負債を差し引いた正味の手元資金です。ネットキャッシュとも呼ばれます。プラスは実質無借金、マイナスは純有利子負債です。成長投資で意図的にマイナスの業種（不動産・通信など）もあります。銀行は解釈が異なります。"
         case .netDe:
@@ -410,6 +462,8 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
         case .operatingMargin: return Format.percent(year.operatingMargin, includeUnit: false)
         case .netProfit: return yenString(year.netProfit, scale: plScale)
         case .netProfitMargin: return Format.percent(Format.netProfitMargin(year), includeUnit: false)
+        case .roic: return Format.percent(year.roic, includeUnit: false)
+        case .roe: return Format.percent(year.roe, includeUnit: false)
         case .netCash: return yenString(year.netCash, scale: cashScale)
         case .netDe: return Format.times(year.netDe, includeUnit: false)
         case .cfo: return yenString(year.cfo, scale: cashScale)
@@ -434,6 +488,16 @@ private enum SummaryRow: String, CaseIterable, Identifiable {
             return deficitColor(year.netProfit)
         case .netProfitMargin:
             return deficitColor(Format.netProfitMargin(year))
+        case .roic:
+            return deficitColor(year.roic)
+        case .roe:
+            return deficitColor(year.roe)
+        case .netCash:
+            return deficitColor(year.netCash)
+        case .cfo:
+            return deficitColor(year.cfo)
+        case .cfi:
+            return deficitColor(year.cfi)
         case .fcf:
             return deficitColor(Format.freeCashFlow(year))
         case .netDe:
@@ -502,5 +566,15 @@ private extension Text {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
+    }
+}
+
+private extension View {
+    func fyColumnDivider() -> some View {
+        overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Theme.textMuted.opacity(0.45))
+                .frame(width: 1)
+        }
     }
 }

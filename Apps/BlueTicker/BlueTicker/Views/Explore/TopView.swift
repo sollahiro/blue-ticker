@@ -14,57 +14,53 @@ struct TopView: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if !searchResults.isEmpty || searchError != nil || isSearching {
-                        sectionHeader("検索結果")
-                        if isSearching && searchResults.isEmpty && searchError == nil {
-                            rowBackground { ProgressView() }
-                        }
-                        if let searchError {
-                            rowBackground {
-                                Text(searchError)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-                        ForEach(searchResults) { hit in
-                            companyLink(CompanyRef(hit))
-                        }
-                    }
-
-                    sectionHeader("最近新しい有報がアップロードされました")
-                    if !updatesReady {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if !searchResults.isEmpty || searchError != nil || isSearching {
+                    sectionHeader("検索結果")
+                    if isSearching && searchResults.isEmpty && searchError == nil {
                         rowBackground { ProgressView() }
-                    } else if let updatesError {
+                    }
+                    if let searchError {
                         rowBackground {
-                            Text(updatesError)
+                            Text(searchError)
                                 .foregroundStyle(Theme.textMuted)
-                        }
-                    } else if updates.isEmpty {
-                        rowBackground {
-                            Text("直近の有報はありません")
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    } else {
-                        ForEach(updates.prefix(10)) { item in
-                            companyLink(CompanyRef(item), submittedAt: item.submittedAt)
                         }
                     }
+                    ForEach(searchResults) { hit in
+                        companyLink(CompanyRef(hit))
+                    }
                 }
-                .padding(.bottom, 120)
-            }
-            .scrollClipDisabled()
-            .contentMargins(.top, 0, for: .scrollContent)
-            .safeAreaPadding(.bottom, 0)
-            .ignoresSafeArea(.container, edges: .bottom)
-            .scrollDismissesKeyboard(.immediately)
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    searchFocused = false
-                }
-            )
 
+                sectionHeader("最近新しい有報がアップロードされました")
+                if !updatesReady {
+                    rowBackground { ProgressView() }
+                } else if let updatesError {
+                    rowBackground {
+                        Text(updatesError)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                } else if updates.isEmpty {
+                    rowBackground {
+                        Text("直近の有報はありません")
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                } else {
+                    ForEach(updates.prefix(10)) { item in
+                        companyLink(CompanyRef(item), submittedAt: item.submittedAt)
+                    }
+                }
+            }
+        }
+        .scrollClipDisabled()
+        .contentMargins(.top, 0, for: .scrollContent)
+        .scrollDismissesKeyboard(.immediately)
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                searchFocused = false
+            }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             nameSearchBar
         }
         .background { InlineNavigationTitle() }

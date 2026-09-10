@@ -25,14 +25,14 @@ struct CompanyRef: Hashable, Identifiable, Codable {
     init(_ item: FeedTrendItem) {
         code = item.code
         name = item.name
-        sector = ""
+        sector = item.sector ?? ""
         iconURL = item.iconURL
     }
 
     init(_ item: FeedUpdateItem) {
         code = item.code
         name = item.name
-        sector = ""
+        sector = item.sector ?? ""
         iconURL = item.iconURL
     }
 

@@ -13,7 +13,7 @@ struct DualRangeSlider: View {
     private let handleSize: CGFloat = 28
     private let hitSize: CGFloat = 44
     private let trackHeight: CGFloat = 6
-    private let valueHeight: CGFloat = 16
+    private let valueHeight: CGFloat = 18
     private let labelGap: CGFloat = 8
 
     private var span: Double { max(rangeMax - rangeMin, step) }
@@ -136,12 +136,20 @@ struct DualRangeSlider: View {
 
     private func valueLabel(_ text: String, color: Color, width: CGFloat) -> some View {
         Text(text)
-            .font(.caption2.monospacedDigit().weight(.bold))
+            .font(valueFont)
             .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.5)
             .frame(width: width, height: valueHeight)
             .accessibilityHidden(true)
+    }
+
+    private var valueFont: Font {
+        Font.system(size: Self.valuePointSize, weight: .bold).monospacedDigit()
+    }
+
+    private static var valuePointSize: CGFloat {
+        UIFont.preferredFont(forTextStyle: .caption2).pointSize + 1
     }
 
     private func x(for value: Double, width: CGFloat) -> CGFloat {
@@ -169,8 +177,7 @@ struct DualRangeSlider: View {
     }
 
     private func measuredWidth(_ text: String) -> CGFloat {
-        let base = UIFont.preferredFont(forTextStyle: .caption2)
-        let font = UIFont.monospacedDigitSystemFont(ofSize: base.pointSize, weight: .bold)
+        let font = UIFont.monospacedDigitSystemFont(ofSize: Self.valuePointSize, weight: .bold)
         let size = (text as NSString).size(withAttributes: [.font: font])
         return ceil(size.width)
     }

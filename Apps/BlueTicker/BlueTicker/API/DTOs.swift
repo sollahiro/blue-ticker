@@ -36,12 +36,13 @@ struct FeedUpdateItem: Codable, Hashable, Identifiable {
     var docTypeLabel: String
     var fyEnd: String
     var submittedAt: String
+    var sector: String?
     var iconURL: String?
 
     var id: String { docId }
 
     enum CodingKeys: String, CodingKey {
-        case code, name
+        case code, name, sector
         case docId = "doc_id"
         case docType = "doc_type"
         case docTypeLabel = "doc_type_label"
@@ -67,12 +68,13 @@ struct FeedTrendItem: Codable, Hashable, Identifiable {
     var code: String
     var name: String
     var count: Int
+    var sector: String?
     var iconURL: String?
 
     var id: String { code }
 
     enum CodingKeys: String, CodingKey {
-        case code, name, count
+        case code, name, count, sector
         case iconURL = "icon_url"
     }
 }

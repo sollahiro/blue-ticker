@@ -18,7 +18,7 @@ struct CompanyRowView: View {
             }
             Spacer()
             if !company.sector.isEmpty {
-                SectorTag(sector: company.sector)
+                SectorTag(sector: company.sector, selected: true)
             }
         }
         .padding(0)
@@ -28,16 +28,21 @@ struct CompanyRowView: View {
 struct SectorTag: View {
     var sector: String
     var selected: Bool = false
-    var compact: Bool = false
+    var height: CGFloat? = nil
 
     var body: some View {
         Text(sector)
-            .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
-            .padding(.horizontal, compact ? 8 : 10)
-            .padding(.vertical, compact ? 3 : 6)
-            .background(selected ? Theme.sectorColor(sector) : Theme.idleTab)
-            .foregroundStyle(.white)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, height == nil ? 6 : 0)
+            .frame(height: height)
+            .background(selected ? Theme.sectorFill : Theme.idleTab)
+            .foregroundStyle(selected ? Theme.positive : .white)
             .clipShape(Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(selected ? Theme.positive : Color.clear, lineWidth: 1.5)
+            }
     }
 }
 
