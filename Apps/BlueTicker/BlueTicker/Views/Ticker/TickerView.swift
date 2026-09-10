@@ -96,27 +96,25 @@ struct TickerView: View {
         HStack(alignment: .center, spacing: 8) {
             CompanyIconView(company, size: Theme.headerSideHeight)
             VStack(alignment: .leading, spacing: Theme.headerChipSpacing) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text(Format.displayName(company.name, fallback: company.code))
-                        .font(nameFont)
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if !displaySector.isEmpty {
-                        SectorTag(sector: displaySector, selected: true, height: Theme.headerRowHeight)
-                    }
-                }
-                .frame(height: Theme.headerRowHeight)
+                Text(Format.displayName(company.name, fallback: company.code))
+                    .font(nameFont)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: Theme.headerRowHeight)
                 HStack(alignment: .center, spacing: 8) {
                     Text(company.code)
                         .font(.subheadline)
                         .foregroundStyle(Theme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    watchButton
+                    if !displaySector.isEmpty {
+                        SectorTag(sector: displaySector, selected: true, height: Theme.headerRowHeight)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: Theme.headerRowHeight)
             }
+            watchButton
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
