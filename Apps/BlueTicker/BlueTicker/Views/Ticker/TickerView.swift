@@ -6,13 +6,6 @@ enum TickerPage: Int, CaseIterable, Identifiable {
     case summary, breakdown
 
     var id: Int { rawValue }
-
-    var title: String {
-        switch self {
-        case .summary: "概要"
-        case .breakdown: "分解"
-        }
-    }
 }
 
 struct TickerView: View {
@@ -21,16 +14,19 @@ struct TickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var watched: [WatchedCompany]
     @State private var page: TickerPage = .summary
+    @State private var summarySection: SummarySection = .performance
+    @State private var breakdownMetric: BreakdownMetric = .businessProfit
+    @State private var resolvedSector = ""
 
     var body: some View {
         VStack(spacing: 0) {
             header
             GeometryReader { geo in
                 TabView(selection: $page) {
-                    SummaryView(code: company.code)
+                    SummaryView(code: company.code, section: $summarySection)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .tag(TickerPage.summary)
-                    BreakdownView(code: company.code)
+                    BreakdownView(code: company.code, metric: $breakdownMetric)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .tag(TickerPage.breakdown)
                 }
@@ -42,7 +38,7 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .background { InteractivePopGestureEnabler() }
-        .onAppear { CompanyHistory.record(company) }
+        .task { await hydrateSector() }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: {
@@ -63,32 +59,72 @@ struct TickerView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
+    private var pageDots: some View {
+        HStack(spacing: 8) {
+            ForEach(TickerPage.allCases) { item in
+                Circle()
+                    .fill(page == item ? Theme.text : Theme.text.opacity(0.28))
+                    .frame(width: page == item ? 7 : 6, height: page == item ? 7 : 6)
+                    .accessibilityLabel(item == .summary ? "概要" : "分解")
+                    .accessibilityAddTraits(page == item ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Theme.tickerPageDotGutter)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("カード \(page.rawValue + 1) / \(TickerPage.allCases.count)")
+    }
+
     private var isWatched: Bool {
         watched.contains { $0.code == company.code }
     }
 
+    private var displaySector: String {
+        company.sector.isEmpty ? resolvedSector : company.sector
+    }
+
+    private var displayCompany: CompanyRef {
+        CompanyRef(
+            code: company.code,
+            name: company.name,
+            sector: displaySector,
+            iconURL: company.iconURL
+        )
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            CompanyIconView(company, size: 38)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Format.displayName(company.name, fallback: company.code))
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(company.code)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.textMuted)
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
-                if !company.sector.isEmpty {
-                    SectorTag(sector: company.sector, compact: true)
+            CompanyIconView(company, size: Theme.headerSideHeight)
+            VStack(alignment: .leading, spacing: Theme.headerChipSpacing) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(Format.displayName(company.name, fallback: company.code))
+                        .font(nameFont)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !displaySector.isEmpty {
+                        SectorTag(sector: displaySector, selected: true, height: Theme.headerRowHeight)
+                    }
                 }
-                watchButton
+                .frame(height: Theme.headerRowHeight)
+                HStack(alignment: .center, spacing: 8) {
+                    Text(company.code)
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    watchButton
+                }
+                .frame(height: Theme.headerRowHeight)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
+    }
+
+    private var nameFont: Font {
+        let size = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
+        return .system(size: size, weight: .bold)
     }
 
     private var watchButton: some View {
@@ -96,7 +132,7 @@ struct TickerView: View {
             Text(isWatched ? "追加済み" : "リストに追加")
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .frame(height: Theme.headerRowHeight)
                 .background(isWatched ? Color.clear : Theme.accent)
                 .foregroundStyle(isWatched ? Theme.accent : .black)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -108,27 +144,22 @@ struct TickerView: View {
         .buttonStyle(.plain)
     }
 
-    private var pageDots: some View {
-        HStack(spacing: 10) {
-            ForEach(TickerPage.allCases) { item in
-                let current = page == item
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        page = item
-                    }
-                } label: {
-                    Circle()
-                        .fill(current ? Theme.accent : Theme.textMuted.opacity(0.45))
-                        .frame(width: current ? 10 : 6, height: current ? 10 : 6)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(item.title)
-                .accessibilityAddTraits(current ? .isSelected : [])
-            }
+    private func hydrateSector() async {
+        if company.sector.isEmpty {
+            resolvedSector = await Self.loadSector(code: company.code)
         }
-        .animation(.easeInOut(duration: 0.2), value: page)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        backfillWatchedSectorIfNeeded()
+        CompanyHistory.record(displayCompany)
+    }
+
+    private static func loadSector(code: String) async -> String {
+        if let cached = await APIClient.shared.cachedFinancials(code: code), !cached.sector.isEmpty {
+            return cached.sector
+        }
+        if let loaded = try? await APIClient.shared.financials(code: code), !loaded.sector.isEmpty {
+            return loaded.sector
+        }
+        return ""
     }
 
     private func toggleWatch() {
@@ -140,11 +171,56 @@ struct TickerView: View {
                 WatchedCompany(
                     code: company.code,
                     name: company.name,
-                    sector: company.sector,
+                    sector: displaySector,
                     iconURL: company.iconURL
                 )
             )
             Task { await APIClient.shared.pinCode(company.code) }
+        }
+    }
+
+    /// Feed から先に追加しても、後から取れた業種でウォッチ行を埋める。
+    private func backfillWatchedSectorIfNeeded() {
+        let sector = displaySector
+        guard !sector.isEmpty else { return }
+        guard let existing = watched.first(where: { $0.code == company.code }) else { return }
+        guard existing.sector.isEmpty else { return }
+        existing.sector = sector
+    }
+}
+
+struct SegmentPills<Item: Identifiable & Hashable>: View {
+    var items: [Item]
+    @Binding var selection: Item
+    var title: (Item) -> String
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(items) { item in
+                let current = selection == item
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selection = item
+                    }
+                } label: {
+                    Text(title(item))
+                        .font(.subheadline.weight(current ? .semibold : .regular))
+                        .foregroundStyle(current ? Theme.text : Theme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background {
+                            if current {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.16))
+                                    .matchedGeometryEffect(id: "pill", in: pill)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(title(item))
+                .accessibilityAddTraits(current ? .isSelected : [])
+            }
         }
     }
 }
@@ -168,8 +244,9 @@ struct TickerStubView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.card)
-        .padding(16)
+        .bltCardSurface()
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
     }
 }
 

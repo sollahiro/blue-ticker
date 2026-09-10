@@ -42,19 +42,19 @@ enum Format {
 
     static func percent(_ value: Double?, digits: Int = 1, includeUnit: Bool = true) -> String {
         guard let value else { return "—" }
-        let unit = includeUnit ? "%" : ""
-        return String(format: "%.\(digits)f\(unit)", value)
+        let number = String(format: "%.\(digits)f", value)
+        return includeUnit ? number + "%" : number
     }
 
     static func times(_ value: Double?, includeUnit: Bool = true) -> String {
         guard let value else { return "—" }
-        let unit = includeUnit ? "倍" : ""
-        return String(format: "%.2f\(unit)", value)
+        let number = String(format: "%.2f", value)
+        return includeUnit ? number + "倍" : number
     }
 
     static func percentPoints(_ value: Double?) -> String {
         guard let value else { return "—" }
-        return String(format: "%+.2f%%", value)
+        return String(format: "%+.2f", value) + "%"
     }
 
     static func groupedNumber(_ value: Double, fractionDigits: Int = 0) -> String {

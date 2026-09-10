@@ -14,11 +14,28 @@ enum Theme {
     static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
     /// 銘柄カード・概要カード。背景から浮かぶ濃いグレー。
     static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
-    /// iOS 26 の inset grouped セクションに近い連続円弧。業種チップの見切れマスクも同じ。
+    /// 銘柄ヘッダ全体の高さ（アイコン・社名＋コード・業種＋ウォッチ）。
+    static let headerSideHeight: CGFloat = 56
+    /// 業種とウォッチを二段にしたときの段間。
+    static let headerChipSpacing: CGFloat = 4
+    /// ヘッダ二段それぞれの行高。
+    static var headerRowHeight: CGFloat { (headerSideHeight - headerChipSpacing) / 2 }
+    /// リスト行などの業種タグ高さ。
+    static let chipHeight: CGFloat = 28
+    /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
+    static let tickerPageDotGutter: CGFloat = 36
+    /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
     static let groupedCornerRadius: CGFloat = 26
-    /// セクション枠と見切れマスクのあいだ。曲率は `groupedCornerRadius` のまま内側へずらす。
+    /// セクション枠と見切れマスクのあいだ。内側半径は `groupedCornerRadius - groupedContentInset`。
     static let groupedContentInset: CGFloat = 12
+    /// 銘柄カードの角。セクション枠と同じ連続円弧。
+    static let cardCornerRadius: CGFloat = groupedCornerRadius
+
+    static var groupedInnerCornerRadius: CGFloat {
+        max(groupedCornerRadius - groupedContentInset, 0)
+    }
     static let positive = Color(red: 0.28, green: 0.78, blue: 0.42)
+    static var sectorFill: Color { positive.opacity(0.22) }
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
     static let margin = Color(red: 0.35, green: 0.78, blue: 0.82)
@@ -60,12 +77,6 @@ enum Theme {
         UICollectionView.appearance().backgroundColor = shell
         UITableViewCell.appearance().backgroundColor = elevated
         UITableView.appearance().sectionHeaderTopPadding = 0
-    }
-
-    static func sectorColor(_ sector: String) -> Color {
-        let index = TSESector.catalog.firstIndex(of: sector) ?? sector.utf8.reduce(0) { $0 &+ Int($1) }
-        let hue = (Double(index) * 0.6180339887).truncatingRemainder(dividingBy: 1)
-        return Color(hue: hue, saturation: 0.78, brightness: 0.88)
     }
 
     static func bandColor(quality: Double) -> Color {
@@ -154,6 +165,12 @@ extension View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleDisplayMode(.inline)
             .scrollEdgeEffectHidden(true, for: .top)
+    }
+
+    func bltCardSurface() -> some View {
+        self
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous))
     }
 }
 

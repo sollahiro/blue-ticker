@@ -15,13 +15,21 @@ enum BreakdownMetric: String, CaseIterable, Identifiable {
         case .roe: "ROE"
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .businessProfit: "chart.line.uptrend.xyaxis"
+        case .roic: "arrow.triangle.2.circlepath"
+        case .roe: "chart.pie"
+        }
+    }
 }
 
 struct BreakdownView: View {
     var code: String
+    @Binding var metric: BreakdownMetric
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
-    @State private var metric: BreakdownMetric = .businessProfit
     @State private var selectedYearID: String?
     @State private var selectedFactor: FactorKind?
 
@@ -45,16 +53,11 @@ struct BreakdownView: View {
         let selectedYear = years.first { $0.id == selectedYearID && isYearSelectable($0) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    ForEach(BreakdownMetric.allCases) { item in
-                        Button(item.title) { metric = item }
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(metric == item ? Theme.selectedTab : Theme.idleTab)
-                            .foregroundStyle(metric == item ? .white : Theme.text)
-                    }
-                }
+                SegmentPills(
+                    items: Array(BreakdownMetric.allCases),
+                    selection: $metric,
+                    title: { $0.title }
+                )
                 if metric == .businessProfit {
                     yearBars(years)
                 } else if years.contains(where: { metricValue($0) != nil }) {
@@ -82,8 +85,9 @@ struct BreakdownView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.card)
-        .padding(16)
+        .bltCardSurface()
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
         .onChange(of: metric) { _, _ in
             selectedFactor = nil
         }
@@ -133,21 +137,22 @@ struct BreakdownView: View {
         let points = ratioPoints(years)
         let anchors = ratioAnchors(years)
         let segments = ratioSegments(points)
-        let xMin = min(points.map(\.value).min() ?? 0, 0)
         let xMax = max(points.map(\.value).max() ?? 0, 0)
         let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0) }
         let selectedSegment = selectedIndex.flatMap { index in
             segments.first { $0.points.last?.index == index }
         }
         return Chart {
-            if let segment = selectedSegment, let start = segment.points.first?.index, let end = segment.points.last?.index, xMin < xMax {
-                RectangleMark(
-                    xStart: .value(metric.title, xMin),
-                    xEnd: .value(metric.title, xMax),
-                    yStart: .value("年度", start),
-                    yEnd: .value("年度", end)
-                )
-                .foregroundStyle(segment.color.opacity(0.15))
+            if let segment = selectedSegment {
+                ForEach(segment.points, id: \.id) { point in
+                    AreaMark(
+                        xStart: .value(metric.title, point.value),
+                        xEnd: .value(metric.title, xMax),
+                        y: .value("年度", point.index)
+                    )
+                    .foregroundStyle(segment.color.opacity(0.15))
+                    .interpolationMethod(.linear)
+                }
             }
             ForEach(segments, id: \.id) { segment in
                 ForEach(segment.points, id: \.id) { point in
@@ -297,9 +302,6 @@ struct BreakdownView: View {
             Text("\(Format.fy(year.fyEnd)) の要因分解")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            Text("プラス（緑）はその要因が前年より押し上げた分、マイナス（赤）は押し下げた分です。行を選ぶと詳しく見られます。")
-                .font(.footnote)
-                .foregroundStyle(Theme.textMuted)
             ForEach(spec.factors) { factor in
                 let selected = selectedFactor == factor.kind
                 factorRow(
@@ -328,16 +330,27 @@ struct BreakdownView: View {
                 emphasized: true
             )
             .accessibilityLabel("\(spec.totalTitle) \(spec.format(spec.totalValue))")
-            if let selectedFactor, spec.factors.contains(where: { $0.kind == selectedFactor }) {
-                let detail = selectedFactor.detail(year: year, prior: prior)
+            if let selectedFactor, let factor = spec.factors.first(where: { $0.kind == selectedFactor }) {
+                let detail = selectedFactor.detail(year: year, prior: prior, contribution: factor.value)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(selectedFactor.title)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(Theme.accent)
-                    ForEach(Array(detail.enumerated()), id: \.offset) { _, line in
-                        Text(line)
+                    Text(detail.outcome)
+                        .font(.caption)
+                        .foregroundStyle(outcomeColor(factor.value))
+                    if let note = detail.inversionNote {
+                        Text(note)
                             .font(.caption)
-                            .foregroundStyle(factorLineColor(line))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    Text(detail.formula)
+                        .font(.caption)
+                        .foregroundStyle(Theme.text)
+                    if let substitution = detail.substitution {
+                        Text("= \(substitution)")
+                            .font(.caption)
+                            .foregroundStyle(Theme.text)
                     }
                 }
                 .padding(.top, 4)
@@ -373,6 +386,13 @@ struct BreakdownView: View {
         .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
     }
 
+    private struct FactorDetail {
+        var outcome: String
+        var inversionNote: String?
+        var formula: String
+        var substitution: String?
+    }
+
     private enum FactorKind: String, CaseIterable {
         case salesChange
         case grossMarginChange
@@ -394,19 +414,21 @@ struct BreakdownView: View {
             }
         }
 
-        func detail(year: FinancialsYear, prior: FinancialsYear?) -> [String] {
+        func detail(year: FinancialsYear, prior: FinancialsYear?, contribution: Double?) -> FactorDetail {
             let inverted = isDriverInverted(year: year, prior: prior)
-            var lines = [blurb]
-            if inverted, let note = inversionNote {
-                lines.append(note)
+            return FactorDetail(
+                outcome: outcome(contribution: contribution, inverted: inverted),
+                inversionNote: inverted ? inversionNote : nil,
+                formula: formula,
+                substitution: substitution(year: year, prior: prior)
+            )
+        }
+
+        private func outcome(contribution: Double?, inverted: Bool) -> String {
+            guard let contribution, contribution != 0 else {
+                return "前年に比べて、この要因の押し上げ・押し下げはほとんどありませんでした。"
             }
-            lines.append(plusMeaning(inverted: inverted))
-            lines.append(minusMeaning(inverted: inverted))
-            lines.append(formula)
-            if let substitution = substitution(year: year, prior: prior) {
-                lines.append("= \(substitution)")
-            }
-            return lines
+            return contribution > 0 ? plusMeaning(inverted: inverted) : minusMeaning(inverted: inverted)
         }
 
         /// 計算の掛け算側がマイナスだと、売上・回転・レバレッジの増減と寄与の符号が逆になる。
@@ -451,57 +473,36 @@ struct BreakdownView: View {
             }
         }
 
-        private var blurb: String {
-            switch self {
-            case .salesChange:
-                return "売上が増えたか減ったかが、利益にどれだけ効いたかです。"
-            case .grossMarginChange:
-                return "同じ売上でも、原価のあとに残る利益の割合が変わった分です。"
-            case .sgaChange:
-                return "人件費・家賃・広告費などの経費の増減が、利益に効いた分です。経費は増えると利益が減ります。"
-            case .roicMargin:
-                return "事業に使っているお金に対して、どれだけ利益を出せるかが変わった分です。"
-            case .roicTurnover:
-                return "事業に使っているお金を、どれだけ効率よく売上に変えられたかが変わった分です。"
-            case .roeNetMargin:
-                return "売上のうち、最終的に株主の手元に残る利益の割合が変わった分です。"
-            case .roeTurnover:
-                return "会社の資産全体を使って、どれだけ売上を出せるかが変わった分です。"
-            case .roeLeverage:
-                return "借入などを使って、自分たちのお金（自己資本）に対する収益をどれだけ膨らませたかの変化です。プラスが必ずしも良いとは限りません。"
-            }
-        }
-
         private func plusMeaning(inverted: Bool) -> String {
             if inverted {
                 switch self {
                 case .salesChange:
-                    return "+ 売上の変化が、利益を押し上げた"
+                    return "前年に比べて、売上の変化が利益を押し上げました。"
                 case .roicTurnover, .roeTurnover:
-                    return "+ 回転率の変化が、収益性を押し上げた"
+                    return "前年に比べて、回転率の変化が収益性を押し上げました。"
                 case .roeLeverage:
-                    return "+ レバレッジの変化が、収益性を押し上げた"
+                    return "前年に比べて、レバレッジの変化が収益性を押し上げました。"
                 default:
                     break
                 }
             }
             switch self {
             case .salesChange:
-                return "+ 売上が増えて、利益を押し上げた"
+                return "前年に比べて、売上が増えて利益を押し上げました。"
             case .grossMarginChange:
-                return "+ 仕入れや製造の効率が良くなり、同じ売上から残る利益が増えた"
+                return "前年に比べて、仕入れや製造の効率が良くなり、同じ売上から残る利益が増えました。"
             case .sgaChange:
-                return "+ 経費が減り、利益が増えた"
+                return "前年に比べて、経費が減り、利益が増えました。"
             case .roicMargin:
-                return "+ 同じお金でも、より多く稼げるようになった"
+                return "前年に比べて、同じお金でもより多く稼げるようになりました。"
             case .roicTurnover:
-                return "+ 同じ資金で、より多くの売上を回せるようになった"
+                return "前年に比べて、同じ資金でより多くの売り上げを出せました。"
             case .roeNetMargin:
-                return "+ 売上に対して、残る利益の割合が上がった"
+                return "前年に比べて、売上に対して残る利益の割合が上がりました。"
             case .roeTurnover:
-                return "+ 資産の使い方が良くなり、同じ資産でも売上が増えた"
+                return "前年に比べて、資産の使い方が良くなり、同じ資産でも売上が増えました。"
             case .roeLeverage:
-                return "+ 借入などの比率が上がり、自己資本あたりの収益を押し上げた"
+                return "前年に比べて、借入などの比率が上がり、自己資本あたりの収益を押し上げました。"
             }
         }
 
@@ -509,32 +510,32 @@ struct BreakdownView: View {
             if inverted {
                 switch self {
                 case .salesChange:
-                    return "− 売上の変化が、利益を押し下げた"
+                    return "前年に比べて、売上の変化が利益を押し下げました。"
                 case .roicTurnover, .roeTurnover:
-                    return "− 回転率の変化が、収益性を押し下げた"
+                    return "前年に比べて、回転率の変化が収益性を押し下げました。"
                 case .roeLeverage:
-                    return "− レバレッジの変化が、収益性を押し下げた"
+                    return "前年に比べて、レバレッジの変化が収益性を押し下げました。"
                 default:
                     break
                 }
             }
             switch self {
             case .salesChange:
-                return "− 売上が減って、利益を押し下げた"
+                return "前年に比べて、売上が減って利益を押し下げました。"
             case .grossMarginChange:
-                return "− 原価がかさみ、同じ売上から残る利益が減った"
+                return "前年に比べて、原価がかさみ、同じ売上から残る利益が減りました。"
             case .sgaChange:
-                return "− 経費が増え、利益が減った"
+                return "前年に比べて、経費が増え、利益が減りました。"
             case .roicMargin:
-                return "− 同じお金でも、稼げる額が減った"
+                return "前年に比べて、同じお金でも稼げる額が減りました。"
             case .roicTurnover:
-                return "− 資金が滞り、売上の回りが悪くなった"
+                return "前年に比べて、資金を効率よく活用できませんでした。"
             case .roeNetMargin:
-                return "− 売上に対して、残る利益の割合が下がった"
+                return "前年に比べて、売上に対して残る利益の割合が下がりました。"
             case .roeTurnover:
-                return "− 資産の使い方が悪くなり、同じ資産でも売上が減った"
+                return "前年に比べて、資産の使い方が悪くなり、同じ資産でも売上が減りました。"
             case .roeLeverage:
-                return "− 借入などの比率が下がり、自己資本あたりの収益を押し下げた"
+                return "前年に比べて、借入などの比率が下がり、自己資本あたりの収益を押し下げました。"
             }
         }
 
@@ -661,15 +662,16 @@ struct BreakdownView: View {
         }
     }
 
+    private func outcomeColor(_ value: Double?) -> Color {
+        guard let value else { return Theme.text }
+        if value < 0 { return Theme.negative }
+        if value > 0 { return Theme.positive }
+        return Theme.text
+    }
+
     private func factorColor(_ value: Double?) -> Color {
         guard let value, value < 0 else { return Theme.text }
         return Theme.negative
-    }
-
-    private func factorLineColor(_ line: String) -> Color {
-        if line.hasPrefix("+") { return Theme.positive }
-        if line.hasPrefix("−") { return Theme.negative }
-        return Theme.text
     }
 
     /// 前年差（要因分解の合計）がある年度だけ選べる。
