@@ -148,6 +148,7 @@ struct TickerView: View {
         if company.sector.isEmpty {
             resolvedSector = await Self.loadSector(code: company.code)
         }
+        backfillWatchedSectorIfNeeded()
         CompanyHistory.record(displayCompany)
     }
 
@@ -176,6 +177,15 @@ struct TickerView: View {
             )
             Task { await APIClient.shared.pinCode(company.code) }
         }
+    }
+
+    /// Feed から先に追加しても、後から取れた業種でウォッチ行を埋める。
+    private func backfillWatchedSectorIfNeeded() {
+        let sector = displaySector
+        guard !sector.isEmpty else { return }
+        guard let existing = watched.first(where: { $0.code == company.code }) else { return }
+        guard existing.sector.isEmpty else { return }
+        existing.sector = sector
     }
 }
 
