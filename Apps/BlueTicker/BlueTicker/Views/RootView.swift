@@ -48,6 +48,9 @@ struct RootView: View {
         .task(id: watched.map(\.code).joined(separator: ",")) {
             let codes = watched.map(\.code)
             await APIClient.shared.setPinnedCodes(Set(codes))
+            // Feed の interactive GET を先に出す。先読みは 429 で止めて間引く。
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
             await APIClient.shared.prefetchAnalysis(codes: codes)
         }
     }

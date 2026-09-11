@@ -8,10 +8,14 @@ actor APIClient {
     private let redirectDelegate: AccessRedirectDelegate?
     private let cache: ResponseCache
     private let hapis: HAPISConsumerClient
+    private let originGate: HAPISOriginGate
     private var pinnedCodes: Set<String> = []
 
     init(
-        session: URLSession? = nil, cache: ResponseCache = .shared, hapis: HAPISConsumerClient? = nil
+        session: URLSession? = nil,
+        cache: ResponseCache = .shared,
+        hapis: HAPISConsumerClient? = nil,
+        originGate: HAPISOriginGate = HAPISOriginGate()
     ) {
         self.cache = cache
         if let session {
@@ -27,6 +31,7 @@ actor APIClient {
                 configuration: config, delegate: delegate, delegateQueue: nil)
         }
         decoder = JSONDecoder()
+        self.originGate = originGate
         self.hapis = hapis ?? HAPISConsumerClient(
             issuerURL: { APIConfiguration.hapisIssuerURL },
             session: URLSession(configuration: .ephemeral),
@@ -107,9 +112,37 @@ actor APIClient {
 
     func prefetchAnalysis(codes: [String]) async {
         for code in codes {
-            _ = try? await financials(code: code)
-            _ = try? await waterfall(code: code)
-            _ = try? await overview(code: code)
+            guard !Task.isCancelled else { return }
+            if await originGate.isCoolingDown() { return }
+            if await prefetchFailedRateLimit({
+                let _: FinancialsResponse = try await get(
+                    path("v1/companies/\(code)/financials"),
+                    cacheTTL: ttl(for: code),
+                    hapisClass: .prefetch)
+            }) { return }
+            if await prefetchFailedRateLimit({
+                let _: FinancialsResponse = try await get(
+                    path("v1/companies/\(code)/waterfall"),
+                    cacheTTL: ttl(for: code),
+                    hapisClass: .prefetch)
+            }) { return }
+            if await prefetchFailedRateLimit({
+                let _: CompanyOverviewResponse = try await get(
+                    path("v1/companies/\(code)/overview"),
+                    cacheTTL: ttl(for: code),
+                    hapisClass: .prefetch)
+            }) { return }
+        }
+    }
+
+    private func prefetchFailedRateLimit(_ run: () async throws -> Void) async -> Bool {
+        do {
+            try await run()
+            return false
+        } catch APIClientError.http(let status, _) where status == 429 {
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -127,7 +160,11 @@ actor APIClient {
         return try? decoder.decode(T.self, from: data)
     }
 
-    private func get<T: Decodable>(_ url: URL, cacheTTL: TimeInterval? = nil) async throws -> T {
+    private func get<T: Decodable>(
+        _ url: URL,
+        cacheTTL: TimeInterval? = nil,
+        hapisClass: HAPISOriginGate.RequestClass = .interactive
+    ) async throws -> T {
         let key = ResponseCache.key(for: url)
         if let cacheTTL, let data = await cache.load(key: key, maxAge: cacheTTL),
             let decoded = try? decoder.decode(T.self, from: data)
@@ -135,7 +172,7 @@ actor APIClient {
             return decoded
         }
         do {
-            let data = try await fetchData(url)
+            let data = try await fetchData(url, hapisClass: hapisClass)
             do {
                 let decoded = try decoder.decode(T.self, from: data)
                 if cacheTTL != nil {
@@ -148,13 +185,17 @@ actor APIClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            if let clientError = error as? APIClientError, case .http(let status, _) = clientError,
-                status == 404
-            {
-                if cacheTTL != nil {
-                    await cache.remove(key: key)
+            if let clientError = error as? APIClientError, case .http(let status, _) = clientError {
+                if status == 404 {
+                    if cacheTTL != nil {
+                        await cache.remove(key: key)
+                    }
+                    throw clientError
                 }
-                throw clientError
+                // 429 を stale cache で握りつぶすと先読みが止まらない。
+                if status == 429 {
+                    throw clientError
+                }
             }
             if cacheTTL != nil, let data = await cache.load(key: key, maxAge: nil),
                 let decoded = try? decoder.decode(T.self, from: data)
@@ -165,7 +206,11 @@ actor APIClient {
         }
     }
 
-    private func fetchData(_ url: URL, hapisRemintAttempted: Bool = false) async throws -> Data {
+    private func fetchData(
+        _ url: URL,
+        hapisRemintAttempted: Bool = false,
+        hapisClass: HAPISOriginGate.RequestClass = .interactive
+    ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -182,6 +227,7 @@ actor APIClient {
                     "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
             }
         } else if APIConfiguration.usesHAPISConsumer(url) {
+            await originGate.waitTurn(hapisClass)
             do {
                 request = try await hapis.authorize(request)
             } catch is CancellationError {
@@ -215,8 +261,19 @@ actor APIClient {
                 } catch {
                     throw APIClientError.hapisUnavailable
                 }
-                return try await fetchData(url, hapisRemintAttempted: true)
+                return try await fetchData(
+                    url, hapisRemintAttempted: true, hapisClass: hapisClass)
             }
+        }
+        if status == 429 {
+            if APIConfiguration.usesHAPISConsumer(url) {
+                await originGate.noteRateLimited(
+                    retryAfterSeconds: HAPISRetryAfter.seconds(
+                        from: http?.value(forHTTPHeaderField: "Retry-After"))
+                )
+            }
+            let message = httpErrorMessage(data, fallback: "HTTP 429")
+            throw APIClientError.http(status: 429, message: message)
         }
         if status == 404 {
             let message = httpErrorMessage(data, fallback: "見つかりません")
