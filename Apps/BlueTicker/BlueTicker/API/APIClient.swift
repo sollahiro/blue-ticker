@@ -139,6 +139,8 @@ actor APIClient {
         do {
             try await run()
             return false
+        } catch is CancellationError {
+            return true
         } catch APIClientError.http(let status, _) where status == 429 {
             return true
         } catch {
@@ -227,7 +229,8 @@ actor APIClient {
                     "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
             }
         } else if APIConfiguration.usesHAPISConsumer(url) {
-            await originGate.waitTurn(hapisClass)
+            try await originGate.waitTurn(hapisClass)
+            try Task.checkCancellation()
             do {
                 request = try await hapis.authorize(request)
             } catch is CancellationError {

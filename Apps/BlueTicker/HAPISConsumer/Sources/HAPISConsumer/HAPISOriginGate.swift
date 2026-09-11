@@ -18,13 +18,13 @@ public actor HAPISOriginGate {
     private var cooldownUntil = Date.distantPast
     private var nextPrefetchAt = Date.distantPast
     private let now: @Sendable () -> Date
-    private let sleep: @Sendable (TimeInterval) async -> Void
+    private let sleep: @Sendable (TimeInterval) async throws -> Void
 
     public init(
         now: @escaping @Sendable () -> Date = { Date() },
-        sleep: @escaping @Sendable (TimeInterval) async -> Void = { seconds in
+        sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { seconds in
             guard seconds > 0.01 else { return }
-            try? await Task.sleep(for: .seconds(seconds))
+            try await Task.sleep(for: .seconds(seconds))
         }
     ) {
         self.now = now
@@ -35,15 +35,20 @@ public actor HAPISOriginGate {
         now() < cooldownUntil
     }
 
-    public func waitTurn(_ requestClass: RequestClass) async {
-        let instant = now()
-        var target = cooldownUntil
-        if requestClass == .prefetch {
-            target = max(target, nextPrefetchAt)
-        }
-        let delay = target.timeIntervalSince(instant)
-        if delay > 0.01 {
-            await sleep(delay)
+    public func waitTurn(_ requestClass: RequestClass) async throws {
+        while true {
+            try Task.checkCancellation()
+            let instant = now()
+            var target = cooldownUntil
+            if requestClass == .prefetch {
+                target = max(target, nextPrefetchAt)
+            }
+            let delay = target.timeIntervalSince(instant)
+            if delay > 0.01 {
+                try await sleep(delay)
+                continue
+            }
+            break
         }
         if requestClass == .prefetch {
             nextPrefetchAt = now().addingTimeInterval(Self.prefetchSpacing)
