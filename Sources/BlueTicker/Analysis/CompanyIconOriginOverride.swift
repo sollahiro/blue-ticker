@@ -53,7 +53,7 @@ enum CompanyIconOriginOverride {
     /// XBRL 電子公告を使わず favicon / 公式画像を取る決め打ち。格納は `icons-manual`。
     /// 7203: トヨタ自動車。公式コンシューマサイト `https://toyota.jp/index.html`（origin のみ保持）。
     /// 9267: Genky DrugStores。有報の公告 URL は frameset のみの `genkydrugstores.co.jp`。
-    /// 581A: ＧＯ。2026-06 上場。マスタ CSV 未収録でも `--codes` で再取得できるよう origin を固定。
+    /// 581A: ＧＯ。2026-06 上場。公式 origin を固定（公告抽出前でも icons-manual）。
     /// 8887: シーラ HD。`/favicon.ico` が 16x16 1bit（198B）で iOS が読めない。WP 192px PNG を直指定。
     /// 6150: タケダ機械。公告掲載方法が日本経済新聞のみ（`not_applicable`）。
     /// 7888: 三光合成。電子公告と書くが公告行に URL が無い（IR の公式 HP を使う）。
