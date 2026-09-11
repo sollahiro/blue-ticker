@@ -104,6 +104,21 @@ private func fakeResult(
         }
     }
 
+    @Test func ingestExplicitCodesIncludesUnlistedWhenAnnualReportExists() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S_GO", secCode: "581A0", db: app.db)
+
+            let summary = try await runIconsIngest(
+                db: app.db, listedCodes: [], limit: nil, explicitCodes: ["581A"]
+            ) { _, _ in .success(fakeResult("581A")) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyIcon.find("581A", on: app.db))
+            #expect(row.r2ObjectKey == "company-icons/581A.png")
+        }
+    }
+
     @Test func ingestPicksOnlyLatestAnnualReportPerCompany() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1_OLD", secCode: "72030", submit: "2024-06-20 09:00", db: app.db)

@@ -72,6 +72,16 @@ import Testing
 
     @Test func remapsToyotaManualHomepageRegardlessOfExtractedOrigin() {
         #expect(CompanyIconOriginOverride.manualSources["7203"] == .homepageOrigin("https://toyota.jp"))
+        #expect(CompanyIconOriginOverride.manualSources["9267"] == .homepageOrigin("https://www.genky.co.jp"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["581A"]
+                == .imageURL("https://go.goinc.jp/android-chrome.png"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["8887"]
+                == .imageURL(
+                    "https://syla-holdings.jp/wp-content/uploads/2025/05/cropped-favicon-192x192.png"))
+        #expect(CompanyIconOriginOverride.manualSources["6150"] == .homepageOrigin("https://www.takeda-mc.co.jp"))
+        #expect(CompanyIconOriginOverride.manualSources["7888"] == .homepageOrigin("https://www.sankogosei.co.jp"))
         #expect(
             Set(CompanyIconOriginOverride.manualSources.keys)
                 .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
@@ -124,5 +134,34 @@ import Testing
             !companyIconShouldRefresh(
                 code: "7203", cacheVersion: companyIconsManualCacheVersion,
                 sourceURL: "https://toyota.jp/"))
+    }
+
+    @Test func sylaRefreshesUntilManualImageURLIsStored() {
+        let png = "https://syla-holdings.jp/wp-content/uploads/2025/05/cropped-favicon-192x192.png"
+        #expect(
+            companyIconShouldRefresh(
+                code: "8887", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://syla-holdings.jp"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "8887", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://syla-holdings.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "8887", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
+    }
+
+    @Test func goAppIconRefreshesUntilManualImageURLIsStored() {
+        let png = "https://go.goinc.jp/android-chrome.png"
+        #expect(
+            companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://goinc.jp"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsCacheVersion, sourceURL: png))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
     }
 }

@@ -98,8 +98,11 @@ import Testing
     @Test func testCurrentEdinetCSVLoadsAlphanumericSecurityCode() async throws {
         let manager = MasterDataManager()
         let stock = try #require(await manager.getByCode("477A"), "477A が CSV に見つからない — EdinetcodeDlInfo.csv が欠落しているか英数字コードのパースが壊れている")
-
         #expect(!stock.coName.isEmpty)
+
+        let go = try #require(await manager.getByCode("581A"), "581A が CSV に見つからない")
+        #expect(go.coName == "ＧＯ株式会社")
+        #expect(go.mktNm == "上場")
     }
 
     @Test func testListedCodesExcludesForeignFilerEvenWhenListed() async throws {
@@ -113,6 +116,7 @@ import Testing
         let listed = await manager.listedCodes()
         #expect(!listed.contains("1773"))
         #expect(listed.contains("6501"))
+        #expect(listed.contains("581A"))
     }
 
     @Test func testForeignFilerCodesIncludesListedForeignIssuers() async throws {
