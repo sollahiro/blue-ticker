@@ -20,6 +20,7 @@
 		AA0000000000000000000026 /* HAPISAttestation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000026 /* HAPISAttestation.swift */; };
 		AA0000000000000000000027 /* HAPISTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000027 /* HAPISTokenStore.swift */; };
 		AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000028 /* HAPISConsumerClient.swift */; };
+		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* WatchedCompany.swift */; };
 		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
 		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
@@ -51,6 +52,7 @@
 		BB0000000000000000000026 /* HAPISAttestation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISAttestation.swift; sourceTree = "<group>"; };
 		BB0000000000000000000027 /* HAPISTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISTokenStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000028 /* HAPISConsumerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerClient.swift; sourceTree = "<group>"; };
+		BB0000000000000000000031 /* HAPISOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISOriginGate.swift; sourceTree = "<group>"; };
 		BB0000000000000000000007 /* WatchedCompany.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedCompany.swift; sourceTree = "<group>"; };
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -143,6 +145,7 @@
 				BB0000000000000000000026 /* HAPISAttestation.swift */,
 				BB0000000000000000000027 /* HAPISTokenStore.swift */,
 				BB0000000000000000000028 /* HAPISConsumerClient.swift */,
+				BB0000000000000000000031 /* HAPISOriginGate.swift */,
 			);
 			name = HAPISConsumer;
 			path = HAPISConsumer/Sources/HAPISConsumer;
@@ -265,6 +268,7 @@
 				AA0000000000000000000026 /* HAPISAttestation.swift in Sources */,
 				AA0000000000000000000027 /* HAPISTokenStore.swift in Sources */,
 				AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */,
+				AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */,
 				AA0000000000000000000023 /* AccessLoginView.swift in Sources */,
 				AA0000000000000000000007 /* WatchedCompany.swift in Sources */,
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
