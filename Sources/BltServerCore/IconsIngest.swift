@@ -4,8 +4,9 @@
 //
 // 抽出元行（「公告掲載方法」）が紙媒体のみ・別注記委譲などで URL 抽出できない会社（実データ検証で
 // 148件中12件）は、直近有報が同一内容である限り毎回 failed として再試行され続ける
-// （既知の制約。公式 HP を `CompanyIconOriginOverride.manualSources` に足せば XBRL を使わず
-// `icons-manual` で格納でき、自動 ingest の cache_version バンプ対象外になる）。
+// （既知の制約。公式 HP / 公式画像を `CompanyIconOriginOverride.manualSources` に足せば XBRL を
+// 使わず `icons-manual` で格納でき、自動 ingest の cache_version バンプ対象外になる）。
+// `--codes` 指定時はマスタ未収録でも会社有報 120 があれば取り込む（英数字コードの新規上場）。
 
 import BlueTickerCore
 import Fluent
@@ -118,7 +119,8 @@ func runIconsIngest(
     return IconsIngestSummary(attempted: attempted, stored: stored, failed: failed, skipped: skipped)
 }
 
-/// 上場（listedCodes）× 会社有報(120・府令010) の直近1件を会社ごとに選ぶ。`explicitCodes` を渡すとさらに絞る。
+/// 上場（listedCodes）× 会社有報(120・府令010) の直近1件を会社ごとに選ぶ。
+/// `explicitCodes` を渡すとその集合だけを対象にし、listedCodes 未収録でも有報があれば含める。
 /// docType 120 でも特定有価証券府令(030)の信託受益証券等は除外（statements / filings と同じ）。
 func latestAnnualReportPerCompany(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
@@ -135,8 +137,12 @@ func latestAnnualReportPerCompany(
             let code = listedTickerCode(fromSecCode: doc.secCode),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
-        guard listedCodes.contains(code) else { continue }
-        if let explicit = explicitCodes, !explicit.contains(code) { continue }
+        // `--codes` はマスタ未収録の新規上場（英数字コード等）でも、有報 120 があれば取り込む。
+        if let explicit = explicitCodes {
+            guard explicit.contains(code) else { continue }
+        } else {
+            guard listedCodes.contains(code) else { continue }
+        }
         if let current = byCode[code], current.submitDateTime >= doc.submitDateTime { continue }
         byCode[code] = (docID, doc.submitDateTime)
     }
