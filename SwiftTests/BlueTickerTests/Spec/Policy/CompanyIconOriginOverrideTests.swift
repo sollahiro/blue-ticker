@@ -73,7 +73,9 @@ import Testing
     @Test func remapsToyotaManualHomepageRegardlessOfExtractedOrigin() {
         #expect(CompanyIconOriginOverride.manualSources["7203"] == .homepageOrigin("https://toyota.jp"))
         #expect(CompanyIconOriginOverride.manualSources["9267"] == .homepageOrigin("https://www.genky.co.jp"))
-        #expect(CompanyIconOriginOverride.manualSources["581A"] == .homepageOrigin("https://goinc.jp"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["581A"]
+                == .imageURL("https://go.goinc.jp/android-chrome.png"))
         #expect(
             CompanyIconOriginOverride.manualSources["8887"]
                 == .imageURL(
@@ -147,5 +149,19 @@ import Testing
         #expect(
             !companyIconShouldRefresh(
                 code: "8887", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
+    }
+
+    @Test func goAppIconRefreshesUntilManualImageURLIsStored() {
+        let png = "https://go.goinc.jp/android-chrome.png"
+        #expect(
+            companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://goinc.jp"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsCacheVersion, sourceURL: png))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "581A", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
     }
 }
