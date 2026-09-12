@@ -267,6 +267,18 @@ enum Xbrl {
         "OperatingGrossProfit",
     ]
 
+    /// 営業収益 − 営業費用 + 販管費の構成粗利に使う営業収益（クレジット・割賦等の `OperatingRevenue1`）。
+    /// 鉄道・電力・証券の営業収益タグは本表形状が異なるため含めない。
+    static let operatingRevenueForOpexSgaGrossProfitTags: [String] = [
+        "OperatingRevenue1",
+        "OperatingRevenue1SummaryOfBusinessResults",
+    ]
+
+    /// 販管費を内数に含む営業費用合計（イオンFS `S100QTUM` 等）。
+    static let operatingExpenseTotalTags: [String] = [
+        "OperatingExpenses",
+    ]
+
     // 売上総利益の計算法（売上 − 売上原価）の売上側タグ。
     // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）と
     // 保険売上タグ（insuranceSalesTags）を除外して導出する。独立手書きリストを持たないことで

@@ -1,5 +1,5 @@
 // 損益計算書（Duration コンテキスト）から売上総利益を抽出するロジックを検証する。
-// 抽出戦略: 直接法 → 銀行業務粗利益 → 営業総利益 → 計算法（売上高 − 売上原価）
+// 抽出戦略: 直接法 → 営業総利益 → 営業収益−営業費用+販管費 → 銀行業務粗利益 → 計算法
 
 import Testing
 import Foundation
@@ -90,6 +90,72 @@ import Foundation
         }
     }
 
+    @Test func testOperatingGrossProfitBeatsOpexPlusSga() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">27840047000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">24519641000</jppfs_cor:OperatingExpenses>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1000000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
+            <jppfs_cor:OperatingGrossProfit contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">3320406000</jppfs_cor:OperatingGrossProfit>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "operating_gross_profit")
+            #expect(result.grossProfit == 3_320_406_000)
+        }
+    }
+
+    @Test func testOperatingRevenueMinusOpexPlusSgaBeatsBankFeeFragment() {
+        // イオンFS 23/02 相当の合成。実ファイル回帰は RealXbrlGrossProfitExtractorTests
+        // （S100QTUM）。役務タグがあっても本表の営業収益/営業費用/販管費を使う。
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">451767000000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingRevenue1 contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">470657000000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">392907000000</jppfs_cor:OperatingExpenses>
+            <jppfs_cor:OperatingExpenses contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">411804000000</jppfs_cor:OperatingExpenses>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">342034000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">347766000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
+            <jppfs_cor:FeesAndCommissionsOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">62178000000</jppfs_cor:FeesAndCommissionsOIBNK>
+            <jppfs_cor:FeesAndCommissionsPaymentsOEBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">11345000000</jppfs_cor:FeesAndCommissionsPaymentsOEBNK>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "operating_revenue_minus_opex_plus_sga")
+            #expect(result.grossProfitLabel == "販管費控除前営業利益")
+            #expect(result.grossProfit == 400_894_000_000)
+            #expect(result.grossProfitPrior == 406_619_000_000)
+        }
+    }
+
+    @Test func testOperatingRevenueMinusOpexPlusSgaRejectsSgaAboveOpex() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">40000000000</jppfs_cor:OperatingExpenses>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">50000000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
+            <jppfs_cor:FeesAndCommissionsOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">8000000000</jppfs_cor:FeesAndCommissionsOIBNK>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "business_gross_profit")
+            #expect(result.grossProfit == 8_000_000_000)
+        }
+    }
+
     @Test func testComputedJgaapOperatingRevenueOperatingCost() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
@@ -151,6 +217,26 @@ import Foundation
                 unitRef="JPY" decimals="-6">7693560000000</jpifrs_cor:InsuranceRevenueIFRS>
             <jpifrs_cor:GrossProfitIFRS contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">200000000000</jpifrs_cor:GrossProfitIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+        }
+    }
+
+    @Test func testInsuranceFilingDoesNotUseOpexPlusSga() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:InsuranceRevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">7693560000000</jpifrs_cor:InsuranceRevenueIFRS>
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">451767000000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">392907000000</jppfs_cor:OperatingExpenses>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">342034000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
