@@ -182,6 +182,12 @@ enum FaviconFetcher {
         if bytes[0...2] == [0xFF, 0xD8, 0xFF] { return "image/jpeg" }
         if bytes[0...2] == [0x47, 0x49, 0x46] { return "image/gif" }
         if bytes[0...1] == [0x42, 0x4D] { return "image/bmp" }
+        // 2026-09-12 icons audit の OGP に webp がある。受理を足すだけで既存格納は無効化しない。
+        if bytes.count >= 12, bytes[0...3] == [0x52, 0x49, 0x46, 0x46],
+            bytes[8...11] == [0x57, 0x45, 0x42, 0x50]
+        {
+            return "image/webp"
+        }
         if let text = String(data: data.prefix(256), encoding: .utf8)?.lowercased(),
            text.contains("<svg") { return "image/svg+xml" }
         return nil

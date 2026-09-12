@@ -1016,6 +1016,7 @@ private func companyIconFileExtension(forContentType contentType: String) -> Str
     case "image/gif": return ".gif"
     case "image/bmp": return ".bmp"
     case "image/svg+xml": return ".svg"
+    case "image/webp": return ".webp"
     default: return ""
     }
 }
