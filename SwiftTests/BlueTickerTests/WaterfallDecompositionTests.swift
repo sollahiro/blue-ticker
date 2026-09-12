@@ -160,14 +160,17 @@ import Foundation
         #expect(cd.roicMarginEffect! + cd.roicTurnoverEffect! == cd.roicDelta!)
     }
 
-    @Test func roicSkipsFinancialInstitutions() {
-        // 経常利益ベース（金融機関）の当期は分解しない
+    @Test func roicDecomposesFinancialInstitutions() {
+        // 経常利益ベース（金融機関）も入力が揃えば分解する
         var years = [
             entry(fyEnd: "2023-03-31", roic: 7.5, nopatMargin: 10, turnover: 0.75),
             entry(fyEnd: "2024-03-31", opLabel: "経常利益", roic: 12, nopatMargin: 12, turnover: 1.0),
         ]
         applyRoicWaterfallToYears(&years)
-        #expect(years[1].calculatedData.roicDelta == nil)
+        let cd = years[1].calculatedData
+        #expect(cd.roicDelta == 4.5)
+        #expect(cd.roicMarginEffect == 1.5)
+        #expect(cd.roicTurnoverEffect == 3.0)
     }
 
     @Test func roicDeltaNilWhenPriorComponentMissing() {
