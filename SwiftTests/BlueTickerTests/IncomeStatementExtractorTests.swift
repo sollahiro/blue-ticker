@@ -110,6 +110,24 @@ import Foundation
         #expect(result.salesLabel == "保険収益")
     }
 
+    @Test func testSalesLabelOperatingIncomeINS() {
+        let fs = makeFieldSet(("OperatingIncomeINS", 5_625_758_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 5_625_758_000_000.0)
+        #expect(result.salesLabel == "経常収益")
+    }
+
+    @Test func testInsuranceDoesNotFallbackToOrdinaryIncome() {
+        let fs = makeFieldSet(
+            ("OperatingIncomeINS", 5_625_758_000_000.0, nil),
+            ("OrdinaryIncome", 271_946_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 5_625_758_000_000.0)
+        #expect(result.operatingProfit == nil)
+        #expect(result.operatingProfitPrior == nil)
+    }
+
     @Test func testSalesLabelDefaultNetSales() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, nil))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")

@@ -227,7 +227,7 @@ public extension BltServerContext {
         let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
         // Ingest は derived `individual_analysis_*` を使わない。そのキーは
         // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
-        // 既定 `useCache: true` のままだと fin-v16 ingest が古 IBD/ROIC を現行として書く。
+        // 既定 `useCache: true` のままだと fin-vN ingest が古 IBD/ROIC を現行として書く。
         switch await analyzer.analyze(code: code, analysisYears: years, useCache: false) {
         case .result(let result):
             let stock = await masterDataManager.getByCode(code)

@@ -61,6 +61,15 @@ import Foundation
         #expect(years[0].calculatedData.businessProfit == 200)  // 1000 − 800
     }
 
+    @Test func insuranceOrdinaryRevenueWithoutOPDoesNotUseSalesAsProfitBase() {
+        // 保険は売上ラベルが経常収益でも営業利益が無いので Sales−SGA を事業利益にしない
+        var years = [entry(
+            fyEnd: "2024-03-31", sales: 1000, sga: 800,
+            salesLabel: "経常収益")]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[0].calculatedData.businessProfit == nil)
+    }
+
     @Test func businessProfitStaysNilWithoutGrossProfitForNonFinancial() {
         // 一般事業会社は GrossProfit が無いと SGA・BP とも導出できない
         var years = [entry(fyEnd: "2024-03-31", sales: 1000, op: 150)]

@@ -435,6 +435,28 @@ import Foundation
             xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YLS8_xbrl"))
         #expect(financials?.sales == 7_693_560_000_000)
         #expect(financials?.salesLabel == "保険収益")
+        #expect(financials?.grossProfit == nil)
+        #expect(financials?.operatingProfit == nil)
+        #expect(financials?.sga == 723_908_000_000)
+    }
+
+    /// 第一生命: J-GAAP 本表の経常収益を売上にし、営業利益は null、事業費を販管費にする。
+    @Test
+    func daiichiLifeSummarySalesUsesOperatingIncomeINS() async throws {
+        guard await Self.ensureAvailable("S100VZZW") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100VZZW", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingIncomeINS" }?.value
+                == 9_873_251_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100VZZW_xbrl"))
+        #expect(financials?.sales == 9_873_251_000_000)
+        #expect(financials?.salesLabel == "経常収益")
+        #expect(financials?.grossProfit == nil)
+        #expect(financials?.operatingProfit == nil)
+        #expect(financials?.sga == 989_777_000_000)
+        #expect(financials?.interestExpense == 49_312_000_000)
     }
 
     // MARK: - 味の素 S100VXJA

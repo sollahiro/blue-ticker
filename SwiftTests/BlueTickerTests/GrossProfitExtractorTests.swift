@@ -126,6 +126,34 @@ import Foundation
         }
     }
 
+    @Test func testInsuranceRevenueIfrsDoesNotComputeGrossProfit() {
+        // 保険収益は売上だが原価0の粗利益（粗利率100%）にしてはいけない
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:InsuranceRevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">7693560000000</jpifrs_cor:InsuranceRevenueIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+            #expect(result.grossProfitPrior == nil)
+        }
+    }
+
+    @Test func testOperatingIncomeINSDoesNotComputeGrossProfit() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingIncomeINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">5625758000000</jppfs_cor:OperatingIncomeINS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+        }
+    }
+
     @Test func testComputedNoCogsUsesSalesOnly() {
         // 売上原価タグがない場合、売上高がそのまま売上総利益になる（COGS=0扱い）
         let xml = XBRLTestSupport.makeXbrlDuration("""
