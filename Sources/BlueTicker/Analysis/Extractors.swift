@@ -286,8 +286,22 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 直接法: GrossProfit タグ
+        // 直接法: GrossProfit タグ（売上高 − 売上原価）。イオン等は営業総利益
+        // （営業収益合計 − 営業原価合計）も併記し、販管費はその直上から落ちる。
+        // Waterfall 事業利益 = GP − 販管費 が営業利益と一致する方を採用する。
         let directItem = resolveItem(fieldSet, tags: Xbrl.grossProfitDirectTags)
+        let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
+        if prefersOperatingGrossProfitOverMerchandise(
+            merchandise: directItem, operating: opGpItem, fieldSet: fieldSet)
+        {
+            return GrossProfitResult(
+                grossProfit: opGpItem.current,
+                grossProfitPrior: opGpItem.prior,
+                grossProfitLabel: "営業総利益",
+                method: "operating_gross_profit",
+                accountingStandard: accountingStandard
+            )
+        }
         if directItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: directItem.current,
@@ -298,8 +312,7 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 営業総利益（倉庫・運輸等）。開示行を構成値・銀行部品より先に取る。
-        let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
+        // 営業総利益（倉庫・運輸等）。売上総利益行が無いとき。開示行を構成値・銀行部品より先に取る。
         if opGpItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: opGpItem.current,
@@ -368,6 +381,22 @@ enum GrossProfitExtractor {
             method: "ifrs_textblock",
             accountingStandard: "IFRS"
         )
+    }
+
+    /// 売上総利益と営業総利益が両方あるとき、販管費の直上（OP+SGA に近い行）を GP にする。
+    /// イオン: 営業総利益 − 販管費 ＝ 営業利益。売上総利益 − 販管費は大幅赤字になる。
+    /// 営業利益タグが無いときは切り替えない。OP 抽出器の `GrossProfit − SGA` と矛盾するため。
+    private static func prefersOperatingGrossProfitOverMerchandise(
+        merchandise: ResolvedItem, operating: ResolvedItem, fieldSet: FieldSet
+    ) -> Bool {
+        guard merchandise.tag != nil, operating.tag != nil else { return false }
+        let sga = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
+        let op = resolveItem(fieldSet, tags: Xbrl.operatingProfitDirectTags)
+        guard let gp = merchandise.current, let ogp = operating.current,
+              let sgaCurrent = sga.current, let opCurrent = op.current
+        else { return false }
+        let implied = opCurrent + sgaCurrent
+        return abs(ogp - implied) < abs(gp - implied)
     }
 
     /// 営業収益 − 営業費用 + 販管費。販管費が営業費用を超える年は構成しない。
