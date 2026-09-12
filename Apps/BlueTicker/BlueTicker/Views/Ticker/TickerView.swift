@@ -272,6 +272,7 @@ struct TickerStubView: View {
 }
 
 /// 横スクロールがキャンセルされても、カード幅へスナップし直す。
+/// 通常のフリックは減速中に触らず、ネイティブの paging に任せる。
 private struct PagerSnapper: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -308,24 +309,30 @@ private struct PagerSnapper: UIViewRepresentable {
 
         @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
             switch gesture.state {
-            case .ended, .cancelled, .failed:
+            case .cancelled, .failed:
                 DispatchQueue.main.async { [weak self] in
-                    self?.snapToNearestPage()
+                    self?.snapToNearestPage(interruptDeceleration: true)
+                }
+            case .ended:
+                DispatchQueue.main.async { [weak self] in
+                    self?.snapToNearestPage(interruptDeceleration: false)
                 }
             default:
                 break
             }
         }
 
-        private func snapToNearestPage() {
+        private func snapToNearestPage(interruptDeceleration: Bool) {
             guard let scrollView, !scrollView.isDragging, !scrollView.isTracking else { return }
+            if !interruptDeceleration, scrollView.isDecelerating { return }
             let width = scrollView.bounds.width
             guard width > 0 else { return }
             let maxIndex = max((scrollView.contentSize.width / width).rounded(.down) - 1, 0)
             let index = min(max((scrollView.contentOffset.x / width).rounded(), 0), maxIndex)
             let target = CGPoint(x: index * width, y: scrollView.contentOffset.y)
-            guard abs(scrollView.contentOffset.x - target.x) > 8 else { return }
-            scrollView.setContentOffset(target, animated: true)
+            let delta = abs(scrollView.contentOffset.x - target.x)
+            guard delta > 0.5 else { return }
+            scrollView.setContentOffset(target, animated: delta > 8)
         }
     }
 }
