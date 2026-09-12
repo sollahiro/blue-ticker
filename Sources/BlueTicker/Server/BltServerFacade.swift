@@ -478,10 +478,12 @@ public extension BltServerContext {
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
     /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。
-    /// 保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
+    /// Summary sales が正当に null の会社は LLM 用だけ本表外タグへフォールバックする
+    /// （三菱商事 `Revenue2IFRS`）。保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
     func resolveBusinessBreakdown(docID: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        let consolidatedSales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+        let consolidatedSales = BreakdownFinancialsResolver.breakdownBusinessSalesDenominator(
+            xbrlDir: xbrlDir)
         guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
         else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 

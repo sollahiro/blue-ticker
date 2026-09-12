@@ -186,6 +186,17 @@ import Foundation
         #expect(await client.timesCalled() == 1)
     }
 
+    @Test func mitsubishiBusinessLLMDenominatorFallsBackWhenStatementSalesIsNil() async throws {
+        guard await Self.ensureAvailable("S100YB25") else { return }
+        let dir = Self.xbrlDir("S100YB25")
+        // Summary 正本は null（PL 先頭は netSalesTags 外の Revenue2IFRS「収益」）。
+        #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == nil)
+        // business LLM は収益認識表の分母照合のため 18,915,995 百万円を使う。
+        #expect(
+            BreakdownFinancialsResolver.breakdownBusinessSalesDenominator(xbrlDir: dir)
+                == 18_915_995_000_000)
+    }
+
     @Test func mitsubishiResolvesViaRevenueRecognitionLLM() async throws {
         guard await Self.ensureAvailable("S100YB25") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))

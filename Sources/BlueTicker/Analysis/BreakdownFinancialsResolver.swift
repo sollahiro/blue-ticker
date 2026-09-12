@@ -11,8 +11,26 @@ enum BreakdownFinancialsResolver {
     }
 
     /// business / geography 軸の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
+    /// Summary の `sales` と一致させる。本表に売上相当行が無い会社では nil（三菱商事の `Revenue2IFRS`「収益」は
+    /// `netSalesTags` 外のため Summary は null のまま）。
     static func financialsCanonicalSales(xbrlDir: URL) -> Double? {
         StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
+    }
+
+    /// business 軸の LLM 正規化に使う分母。Summary sales が正当に null でも、本表外タグを含む
+    /// FieldSet から売上相当（`RevenueIFRSSummaryOfBusinessResults` 等）を取る。
+    /// geography と Summary 正本は `financialsCanonicalSales` のまま変えない。
+    static func breakdownBusinessSalesDenominator(xbrlDir: URL) -> Double? {
+        if let sales = financialsCanonicalSales(xbrlDir: xbrlDir), sales != 0 {
+            return sales
+        }
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let sales = IncomeStatementExtractor.extract(
+            fieldSet: fieldSetFromDuration(allTags),
+            accountingStandard: detectAccountingStandard(allTags)
+        ).sales
+        guard let sales, sales != 0 else { return nil }
+        return sales
     }
 
     /// financials の `employees`。正本は breakdown `employees` 軸の分母。
