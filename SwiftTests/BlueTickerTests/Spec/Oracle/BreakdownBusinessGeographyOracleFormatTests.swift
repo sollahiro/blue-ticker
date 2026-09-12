@@ -157,6 +157,36 @@ enum BreakdownSmokeOracleSupport {
         }
     }
 
+    /// `breakdownBusinessSalesDenominator` は statement sales がある smoke 11 社では動かない。
+    /// 8058 は smoke 対象外。フォールバックで xbrl_facts 行が変わらないことを固定する。
+    @Test func smokeBusinessDenominatorMatchesStatementSales() async throws {
+        for (code, docID, name) in BreakdownSmokeOracleSupport.smokeDocs {
+            try await BreakdownSmokeOracleSupport.withSmokeCache(docID) { xbrlDir in
+                let statement = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+                let item = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
+                    xbrlDir: xbrlDir)
+                #expect(
+                    statement != nil && statement != 0,
+                    Comment(rawValue: "\(code) \(name) \(docID): smoke has statement sales"))
+                #expect(
+                    item.value == statement,
+                    Comment(rawValue: "\(code): fallback must not change denom"))
+                #expect(
+                    item.tag == "income_statement.sales",
+                    Comment(rawValue: "\(code): provenance stays income_statement.sales"))
+                let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
+                let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+                let withStatement = BreakdownNormalizer.normalize(
+                    segments, consolidatedSales: statement, labelsByTag: labelsByTag)
+                let withFallback = BreakdownNormalizer.normalize(
+                    segments, consolidatedSales: item.value, labelsByTag: labelsByTag)
+                #expect(
+                    withStatement == withFallback,
+                    Comment(rawValue: "\(code): xbrl_facts snapshot unchanged"))
+            }
+        }
+    }
+
     @Test func smokeBusinessAjinomotoMatchesOracle() async throws {
         try await BreakdownSmokeOracleSupport.withSmokeCache("S100VXJA") {
             try assertMatchesOracle(docID: "S100VXJA", code: "2802", xbrlDir: $0)

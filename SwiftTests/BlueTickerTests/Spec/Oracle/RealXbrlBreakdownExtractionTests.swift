@@ -250,7 +250,8 @@ import Foundation
         guard await Self.ensureAvailable("S100YB25") else { return }
         // 事業グループが列の収益表が改ページで左右に割れる。左（地球環境…食品）と
         // 右（S.L.C. / 電力 / 合計 / 連結金額）を1表に結合し、LLM に半分だけ選ばせない。
-        // 当期は 2025-04-01〜2026-03-31。合計行の連結金額が連結売上 18,915,995 百万円。
+        // 当期は 2025-04-01〜2026-03-31。合計行の連結金額が PL 収益 18,915,995 百万円。
+        // 顧客との契約行の連結金額は 13,948,091 百万円（business 分母の正本）。
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
         #expect(result.method == "html_table")
         #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
@@ -270,7 +271,14 @@ import Foundation
         #expect(current.contains("モビリティ"))
         #expect(current.contains("食品産業"))
         #expect(current.contains("電力ソリューション"))
-        // 合計行（顧客契約＋その他の源泉）。分母と一致する連結金額の内訳。
+        // 顧客との契約行の連結金額（PDF 顧客との契約。business 分母）。
+        #expect(containsAmount(current, "1,851,642"))
+        #expect(containsAmount(current, "1,243,344"))
+        #expect(containsAmount(current, "13,948,091"))
+        #expect(
+            BreakdownExtractor.customerContractConsolidatedYen(tables: result.tables)
+                == 13_948_091_000_000)
+        // 合計行（顧客契約＋その他の源泉）。PL 収益と一致する連結金額の内訳。
         #expect(containsAmount(current, "3,267,295"))
         #expect(containsAmount(current, "3,631,197"))
         #expect(containsAmount(current, "4,083,329"))

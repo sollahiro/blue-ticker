@@ -86,7 +86,8 @@ enum SegmentInfoLLMNormalizer {
     /// segments の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     static func normalize(
-        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
+        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        salesDenominatorTag: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
         // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
@@ -215,7 +216,7 @@ enum SegmentInfoLLMNormalizer {
         let segmentShare = segmentSum / consolidatedSales
 
         var denominator = consolidatedSales
-        var denominatorTag = "income_statement.sales"
+        var denominatorTag = salesDenominatorTag ?? "income_statement.sales"
 
         if !denominatorTolerance.contains(segmentShare) {
             let internalSum = segmentSum + reconcilingSum

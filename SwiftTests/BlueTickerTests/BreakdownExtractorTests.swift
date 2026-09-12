@@ -1797,6 +1797,40 @@ import Foundation
         }
     }
 
+    @Test func customerContractConsolidatedYenPrefersConsolidatedColumnNotTotalRow() {
+        let markdown = """
+        |  | 地球環境エネルギー | 合計 | その他 | 連結金額 |
+        | --- | --- | --- | --- | --- |
+        | 顧客との契約から認識した収益 | 1851642 | 13939592 | 8539 | 13948091 |
+        | 合計 | 3267295 | 18907496 | 8539 | 18915995 |
+        """
+        let tables = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "百万円"),
+        ]
+        #expect(
+            BreakdownExtractor.customerContractConsolidatedYen(tables: tables)
+                == 13_948_091 * Financial.millionYen)
+    }
+
+    @Test func customerContractConsolidatedYenIgnoresProductRowSubtotalWithoutConsolidatedColumn() {
+        let markdown = """
+        |  | 当期 |
+        | --- | --- |
+        | 家電製品（ディスカウントストア） | 92391 |
+        | 顧客との契約から生じる収益 | 2170368 |
+        | その他の収益 | 76390 |
+        | 外部顧客への売上高 | 2246758 |
+        """
+        let tables = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "百万円"),
+        ]
+        #expect(BreakdownExtractor.customerContractConsolidatedYen(tables: tables) == nil)
+    }
+
     /// 三菱商事型: セグメント表が売上総利益のみ → Revenue2 の売上相当へ swap。
     @Test func segmentInfoSwapsToRevenue2WhenSegmentTablesLackSalesEquivalent() throws {
         let xml = """

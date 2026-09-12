@@ -675,6 +675,23 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
+    /// Markdown 表をセルグリッドへ戻す（`gridToMarkdown` の逆）。
+    static func markdownToGrid(_ markdown: String) -> [[String]] {
+        var grid: [[String]] = []
+        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") else { continue }
+            let body = trimmed.dropFirst().dropLast()
+            let cells = body.split(separator: "|", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            if cells.allSatisfy({ $0.allSatisfy({ $0 == "-" || $0 == ":" || $0 == " " }) }) {
+                continue
+            }
+            grid.append(cells)
+        }
+        return grid
+    }
+
     /// 数値セルが1つも無い表か。
     static func gridHasNumericValue(_ grid: [[String]]) -> Bool {
         grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
@@ -793,6 +810,61 @@ enum BreakdownExtractor {
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// 収益認識表の「顧客との契約から認識した収益」行の連結金額（円）。
+    /// 当期表を優先。債権・契約資産行は対象外。合計列（事業グループ小計）ではなく
+    /// 連結金額列があるマトリクスだけを対象にする（パンパシHD型の行小計は拾わない）。
+    static func customerContractConsolidatedYen(tables: [BreakdownTable]) -> Double? {
+        let current = tables.filter { $0.period == "当期" }
+        let ordered = current + tables.filter { $0.period != "当期" }
+        for table in ordered {
+            if let yen = customerContractConsolidatedYen(in: table) { return yen }
+        }
+        return nil
+    }
+
+    private static func customerContractConsolidatedYen(in table: BreakdownTable) -> Double? {
+        let grid = markdownToGrid(table.markdown)
+        guard grid.count >= 2 else { return nil }
+        guard let consolidatedCol = consolidatedAmountColumnIndex(grid[0]) else { return nil }
+
+        let contractMarkers = ["顧客との契約から認識した収益", "顧客との契約から生じる収益"]
+        let exclude = ["債権", "契約資産", "契約負債"]
+        for row in grid.dropFirst() {
+            let label = row.first ?? ""
+            guard contractMarkers.contains(where: { label.contains($0) }) else { continue }
+            if exclude.contains(where: { label.contains($0) }) { continue }
+            guard consolidatedCol < row.count,
+                  let raw = XBRLUtils.parseHtmlNumber(row[consolidatedCol]), raw != 0
+            else { continue }
+            return raw * yenMultiplier(for: table)
+        }
+        return nil
+    }
+
+    private static func consolidatedAmountColumnIndex(_ header: [String]) -> Int? {
+        let preferences = ["連結金額", "連結合計", "連結計"]
+        let compact = header.map {
+            $0.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+        }
+        for pref in preferences {
+            if let idx = compact.firstIndex(of: pref) { return idx }
+        }
+        return nil
+    }
+
+    private static func yenMultiplier(for table: BreakdownTable) -> Double {
+        let caption = table.unitCaption ?? ""
+        let haystack = caption + table.markdown
+        if haystack.contains("百万円") { return Financial.millionYen }
+        if haystack.contains("千円") { return 1_000 }
+        if haystack.contains("単位：円") || haystack.contains("単位:円")
+            || haystack.contains("（単位：円）") || haystack.contains("(単位：円)")
+        {
+            return 1
+        }
+        return Financial.millionYen
     }
 
     /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。

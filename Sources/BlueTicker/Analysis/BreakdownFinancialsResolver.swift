@@ -17,20 +17,33 @@ enum BreakdownFinancialsResolver {
         StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
     }
 
-    /// business 軸の LLM 正規化に使う分母。Summary sales が正当に null でも、本表外タグを含む
-    /// FieldSet から売上相当（`RevenueIFRSSummaryOfBusinessResults` 等）を取る。
-    /// geography と Summary 正本は `financialsCanonicalSales` のまま変えない。
+    /// business 軸の売上分母。`breakdownBusinessSalesDenominatorItem` の値だけ。
     static func breakdownBusinessSalesDenominator(xbrlDir: URL) -> Double? {
+        breakdownBusinessSalesDenominatorItem(xbrlDir: xbrlDir).value
+    }
+
+    /// business 軸の分母と由来タグ。Summary sales があれば `income_statement.sales`。
+    /// 無ければ収益認識表の「顧客との契約」連結金額（`llm_table_subtotal`）、さらに無ければ
+    /// 未マスク FieldSet の売上相当タグ（`RevenueIFRSSummaryOfBusinessResults` 等）。
+    /// 偽の `income_statement.sales` は出さない。geography / Summary は変えない。
+    /// `tables` を渡すと `extractSegmentInfo` の再走査を避ける（ingest 経路）。
+    static func breakdownBusinessSalesDenominatorItem(
+        xbrlDir: URL, tables: [BreakdownTable]? = nil
+    ) -> CanonicalValue {
         if let sales = financialsCanonicalSales(xbrlDir: xbrlDir), sales != 0 {
-            return sales
+            return CanonicalValue(value: sales, tag: "income_statement.sales")
+        }
+        let rrTables = tables ?? BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir).tables
+        if let yen = BreakdownExtractor.customerContractConsolidatedYen(tables: rrTables) {
+            return CanonicalValue(value: yen, tag: "llm_table_subtotal")
         }
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let sales = IncomeStatementExtractor.extract(
-            fieldSet: fieldSetFromDuration(allTags),
-            accountingStandard: detectAccountingStandard(allTags)
-        ).sales
-        guard let sales, sales != 0 else { return nil }
-        return sales
+        let salesItem = resolveItemPreferCurrent(
+            fieldSetFromDuration(allTags), tags: Xbrl.netSalesTags)
+        guard let sales = salesItem.current, sales != 0 else {
+            return CanonicalValue(value: nil, tag: nil)
+        }
+        return CanonicalValue(value: sales, tag: salesItem.tag)
     }
 
     /// financials の `employees`。正本は breakdown `employees` 軸の分母。

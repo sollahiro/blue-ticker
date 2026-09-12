@@ -7,9 +7,9 @@ import Testing
     @Test func htmlExtractorSharedPathBumpsBusinessWithGeography() throws {
         let businessN = try #require(breakdownCacheVersionNumber(businessBreakdownCacheVersion))
         let geographyN = try #require(breakdownCacheVersionNumber(geographyBreakdownCacheVersion))
-        #expect(businessN == 12)
+        #expect(businessN == 13)
         #expect(geographyN == 12)
-        #expect(try #require(breakdownCacheVersionNumber("breakdown-business-v11")) < businessN)
+        #expect(try #require(breakdownCacheVersionNumber("breakdown-business-v12")) < businessN)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v11")) < geographyN)
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v1")

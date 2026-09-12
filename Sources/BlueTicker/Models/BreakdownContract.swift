@@ -70,8 +70,10 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす
 /// （`allTablesFromHtml` / `keywordTablesFromHtml` の共有決定論経路。geography と同じ変更）。
 /// v12: うち列ドロップを geography 軸＋地域親/兄弟に限定（うち輸出高等の事業指標列を残す）。
-/// v11 のままでは決定論変更後も clean 行が skip される。
-public let businessBreakdownCacheVersion = "breakdown-business-v12"
+/// v13: statement sales が null のとき business 分母を収益認識の顧客契約連結→未マスク売上相当へ
+/// フォールバックし、由来タグを偽の `income_statement.sales` にしない。
+/// v12 のままでは決定論変更後も clean 行が skip される。
+public let businessBreakdownCacheVersion = "breakdown-business-v13"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v11 のままでは決定論変更後も clean 行が skip される。
