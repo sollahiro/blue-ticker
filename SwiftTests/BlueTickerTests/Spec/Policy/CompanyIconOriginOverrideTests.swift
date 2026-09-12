@@ -83,6 +83,21 @@ import Testing
         #expect(CompanyIconOriginOverride.manualSources["6150"] == .homepageOrigin("https://www.takeda-mc.co.jp"))
         #expect(CompanyIconOriginOverride.manualSources["7888"] == .homepageOrigin("https://www.sankogosei.co.jp"))
         #expect(
+            CompanyIconOriginOverride.manualSources["8473"]
+                == .imageURL("https://www.sbisec.co.jp/apple-touch-icon.png"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["7177"]
+                == .imageURL("https://group.gmo/favicon_144x144.png"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["8630"]
+                == .imageURL("https://www.sompo-hd.com/sompohd/common/images/apple-touch-icon.png"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["8616"]
+                == .imageURL("https://www.tokaitokyo-fh.jp/asset/img/common/apple-touch-icon.png"))
+        #expect(
+            CompanyIconOriginOverride.manualSources["2653"]
+                == .imageURL("https://www.aeon-kyushu.info/apple-touch-icon-precomposed.png"))
+        #expect(
             Set(CompanyIconOriginOverride.manualSources.keys)
                 .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
         #expect(
@@ -163,5 +178,32 @@ import Testing
         #expect(
             !companyIconShouldRefresh(
                 code: "581A", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
+    }
+
+    @Test func lowResHoldingsIconsRefreshUntilManualImageURLIsStored() {
+        let pinned: [(String, String, String)] = [
+            ("8473", "https://www.sbigroup.co.jp", "https://www.sbisec.co.jp/apple-touch-icon.png"),
+            ("7177", "https://www.gmofh.com", "https://group.gmo/favicon_144x144.png"),
+            ("8630", "https://www.sompo-hd.com",
+                "https://www.sompo-hd.com/sompohd/common/images/apple-touch-icon.png"),
+            ("8616", "https://www.tokaitokyo-fh.jp",
+                "https://www.tokaitokyo-fh.jp/asset/img/common/apple-touch-icon.png"),
+            ("2653", "https://www.aeon-kyushu.info",
+                "https://www.aeon-kyushu.info/apple-touch-icon-precomposed.png"),
+        ]
+        for (code, oldOrigin, png) in pinned {
+            #expect(
+                companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsCacheVersion, sourceURL: oldOrigin),
+                "code=\(code)")
+            #expect(
+                companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsManualCacheVersion, sourceURL: oldOrigin),
+                "code=\(code)")
+            #expect(
+                !companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsManualCacheVersion, sourceURL: png),
+                "code=\(code)")
+        }
     }
 }

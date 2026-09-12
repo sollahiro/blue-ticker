@@ -58,6 +58,11 @@ enum CompanyIconOriginOverride {
     /// 8887: シーラ HD。`/favicon.ico` が 16x16 1bit（198B）で iOS が読めない。WP 192px PNG を直指定。
     /// 6150: タケダ機械。公告掲載方法が日本経済新聞のみ（`not_applicable`）。
     /// 7888: 三光合成。電子公告と書くが公告行に URL が無い（IR の公式 HP を使う）。
+    /// 8473: SBI HD。持株会社トップの favicon は 16×16。SBI 証券 `sbisec.co.jp` の 180px apple-touch。
+    /// 7177: GMOFG。持株会社トップの favicon は 16×16。GMO グループ `group.gmo` の 144px PNG。
+    /// 8630: SOMPO HD。電子公告 origin の favicon は 16×16 で潰れる。公式 apple-touch 152px。
+    /// 8616: 東海東京 FG。同上、公式 apple-touch 144px。
+    /// 2653: イオン九州。電子公告 URL が取れず行が無い。公式 apple-touch-precomposed 180px。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -66,6 +71,11 @@ enum CompanyIconOriginOverride {
             "https://syla-holdings.jp/wp-content/uploads/2025/05/cropped-favicon-192x192.png"),
         "6150": .homepageOrigin("https://www.takeda-mc.co.jp"),
         "7888": .homepageOrigin("https://www.sankogosei.co.jp"),
+        "8473": .imageURL("https://www.sbisec.co.jp/apple-touch-icon.png"),
+        "7177": .imageURL("https://group.gmo/favicon_144x144.png"),
+        "8630": .imageURL("https://www.sompo-hd.com/sompohd/common/images/apple-touch-icon.png"),
+        "8616": .imageURL("https://www.tokaitokyo-fh.jp/asset/img/common/apple-touch-icon.png"),
+        "2653": .imageURL("https://www.aeon-kyushu.info/apple-touch-icon-precomposed.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
