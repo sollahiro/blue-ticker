@@ -171,16 +171,19 @@ PublicDoc/
 US-GAAP → USGAAPHtml.extractGrossProfit の HTML パース（§5 参照）
 
 J-GAAP / IFRS:
+  0. 保険 filing（`isInsuranceFiling`）は全年 null（#360）
   1. 直接法: Xbrl.grossProfitDirectTags を検索
      - GrossProfitIFRS（IFRS連結）
      - GrossProfit（J-GAAP連結）
      - GrossProfitOnCompletedConstructionContractsCNS（建設業）
-     - OperatingGrossProfit（倉庫・運輸等 J-GAAP 営業総利益）
-  2. 計算法: 売上高タグ − 売上原価タグ（直接法で取得できなかった場合）
+  2. 営業総利益: Xbrl.operatingGrossProfitDirectTags（倉庫・運輸等）
+  3. 営業収益 − 営業費用 + 販管費: 販管費が営業費用の内数であるクレジット・割賦等
+     （`OperatingRevenue1` / `OperatingExpenses` / `sgaDirectTags`。銀行部品より先）
+  4. 銀行業: Xbrl.businessGrossProfitComponents（収益/費用の符号付き合算）
+  5. 計算法: 売上高タグ − 売上原価タグ
      - Xbrl.grossProfitSalesTags / Xbrl.grossProfitCostsTags 参照
-  3. 銀行業: Xbrl.businessGrossProfitComponents（収益/費用の符号付き合算）
-  4. IFRS PL TextBlock フォールバック（連結PLがTextBlockのみの場合）
-  5. 連結値がなければ個別値にフォールバック
+  6. IFRS PL TextBlock フォールバック（連結PLがTextBlockのみの場合）
+  7. 連結値がなければ個別値にフォールバック
 ```
 
 ### 4.4 有利子負債（`IBDExtractor`）

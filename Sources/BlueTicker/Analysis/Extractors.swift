@@ -277,8 +277,8 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 保険は粗利益を全年 null にする。direct / 業務粗利益 / 営業総利益 / TextBlock /
-        // 売上−原価（原価0）のいずれも採用しない。
+        // 保険は粗利益を全年 null にする。direct / 営業収益−営業費用+販管費 / 業務粗利益 /
+        // 営業総利益 / TextBlock / 売上−原価（原価0）のいずれも採用しない。
         if Xbrl.isInsuranceFiling(fieldSet) {
             return GrossProfitResult(
                 grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
@@ -298,12 +298,7 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 銀行業: 連結業務粗利益を構成要素から積み上げ
-        if let bankGP = extractBankBusinessGrossProfit(fieldSet: fieldSet, accountingStandard: accountingStandard) {
-            return bankGP
-        }
-
-        // 営業総利益（倉庫・運輸等）
+        // 営業総利益（倉庫・運輸等）。開示行を構成値・銀行部品より先に取る。
         let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
         if opGpItem.tag != nil {
             return GrossProfitResult(
@@ -313,6 +308,19 @@ enum GrossProfitExtractor {
                 method: "operating_gross_profit",
                 accountingStandard: accountingStandard
             )
+        }
+
+        // 営業収益 − 営業費用 + 販管費。販管費が営業費用の内数であるクレジット・割賦等向け。
+        // 役務タグ1本で銀行の連結業務粗利益に落ちる誤爆（イオンFS）を、本表形状が揃っているときに避ける。
+        if let opexGP = extractOperatingRevenueMinusOpexPlusSGA(
+            fieldSet: fieldSet, accountingStandard: accountingStandard)
+        {
+            return opexGP
+        }
+
+        // 銀行業: 連結業務粗利益を構成要素から積み上げ
+        if let bankGP = extractBankBusinessGrossProfit(fieldSet: fieldSet, accountingStandard: accountingStandard) {
+            return bankGP
         }
 
         let salesItem = resolveItem(fieldSet, tags: Xbrl.grossProfitSalesTags)
@@ -360,6 +368,35 @@ enum GrossProfitExtractor {
             method: "ifrs_textblock",
             accountingStandard: "IFRS"
         )
+    }
+
+    /// 営業収益 − 営業費用 + 販管費。販管費が営業費用を超える年は構成しない。
+    private static func extractOperatingRevenueMinusOpexPlusSGA(
+        fieldSet: FieldSet, accountingStandard: String
+    ) -> GrossProfitResult? {
+        let revenue = resolveItem(fieldSet, tags: Xbrl.operatingRevenueForOpexSgaGrossProfitTags)
+        let opex = resolveItem(fieldSet, tags: Xbrl.operatingExpenseTotalTags)
+        let sga = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
+        guard revenue.tag != nil, opex.tag != nil, sga.tag != nil else { return nil }
+
+        let current = constructedGrossProfit(
+            revenue: revenue.current, opex: opex.current, sga: sga.current)
+        let prior = constructedGrossProfit(
+            revenue: revenue.prior, opex: opex.prior, sga: sga.prior)
+        guard current != nil || prior != nil else { return nil }
+
+        return GrossProfitResult(
+            grossProfit: current,
+            grossProfitPrior: prior,
+            grossProfitLabel: "販管費控除前営業利益",
+            method: "operating_revenue_minus_opex_plus_sga",
+            accountingStandard: accountingStandard
+        )
+    }
+
+    private static func constructedGrossProfit(revenue: Double?, opex: Double?, sga: Double?) -> Double? {
+        guard let revenue, let opex, let sga, sga <= opex else { return nil }
+        return revenue - opex + sga
     }
 
     private static func extractBankBusinessGrossProfit(fieldSet: FieldSet, accountingStandard: String) -> GrossProfitResult? {
