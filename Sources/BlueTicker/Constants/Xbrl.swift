@@ -89,7 +89,7 @@ enum Xbrl {
         "OperatingIncomeINS",
     ]
 
-    /// FieldSet に保険売上タグがあるか。営業利益フォールバック抑止と粗利益除外の判定に使う。
+    /// FieldSet に保険売上タグがあるか。営業利益フォールバック抑止と粗利益全年 null の判定に使う。
     static func isInsuranceFiling(_ fieldSet: FieldSet) -> Bool {
         insuranceSalesTags.contains { tag in
             guard let fv = fieldSet[tag] else { return false }

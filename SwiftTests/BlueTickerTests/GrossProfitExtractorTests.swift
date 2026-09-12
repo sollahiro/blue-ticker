@@ -142,6 +142,23 @@ import Foundation
         }
     }
 
+    @Test func testInsuranceDirectGrossProfitTagIsStillNull() {
+        // 保険 filing では GrossProfitIFRS があっても粗利益は出さない
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:InsuranceRevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">7693560000000</jpifrs_cor:InsuranceRevenueIFRS>
+            <jpifrs_cor:GrossProfitIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">200000000000</jpifrs_cor:GrossProfitIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+        }
+    }
+
     @Test func testOperatingIncomeINSDoesNotComputeGrossProfit() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingIncomeINS contextRef="CurrentYearDuration"

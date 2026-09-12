@@ -277,6 +277,15 @@ enum GrossProfitExtractor {
             )
         }
 
+        // 保険は粗利益を全年 null にする。direct / 業務粗利益 / 営業総利益 / TextBlock /
+        // 売上−原価（原価0）のいずれも採用しない。
+        if Xbrl.isInsuranceFiling(fieldSet) {
+            return GrossProfitResult(
+                grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
+                method: "not_found", accountingStandard: accountingStandard
+            )
+        }
+
         // 直接法: GrossProfit タグ
         let directItem = resolveItem(fieldSet, tags: Xbrl.grossProfitDirectTags)
         if directItem.tag != nil {
