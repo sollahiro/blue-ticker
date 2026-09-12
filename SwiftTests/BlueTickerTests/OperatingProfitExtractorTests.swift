@@ -118,6 +118,64 @@ import Foundation
 
     // MARK: - フォールバック
 
+    @Test func testInsuranceJgaapDoesNotFallbackToOrdinaryIncomeAndKeepsSGA() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingIncomeINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">5625758000000</jppfs_cor:OperatingIncomeINS>
+            <jppfs_cor:OrdinaryIncome contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">271946000000</jppfs_cor:OrdinaryIncome>
+            <jppfs_cor:ProjectExpensesINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">413370000000</jppfs_cor:ProjectExpensesINS>
+            <jppfs_cor:ProjectExpensesINS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">400000000000</jppfs_cor:ProjectExpensesINS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.operatingProfit == nil)
+            #expect(result.operatingProfitPrior == nil)
+            #expect(result.sga == 413_370_000_000)
+            #expect(result.sgaPrior == 400_000_000_000)
+        }
+    }
+
+    @Test func testInsuranceJgaapPicksSalesAndAdministrativeExpenses() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:OperatingIncomeINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">8440114000000</jppfs_cor:OperatingIncomeINS>
+            <jppfs_cor:OrdinaryIncome contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1460007000000</jppfs_cor:OrdinaryIncome>
+            <jppfs_cor:SalesAndAdministrativeExpensesOEINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1401394000000</jppfs_cor:SalesAndAdministrativeExpensesOEINS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.operatingProfit == nil)
+            #expect(result.sga == 1_401_394_000_000)
+        }
+    }
+
+    @Test func testInsuranceIfrsDoesNotComputeOperatingProfitAndKeepsGA() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:InsuranceRevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">7693560000000</jpifrs_cor:InsuranceRevenueIFRS>
+            <jpifrs_cor:GeneralAndAdministrativeExpensesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">723908000000</jpifrs_cor:GeneralAndAdministrativeExpensesIFRS>
+            <jpifrs_cor:GeneralAndAdministrativeExpensesIFRS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">700000000000</jpifrs_cor:GeneralAndAdministrativeExpensesIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.operatingProfit == nil)
+            #expect(result.sga == 723_908_000_000)
+            #expect(result.sgaPrior == 700_000_000_000)
+        }
+    }
+
     @Test func testOrdinaryIncomeFallback() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults contextRef="CurrentYearDuration"

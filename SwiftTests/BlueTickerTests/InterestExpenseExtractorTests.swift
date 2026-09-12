@@ -32,6 +32,22 @@ import Foundation
 
     // MARK: - J-GAAP
 
+    @Test func testDirectJgaapInsuranceInterestExpensesOEINS() {
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:InterestExpensesOEINS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">31103000000</jppfs_cor:InterestExpensesOEINS>
+            <jppfs_cor:InterestExpensesOEINS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">30000000000</jppfs_cor:InterestExpensesOEINS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "direct")
+            #expect(result.accountingStandard == "J-GAAP")
+            #expect(result.current == 31_103_000_000)
+            #expect(result.prior == 30_000_000_000)
+        }
+    }
+
     @Test func testDirectJgaap() {
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:InterestExpensesNOE contextRef="CurrentYearDuration"

@@ -114,7 +114,8 @@ enum StatementFinancialsResolver {
             sales = netRev
             salesLabel = "純収益"
         }
-        if operatingProfit == nil, let bp = nr.businessProfit {
+        // 保険の営業利益は全年 null。純収益／事業利益フォールバックで埋めない。
+        if !Xbrl.isInsuranceFiling(durationFS), operatingProfit == nil, let bp = nr.businessProfit {
             operatingProfit = bp
             operatingProfitLabel = "事業利益"
         }

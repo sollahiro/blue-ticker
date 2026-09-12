@@ -51,6 +51,7 @@ enum Xbrl {
     static let ordinaryRevenueTags: [String] = [
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
+        "OperatingIncomeINS",  // 保険業の経常収益（かんぽ S100YD29・第一 S100VZZW・損保 J-GAAP）
     ]
 
     static let netSalesTags: [String] = [
@@ -76,9 +77,25 @@ enum Xbrl {
         "OperatingRevenueRevenue2IFRS",
         "OperatingRevenueSEC",
         "InsuranceRevenueIFRS",  // 損保等（東京海上HD S100YLS8）
+        "OperatingIncomeINS",  // 保険業の経常収益（かんぽ S100YD29・第一 S100VZZW）
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
     ]
+
+    /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に
+    /// これらのタグがある filing を保険とみなす。
+    static let insuranceSalesTags: [String] = [
+        "InsuranceRevenueIFRS",
+        "OperatingIncomeINS",
+    ]
+
+    /// FieldSet に保険売上タグがあるか。営業利益フォールバック抑止と粗利益全年 null の判定に使う。
+    static func isInsuranceFiling(_ fieldSet: FieldSet) -> Bool {
+        insuranceSalesTags.contains { tag in
+            guard let fv = fieldSet[tag] else { return false }
+            return fv.current != nil || fv.prior != nil
+        }
+    }
 
     // MARK: - 当期純利益タグ
 
@@ -199,6 +216,13 @@ enum Xbrl {
     static let sgaSellingIFRSTags: [String] = ["SellingExpensesIFRS"]
     static let sgaGaIFRSTags: [String] = ["GeneralAndAdministrativeExpensesIFRS"]
 
+    /// 保険の販管費相当。損保 J-GAAP は営業費及び一般管理費、生保 J-GAAP は事業費。
+    /// IFRS の一般管理費は `sgaGaIFRSTags`（結合タグが無いときの合算経路）。
+    static let insuranceSgaTags: [String] = [
+        "SalesAndAdministrativeExpensesOEINS",
+        "ProjectExpensesINS",
+    ]
+
     /// `sga_expense_breakdown` note_type の合計行タグ（`is_total`）。
     /// 味の素型は販売費・一般管理費を分けて開示するため両方を合計候補にする。
     static let sgaExpenseBreakdownTotalTags: Set<String> = Set(
@@ -244,11 +268,14 @@ enum Xbrl {
     ]
 
     // 売上総利益の計算法（売上 − 売上原価）の売上側タグ。
-    // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）を
-    // 除外して導出する。独立手書きリストを持たないことで「片側だけタグが腐り not_found に落ちる」
-    // 事故を防ぎ（issue #24）、かつ売上原価を持たない非銀行金融（保険等）が
-    // 「GP＝経常収益（原価0扱い）」という無意味な値を誤算出するのを防ぐ。
-    static let grossProfitSalesTags: [String] = netSalesTags.filter { !ordinaryRevenueTags.contains($0) }
+    // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）と
+    // 保険売上タグ（insuranceSalesTags）を除外して導出する。独立手書きリストを持たないことで
+    // 「片側だけタグが腐り not_found に落ちる」事故を防ぎ（issue #24）、かつ売上原価を持たない
+    // 金融（銀行の経常収益・保険の保険収益）が「GP＝売上（原価0扱い）」という無意味な値を
+    // 誤算出するのを防ぐ。
+    static let grossProfitSalesTags: [String] = netSalesTags.filter {
+        !ordinaryRevenueTags.contains($0) && !insuranceSalesTags.contains($0)
+    }
 
     static let grossProfitCostsTags: [String] = [
         "CostOfSalesIFRS",
@@ -534,7 +561,10 @@ enum Xbrl {
 
     // MARK: - 支払利息タグ
 
-    static let interestExpenseJGAAPTags: [String] = ["InterestExpensesNOE"]
+    static let interestExpenseJGAAPTags: [String] = [
+        "InterestExpensesNOE",
+        "InterestExpensesOEINS",  // 保険業の支払利息（かんぽ・第一・損保 J-GAAP）
+    ]
 
     static let interestExpenseIFRSTags: [String] = [
         "InterestExpensesIFRS",
