@@ -28,6 +28,13 @@ import Testing
         #expect(FaviconFetcher.sniffImageContentType(jpegBytes) == "image/jpeg")
     }
 
+    @Test func sniffsWebPFromRIFFHeader() {
+        let webpBytes = Data([
+            0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+        ])
+        #expect(FaviconFetcher.sniffImageContentType(webpBytes) == "image/webp")
+    }
+
     @Test func rejectsHTMLFallbackPage() {
         // 実データ検証: azplan.co.jp / kawasaki-sk.co.jp は /favicon.ico が200だが実体はHTML
         // （SPAフォールバック等）。画像として誤認しないことを確認する。
