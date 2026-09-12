@@ -827,7 +827,7 @@ enum BreakdownExtractor {
     private static func customerContractConsolidatedYen(in table: BreakdownTable) -> Double? {
         let grid = markdownToGrid(table.markdown)
         guard grid.count >= 2 else { return nil }
-        guard let consolidatedCol = consolidatedAmountColumnIndex(grid[0]) else { return nil }
+        guard let consolidatedCol = consolidatedAmountColumnIndex(in: grid) else { return nil }
 
         let contractMarkers = ["顧客との契約から認識した収益", "顧客との契約から生じる収益"]
         let exclude = ["債権", "契約資産", "契約負債"]
@@ -843,27 +843,67 @@ enum BreakdownExtractor {
         return nil
     }
 
-    private static func consolidatedAmountColumnIndex(_ header: [String]) -> Int? {
-        let preferences = ["連結金額", "連結合計", "連結計"]
-        let compact = header.map {
-            $0.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+    /// 数値の無い先頭行を見出しとみなす。改ページ結合後の2段見出し
+    /// （期間行の下に「連結金額」）も拾う。
+    private static func headerRows(in grid: [[String]]) -> [[String]] {
+        var rows: [[String]] = []
+        for row in grid {
+            if row.contains(where: { XBRLUtils.parseHtmlNumber($0) != nil }) { break }
+            rows.append(row)
         }
-        for pref in preferences {
-            if let idx = compact.firstIndex(of: pref) { return idx }
-        }
-        return nil
+        return rows
     }
 
-    private static func yenMultiplier(for table: BreakdownTable) -> Double {
-        let caption = table.unitCaption ?? ""
-        let haystack = caption + table.markdown
-        if haystack.contains("百万円") { return Financial.millionYen }
-        if haystack.contains("千円") { return 1_000 }
-        if haystack.contains("単位：円") || haystack.contains("単位:円")
-            || haystack.contains("（単位：円）") || haystack.contains("(単位：円)")
-        {
-            return 1
+    private static func compactHeaderCell(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+    }
+
+    /// 見出し行全体から連結金額列を探す。前期/当期が並ぶ比較表では当期列を優先する。
+    private static func consolidatedAmountColumnIndex(in grid: [[String]]) -> Int? {
+        let headers = headerRows(in: grid)
+        guard !headers.isEmpty else { return nil }
+        let preferences = ["連結金額", "連結合計", "連結計"]
+        var matches: [(col: Int, pref: Int)] = []
+        for row in headers {
+            let compact = row.map(compactHeaderCell)
+            for (prefIndex, pref) in preferences.enumerated() {
+                for (col, cell) in compact.enumerated() where cell == pref {
+                    matches.append((col, prefIndex))
+                }
+            }
         }
+        guard !matches.isEmpty else { return nil }
+        let bestPref = matches.map(\.pref).min()!
+        let preferred = matches.filter { $0.pref == bestPref }
+        let current = preferred.filter { columnLooksLikeCurrentPeriod(headers, column: $0.col) }
+        if let last = current.last { return last.col }
+        return preferred.last?.col
+    }
+
+    private static func columnLooksLikeCurrentPeriod(_ headers: [[String]], column: Int) -> Bool {
+        for row in headers {
+            let cell = column < row.count ? row[column] : ""
+            if priorPeriodKeywords.contains(where: cell.contains) { return false }
+            if currentPeriodKeywords.contains(where: cell.contains) { return true }
+        }
+        return false
+    }
+
+    /// `unitCaption`（`parseUnitCaption` の語）を優先し、無ければ表内の単位表記。
+    /// `十億円` / `億円` を百万円扱いにしない（部分一致順にも依存させない）。
+    private static func yenMultiplier(for table: BreakdownTable) -> Double {
+        let token = table.unitCaption.flatMap(parseUnitCaption)
+            ?? parseUnitCaption(table.markdown)
+        return yenScale(forUnitToken: token)
+    }
+
+    private static func yenScale(forUnitToken token: String?) -> Double {
+        guard let token else { return Financial.millionYen }
+        if token.contains("十億円") { return 10_000_000_000 }
+        if token.contains("億円") { return 100_000_000 }
+        if token.contains("百万円") { return Financial.millionYen }
+        if token.contains("千円") { return 1_000 }
+        if token == "円" { return 1 }
         return Financial.millionYen
     }
 

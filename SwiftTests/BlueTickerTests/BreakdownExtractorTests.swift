@@ -538,6 +538,8 @@ import Foundation
         #expect(BreakdownExtractor.parseUnitCaption("（単位：百万円）") == "百万円")
         #expect(BreakdownExtractor.parseUnitCaption("(単位：千円)") == "千円")
         #expect(BreakdownExtractor.parseUnitCaption("（単位：円）") == "円")
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：億円）") == "億円")
+        #expect(BreakdownExtractor.parseUnitCaption("（単位：十億円）") == "十億円")
         #expect(BreakdownExtractor.parseUnitCaption("(Millions of yen)") == "百万円")
         #expect(BreakdownExtractor.parseUnitCaption("(Thousands of yen)") == "千円")
         #expect(BreakdownExtractor.parseUnitCaption("日本 100") == nil)
@@ -1829,6 +1831,61 @@ import Foundation
                 markdown: markdown, period: "当期", unitCaption: "百万円"),
         ]
         #expect(BreakdownExtractor.customerContractConsolidatedYen(tables: tables) == nil)
+    }
+
+    @Test func customerContractConsolidatedYenScalesOkuAndJuOkuCaptions() {
+        let markdown = """
+        |  | 地球環境エネルギー | 連結金額 |
+        | --- | --- | --- |
+        | 顧客との契約から認識した収益 | 100 | 200 |
+        """
+        let oku = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "億円"),
+        ]
+        let juOku = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "十億円"),
+        ]
+        #expect(BreakdownExtractor.customerContractConsolidatedYen(tables: oku) == 200 * 100_000_000.0)
+        #expect(
+            BreakdownExtractor.customerContractConsolidatedYen(tables: juOku)
+                == 200 * 10_000_000_000.0)
+    }
+
+    @Test func customerContractConsolidatedYenCaptionBeatsMillionYenInMarkdown() {
+        let markdown = """
+        |  | 連結金額 |
+        | --- | --- |
+        | 顧客との契約から認識した収益 | 200 |
+        | 注記 | 百万円は参考 |
+        """
+        let tables = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "億円"),
+        ]
+        #expect(BreakdownExtractor.customerContractConsolidatedYen(tables: tables) == 200 * 100_000_000.0)
+    }
+
+    @Test func customerContractConsolidatedYenReadsConsolidatedColumnFromSecondHeaderRow() {
+        let markdown = """
+        |  | 前連結会計年度 | 前連結会計年度 | 当連結会計年度 | 当連結会計年度 |
+        | --- | --- | --- | --- | --- |
+        |  | 地球環境エネルギー | 連結金額 | 地球環境エネルギー | 連結金額 |
+        | 顧客との契約から認識した収益 | 100 | 200 | 150 | 300 |
+        | 合計 | 110 | 220 | 160 | 320 |
+        """
+        let tables = [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: markdown, period: "当期", unitCaption: "百万円"),
+        ]
+        #expect(
+            BreakdownExtractor.customerContractConsolidatedYen(tables: tables)
+                == 300 * Financial.millionYen)
     }
 
     /// 三菱商事型: セグメント表が売上総利益のみ → Revenue2 の売上相当へ swap。
