@@ -176,7 +176,9 @@ J-GAAP / IFRS:
      - GrossProfitIFRS（IFRS連結）
      - GrossProfit（J-GAAP連結）
      - GrossProfitOnCompletedConstructionContractsCNS（建設業）
-  2. 営業総利益: Xbrl.operatingGrossProfitDirectTags（倉庫・運輸等）
+     - 売上総利益と営業総利益が両方あるとき（イオン・セブン＆アイ）は OP+SGA に近い行を採用。
+       販管費の直上は営業総利益で、売上総利益を使うと事業利益が大幅赤字になる
+  2. 営業総利益: Xbrl.operatingGrossProfitDirectTags（倉庫・運輸等。上記の両立法が無いとき）
   3. 営業収益 − 営業費用 + 販管費: 販管費が営業費用の内数であるクレジット・割賦等
      （`OperatingRevenue1` / `OperatingExpenses` / `sgaDirectTags`。銀行部品より先）
   4. 銀行業: Xbrl.businessGrossProfitComponents（収益/費用の符号付き合算）

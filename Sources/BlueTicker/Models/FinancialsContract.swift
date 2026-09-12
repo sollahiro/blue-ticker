@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v19"
+public let companyFinancialsCacheVersion = "fin-v20"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -84,7 +84,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
-// | gross_profit, sga | statement（income_statement 行）。GP は開示行が無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益 | StatementFinancialsResolver（#5c） | done |
+// | gross_profit, sga | statement（income_statement 行）。売上総利益と営業総利益が両方あるときは OP+SGA に近い行。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益 | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |

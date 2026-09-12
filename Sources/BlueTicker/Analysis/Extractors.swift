@@ -286,8 +286,21 @@ enum GrossProfitExtractor {
             )
         }
 
-        // 直接法: GrossProfit タグ
+        // 直接法: GrossProfit タグ。売上総利益と営業総利益が両方ある小売（イオン・セブン＆アイ）は
+        // 販管費の直上が営業総利益なので、OP+SGA に近い方を採用する。
         let directItem = resolveItem(fieldSet, tags: Xbrl.grossProfitDirectTags)
+        let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
+        if prefersOperatingGrossProfitOverMerchandise(
+            merchandise: directItem, operating: opGpItem, fieldSet: fieldSet)
+        {
+            return GrossProfitResult(
+                grossProfit: opGpItem.current,
+                grossProfitPrior: opGpItem.prior,
+                grossProfitLabel: "営業総利益",
+                method: "operating_gross_profit",
+                accountingStandard: accountingStandard
+            )
+        }
         if directItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: directItem.current,
@@ -299,7 +312,6 @@ enum GrossProfitExtractor {
         }
 
         // 営業総利益（倉庫・運輸等）。開示行を構成値・銀行部品より先に取る。
-        let opGpItem = resolveItem(fieldSet, tags: Xbrl.operatingGrossProfitDirectTags)
         if opGpItem.tag != nil {
             return GrossProfitResult(
                 grossProfit: opGpItem.current,
@@ -368,6 +380,26 @@ enum GrossProfitExtractor {
             method: "ifrs_textblock",
             accountingStandard: "IFRS"
         )
+    }
+
+    /// 売上総利益と営業総利益が両方あるとき、販管費の直上（OP+SGA に近い行）を採用する。
+    /// イオン `S100Y5VH`: 売上総利益 2,649,178 ≠ 営業利益+販管費、営業総利益 3,910,376 ≈ 270,459+3,639,916。
+    private static func prefersOperatingGrossProfitOverMerchandise(
+        merchandise: ResolvedItem, operating: ResolvedItem, fieldSet: FieldSet
+    ) -> Bool {
+        guard merchandise.tag != nil, operating.tag != nil else { return false }
+        let sga = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
+        let op = resolveItem(fieldSet, tags: Xbrl.operatingProfitDirectTags)
+        if let gp = merchandise.current, let ogp = operating.current,
+           let sgaCurrent = sga.current, let opCurrent = op.current
+        {
+            let implied = opCurrent + sgaCurrent
+            return abs(ogp - implied) < abs(gp - implied)
+        }
+        if let gp = merchandise.current, let sgaCurrent = sga.current, operating.current != nil {
+            return sgaCurrent > gp
+        }
+        return false
     }
 
     /// 営業収益 − 営業費用 + 販管費。販管費が営業費用を超える年は構成しない。
