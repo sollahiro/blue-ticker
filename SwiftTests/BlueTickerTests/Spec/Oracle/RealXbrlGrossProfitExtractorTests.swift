@@ -26,17 +26,11 @@ import Testing
     }
 
     /// `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、それでも無ければ SKIP する。
+    /// 展開途中ディレクトリに `.extract_complete` を書かない。`ensureCached` は
+    /// マーカー無しなら再取得し、壊れたキャッシュを信頼しない。
     private static func ensureAvailable() async -> Bool {
-        let dir = xbrlDir
-        if FileManager.default.fileExists(atPath: dir.path) {
-            let marker = dir.appendingPathComponent(EdinetCacheStore.xbrlExtractCompleteMarker)
-            if !FileManager.default.fileExists(atPath: marker.path) {
-                FileManager.default.createFile(atPath: marker.path, contents: Data(), attributes: nil)
-            }
-        } else {
-            await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
-        }
-        guard FileManager.default.fileExists(atPath: dir.path) else {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        guard FileManager.default.fileExists(atPath: xbrlDir.path) else {
             print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
             return false
         }
