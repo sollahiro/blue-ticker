@@ -1852,7 +1852,7 @@ import Foundation
         #expect(BreakdownExtractor.customerContractConsolidatedYen(tables: oku) == 200 * 100_000_000.0)
         #expect(
             BreakdownExtractor.customerContractConsolidatedYen(tables: juOku)
-                == 200 * 10_000_000_000.0)
+                == 200 * 1_000_000_000.0)
     }
 
     @Test func customerContractConsolidatedYenCaptionBeatsMillionYenInMarkdown() {

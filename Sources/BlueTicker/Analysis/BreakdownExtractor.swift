@@ -899,7 +899,7 @@ enum BreakdownExtractor {
 
     private static func yenScale(forUnitToken token: String?) -> Double {
         guard let token else { return Financial.millionYen }
-        if token.contains("十億円") { return 10_000_000_000 }
+        if token.contains("十億円") { return 1_000_000_000 }
         if token.contains("億円") { return 100_000_000 }
         if token.contains("百万円") { return Financial.millionYen }
         if token.contains("千円") { return 1_000 }
