@@ -74,7 +74,7 @@ import Testing
         #expect(CompanyIconOriginOverride.manualSources["7203"] == .homepageOrigin("https://toyota.jp"))
         #expect(
             CompanyIconOriginOverride.manualSources["9267"]
-                == .imageURL("https://genky.co.jp/common/cmn_img/logo.png"))
+                == .homepageOrigin("https://www.genky.co.jp"))
         #expect(
             CompanyIconOriginOverride.manualSources["581A"]
                 == .imageURL("https://go.goinc.jp/android-chrome.png"))
@@ -112,11 +112,11 @@ import Testing
                 == "https://toyota.jp")
     }
 
-    /// 2026-09-12 icons audit: priority A 3 + missing-batch B 57。6902 デンソーは対象外。
+    /// 2026-09-12 icons audit: priority A 2（9267 は TLS 欠落のため homepage のまま）+ missing-batch B 57。
+    /// 6902 デンソーは対象外。
     @Test func pins20260912IconsAuditManualImageURLs() {
         let expected: [(String, String)] = [
             ("2462", "https://www.like-gr.co.jp/wp/wp-content/themes/like.1801/152x152.png"),
-            ("9267", "https://genky.co.jp/common/cmn_img/logo.png"),
             ("8377", "https://www.hokuhoku-fg.co.jp/assets/images/pages/info/idea/corporate_mark.png"),
             ("4188", "https://www.mcgc.com/assets/img/og-image.jpg"),
             ("9531", "https://www.tokyo-gas.co.jp/apple-touch-icon.png"),
@@ -176,8 +176,8 @@ import Testing
             ("7564", "https://www.workman.co.jp/apple-touch-icon.png"),
             ("9759", "https://www.nsd.co.jp/app-files/img/symbol/ogp.webp"),
         ]
-        #expect(expected.count == 60)
-        #expect(Set(expected.map(\.0)).count == 60)
+        #expect(expected.count == 59)
+        #expect(Set(expected.map(\.0)).count == 59)
         #expect(CompanyIconOriginOverride.manualSources["6902"] == nil)
         for (code, url) in expected {
             #expect(
@@ -226,19 +226,19 @@ import Testing
                 sourceURL: "https://toyota.jp/"))
     }
 
-    @Test func genkyRefreshesUntilManualLogoPNGIsStored() {
-        let png = "https://genky.co.jp/common/cmn_img/logo.png"
+    @Test func genkyKeepsHomepageOriginWithoutLogoPNGRefresh() {
         #expect(
             companyIconShouldRefresh(
                 code: "9267", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://genky.co.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "9267", cacheVersion: companyIconsManualCacheVersion,
                 sourceURL: "https://www.genky.co.jp"))
         #expect(
             companyIconShouldRefresh(
                 code: "9267", cacheVersion: companyIconsManualCacheVersion,
-                sourceURL: "https://www.genky.co.jp"))
-        #expect(
-            !companyIconShouldRefresh(
-                code: "9267", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
+                sourceURL: "https://genky.co.jp/common/cmn_img/logo.png"))
     }
 
     @Test func sylaRefreshesUntilManualImageURLIsStored() {

@@ -53,7 +53,7 @@ enum CompanyIconOriginOverride {
     /// XBRL 電子公告を使わず favicon / 公式画像を取る決め打ち。格納は `icons-manual`。
     /// 7203: トヨタ自動車。公式コンシューマサイト `https://toyota.jp/index.html`（origin のみ保持）。
     /// 9267: Genky DrugStores。有報の公告 URL は frameset のみの `genkydrugstores.co.jp`。
-    /// 公式 `logo.png`（600×600）を直指定（2026-09-12 icons audit priority A）。
+    /// 公式 `logo.png` は中間証明書欠落で URLSession が落ちるので homepage origin のまま。
     /// 581A: ＧＯ。タクシーアプリ `https://go.goinc.jp` の 190px PNG。コーポレート
     /// `goinc.jp` の 32px favicon は白地が多く iOS の白背景で消える。
     /// 8887: シーラ HD。`/favicon.ico` が 16x16 1bit（198B）で iOS が読めない。WP 192px PNG を直指定。
@@ -69,7 +69,7 @@ enum CompanyIconOriginOverride {
     /// 8377 はほくほく FG の corporate_mark。北海道銀行 apple-touch は使わない。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
-        "9267": .imageURL("https://genky.co.jp/common/cmn_img/logo.png"),
+        "9267": .homepageOrigin("https://www.genky.co.jp"),
         "581A": .imageURL("https://go.goinc.jp/android-chrome.png"),
         "8887": .imageURL(
             "https://syla-holdings.jp/wp-content/uploads/2025/05/cropped-favicon-192x192.png"),
