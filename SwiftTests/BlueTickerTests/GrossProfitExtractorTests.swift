@@ -157,6 +157,24 @@ import Foundation
         }
     }
 
+    @Test func testKeepsMerchandiseGrossProfitWhenOperatingProfitIsMissing() {
+        // OP 欠測時に営業総利益へ寄せると、OP 抽出器の GrossProfit−SGA と符号が食い違う。
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:OperatingGrossProfit contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingGrossProfit>
+            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">120000000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "direct")
+            #expect(result.grossProfit == 100_000_000_000)
+            #expect(result.grossProfitLabel == nil)
+        }
+    }
+
     @Test func testOperatingRevenueMinusOpexPlusSgaBeatsBankFeeFragment() {
         // イオンFS 23/02 相当の合成。実ファイル回帰は RealXbrlGrossProfitExtractorTests
         // （S100QTUM）。役務タグがあっても本表の営業収益/営業費用/販管費を使う。

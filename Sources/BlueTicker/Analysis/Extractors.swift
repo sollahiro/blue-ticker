@@ -385,22 +385,18 @@ enum GrossProfitExtractor {
 
     /// 売上総利益と営業総利益が両方あるとき、販管費の直上（OP+SGA に近い行）を GP にする。
     /// イオン: 営業総利益 − 販管費 ＝ 営業利益。売上総利益 − 販管費は大幅赤字になる。
+    /// 営業利益タグが無いときは切り替えない。OP 抽出器の `GrossProfit − SGA` と矛盾するため。
     private static func prefersOperatingGrossProfitOverMerchandise(
         merchandise: ResolvedItem, operating: ResolvedItem, fieldSet: FieldSet
     ) -> Bool {
         guard merchandise.tag != nil, operating.tag != nil else { return false }
         let sga = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
         let op = resolveItem(fieldSet, tags: Xbrl.operatingProfitDirectTags)
-        if let gp = merchandise.current, let ogp = operating.current,
-           let sgaCurrent = sga.current, let opCurrent = op.current
-        {
-            let implied = opCurrent + sgaCurrent
-            return abs(ogp - implied) < abs(gp - implied)
-        }
-        if let gp = merchandise.current, let sgaCurrent = sga.current, operating.current != nil {
-            return sgaCurrent > gp
-        }
-        return false
+        guard let gp = merchandise.current, let ogp = operating.current,
+              let sgaCurrent = sga.current, let opCurrent = op.current
+        else { return false }
+        let implied = opCurrent + sgaCurrent
+        return abs(ogp - implied) < abs(gp - implied)
     }
 
     /// 営業収益 − 営業費用 + 販管費。販管費が営業費用を超える年は構成しない。
