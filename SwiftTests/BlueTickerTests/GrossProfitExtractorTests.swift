@@ -109,7 +109,8 @@ import Foundation
     }
 
     @Test func testOperatingRevenueMinusOpexPlusSgaBeatsBankFeeFragment() {
-        // イオンFS 23/02 相当。役務タグがあっても本表の営業収益/営業費用/販管費を使う。
+        // イオンFS 23/02 相当の合成。実ファイル回帰は RealXbrlGrossProfitExtractorTests
+        // （S100QTUM）。役務タグがあっても本表の営業収益/営業費用/販管費を使う。
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">451767000000</jppfs_cor:OperatingRevenue1>
