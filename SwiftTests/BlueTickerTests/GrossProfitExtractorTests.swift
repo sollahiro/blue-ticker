@@ -1,5 +1,5 @@
 // 損益計算書（Duration コンテキスト）から売上総利益を抽出するロジックを検証する。
-// 抽出戦略: 直接法（売上総利益と営業総利益が両方あるときは OP+SGA に近い行）
+// 抽出戦略: 直接法（売上総利益＝売上高−売上原価。営業総利益が併記されても置き換えない）
 // → 営業総利益 → 営業収益−営業費用+販管費 → 銀行業務粗利益 → 計算法
 
 import Testing
@@ -109,8 +109,8 @@ import Foundation
         }
     }
 
-    @Test func testOperatingGrossProfitBeatsMerchandiseWhenCloserToOpPlusSga() {
-        // イオン 26/02 相当。売上総利益を販管費から引くと事業利益が大幅赤字になる。
+    @Test func testMerchandiseGrossProfitBeatsOperatingGrossProfit() {
+        // イオン 26/02 相当。売上総利益＝売上高−売上原価。営業総利益は営業収益合計−営業原価合計。
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">2649178000000</jppfs_cor:GrossProfit>
@@ -122,38 +122,15 @@ import Foundation
                 unitRef="JPY" decimals="-6">3755736000000</jppfs_cor:OperatingGrossProfit>
             <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">3639916000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
-            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="Prior1YearDuration"
-                unitRef="JPY" decimals="-6">3516989000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
             <jppfs_cor:OperatingIncome contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">270459000000</jppfs_cor:OperatingIncome>
-            <jppfs_cor:OperatingIncome contextRef="Prior1YearDuration"
-                unitRef="JPY" decimals="-6">237747000000</jppfs_cor:OperatingIncome>
-        """)
-        XBRLTestSupport.withXbrlDir(xml) { dir in
-            let result = extract(in: dir)
-            #expect(result.method == "operating_gross_profit")
-            #expect(result.grossProfitLabel == "営業総利益")
-            #expect(result.grossProfit == 3_910_376_000_000)
-            #expect(result.grossProfitPrior == 3_755_736_000_000)
-        }
-    }
-
-    @Test func testMerchandiseGrossProfitBeatsOperatingWhenCloserToOpPlusSga() {
-        let xml = XBRLTestSupport.makeXbrlDuration("""
-            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
-                unitRef="JPY" decimals="-6">100000000000</jppfs_cor:GrossProfit>
-            <jppfs_cor:OperatingGrossProfit contextRef="CurrentYearDuration"
-                unitRef="JPY" decimals="-6">50000000000</jppfs_cor:OperatingGrossProfit>
-            <jppfs_cor:SellingGeneralAndAdministrativeExpenses contextRef="CurrentYearDuration"
-                unitRef="JPY" decimals="-6">20000000000</jppfs_cor:SellingGeneralAndAdministrativeExpenses>
-            <jppfs_cor:OperatingIncome contextRef="CurrentYearDuration"
-                unitRef="JPY" decimals="-6">80000000000</jppfs_cor:OperatingIncome>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
             #expect(result.method == "direct")
-            #expect(result.grossProfit == 100_000_000_000)
             #expect(result.grossProfitLabel == nil)
+            #expect(result.grossProfit == 2_649_178_000_000)
+            #expect(result.grossProfitPrior == 2_515_596_000_000)
         }
     }
 
