@@ -675,6 +675,23 @@ enum BreakdownExtractor {
         return lines.joined(separator: "\n")
     }
 
+    /// Markdown 表をセルグリッドへ戻す（`gridToMarkdown` の逆）。
+    static func markdownToGrid(_ markdown: String) -> [[String]] {
+        var grid: [[String]] = []
+        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") else { continue }
+            let body = trimmed.dropFirst().dropLast()
+            let cells = body.split(separator: "|", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            if cells.allSatisfy({ $0.allSatisfy({ $0 == "-" || $0 == ":" || $0 == " " }) }) {
+                continue
+            }
+            grid.append(cells)
+        }
+        return grid
+    }
+
     /// 数値セルが1つも無い表か。
     static func gridHasNumericValue(_ grid: [[String]]) -> Bool {
         grid.contains { row in row.contains { XBRLUtils.parseHtmlNumber($0) != nil } }
@@ -793,6 +810,101 @@ enum BreakdownExtractor {
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// 収益認識表の「顧客との契約から認識した収益」行の連結金額（円）。
+    /// 当期表を優先。債権・契約資産行は対象外。合計列（事業グループ小計）ではなく
+    /// 連結金額列があるマトリクスだけを対象にする（パンパシHD型の行小計は拾わない）。
+    static func customerContractConsolidatedYen(tables: [BreakdownTable]) -> Double? {
+        let current = tables.filter { $0.period == "当期" }
+        let ordered = current + tables.filter { $0.period != "当期" }
+        for table in ordered {
+            if let yen = customerContractConsolidatedYen(in: table) { return yen }
+        }
+        return nil
+    }
+
+    private static func customerContractConsolidatedYen(in table: BreakdownTable) -> Double? {
+        let grid = markdownToGrid(table.markdown)
+        guard grid.count >= 2 else { return nil }
+        guard let consolidatedCol = consolidatedAmountColumnIndex(in: grid) else { return nil }
+
+        let contractMarkers = ["顧客との契約から認識した収益", "顧客との契約から生じる収益"]
+        let exclude = ["債権", "契約資産", "契約負債"]
+        for row in grid.dropFirst() {
+            let label = row.first ?? ""
+            guard contractMarkers.contains(where: { label.contains($0) }) else { continue }
+            if exclude.contains(where: { label.contains($0) }) { continue }
+            guard consolidatedCol < row.count,
+                  let raw = XBRLUtils.parseHtmlNumber(row[consolidatedCol]), raw != 0
+            else { continue }
+            return raw * yenMultiplier(for: table)
+        }
+        return nil
+    }
+
+    /// 数値の無い先頭行を見出しとみなす。改ページ結合後の2段見出し
+    /// （期間行の下に「連結金額」）も拾う。
+    private static func headerRows(in grid: [[String]]) -> [[String]] {
+        var rows: [[String]] = []
+        for row in grid {
+            if row.contains(where: { XBRLUtils.parseHtmlNumber($0) != nil }) { break }
+            rows.append(row)
+        }
+        return rows
+    }
+
+    private static func compactHeaderCell(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+    }
+
+    /// 見出し行全体から連結金額列を探す。前期/当期が並ぶ比較表では当期列を優先する。
+    private static func consolidatedAmountColumnIndex(in grid: [[String]]) -> Int? {
+        let headers = headerRows(in: grid)
+        guard !headers.isEmpty else { return nil }
+        let preferences = ["連結金額", "連結合計", "連結計"]
+        var matches: [(col: Int, pref: Int)] = []
+        for row in headers {
+            let compact = row.map(compactHeaderCell)
+            for (prefIndex, pref) in preferences.enumerated() {
+                for (col, cell) in compact.enumerated() where cell == pref {
+                    matches.append((col, prefIndex))
+                }
+            }
+        }
+        guard !matches.isEmpty else { return nil }
+        let bestPref = matches.map(\.pref).min()!
+        let preferred = matches.filter { $0.pref == bestPref }
+        let current = preferred.filter { columnLooksLikeCurrentPeriod(headers, column: $0.col) }
+        if let last = current.last { return last.col }
+        return preferred.last?.col
+    }
+
+    private static func columnLooksLikeCurrentPeriod(_ headers: [[String]], column: Int) -> Bool {
+        for row in headers {
+            let cell = column < row.count ? row[column] : ""
+            if priorPeriodKeywords.contains(where: cell.contains) { return false }
+            if currentPeriodKeywords.contains(where: cell.contains) { return true }
+        }
+        return false
+    }
+
+    /// `unitCaption`（`parseUnitCaption` の語）を優先し、無ければ表内の単位表記。
+    /// `十億円` / `億円` を百万円扱いにしない（部分一致順にも依存させない）。
+    private static func yenMultiplier(for table: BreakdownTable) -> Double {
+        let token = table.unitCaption.flatMap(parseUnitCaption)
+            ?? parseUnitCaption(table.markdown)
+        return yenScale(forUnitToken: token)
+    }
+
+    private static func yenScale(forUnitToken token: String?) -> Double {
+        guard let token else { return Financial.millionYen }
+        if token.contains("十億円") { return 1_000_000_000 }
+        if token.contains("億円") { return 100_000_000 }
+        if token.contains("百万円") { return Financial.millionYen }
+        if token.contains("千円") { return 1_000 }
+        if token == "円" { return 1 }
+        return Financial.millionYen
     }
 
     /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。

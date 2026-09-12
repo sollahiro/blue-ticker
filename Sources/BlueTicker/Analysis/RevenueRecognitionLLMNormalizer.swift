@@ -31,7 +31,7 @@ enum RevenueRecognitionLLMNormalizer {
     - **例外（パンパシHD型）**: 行が「（ディスカウントストア）」「（総合スーパー）」のような大枠見出し（金額なし）と、その下の品目明細（家電製品・日用雑貨品等、金額あり）、さらに品目分解の無い「（海外）」配下の北米/アジアになっている表は対象内。大枠見出し行は出さず、品目明細を segment にし、業態が分かるようラベルに親見出しを付すこと（例: 「家電製品（ディスカウントストア）」）。海外の北米/アジアは品目が無い残として segment に残すこと。「その他の収益」も外部顧客への売上高に加算されているなら segment とし、reconciling にしないこと（品目＋海外＋その他の収益の segment 合計が外部顧客への売上高と一致するようにする）。親見出しの付与はこの形に限る
     - **単純な製品別・部門別表**（1行=1製品/部門）はそのまま行として使うこと。行ラベルは表の区分名を一字一句そのまま使うこと。表に無い親区分・分野名を括弧で足さないこと（誤例: 表が「その他」なのに「その他（自動車分野）」とする。補足は notes へ）
     - **事業・製品名が行、地域が列のマトリクス表**（例: 行がタイヤ／その他、列が日本／米州／欧州…／連結計）は対象内。金額は「連結計」（または連結合計）列を使うこと。地域列の内訳を行にしてはならない
-    - **部門・製品名・事業グループ名が列見出しで、指標が行になっているマトリクス表**（例: 列が地球環境エネルギー／マテリアルソリューション／金属資源…、行が「顧客との契約から認識した収益」）は対象内。当該収益行の各事業列の金額を使い、列見出しを行ラベルとして1事業=1行に転置して出力すること。地域行・調整列の扱いに注意し、合計列は row_kind="subtotal"
+    - **部門・製品名・事業グループ名が列見出しで、指標が行になっているマトリクス表**（例: 列が地球環境エネルギー／マテリアルソリューション／金属資源…、行が「顧客との契約から認識した収益」）は対象内。当該収益行の各事業列の金額を使い、列見出しを行ラベルとして1事業=1行に転置して出力すること。地域行・調整列の扱いに注意し、合計列は row_kind="subtotal"。同じ表に「合計」（その他の源泉を含む）行があるときは、与えられた分母に一致する行を使う。分母が顧客契約の連結金額なら合計行を選ばないこと
     - **部門・製品名が列見出しで、地域名が行になっているマトリクス表**（例: 列がＦＡ／ロボット／ロボマシン／サービス、行が国内／米州／欧州／中国…）は対象内。この場合は「外部顧客への売上高」または「顧客との契約から生じる収益」の合計行にある各部門列の金額を使い、列見出しを行ラベルとして1部門=1行に転置して出力すること。地域行をそのまま行にしてはならない。合計列は row_kind="subtotal"。転置後の行順は元表の列の左から右と一致させること。連結・合計を消去より前に動かさないこと
     - 同一 Markdown 内に「収益認識の時期別」（一時点／一定期間）の第2マトリクスが続く場合がある。部門別の外部売上は上側（地域×部門）の合計行から取ること
     - **報告セグメント（不動産／保険／ホテル等の事業区分）を列に、収益の種類（物件売却収入・その他等）を行に持つクロス集計表**は対象外。この形は既に別経路（segments キー）で事業別データが取得できているため、ここでは扱わない。applicable=false を返すこと
@@ -89,7 +89,8 @@ enum RevenueRecognitionLLMNormalizer {
     /// revenue_recognition の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
     static func normalize(
-        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting
+        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        denominatorTag: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
         // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
@@ -216,7 +217,7 @@ enum RevenueRecognitionLLMNormalizer {
         let snapshot = BreakdownSnapshot(
             axis: "business",
             denominator: consolidatedSales,
-            denominatorTag: "income_statement.sales",
+            denominatorTag: denominatorTag ?? "income_statement.sales",
             rows: rowsWithShare,
             sourceKind: "revenue_recognition",
             needsReview: needsReview,

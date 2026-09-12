@@ -21,7 +21,8 @@ enum StackedSegmentPnLNormalizer {
     /// `html_table` の積み上げセグメント損益表から business 軸スナップショットを組み立てる。
     /// パターン非該当・分母不整合・売上/営業利益ブロック欠落時は nil（呼び出し側が LLM へフォールバック）。
     static func normalize(
-        _ result: ExtractedBreakdown, consolidatedSales: Double?
+        _ result: ExtractedBreakdown, consolidatedSales: Double?,
+        salesDenominatorTag: String? = nil
     ) -> BreakdownSnapshot? {
         guard !result.tables.isEmpty else { return nil }
 
@@ -29,7 +30,8 @@ enum StackedSegmentPnLNormalizer {
         var bestScore = -1.0
         for table in result.tables {
             guard let candidate = normalizeMarkdown(
-                table.markdown, consolidatedSales: consolidatedSales)
+                table.markdown, consolidatedSales: consolidatedSales,
+                salesDenominatorTag: salesDenominatorTag)
             else { continue }
             let score = candidate.rows.filter { $0.rowKind == "segment" }.count
             let denScore = consolidatedSales.map { sales in
@@ -47,7 +49,8 @@ enum StackedSegmentPnLNormalizer {
 
     /// 単一 Markdown 表を正規化する（単体テスト用に internal）。
     static func normalizeMarkdown(
-        _ markdown: String, consolidatedSales: Double?
+        _ markdown: String, consolidatedSales: Double?,
+        salesDenominatorTag: String? = nil
     ) -> BreakdownSnapshot? {
         let grid = parseMarkdownGrid(markdown)
         guard grid.count >= 4 else { return nil }
@@ -114,7 +117,7 @@ enum StackedSegmentPnLNormalizer {
             let share = salesSum / consolidatedSales
             guard denominatorTolerance.contains(share) else { return nil }
             denominator = consolidatedSales
-            denominatorTag = "income_statement.sales"
+            denominatorTag = salesDenominatorTag ?? "income_statement.sales"
         } else {
             denominator = salesTotal
             denominatorTag = "stacked_table_sales_total"

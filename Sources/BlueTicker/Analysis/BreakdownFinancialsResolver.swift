@@ -11,8 +11,39 @@ enum BreakdownFinancialsResolver {
     }
 
     /// business / geography 軸の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
+    /// Summary の `sales` と一致させる。本表に売上相当行が無い会社では nil（三菱商事の `Revenue2IFRS`「収益」は
+    /// `netSalesTags` 外のため Summary は null のまま）。
     static func financialsCanonicalSales(xbrlDir: URL) -> Double? {
         StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
+    }
+
+    /// business 軸の売上分母。`breakdownBusinessSalesDenominatorItem` の値だけ。
+    static func breakdownBusinessSalesDenominator(xbrlDir: URL) -> Double? {
+        breakdownBusinessSalesDenominatorItem(xbrlDir: xbrlDir).value
+    }
+
+    /// business 軸の分母と由来タグ。Summary sales があれば `income_statement.sales`。
+    /// 無ければ収益認識表の「顧客との契約」連結金額（`llm_table_subtotal`）、さらに無ければ
+    /// 未マスク FieldSet の売上相当タグ（`RevenueIFRSSummaryOfBusinessResults` 等）。
+    /// 偽の `income_statement.sales` は出さない。geography / Summary は変えない。
+    /// `tables` を渡すと `extractSegmentInfo` の再走査を避ける（ingest 経路）。
+    static func breakdownBusinessSalesDenominatorItem(
+        xbrlDir: URL, tables: [BreakdownTable]? = nil
+    ) -> CanonicalValue {
+        if let sales = financialsCanonicalSales(xbrlDir: xbrlDir), sales != 0 {
+            return CanonicalValue(value: sales, tag: "income_statement.sales")
+        }
+        let rrTables = tables ?? BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir).tables
+        if let yen = BreakdownExtractor.customerContractConsolidatedYen(tables: rrTables) {
+            return CanonicalValue(value: yen, tag: "llm_table_subtotal")
+        }
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let salesItem = resolveItemPreferCurrent(
+            fieldSetFromDuration(allTags), tags: Xbrl.netSalesTags)
+        guard let sales = salesItem.current, sales != 0 else {
+            return CanonicalValue(value: nil, tag: nil)
+        }
+        return CanonicalValue(value: sales, tag: salesItem.tag)
     }
 
     /// financials の `employees`。正本は breakdown `employees` 軸の分母。

@@ -186,9 +186,21 @@ import Foundation
         #expect(await client.timesCalled() == 1)
     }
 
+    @Test func mitsubishiBusinessLLMDenominatorFallsBackWhenStatementSalesIsNil() async throws {
+        guard await Self.ensureAvailable("S100YB25") else { return }
+        let dir = Self.xbrlDir("S100YB25")
+        // Summary 正本は null（PL 先頭は netSalesTags 外の Revenue2IFRS「収益」）。
+        #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == nil)
+        // business 分母は PDF 顧客との契約の連結金額 13,948,091 百万円。合計行 18,915,995 ではない。
+        let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(xbrlDir: dir)
+        #expect(denom.value == 13_948_091_000_000)
+        #expect(denom.tag == "llm_table_subtotal")
+    }
+
     @Test func mitsubishiResolvesViaRevenueRecognitionLLM() async throws {
         guard await Self.ensureAvailable("S100YB25") else { return }
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
+        let dir = Self.xbrlDir("S100YB25")
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
         #expect(segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
 
         let tableIndex = Self.preferredTableIndex(segments.tables, containing: "地球環境エネルギー")
@@ -199,33 +211,37 @@ import Foundation
             "period_column": "当期",
             "profit_disclosed": false,
             "rows": [
-                ["label": "地球環境エネルギー", "amount": 3_267_295, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "マテリアルソリューション", "amount": 3_631_197, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "金属資源", "amount": 4_083_329, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "社会インフラ", "amount": 930_638, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "モビリティ", "amount": 837_375, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "食品産業", "amount": 2_324_535, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "S.L.C.", "amount": 2_514_143, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "電力ソリューション", "amount": 1_318_984, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "地球環境エネルギー", "amount": 1_851_642, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "マテリアルソリューション", "amount": 3_603_708, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "金属資源", "amount": 1_243_344, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "社会インフラ", "amount": 821_299, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "モビリティ", "amount": 769_129, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "食品産業", "amount": 1_874_005, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "S.L.C.", "amount": 2_513_397, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "電力ソリューション", "amount": 1_263_068, "profit": NSNull(), "row_kind": "segment"],
                 ["label": "その他", "amount": 8_539, "profit": NSNull(), "row_kind": "segment"],
                 ["label": "調整・消去", "amount": -40, "profit": NSNull(), "row_kind": "reconciling"],
-                ["label": "連結金額", "amount": 18_915_995, "profit": NSNull(), "row_kind": "subtotal"],
+                ["label": "連結金額", "amount": 13_948_091, "profit": NSNull(), "row_kind": "subtotal"],
             ],
-            "notes": "当期の横結合表の合計行",
+            "notes": "当期の横結合表の顧客との契約から認識した収益行",
         ]
         let client = RealXbrlMockChat(responseJSON: response)
-        let sales = 18_915_995_000_000.0
+        let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
+            xbrlDir: dir, tables: segments.tables)
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: denom.value, client: client,
+            denominatorTag: denom.tag
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
+        #expect(snapshot?.denominator == 13_948_091_000_000)
+        #expect(snapshot?.denominatorTag == "llm_table_subtotal")
         let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
         #expect(labels.contains("地球環境エネルギー"))
         #expect(labels.contains("S.L.C."))
         #expect(labels.contains("電力ソリューション"))
-        #expect(snapshot?.rows.contains { $0.labelRaw == "金属資源" && $0.amount == 4_083_329_000_000 } == true)
-        #expect(snapshot?.rows.contains { $0.rowKind == "subtotal" && $0.amount == 18_915_995_000_000 } == true)
+        #expect(snapshot?.rows.contains { $0.labelRaw == "金属資源" && $0.amount == 1_243_344_000_000 } == true)
+        #expect(snapshot?.rows.contains { $0.rowKind == "subtotal" && $0.amount == 13_948_091_000_000 } == true)
         #expect(snapshot?.needsReview == false)
         #expect(await client.timesCalled() == 1)
     }

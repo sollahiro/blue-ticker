@@ -30,7 +30,8 @@ enum BusinessBreakdownResolver {
     /// xbrl_facts で business 判定できた場合は呼び出さない（決定的経路を優先し LLM 費用を最小化）。
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
-        labelsByTag: [String: String] = [:]
+        labelsByTag: [String: String] = [:],
+        denominatorTag: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
         let factsSnapshot = BreakdownNormalizer.normalize(
             segments, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
@@ -50,7 +51,7 @@ enum BusinessBreakdownResolver {
         // （実測: 富士フイルム S100YIBH / S100W3XJ）では、LLM が研究開発費を profit に
         // 誤寄せする。比較必須の揃えは構造側で行う。
         if let stacked = StackedSegmentPnLNormalizer.normalize(
-            segments, consolidatedSales: consolidatedSales)
+            segments, consolidatedSales: consolidatedSales, salesDenominatorTag: denominatorTag)
         {
             return (stacked, .stackedSegmentPnL, nil)
         }
@@ -71,7 +72,8 @@ enum BusinessBreakdownResolver {
         if !segments.tables.isEmpty {
             if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
                 let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(
-                    segments, consolidatedSales: consolidatedSales, client: client
+                    segments, consolidatedSales: consolidatedSales, client: client,
+                    denominatorTag: denominatorTag
                 )
                 lastAudit = audit
                 // needs_review 付きでも採用する（segment_info 経路と同じ）。空にすると
@@ -82,7 +84,8 @@ enum BusinessBreakdownResolver {
                 if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
             } else {
                 let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-                    segments, consolidatedSales: consolidatedSales, client: client
+                    segments, consolidatedSales: consolidatedSales, client: client,
+                    salesDenominatorTag: denominatorTag
                 )
                 lastAudit = audit
                 if let snapshot { return (snapshot, .segmentInfoLLM, audit) }

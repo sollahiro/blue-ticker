@@ -333,4 +333,29 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshotOrNil != nil)
         #expect(audit?.notApplicableReason == nil)
     }
+
+    @Test func stampsPassedDenominatorTagInsteadOfIncomeStatementSales() async throws {
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "地球環境エネルギー", "amount": 1_851_642, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "連結金額", "amount": 1_851_642, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "顧客契約行",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            Self.htmlTableResult(),
+            consolidatedSales: 1_851_642 * Financial.millionYen,
+            client: client,
+            denominatorTag: "llm_table_subtotal"
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.denominatorTag == "llm_table_subtotal")
+        #expect(snapshot.needsReview == false)
+    }
 }
