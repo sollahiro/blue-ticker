@@ -11,7 +11,8 @@
 //
 // イオン 8267 / S100Y5VH（26/02 有報）:
 // 売上総利益（売上高 − 売上原価）2,649,178 と営業総利益（営業収益合計 − 営業原価合計）
-// 3,910,376 が両方ある。GP は売上総利益のまま。営業総利益に置き換えない。
+// 3,910,376 が両方ある。販管費 3,639,916 は営業総利益から落ち、営業利益 270,459。
+// Waterfall 事業利益 = GP − 販管費 なので GP は営業総利益。事業利益＝営業利益。
 //
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
@@ -58,22 +59,25 @@ import Testing
         #expect(values.sales == 451_767_000_000)
     }
 
-    @Test func aeonS100Y5VHKeepsMerchandiseGrossProfit() async throws {
+    @Test func aeonS100Y5VHUsesOperatingGrossProfitSoBusinessProfitEqualsOP() async throws {
         guard let dir = await Self.ensureAvailable("S100Y5VH") else { return }
 
         let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
         let result = GrossProfitExtractor.extract(
             fieldSet: fs, accountingStandard: std, xbrlDir: dir)
 
-        #expect(result.method == "direct")
-        #expect(result.grossProfitLabel == nil)
-        #expect(result.grossProfit == 2_649_178_000_000)
+        #expect(result.method == "operating_gross_profit")
+        #expect(result.grossProfitLabel == "営業総利益")
+        #expect(result.grossProfit == 3_910_376_000_000)
 
         let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
-        #expect(values.grossProfit == 2_649_178_000_000)
-        #expect(values.grossProfitLabel == nil)
+        #expect(values.grossProfit == 3_910_376_000_000)
+        #expect(values.grossProfitLabel == "営業総利益")
         #expect(values.operatingProfit == 270_459_000_000)
         #expect(values.sga == 3_639_916_000_000)
-        #expect(values.sales == 9_355_439_000_000)
+        let gp = try #require(values.grossProfit)
+        let sga = try #require(values.sga)
+        let op = try #require(values.operatingProfit)
+        #expect(abs((gp - sga) - op) < 2_000_000)
     }
 }

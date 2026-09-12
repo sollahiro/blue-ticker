@@ -176,8 +176,9 @@ J-GAAP / IFRS:
      - GrossProfitIFRS（IFRS連結）
      - GrossProfit（J-GAAP連結）
      - GrossProfitOnCompletedConstructionContractsCNS（建設業）
-     - 売上総利益は売上高 − 売上原価。イオン等で営業総利益（営業収益合計 − 営業原価合計）が
-       併記されていても置き換えない
+     - 売上総利益は売上高 − 売上原価、営業総利益は営業収益合計 − 営業原価合計。
+       両方があり販管費が営業総利益から落ちるとき（イオン）は営業総利益を GP にする。
+       Waterfall 事業利益 = GP − 販管費 が営業利益と一致する
   2. 営業総利益: Xbrl.operatingGrossProfitDirectTags（倉庫・運輸等。売上総利益行が無いとき）
   3. 営業収益 − 営業費用 + 販管費: 販管費が営業費用の内数であるクレジット・割賦等
      （`OperatingRevenue1` / `OperatingExpenses` / `sgaDirectTags`。銀行部品より先）
