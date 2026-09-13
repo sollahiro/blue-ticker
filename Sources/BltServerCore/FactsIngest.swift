@@ -74,9 +74,22 @@ func runFactsIngest(
     // store は候補順の直列。未格納 payload の同時保持は並列度分だけに抑え、
     // メモリピークを並列数倍にしない（BoundedConcurrency.swift / issue #34 と同思想）。
     var pending: [String] = []
+    // store バッチ内でもサーキットブレーカを見る。バッチ先頭の store が閾値に達したら
+    // 残りは次回へ回し、直列時代と同じ「閾値超で後続を始めない」形にする。
+    var interrupted = false
+
+    func deferRemaining(_ count: Int) {
+        attempted -= count
+        interrupted = true
+    }
 
     func flushPending() async throws {
         guard !pending.isEmpty else { return }
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            deferRemaining(pending.count)
+            pending.removeAll()
+            return
+        }
         let batch = pending
         pending.removeAll()
         let parsed: [(docID: String, payload: XbrlFactIndexPayload)] = await withBoundedTaskGroup(
@@ -85,7 +98,11 @@ func runFactsIngest(
             await parse(docID).map { (docID, $0) }
         }
         let parsedByID = Dictionary(uniqueKeysWithValues: parsed.map { ($0.docID, $0.payload) })
-        for docID in batch {
+        for (offset, docID) in batch.enumerated() {
+            if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+                deferRemaining(batch.count - offset)
+                return
+            }
             guard let payload = parsedByID[docID] else {
                 failed += 1
                 logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
@@ -107,9 +124,7 @@ func runFactsIngest(
         let docID = cand
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
-            )
+            interrupted = true
             break
         }
         // skip 再判定は分類フェーズとの競合窓を潰すためのもので、`facts` JSONB は不要。
@@ -131,6 +146,11 @@ func runFactsIngest(
         }
     }
     try await flushPending()
+    if interrupted {
+        logger?.error(
+            "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+        )
+    }
 
     return FactsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped)
