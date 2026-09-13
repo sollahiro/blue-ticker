@@ -138,26 +138,31 @@ struct BreakdownView: View {
         let anchors = ratioAnchors(years)
         let segments = ratioSegments(points)
         let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0) }
+        let selectedPosition = selectedIndex.map(Double.init)
         let selectedSegment = selectedIndex.flatMap { index in
-            segments.first { $0.points.last?.index == index }
+            segments.first { $0.points.last?.index == Double(index) }
         }
         return Chart {
             if let segment = selectedSegment {
-                ForEach(segment.points, id: \.id) { point in
-                    AreaMark(
-                        xStart: .value(metric.title, 0),
-                        xEnd: .value(metric.title, point.value),
-                        y: .value("年度", point.index)
-                    )
-                    .foregroundStyle(segment.color.opacity(0.15))
-                    .interpolationMethod(.linear)
+                ForEach(ratioFillAreas(segment)) { area in
+                    ForEach(area.points) { point in
+                        AreaMark(
+                            xStart: .value(metric.title, 0),
+                            xEnd: .value(metric.title, point.value),
+                            y: .value("年度", point.index),
+                            series: .value("fill", area.id)
+                        )
+                        .foregroundStyle(segment.color.opacity(0.15))
+                        .interpolationMethod(.linear)
+                    }
                 }
             }
-            ForEach(segments, id: \.id) { segment in
-                ForEach(segment.points, id: \.id) { point in
+            ForEach(segments) { segment in
+                ForEach(segment.points) { point in
                     LineMark(
                         x: .value(metric.title, point.value),
-                        y: .value("年度", point.index)
+                        y: .value("年度", point.index),
+                        series: .value("line", segment.id)
                     )
                     .foregroundStyle(segment.color)
                     .lineStyle(StrokeStyle(lineWidth: 3))
@@ -171,18 +176,18 @@ struct BreakdownView: View {
             ForEach(anchors, id: \.self) { index in
                 PointMark(
                     x: .value(metric.title, 0),
-                    y: .value("年度", index)
+                    y: .value("年度", Double(index))
                 )
                 .opacity(0)
                 .accessibilityHidden(true)
             }
-            ForEach(points, id: \.id) { point in
+            ForEach(points) { point in
                 PointMark(
                     x: .value(metric.title, point.value),
                     y: .value("年度", point.index)
                 )
-                .foregroundStyle(point.index == selectedIndex ? Theme.accent : Theme.text)
-                .symbolSize(point.index == selectedIndex ? 90 : 45)
+                .foregroundStyle(point.index == selectedPosition ? Theme.accent : Theme.text)
+                .symbolSize(point.index == selectedPosition ? 90 : 45)
                 .annotation(position: .trailing, alignment: .leading, spacing: 4) {
                     Text(Format.percent(point.value, digits: 1))
                         .font(.caption2)
@@ -204,11 +209,14 @@ struct BreakdownView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: Array(years.indices)) { value in
+            AxisMarks(position: .leading, values: years.indices.map { Double($0) }) { value in
                 AxisValueLabel {
-                    if let index = value.as(Int.self), labels.indices.contains(index) {
-                        Text(labels[index])
-                            .foregroundStyle(Theme.textMuted)
+                    if let position = value.as(Double.self) {
+                        let index = Int(position.rounded())
+                        if labels.indices.contains(index) {
+                            Text(labels[index])
+                                .foregroundStyle(Theme.textMuted)
+                        }
                     }
                 }
             }
@@ -248,14 +256,35 @@ struct BreakdownView: View {
 
     private struct SegmentPoint: Identifiable {
         var id: Int
-        var index: Int
+        var index: Double
         var value: Double
     }
 
     /// 値のある年だけを、元の年度並びの位置（`index`）を保ったまま返す。
     private func ratioPoints(_ years: [FinancialsYear]) -> [SegmentPoint] {
         years.enumerated().compactMap { index, year in
-            metricValue(year).map { SegmentPoint(id: index, index: index, value: $0) }
+            metricValue(year).map { SegmentPoint(id: index, index: Double(index), value: $0) }
+        }
+    }
+
+    /// 選択区間の塗り。0 を跨ぐ辺は交点で切り、マイナス側とプラス側で別の三角にする。
+    /// 同じ AreaMark 系列のまま補間すると、異符号の両端が一つの三角に潰れる。
+    private func ratioFillAreas(_ segment: Segment) -> [Segment] {
+        let vertices = segment.points.map {
+            ZeroAxisFill.Vertex(position: $0.index, value: $0.value)
+        }
+        return ZeroAxisFill.areas(vertices).enumerated().map { offset, area in
+            Segment(
+                id: offset,
+                points: area.enumerated().map { pointOffset, vertex in
+                    SegmentPoint(
+                        id: offset * 100 + pointOffset,
+                        index: vertex.position,
+                        value: vertex.value
+                    )
+                },
+                color: segment.color
+            )
         }
     }
 
@@ -270,11 +299,12 @@ struct BreakdownView: View {
         var segments: [Segment] = []
         for (start, end) in zip(points, points.dropFirst()) where end.index == start.index + 1 {
             let midValue = (start.value + end.value) / 2
+            let yearIndex = Int(start.index)
             segments.append(Segment(
-                id: start.index,
+                id: yearIndex,
                 points: [
-                    SegmentPoint(id: start.index * 2, index: start.index, value: start.value),
-                    SegmentPoint(id: start.index * 2 + 1, index: end.index, value: end.value),
+                    SegmentPoint(id: yearIndex * 2, index: start.index, value: start.value),
+                    SegmentPoint(id: yearIndex * 2 + 1, index: end.index, value: end.value),
                 ],
                 color: band.color(for: midValue)
             ))
