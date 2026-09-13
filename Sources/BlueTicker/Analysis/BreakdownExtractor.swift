@@ -749,17 +749,14 @@ enum BreakdownExtractor {
             .replacingOccurrences(of: "\r", with: "")
         guard !compact.isEmpty else { return nil }
 
-        do {
-            let regex = unitCaptionPattern
-            let ns = compact as NSString
-            let range = NSRange(location: 0, length: ns.length)
-            if let match = regex.firstMatch(in: compact, options: [], range: range),
-                match.numberOfRanges > 1
-            {
-                let captured = ns.substring(with: match.range(at: 1))
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "：: 　"))
-                if !captured.isEmpty { return captured }
-            }
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        if let match = unitCaptionPattern.firstMatch(in: compact, options: [], range: range),
+            match.numberOfRanges > 1
+        {
+            let captured = ns.substring(with: match.range(at: 1))
+                .trimmingCharacters(in: CharacterSet(charactersIn: "：: 　"))
+            if !captured.isEmpty { return captured }
         }
 
         let tokens = [
