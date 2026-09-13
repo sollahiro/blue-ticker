@@ -29,7 +29,7 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 /// `cachedDocIDs` はローカル XBRL 展開済み。欠測→版ずれの連結のうえ、キャッシュ済みを先頭へ寄せる。
 func runFactsIngest(
     db: Database, limit: Int?, cachedDocIDs: Set<String> = [], logger: Logger? = nil,
-    parse: @escaping XbrlFactParser
+    parse: XbrlFactParser
 ) async throws -> FactsIngestSummary {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocumentListing.query(on: db)
@@ -70,72 +70,19 @@ func runFactsIngest(
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0
 
-    // parse（XBRL 取得＋展開）は `Api.xbrlProcessConcurrency` 件の bounded 並列、
-    // store は候補順の直列。未格納 payload の同時保持は並列度分だけに抑え、
-    // メモリピークを並列数倍にしない（BoundedConcurrency.swift / issue #34 と同思想）。
-    var pending: [String] = []
-    // store バッチ内でもサーキットブレーカを見る。バッチ先頭の store が閾値に達したら
-    // 残りは次回へ回し、直列時代と同じ「閾値超で後続を始めない」形にする。
-    var interrupted = false
-
-    func deferRemaining(_ count: Int) {
-        // 直列ループと同じく、次回に回す分は attempted に残さない。
-        // サマリは attempted == stored + failed（skip 除く）であり、
-        // バッチ先行 parse の実装詳細を件数に混ぜない。
-        attempted -= count
-        interrupted = true
-    }
-
-    func flushPending() async throws {
-        guard !pending.isEmpty else { return }
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            deferRemaining(pending.count)
-            pending.removeAll()
-            return
-        }
-        let batch = pending
-        pending.removeAll()
-        let parsed: [(docID: String, payload: XbrlFactIndexPayload)] = await withBoundedTaskGroup(
-            items: batch, limit: Api.xbrlProcessConcurrency
-        ) { docID in
-            await parse(docID).map { (docID, $0) }
-        }
-        let parsedByID = Dictionary(uniqueKeysWithValues: parsed.map { ($0.docID, $0.payload) })
-        for (offset, docID) in batch.enumerated() {
-            if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-                deferRemaining(batch.count - offset)
-                return
-            }
-            guard let payload = parsedByID[docID] else {
-                failed += 1
-                logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
-                continue
-            }
-            try await withDbRetry(
-                logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-            ) {
-                try await storeXbrlFacts(
-                    existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID,
-                    facts: payload,
-                    db: db)
-            }
-            stored += 1
-        }
-    }
-
     for cand in candidates {
         let docID = cand
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
         if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            interrupted = true
+            logger?.error(
+                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
+            )
             break
         }
-        // skip 再判定は分類フェーズとの競合窓を潰すためのもので、`facts` JSONB は不要。
-        // 全行転送する EdinetXbrlFacts.find ではなく軽量射影で確認する。
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await EdinetXbrlFactsCacheVersionOnly.find(docID, on: db)
+            try await EdinetXbrlFacts.find(docID, on: db)
         }
         if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
             skipped += 1
@@ -143,16 +90,19 @@ func runFactsIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        pending.append(docID)
-        if pending.count >= Api.xbrlProcessConcurrency {
-            try await flushPending()
+        guard let payload = await parse(docID) else {
+            failed += 1
+            logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
+            continue
         }
-    }
-    try await flushPending()
-    if interrupted {
-        logger?.error(
-            "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
-        )
+        try await withDbRetry(
+            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await storeXbrlFacts(
+                existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID, facts: payload,
+                db: db)
+        }
+        stored += 1
     }
 
     return FactsIngestSummary(

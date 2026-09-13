@@ -53,7 +53,11 @@ public func parseFeedDocTypes(_ raw: String?) -> [String] {
 
 /// UTC 暦日（YYYY-MM-DD）。`submit_date_time` の日付部分および Update の `date` に使う。
 public func feedDateString(_ date: Date = Date()) -> String {
-    formatDateString(date)
+    let formatter = DateFormatter()
+    formatter.dateFormat = DateFormat.hyphenated
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    return formatter.string(from: date)
 }
 
 /// 今日を含む UTC 暦日数の下限。`days=1` はその日、`days=7` は直近1週間。

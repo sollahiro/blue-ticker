@@ -158,8 +158,7 @@ public enum Api {
 
     /// XBRL ダウンロード＋fact インデックス展開（processDocument）の同時実行数。
     /// メモリピーク抑制のため（issue #34）。
-    /// BltServerCore の数値 fact 取り込み（FactsIngest）の parse 並列度としても使うため public。
-    public static let xbrlProcessConcurrency = 2
+    static let xbrlProcessConcurrency = 2
 
     // 書類種別
     // 有報セクション取り込み（BltServerCore）が有報のみを対象にするため public。

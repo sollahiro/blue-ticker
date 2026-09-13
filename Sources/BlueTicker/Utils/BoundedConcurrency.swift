@@ -9,8 +9,7 @@ import Foundation
 ///
 /// 最初に in-flight を最大 limit 件まで addTask し、1件完了するたびに次の1件を addTask する
 /// ウィンドウ方式。limit が items.count 以上でも正しく動作する。
-// BltServerCore の数値 fact 取り込み（FactsIngest）からも使うため public。
-public func withBoundedTaskGroup<Item: Sendable, Result: Sendable>(
+func withBoundedTaskGroup<Item: Sendable, Result: Sendable>(
     items: [Item],
     limit: Int,
     transform: @escaping @Sendable (Item) async -> Result?
