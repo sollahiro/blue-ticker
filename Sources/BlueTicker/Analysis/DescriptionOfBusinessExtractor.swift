@@ -37,29 +37,52 @@ enum DescriptionOfBusinessExtractor {
         return htmlToText(chunk)
     }
 
+    /// タグ除去フェーズの置換（entity デコード前）。順序依存。
+    /// 定数パターンのため静的に保持し、呼び出しごとの再コンパイルを避ける。
+    private static let tagReplacements: [(NSRegularExpression, String)] = [
+        (try! NSRegularExpression(pattern: #"<script[^>]*>.*?</script>"#, options: [.caseInsensitive, .dotMatchesLineSeparators]), " "),
+        (try! NSRegularExpression(pattern: #"<style[^>]*>.*?</style>"#, options: [.caseInsensitive, .dotMatchesLineSeparators]), " "),
+        (try! NSRegularExpression(pattern: #"<br\s*/?>"#, options: [.caseInsensitive]), "\n"),
+        (try! NSRegularExpression(pattern: #"</(p|h[1-6]|tr|div|li|table)>"#, options: [.caseInsensitive]), "\n"),
+        (try! NSRegularExpression(pattern: #"<[^>]+>"#, options: [.dotMatchesLineSeparators]), " "),
+    ]
+
+    /// 空白正規化フェーズの置換（entity デコード後）。順序依存。
+    private static let whitespaceReplacements: [(NSRegularExpression, String)] = [
+        (try! NSRegularExpression(pattern: #"[ \t]+"#), " "),
+        (try! NSRegularExpression(pattern: #"\n[ \t]+"#), "\n"),
+        (try! NSRegularExpression(pattern: #"\n{2,}"#), "\n"),
+    ]
+
     static func htmlToText(_ raw: String) -> String {
         var s = raw.htmlEntityDecoded
-        s = replace(#"<script[^>]*>.*?</script>"#, in: s, with: " ", options: [.caseInsensitive, .dotMatchesLineSeparators])
-        s = replace(#"<style[^>]*>.*?</style>"#, in: s, with: " ", options: [.caseInsensitive, .dotMatchesLineSeparators])
-        s = replace(#"<br\s*/?>"#, in: s, with: "\n", options: [.caseInsensitive])
-        s = replace(#"</(p|h[1-6]|tr|div|li|table)>"#, in: s, with: "\n", options: [.caseInsensitive])
-        s = replace(#"<[^>]+>"#, in: s, with: " ", options: [.dotMatchesLineSeparators])
+        s = apply(tagReplacements, to: s)
         s = s.htmlEntityDecoded
         s = s.replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\u{3000}", with: " ")
-        s = replace(#"[ \t]+"#, in: s, with: " ")
-        s = replace(#"\n[ \t]+"#, in: s, with: "\n")
-        s = replace(#"\n{2,}"#, in: s, with: "\n")
+        s = apply(whitespaceReplacements, to: s)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func firstIXBlock(in html: String) -> String? {
+    private static func apply(_ replacements: [(NSRegularExpression, String)], to text: String) -> String {
+        var s = text
+        for (regex, template) in replacements {
+            s = regex.stringByReplacingMatches(
+                in: s, range: NSRange(s.startIndex..., in: s), withTemplate: template)
+        }
+        return s
+    }
+
+    /// 定数パターンのため静的に保持し、呼び出しごとの再コンパイルを避ける。
+    private static let ixBlockPattern: NSRegularExpression = {
         let tag = NSRegularExpression.escapedPattern(for: Xbrl.descriptionOfBusinessTextblockTag)
-        let pattern =
-            #"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*"# + tag + #"[^'\"]*['\"][^>]*>(.*?)</ix:nonNumeric>"#
-        guard let regex = try? NSRegularExpression(
-            pattern: pattern, options: [.dotMatchesLineSeparators, .caseInsensitive]),
-            let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+        return try! NSRegularExpression(
+            pattern: #"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*"# + tag + #"[^'\"]*['\"][^>]*>(.*?)</ix:nonNumeric>"#,
+            options: [.dotMatchesLineSeparators, .caseInsensitive])
+    }()
+
+    private static func firstIXBlock(in html: String) -> String? {
+        guard let match = ixBlockPattern.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
             let range = Range(match.range(at: 1), in: html)
         else { return nil }
         return String(html[range])
@@ -82,12 +105,4 @@ enum DescriptionOfBusinessExtractor {
         return files
     }
 
-    private static func replace(
-        _ pattern: String, in text: String, with template: String,
-        options: NSRegularExpression.Options = []
-    ) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return text }
-        let range = NSRange(text.startIndex..., in: text)
-        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: template)
-    }
 }

@@ -48,15 +48,17 @@ enum ReportableSegmentsOverviewExtractor {
         return DescriptionOfBusinessExtractor.htmlToText(chunk)
     }
 
-    private static func ixBlocks(in html: String) -> [String] {
+    /// 定数パターンのため静的に保持し、呼び出しごとの再コンパイルを避ける。
+    private static let ixBlockPattern: NSRegularExpression = {
         let tag = NSRegularExpression.escapedPattern(for: Xbrl.descriptionOfReportableSegmentsTextblockTag)
-        let pattern =
-            #"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*"# + tag + #"[^'\"]*['\"][^>]*>(.*?)</ix:nonNumeric>"#
-        guard let regex = try? NSRegularExpression(
-            pattern: pattern, options: [.dotMatchesLineSeparators, .caseInsensitive])
-        else { return [] }
+        return try! NSRegularExpression(
+            pattern: #"<ix:nonNumeric\b[^>]*\bname=['\"][^'\"]*"# + tag + #"[^'\"]*['\"][^>]*>(.*?)</ix:nonNumeric>"#,
+            options: [.dotMatchesLineSeparators, .caseInsensitive])
+    }()
+
+    private static func ixBlocks(in html: String) -> [String] {
         let full = NSRange(html.startIndex..., in: html)
-        return regex.matches(in: html, range: full).compactMap { match in
+        return ixBlockPattern.matches(in: html, range: full).compactMap { match in
             guard match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: html) else {
                 return nil
             }

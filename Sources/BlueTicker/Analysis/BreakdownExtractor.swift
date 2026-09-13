@@ -711,6 +711,9 @@ enum BreakdownExtractor {
 
     private static let decorativeStubCells: Set<String> = ["－", "─", "-", "—", "―", "・"]
 
+    /// 「単位：百万円」等のキャプション検出。定数パターンのため静的に保持する。
+    private static let unitCaptionPattern = try! NSRegularExpression(pattern: #"単位[：:﹕︰]([^）)\]】]{1,40})"#)
+
     private static func isUnitCaptionOrDecorativeCell(_ cell: String) -> Bool {
         if decorativeStubCells.contains(cell) { return true }
         guard cell.unicodeScalars.count <= 40 else { return false }
@@ -746,7 +749,8 @@ enum BreakdownExtractor {
             .replacingOccurrences(of: "\r", with: "")
         guard !compact.isEmpty else { return nil }
 
-        if let regex = try? NSRegularExpression(pattern: #"単位[：:﹕︰]([^）)\]】]{1,40})"#) {
+        do {
+            let regex = unitCaptionPattern
             let ns = compact as NSString
             let range = NSRange(location: 0, length: ns.length)
             if let match = regex.firstMatch(in: compact, options: [], range: range),

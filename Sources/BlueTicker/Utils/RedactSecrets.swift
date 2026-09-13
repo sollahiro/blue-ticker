@@ -3,17 +3,13 @@
 
 import Foundation
 
-private let redactSecretReplacements: [(NSRegularExpression, String)] = {
-    let patterns: [(pattern: String, template: String)] = [
-        (#"(Subscription-Key=)[^&\s"]+"#, "$1***"),
-        (#"((?:postgres(?:ql)?://[^:/@\s]+:))[^@\s]+@"#, "$1***@"),
-        (#"(Bearer\s+)\S+"#, "$1***"),
-    ]
-    return patterns.compactMap { item in
-        guard let regex = try? NSRegularExpression(pattern: item.pattern) else { return nil }
-        return (regex, item.template)
-    }
-}()
+// 定数パターンのため try!（コンパイル失敗は実装ミスであり、try? で握り潰すと
+// マスクが効かないまま秘密情報がログに出る。起動時クラッシュで気づける方が安全）。
+private let redactSecretReplacements: [(NSRegularExpression, String)] = [
+    (try! NSRegularExpression(pattern: #"(Subscription-Key=)[^&\s"]+"#), "$1***"),
+    (try! NSRegularExpression(pattern: #"((?:postgres(?:ql)?://[^:/@\s]+:))[^@\s]+@"#), "$1***@"),
+    (try! NSRegularExpression(pattern: #"(Bearer\s+)\S+"#), "$1***"),
+]
 
 /// EDINET Subscription-Key / Postgres URL の password / Bearer トークンを `***` に置換する。
 public func redactSecrets(_ message: String) -> String {
