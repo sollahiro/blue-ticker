@@ -29,7 +29,7 @@ public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPaylo
 /// `cachedDocIDs` はローカル XBRL 展開済み。欠測→版ずれの連結のうえ、キャッシュ済みを先頭へ寄せる。
 func runFactsIngest(
     db: Database, limit: Int?, cachedDocIDs: Set<String> = [], logger: Logger? = nil,
-    parse: XbrlFactParser
+    parse: @escaping XbrlFactParser
 ) async throws -> FactsIngestSummary {
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocumentListing.query(on: db)
@@ -70,6 +70,39 @@ func runFactsIngest(
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0
 
+    // parse（XBRL 取得＋展開）は `Api.xbrlProcessConcurrency` 件の bounded 並列、
+    // store は候補順の直列。未格納 payload の同時保持は並列度分だけに抑え、
+    // メモリピークを並列数倍にしない（BoundedConcurrency.swift / issue #34 と同思想）。
+    var pending: [String] = []
+
+    func flushPending() async throws {
+        guard !pending.isEmpty else { return }
+        let batch = pending
+        pending.removeAll()
+        let parsed: [(docID: String, payload: XbrlFactIndexPayload)] = await withBoundedTaskGroup(
+            items: batch, limit: Api.xbrlProcessConcurrency
+        ) { docID in
+            await parse(docID).map { (docID, $0) }
+        }
+        let parsedByID = Dictionary(uniqueKeysWithValues: parsed.map { ($0.docID, $0.payload) })
+        for docID in batch {
+            guard let payload = parsedByID[docID] else {
+                failed += 1
+                logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
+                continue
+            }
+            try await withDbRetry(
+                logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeXbrlFacts(
+                    existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID,
+                    facts: payload,
+                    db: db)
+            }
+            stored += 1
+        }
+    }
+
     for cand in candidates {
         let docID = cand
         // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
@@ -79,10 +112,12 @@ func runFactsIngest(
             )
             break
         }
+        // skip 再判定は分類フェーズとの競合窓を潰すためのもので、`facts` JSONB は不要。
+        // 全行転送する EdinetXbrlFacts.find ではなく軽量射影で確認する。
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await EdinetXbrlFacts.find(docID, on: db)
+            try await EdinetXbrlFactsCacheVersionOnly.find(docID, on: db)
         }
         if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
             skipped += 1
@@ -90,20 +125,12 @@ func runFactsIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        guard let payload = await parse(docID) else {
-            failed += 1
-            logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
-            continue
+        pending.append(docID)
+        if pending.count >= Api.xbrlProcessConcurrency {
+            try await flushPending()
         }
-        try await withDbRetry(
-            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeXbrlFacts(
-                existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID, facts: payload,
-                db: db)
-        }
-        stored += 1
     }
+    try await flushPending()
 
     return FactsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped)
