@@ -77,6 +77,9 @@ workers/**/.dev.vars
 *.o
 *.d
 
+# iOS ローカル検証用の派生ビルド出力（Apps/BlueTicker/.derived-debug 等）
+.derived-debug/
+
 # ==========================================
 # Secrets and credentials
 # ==========================================

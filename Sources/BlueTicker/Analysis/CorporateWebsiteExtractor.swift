@@ -65,9 +65,11 @@ enum CorporateWebsiteExtractor {
     /// 表記（例: テルモ「…https://www.terumo.co.jpです。」）を巻き込み、`URL(string:)`が
     /// 末尾の日本語をIDNA punycode化して不正ホスト（`terumo.co.xn--jp-883a6b.`等）を生成する
     /// 実データ不具合があった（監査レビューで発見、157件中1件）。
+    /// 定数パターンのため静的に保持し、呼び出しごとの再コンパイルを避ける。
+    private static let urlPattern = try! NSRegularExpression(pattern: "https?[:：]//[!-~]+")
+
     private static func firstURL(in text: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: "https?[:：]//[!-~]+"),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+        guard let match = urlPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let range = Range(match.range, in: text) else { return nil }
         return String(text[range]).replacingOccurrences(of: "：", with: ":")
     }

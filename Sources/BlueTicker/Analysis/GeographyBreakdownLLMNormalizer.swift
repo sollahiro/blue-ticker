@@ -250,20 +250,21 @@ enum GeographyBreakdownLLMNormalizer {
     /// 地域ラベル末尾の脚注マーカーを決定的に除去する（LLM 出力の保険）。
     /// 例: `米州（注）2` → `米州`、`欧州他(注1)` → `欧州他`、`アジア※１` → `アジア`。
     /// 「（注記）」のような一般語や、地域名の一部としての「注」は対象外。
+    /// （注）2 / (注)３ / （注1） / (注１) / （注） / ※1 / ＊２ 等の末尾脚注マーカー除去パターン。
+    /// 呼び出しごとの再コンパイルを避けるため静的に保持する（定数パターンのため try!）。
+    private static let footnoteStripPatterns: [NSRegularExpression] = [
+        try! NSRegularExpression(pattern: #"[\s　]*[（(]\s*注\s*[）)]\s*[0-9０-９]+$"#),
+        try! NSRegularExpression(pattern: #"[\s　]*[（(]\s*注\s*[0-9０-９]+\s*[）)]$"#),
+        try! NSRegularExpression(pattern: #"[\s　]*[（(]\s*注\s*[）)]$"#),
+        try! NSRegularExpression(pattern: #"[\s　]*[※＊*]\s*[0-9０-９]+$"#),
+    ]
+
     static func stripGeographyLabelFootnotes(_ label: String) -> String {
         var s = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        // （注）2 / (注)３ / （注1） / (注１) / （注） / ※1 / ＊２ 等を末尾から繰り返し除去
-        let patterns = [
-            #"[\s　]*[（(]\s*注\s*[）)]\s*[0-9０-９]+$"#,
-            #"[\s　]*[（(]\s*注\s*[0-9０-９]+\s*[）)]$"#,
-            #"[\s　]*[（(]\s*注\s*[）)]$"#,
-            #"[\s　]*[※＊*]\s*[0-9０-９]+$"#,
-        ]
         var changed = true
         while changed {
             changed = false
-            for pattern in patterns {
-                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            for regex in footnoteStripPatterns {
                 let range = NSRange(s.startIndex..<s.endIndex, in: s)
                 let replaced = regex.stringByReplacingMatches(in: s, range: range, withTemplate: "")
                 if replaced != s {
