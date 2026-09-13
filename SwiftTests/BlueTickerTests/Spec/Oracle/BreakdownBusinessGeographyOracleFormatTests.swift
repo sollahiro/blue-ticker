@@ -157,8 +157,8 @@ enum BreakdownSmokeOracleSupport {
         }
     }
 
-    /// `breakdownBusinessSalesDenominator` は statement sales がある smoke 11 社では動かない。
-    /// 8058 は smoke 対象外。フォールバックで xbrl_facts 行が変わらないことを固定する。
+    /// smoke 11 社は statement sales があり、収益認識へ寄せても顧客契約＝本表売上。
+    /// 8058 は smoke 対象外（本表収益とその他源泉が食い違う）。
     @Test func smokeBusinessDenominatorMatchesStatementSales() async throws {
         for (code, docID, name) in BreakdownSmokeOracleSupport.smokeDocs {
             try await BreakdownSmokeOracleSupport.withSmokeCache(docID) { xbrlDir in
@@ -171,10 +171,21 @@ enum BreakdownSmokeOracleSupport {
                 #expect(
                     item.value == statement,
                     Comment(rawValue: "\(code): fallback must not change denom"))
-                #expect(
-                    item.tag == "income_statement.sales",
-                    Comment(rawValue: "\(code): provenance stays income_statement.sales"))
                 let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir)
+                let usesRevenueRecognition = segments.tables.contains {
+                    $0.heading == BreakdownExtractor.revenueRecognitionHeading
+                }
+                let contractYen = BreakdownExtractor.customerContractConsolidatedYen(
+                    tables: segments.tables)
+                if usesRevenueRecognition, contractYen != nil {
+                    #expect(
+                        item.tag == "llm_table_subtotal",
+                        Comment(rawValue: "\(code): RR table uses customer-contract denom"))
+                } else {
+                    #expect(
+                        item.tag == "income_statement.sales",
+                        Comment(rawValue: "\(code): provenance stays income_statement.sales"))
+                }
                 let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
                 let withStatement = BreakdownNormalizer.normalize(
                     segments, consolidatedSales: statement, labelsByTag: labelsByTag)

@@ -186,11 +186,11 @@ import Foundation
         #expect(await client.timesCalled() == 1)
     }
 
-    @Test func mitsubishiBusinessLLMDenominatorFallsBackWhenStatementSalesIsNil() async throws {
+    @Test func mitsubishiBusinessDenominatorKeepsCustomerContractWhenPLRevenueDiffers() async throws {
         guard await Self.ensureAvailable("S100YB25") else { return }
         let dir = Self.xbrlDir("S100YB25")
-        // Summary 正本は null（PL 先頭は netSalesTags 外の Revenue2IFRS「収益」）。
-        #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == nil)
+        // Summary sales は本表 Revenue2IFRS「収益」18,915,995 百万円。
+        #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == 18_915_995_000_000)
         // business 分母は PDF 顧客との契約の連結金額 13,948,091 百万円。合計行 18,915,995 ではない。
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(xbrlDir: dir)
         #expect(denom.value == 13_948_091_000_000)

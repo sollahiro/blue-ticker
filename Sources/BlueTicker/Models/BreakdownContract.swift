@@ -72,6 +72,8 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// v12: うち列ドロップを geography 軸＋地域親/兄弟に限定（うち輸出高等の事業指標列を残す）。
 /// v13: statement sales が null のとき business 分母を収益認識の顧客契約連結→未マスク売上相当へ
 /// フォールバックし、由来タグを偽の `income_statement.sales` にしない。
+/// Summary が本表 `Revenue2IFRS`「収益」を sales に載せても、収益認識表の分母は顧客契約のまま
+/// （`fin-v21`。金額比較では切り替えない）。
 /// v12 のままでは決定論変更後も clean 行が skip される。
 public let businessBreakdownCacheVersion = "breakdown-business-v13"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。

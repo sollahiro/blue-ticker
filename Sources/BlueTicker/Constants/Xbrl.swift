@@ -74,7 +74,8 @@ enum Xbrl {
         "OperatingRevenue1SummaryOfBusinessResults",
         "OperatingRevenueRWY",
         "OperatingRevenueELE",
-        "OperatingRevenueRevenue2IFRS",
+        "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益。Revenue2IFRS（収益計）より先
+        "Revenue2IFRS",  // 三菱商事等の本表「収益」。JPX では営業収益+その他なので上より後
         "OperatingRevenueSEC",
         "InsuranceRevenueIFRS",  // 損保等（東京海上HD S100YLS8）
         "OperatingIncomeINS",  // 保険業の経常収益（かんぽ S100YD29・第一 S100VZZW）

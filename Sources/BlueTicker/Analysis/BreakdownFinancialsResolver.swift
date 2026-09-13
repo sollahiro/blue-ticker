@@ -10,9 +10,9 @@ enum BreakdownFinancialsResolver {
         let tag: String?
     }
 
-    /// business / geography 軸の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
-    /// Summary の `sales` と一致させる。本表に売上相当行が無い会社では nil（三菱商事の `Revenue2IFRS`「収益」は
-    /// `netSalesTags` 外のため Summary は null のまま）。
+    /// geography 軸と Summary の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
+    /// 三菱商事等の本表 `Revenue2IFRS`「収益」も含む。business 軸は
+    /// `breakdownBusinessSalesDenominatorItem`（収益認識表なら顧客契約）。
     static func financialsCanonicalSales(xbrlDir: URL) -> Double? {
         StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
     }
@@ -22,28 +22,35 @@ enum BreakdownFinancialsResolver {
         breakdownBusinessSalesDenominatorItem(xbrlDir: xbrlDir).value
     }
 
-    /// business 軸の分母と由来タグ。Summary sales があれば `income_statement.sales`。
-    /// 無ければ収益認識表の「顧客との契約」連結金額（`llm_table_subtotal`）、さらに無ければ
-    /// 未マスク FieldSet の売上相当タグ（`RevenueIFRSSummaryOfBusinessResults` 等）。
-    /// 偽の `income_statement.sales` は出さない。geography / Summary は変えない。
+    /// business 軸の分母と由来タグ。収益認識へ swap した表は顧客契約連結（`llm_table_subtotal`）。
+    /// 三菱商事: セグメント表が顧客契約ベース。PL「収益」はその他源泉込みで Summary とは分母が違う。
+    /// 報告セグメント表のままなら Summary sales（`income_statement.sales`）。無ければ顧客契約、
+    /// さらに無ければ未マスク FieldSet の売上相当タグ。偽の `income_statement.sales` は出さない。
     /// `tables` を渡すと `extractSegmentInfo` の再走査を避ける（ingest 経路）。
     static func breakdownBusinessSalesDenominatorItem(
         xbrlDir: URL, tables: [BreakdownTable]? = nil
     ) -> CanonicalValue {
-        if let sales = financialsCanonicalSales(xbrlDir: xbrlDir), sales != 0 {
+        let sales = financialsCanonicalSales(xbrlDir: xbrlDir)
+        let rrTables = tables ?? BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir).tables
+        if rrTables.contains(where: {
+            $0.heading == BreakdownExtractor.revenueRecognitionHeading
+        }), let yen = BreakdownExtractor.customerContractConsolidatedYen(tables: rrTables), yen != 0
+        {
+            return CanonicalValue(value: yen, tag: "llm_table_subtotal")
+        }
+        if let sales, sales != 0 {
             return CanonicalValue(value: sales, tag: "income_statement.sales")
         }
-        let rrTables = tables ?? BreakdownExtractor.extractSegmentInfo(xbrlDir: xbrlDir).tables
         if let yen = BreakdownExtractor.customerContractConsolidatedYen(tables: rrTables) {
             return CanonicalValue(value: yen, tag: "llm_table_subtotal")
         }
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let salesItem = resolveItemPreferCurrent(
             fieldSetFromDuration(allTags), tags: Xbrl.netSalesTags)
-        guard let sales = salesItem.current, sales != 0 else {
+        guard let unmasked = salesItem.current, unmasked != 0 else {
             return CanonicalValue(value: nil, tag: nil)
         }
-        return CanonicalValue(value: sales, tag: salesItem.tag)
+        return CanonicalValue(value: unmasked, tag: salesItem.tag)
     }
 
     /// financials の `employees`。正本は breakdown `employees` 軸の分母。
