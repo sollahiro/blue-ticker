@@ -199,6 +199,55 @@ struct CompanyOverviewResponse: Codable {
     }
 }
 
+struct ScreenResponse: Codable {
+    var items: [ScreenItem]
+    var returned: Int
+    var matched: Int
+    var sort: ScreenSort
+}
+
+struct ScreenSort: Codable, Equatable {
+    var key: String
+    var order: String
+}
+
+struct ScreenItem: Codable, Hashable, Identifiable {
+    var code: String
+    var name: String
+    var market: String?
+    var sector: String?
+    var periodEnd: String?
+    var sales: Double?
+    var salesGrowth: Double?
+    var grossProfitMargin: Double?
+    var operatingMargin: Double?
+    var roic: Double?
+    var roe: Double?
+    var netDe: Double?
+
+    var id: String { code }
+
+    enum CodingKeys: String, CodingKey {
+        case code, name, market, sector, sales, roic, roe
+        case periodEnd = "period_end"
+        case salesGrowth = "sales_growth"
+        case grossProfitMargin = "gross_profit_margin"
+        case operatingMargin = "operating_margin"
+        case netDe = "net_de"
+    }
+}
+
+struct ScreenMetricFilter: Sendable, Hashable {
+    var key: String
+    var min: Double?
+    var max: Double?
+}
+
+struct ScreenQuery: Hashable {
+    var sectors: [String]
+    var filters: [ScreenMetricFilter]
+}
+
 struct APIErrorBody: Codable {
     var error: String?
     var status: Int?
@@ -216,7 +265,10 @@ enum APIClientError: LocalizedError {
         switch self {
         case .badURL:
             return "API の URL が不正です"
-        case .http(_, let message):
+        case .http(let status, let message):
+            if status == 429 {
+                return "アクセスが集中しています。少し待ってから再度お試しください"
+            }
             return message
         case .decoding:
             return "応答の形式を解釈できません"

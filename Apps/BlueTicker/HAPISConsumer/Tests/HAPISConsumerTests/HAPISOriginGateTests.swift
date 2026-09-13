@@ -80,6 +80,36 @@ struct HAPISOriginGateTests {
         }
     }
 
+    @Test func withTurnSerializesConcurrentRequests() async throws {
+        let gate = HAPISOriginGate()
+        let order = SequenceLog()
+        let hold = Hold()
+
+        let first = Task {
+            try await gate.withTurn(.interactive) {
+                await order.append("a-start")
+                await hold.wait()
+                await order.append("a-end")
+                return 1
+            }
+        }
+        await order.waitUntil("a-start")
+
+        let second = Task {
+            try await gate.withTurn(.interactive) {
+                await order.append("b")
+                return 2
+            }
+        }
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(await order.values == ["a-start"])
+
+        await hold.resume()
+        #expect(try await first.value == 1)
+        #expect(try await second.value == 2)
+        #expect(await order.values == ["a-start", "a-end", "b"])
+    }
+
     @Test func retryAfterIsCappedForClientUX() async throws {
         let clock = TestClock(start: Date(timeIntervalSince1970: 1_000))
         let sleeps = SleepLog()
@@ -115,6 +145,38 @@ struct HAPISOriginGateTests {
 
         let expired = formatter.string(from: Date(timeIntervalSince1970: 900))
         #expect(HAPISRetryAfter.seconds(from: expired, now: now) == -100)
+    }
+}
+
+private actor SequenceLog {
+    private(set) var values: [String] = []
+    private var waiters: [String: CheckedContinuation<Void, Never>] = [:]
+
+    func append(_ value: String) {
+        values.append(value)
+        waiters.removeValue(forKey: value)?.resume()
+    }
+
+    func waitUntil(_ value: String) async {
+        if values.contains(value) { return }
+        await withCheckedContinuation { continuation in
+            waiters[value] = continuation
+        }
+    }
+}
+
+private actor Hold {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
     }
 }
 

@@ -42,47 +42,62 @@ enum APIConfiguration {
         #endif
     }
 
+    /// Debug だけ UserDefaults で上書き。Release は HAPIS 本番に固定（同じ Bundle ID の Debug 値を読まない）。
     static var hapisIssuerURL: URL {
         get {
-            if let raw = UserDefaults.standard.string(forKey: issuerStorageKey),
-                let url = validatedHAPISIssuerURL(from: raw)
-            {
-                return url
-            }
+            #if DEBUG
+                if let raw = UserDefaults.standard.string(forKey: issuerStorageKey),
+                    let url = validatedHAPISIssuerURL(from: raw)
+                {
+                    return url
+                }
+            #endif
             return defaultHAPISIssuerURL
         }
         set {
-            if let origin = HAPISIssuer.origin(of: newValue) {
-                UserDefaults.standard.set(origin.absoluteString, forKey: issuerStorageKey)
-            }
+            #if DEBUG
+                if let origin = HAPISIssuer.origin(of: newValue) {
+                    UserDefaults.standard.set(origin.absoluteString, forKey: issuerStorageKey)
+                }
+            #endif
         }
     }
 
     static var hapisGatewayBaseURL: URL {
         get {
-            if let raw = UserDefaults.standard.string(forKey: gatewayStorageKey),
-                let url = validatedBaseURL(from: raw)
-            {
-                return url
-            }
+            #if DEBUG
+                if let raw = UserDefaults.standard.string(forKey: gatewayStorageKey),
+                    let url = validatedBaseURL(from: raw)
+                {
+                    return url
+                }
+            #endif
             return productionHAPISGatewayBaseURL
         }
         set {
-            UserDefaults.standard.set(newValue.absoluteString, forKey: gatewayStorageKey)
+            #if DEBUG
+                UserDefaults.standard.set(newValue.absoluteString, forKey: gatewayStorageKey)
+            #endif
         }
     }
 
     static var baseURL: URL {
         get {
-            if let raw = UserDefaults.standard.string(forKey: storageKey),
-                let url = validatedBaseURL(from: raw)
-            {
-                return url
-            }
-            return defaultBaseURL
+            #if DEBUG
+                if let raw = UserDefaults.standard.string(forKey: storageKey),
+                    let url = validatedBaseURL(from: raw)
+                {
+                    return url
+                }
+                return defaultBaseURL
+            #else
+                return productionHAPISGatewayBaseURL
+            #endif
         }
         set {
-            UserDefaults.standard.set(newValue.absoluteString, forKey: storageKey)
+            #if DEBUG
+                UserDefaults.standard.set(newValue.absoluteString, forKey: storageKey)
+            #endif
         }
     }
 

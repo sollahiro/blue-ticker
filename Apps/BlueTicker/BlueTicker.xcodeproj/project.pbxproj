@@ -24,7 +24,7 @@
 		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* WatchedCompany.swift */; };
 		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
 		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
-		AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* SettingsPlaceholder.swift */; };
+		AA0000000000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* SettingsView.swift */; };
 		AA0000000000000000000011 /* DualRangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011 /* DualRangeSlider.swift */; };
 		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012 /* CompanyRowView.swift */; };
 		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013 /* TopView.swift */; };
@@ -56,7 +56,7 @@
 		BB0000000000000000000007 /* WatchedCompany.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedCompany.swift; sourceTree = "<group>"; };
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000010 /* SettingsPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPlaceholder.swift; sourceTree = "<group>"; };
+		BB0000000000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000011 /* DualRangeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualRangeSlider.swift; sourceTree = "<group>"; };
 		BB0000000000000000000012 /* CompanyRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRowView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000013 /* TopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopView.swift; sourceTree = "<group>"; };
@@ -156,7 +156,7 @@
 			children = (
 				BB0000000000000000000009 /* RootView.swift */,
 				BB0000000000000000000021 /* BrandMark.swift */,
-				BB0000000000000000000010 /* SettingsPlaceholder.swift */,
+				BB0000000000000000000010 /* SettingsView.swift */,
 				BB0000000000000000000023 /* AccessLoginView.swift */,
 				DD0000000000000000000007 /* Explore */,
 				DD0000000000000000000008 /* Ticker */,
@@ -274,7 +274,7 @@
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
 				AA0000000000000000000009 /* RootView.swift in Sources */,
 				AA0000000000000000000021 /* BrandMark.swift in Sources */,
-				AA0000000000000000000010 /* SettingsPlaceholder.swift in Sources */,
+				AA0000000000000000000010 /* SettingsView.swift in Sources */,
 				AA0000000000000000000011 /* DualRangeSlider.swift in Sources */,
 				AA0000000000000000000012 /* CompanyRowView.swift in Sources */,
 				AA0000000000000000000013 /* TopView.swift in Sources */,

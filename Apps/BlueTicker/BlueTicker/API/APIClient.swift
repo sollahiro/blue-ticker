@@ -10,6 +10,13 @@ actor APIClient {
     private let hapis: HAPISConsumerClient
     private let originGate: HAPISOriginGate
     private var pinnedCodes: Set<String> = []
+    private var inFlightGets: [String: InFlightGet] = [:]
+
+    private struct InFlightGet {
+        let id: UUID
+        let task: Task<Data, Error>
+        var waiterCount: Int
+    }
 
     init(
         session: URLSession? = nil,
@@ -71,6 +78,68 @@ actor APIClient {
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
         guard let url = components?.url else { throw APIClientError.badURL }
         return try await get(url)
+    }
+
+    /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。2 件以上は完全一致を順に叩き、ROIC 降順で 50 件にまとめる（サーバーは `sector` 1 件）。
+    func screen(sectors: [String], filters: [ScreenMetricFilter]) async throws -> ScreenResponse {
+        let targets: [String?] =
+            sectors.isEmpty ? [nil] : sectors.map { Optional($0) }
+        if targets.count == 1 {
+            return try await screenOnce(sector: targets[0], filters: filters)
+        }
+        var byCode: [String: ScreenItem] = [:]
+        var matched = 0
+        var sort = ScreenSort(key: "roic", order: "desc")
+        for sector in targets {
+            try Task.checkCancellation()
+            let page = try await screenOnce(sector: sector, filters: filters)
+            matched += page.matched
+            sort = page.sort
+            for item in page.items where byCode[item.code] == nil {
+                byCode[item.code] = item
+            }
+        }
+        let items = Array(
+            byCode.values.sorted {
+                let leftROIC = $0.roic ?? -.infinity
+                let rightROIC = $1.roic ?? -.infinity
+                if leftROIC != rightROIC { return leftROIC > rightROIC }
+                return $0.code < $1.code
+            }.prefix(50))
+        return ScreenResponse(
+            items: items, returned: items.count, matched: matched, sort: sort)
+    }
+
+    private func screenOnce(sector: String?, filters: [ScreenMetricFilter]) async throws
+        -> ScreenResponse
+    {
+        var items = [
+            URLQueryItem(name: "sort", value: "roic"),
+            URLQueryItem(name: "order", value: "desc"),
+            URLQueryItem(name: "limit", value: "50"),
+        ]
+        if let sector, !sector.isEmpty {
+            items.append(URLQueryItem(name: "sector", value: sector))
+        }
+        for filter in filters {
+            if let min = filter.min {
+                items.append(URLQueryItem(name: "\(filter.key)_min", value: Self.queryNumber(min)))
+            }
+            if let max = filter.max {
+                items.append(URLQueryItem(name: "\(filter.key)_max", value: Self.queryNumber(max)))
+            }
+        }
+        var components = URLComponents(url: path("v1/screen"), resolvingAgainstBaseURL: false)
+        components?.queryItems = items
+        guard let url = components?.url else { throw APIClientError.badURL }
+        return try await get(url)
+    }
+
+    private static func queryNumber(_ value: Double) -> String {
+        if value.rounded() == value, value >= Double(Int.min), value <= Double(Int.max) {
+            return String(Int(value))
+        }
+        return String(value)
     }
 
     func feedUpdates() async throws -> FeedUpdatesResponse {
@@ -174,7 +243,7 @@ actor APIClient {
             return decoded
         }
         do {
-            let data = try await fetchData(url, hapisClass: hapisClass)
+            let data = try await fetchCoalesced(url, hapisClass: hapisClass)
             do {
                 let decoded = try decoder.decode(T.self, from: data)
                 if cacheTTL != nil {
@@ -208,6 +277,76 @@ actor APIClient {
         }
     }
 
+    /// 同一 GET は 1 本にまとめる。待ちが残っている間は生かし、最後の待ちが消えたら中身をキャンセルする。
+    /// map から外すのはその Task が完了したときだけ（新しい in-flight を消さない）。
+    private func fetchCoalesced(
+        _ url: URL,
+        hapisClass: HAPISOriginGate.RequestClass
+    ) async throws -> Data {
+        try Task.checkCancellation()
+        let key = "\(ResponseCache.key(for: url))|\(hapisClass)"
+        let flight: InFlightGet
+        if let existing = inFlightGets[key], existing.waiterCount > 0, !existing.task.isCancelled {
+            var joined = existing
+            joined.waiterCount += 1
+            inFlightGets[key] = joined
+            flight = joined
+        } else {
+            let id = UUID()
+            let task = Task {
+                try await self.fetchWithGate(url, hapisClass: hapisClass)
+            }
+            flight = InFlightGet(id: id, task: task, waiterCount: 1)
+            inFlightGets[key] = flight
+        }
+        do {
+            let data = try await withTaskCancellationHandler {
+                try await flight.task.value
+            } onCancel: {
+                Task { await self.abandonWaiter(key: key, id: flight.id) }
+            }
+            finishInFlight(key: key, id: flight.id)
+            return data
+        } catch {
+            finishInFlight(key: key, id: flight.id)
+            throw error
+        }
+    }
+
+    private func abandonWaiter(key: String, id: UUID) {
+        guard var entry = inFlightGets[key], entry.id == id else { return }
+        entry.waiterCount -= 1
+        if entry.waiterCount <= 0 {
+            entry.task.cancel()
+        }
+        inFlightGets[key] = entry
+    }
+
+    private func finishInFlight(key: String, id: UUID) {
+        guard let entry = inFlightGets[key], entry.id == id else { return }
+        inFlightGets[key] = nil
+    }
+
+    /// HAPIS は同時 1 本。interactive の 429 はクールダウンのあと 1 回だけやり直す。
+    private func fetchWithGate(
+        _ url: URL,
+        hapisClass: HAPISOriginGate.RequestClass
+    ) async throws -> Data {
+        guard APIConfiguration.usesHAPISConsumer(url) else {
+            return try await fetchData(url, hapisClass: hapisClass)
+        }
+        do {
+            return try await originGate.withTurn(hapisClass) {
+                try await self.fetchData(url, hapisClass: hapisClass)
+            }
+        } catch APIClientError.http(let status, _) where status == 429 && hapisClass == .interactive {
+            try await originGate.waitTurn(.interactive)
+            return try await originGate.withTurn(hapisClass) {
+                try await self.fetchData(url, hapisClass: hapisClass)
+            }
+        }
+    }
+
     private func fetchData(
         _ url: URL,
         hapisRemintAttempted: Bool = false,
@@ -229,7 +368,6 @@ actor APIClient {
                     "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
             }
         } else if APIConfiguration.usesHAPISConsumer(url) {
-            try await originGate.waitTurn(hapisClass)
             try Task.checkCancellation()
             do {
                 request = try await hapis.authorize(request)

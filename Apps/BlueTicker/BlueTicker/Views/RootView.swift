@@ -35,7 +35,7 @@ struct RootView: View {
             .tag(2)
 
             NavigationStack {
-                SettingsPlaceholder()
+                SettingsView()
                     .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
