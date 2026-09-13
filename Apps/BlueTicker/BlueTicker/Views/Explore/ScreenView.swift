@@ -93,7 +93,6 @@ struct ScreenView: View {
     @State private var selectedSectors: Set<String> = []
     @State private var ranges: [ScreenMetric: [Double]] = [:]
     @State private var extraMetrics: [ScreenMetric] = []
-    @State private var showResults = false
 
     private var availableOptional: [ScreenMetric] {
         ScreenMetric.optional.filter { !extraMetrics.contains($0) }
@@ -138,14 +137,37 @@ struct ScreenView: View {
         .bltChrome()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("検索") {
-                    showResults = true
+                NavigationLink(value: ScreenQuery(sectors: screenSectors, filters: metricFilters)) {
+                    Text("検索")
                 }
                 .foregroundStyle(Theme.text)
             }
         }
-        .navigationDestination(isPresented: $showResults) {
-            ScreenResultsView()
+        .navigationDestination(for: ScreenQuery.self) { query in
+            ScreenResultsView(sectors: query.sectors, filters: query.filters)
+        }
+    }
+
+    /// 未選択と全選択は同じ（業種フィルタなし）。複数はサーバーが 1 業種なので呼び出し側で OR する。
+    private var screenSectors: [String] {
+        if selectedSectors.isEmpty || selectedSectors.count == TSESector.catalog.count {
+            return []
+        }
+        return selectedSectors.sorted()
+    }
+
+    private var metricFilters: [ScreenMetricFilter] {
+        (ScreenMetric.alwaysShown + extraMetrics).compactMap { metric in
+            let values = ranges[metric] ?? [metric.sliderMin, metric.sliderMax]
+            let lo = values[0]
+            let hi = values[1]
+            let sendMin = lo > metric.sliderMin + metric.step / 2
+            let sendMax = hi < metric.sliderMax - metric.step / 2
+            guard sendMin || sendMax else { return nil }
+            return ScreenMetricFilter(
+                key: metric.rawValue,
+                min: sendMin ? lo : nil,
+                max: sendMax ? hi : nil)
         }
     }
 
@@ -297,13 +319,162 @@ struct ScreenView: View {
 }
 
 private struct ScreenResultsView: View {
+    var sectors: [String]
+    var filters: [ScreenMetricFilter]
+
+    @State private var items: [ScreenItem] = []
+    @State private var matched = 0
+    @State private var errorMessage: String?
+    @State private var loaded = false
+
     var body: some View {
-        ContentUnavailableView(
-            "該当する会社はありません",
-            systemImage: "slider.horizontal.3",
-            description: Text("横断検索は未接続です。Screen REST が公開されるまで結果は返しません。")
-        )
+        Group {
+            if !loaded {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage {
+                ContentUnavailableView(
+                    "検索できません",
+                    systemImage: "slider.horizontal.3",
+                    description: Text(errorMessage)
+                )
+            } else if items.isEmpty {
+                ContentUnavailableView(
+                    "該当する会社はありません",
+                    systemImage: "slider.horizontal.3"
+                )
+            } else {
+                List {
+                    ForEach(items) { item in
+                        NavigationLink(value: CompanyRef(item)) {
+                            ScreenResultRow(item: item, metrics: shownMetrics)
+                        }
+                        .listRowBackground(Theme.elevated)
+                    }
+                    if matched > items.count {
+                        Text("上位 \(items.count) 件を表示（該当 \(matched) 件）")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textMuted)
+                            .listRowBackground(Color.clear)
+                    }
+                }
+            }
+        }
         .navigationTitle("検索結果")
         .bltChrome()
+        .task {
+            guard !loaded else { return }
+            await run()
+        }
+    }
+
+    private func run() async {
+        do {
+            let response = try await APIClient.shared.screen(sectors: sectors, filters: filters)
+            items = response.items
+            matched = response.matched
+            errorMessage = nil
+        } catch APIClientError.http(let status, let message) where status == 404 {
+            items = []
+            matched = 0
+            errorMessage = message.isEmpty ? "Screen 索引は未生成です" : message
+        } catch {
+            items = []
+            matched = 0
+            errorMessage = error.localizedDescription
+        }
+        loaded = true
+    }
+
+    /// 並びは ROIC 固定。スライダーで送った指標は条件の並び（既定3つ → 追加）で出す。
+    private var shownMetrics: [ScreenMetric] {
+        let requested = Set(filters.map(\.key))
+        var ordered: [ScreenMetric] = []
+        var seen = Set<ScreenMetric>()
+        func add(_ metric: ScreenMetric) {
+            if seen.insert(metric).inserted {
+                ordered.append(metric)
+            }
+        }
+        for metric in ScreenMetric.alwaysShown {
+            if metric == .roic || requested.contains(metric.rawValue) {
+                add(metric)
+            }
+        }
+        for metric in ScreenMetric.optional where requested.contains(metric.rawValue) {
+            add(metric)
+        }
+        return ordered
+    }
+}
+
+private struct ScreenResultRow: View {
+    var item: ScreenItem
+    var metrics: [ScreenMetric]
+
+    private var visibleMetrics: [ScreenMetric] {
+        metrics.filter { item.value(for: $0) != nil }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CompanyRowView(company: CompanyRef(item))
+            if !visibleMetrics.isEmpty {
+                ScreenMetricValuesView(item: item, metrics: visibleMetrics)
+                    .padding(.leading, 48)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct ScreenMetricValuesView: View {
+    var item: ScreenItem
+    var metrics: [ScreenMetric]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(metricRows.indices, id: \.self) { index in
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(metricRows[index]) { metric in
+                        if let value = item.value(for: metric) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(metric.title)
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.textMuted)
+                                Text(metric.format(value))
+                                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                                    .foregroundStyle(metric.band.color(for: value))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                            .frame(minWidth: 72, alignment: .leading)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var metricRows: [[ScreenMetric]] {
+        stride(from: 0, to: metrics.count, by: 3).map { start in
+            Array(metrics[start..<min(start + 3, metrics.count)])
+        }
+    }
+}
+
+private extension ScreenItem {
+    func value(for metric: ScreenMetric) -> Double? {
+        switch metric {
+        case .sales: sales
+        case .salesGrowth: salesGrowth
+        case .grossMargin: grossProfitMargin
+        case .operatingMargin: operatingMargin
+        case .roic: roic
+        case .roe: roe
+        case .netDe: netDe
+        }
     }
 }

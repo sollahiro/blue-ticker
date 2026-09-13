@@ -2,6 +2,7 @@ import Foundation
 
 /// HAPIS ゲートウェイ（＝上流 `api.*`）向けのクライアント側スロットリング。
 /// 先読みは間引き、429 のあとは interactive も含めて待つ。loopback には使わない。
+/// ゲートウェイへは同時に 1 本だけ出す（起動時 Feed と条件検索が並走して 429 にならないようにする）。
 public actor HAPISOriginGate {
     public enum RequestClass: Sendable, Equatable {
         /// Feed / 検索 / 銘柄を開いたとき。429 クールダウンだけ待つ。
@@ -17,6 +18,8 @@ public actor HAPISOriginGate {
 
     private var cooldownUntil = Date.distantPast
     private var nextPrefetchAt = Date.distantPast
+    private var occupied = false
+    private var occupancyWaiters: [(id: UUID, continuation: CheckedContinuation<Void, Error>)] = []
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (TimeInterval) async throws -> Void
 
@@ -35,6 +38,7 @@ public actor HAPISOriginGate {
         now() < cooldownUntil
     }
 
+    /// クールダウン / 先読み間隔だけ待つ。スロットは取らない。
     public func waitTurn(_ requestClass: RequestClass) async throws {
         while true {
             try Task.checkCancellation()
@@ -55,6 +59,22 @@ public actor HAPISOriginGate {
         }
     }
 
+    /// 1 本分のゲートウェイ枠を取って `operation` を走らせる。終了まで次は待たされる。
+    public func withTurn<T: Sendable>(
+        _ requestClass: RequestClass,
+        operation: @Sendable () async throws -> T
+    ) async throws -> T {
+        try await acquireSlot(requestClass)
+        do {
+            let value = try await operation()
+            releaseSlot()
+            return value
+        } catch {
+            releaseSlot()
+            throw error
+        }
+    }
+
     public func noteRateLimited(retryAfterSeconds: TimeInterval?) {
         let seconds = min(
             max(retryAfterSeconds ?? Self.defaultCooldown, 5),
@@ -63,6 +83,41 @@ public actor HAPISOriginGate {
         let until = now().addingTimeInterval(seconds)
         cooldownUntil = until
         nextPrefetchAt = until
+    }
+
+    private func acquireSlot(_ requestClass: RequestClass) async throws {
+        while true {
+            try await waitTurn(requestClass)
+            if occupied {
+                try await waitForOccupancy()
+                continue
+            }
+            occupied = true
+            return
+        }
+    }
+
+    private func waitForOccupancy() async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                occupancyWaiters.append((id, continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelOccupancy(id) }
+        }
+    }
+
+    private func cancelOccupancy(_ id: UUID) {
+        if let index = occupancyWaiters.firstIndex(where: { $0.id == id }) {
+            occupancyWaiters.remove(at: index).continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    private func releaseSlot() {
+        occupied = false
+        guard !occupancyWaiters.isEmpty else { return }
+        occupancyWaiters.removeFirst().continuation.resume()
     }
 }
 

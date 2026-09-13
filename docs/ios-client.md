@@ -38,6 +38,7 @@
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
 | ウォッチリスト | クライアントローカル（`SwiftData`）。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
 | 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索・Feed はキャッシュしない。iOS は Core をリンクしないので `CacheManager` は使わない |
+| 設定 | Release はバージョン表示のみ。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS） |
 | 会社行 | 社名・業種に加え銘柄コードを載せる |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`）。Feed からの遷移は `CompanyRef.sector` が空なので、銘柄面は `GET /v1/companies/{code}/financials` の `sector` で補う |
 
@@ -61,7 +62,7 @@
 | 画面 | Feature | 備考 |
 |---|---|---|
 | 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed は REST 省略時どおり直近90日を最大10件。同日過多のサンプルはサーバー。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト |
-| 条件検索 | Screen（BLT-49） | 横断フィルタ UI。`検索` で結果画面へ。Screen REST は未接続なので空状態。全社 `financials` をクライアントで絞らない |
+| 条件検索 | Screen（BLT-49） | 横断フィルタ UI。`検索` で `GET /v1/screen` の結果画面へ。全社 `financials` をクライアントで絞らない |
 | リスト | （クライアント） | ウォッチリスト |
 | 概要 | Summary | 年次の水準値。表の上に Overview。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ。要因を選ぶと、緑／赤に応じた一文と計算式（と可能な範囲で計算に使った数値）を出す |
@@ -75,7 +76,7 @@
 
 アプリ側の制約（サーバー許可リストは削らない。BLT-49）:
 
-- 業種は横スクロール 3 段のチップで複数選択。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行・銘柄ヘッダの業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。REST 未接続のため送出契約は未決（AND にはしない）
+- 業種は横スクロール 3 段のチップで複数選択。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行・銘柄ヘッダの業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。未選択と全選択は `sector` を送らない。1 業種は `sector=` 完全一致。2 業種以上は AND にせず、業種ごとに `GET /v1/screen` して ROIC 降順 50 件へマージする（サーバーは `sector` 1 件）
 - 数値指標の既定は `営業利益率` / `ROIC` / `ROE` の 3 つ。その下の `＋` でオプション行を足す（`売上高` / `売上増加率` / `粗利率` / `ネットD/E`）。追加行のタイトル右の上下シェブロンで項目を選び、右からのスライドでバツ削除。`＋` は常に最下行。各指標は DualRangeSlider（下限・上限、`[minValue, maxValue]`、値はハンドル上）。ソートは `roic` 降順、LIMIT 50 で固定
   - 売上高 `sales`（100 億円以上が緑、未満は黄）
   - 売上増加率 `sales_growth`（画面上のオプション。Summary `years[]` に YoY キーは無く、`screen_index` の派生列）
@@ -85,12 +86,12 @@
   - ROE `roe`
   - ネット D/E `net_de`
 - スライダーはハンドルのドラッグだけが値を変える。トラックや余白のタップ、縦スクロール開始では動かない。ハンドル色は水準帯を赤→黄→緑で表す（文言ラベルは出さない）。数値はハンドルに追従し、近いときは重ならない。背景から横にはみ出さない。指標セクションの背景は設定のサーバー入力欄に近い黒寄り。Screen REST の許可リストは変えない
-- 条件の実行はツールバーの `検索`。結果画面へ遷移する。Screen REST 未接続時は空状態。`絞り込む` は置かない
+- 条件の実行はツールバーの `検索`。結果画面へ遷移する。スライダーが既定の全幅の指標は min/max を送らない（null 行を落とさない）。`絞り込む` は置かない
 - 売上増加率 `sales_growth` は `screen_index` の派生列（最新 FY と直前 FY の `sales` から `%`。直前 FY が無い / 売上 0 以下なら null）。Summary の `years[]` には YoY キーを足さない
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 7 指標。応答は `items[]`（メタ + フィルタ / ソートに使った指標だけ）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、`blt-server screen-rebuild` で全件再生成する。skills カタログには載せない（BLT-49）。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 7 指標。応答は `items[]`（メタ + フィルタ / ソートに使った指標だけ）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、`blt-server screen-rebuild` で全件再生成する。skills カタログには載せない（BLT-49）。
 
 ## 認証
 
@@ -99,10 +100,10 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 段階 | 方針 |
 |---|---|
 | 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
-| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。設定の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
-| 段階 B（HAPIS、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**クライアントは App Attest を sessions に載せる（Release）。本番サーバーの `ATTEST_MODE=enforce` はまだオフ**（stub のまま。この PR では切替しない）。Debug ビルドは stub mint のまま（Simulator / stub 制御面）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
+| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。**Debug 設定**の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
+| 段階 B（HAPIS、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**クライアントは App Attest を sessions に載せる（Release）。本番制御面は `ATTEST_MODE=enforce`**（stub mint は `missing_attest`）。Debug ビルドは stub mint のまま（Simulator / 手元ループバック用）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
 
-設定の SSO は段階 A プレビュー用。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
+**Release** は起動時から HAPIS ゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh）。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・Access SSO・発行者 URL は開発ラボ。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
 
 ### HAPIS consumer mint（クライアント）
 
@@ -115,11 +116,12 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 - `GET /v1/consumer/challenge` — App Attest の mint / attest / assertion のたびに取る（単回使い切り。stub mint では呼ばない）。応答 `challenge` は 32 バイトの unpadded base64url
 - `POST /v1/consumer/sessions` — 201 で `token` / `refresh_at` / `expires_at`
-  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=stub` のまま受ける。**本番 `ATTEST_MODE=enforce` はこの PR では切替しない**
+  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=enforce` なので拒否する（`missing_attest`）。Simulator / ローカル用
   - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
 - `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない。blt-server / Vapor には consumer JWT を付けない
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
-- 設定の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
+- **Release** の API base / 発行者はハードコード（ゲートウェイ + `hapis.sollahiro.workers.dev`）。設定では切り替えない
+- **Debug** の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
 - Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Debug は stub なので Simulator 検索は動く）
 
 #### App Attest 証拠（Release / `blt.hapis.attestMode=appAttest`）
@@ -153,25 +155,26 @@ Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAtte
 
 Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
 
-1. 設定 → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
-2. Debug ビルド → 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
+1. Debug → 設定 → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
+2. Debug → 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
 3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
 4. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
+5. Release は設定を触らず検索できること（API base は HAPIS ゲートウェイ。設定はバージョン表示のみ）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
 
 #### 実機 App Attest（後で。Simulator では不可）
 
-本番 `ATTEST_MODE` は stub のまま。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`）:
+本番 `ATTEST_MODE` は enforce。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`。ただし Debug の Attest 環境は `development` で、本番 HAPIS の既定 `APP_ATTEST_ENVIRONMENT=production` とは合わない）:
 
-1. 設定 → HAPIS 本番。検索できること
+1. Release は設定を触らず検索できること。Debug で試すときは設定 → HAPIS 本番
 2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id`・`challenge`・`client_data`（`{"challenge":…}`）と、初回は `attestation`、2 回目以降は `assertion`
-3. トークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
-4. Access の「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
+3. Debug のトークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
+4. Debug の Access「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
 
 
 ## 未決
 
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
-- 設定の、開発用サーバー / Access ログイン / HAPIS 発行者以外
+- 設定の製品コンテンツ（プライバシー、アカウント等）。Release はバージョン表示のみで、開発ラボは Debug 限定
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
 - Screen REST を skills カタログに載せるか（BLT-49。listed drain 後でも別判断）
 
