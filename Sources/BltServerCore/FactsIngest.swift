@@ -79,6 +79,9 @@ func runFactsIngest(
     var interrupted = false
 
     func deferRemaining(_ count: Int) {
+        // 直列ループと同じく、次回に回す分は attempted に残さない。
+        // サマリは attempted == stored + failed（skip 除く）であり、
+        // バッチ先行 parse の実装詳細を件数に混ぜない。
         attempted -= count
         interrupted = true
     }

@@ -44,13 +44,18 @@ func parseDateString(_ dateStr: String?) -> Date? {
 }
 
 /// Date → "YYYY-MM-DD"（UTC 固定）。
+/// DateFormatter は Linux で並行 `string(from:)` が安全でないため、共有 `utcCalendar` で組む。
 func formatDateString(_ date: Date) -> String {
-    isoFormatter.string(from: date)
+    let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
+    let year = comps.year ?? 0
+    let month = comps.month ?? 0
+    let day = comps.day ?? 0
+    return String(format: "%04d-%02d-%02d", year, month, day)
 }
 
 /// 今日（UTC）の "YYYY-MM-DD"。
 public func todayUTC() -> String {
-    isoFormatter.string(from: Date())
+    formatDateString(Date())
 }
 
 /// YYYYMMDD / YYYY-MM-DD → (year, month). 失敗時は (nil, nil)。

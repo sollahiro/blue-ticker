@@ -52,14 +52,8 @@ public func parseFeedDocTypes(_ raw: String?) -> [String] {
 }
 
 /// UTC 暦日（YYYY-MM-DD）。`submit_date_time` の日付部分および Update の `date` に使う。
-/// DateFormatter は Linux で並行 `string(from:)` が安全でない。REST から同時に呼ばれるため、
-/// 既存の共有 `utcCalendar` で組む（`feedInclusiveCutoffDateString` と同じ土台）。
 public func feedDateString(_ date: Date = Date()) -> String {
-    let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
-    let year = comps.year ?? 0
-    let month = comps.month ?? 0
-    let day = comps.day ?? 0
-    return String(format: "%04d-%02d-%02d", year, month, day)
+    formatDateString(date)
 }
 
 /// 今日を含む UTC 暦日数の下限。`days=1` はその日、`days=7` は直近1週間。
