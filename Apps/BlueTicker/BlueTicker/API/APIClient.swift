@@ -10,7 +10,13 @@ actor APIClient {
     private let hapis: HAPISConsumerClient
     private let originGate: HAPISOriginGate
     private var pinnedCodes: Set<String> = []
-    private var inFlightGets: [String: Task<Data, Error>] = [:]
+    private var inFlightGets: [String: InFlightGet] = [:]
+
+    private struct InFlightGet {
+        let id: UUID
+        let task: Task<Data, Error>
+        var waiterCount: Int
+    }
 
     init(
         session: URLSession? = nil,
@@ -85,6 +91,7 @@ actor APIClient {
         var matched = 0
         var sort = ScreenSort(key: "roic", order: "desc")
         for sector in targets {
+            try Task.checkCancellation()
             let page = try await screenOnce(sector: sector, filters: filters)
             matched += page.matched
             sort = page.sort
@@ -93,7 +100,12 @@ actor APIClient {
             }
         }
         let items = Array(
-            byCode.values.sorted { ($0.roic ?? -.infinity) > ($1.roic ?? -.infinity) }.prefix(50))
+            byCode.values.sorted {
+                let leftROIC = $0.roic ?? -.infinity
+                let rightROIC = $1.roic ?? -.infinity
+                if leftROIC != rightROIC { return leftROIC > rightROIC }
+                return $0.code < $1.code
+            }.prefix(50))
         return ScreenResponse(
             items: items, returned: items.count, matched: matched, sort: sort)
     }
@@ -265,26 +277,54 @@ actor APIClient {
         }
     }
 
+    /// 同一 GET は 1 本にまとめる。待ちが残っている間は生かし、最後の待ちが消えたら中身をキャンセルする。
+    /// map から外すのはその Task が完了したときだけ（新しい in-flight を消さない）。
     private func fetchCoalesced(
         _ url: URL,
         hapisClass: HAPISOriginGate.RequestClass
     ) async throws -> Data {
+        try Task.checkCancellation()
         let key = "\(ResponseCache.key(for: url))|\(hapisClass)"
-        if let existing = inFlightGets[key] {
-            return try await existing.value
+        let flight: InFlightGet
+        if let existing = inFlightGets[key], existing.waiterCount > 0, !existing.task.isCancelled {
+            var joined = existing
+            joined.waiterCount += 1
+            inFlightGets[key] = joined
+            flight = joined
+        } else {
+            let id = UUID()
+            let task = Task {
+                try await self.fetchWithGate(url, hapisClass: hapisClass)
+            }
+            flight = InFlightGet(id: id, task: task, waiterCount: 1)
+            inFlightGets[key] = flight
         }
-        let task = Task {
-            try await self.fetchWithGate(url, hapisClass: hapisClass)
-        }
-        inFlightGets[key] = task
         do {
-            let data = try await task.value
-            inFlightGets[key] = nil
+            let data = try await withTaskCancellationHandler {
+                try await flight.task.value
+            } onCancel: {
+                Task { await self.abandonWaiter(key: key, id: flight.id) }
+            }
+            finishInFlight(key: key, id: flight.id)
             return data
         } catch {
-            inFlightGets[key] = nil
+            finishInFlight(key: key, id: flight.id)
             throw error
         }
+    }
+
+    private func abandonWaiter(key: String, id: UUID) {
+        guard var entry = inFlightGets[key], entry.id == id else { return }
+        entry.waiterCount -= 1
+        if entry.waiterCount <= 0 {
+            entry.task.cancel()
+        }
+        inFlightGets[key] = entry
+    }
+
+    private func finishInFlight(key: String, id: UUID) {
+        guard let entry = inFlightGets[key], entry.id == id else { return }
+        inFlightGets[key] = nil
     }
 
     /// HAPIS は同時 1 本。interactive の 429 はクールダウンのあと 1 回だけやり直す。
