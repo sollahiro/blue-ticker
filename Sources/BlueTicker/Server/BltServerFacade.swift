@@ -478,7 +478,7 @@ public extension BltServerContext {
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
     /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。
-    /// Summary sales が正当に null の会社は顧客契約の連結金額、無ければ本表外タグへフォールバックする
+    /// 収益認識表へ寄せた会社は顧客契約の連結金額、無ければ本表外タグへフォールバックする
     /// （三菱商事）。由来タグは実タグ / `llm_table_subtotal` で、偽の `income_statement.sales` は出さない。
     /// 保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
     func resolveBusinessBreakdown(docID: String) async -> BreakdownResolveResult {

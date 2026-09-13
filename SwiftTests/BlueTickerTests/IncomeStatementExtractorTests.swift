@@ -197,4 +197,23 @@ import Foundation
         #expect(result.sales == nil)
         #expect(result.salesPrior == 900_000.0)
     }
+
+    @Test func testSalesLabelRevenue2IFRS() {
+        // 三菱商事等: 本表先頭は Revenue2IFRS「収益」（顧客契約+その他の源泉）
+        let fs = makeFieldSet(("Revenue2IFRS", 18_915_995_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 18_915_995_000_000.0)
+        #expect(result.salesLabel == "収益")
+    }
+
+    @Test func testOperatingRevenueRevenue2IFRSPreferredOverRevenue2IFRS() {
+        // JPX: 営業収益は OperatingRevenueRevenue2IFRS。Revenue2IFRS は収益計。
+        let fs = makeFieldSet(
+            ("OperatingRevenueRevenue2IFRS", 198_735_000_000.0, nil),
+            ("Revenue2IFRS", 210_000_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 198_735_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
 }

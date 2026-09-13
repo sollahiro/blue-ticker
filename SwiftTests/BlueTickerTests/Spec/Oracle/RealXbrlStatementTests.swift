@@ -422,6 +422,21 @@ import Foundation
         #expect(financials?.operatingProfit == 116_289_000_000)
     }
 
+    /// 三菱商事: 本表先頭は `Revenue2IFRS`「収益」（顧客契約+その他の源泉）。Summary sales にする。
+    @Test
+    func mitsubishiSummarySalesUsesRevenue2IFRS() async throws {
+        guard await Self.ensureAvailable("S100YB25") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YB25", statementTypes: [.incomeStatement]))
+        #expect(year.incomeStatement.first { $0.tag == "Revenue2IFRS" }?.value == 18_915_995_000_000)
+        #expect(year.incomeStatement.first { $0.tag == "GrossProfitIFRS" }?.value == 1_655_074_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YB25_xbrl"))
+        #expect(financials?.sales == 18_915_995_000_000)
+        #expect(financials?.salesLabel == "収益")
+        #expect(financials?.grossProfit == 1_655_074_000_000)
+    }
+
     /// 東京海上HD: 本表行は `InsuranceRevenueIFRS`（保険収益）。
     @Test
     func tokioMarineSummarySalesUsesInsuranceRevenueIFRS() async throws {
