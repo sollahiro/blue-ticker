@@ -86,6 +86,49 @@ struct HAPISConsumerClientTests {
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
 
+    @Test func refreshAcceptsCreatedStatus() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = MutableHAPISClock(now: now)
+        let http = MockHAPISHTTP()
+        let store = InMemoryHAPISTokenStore()
+        try store.save(
+            HAPISConsumerToken(
+                token: "old-token",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(100),
+                subject: "stub:old",
+                attestMode: "stub"
+            ),
+            issuer: issuer
+        )
+        http.handler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "POST", path.hasSuffix("/v1/consumer/token/refresh") {
+                return (
+                    201,
+                    tokenJSON(
+                        token: "refreshed-created", now: now.addingTimeInterval(400), refreshIn: 3300,
+                        expiresIn: 3600)
+                )
+            }
+            Issue.record("unexpected \(request.httpMethod ?? "?") \(path)")
+            return (500, #"{"error":{"code":"unexpected"}}"#)
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: clock
+        )
+
+        clock.now = now.addingTimeInterval(120)
+        #expect(try await client.validToken() == "refreshed-created")
+        #expect(try store.load(issuer: issuer)?.token == "refreshed-created")
+        #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+    }
+
     @Test func remintsWhenStoredTokenExpired() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let clock = MutableHAPISClock(now: now)
