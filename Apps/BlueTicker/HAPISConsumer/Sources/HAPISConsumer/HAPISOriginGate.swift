@@ -78,8 +78,8 @@ public actor HAPISOriginGate {
             Self.maxCooldown
         )
         let until = now().addingTimeInterval(seconds)
-        cooldownUntil = until
-        nextPrefetchAt = until
+        cooldownUntil = max(cooldownUntil, until)
+        nextPrefetchAt = max(nextPrefetchAt, until)
     }
 
     /// クールダウン（と prefetch の間隔・静穏期間）が明けるまで眠る。予約はしない。

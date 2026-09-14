@@ -181,6 +181,27 @@ struct HAPISOriginGateTests {
         #expect(sleeps.values[1] == HAPISOriginGate.prefetchSpacing)
     }
 
+    /// 後から短い Retry-After が来ても、先に立った長いクールダウンを縮めない。
+    @Test func overlappingRateLimitsKeepTheLongerDeadline() async throws {
+        let clock = TestClock(start: Date(timeIntervalSince1970: 1_000))
+        let sleeps = SleepLog()
+        let gate = HAPISOriginGate(
+            now: { clock.now },
+            sleep: { seconds in
+                sleeps.append(seconds)
+                clock.advance(seconds)
+            }
+        )
+
+        await gate.noteRateLimited(retryAfterSeconds: 30)
+        clock.advance(1)
+        await gate.noteRateLimited(retryAfterSeconds: 5)
+
+        try await gate.waitTurn(.interactive)
+        #expect(sleeps.values == [29])
+        #expect(await gate.isCoolingDown() == false)
+    }
+
     @Test func retryAfterIsCappedForClientUX() async throws {
         let clock = TestClock(start: Date(timeIntervalSince1970: 1_000))
         let sleeps = SleepLog()
