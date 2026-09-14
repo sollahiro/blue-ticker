@@ -80,8 +80,50 @@ struct HAPISOriginGateTests {
         }
     }
 
-    @Test func withTurnSerializesConcurrentRequests() async throws {
+    @Test func interactiveRunsInParallelUpToLimit() async throws {
         let gate = HAPISOriginGate()
+        let order = SequenceLog()
+        let holds = (0..<HAPISOriginGate.interactiveConcurrency).map { _ in Hold() }
+
+        var running: [Task<Int, Error>] = []
+        for (index, hold) in holds.enumerated() {
+            running.append(
+                Task {
+                    try await gate.withTurn(.interactive) {
+                        await order.append("start-\(index)")
+                        await hold.wait()
+                        return index
+                    }
+                })
+            await order.waitUntil("start-\(index)")
+        }
+
+        let extra = Task {
+            try await gate.withTurn(.interactive) {
+                await order.append("extra")
+                return -1
+            }
+        }
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(await order.values.contains("extra") == false)
+
+        await holds[0].resume()
+        #expect(try await extra.value == -1)
+        for hold in holds.dropFirst() {
+            await hold.resume()
+        }
+        for task in running {
+            _ = try await task.value
+        }
+    }
+
+    /// 並んだ prefetch が、後から来た interactive を待たせない。prefetch は interactive が終わってから。
+    @Test func queuedPrefetchDoesNotDelayInteractive() async throws {
+        let clock = TestClock(start: Date(timeIntervalSince1970: 1_000))
+        let gate = HAPISOriginGate(
+            now: { clock.now },
+            sleep: { seconds in clock.advance(seconds) }
+        )
         let order = SequenceLog()
         let hold = Hold()
 
@@ -95,19 +137,48 @@ struct HAPISOriginGateTests {
         }
         await order.waitUntil("a-start")
 
+        let prefetch = Task {
+            try await gate.withTurn(.prefetch) {
+                await order.append("p")
+                return 3
+            }
+        }
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(await order.values == ["a-start"])
+
         let second = Task {
             try await gate.withTurn(.interactive) {
                 await order.append("b")
                 return 2
             }
         }
-        try await Task.sleep(for: .milliseconds(40))
-        #expect(await order.values == ["a-start"])
+        #expect(try await second.value == 2)
+        #expect(await order.values == ["a-start", "b"])
 
         await hold.resume()
         #expect(try await first.value == 1)
-        #expect(try await second.value == 2)
-        #expect(await order.values == ["a-start", "a-end", "b"])
+        #expect(try await prefetch.value == 3)
+        #expect(await order.values == ["a-start", "b", "a-end", "p"])
+    }
+
+    @Test func prefetchWaitsForQuietPeriodAfterInteractive() async throws {
+        let clock = TestClock(start: Date(timeIntervalSince1970: 1_000))
+        let sleeps = SleepLog()
+        let gate = HAPISOriginGate(
+            now: { clock.now },
+            sleep: { seconds in
+                sleeps.append(seconds)
+                clock.advance(seconds)
+            }
+        )
+
+        _ = try await gate.withTurn(.interactive) { 1 }
+        _ = try await gate.withTurn(.prefetch) { 2 }
+        #expect(sleeps.values == [HAPISOriginGate.prefetchQuietPeriod])
+
+        _ = try await gate.withTurn(.prefetch) { 3 }
+        #expect(sleeps.values.count == 2)
+        #expect(sleeps.values[1] == HAPISOriginGate.prefetchSpacing)
     }
 
     @Test func retryAfterIsCappedForClientUX() async throws {

@@ -12,9 +12,13 @@ actor HAPISConsumerClient {
     private let clock: any HAPISClock
     private let attestation: any HAPISAttestationProviding
     private var inFlight: Task<String, Error>?
+    private var backgroundRefresh: Task<Void, Never>?
     private var epoch = 0
     private var remintEpoch: Int?
     private let controlPlaneAttempts = 3
+    /// 期限までこれ以上残っていれば、refresh は裏で行い、手元のトークンで即リクエストを出す。
+    /// これ未満は refresh を待つ（リクエスト途中で期限切れになるのを避ける）。
+    static let backgroundRefreshMinRemaining: TimeInterval = 60
 
     init(
         issuerURL: @escaping @Sendable () -> URL,
@@ -66,6 +70,13 @@ actor HAPISConsumerClient {
         remintEpoch = nil
         store.clear(issuer: issuerURL())
         inFlight = nil
+        backgroundRefresh?.cancel()
+        backgroundRefresh = nil
+    }
+
+    /// 裏で走っている refresh の完了を待つ（テストと、明示的に同期したいとき用）。
+    func awaitBackgroundRefresh() async {
+        await backgroundRefresh?.value
     }
 
     @discardableResult
@@ -126,23 +137,47 @@ actor HAPISConsumerClient {
                 return try await mint(ticket: ticket)
             }
             if stored.needsRefresh(at: now) {
-                do {
-                    return try await refresh(stored, ticket: ticket)
-                } catch HAPISConsumerError.tokenExpired {
-                    store.clear(issuer: issuer)
-                    return try await mint(ticket: ticket)
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    if stored.isExpired(at: clock.now) {
-                        throw error
-                    }
+                if stored.expiresAt.timeIntervalSince(now) > Self.backgroundRefreshMinRemaining {
+                    scheduleBackgroundRefresh(stored, ticket: ticket)
                     return stored.token
                 }
+                return try await refreshOrRemint(stored, ticket: ticket)
             }
             return stored.token
         }
         return try await mint(ticket: ticket)
+    }
+
+    private func refreshOrRemint(_ stored: HAPISConsumerToken, ticket: Int) async throws -> String {
+        do {
+            return try await refresh(stored, ticket: ticket)
+        } catch HAPISConsumerError.tokenExpired {
+            store.clear(issuer: issuerURL())
+            return try await mint(ticket: ticket)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if stored.isExpired(at: clock.now) {
+                throw error
+            }
+            return stored.token
+        }
+    }
+
+    /// まだ有効なトークンを手元で使いつつ、裏で refresh する。走っていれば重ねない。
+    /// 失敗しても手元のトークンは残る（期限間際になれば同期 refresh、期限切れなら remint に落ちる）。
+    private func scheduleBackgroundRefresh(_ stored: HAPISConsumerToken, ticket: Int) {
+        if let backgroundRefresh, !backgroundRefresh.isCancelled {
+            return
+        }
+        backgroundRefresh = Task {
+            _ = try? await self.refreshOrRemint(stored, ticket: ticket)
+            self.finishBackgroundRefresh()
+        }
+    }
+
+    private func finishBackgroundRefresh() {
+        backgroundRefresh = nil
     }
 
     private func mint(ticket: Int) async throws -> String {

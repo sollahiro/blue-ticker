@@ -80,19 +80,30 @@ actor APIClient {
         return try await get(url)
     }
 
-    /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。2 件以上は完全一致を順に叩き、ROIC 降順で 50 件にまとめる（サーバーは `sector` 1 件）。
+    /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。2 件以上は完全一致を業種ごとに叩き
+    /// （並列数はゲートに任せる）、ROIC 降順で 50 件にまとめる（サーバーは `sector` 1 件）。
     func screen(sectors: [String], filters: [ScreenMetricFilter]) async throws -> ScreenResponse {
         let targets: [String?] =
             sectors.isEmpty ? [nil] : sectors.map { Optional($0) }
         if targets.count == 1 {
             return try await screenOnce(sector: targets[0], filters: filters)
         }
+        let pages = try await withThrowingTaskGroup(of: (Int, ScreenResponse).self) { group in
+            for (index, sector) in targets.enumerated() {
+                group.addTask {
+                    (index, try await self.screenOnce(sector: sector, filters: filters))
+                }
+            }
+            var collected: [(Int, ScreenResponse)] = []
+            for try await page in group {
+                collected.append(page)
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
         var byCode: [String: ScreenItem] = [:]
         var matched = 0
         var sort = ScreenSort(key: "roic", order: "desc")
-        for sector in targets {
-            try Task.checkCancellation()
-            let page = try await screenOnce(sector: sector, filters: filters)
+        for page in pages {
             matched += page.matched
             sort = page.sort
             for item in page.items where byCode[item.code] == nil {
@@ -327,13 +338,22 @@ actor APIClient {
         inFlightGets[key] = nil
     }
 
-    /// HAPIS は同時 1 本。interactive の 429 はクールダウンのあと 1 回だけやり直す。
+    /// HAPIS は少数並列（`HAPISOriginGate`）。interactive の 429 はクールダウンのあと 1 回だけやり直す。
+    /// mint / refresh はスロットを取る前に済ませ、スロット中は Keychain 読みだけにする。
     private func fetchWithGate(
         _ url: URL,
         hapisClass: HAPISOriginGate.RequestClass
     ) async throws -> Data {
         guard APIConfiguration.usesHAPISConsumer(url) else {
             return try await fetchData(url, hapisClass: hapisClass)
+        }
+        try Task.checkCancellation()
+        do {
+            _ = try await hapis.validToken()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw APIClientError.hapisUnavailable
         }
         do {
             return try await originGate.withTurn(hapisClass) {

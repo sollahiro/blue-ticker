@@ -79,11 +79,57 @@ struct HAPISConsumerClientTests {
         #expect(try await client.validToken() == "old-token")
         #expect(http.calls.isEmpty)
 
+        // 期限まで余裕があるので、手元のトークンを即返し、refresh は裏で走る。
         clock.now = now.addingTimeInterval(120)
-        #expect(try await client.validToken() == "refreshed-token")
+        #expect(try await client.validToken() == "old-token")
+        await client.awaitBackgroundRefresh()
         #expect(try store.load(issuer: issuer)?.token == "refreshed-token")
+        #expect(try await client.validToken() == "refreshed-token")
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+    }
+
+    /// 制御面が遅くても、期限に余裕のあるトークンの refresh はリクエストを待たせない。
+    @Test func backgroundRefreshDoesNotBlockRequestPath() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = MutableHAPISClock(now: now)
+        let http = MockHAPISHTTP()
+        http.delayNanoseconds = 200_000_000
+        let store = InMemoryHAPISTokenStore()
+        try store.save(
+            HAPISConsumerToken(
+                token: "fresh-enough",
+                tokenType: "Bearer",
+                expiresAt: now.addingTimeInterval(3600),
+                refreshAt: now.addingTimeInterval(-1),
+                subject: "stub:fresh",
+                attestMode: "stub"
+            ),
+            issuer: issuer
+        )
+        http.handler = { request in
+            guard (request.url?.path ?? "").hasSuffix("/v1/consumer/token/refresh") else {
+                return (500, #"{"error":{"code":"unexpected"}}"#)
+            }
+            return (
+                200,
+                tokenJSON(token: "refreshed-later", now: now, refreshIn: 3300, expiresIn: 3600)
+            )
+        }
+        let client = HAPISConsumerClient(
+            issuerURL: { issuer },
+            http: http,
+            store: store,
+            clock: clock
+        )
+
+        #expect(try await client.validToken() == "fresh-enough")
+        #expect(http.calls.isEmpty)
+        // 同時に来た 2 本目も refresh を重ねない。
+        #expect(try await client.validToken() == "fresh-enough")
+        await client.awaitBackgroundRefresh()
+        #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
+        #expect(try await client.validToken() == "refreshed-later")
     }
 
     @Test func remintsWhenStoredTokenExpired() async throws {
@@ -350,8 +396,10 @@ struct HAPISConsumerClientTests {
             clock: clock
         )
         #expect(try await client.validToken() == "still-valid")
+        await client.awaitBackgroundRefresh()
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.count == 3)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
+        #expect(try store.load(issuer: issuer)?.token == "still-valid")
     }
 
     @Test func issuerChangeDoesNotReuseOtherIssuerToken() async throws {
@@ -505,7 +553,9 @@ struct HAPISConsumerClientTests {
             store: store,
             clock: clock
         )
-        #expect(try await client.validToken() == "refreshed-after-malformed")
+        #expect(try await client.validToken() == "old-token")
+        await client.awaitBackgroundRefresh()
+        #expect(try store.load(issuer: issuer)?.token == "refreshed-after-malformed")
         #expect(attempts.value == 2)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
