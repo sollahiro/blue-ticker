@@ -30,6 +30,8 @@ enum Theme {
     static let groupedContentInset: CGFloat = 12
     /// 銘柄カードの角。セクション枠と同じ連続円弧。
     static let cardCornerRadius: CGFloat = groupedCornerRadius
+    /// カード内テキストの規定 padding。四辺同じ。内側の角丸マスクは掛けない。
+    static let cardContentInset: CGFloat = groupedContentInset
 
     static var groupedInnerCornerRadius: CGFloat {
         max(groupedCornerRadius - groupedContentInset, 0)
@@ -171,6 +173,22 @@ extension View {
         self
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous))
+    }
+
+    func bltCard() -> some View {
+        self
+            .bltCardSurface()
+            .padding(.horizontal, Theme.cardContentInset)
+            .padding(.top, Theme.cardContentInset)
+    }
+
+    func bltCardScroll() -> some View {
+        self
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollEdgeEffectHidden(true)
+            .contentMargins(.all, 0, for: .scrollContent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .bltCard()
     }
 }
 

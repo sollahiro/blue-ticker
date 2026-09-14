@@ -80,14 +80,10 @@ struct BreakdownView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
             }
-            .padding(16)
+            .padding(Theme.cardContentInset)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .bltCardSurface()
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .bltCardScroll()
         .onChange(of: metric) { _, _ in
             selectedFactor = nil
         }

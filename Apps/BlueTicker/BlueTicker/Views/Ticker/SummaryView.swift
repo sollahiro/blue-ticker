@@ -52,7 +52,6 @@ struct SummaryView: View {
                     FillWidth {
                         JustifiedOverviewText(text: overview)
                     }
-                    .padding(.horizontal, 6)
                     .padding(.bottom, 8)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(overview)
@@ -110,14 +109,10 @@ struct SummaryView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .padding(12)
+            .padding(Theme.cardContentInset)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .bltCardSurface()
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
+        .bltCardScroll()
         .onChange(of: section) { _, _ in
             selectedRow = nil
         }
