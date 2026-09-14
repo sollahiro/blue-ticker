@@ -10,7 +10,6 @@ enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
 
 struct TickerView: View {
     var company: CompanyRef
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var watched: [WatchedCompany]
     @State private var page: TickerPage = .summary
@@ -27,26 +26,9 @@ struct TickerView: View {
         .background(Theme.shell.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
         .task { await hydrateSector() }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                }
-                .accessibilityLabel("戻る")
-            }
-            .withoutSharedBackground()
-            ToolbarItem(placement: .principal) {
-                BrandMark()
-            }
-            .withoutSharedBackground()
-        }
-        .toolbarBackground(Theme.shell, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -260,14 +242,10 @@ struct TickerStubView: View {
                     .font(.subheadline)
                     .foregroundStyle(Theme.textMuted)
             }
-            .padding(16)
+            .padding(Theme.cardContentInset)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .bltCardSurface()
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .bltCardScroll()
     }
 }
 
@@ -337,8 +315,8 @@ private struct PagerSnapper: UIViewRepresentable {
     }
 }
 
-/// `navigationBarBackButtonHidden` でも端スワイプで戻れるようにする。
-/// 概要以外では無効。分解から左へはカード送りだけにし、戻ると食い違わないようにする。
+/// ナビバーを隠しても、概要では端スワイプで戻れるようにする。
+/// 分解から左へはカード送りだけにし、戻ると食い違わないようにする。
 private struct InteractivePopGestureEnabler: UIViewRepresentable {
     var allowsPop: Bool
 

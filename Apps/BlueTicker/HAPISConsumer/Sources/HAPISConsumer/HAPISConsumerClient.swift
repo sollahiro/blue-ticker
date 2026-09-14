@@ -246,7 +246,7 @@ actor HAPISConsumerClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(stored.token)", forHTTPHeaderField: "Authorization")
-        var refreshed = try await send(request, expected: [200])
+        var refreshed = try await send(request, expected: [200, 201])
         guard ticket == epoch else { throw CancellationError() }
         refreshed.clientMintMode = stored.clientMintMode ?? attestation.clientMode.rawValue
         try store.save(refreshed, issuer: issuer)
