@@ -248,9 +248,7 @@ struct ScreenView: View {
     }
 
     private var sectorChips: some View {
-        let outer = RoundedRectangle(cornerRadius: Theme.groupedCornerRadius, style: .continuous)
-        let inner = RoundedRectangle(cornerRadius: Theme.groupedInnerCornerRadius, style: .continuous)
-        return ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: 6) {
@@ -260,15 +258,13 @@ struct ScreenView: View {
                     }
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 8)
+            .padding(.vertical, Theme.concentricInnerPadding)
+            .padding(.horizontal, Theme.concentricInnerPadding)
         }
         .scrollClipDisabled()
-        .clipShape(inner)
-        .padding(Theme.groupedContentInset)
+        .bltConcentricClip()
         .listRowInsets(EdgeInsets())
         .listRowBackground(Theme.elevated)
-        .containerShape(outer)
     }
 
     private var packedSectorRows: [[String]] {

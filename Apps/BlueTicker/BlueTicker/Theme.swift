@@ -24,16 +24,38 @@ enum Theme {
     static let chipHeight: CGFloat = 28
     /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
     static let tickerPageDotGutter: CGFloat = 36
-    /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
+    /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクション・銘柄カードの外側。
     static let groupedCornerRadius: CGFloat = 26
-    /// セクション枠と見切れマスクのあいだ。内側半径は `groupedCornerRadius - groupedContentInset`。
+    /// 外側枠と見切れマスクのあいだ。四辺とも同じ。`outer = inner + inset`。
     static let groupedContentInset: CGFloat = 12
     /// 銘柄カードの角。セクション枠と同じ連続円弧。
     static let cardCornerRadius: CGFloat = groupedCornerRadius
+    /// 銘柄カードの外側枠と見切れマスクのあいだ。セクションと同じトークン。
+    static let cardContentInset: CGFloat = groupedContentInset
+    /// 同心見切れマスクの内側（業種チップなど）。テキストカードには使わない。
+    static let concentricInnerPadding: CGFloat = 8
 
     static var groupedInnerCornerRadius: CGFloat {
-        max(groupedCornerRadius - groupedContentInset, 0)
+        concentricInnerRadius(outer: groupedCornerRadius, inset: groupedContentInset)
     }
+
+    static var cardInnerCornerRadius: CGFloat {
+        concentricInnerRadius(outer: cardCornerRadius, inset: cardContentInset)
+    }
+
+    /// 同心角丸の内側半径。`outer = inner + inset`。
+    static func concentricInnerRadius(outer: CGFloat, inset: CGFloat) -> CGFloat {
+        max(outer - inset, 0)
+    }
+
+    static func concentricRoundedRect(outer: CGFloat, inset: CGFloat) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: concentricInnerRadius(outer: outer, inset: inset), style: .continuous)
+    }
+
+    static func roundedRect(_ radius: CGFloat) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+    }
+
     static let positive = Color(red: 0.28, green: 0.78, blue: 0.42)
     static var sectorFill: Color { positive.opacity(0.22) }
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
@@ -168,9 +190,38 @@ extension View {
     }
 
     func bltCardSurface() -> some View {
-        self
+        let outer = Theme.roundedRect(Theme.cardCornerRadius)
+        return self
             .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous))
+            .clipShape(outer)
+            .containerShape(outer)
+    }
+
+    /// 横スクロールなど、はみ出しを外側枠と同心の角丸で切る。`outer r = inner r + inset`。
+    /// テキスト中心のカードには使わず、規定の padding だけにする。
+    func bltConcentricClip(
+        outer: CGFloat = Theme.groupedCornerRadius,
+        inset: CGFloat = Theme.groupedContentInset
+    ) -> some View {
+        self
+            .clipShape(Theme.concentricRoundedRect(outer: outer, inset: inset))
+            .padding(inset)
+            .containerShape(Theme.roundedRect(outer))
+    }
+
+    func bltCard() -> some View {
+        self
+            .bltCardSurface()
+            .padding(.horizontal, Theme.cardContentInset)
+            .padding(.top, Theme.cardContentInset)
+    }
+
+    func bltCardScroll() -> some View {
+        self
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollEdgeEffectHidden(true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .bltCard()
     }
 }
 

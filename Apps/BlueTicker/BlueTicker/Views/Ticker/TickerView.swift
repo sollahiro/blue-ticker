@@ -10,7 +10,6 @@ enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
 
 struct TickerView: View {
     var company: CompanyRef
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var watched: [WatchedCompany]
     @State private var page: TickerPage = .summary
@@ -27,26 +26,9 @@ struct TickerView: View {
         .background(Theme.shell.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
         .task { await hydrateSector() }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                }
-                .accessibilityLabel("戻る")
-            }
-            .withoutSharedBackground()
-            ToolbarItem(placement: .principal) {
-                BrandMark()
-            }
-            .withoutSharedBackground()
-        }
-        .toolbarBackground(Theme.shell, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -260,14 +242,10 @@ struct TickerStubView: View {
                     .font(.subheadline)
                     .foregroundStyle(Theme.textMuted)
             }
-            .padding(16)
+            .padding(Theme.cardContentInset)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .bltCardSurface()
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .bltCardScroll()
     }
 }
 
@@ -337,8 +315,9 @@ private struct PagerSnapper: UIViewRepresentable {
     }
 }
 
-/// `navigationBarBackButtonHidden` でも端スワイプで戻れるようにする。
-/// 概要以外では無効。分解から左へはカード送りだけにし、戻ると食い違わないようにする。
+/// ナビバーを隠しても、概要では端スワイプで戻れるようにする。
+/// 分解から左へはカード送りだけにし、戻ると食い違わないようにする。
+/// スワイプ中は遷移コンテナをバーより前面に出し、銘柄画面が上のレイヤーになるようにする。
 private struct InteractivePopGestureEnabler: UIViewRepresentable {
     var allowsPop: Bool
 
@@ -364,12 +343,21 @@ private struct InteractivePopGestureEnabler: UIViewRepresentable {
         var allowsPop: Bool
         weak var navigationController: UINavigationController?
         private static let edgeWidth: CGFloat = 32
+        private weak var trackedPop: UIGestureRecognizer?
+        private var displayLink: CADisplayLink?
+        private var hookedCoordinator: UIViewControllerTransitionCoordinator?
+        private var savedBarZPositions: [ObjectIdentifier: CGFloat] = [:]
+        private let tick = DisplayTick()
 
         init(allowsPop: Bool) {
             self.allowsPop = allowsPop
+            super.init()
+            tick.owner = self
         }
 
         deinit {
+            stopLayering(restore: true)
+            trackedPop?.removeTarget(self, action: #selector(handlePop(_:)))
             if navigationController?.interactivePopGestureRecognizer?.delegate === self {
                 navigationController?.interactivePopGestureRecognizer?.delegate = nil
             }
@@ -381,6 +369,11 @@ private struct InteractivePopGestureEnabler: UIViewRepresentable {
             guard let pop = navigationController.interactivePopGestureRecognizer else { return }
             pop.isEnabled = navigationController.viewControllers.count > 1
             pop.delegate = self
+            if trackedPop !== pop {
+                trackedPop?.removeTarget(self, action: #selector(handlePop(_:)))
+                pop.addTarget(self, action: #selector(handlePop(_:)))
+                trackedPop = pop
+            }
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -395,6 +388,110 @@ private struct InteractivePopGestureEnabler: UIViewRepresentable {
             shouldBeRequiredToFailBy other: UIGestureRecognizer
         ) -> Bool {
             allowsPop && other is UIPanGestureRecognizer
+        }
+
+        @objc func handlePop(_ gesture: UIGestureRecognizer) {
+            switch gesture.state {
+            case .began:
+                startLayering()
+            case .ended, .cancelled, .failed:
+                hookTransitionCompletionIfNeeded()
+                if hookedCoordinator == nil {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.hookTransitionCompletionIfNeeded()
+                        if self?.hookedCoordinator == nil {
+                            self?.stopLayering(restore: true)
+                        }
+                    }
+                }
+            default:
+                break
+            }
+        }
+
+        @objc func placeContentAboveBar() {
+            guard let nav = navigationController else { return }
+            for chrome in barChromeViews(in: nav) {
+                let id = ObjectIdentifier(chrome)
+                if savedBarZPositions[id] == nil {
+                    savedBarZPositions[id] = chrome.layer.zPosition
+                }
+                chrome.layer.zPosition = -1
+            }
+            if let container = transitionContainer(in: nav) {
+                nav.view.bringSubviewToFront(container)
+            }
+        }
+
+        private func startLayering() {
+            placeContentAboveBar()
+            if displayLink == nil {
+                let link = CADisplayLink(target: tick, selector: #selector(DisplayTick.fire))
+                link.add(to: .main, forMode: .common)
+                displayLink = link
+            }
+            hookTransitionCompletionIfNeeded()
+            DispatchQueue.main.async { [weak self] in
+                self?.placeContentAboveBar()
+                self?.hookTransitionCompletionIfNeeded()
+            }
+        }
+
+        private func hookTransitionCompletionIfNeeded() {
+            guard hookedCoordinator == nil,
+                let coordinator = navigationController?.transitionCoordinator
+            else { return }
+            hookedCoordinator = coordinator
+            coordinator.animate(alongsideTransition: { [weak self] _ in
+                self?.placeContentAboveBar()
+            }, completion: { [weak self] _ in
+                self?.stopLayering(restore: true)
+            })
+        }
+
+        private func stopLayering(restore: Bool) {
+            displayLink?.invalidate()
+            displayLink = nil
+            hookedCoordinator = nil
+            guard restore, let nav = navigationController else {
+                savedBarZPositions.removeAll()
+                return
+            }
+            for chrome in barChromeViews(in: nav) {
+                if let saved = savedBarZPositions[ObjectIdentifier(chrome)] {
+                    chrome.layer.zPosition = saved
+                } else {
+                    chrome.layer.zPosition = 0
+                }
+                nav.view.bringSubviewToFront(chrome)
+            }
+            savedBarZPositions.removeAll()
+        }
+
+        private func transitionContainer(in nav: UINavigationController) -> UIView? {
+            nav.view.subviews.first { view in
+                !(view is UINavigationBar) && view.frame.height > nav.view.bounds.height * 0.5
+            }
+        }
+
+        /// iOS 26 のガラス背景など、バー本体の兄弟ビューも含める。
+        private func barChromeViews(in nav: UINavigationController) -> [UIView] {
+            let barFrame = nav.navigationBar.frame
+            return nav.view.subviews.filter { view in
+                if view is UINavigationBar { return true }
+                guard view.frame.height <= barFrame.height + 24 else { return false }
+                return view.frame.minY <= barFrame.maxY
+                    && view.frame.width >= nav.view.bounds.width * 0.8
+            }
+        }
+    }
+
+    /// `CADisplayLink` は target を強参照するため、Coordinator を直接渡さない。
+    private final class DisplayTick: NSObject {
+        weak var owner: Coordinator?
+
+        @objc func fire() {
+            owner?.placeContentAboveBar()
         }
     }
 }
