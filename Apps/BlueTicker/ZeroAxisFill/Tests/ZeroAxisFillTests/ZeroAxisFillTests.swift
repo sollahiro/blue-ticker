@@ -1,6 +1,6 @@
 import Testing
 
-@testable import BlueTickerCore
+@testable import ZeroAxisFill
 
 @Suite struct ZeroAxisFillTests {
     @Test func sameSignKeepsOneAreaAgainstZero() {

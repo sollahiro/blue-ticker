@@ -66,7 +66,7 @@
 		BB0000000000000000000016 /* TickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000017 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ZeroAxisFill.swift; path = ../../../../../Sources/BlueTicker/Utils/ZeroAxisFill.swift; sourceTree = "<group>"; };
+		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZeroAxisFill.swift; sourceTree = "<group>"; };
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
@@ -90,6 +90,7 @@
 			children = (
 				DD0000000000000000000002 /* BlueTicker */,
 				DD0000000000000000000009 /* HAPISConsumer */,
+				DD0000000000000000000010 /* ZeroAxisFill */,
 				DD0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -153,6 +154,15 @@
 			path = HAPISConsumer/Sources/HAPISConsumer;
 			sourceTree = "<group>";
 		};
+		DD0000000000000000000010 /* ZeroAxisFill */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000032 /* ZeroAxisFill.swift */,
+			);
+			name = ZeroAxisFill;
+			path = ZeroAxisFill/Sources/ZeroAxisFill;
+			sourceTree = "<group>";
+		};
 		DD0000000000000000000006 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -184,7 +194,6 @@
 				BB0000000000000000000016 /* TickerView.swift */,
 				BB0000000000000000000017 /* SummaryView.swift */,
 				BB0000000000000000000018 /* BreakdownView.swift */,
-				BB0000000000000000000032 /* ZeroAxisFill.swift */,
 			);
 			path = Ticker;
 			sourceTree = "<group>";

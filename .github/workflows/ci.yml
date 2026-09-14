@@ -44,6 +44,10 @@ jobs:
         working-directory: Apps/BlueTicker/HAPISConsumer
         run: swift test
 
+      - name: Test iOS zero-axis fill helper
+        working-directory: Apps/BlueTicker/ZeroAxisFill
+        run: swift test
+
   ios-paths:
     # macos-26 を毎回起こさない。iOS アプリ本体と、このワークフロー（ios ジョブ定義）の
     # 変更だけを見る。docs やサーバー側 DTO はコンパイルに影響しないので対象外。
@@ -117,8 +121,8 @@ jobs:
     # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
     # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
-    # HAPIS consumer の mint/refresh テストはシミュレータ不要で、swift-macos / swift-linux の
-    # `Apps/BlueTicker/HAPISConsumer` パッケージが回す。
+    # シミュレータ不要の iOS Foundation 単体は swift-macos / swift-linux の
+    # `Apps/BlueTicker/HAPISConsumer` と `Apps/BlueTicker/ZeroAxisFill` が回す。
     # 署名はしない（CODE_SIGNING_ALLOWED=NO。プロジェクトの DEVELOPMENT_TEAM は実機用）。
     needs: ios-paths
     if: needs.ios-paths.outputs.run == 'true'
@@ -198,6 +202,10 @@ jobs:
 
       - name: Test HAPIS iOS consumer client
         working-directory: Apps/BlueTicker/HAPISConsumer
+        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
+      - name: Test iOS zero-axis fill helper
+        working-directory: Apps/BlueTicker/ZeroAxisFill
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
   repo-invariants:
