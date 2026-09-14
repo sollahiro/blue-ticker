@@ -169,8 +169,10 @@ struct HAPISConsumerClientTests {
         )
 
         clock.now = now.addingTimeInterval(120)
-        #expect(try await client.validToken() == "refreshed-created")
+        #expect(try await client.validToken() == "old-token")
+        await client.awaitBackgroundRefresh()
         #expect(try store.load(issuer: issuer)?.token == "refreshed-created")
+        #expect(try await client.validToken() == "refreshed-created")
         #expect(http.calls.map(\.path).filter { $0.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
     }
