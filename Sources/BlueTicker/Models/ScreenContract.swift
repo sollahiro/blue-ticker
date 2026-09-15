@@ -3,29 +3,36 @@
 // `company_financials` の最新 FY を 1 社 1 行へ投影した検索用 Read Model（Neon `screen_index`）の
 // 行定義と、REST `GET /v1/screen` のクエリ解析。`company_financials` の契約は複製しない。
 // 数値キーは Summary `years[]` の公開キーのうち Screen が受け付ける許可リストだけ。
-// `sales_growth` は Summary `years[]` に無い派生列（最新 FY と直前 FY の売上高から ingest 時に計算）。
-// BLT-49 初稿は v1 対象外としたが、横断検索用の派生列として v1 許可リストに入れる。
+// `sales_cagr_3y` は Summary `years[]` に無い派生列（最新から売上 > 0 の 3 期で ingest 時に計算）。
+// YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
 import Foundation
 
+/// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
+/// BLT-49 初稿（YoY `sales_growth`）を v1 とし、3 期売上 CAGR への切替が v2。
+public let screenIndexVersion = "screen-v2"
+
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
 public enum ScreenMetric: String, CaseIterable, Sendable {
-    /// 売上高（百万円）。
+    /// 売上高（百万円）。サイズ用。iOS プリセットでは使わない。
     case sales
-    /// 売上高増加率（%、最新 FY ÷ 直前 FY − 1）。直前 FY が無い・0 以下なら null。
-    case salesGrowth = "sales_growth"
-    /// 売上高総利益率（%）。
-    case grossProfitMargin = "gross_profit_margin"
     /// 営業利益率（%、開示営業利益 ÷ 売上高）。
     case operatingMargin = "operating_margin"
     /// ROIC（%）。
     case roic
-    /// ROE（%）。
+    /// ROE（%）。API は残す。iOS プリセットでは絞らない。
     case roe
     /// ネット D/E（倍）。
     case netDe = "net_de"
+    /// 3 期売上 CAGR（%、売上 > 0 の直近 3 期・2 年間）。足りなければ null。
+    case salesCagr3y = "sales_cagr_3y"
+
+    /// 結果行に常に載せる指標（iOS core4）。フィルタ未使用でも null を返す。
+    public static let coreDisplayMetrics: [ScreenMetric] = [
+        .roic, .operatingMargin, .salesCagr3y, .netDe,
+    ]
 }
 
 /// `screen_index` 1 行（1 社の最新 FY）。
@@ -61,25 +68,38 @@ extension FinancialsResponse {
         let dated = years.compactMap { year in year.fyEnd.map { ($0, year) } }
             .sorted { $0.0 > $1.0 }
         guard let (periodEnd, latest) = dated.first else { return nil }
-        let prior = dated.dropFirst().first?.1
 
         var metrics: [ScreenMetric: Double] = [:]
         func put(_ metric: ScreenMetric, _ value: Double?) {
             if let value, value.isFinite { metrics[metric] = value }
         }
         put(.sales, latest.sales)
-        if let cur = latest.sales, let prev = prior?.sales, prev > 0 {
-            put(.salesGrowth, (cur / prev - 1) * 100)
-        }
-        put(.grossProfitMargin, latest.grossProfitMargin)
         put(.operatingMargin, latest.operatingMargin)
         put(.roic, latest.roic)
         put(.roe, latest.roe)
         put(.netDe, latest.netDe)
+        put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
         return ScreenRow(
             code: code, name: name, market: market, sector: sector, periodEnd: periodEnd,
             metrics: metrics)
     }
+}
+
+/// 最新 Summary 年から売上 > 0 の直近 3 期を取り、2 年間の CAGR% = `((latest/oldest)^(1/2) - 1) * 100`。
+/// `fy_end` 降順で見て売上 ≤ 0 / 欠測の期は飛ばす。3 期に満たない・非有限なら nil。`years[]` には書き戻さない。
+private func salesCagr3y(from years: [FinancialsYear]) -> Double? {
+    let positive = years.compactMap { year -> (String, Double)? in
+        guard let fyEnd = year.fyEnd, let sales = year.sales, sales > 0, sales.isFinite else {
+            return nil
+        }
+        return (fyEnd, sales)
+    }
+    .sorted { $0.0 > $1.0 }
+    guard positive.count >= 3 else { return nil }
+    let newest = positive[0].1
+    let oldest = positive[2].1
+    let percent = ((newest / oldest).squareRoot() - 1) * 100
+    return percent.isFinite ? percent : nil
 }
 
 // MARK: - クエリ
@@ -124,9 +144,12 @@ public struct ScreenQuery: Sendable, Equatable {
         self.limit = limit
     }
 
-    /// 応答 `items[]` に載せる数値キー（フィルタと sort に使ったもの。sort は常に含む）。
+    /// 応答 `items[]` に載せる数値キー（core4 + フィルタと sort に使ったもの）。
     public var projectedMetrics: [ScreenMetric] {
-        ScreenMetric.allCases.filter { $0 == sort || ranges[$0] != nil }
+        ScreenMetric.allCases.filter { metric in
+            metric == sort || ranges[metric] != nil
+                || ScreenMetric.coreDisplayMetrics.contains(metric)
+        }
     }
 }
 

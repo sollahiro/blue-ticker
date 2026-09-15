@@ -30,6 +30,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(AddHighWaterToCompanyFinancials())
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(CreateScreenIndex())
+        app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
         try await app.autoMigrate()
         try await registerRoutes(app, context: makeContext())
         try await body(app)
@@ -53,10 +54,11 @@ private func send(_ app: Application, _ path: String) async throws -> (HTTPRespo
 
 private func makeResponse(
     code: String, sector: String = "電気機器", market: String = "プライム",
-    latest: [String: Any], prior: [String: Any]? = nil
+    latest: [String: Any], prior: [String: Any]? = nil, older: [String: Any]? = nil
 ) throws -> FinancialsResponse {
     var years: [[String: Any]] = [latest.merging(["fy_end": "2025-03-31"]) { $1 }]
     if let prior { years.append(prior.merging(["fy_end": "2024-03-31"]) { $1 }) }
+    if let older { years.append(older.merging(["fy_end": "2023-03-31"]) { $1 }) }
     let dict: [String: Any] = [
         "schema_version": 2, "code": code, "name": "会社\(code)", "sector": sector,
         "market": market, "currency": "JPY", "unit": "百万円", "years": years,
@@ -85,12 +87,20 @@ private func codes(_ json: [String: Any]?) -> [String] {
     @Test func upsertWritesLatestFyAndRemovesPlaceholder() async throws {
         try await withApp { app in
             let resp = try makeResponse(
-                code: "6758", latest: ["sales": 1200.0, "roic": 12.0], prior: ["sales": 1000.0])
+                code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                prior: ["sales": 1100.0], older: ["sales": 1000.0])
             try await upsertScreenIndex(code: "6758", response: resp, db: app.db)
             let row = try #require(try await ScreenIndex.find("6758", on: app.db))
             #expect(row.periodEnd == "2025-03-31")
             #expect(row.roic == 12)
-            #expect(row.salesGrowth.map { abs($0 - 20) < 1e-9 } == true)
+            #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+
+            try await upsertScreenIndex(
+                code: "6759",
+                response: try makeResponse(
+                    code: "6759", latest: ["sales": 1210.0], prior: ["sales": 1000.0]),
+                db: app.db)
+            #expect(try await ScreenIndex.find("6759", on: app.db)?.salesCagr3y == nil)
 
             try await upsertScreenIndex(
                 code: "6758", response: .notApplicablePlaceholder(code: "6758"), db: app.db)
@@ -191,6 +201,8 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(item?["sales"] as? Double == 50000)
             #expect(item?["roic"] as? Double == 20)
             #expect(item?["net_de"] as? Double == 0.2)
+            #expect(item?["operating_margin"] is NSNull)
+            #expect(item?["sales_cagr_3y"] is NSNull)
             #expect(item?["roe"] == nil)
 
             let (_, all) = try await send(app, "/v1/screen?limit=2")
@@ -203,6 +215,33 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func screenEndpointFiltersSalesCagr3y() async throws {
+        try await withApp { app in
+            try await upsertScreenIndex(
+                code: "0001",
+                response: try makeResponse(
+                    code: "0001", latest: ["sales": 1210.0, "roic": 20.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await upsertScreenIndex(
+                code: "0002",
+                response: try makeResponse(
+                    code: "0002", latest: ["sales": 1050.0, "roic": 25.0],
+                    prior: ["sales": 1030.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await upsertScreenIndex(
+                code: "0003",
+                response: try makeResponse(code: "0003", latest: ["sales": 1210.0, "roic": 30.0]),
+                db: app.db)
+
+            let (status, json) = try await send(app, "/v1/screen?sales_cagr_3y_min=10")
+            #expect(status == .ok)
+            #expect(codes(json) == ["0001"])
+            let cagr = try #require((json?["items"] as? [[String: Any]])?.first?["sales_cagr_3y"] as? Double)
+            #expect(abs(cagr - 10) < 1e-9)
+        }
+    }
+
     @Test func screenEndpointRejectsUnknownKeysAndServes503WithoutDb() async throws {
         try await withApp { app in
             let (emptyStatus, emptyJson) = try await send(app, "/v1/screen")
@@ -212,6 +251,10 @@ private func codes(_ json: [String: Any]?) -> [String] {
             let (status, json) = try await send(app, "/v1/screen?ccc_min=1")
             #expect(status == .badRequest)
             #expect(json?["status"] as? Int == 400)
+
+            let (growthStatus, growthJson) = try await send(app, "/v1/screen?sales_growth_min=1")
+            #expect(growthStatus == .badRequest)
+            #expect(growthJson?["status"] as? Int == 400)
         }
         let app = try await Application.make(.testing)
         try await registerRoutes(app, context: makeContext())

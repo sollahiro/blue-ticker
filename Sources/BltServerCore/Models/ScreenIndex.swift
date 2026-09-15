@@ -27,12 +27,6 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "sales")
     var sales: Double?
 
-    @OptionalField(key: "sales_growth")
-    var salesGrowth: Double?
-
-    @OptionalField(key: "gross_profit_margin")
-    var grossProfitMargin: Double?
-
     @OptionalField(key: "operating_margin")
     var operatingMargin: Double?
 
@@ -44,6 +38,9 @@ final class ScreenIndex: Model, @unchecked Sendable {
 
     @OptionalField(key: "net_de")
     var netDe: Double?
+
+    @OptionalField(key: "sales_cagr_3y")
+    var salesCagr3y: Double?
 
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?
@@ -57,12 +54,11 @@ final class ScreenIndex: Model, @unchecked Sendable {
         sector = row.sector
         periodEnd = row.periodEnd
         sales = row[.sales]
-        salesGrowth = row[.salesGrowth]
-        grossProfitMargin = row[.grossProfitMargin]
         operatingMargin = row[.operatingMargin]
         roic = row[.roic]
         roe = row[.roe]
         netDe = row[.netDe]
+        salesCagr3y = row[.salesCagr3y]
     }
 
     func toRow() -> ScreenRow {
@@ -78,12 +74,11 @@ final class ScreenIndex: Model, @unchecked Sendable {
     subscript(_ metric: ScreenMetric) -> Double? {
         switch metric {
         case .sales: return sales
-        case .salesGrowth: return salesGrowth
-        case .grossProfitMargin: return grossProfitMargin
         case .operatingMargin: return operatingMargin
         case .roic: return roic
         case .roe: return roe
         case .netDe: return netDe
+        case .salesCagr3y: return salesCagr3y
         }
     }
 
@@ -91,12 +86,11 @@ final class ScreenIndex: Model, @unchecked Sendable {
     static func field(_ metric: ScreenMetric) -> KeyPath<ScreenIndex, OptionalFieldProperty<ScreenIndex, Double>> {
         switch metric {
         case .sales: return \.$sales
-        case .salesGrowth: return \.$salesGrowth
-        case .grossProfitMargin: return \.$grossProfitMargin
         case .operatingMargin: return \.$operatingMargin
         case .roic: return \.$roic
         case .roe: return \.$roe
         case .netDe: return \.$netDe
+        case .salesCagr3y: return \.$salesCagr3y
         }
     }
 }
