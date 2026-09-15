@@ -174,8 +174,10 @@ struct CompanyOverviewView: View {
             let loaded = try await APIClient.shared.overview(code: code)
             let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
             overview = text.isEmpty ? nil : text
+        } catch APIClientError.http(let status, _) where status == 404 {
+            overview = nil
         } catch {
-            // Keep the cached overview when refreshing fails.
+            // 通信失敗時は最後の成功応答（キャッシュ）を出したままにする。
         }
     }
 }
