@@ -84,19 +84,33 @@ struct CompanyIconView: View {
 
 /// REST の `icon_url` を優先し、無いときは公開 R2 の `company-icons/{code}.{ext}` を試す。
 /// 格納の大半は ICO なので `UIImage(data:)` ではなく ImageIO で解码する。
+/// 「無い」結果は `UserDefaults` に 1 日持ち、起動ごとに最大 5 回のプローブをやり直さない
+/// （Feed / 検索結果の数十リクエストが本文の REST と帯域を争わないようにする）。
 actor CompanyIconLoader {
     static let shared = CompanyIconLoader()
 
     private static let probeExtensions = ["ico", "png", "jpg", "gif", "bmp"]
+    private static let missingStorageKey = "blt.icon.missing"
+    private static let missingTTL: TimeInterval = 24 * 60 * 60
+    private static let missingLimit = 2_000
 
     private var memory: [String: UIImage] = [:]
-    private var missing: Set<String> = []
+    private var missing: [String: Date]
     private var inflight: [String: Task<IconLoadOutcome, Never>] = [:]
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard, now: Date = Date()) {
+        self.defaults = defaults
+        let stored = defaults.dictionary(forKey: Self.missingStorageKey) as? [String: Date] ?? [:]
+        missing = stored.filter { now.timeIntervalSince($0.value) < Self.missingTTL }
+    }
 
     func image(code: String, preferredURL: String?) async -> UIImage? {
         let key = cacheKey(code: code, preferredURL: preferredURL)
         if let cached = memory[key] { return cached }
-        if missing.contains(key) { return nil }
+        if let checkedAt = missing[key], Date().timeIntervalSince(checkedAt) < Self.missingTTL {
+            return nil
+        }
         if let existing = inflight[key] {
             return await existing.value.image
         }
@@ -106,10 +120,24 @@ actor CompanyIconLoader {
         inflight[key] = nil
         if let loaded = outcome.image {
             memory[key] = loaded
+            if missing.removeValue(forKey: key) != nil {
+                persistMissing()
+            }
         } else if outcome.cacheAsMissing {
-            missing.insert(key)
+            missing[key] = Date()
+            persistMissing()
         }
         return outcome.image
+    }
+
+    private func persistMissing() {
+        if missing.count > Self.missingLimit {
+            let oldest = missing.sorted { $0.value < $1.value }.prefix(missing.count - Self.missingLimit)
+            for (key, _) in oldest {
+                missing.removeValue(forKey: key)
+            }
+        }
+        defaults.set(missing, forKey: Self.missingStorageKey)
     }
 
     private func load(code: String, preferredURL: String?) async -> IconLoadOutcome {

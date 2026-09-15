@@ -149,7 +149,11 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。`APIClient.shared` は起動時に provider を固定するので、上書きの反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
 
-段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。
+段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。残り 60 秒超なら手元のトークンで即リクエストを出し、refresh は裏で 1 本だけ走らせる（リクエスト経路で制御面の往復を待たない）。残り 60 秒以下は refresh を待つ。
+
+### ゲートウェイの同時実行（`HAPISOriginGate`）
+
+HAPIS の制限は 60/分のレートで同時数ではない。interactive（Feed / 検索 / 銘柄面）は 3 本まで並列に出し、銘柄面の financials / overview / waterfall を直列にしない。先読み（ウォッチリスト）は 1 本ずつ 4 秒間隔で、interactive が流れている・待っている間と、最後の interactive から 2 秒間は出さない。スロットが空いたら待ちを全員起こして条件を再確認させる（先頭だけ起こすと、その 1 本が間隔待ちで眠っている間に空きが使われない）。mint / refresh はスロットを取る前に済ませる。
 
 ### Mac / Simulator 手動スモーク（この PR では必須にしない）
 

@@ -252,6 +252,8 @@ struct HAPISAttestationTests {
             attestation: HAPISAppAttestProvider(
                 service: service, keyStore: InMemoryHAPISAttestKeyStore())
         )
+        #expect(try await client.validToken() == "old-token")
+        await client.awaitBackgroundRefresh()
         #expect(try await client.validToken() == "refreshed-token")
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/token/refresh") }.count == 1)
         #expect(http.calls.filter { $0.path.hasSuffix("/v1/consumer/sessions") }.isEmpty)
