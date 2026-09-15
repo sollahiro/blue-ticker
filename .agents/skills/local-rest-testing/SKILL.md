@@ -49,6 +49,10 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
   is HTTP 200 and `items: []`.
 - Seed more than 200 rows to exercise pagination and default/max query limits.
 - Seed prior-first year arrays to distinguish latest-FY selection from array order.
+- `sales_cagr_3y` is derived at index time from the latest Summary years: most recent
+  3 fiscal periods with sales > 0, CAGR% over 2 years
+  `((latest/oldest)^(1/2) - 1) * 100`. Fewer than 3 such periods → null. Do not add
+  CAGR/YoY onto Summary `years[]`. `sales_growth` is not on the allow-list.
 - Screen empty/valueless/whitespace-only range bounds intentionally mean omitted filters.
 - SQL seeding plus rebuild does **not** prove the live financial ingest hook, skip-path
   backfill, or their best-effort error handling. State that limitation explicitly.
