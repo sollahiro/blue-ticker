@@ -1,6 +1,19 @@
 # REST / MCP 認証の住み分け
 
-段階 A が現行。段階 B の公開入口は HAPIS（`public-api.md`）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。
+段階 A が現行。段階 B の公開入口は HAPIS（`public-api.md`）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
+
+## origin の起動ガード
+
+非 loopback bind（`0.0.0.0` 等。Dockerfile / Fly の既定）では、次のどちらかが無いと **プロセス起動を拒否**する（EDINET キー欠落と同型の fail-closed。Routes の warning だけでは足りない）。
+
+| 条件 | 起動 |
+|---|---|
+| `CF_ACCESS_TEAM_DOMAIN` が非空 | 可（段階 A。エッジ信頼。origin はトークンを見ない） |
+| `BLT_ALLOW_UNAUTHENTICATED=1` | 可（手元で `0.0.0.0` を晒すとき、および段階 B で origin が HAPIS の後ろにあり Access を付けないとき） |
+| どちらも無い | 拒否 |
+| loopback（`127.0.0.1` / `localhost` / `::1`） | 従来どおり無認証で可 |
+
+`BLT_ALLOW_UNAUTHENTICATED=1` が唯一の明示 opt-in。HAPIS 専用の別 env は持たない。段階 B の Fly origin は HAPIS 背後で `CF_ACCESS_TEAM_DOMAIN` を置かない場合、この opt-in が必須。
 
 | 項目 | 段階 A（現行） | 段階 B（HAPIS 着地後） |
 |---|---|---|
@@ -20,7 +33,7 @@
 | curl / CI | `api.*` | Service Token |
 | ブラウザで api | `api.*` | SSO / OTP |
 | MCP（開発用） | `mcp.*` | Managed OAuth |
-| ローカル | `127.0.0.1` / LAN `http` | 無認証（`CF_ACCESS_TEAM_DOMAIN` 未設定） |
+| ローカル | `127.0.0.1` / LAN `http` | loopback は無認証。LAN 向けに `0.0.0.0` 等へ bind するときは `BLT_ALLOW_UNAUTHENTICATED=1` |
 | 第三者 REST | `api.*` | 段階 B / HAPIS + x402（`public-api.md`） |
 | iOS | loopback / `api.sollahiro.com` | 開発は loopback / http 無認証。実機プレビューで `https://api.sollahiro.com` を叩くときだけ Access SSO の短命 JWT（`CF_Authorization`）。Service Token は埋め込まない |
 
@@ -41,7 +54,9 @@
 
 HAPIS v0 は Cloudflare Access を転送してよい。段階 B 認証は v0 のあと。
 
-**開発例外:** `http://127.0.0.1` と LAN `http` は無認証・Attest なし（現行どおり）。
+**開発例外:** `http://127.0.0.1` と LAN `http` は無認証・Attest なし（現行どおり）。LAN で origin を `0.0.0.0` に bind するときは `BLT_ALLOW_UNAUTHENTICATED=1`。
+
+段階 B の Fly origin（HAPIS 背後・Access なし）は `BLT_ALLOW_UNAUTHENTICATED=1` をセットする。origin はゲートウェイを信頼し、トークンを検証しない。
 
 **内部退避:** staging ホストは Access を残す。段階 B 着地後の本番公開扉は HAPIS のみ（本番公開ゲートウェイに Access を置かない）。
 
