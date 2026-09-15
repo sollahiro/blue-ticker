@@ -46,6 +46,24 @@ import Testing
         #expect(zeros?[.salesCagr3y] == nil)
     }
 
+    @Test func screenRowCagrDedupesDuplicateFyEnd() throws {
+        let twoDistinct = try response(years: [
+            ["fy_end": "2025-03-31", "sales": 1210.0],
+            ["fy_end": "2025-03-31", "sales": 1210.0],
+            ["fy_end": "2024-03-31", "sales": 1100.0],
+        ]).screenRow()
+        #expect(twoDistinct?[.salesCagr3y] == nil)
+
+        let threeDistinct = try response(years: [
+            ["fy_end": "2025-03-31", "sales": 1210.0],
+            ["fy_end": "2025-03-31", "sales": 1210.0],
+            ["fy_end": "2024-03-31", "sales": 1100.0],
+            ["fy_end": "2023-03-31", "sales": 1000.0],
+        ]).screenRow()
+        let cagr = try #require(threeDistinct?[.salesCagr3y])
+        #expect(abs(cagr - 10) < 1e-9)
+    }
+
     @Test func screenRowCagrSkipsNonPositiveSalesAndIgnoresOlderFourthYear() throws {
         let row = try response(years: [
             ["fy_end": "2021-03-31", "sales": 100.0],

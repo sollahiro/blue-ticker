@@ -3,7 +3,7 @@
 // `company_financials` の最新 FY を 1 社 1 行へ投影した検索用 Read Model（Neon `screen_index`）の
 // 行定義と、REST `GET /v1/screen` のクエリ解析。`company_financials` の契約は複製しない。
 // 数値キーは Summary `years[]` の公開キーのうち Screen が受け付ける許可リストだけ。
-// `sales_cagr_3y` は Summary `years[]` に無い派生列（最新から売上 > 0 の 3 期で ingest 時に計算）。
+// `sales_cagr_3y` は Summary `years[]` に無い派生列（最新から売上 > 0 の 3 期・同一 fy_end は先勝ち）。
 // YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
@@ -86,7 +86,8 @@ extension FinancialsResponse {
 }
 
 /// 最新 Summary 年から売上 > 0 の直近 3 期を取り、2 年間の CAGR% = `((latest/oldest)^(1/2) - 1) * 100`。
-/// `fy_end` 降順で見て売上 ≤ 0 / 欠測の期は飛ばす。3 期に満たない・非有限なら nil。`years[]` には書き戻さない。
+/// `fy_end` 降順で見て売上 ≤ 0 / 欠測の期は飛ばす。同一 `fy_end` は先勝ちで 1 期（配信側 `uniquedByFyEnd` と同じ）。
+/// 3 期に満たない・非有限なら nil。`years[]` には書き戻さない。
 private func salesCagr3y(from years: [FinancialsYear]) -> Double? {
     let positive = years.compactMap { year -> (String, Double)? in
         guard let fyEnd = year.fyEnd, let sales = year.sales, sales > 0, sales.isFinite else {
@@ -95,9 +96,11 @@ private func salesCagr3y(from years: [FinancialsYear]) -> Double? {
         return (fyEnd, sales)
     }
     .sorted { $0.0 > $1.0 }
-    guard positive.count >= 3 else { return nil }
-    let newest = positive[0].1
-    let oldest = positive[2].1
+    var seen = Set<String>()
+    let unique = positive.filter { seen.insert($0.0).inserted }
+    guard unique.count >= 3 else { return nil }
+    let newest = unique[0].1
+    let oldest = unique[2].1
     let percent = ((newest / oldest).squareRoot() - 1) * 100
     return percent.isFinite ? percent : nil
 }
