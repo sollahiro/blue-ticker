@@ -9,16 +9,20 @@ import SQLKit
 
 struct ReplaceScreenIndexGrowthWithCagr: AsyncMigration {
     func prepare(on database: Database) async throws {
-        guard let sql = database as? SQLDatabase else { return }
-        if try await screenIndexHasColumn(sql, "sales_cagr_3y") { return }
+        if let sql = database as? SQLDatabase,
+           try await screenIndexHasColumn(sql, "sales_cagr_3y")
+        {
+            return
+        }
         try await database.schema(ScreenIndex.schema)
             .field("sales_cagr_3y", .double)
             .update()
     }
 
     func revert(on database: Database) async throws {
-        guard let sql = database as? SQLDatabase else { return }
-        guard try await screenIndexHasColumn(sql, "sales_cagr_3y") else { return }
+        if let sql = database as? SQLDatabase {
+            guard try await screenIndexHasColumn(sql, "sales_cagr_3y") else { return }
+        }
         try await database.schema(ScreenIndex.schema)
             .deleteField("sales_cagr_3y")
             .update()
