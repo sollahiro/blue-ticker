@@ -153,16 +153,18 @@ struct CompanyOverviewView: View {
     @State private var overview: String?
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
             if let overview, !overview.isEmpty {
                 FillWidth {
                     JustifiedOverviewText(text: overview)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(overview)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
         }
-        .task { await load() }
+        .task(id: code) { await load() }
     }
 
     private func load() async {
