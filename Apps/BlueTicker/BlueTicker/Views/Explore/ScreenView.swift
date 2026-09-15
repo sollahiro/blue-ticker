@@ -85,11 +85,13 @@ struct ScreenView: View {
     }
 
     private func presetRow(_ preset: ScreenPreset) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(preset.title)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            reasonChips(preset.reasonChips)
+            Text(preset.reasonText)
+                .font(.footnote)
+                .foregroundStyle(Theme.textMuted)
         }
         .padding(.vertical, 6)
     }
@@ -175,7 +177,7 @@ private struct ScreenResultsView: View {
                     Section {
                         ForEach(items) { item in
                             NavigationLink(value: CompanyRef(item)) {
-                                ScreenResultRow(item: item, chips: preset.reasonChips)
+                                ScreenResultRow(item: item)
                             }
                             .listRowBackground(Theme.elevated)
                         }
@@ -185,8 +187,9 @@ private struct ScreenResultsView: View {
                                 .foregroundStyle(Theme.textMuted)
                                 .listRowBackground(Color.clear)
                         }
-                    } header: {
-                        reasonChips(preset.reasonChips)
+                    } footer: {
+                        Text(preset.reasonText)
+                            .foregroundStyle(Theme.textMuted)
                     }
                 }
             }
@@ -220,14 +223,11 @@ private struct ScreenResultsView: View {
 
 private struct ScreenResultRow: View {
     var item: ScreenItem
-    var chips: [String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CompanyRowView(company: CompanyRef(item))
             ScreenMetricValuesView(item: item)
-                .padding(.leading, 48)
-            reasonChips(chips)
                 .padding(.leading, 48)
         }
         .padding(.vertical, 2)
@@ -278,20 +278,5 @@ private extension ScreenItem {
         case .salesCagr3y: salesCagr3y
         case .netDe: netDe
         }
-    }
-}
-
-private func reasonChips(_ chips: [String]) -> some View {
-    HStack(spacing: 6) {
-        ForEach(chips, id: \.self) { chip in
-            Text(chip)
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .foregroundStyle(Theme.text)
-                .background(Theme.idleTab)
-                .clipShape(Capsule())
-        }
-        Spacer(minLength: 0)
     }
 }
