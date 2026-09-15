@@ -20,6 +20,7 @@ struct TickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            CompanyOverviewView(code: company.code)
             cards
             pageDots
         }

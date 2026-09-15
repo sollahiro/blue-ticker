@@ -8,7 +8,6 @@ struct SummaryView: View {
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
     @State private var selectedRow: SummaryRow?
-    @State private var overview: String?
 
     var body: some View {
         Group {
@@ -48,14 +47,6 @@ struct SummaryView: View {
         let scales = moneyScales(for: response)
         return ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                if let overview, !overview.isEmpty {
-                    FillWidth {
-                        JustifiedOverviewText(text: overview)
-                    }
-                    .padding(.bottom, 8)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(overview)
-                }
                 SegmentPills(
                     items: Array(SummarySection.allCases),
                     selection: $section,
@@ -123,19 +114,11 @@ struct SummaryView: View {
             response = cached
             errorMessage = nil
         }
-        if let cachedOverview = await APIClient.shared.cachedOverview(code: code) {
-            let text = cachedOverview.overview.trimmingCharacters(in: .whitespacesAndNewlines)
-            overview = text.isEmpty ? nil : text
-        }
-        async let financials = APIClient.shared.financials(code: code)
-        async let overviewText = loadOverview()
         do {
-            response = try await financials
+            response = try await APIClient.shared.financials(code: code)
             errorMessage = nil
-            overview = await overviewText
         } catch APIClientError.http(let status, let message) where status == 404 {
             response = nil
-            overview = nil
             errorMessage = message.isEmpty ? "財務データは未集計です" : message
         } catch {
             if response == nil {
@@ -143,19 +126,9 @@ struct SummaryView: View {
             }
         }
     }
-
-    private func loadOverview() async -> String? {
-        do {
-            let loaded = try await APIClient.shared.overview(code: code)
-            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? nil : text
-        } catch {
-            return nil
-        }
-    }
 }
 
-/// 親の提案幅を子に渡し、Overview がカード幅まで広がるようにする。
+/// 親の提案幅を子に渡し、Overview がヘッダ幅まで広がるようにする。
 private struct FillWidth: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let subview = subviews.first else { return .zero }
@@ -171,6 +144,43 @@ private struct FillWidth: Layout {
             at: bounds.origin,
             proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
         )
+    }
+}
+
+/// 銘柄ヘッダとカードのあいだに置く会社説明。空なら何も出さない。
+struct CompanyOverviewView: View {
+    var code: String
+    @State private var overview: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let overview, !overview.isEmpty {
+                FillWidth {
+                    JustifiedOverviewText(text: overview)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(overview)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+        }
+        .task(id: code) { await load() }
+    }
+
+    private func load() async {
+        if let cached = await APIClient.shared.cachedOverview(code: code) {
+            let text = cached.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        }
+        do {
+            let loaded = try await APIClient.shared.overview(code: code)
+            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        } catch APIClientError.http(let status, _) where status == 404 {
+            overview = nil
+        } catch {
+            // 通信失敗時は最後の成功応答（キャッシュ）を出したままにする。
+        }
     }
 }
 
