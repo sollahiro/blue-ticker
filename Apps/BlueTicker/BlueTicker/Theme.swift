@@ -8,7 +8,6 @@ enum Theme {
     static let text = Color(red: 0.98, green: 0.98, blue: 0.99)
     static let textMuted = Color(red: 0.70, green: 0.72, blue: 0.75)
     static let accent = Color(red: 0.35, green: 0.70, blue: 0.95)
-    static let selectedTab = Color(red: 0.18, green: 0.42, blue: 0.65)
     static let idleTab = Color(red: 0.35, green: 0.36, blue: 0.38)
     /// リスト行・コントロール背景。カードより黒寄り。
     static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
@@ -20,8 +19,6 @@ enum Theme {
     static let headerChipSpacing: CGFloat = 4
     /// ヘッダ二段それぞれの行高。
     static var headerRowHeight: CGFloat { (headerSideHeight - headerChipSpacing) / 2 }
-    /// リスト行などの業種タグ高さ。
-    static let chipHeight: CGFloat = 28
     /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
     static let tickerPageDotGutter: CGFloat = 36
     /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
@@ -40,7 +37,6 @@ enum Theme {
     static var sectorFill: Color { positive.opacity(0.22) }
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
-    static let margin = Color(red: 0.35, green: 0.78, blue: 0.82)
 
     static let bandLow = SIMD3<Double>(0.95, 0.08, 0.08)
     static let bandMid = SIMD3<Double>(0.98, 0.82, 0.12)
@@ -105,15 +101,11 @@ enum MetricBand {
     case higherBetter(lowBelow: Double, midFrom: Double, midTo: Double, highFrom: Double)
     /// 値が小さいほど優良。`highBelow` 未満が High、`midFrom...midTo` が Mid、`lowFrom` 以上が Low。
     case lowerBetter(highBelow: Double, midFrom: Double, midTo: Double, lowFrom: Double)
-    /// 閾値未満は黄、以上は緑。
-    case yellowThenGreen(greenFrom: Double)
 
     func quality(_ value: Double) -> Double {
         switch self {
         case .none:
             return 0.5
-        case .yellowThenGreen(let greenFrom):
-            return value >= greenFrom ? 1 : 0.5
         case .higherBetter(let lowBelow, let midFrom, let midTo, let highFrom):
             if value < lowBelow { return 0 }
             if value >= highFrom { return 1 }

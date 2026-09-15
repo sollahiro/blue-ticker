@@ -15,14 +15,6 @@ enum BreakdownMetric: String, CaseIterable, Identifiable {
         case .roe: "ROE"
         }
     }
-
-    var systemImage: String {
-        switch self {
-        case .businessProfit: "chart.line.uptrend.xyaxis"
-        case .roic: "arrow.triangle.2.circlepath"
-        case .roe: "chart.pie"
-        }
-    }
 }
 
 struct BreakdownView: View {

@@ -317,14 +317,6 @@ enum SummarySection: String, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .performance: "chart.bar"
-        case .assets: "building.columns"
-        case .efficiency: "percent"
-        }
-    }
-
     var rows: [SummaryRow] {
         switch self {
         case .performance:
