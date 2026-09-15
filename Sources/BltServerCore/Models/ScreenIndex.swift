@@ -39,6 +39,8 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "net_de")
     var netDe: Double?
 
+    /// 物理テーブルには旧 `sales_growth` / `gross_profit_margin` が nullable で残る（削除しない）。
+    /// Model には載せず、許可リスト・書き込み・GET /v1/screen からも除外する。
     @OptionalField(key: "sales_cagr_3y")
     var salesCagr3y: Double?
 
