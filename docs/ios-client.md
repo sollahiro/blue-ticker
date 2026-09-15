@@ -26,7 +26,7 @@
 | 最低対応 OS | iOS 26.0。`IPHONEOS_DEPLOYMENT_TARGET` はプロジェクト側だけに置き、ターゲットは継承させる。iOS 26 の UI 作法（透過タブバー、`scrollEdgeEffectHidden` 等）をそのまま使い、`if #available` で古い OS に分岐させない |
 | 背景 | 株価アプリ風のダーク。シェルはほぼ黒、カードは背景から浮かぶ濃いグレー、リスト行・コントロールはカードより黒寄り（`Theme.shell` / `Theme.card` / `Theme.control`）。紺の `#16446F` は使わない |
 | 履歴 | 名称検索の右上ツールバー。開いた銘柄をクライアントローカル（`UserDefaults`、最大 30 件）に残す |
-| 条件 | Screen。キーワードは正本にしない。Figma の業種チップ列は未完成で、インタラクティブな条件設定ができればよい |
+| 条件 | Screen。業種チップ + 3 プリセット。DualRangeSlider は出さない |
 | フロー | Sankey。未実装。銘柄の次カード（3 枚目）にする。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | 構想。銘柄カードからは外し、ロードマップに残す |
 | ニュース | 開発廃止。銘柄カードから外す。Brave 等の外部ニュースは載せない |
@@ -62,7 +62,7 @@
 | 画面 | Feature | 備考 |
 |---|---|---|
 | 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed は REST 省略時どおり直近90日を最大10件。同日過多のサンプルはサーバー。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト |
-| 条件検索 | Screen（BLT-49） | 横断フィルタ UI。`検索` で `GET /v1/screen` の結果画面へ。全社 `financials` をクライアントで絞らない |
+| 条件検索 | Screen（BLT-49） | 業種チップ + 3 プリセット。タップで `GET /v1/screen` の結果へ。全社 `financials` をクライアントで絞らない |
 | リスト | （クライアント） | ウォッチリスト |
 | 概要 | Summary | 年次の水準値。表の上に Overview。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ。要因を選ぶと、緑／赤に応じた一文と計算式（と可能な範囲で計算に使った数値）を出す |
@@ -74,24 +74,23 @@
 
 ポンチ絵の業種チップは Screen の一部だけ。完成形のレイアウト再現は求めない。
 
-アプリ側の制約（サーバー許可リストは削らない。BLT-49）:
+アプリ側の制約（サーバー許可リストは `ScreenMetric`。BLT-49）:
 
 - 業種は横スクロール 3 段のチップで複数選択。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行・銘柄ヘッダの業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。未選択と全選択は `sector` を送らない。1 業種は `sector=` 完全一致。2 業種以上は AND にせず、業種ごとに `GET /v1/screen` して ROIC 降順 50 件へマージする（サーバーは `sector` 1 件）
-- 数値指標の既定は `営業利益率` / `ROIC` / `ROE` の 3 つ。その下の `＋` でオプション行を足す（`売上高` / `売上増加率` / `粗利率` / `ネットD/E`）。追加行のタイトル右の上下シェブロンで項目を選び、右からのスライドでバツ削除。`＋` は常に最下行。各指標は DualRangeSlider（下限・上限、`[minValue, maxValue]`、値はハンドル上）。ソートは `roic` 降順、LIMIT 50 で固定
-  - 売上高 `sales`（100 億円以上が緑、未満は黄）
-  - 売上増加率 `sales_growth`（画面上のオプション。Summary `years[]` に YoY キーは無く、`screen_index` の派生列）
-  - 粗利率 `gross_profit_margin`（売上高総利益率）
-  - 営業利益率 `operating_margin`（開示営業利益 ÷ 売上。分解の事業利益率ではない）
-  - ROIC `roic`
-  - ROE `roe`
-  - ネット D/E `net_de`
-- スライダーはハンドルのドラッグだけが値を変える。トラックや余白のタップ、縦スクロール開始では動かない。ハンドル色は水準帯を赤→黄→緑で表す（文言ラベルは出さない）。数値はハンドルに追従し、近いときは重ならない。背景から横にはみ出さない。指標セクションの背景は設定のサーバー入力欄に近い黒寄り。Screen REST の許可リストは変えない
-- 条件の実行はツールバーの `検索`。結果画面へ遷移する。スライダーが既定の全幅の指標は min/max を送らない（null 行を落とさない）。`絞り込む` は置かない
-- 売上増加率 `sales_growth` は `screen_index` の派生列（最新 FY と直前 FY の `sales` から `%`。直前 FY が無い / 売上 0 以下なら null）。Summary の `years[]` には YoY キーを足さない
+- DualRangeSlider・指標の詳細トグル・`ScreenMetricFilter` 組み立て UI は出さない。フローは業種（任意）→ プリセットタップ → 結果 → 銘柄
+- プリセットは 3 つ。クライアントが `GET /v1/screen` の min/max + `sort=roic` desc に写す（閾値は整数、ネット D/E は 1 桁）:
+  - **優良**: `roic_min=10`、`operating_margin_min=8`、`net_de_max=0.5`。成長フィルタなし
+  - **成長**: `sales_cagr_3y_min=10`、`operating_margin_min=5`、`roic_min=8`。CAGR 上限なし
+  - **健全成長**: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
+- 結果行は常に core4 を出す（欠測は `—`。CAGR が null でも YoY に落とさない）: `roic` / `operating_margin` / `sales_cagr_3y` / `net_de`
+- 理由チップはプリセット条件の短い言い換え（ブラックボックスのスコアではない）
+- `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
+- サーバー許可リスト: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y`
+- 3 期売上 CAGR `sales_cagr_3y` は `screen_index` の派生列。最新 Summary 年から売上 > 0 の直近 3 期を取り、`((latest/oldest)^(1/2) - 1) * 100`。3 期に満たなければ null。Summary の `years[]` には CAGR / YoY キーを足さない
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 7 指標。応答は `items[]`（メタ + フィルタ / ソートに使った指標だけ）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、`blt-server screen-rebuild` で全件再生成する。skills カタログには載せない（BLT-49）。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 6 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、列定義変更後は `blt-server screen-rebuild` で全件再生成する（`screenIndexVersion` = `screen-v2`。`fin-vN` は上げない）。skills カタログには載せない（BLT-49）。
 
 ## 認証
 

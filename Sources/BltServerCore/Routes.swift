@@ -48,6 +48,7 @@ func registerRoutes(
                 "statement_min_servable": statementMinServableVersion,
                 "company_overviews": companyOverviewCacheVersion,
                 "company_overviews_min_servable": companyOverviewMinServableVersion,
+                "screen_index": screenIndexVersion,
             ],
         ], status: .ok)
     }
@@ -245,10 +246,10 @@ func registerRoutes(
             notFoundMessage: "指定された note_type の注記は未算出です")
     }
 
-    // GET /v1/screen?sector=電気機器&roic_min=15&sales_min=10000&sort=roic&order=desc&limit=50
+    // GET /v1/screen?sector=電気機器&roic_min=15&sales_cagr_3y_min=10&sort=roic&order=desc&limit=50
     // Summary 横断検索（BLT-49）。DB（screen_index、company_financials の最新 FY 派生）を AND フィルタ +
     // 1 キーソート + LIMIT で読む。数値は `{metric}_min` / `{metric}_max`（許可リストは `ScreenMetric`）。
-    // 不明キー・不正値は 400。REST のみ（skills カタログ・MCP には載せない）。
+    // `sales_cagr_3y` は ingest 時の派生列。不明キー・不正値は 400。REST のみ（skills カタログ・MCP には載せない）。
     v1.get("screen") { req async -> Response in
         let query: ScreenQuery
         switch parseScreenQuery(rawQueryItems(req)) {
