@@ -16,6 +16,17 @@ import Vapor
 ///   - host: バインドアドレス（デフォルト 127.0.0.1）
 ///   - port: ポート番号（デフォルト 3000）
 public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async throws {
+    // 非 loopback の無認証 listen はプロセス開始で拒否する（Routes の warning だけでは不足。
+    // Fly secret 消失時に origin が露出する。EDINET キー欠落と同型の fail-closed）。
+    if case .refuse(let message) = OriginUnauthenticatedBindGuard.evaluate(
+        host: host,
+        cfAccessTeamDomain: Environment.get("CF_ACCESS_TEAM_DOMAIN"),
+        allowUnauthenticated: Environment.get("BLT_ALLOW_UNAUTHENTICATED")
+    ) {
+        printError(message)
+        exit(1)
+    }
+
     guard let context = await makeBltServerContext() else {
         printError("EDINET API キーが設定されていません。BLT_EDINET_API_KEY 環境変数を設定してください。\n")
         exit(1)

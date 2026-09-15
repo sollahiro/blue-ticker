@@ -19,14 +19,15 @@ Neon write・RO 同期・訂正有報は `.agents/skills/production-ingest/SKILL
 | `BLUE_TICKER_ASSETS_PATH` | assets（既定 `/app/assets`） |
 | `BLUE_TICKER_USER_DATA_PATH` | キャッシュ永続先（既定 `/data`） |
 | `BLT_EDINET_API_KEY` | EDINET（**secret・必須**） |
-| `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード。公開デプロイでは**必須**（未設定＝無認証） |
+| `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード（エッジ信頼）。非 loopback ではこれか `BLT_ALLOW_UNAUTHENTICATED=1` が必須 |
+| `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `docs/api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
 | `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
 | `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
-認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（dev）。Bearer は廃止済み。
+認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。Bearer は廃止済み。
 
 ## Fly.io
 

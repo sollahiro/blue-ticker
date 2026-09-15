@@ -54,11 +54,11 @@ func registerRoutes(
     }
 
     // /v1 配下の認証モードを env から決める（docs/api-auth.md / .agents/skills/deploy/SKILL.md）。
-    // 優先順位:
+    // origin はトークンを検証しない（エッジ / ゲートウェイ信頼。認証ミドルウェアは載せない）。
+    // 非 loopback の無認証 listen 拒否は `runBltServer` の起動ガード
+    // （`OriginUnauthenticatedBindGuard`）が担う。ここは到達したモードのログだけ。
     //   1. CF_ACCESS_TEAM_DOMAIN 設定 → Cloudflare Access モード（エッジ信頼 / 方式 A）。
-    //      Tunnel + Access がエッジで認証済みのため origin は検証しない。
-    //      ※安全要件: 公開ポートを閉じ Cloudflare Tunnel 経由限定にすること（origin 非公開が前提）。
-    //   2. 未設定 → 無認証（ローカル開発専用。公開デプロイでは危険なため警告を出す）。
+    //   2. 未設定 → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。
     let authenticated: RoutesBuilder = app
     if cfAccessTeamDomain?.isEmpty == false {
         app.logger.notice(
