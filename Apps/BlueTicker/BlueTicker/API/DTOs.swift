@@ -273,15 +273,15 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// プリセット条件の短い言い換え（スコアではない）。
-    var reasonChips: [String] {
+    /// プリセット条件の短い言い換え（スコアではない）。脚注 / セクション footer 用。
+    var reasonText: String {
         switch self {
         case .quality:
-            ["ROIC≥10%", "営業利益率≥8%", "ネットD/E≤0.5倍"]
+            "ROIC≥10% · 営業利益率≥8% · ネットD/E≤0.5倍"
         case .growth:
-            ["売上CAGR≥10%", "営業利益率≥5%", "ROIC≥8%"]
+            "売上CAGR≥10% · 営業利益率≥5% · ROIC≥8%"
         case .healthyGrowth:
-            ["売上CAGR≥5%", "ROIC≥12%", "ネットD/E≤0.3倍"]
+            "売上CAGR≥5% · ROIC≥12% · ネットD/E≤0.3倍"
         }
     }
 }

@@ -11,40 +11,33 @@ struct TopView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var searchGeneration = 0
     @State private var showHistory = false
-    @FocusState private var searchFocused: Bool
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if !searchResults.isEmpty || searchError != nil || isSearching {
-                    sectionHeader("検索結果")
+        List {
+            if showsSearchSection {
+                Section("検索結果") {
                     if isSearching && searchResults.isEmpty && searchError == nil {
-                        rowBackground { ProgressView() }
+                        ProgressView()
                     }
                     if let searchError {
-                        rowBackground {
-                            Text(searchError)
-                                .foregroundStyle(Theme.textMuted)
-                        }
+                        Text(searchError)
+                            .foregroundStyle(Theme.textMuted)
                     }
                     ForEach(searchResults) { hit in
                         companyLink(CompanyRef(hit))
                     }
                 }
+            }
 
-                sectionHeader("最近新しい有報がアップロードされました")
+            Section("最近新しい有報がアップロードされました") {
                 if !updatesReady {
-                    rowBackground { ProgressView() }
+                    ProgressView()
                 } else if let updatesError {
-                    rowBackground {
-                        Text(updatesError)
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                    Text(updatesError)
+                        .foregroundStyle(Theme.textMuted)
                 } else if updates.isEmpty {
-                    rowBackground {
-                        Text("直近の有報はありません")
-                            .foregroundStyle(Theme.textMuted)
-                    }
+                    Text("直近の有報はありません")
+                        .foregroundStyle(Theme.textMuted)
                 } else {
                     ForEach(updates.prefix(10)) { item in
                         companyLink(CompanyRef(item), submittedAt: item.submittedAt)
@@ -52,25 +45,19 @@ struct TopView: View {
                 }
             }
         }
-        .scrollClipDisabled()
-        .contentMargins(.top, 0, for: .scrollContent)
-        .scrollDismissesKeyboard(.immediately)
-        .simultaneousGesture(
-            TapGesture().onEnded {
-                searchFocused = false
-            }
+        .searchable(
+            text: $query,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "会社名を入力してください"
         )
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            nameSearchBar
-        }
-        .background { InlineNavigationTitle() }
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .scrollDismissesKeyboard(.immediately)
         .navigationTitle("名称検索")
         .bltChrome()
-        .scrollDismissesKeyboard(.immediately)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("履歴") {
-                    searchFocused = false
                     showHistory = true
                 }
                 .foregroundStyle(Theme.text)
@@ -82,17 +69,14 @@ struct TopView: View {
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
+        .onSubmit(of: .search) {
+            scheduleSearch(query)
+        }
         .task { await loadFeeds() }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(Theme.textMuted)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 6)
+    private var showsSearchSection: Bool {
+        !searchResults.isEmpty || searchError != nil || isSearching
     }
 
     private func companyLink(_ company: CompanyRef, submittedAt: String? = nil) -> some View {
@@ -111,61 +95,8 @@ struct TopView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("提出日 \(Format.submittedDate(submittedAt))")
                 }
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.textMuted)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Theme.elevated)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func rowBackground<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Theme.elevated)
-    }
-
-    private var nameSearchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Theme.textMuted)
-                .accessibilityHidden(true)
-            TextField("会社名を入力してください", text: $query)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .foregroundStyle(Theme.text)
-                .focused($searchFocused)
-                .onSubmit {
-                    searchFocused = false
-                    scheduleSearch(query)
-                }
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("クリア")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay {
-            Capsule()
-                .stroke(Theme.text.opacity(0.14), lineWidth: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
     }
 
     private func loadFeeds() async {
@@ -248,7 +179,6 @@ struct HistoryView: View {
                         .listRowBackground(Theme.elevated)
                     }
                 }
-                .listStyle(.plain)
             }
         }
         .navigationTitle("履歴")
@@ -278,44 +208,6 @@ enum CompanyHistory {
         }
         if let data = try? JSONEncoder().encode(items) {
             UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-}
-
-/// iOS 26 の NavigationStack が inline でも大きなタイトル用の空きを残すのを潰す。
-private struct InlineNavigationTitle: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> Controller {
-        Controller()
-    }
-
-    func updateUIViewController(_ uiViewController: Controller, context: Context) {
-        uiViewController.apply()
-    }
-
-    final class Controller: UIViewController {
-        override func viewDidLoad() {
-            super.viewDidLoad()
-            view.isUserInteractionEnabled = false
-            view.backgroundColor = .clear
-        }
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            apply()
-        }
-
-        override func didMove(toParent parent: UIViewController?) {
-            super.didMove(toParent: parent)
-            apply()
-        }
-
-        func apply() {
-            var current: UIViewController? = self
-            while let controller = current {
-                controller.navigationItem.largeTitleDisplayMode = .never
-                controller.navigationController?.navigationBar.prefersLargeTitles = false
-                current = controller.parent
-            }
         }
     }
 }
