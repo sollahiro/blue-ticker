@@ -50,8 +50,22 @@ struct ScreenView: View {
                 sectorChips
                     .listRowBackground(Theme.elevated)
             } header: {
-                Text("業種")
-                    .foregroundStyle(Theme.textMuted)
+                HStack {
+                    Text("業種")
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer()
+                    Button("全選択") { selectedSectors = Set(TSESector.catalog) }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .buttonStyle(.plain)
+                        .disabled(selectedSectors.count == TSESector.catalog.count)
+                    Button("全解除") { selectedSectors.removeAll() }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .buttonStyle(.plain)
+                        .disabled(selectedSectors.isEmpty)
+                }
+                .textCase(nil)
             } footer: {
                 Text("横にスライドして複数選べます。未選択は全業種です。")
                     .foregroundStyle(Theme.textMuted)

@@ -20,6 +20,9 @@ struct TickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            CompanyOverviewView(code: company.code)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             cards
             pageDots
         }
