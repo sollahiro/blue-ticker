@@ -218,22 +218,20 @@ struct ScreenItem: Codable, Hashable, Identifiable {
     var sector: String?
     var periodEnd: String?
     var sales: Double?
-    var salesGrowth: Double?
-    var grossProfitMargin: Double?
     var operatingMargin: Double?
     var roic: Double?
     var roe: Double?
     var netDe: Double?
+    var salesCagr3y: Double?
 
     var id: String { code }
 
     enum CodingKeys: String, CodingKey {
         case code, name, market, sector, sales, roic, roe
         case periodEnd = "period_end"
-        case salesGrowth = "sales_growth"
-        case grossProfitMargin = "gross_profit_margin"
         case operatingMargin = "operating_margin"
         case netDe = "net_de"
+        case salesCagr3y = "sales_cagr_3y"
     }
 }
 
@@ -243,9 +241,54 @@ struct ScreenMetricFilter: Sendable, Hashable {
     var max: Double?
 }
 
+/// 条件検索の 3 プリセット。閾値は整数（ネット D/E は 1 桁）で `GET /v1/screen` に載せる。
+enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
+    case quality = "優良"
+    case growth = "成長"
+    case healthyGrowth = "健全成長"
+
+    var id: String { rawValue }
+    var title: String { rawValue }
+
+    var filters: [ScreenMetricFilter] {
+        switch self {
+        case .quality:
+            [
+                ScreenMetricFilter(key: "roic", min: 10, max: nil),
+                ScreenMetricFilter(key: "operating_margin", min: 8, max: nil),
+                ScreenMetricFilter(key: "net_de", min: nil, max: 0.5),
+            ]
+        case .growth:
+            [
+                ScreenMetricFilter(key: "sales_cagr_3y", min: 10, max: nil),
+                ScreenMetricFilter(key: "operating_margin", min: 5, max: nil),
+                ScreenMetricFilter(key: "roic", min: 8, max: nil),
+            ]
+        case .healthyGrowth:
+            [
+                ScreenMetricFilter(key: "sales_cagr_3y", min: 5, max: nil),
+                ScreenMetricFilter(key: "roic", min: 12, max: nil),
+                ScreenMetricFilter(key: "net_de", min: nil, max: 0.3),
+            ]
+        }
+    }
+
+    /// プリセット条件の短い言い換え（スコアではない）。
+    var reasonChips: [String] {
+        switch self {
+        case .quality:
+            ["ROIC≥10%", "営業利益率≥8%", "ネットD/E≤0.5倍"]
+        case .growth:
+            ["売上CAGR≥10%", "営業利益率≥5%", "ROIC≥8%"]
+        case .healthyGrowth:
+            ["売上CAGR≥5%", "ROIC≥12%", "ネットD/E≤0.3倍"]
+        }
+    }
+}
+
 struct ScreenQuery: Hashable {
     var sectors: [String]
-    var filters: [ScreenMetricFilter]
+    var preset: ScreenPreset
 }
 
 struct APIErrorBody: Codable {

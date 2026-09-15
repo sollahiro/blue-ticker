@@ -30,7 +30,7 @@ enum Format {
         return yenScale(maxValue)
     }
 
-    /// 百万円 → 億円。サフィックス付き（条件検索のスライダー用）。
+    /// 百万円 → 億円。サフィックス付き。
     static func okuYen(_ value: Double?) -> String {
         guard let value else { return "—" }
         return groupedNumber(value / 100.0) + "億円"

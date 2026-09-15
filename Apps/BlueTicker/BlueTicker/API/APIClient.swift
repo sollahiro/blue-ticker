@@ -82,6 +82,7 @@ actor APIClient {
 
     /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。2 件以上は完全一致を業種ごとに叩き
     /// （並列数はゲートに任せる）、ROIC 降順で 50 件にまとめる（サーバーは `sector` 1 件）。
+    /// プリセットは `filters` の min/max に写す。スライダー UI は出さない。
     func screen(sectors: [String], filters: [ScreenMetricFilter]) async throws -> ScreenResponse {
         let targets: [String?] =
             sectors.isEmpty ? [nil] : sectors.map { Optional($0) }

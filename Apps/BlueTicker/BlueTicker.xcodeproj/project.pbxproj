@@ -25,7 +25,6 @@
 		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
 		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
 		AA0000000000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* SettingsView.swift */; };
-		AA0000000000000000000011 /* DualRangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011 /* DualRangeSlider.swift */; };
 		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012 /* CompanyRowView.swift */; };
 		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013 /* TopView.swift */; };
 		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* ScreenView.swift */; };
@@ -58,7 +57,6 @@
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000011 /* DualRangeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualRangeSlider.swift; sourceTree = "<group>"; };
 		BB0000000000000000000012 /* CompanyRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRowView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000013 /* TopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000014 /* ScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenView.swift; sourceTree = "<group>"; };
@@ -179,7 +177,6 @@
 		DD0000000000000000000007 /* Explore */ = {
 			isa = PBXGroup;
 			children = (
-				BB0000000000000000000011 /* DualRangeSlider.swift */,
 				BB0000000000000000000012 /* CompanyRowView.swift */,
 				BB0000000000000000000013 /* TopView.swift */,
 				BB0000000000000000000014 /* ScreenView.swift */,
@@ -287,7 +284,6 @@
 				AA0000000000000000000009 /* RootView.swift in Sources */,
 				AA0000000000000000000021 /* BrandMark.swift in Sources */,
 				AA0000000000000000000010 /* SettingsView.swift in Sources */,
-				AA0000000000000000000011 /* DualRangeSlider.swift in Sources */,
 				AA0000000000000000000012 /* CompanyRowView.swift in Sources */,
 				AA0000000000000000000013 /* TopView.swift in Sources */,
 				AA0000000000000000000014 /* ScreenView.swift in Sources */,
