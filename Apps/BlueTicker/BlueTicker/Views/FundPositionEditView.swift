@@ -1,13 +1,15 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct TickerHoldingsView: View {
     var code: String
     var onAddAccount: () -> WatchedCompany
 
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var addedBlankIDs: Set<PersistentIdentifier> = []
+    @State private var editorEpoch = 0
 
     var body: some View {
         Form {
@@ -20,8 +22,11 @@ struct TickerHoldingsView: View {
             ForEach(Array(rows.enumerated()), id: \.element.persistentModelID) { index, item in
                 HoldingsAccountGroup(
                     item: item,
-                    heading: rows.count >= 2 ? (item.accountCaption ?? "口座 \(index + 1)") : nil
+                    heading: rows.count >= 2 ? (item.accountCaption ?? "口座 \(index + 1)") : nil,
+                    showsDelete: !item.isBlankHoldingsRow,
+                    onDelete: { deleteAccount(item) }
                 )
+                .id("\(item.persistentModelID)-\(editorEpoch)")
             }
             Section {
                 Button("口座を追加") {
@@ -29,7 +34,7 @@ struct TickerHoldingsView: View {
                     addedBlankIDs.insert(created.persistentModelID)
                 }
             } footer: {
-                Text("株数と取得単価の両方が入るとファンド明細に出ます。")
+                Text("株数と取得単価の両方が入るとファンド明細に出ます。登録口座は各グループの削除で外せます。")
             }
         }
         .listSectionSpacing(.compact)
@@ -38,8 +43,10 @@ struct TickerHoldingsView: View {
         .toolbar(.visible, for: .navigationBar)
         .bltChrome()
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("完了") { dismiss() }
+            if !addedBlankIDs.isEmpty {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { finishAdding() }
+                }
             }
         }
     }
@@ -71,18 +78,51 @@ struct TickerHoldingsView: View {
             }
         )
     }
+
+    private func finishAdding() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        for id in addedBlankIDs {
+            guard let item = matching.first(where: { $0.persistentModelID == id }),
+                item.isBlankHoldingsRow
+            else { continue }
+            let others = matching.filter { $0.persistentModelID != id }
+            if !others.isEmpty {
+                modelContext.delete(item)
+            }
+        }
+        addedBlankIDs.removeAll()
+    }
+
+    private func deleteAccount(_ item: WatchedCompany) {
+        addedBlankIDs.remove(item.persistentModelID)
+        let others = matching.filter { $0.persistentModelID != item.persistentModelID }
+        if others.isEmpty {
+            item.quantity = nil
+            item.acquisitionPriceYen = nil
+            item.broker = nil
+            item.accountType = nil
+            editorEpoch += 1
+        } else {
+            modelContext.delete(item)
+        }
+    }
 }
 
 private struct HoldingsAccountGroup: View {
     @Bindable var item: WatchedCompany
     var heading: String?
+    var showsDelete: Bool
+    var onDelete: () -> Void
     @State private var quantityText: String
     @State private var priceText: String
     @State private var parseError: String?
 
-    init(item: WatchedCompany, heading: String?) {
+    init(item: WatchedCompany, heading: String?, showsDelete: Bool, onDelete: @escaping () -> Void) {
         self.item = item
         self.heading = heading
+        self.showsDelete = showsDelete
+        self.onDelete = onDelete
         _quantityText = State(initialValue: Self.string(from: item.quantity))
         _priceText = State(initialValue: Self.string(from: item.acquisitionPriceYen))
     }
@@ -118,6 +158,9 @@ private struct HoldingsAccountGroup: View {
                 Text(parseError)
                     .font(.footnote)
                     .foregroundStyle(.red)
+            }
+            if showsDelete {
+                Button("この口座を削除", role: .destructive, action: onDelete)
             }
         } header: {
             if let heading {
