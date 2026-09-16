@@ -29,7 +29,7 @@ struct FundView: View {
 
             Section {
                 if holdings.isEmpty {
-                    Text("リスト右上の編集から、株数と取得単価を入れると保有になります。ウォッチはここに出ません。")
+                    Text("銘柄の保有情報から、口座ごとの株数と取得単価を入れると保有になります。ウォッチはここに出ません。")
                         .foregroundStyle(Theme.textMuted)
                 } else {
                     ForEach(holdings) { item in

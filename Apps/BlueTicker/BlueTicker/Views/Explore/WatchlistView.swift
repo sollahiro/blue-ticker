@@ -4,8 +4,6 @@ import SwiftUI
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.editMode) private var editMode
-    @State private var editingID: PersistentIdentifier?
 
     var body: some View {
         Group {
@@ -18,26 +16,11 @@ struct WatchlistView: View {
             } else {
                 List {
                     ForEach(companies) { item in
-                        Group {
-                            if isEditing {
-                                Button {
-                                    editingID = item.persistentModelID
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        companyRow(item)
-                                        Image(systemName: "square.and.pencil")
-                                            .font(.body)
-                                            .foregroundStyle(Theme.accent)
-                                            .accessibilityLabel("保有を編集")
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .contentShape(Rectangle())
-                            } else {
-                                NavigationLink(value: CompanyRef(item)) {
-                                    companyRow(item)
-                                }
-                            }
+                        NavigationLink(value: CompanyRef(item)) {
+                            CompanyRowView(
+                                company: CompanyRef(item),
+                                caption: item.listCaption
+                            )
                         }
                         .listRowBackground(Theme.elevated)
                     }
@@ -53,28 +36,9 @@ struct WatchlistView: View {
                 EditButton()
             }
         }
-        .navigationDestination(item: $editingID) { id in
-            if let item = companies.first(where: { $0.persistentModelID == id }) {
-                FundPositionEditView(item: item) {
-                    addAccount(from: item)
-                }
-                .environment(\.editMode, .constant(.inactive))
-            }
-        }
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
         }
-    }
-
-    private var isEditing: Bool {
-        editMode?.wrappedValue.isEditing == true
-    }
-
-    private func companyRow(_ item: WatchedCompany) -> some View {
-        CompanyRowView(
-            company: CompanyRef(item),
-            caption: item.listCaption
-        )
     }
 
     private func delete(at offsets: IndexSet) {
@@ -97,11 +61,5 @@ struct WatchlistView: View {
         for (index, item) in ordered.enumerated() {
             item.sortOrder = index
         }
-    }
-
-    private func addAccount(from item: WatchedCompany) {
-        modelContext.insert(
-            item.duplicateAccountRow(sortOrder: WatchedCompany.nextSortOrder(among: companies))
-        )
     }
 }

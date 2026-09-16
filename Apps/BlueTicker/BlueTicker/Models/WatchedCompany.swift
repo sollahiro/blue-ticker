@@ -81,6 +81,32 @@ final class WatchedCompany {
         )
     }
 
+    /// 選択式。未選択（空白）も保有入力できる。
+    static let brokerChoices = [
+        "SBI証券",
+        "楽天証券",
+        "マネックス証券",
+        "松井証券",
+        "三菱UFJ eスマート証券",
+        "野村證券",
+        "大和証券",
+        "SMBC日興証券",
+        "みずほ証券",
+        "岡三証券",
+        "GMOクリック証券",
+        "PayPay証券",
+    ]
+
+    static let accountTypeChoices = ["一般", "特定", "NISA"]
+
+    static func choices(_ catalog: [String], including extra: String?) -> [String] {
+        var list = catalog
+        if let extra = nonEmpty(extra), !list.contains(extra) {
+            list.append(extra)
+        }
+        return list
+    }
+
     static func nextSortOrder(among items: [WatchedCompany]) -> Int {
         (items.map(\.sortOrder).min() ?? 0) - 1
     }

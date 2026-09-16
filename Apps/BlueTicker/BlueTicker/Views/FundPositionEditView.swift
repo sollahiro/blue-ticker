@@ -1,25 +1,56 @@
+import SwiftData
 import SwiftUI
 
 struct FundPositionEditView: View {
-    var item: WatchedCompany
-    var onAddAccount: () -> Void
+    @State private var current: WatchedCompany
+    var onAddAccount: () -> WatchedCompany
 
     @Environment(\.dismiss) private var dismiss
     @State private var quantityText = ""
     @State private var priceText = ""
-    @State private var brokerText = ""
-    @State private var accountTypeText = ""
+    @State private var broker = ""
+    @State private var accountType = ""
     @State private var parseError: String?
+
+    init(item: WatchedCompany, onAddAccount: @escaping () -> WatchedCompany) {
+        _current = State(initialValue: item)
+        self.onAddAccount = onAddAccount
+    }
 
     var body: some View {
         Form {
             Section("銘柄") {
-                LabeledContent("社名", value: Format.displayName(item.name, fallback: item.code))
-                LabeledContent("コード", value: item.code)
-                LabeledContent("区分", value: item.kindLabel)
-                NavigationLink(value: CompanyRef(item)) {
-                    Text("銘柄を開く")
+                LabeledContent("社名", value: Format.displayName(current.name, fallback: current.code))
+                LabeledContent("コード", value: current.code)
+                LabeledContent("区分", value: current.kindLabel)
+            }
+
+            Section {
+                Picker("証券会社", selection: $broker) {
+                    Text("未選択").tag("")
+                    ForEach(
+                        WatchedCompany.choices(WatchedCompany.brokerChoices, including: current.broker),
+                        id: \.self
+                    ) { name in
+                        Text(name).tag(name)
+                    }
                 }
+                .pickerStyle(.navigationLink)
+                Picker("口座", selection: $accountType) {
+                    Text("未選択").tag("")
+                    ForEach(
+                        WatchedCompany.choices(
+                            WatchedCompany.accountTypeChoices, including: current.accountType),
+                        id: \.self
+                    ) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+            } header: {
+                Text("口座（任意）")
+            } footer: {
+                Text("未選択のままでも、この行に株数を入れられます。計算には使いません。")
             }
 
             Section {
@@ -28,20 +59,9 @@ struct FundPositionEditView: View {
                 TextField("取得単価（円/株）", text: $priceText)
                     .keyboardType(.decimalPad)
             } header: {
-                Text("保有")
+                Text("この口座の保有")
             } footer: {
-                Text("株数と取得単価（円/株）の両方が入ると保有、片方だけならウォッチです。本表の百万円は使いません。")
-            }
-
-            Section {
-                TextField("証券会社", text: $brokerText)
-                    .textInputAutocapitalization(.never)
-                TextField("口座区分", text: $accountTypeText)
-                    .textInputAutocapitalization(.never)
-            } header: {
-                Text("口座（任意）")
-            } footer: {
-                Text("特定・NISA などは任意です。空白にできます。計算には使いません。")
+                Text("株数は口座ごとです。株数と取得単価の両方が入ると保有、片方だけならウォッチです。")
             }
 
             if let parseError {
@@ -55,13 +75,14 @@ struct FundPositionEditView: View {
             Section {
                 Button("同じ銘柄を別口座で追加") {
                     guard commit() else { return }
-                    onAddAccount()
-                    dismiss()
+                    current = onAddAccount()
+                    load()
                 }
             }
         }
-        .navigationTitle("保有の編集")
+        .navigationTitle("保有情報")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .bltChrome()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -79,34 +100,34 @@ struct FundPositionEditView: View {
     }
 
     private func load() {
-        quantityText = string(from: item.quantity)
-        priceText = string(from: item.acquisitionPriceYen)
-        brokerText = item.broker ?? ""
-        accountTypeText = item.accountType ?? ""
+        quantityText = string(from: current.quantity)
+        priceText = string(from: current.acquisitionPriceYen)
+        broker = current.broker ?? ""
+        accountType = current.accountType ?? ""
     }
 
     @discardableResult
     private func commit() -> Bool {
         if let quantity = parseOptionalDouble(quantityText) {
-            item.quantity = quantity
+            current.quantity = quantity
         } else if quantityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            item.quantity = nil
+            current.quantity = nil
             parseError = nil
         } else {
             parseError = "株数は数値で入力してください"
             return false
         }
         if let price = parseOptionalDouble(priceText) {
-            item.acquisitionPriceYen = price
+            current.acquisitionPriceYen = price
         } else if priceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            item.acquisitionPriceYen = nil
+            current.acquisitionPriceYen = nil
             parseError = nil
         } else {
             parseError = "取得単価は円/株の数値で入力してください"
             return false
         }
-        item.broker = WatchedCompany.nonEmpty(brokerText)
-        item.accountType = WatchedCompany.nonEmpty(accountTypeText)
+        current.broker = WatchedCompany.nonEmpty(broker)
+        current.accountType = WatchedCompany.nonEmpty(accountType)
         parseError = nil
         return true
     }
@@ -124,5 +145,57 @@ struct FundPositionEditView: View {
             .replacingOccurrences(of: ",", with: "")
         if trimmed.isEmpty { return nil }
         return Double(trimmed)
+    }
+}
+
+struct TickerAccountListView: View {
+    var code: String
+    var onAddAccount: () -> WatchedCompany
+
+    @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
+    @State private var editingID: PersistentIdentifier?
+
+    var body: some View {
+        List {
+            ForEach(rows) { item in
+                Button {
+                    editingID = item.persistentModelID
+                } label: {
+                    LabeledContent {
+                        Text(quantityLabel(item))
+                    } label: {
+                        Text(item.accountCaption ?? "口座未選択")
+                        Text(item.kindLabel)
+                    }
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Theme.elevated)
+            }
+            Button("口座を追加") {
+                let created = onAddAccount()
+                editingID = created.persistentModelID
+            }
+        }
+        .navigationTitle("保有情報")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .bltChrome()
+        .navigationDestination(item: $editingID) { id in
+            if let item = rows.first(where: { $0.persistentModelID == id }) {
+                FundPositionEditView(item: item, onAddAccount: onAddAccount)
+            }
+        }
+    }
+
+    private var rows: [WatchedCompany] {
+        watched.filter { $0.code == code }
+    }
+
+    private func quantityLabel(_ item: WatchedCompany) -> String {
+        guard let quantity = item.quantity else { return "—" }
+        if quantity.rounded() == quantity {
+            return "\(Int(quantity))株"
+        }
+        return "\(quantity)株"
     }
 }
