@@ -67,6 +67,16 @@ breaking 再編時は可能な範囲で:
 - 互換追加も含め、契約に触る変更は短いメモを残す（PR 説明または関連 docs）
 - 開発用 MCP の入出力を変える必要が出ても、先に REST 契約を決める。MCP を製品面として拡張しない
 
+## Codable 応答への段階移行
+
+新規 REST エンドポイントは専用の `Codable` / `Sendable` 応答型を定義し、内部モデルから写像する。キー名は `CodingKeys` に集約する。開発用 MCP は同じ契約を再利用する。
+
+- Optional の自動合成 `encodeIfPresent` は nil のキーを省略する。必須 nullable キーには `encode(_:forKey:)`（Optional の nil を null として符号化）または `encodeNil(forKey:)` を使う。
+- 既存の疎な保存 JSON はデコード可能なままにする。`0`・空文字・空配列・null・欠落を相互に置換しない。
+- 移行前に `Spec/Contract` へ固定の JSON 期待値を追加し、キー集合・値の型・null・`fields` 射影・エラー形を該当範囲で検証する。期待値を実装の `CodingKeys` だけから生成しない。固定 JSON のキー集合と `CodingKeys.allCases` も突き合わせ、encode 漏れと期待値漏れを両方拾う。
+- `FinancialsYear` は最初の移行対象。`encode(to:)` を `CodingKeys` 網羅 switch にし、直接の Codable エンコードでも全キーを出す。Summary / Waterfall の射影と REST 応答の意味は維持するため、`schema_version` / `cache_version` は変更しない。
+- REST ルートと MCP の動的な封筒、Waterfall の派生値、外部 API の JSON は後続の個別移行対象とする。境界アダプターの `JSONSerialization` は残せるが、新しい応答組立を辞書へ広げない。非 Sendable 辞書を運ぶ回避策も、型付き境界への移行と一緒に除く。
+
 ## 段階 B で足す予定
 
 - 第三者向けの deprecation 期間（日数またはリリース数）
