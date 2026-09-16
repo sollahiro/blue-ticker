@@ -73,8 +73,8 @@ breaking 再編時は可能な範囲で:
 
 - Optional の自動合成 `encodeIfPresent` は nil のキーを省略する。必須 nullable キーには `encode(_:forKey:)`（Optional の nil を null として符号化）または `encodeNil(forKey:)` を使う。
 - 既存の疎な保存 JSON はデコード可能なままにする。`0`・空文字・空配列・null・欠落を相互に置換しない。
-- 移行前に `Spec/Contract` へ固定の JSON 期待値を追加し、キー集合・値の型・null・`fields` 射影・エラー形を該当範囲で検証する。期待値を実装の `CodingKeys` だけから生成しない。
-- `FinancialsYear` は最初の移行対象。直接の Codable エンコードでも全キーを出し、従来の `jsonObject()` による null 後補完を不要にする。Summary / Waterfall の射影と REST 応答の意味は維持するため、`schema_version` / `cache_version` は変更しない。
+- 移行前に `Spec/Contract` へ固定の JSON 期待値を追加し、キー集合・値の型・null・`fields` 射影・エラー形を該当範囲で検証する。期待値を実装の `CodingKeys` だけから生成しない。固定 JSON のキー集合と `CodingKeys.allCases` も突き合わせ、encode 漏れと期待値漏れを両方拾う。
+- `FinancialsYear` は最初の移行対象。`encode(to:)` を `CodingKeys` 網羅 switch にし、直接の Codable エンコードでも全キーを出す。Summary / Waterfall の射影と REST 応答の意味は維持するため、`schema_version` / `cache_version` は変更しない。
 - REST ルートと MCP の動的な封筒、Waterfall の派生値、外部 API の JSON は後続の個別移行対象とする。境界アダプターの `JSONSerialization` は残せるが、新しい応答組立を辞書へ広げない。非 Sendable 辞書を運ぶ回避策も、型付き境界への移行と一緒に除く。
 
 ## 段階 B で足す予定

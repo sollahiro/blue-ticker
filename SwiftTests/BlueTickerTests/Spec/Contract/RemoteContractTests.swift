@@ -35,6 +35,8 @@ import Testing
     @Test func financialsNullContractMatchesFixedJSON() throws {
         let expected = try #require(
             JSONSerialization.jsonObject(with: Data(emptyFinancialsYear.utf8)) as? NSDictionary)
+        let frozenKeys = Set(expected.allKeys.compactMap { $0 as? String })
+        #expect(frozenKeys == Set(FinancialsYear.CodingKeys.allCases.map(\.rawValue)))
         let year = try JSONDecoder().decode(FinancialsYear.self, from: Data("{}".utf8))
         #expect(NSDictionary(dictionary: year.jsonObject()) == expected)
     }
