@@ -5,31 +5,14 @@ struct FundView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
     @State private var perShareByCode: [String: FundMath.PerShare] = [:]
-    @State private var editing: WatchedCompany?
 
     var body: some View {
         List {
             Section {
-                metricRow(
-                    title: "ルックスルー利益",
-                    value: Format.yenCash(snapshot.lookThroughProfitYen),
-                    detail: "最新FY EPS（円/株）×株数"
-                )
-                metricRow(
-                    title: "ルックスルー純資産",
-                    value: Format.yenCash(snapshot.lookThroughBookYen),
-                    detail: "最新FY BPS（円/株）×株数"
-                )
-                metricRow(
-                    title: "投下資本",
-                    value: Format.yenCash(snapshot.investedCapitalYen),
-                    detail: "取得単価（円/株）×株数"
-                )
-                metricRow(
-                    title: "ファンドROE",
-                    value: Format.percent(snapshot.fundROEPercent),
-                    detail: "ルックスルー利益 ÷ 投下資本"
-                )
+                LabeledContent("ルックスルー利益", value: Format.yenCash(snapshot.lookThroughProfitYen))
+                LabeledContent("ルックスルー純資産", value: Format.yenCash(snapshot.lookThroughBookYen))
+                LabeledContent("投下資本", value: Format.yenCash(snapshot.investedCapitalYen))
+                LabeledContent("ファンドROE", value: Format.percent(snapshot.fundROEPercent))
             } header: {
                 Text("ルックスルー")
             } footer: {
@@ -39,7 +22,15 @@ struct FundView: View {
             if snapshot.tickerTotals.count > 1 {
                 Section("銘柄別") {
                     ForEach(snapshot.tickerTotals, id: \.code) { total in
-                        tickerTotalRow(total)
+                        let name = companies.first { $0.code == total.code }?.name ?? total.code
+                        LabeledContent {
+                            Text(Format.yenCash(total.lookThroughProfitYen))
+                        } label: {
+                            Text("\(Format.displayName(name, fallback: total.code)) \(total.code)")
+                            Text(
+                                "純資産 \(Format.yenCash(total.lookThroughBookYen)) · 投下 \(Format.yenCash(total.investedCapitalYen))"
+                            )
+                        }
                     }
                 }
             }
@@ -47,25 +38,15 @@ struct FundView: View {
             Section {
                 if companies.isEmpty {
                     Text("銘柄画面からリストに追加し、ここで株数と取得単価を入れると保有になります。")
-                        .font(.subheadline)
                         .foregroundStyle(Theme.textMuted)
                 } else {
                     ForEach(companies) { item in
-                        HStack(alignment: .center, spacing: 8) {
-                            NavigationLink(value: CompanyRef(item)) {
-                                fundRow(item)
+                        NavigationLink {
+                            FundPositionEditView(item: item) {
+                                addAccount(from: item)
                             }
-                            Button {
-                                editing = item
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(Theme.accent)
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("保有を編集")
+                        } label: {
+                            holdingLabel(item)
                         }
                         .listRowBackground(Theme.elevated)
                     }
@@ -85,13 +66,6 @@ struct FundView: View {
         }
         .navigationTitle("ファンド")
         .bltChrome()
-        .sheet(item: $editing) { item in
-            NavigationStack {
-                FundPositionEditView(item: item) {
-                    addAccount(from: item)
-                }
-            }
-        }
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
         }
@@ -119,7 +93,7 @@ struct FundView: View {
         let fy = uniqueFyEnds
         let fyText = fy.isEmpty ? "最新FY" : fy.sorted().map(Format.fy).joined(separator: "・")
         return """
-        一株は円/株、合計は円です。有報本表の百万円とは単位が違います。EPS/BPS 欠測は — で合計から外します。\(fyText)。バージョン \(Self.versionText)
+        利益＝最新FY EPS（円/株）×株数。純資産＝BPS（円/株）×株数。投下＝取得単価（円/株）×株数。ROE＝利益÷投下（EPSがある保有のみ）。本表の百万円とは単位が違います。欠測は —。\(fyText)。バージョン \(Self.versionText)
         """
     }
 
@@ -140,39 +114,7 @@ struct FundView: View {
         return short
     }
 
-    private func metricRow(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                Spacer()
-                Text(value)
-                    .font(.headline)
-                    .monospacedDigit()
-            }
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(Theme.textMuted)
-        }
-        .listRowBackground(Theme.elevated)
-    }
-
-    private func tickerTotalRow(_ total: FundMath.TickerTotal) -> some View {
-        let name = companies.first { $0.code == total.code }?.name ?? total.code
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("\(Format.displayName(name, fallback: total.code)) \(total.code)")
-                .font(.subheadline.weight(.semibold))
-            HStack {
-                labeled("利益", Format.yenCash(total.lookThroughProfitYen))
-                labeled("純資産", Format.yenCash(total.lookThroughBookYen))
-                labeled("投下", Format.yenCash(total.investedCapitalYen))
-            }
-            .font(.caption)
-        }
-        .listRowBackground(Theme.elevated)
-    }
-
-    private func fundRow(_ item: WatchedCompany) -> some View {
-        let share = perShareByCode[item.code] ?? FundMath.PerShare()
+    private func holdingLabel(_ item: WatchedCompany) -> some View {
         let metrics = FundMath.rowMetrics(
             position: FundMath.Position(
                 id: String(describing: item.persistentModelID),
@@ -180,38 +122,14 @@ struct FundView: View {
                 quantity: item.quantity,
                 acquisitionPriceYen: item.acquisitionPriceYen
             ),
-            perShare: share
+            perShare: perShareByCode[item.code] ?? FundMath.PerShare()
         )
-        return VStack(alignment: .leading, spacing: 6) {
-            CompanyRowView(
-                company: CompanyRef(item),
-                caption: item.accountCaption,
-                kindLabel: item.kindLabel
-            )
-            if metrics.isHolding {
-                HStack {
-                    labeled("利益", Format.yenCash(metrics.lookThroughProfitYen))
-                    labeled("純資産", Format.yenCash(metrics.lookThroughBookYen))
-                    labeled("投下", Format.yenCash(metrics.investedCapitalYen))
-                }
-                .font(.caption)
-            } else {
-                Text("株数と取得単価（円/株）を入れると保有になります")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textMuted)
-            }
+        return LabeledContent {
+            Text(Format.yenCash(metrics.lookThroughProfitYen))
+        } label: {
+            Text(Format.displayName(item.name, fallback: item.code))
+            Text(item.fundCaption)
         }
-    }
-
-    private func labeled(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .foregroundStyle(Theme.textMuted)
-            Text(value)
-                .foregroundStyle(Theme.text)
-                .monospacedDigit()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func delete(at offsets: IndexSet) {
@@ -229,11 +147,9 @@ struct FundView: View {
     }
 
     private func addAccount(from item: WatchedCompany) {
-        let copy = item.duplicateAccountRow(
-            sortOrder: WatchedCompany.nextSortOrder(among: companies)
+        modelContext.insert(
+            item.duplicateAccountRow(sortOrder: WatchedCompany.nextSortOrder(among: companies))
         )
-        modelContext.insert(copy)
-        editing = copy
     }
 
     private func loadPerShare() async {

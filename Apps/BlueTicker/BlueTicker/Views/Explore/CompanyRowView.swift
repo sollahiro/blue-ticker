@@ -5,7 +5,6 @@ import UIKit
 struct CompanyRowView: View {
     var company: CompanyRef
     var caption: String? = nil
-    var kindLabel: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -24,13 +23,7 @@ struct CompanyRowView: View {
                 }
             }
             Spacer()
-            if let kindLabel, !kindLabel.isEmpty {
-                SectorTag(
-                    sector: kindLabel,
-                    selected: kindLabel == "保有",
-                    tint: kindLabel == "保有" ? Theme.positive : Theme.textMuted
-                )
-            } else if !company.sector.isEmpty {
+            if !company.sector.isEmpty {
                 SectorTag(sector: company.sector, selected: true)
             }
         }

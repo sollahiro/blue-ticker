@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 struct FundPositionEditView: View {
@@ -18,6 +17,9 @@ struct FundPositionEditView: View {
                 LabeledContent("社名", value: Format.displayName(item.name, fallback: item.code))
                 LabeledContent("コード", value: item.code)
                 LabeledContent("区分", value: item.kindLabel)
+                NavigationLink(value: CompanyRef(item)) {
+                    Text("銘柄を開く")
+                }
             }
 
             Section {
@@ -54,6 +56,7 @@ struct FundPositionEditView: View {
                 Button("同じ銘柄を別口座で追加") {
                     guard commit() else { return }
                     onAddAccount()
+                    dismiss()
                 }
             }
         }
@@ -61,15 +64,8 @@ struct FundPositionEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .bltChrome()
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("閉じる") {
-                    if commit() {
-                        dismiss()
-                    }
-                }
-            }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
+                Button("完了") {
                     if commit() {
                         dismiss()
                     }

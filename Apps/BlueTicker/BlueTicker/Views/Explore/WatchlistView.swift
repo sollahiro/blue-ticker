@@ -19,8 +19,7 @@ struct WatchlistView: View {
                         NavigationLink(value: CompanyRef(item)) {
                             CompanyRowView(
                                 company: CompanyRef(item),
-                                caption: item.accountCaption,
-                                kindLabel: item.kindLabel
+                                caption: item.listCaption
                             )
                         }
                         .listRowBackground(Theme.elevated)

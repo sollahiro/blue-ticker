@@ -55,6 +55,22 @@ final class WatchedCompany {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    var listCaption: String {
+        var parts = [kindLabel]
+        if let accountCaption {
+            parts.append(accountCaption)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var fundCaption: String {
+        var parts = [code, kindLabel]
+        if let accountCaption {
+            parts.append(accountCaption)
+        }
+        return parts.joined(separator: " · ")
+    }
+
     func duplicateAccountRow(sortOrder: Int) -> WatchedCompany {
         WatchedCompany(
             code: code,
