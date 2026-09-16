@@ -82,11 +82,8 @@ struct SettingsView: View {
                     }
                 }
             #endif
-            Section {
-                LabeledContent("バージョン", value: Self.versionText)
-            }
         }
-        .navigationTitle("設定")
+        .navigationTitle("開発ラボ")
         .bltChrome()
         #if DEBUG
             .sheet(isPresented: $showLogin, onDismiss: { loginStatus = LoginStatus.read() }) {
@@ -99,15 +96,6 @@ struct SettingsView: View {
                 issuerURL = APIConfiguration.hapisIssuerURL.absoluteString
             }
         #endif
-    }
-
-    private static var versionText: String {
-        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        if let build, !build.isEmpty {
-            return "\(short) (\(build))"
-        }
-        return short
     }
 
     #if DEBUG

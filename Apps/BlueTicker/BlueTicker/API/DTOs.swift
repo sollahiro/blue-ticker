@@ -126,6 +126,10 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var nonCurrentAssets: Double?
     var currentLiabilities: Double?
     var netAssets: Double?
+    /// 最新 FY の Summary 一株当たり当期純利益。単位は円/株（本表の百万円ではない）。
+    var eps: Double?
+    /// 最新 FY の Summary 一株当たり純資産。単位は円/株。
+    var bps: Double?
 
     var businessProfit: Double?
     var businessProfitMargin: Double?
@@ -170,6 +174,8 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case nonCurrentAssets = "non_current_assets"
         case currentLiabilities = "current_liabilities"
         case netAssets = "net_assets"
+        case eps
+        case bps
         case businessProfit = "business_profit"
         case businessProfitMargin = "business_profit_margin"
         case businessProfitChange = "business_profit_change"
@@ -327,7 +333,7 @@ enum APIClientError: LocalizedError {
         case .transport(let error):
             return error.localizedDescription
         case .needsAccessLogin:
-            return "Cloudflare Access のログインが必要です。設定からログインしてください"
+            return "Cloudflare Access のログインが必要です。ファンドの開発ラボからログインしてください"
         case .hapisUnavailable:
             return "一時的に更新できません"
         }

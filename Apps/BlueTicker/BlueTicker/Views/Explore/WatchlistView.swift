@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct WatchlistView: View {
-    @Query(sort: \WatchedCompany.addedAt, order: .reverse) private var companies: [WatchedCompany]
+    @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
@@ -17,11 +17,16 @@ struct WatchlistView: View {
                 List {
                     ForEach(companies) { item in
                         NavigationLink(value: CompanyRef(item)) {
-                            CompanyRowView(company: CompanyRef(item))
+                            CompanyRowView(
+                                company: CompanyRef(item),
+                                caption: item.accountCaption,
+                                kindLabel: item.kindLabel
+                            )
                         }
                         .listRowBackground(Theme.elevated)
                     }
                     .onDelete(perform: delete)
+                    .onMove(perform: move)
                 }
             }
         }
@@ -32,11 +37,30 @@ struct WatchlistView: View {
                 EditButton()
             }
         }
+        .onAppear {
+            WatchedCompany.repairSortOrderIfNeeded(companies)
+        }
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(companies[index])
+        let removed = offsets.map { companies[$0] }
+        let removedCodes = Set(removed.map(\.code))
+        for item in removed {
+            modelContext.delete(item)
+        }
+        let remaining = companies.filter { item in
+            !removed.contains { $0.persistentModelID == item.persistentModelID }
+        }
+        for code in removedCodes where !remaining.contains(where: { $0.code == code }) {
+            Task { await APIClient.shared.unpinCode(code) }
+        }
+    }
+
+    private func move(from source: IndexSet, to destination: Int) {
+        var ordered = companies
+        ordered.move(fromOffsets: source, toOffset: destination)
+        for (index, item) in ordered.enumerated() {
+            item.sortOrder = index
         }
     }
 }
