@@ -36,6 +36,8 @@ enum Theme {
     static let positive = Color(red: 0.28, green: 0.78, blue: 0.42)
     static var sectorFill: Color { positive.opacity(0.22) }
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
+    /// 条件検索「成長」ラベルのオレンジ。
+    static let growthTint = Color(red: 0.98, green: 0.62, blue: 0.25)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
 
     static let bandLow = SIMD3<Double>(0.95, 0.08, 0.08)

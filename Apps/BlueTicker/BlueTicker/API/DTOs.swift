@@ -245,10 +245,19 @@ struct ScreenMetricFilter: Sendable, Hashable {
 enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
     case quality = "優良"
     case growth = "成長"
-    case healthyGrowth = "健全成長"
+    case healthyGrowth = "安定"
 
     var id: String { rawValue }
     var title: String { rawValue }
+
+    /// 行の説明文。1 行に収まる短さ（15 字前後）。
+    var descriptionText: String {
+        switch self {
+        case .quality: "高収益で財務が健全な企業"
+        case .growth: "利益を出しながら急成長する企業"
+        case .healthyGrowth: "財務健全で安定成長する企業"
+        }
+    }
 
     var filters: [ScreenMetricFilter] {
         switch self {

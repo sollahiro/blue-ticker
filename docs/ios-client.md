@@ -78,10 +78,10 @@
 
 - 業種は横スクロール 3 段のチップで複数選択。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行・銘柄ヘッダの業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。未選択と全選択は `sector` を送らない。1 業種は `sector=` 完全一致。2 業種以上は AND にせず、業種ごとに `GET /v1/screen` して ROIC 降順 50 件へマージする（サーバーは `sector` 1 件）
 - DualRangeSlider・指標の詳細トグル・`ScreenMetricFilter` 組み立て UI は出さない。フローは業種（任意）→ プリセットタップ → 結果 → 銘柄
-- プリセットは 3 つ。クライアントが `GET /v1/screen` の min/max + `sort=roic` desc に写す（閾値は整数、ネット D/E は 1 桁）:
+- プリセットは 3 つ。セクション見出しは「こんな企業を探す」。行はラベル（優良=青 / 成長=橙 / 安定=緑。業種タグと同形の枠）+ 1 行の説明文（「高収益で財務が健全な企業」など 15 字前後、1 行に収める）。クライアントが `GET /v1/screen` の min/max + `sort=roic` desc に写す（閾値は整数、ネット D/E は 1 桁）:
   - **優良**: `roic_min=10`、`operating_margin_min=8`、`net_de_max=0.5`。成長フィルタなし
   - **成長**: `sales_cagr_3y_min=10`、`operating_margin_min=5`、`roic_min=8`。CAGR 上限なし
-  - **健全成長**: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
+  - **安定**（旧 健全成長）: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
 - 結果行は常に core4 を出す（欠測は `—`。CAGR が null でも YoY に落とさない）: `roic` / `operating_margin` / `sales_cagr_3y` / `net_de`
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
