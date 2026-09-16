@@ -1,6 +1,6 @@
 // モジュール横断 SPEC_INVARIANT（.agents/skills/xbrl-development/SKILL.md、2026-08-09）。
 //
-// IBDExtractor（有利子負債抽出器、Analysis/Extractors.swift）の借入金等明細表フォールバックと
+// IBDExtractor（有利子負債抽出器、Analysis/IBDExtractor.swift）の借入金等明細表フォールバックと
 // StatementNotesResolver.resolveBorrowingsSchedule（財務諸表注記取り込み borrowings_schedule note_type）は
 // どちらも BorrowingsSchedule.extract 系（BorrowingsSchedule.swift）が同じ `parseTable` 結果を経由する
 // ため、明細表が解決した書類では常に合計が一致するはずである。IBDExtractor.extract は連結BSの

@@ -145,7 +145,7 @@ PublicDoc/
 | Instant FieldSet | Instant | 貸借対照表・従業員数 |
 | 非連結 Duration / Instant FieldSet | — | 連結値がない場合の個別財務諸表フォールバック |
 
-### 4.2 エクストラクター一覧（`Analysis/*Extractor.swift`）
+### 4.2 エクストラクター一覧（`Analysis/*Extractor.swift` / `*Extractors.swift`）
 
 結果型は各抽出器と同居する。CF・設備投資・自己株式・配当は `CashFlowExtractors.swift`、BS・運転資本は `BalanceSheetExtractors.swift` にまとめる。
 
