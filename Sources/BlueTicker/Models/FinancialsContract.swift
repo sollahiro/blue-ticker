@@ -2,7 +2,7 @@
 //
 // - ingest（computeFinancials → DB）と read（jsonObject()）のキー定義を CodingKeys に集約する。
 // - 内部モデル（MetricsResult 等）は直シリアライズせず、公開用フラット形（snake_case）へ写像する。
-// - 「全キー存在（欠落は null）」を維持するため、jsonObject() で CodingKeys.allCases から null を補完する。
+// - 全キーを encode(to:) で符号化し、欠落値は null とする。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
@@ -261,6 +261,79 @@ struct FinancialsYear: Codable, Sendable {
         case dpo
         case ccc
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fyEnd, forKey: .fyEnd)
+        try container.encode(financialPeriod, forKey: .financialPeriod)
+        try container.encode(curPerType, forKey: .curPerType)
+        try container.encode(docId, forKey: .docId)
+        try container.encode(salesLabel, forKey: .salesLabel)
+        try container.encode(grossProfitLabel, forKey: .grossProfitLabel)
+        try container.encode(opLabel, forKey: .opLabel)
+        try container.encode(sales, forKey: .sales)
+        try container.encode(grossProfit, forKey: .grossProfit)
+        try container.encode(grossProfitMargin, forKey: .grossProfitMargin)
+        try container.encode(sga, forKey: .sga)
+        try container.encode(operatingProfit, forKey: .operatingProfit)
+        try container.encode(operatingMargin, forKey: .operatingMargin)
+        try container.encode(nopat, forKey: .nopat)
+        try container.encode(netProfit, forKey: .netProfit)
+        try container.encode(effectiveTaxRate, forKey: .effectiveTaxRate)
+        try container.encode(roe, forKey: .roe)
+        try container.encode(roic, forKey: .roic)
+        try container.encode(nopatMargin, forKey: .nopatMargin)
+        try container.encode(investedCapitalTurnover, forKey: .investedCapitalTurnover)
+        try container.encode(interestBearingDebt, forKey: .interestBearingDebt)
+        try container.encode(interestExpense, forKey: .interestExpense)
+        try container.encode(totalAssets, forKey: .totalAssets)
+        try container.encode(currentAssets, forKey: .currentAssets)
+        try container.encode(nonCurrentAssets, forKey: .nonCurrentAssets)
+        try container.encode(ppeTotal, forKey: .ppeTotal)
+        try container.encode(currentLiabilities, forKey: .currentLiabilities)
+        try container.encode(nonCurrentLiabilities, forKey: .nonCurrentLiabilities)
+        try container.encode(netAssets, forKey: .netAssets)
+        try container.encode(accountsReceivable, forKey: .accountsReceivable)
+        try container.encode(inventory, forKey: .inventory)
+        try container.encode(accountsPayable, forKey: .accountsPayable)
+        try container.encode(workingCapital, forKey: .workingCapital)
+        try container.encode(cashEquivalents, forKey: .cashEquivalents)
+        try container.encode(netCash, forKey: .netCash)
+        try container.encode(netDe, forKey: .netDe)
+        try container.encode(cfo, forKey: .cfo)
+        try container.encode(cfi, forKey: .cfi)
+        try container.encode(cfc, forKey: .cfc)
+        try container.encode(capex, forKey: .capex)
+        try container.encode(buyback, forKey: .buyback)
+        try container.encode(rd, forKey: .rd)
+        try container.encode(cfTreasuryStock, forKey: .cfTreasuryStock)
+        try container.encode(dividendSs, forKey: .dividendSs)
+        try container.encode(dividendPaidCf, forKey: .dividendPaidCf)
+        try container.encode(eps, forKey: .eps)
+        try container.encode(bps, forKey: .bps)
+        try container.encode(issuedShares, forKey: .issuedShares)
+        try container.encode(employees, forKey: .employees)
+        try container.encode(businessProfit, forKey: .businessProfit)
+        try container.encode(businessProfitMargin, forKey: .businessProfitMargin)
+        try container.encode(businessProfitChange, forKey: .businessProfitChange)
+        try container.encode(salesChangeImpact, forKey: .salesChangeImpact)
+        try container.encode(grossMarginChangeImpact, forKey: .grossMarginChangeImpact)
+        try container.encode(sgaChangeImpact, forKey: .sgaChangeImpact)
+        try container.encode(netMargin, forKey: .netMargin)
+        try container.encode(assetTurnover, forKey: .assetTurnover)
+        try container.encode(financialLeverage, forKey: .financialLeverage)
+        try container.encode(roicDelta, forKey: .roicDelta)
+        try container.encode(roicMarginEffect, forKey: .roicMarginEffect)
+        try container.encode(roicTurnoverEffect, forKey: .roicTurnoverEffect)
+        try container.encode(roeDelta, forKey: .roeDelta)
+        try container.encode(roeNetMarginEffect, forKey: .roeNetMarginEffect)
+        try container.encode(roeAssetTurnoverEffect, forKey: .roeAssetTurnoverEffect)
+        try container.encode(roeLeverageEffect, forKey: .roeLeverageEffect)
+        try container.encode(dso, forKey: .dso)
+        try container.encode(dio, forKey: .dio)
+        try container.encode(dpo, forKey: .dpo)
+        try container.encode(ccc, forKey: .ccc)
+    }
 }
 
 extension FinancialsYear {
@@ -430,11 +503,7 @@ extension FinancialsYear {
 
     /// 全キーを含む JSON オブジェクト（欠落値は null）。既存契約の「全キー存在」を維持する。
     func jsonObject() -> [String: Any] {
-        var dict = encodeToDictionary(self)
-        for key in CodingKeys.allCases where dict[key.rawValue] == nil {
-            dict[key.rawValue] = NSNull()
-        }
-        return dict
+        encodeToDictionary(self) ?? encodeToDictionary(FinancialsYear()) ?? [:]
     }
 
     /// Waterfall（`docs/financials-summary-separation.md`）専用の増減分解フィールド。Summary（financials）の応答からは
@@ -713,12 +782,12 @@ extension FinancialsYear {
 
 // MARK: - 内部ヘルパー
 
-/// Encodable を [String: Any] へ変換する（nil の Optional はキーごと省略される）。
-private func encodeToDictionary(_ value: some Encodable) -> [String: Any] {
+/// Encodable を [String: Any] へ変換する。
+private func encodeToDictionary(_ value: some Encodable) -> [String: Any]? {
     guard let data = try? JSONEncoder().encode(value),
         let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     else {
-        return [:]
+        return nil
     }
     return dict
 }
