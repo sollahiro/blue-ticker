@@ -4,6 +4,7 @@ import UIKit
 
 struct CompanyRowView: View {
     var company: CompanyRef
+    var caption: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -15,6 +16,11 @@ struct CompanyRowView: View {
                 Text(company.code)
                     .font(.subheadline)
                     .foregroundStyle(Theme.textMuted)
+                if let caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
             Spacer()
             if !company.sector.isEmpty {

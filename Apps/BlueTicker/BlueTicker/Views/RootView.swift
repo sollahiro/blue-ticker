@@ -3,7 +3,7 @@ import SwiftUI
 
 struct RootView: View {
     @State private var tab = 0
-    @Query(sort: \WatchedCompany.addedAt, order: .reverse) private var watched: [WatchedCompany]
+    @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
         TabView(selection: $tab) {
@@ -35,18 +35,19 @@ struct RootView: View {
             .tag(2)
 
             NavigationStack {
-                SettingsView()
+                FundView()
+                    .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
-            .tabItem { Label("設定", systemImage: "gearshape") }
+            .tabItem { Label("ファンド", systemImage: "chart.pie.fill") }
             .tag(3)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(.hidden, for: .tabBar)
         .task(id: watched.map(\.code).joined(separator: ",")) {
-            let codes = watched.map(\.code)
+            let codes = Array(Set(watched.map(\.code)))
             await APIClient.shared.setPinnedCodes(Set(codes))
             // Feed の interactive GET を先に出す。先読みは 429 で止めて間引く。
             try? await Task.sleep(for: .milliseconds(800))

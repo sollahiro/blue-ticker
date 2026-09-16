@@ -8,16 +8,16 @@
 
 ## 置き場
 
-`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。CI は `.github/workflows/ci.yml` の `ios` ジョブ（`macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし）。`ios-paths` が `Apps/BlueTicker/` または `.github/workflows/ci.yml` の差分を見たときだけ走る。サーバーの `swift test` とはジョブを分けて並列に回す。別リポジトリは App Store 署名がサーバー CI を汚し始めたら分ける。Cloud Agent の Linux VM では `xcodebuild` が無い。
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。CI は `.github/workflows/ci.yml` の `ios` ジョブ（`macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし）。`ios-paths` が `Apps/BlueTicker/` または `.github/workflows/ci.yml` の差分を見たときだけ走る。サーバーの `swift test` とはジョブを分けて並列に回す。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` を `swift test` する。別リポジトリは App Store 署名がサーバー CI を汚し始めたら分ける。Cloud Agent の Linux VM では `xcodebuild` が無い。
 
 ## 決めたこと
 
 | 項目 | 方針 |
 |---|---|
-| 探索 3 面 | `名称検索` / `条件検索` / `リスト`。OS 標準 `TabView`（タブバー）。各タブは `NavigationStack` + 標準ツールバー。設定はタブバー右端（リストの右） |
-| 探索ツールバー | 左にブランドマーク。設定は下部タブの歯車 |
+| 探索 3 面 | `名称検索` / `条件検索` / `リスト`。OS 標準 `TabView`（タブバー）。各タブは `NavigationStack` + 標準ツールバー。右端は `ファンド`（設定タブは置かない） |
+| 探索ツールバー | 左にブランドマーク。設定歯車タブは出さない |
 | キーワード検索 | 名称検索の `.searchable`（標準検索欄）。`GET /v1/companies?q=` |
-| 銘柄面 | 探索から `NavigationStack` で push。タブの入れ子にしない。下部タブバー（`名称検索`〜`設定`）は探索と同じまま出す。カードとタブバーのあいだに 2 枚分のページ点を置く |
+| 銘柄面 | 探索から `NavigationStack` で push。タブの入れ子にしない。下部タブバー（`名称検索`〜`ファンド`）は探索と同じまま出す。カードとタブバーのあいだに 2 枚分のページ点を置く |
 | 銘柄ヘッダ | ブランドマークは中央（探索の左マークと同じツールバー段）。`探す` は出さない。上段は社名、下段はコードと業種。右側はリスト追加ボタンのみでヘッダ高さの中央。左右は同じ行の高さ（合計 56pt）。社名は Headline +2pt。業種タグは緑枠・薄緑地・緑文字。未追加は `リストに追加`（青地・黒文字）、追加後は `追加済み`（青枠・抜き・青文字） |
 | 銘柄ページ | `概要` / `分解` の 2 枚。タイルは出さない。左右スライドのみ。銘柄の短い会社説明（Overview）はヘッダ（社名・コード・業種）とカードのあいだ、カード外に置く。切替は各カード上端のピル型ボタン（概要は `業績` / `資産` / `効率性`、分解は `事業利益` / `ROIC` / `ROE`）。各カード内は縦スクロール可。カードは角丸。概要の表はカード幅に収める。`レポート` は廃止 |
 | 会社アイコン | 角丸四角・白背景。リスト行と銘柄ヘッダで同じ |
@@ -36,9 +36,9 @@
 | 事業利益 | 売上総利益 − 販管費。開示の営業利益ではない。分解の下部に一文を置く |
 | 新着 | ウォッチリストだけ。名称検索の Feed 行には付けない。バッジの定義は未決のため v1 では出さない。Feed 行には提出日（`submitted_at`。矢印の左に「提出日」と日付）を出す |
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
-| ウォッチリスト | クライアントローカル（`SwiftData`）。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
+| ウォッチリスト | クライアントローカル（`SwiftData`。CloudKit コンテナは足していないので iCloud 同期はしない）。1 本のリスト。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替えはリストの `EditButton` + `onMove`（システムの editMode。独自のドラッグハンドルは足さない）。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
 | 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索・Feed はキャッシュしない。iOS は Core をリンクしないので `CacheManager` は使わない |
-| 設定 | Release はバージョン表示のみ。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS） |
+| ファンド | タブ右端。ルックスルー合計・明細の保有編集・任意の証券会社／口座区分。公開合計は銘柄単位で合算。Release のバージョンはルックスルー節のフッター。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS）をファンド内の「開発ラボ」から開く。設定タブは復活させない |
 | 会社行 | 社名・業種に加え銘柄コードを載せる |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`）。Feed からの遷移は `CompanyRef.sector` が空なので、銘柄面は `GET /v1/companies/{code}/financials` の `sector` で補う |
 
@@ -63,12 +63,28 @@
 |---|---|---|
 | 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed は REST 省略時どおり直近90日を最大10件。同日過多のサンプルはサーバー。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト |
 | 条件検索 | Screen（BLT-49） | 業種チップ + 3 プリセット。タップで `GET /v1/screen` の結果へ。全社 `financials` をクライアントで絞らない |
-| リスト | （クライアント） | ウォッチリスト |
+| リスト | （クライアント） | ウォッチリスト 1 本。行はウォッチ／保有。`EditButton` + `onMove` で並べ替え |
+| ファンド | （クライアント） | ルックスルー合計と保有編集（同じリストの属性。並べ替え面はリスト側）。指標は最新 FY Summary の `eps` / `bps`（円/株）。portfolio REST は足さない |
 | 概要 | Summary | 年次の水準値。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ。要因を選ぶと、緑／赤に応じた一文と計算式（と可能な範囲で計算に使った数値）を出す |
 | レポート | Filing | 銘柄カードから廃止。有報一覧は当面出さない |
 | フロー | Sankey | 銘柄の次カード。ロードマップ。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | Report（構想） | ロードマップ。本来クライアント責務 |
+
+## マイファンド（BLT-72）
+
+手元の保有からルックスルー利益・ルックスルー純資産・投下資本利益率を見る。税務プロダクトではない。サーバーの portfolio API は足さない。指標は `GET /v1/companies/{code}/financials` の最新 FY（`years[].fy_end` が最大）の `eps` / `bps` だけ。キー名は Summary 公開 JSON の `eps` / `bps`（円/株）。Notes `per_share_information` はクライアントから呼ばない。欠測は「—」で、その行・銘柄を合計から外す（捏造しない）。
+
+計算（円。本表の百万円スケールは使わない）:
+
+- ルックスルー利益 = EPS（円/株）× 株数
+- ルックスルー純資産 = BPS（円/株）× 株数
+- 投下資本 = 取得単価（円/株）× 株数
+- ファンドROE = Σ(EPS×株数) / Σ(取得単価×株数)（保有かつ EPS がある行だけ。時価・純資産合計は分母にしない）
+
+同じ銘柄の口座行は管理上は分割してよい。公開合計は銘柄単位で株数を足してから掛ける。証券会社・口座区分は任意・空白可。並べ替えはリストタブのシステム編集だけ。ファンドは合計と保有フィールドの編集で、第二の銘柄リストにはしない。
+
+計算の切り出しは `Apps/BlueTicker/FundMath`（Linux / macOS の `swift test`）。
 
 ## 条件（Screen）
 
@@ -99,10 +115,10 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 段階 | 方針 |
 |---|---|
 | 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
-| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。**Debug 設定**の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
+| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。**Debug ファンド → 開発ラボ**の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
 | 段階 B（HAPIS、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**クライアントは App Attest を sessions に載せる（Release）。本番制御面は `ATTEST_MODE=enforce`**（stub mint は `missing_attest`）。Debug ビルドは stub mint のまま（Simulator / 手元ループバック用）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
 
-**Release** は起動時から HAPIS ゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh）。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・Access SSO・発行者 URL は開発ラボ。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
+**Release** は起動時から HAPIS ゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh）。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・Access SSO・発行者 URL はファンド面の開発ラボ。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
 
 ### HAPIS consumer mint（クライアント）
 
@@ -119,7 +135,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
   - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
 - `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない。blt-server / Vapor には consumer JWT を付けない
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
-- **Release** の API base / 発行者はハードコード（ゲートウェイ + `hapis.sollahiro.workers.dev`）。設定では切り替えない
+- **Release** の API base / 発行者はハードコード（ゲートウェイ + `hapis.sollahiro.workers.dev`）。ファンド面では切り替えない
 - **Debug** の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
 - Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Debug は stub なので Simulator 検索は動く）
 
@@ -158,17 +174,17 @@ HAPIS の制限は 60/分のレートで同時数ではない。interactive（Fe
 
 Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
 
-1. Debug → 設定 → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
-2. Debug → 設定 → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
+1. Debug → ファンド → 開発ラボ → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
+2. Debug → ファンド → 開発ラボ → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
 3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
 4. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
-5. Release は設定を触らず検索できること（API base は HAPIS ゲートウェイ。設定はバージョン表示のみ）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
+5. Release はファンドの開発ラボを触らず検索できること（API base は HAPIS ゲートウェイ。バージョンはファンドのフッター）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
 
 #### 実機 App Attest（後で。Simulator では不可）
 
 本番 `ATTEST_MODE` は enforce。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`。ただし Debug の Attest 環境は `development` で、本番 HAPIS の既定 `APP_ATTEST_ENVIRONMENT=production` とは合わない）:
 
-1. Release は設定を触らず検索できること。Debug で試すときは設定 → HAPIS 本番
+1. Release はファンドの開発ラボを触らず検索できること。Debug で試すときはファンド → 開発ラボ → HAPIS 本番
 2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id`・`challenge`・`client_data`（`{"challenge":…}`）と、初回は `attestation`、2 回目以降は `assertion`
 3. Debug のトークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
 4. Debug の Access「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
@@ -177,7 +193,7 @@ Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミ�
 ## 未決
 
 - `インタビュー` の経営者 / アナリストは有報セクションか LLM か（カードはロードマップ）
-- 設定の製品コンテンツ（プライバシー、アカウント等）。Release はバージョン表示のみで、開発ラボは Debug 限定
+- ファンド以外の製品設定（プライバシー、アカウント等）。バージョンはファンドフッター。開発ラボは Debug 限定
 - ウォッチリストの「新着」を、その銘柄の新規有報としてよいか
 - Screen REST を skills カタログに載せるか（BLT-49。listed drain 後でも別判断）
 

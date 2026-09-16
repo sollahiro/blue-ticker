@@ -40,6 +40,29 @@ enum Format {
         years.sorted { ($0.fyEnd ?? "") < ($1.fyEnd ?? "") }
     }
 
+    static func latestYear(_ years: [FinancialsYear]) -> FinancialsYear? {
+        FundMath.latestYear(years, fyEnd: \.fyEnd)
+    }
+
+    /// 実円（ルックスルー・投下資本）。本表の百万円スケールは使わない。
+    static func yenCash(_ yen: Double?) -> String {
+        guard let yen else { return "—" }
+        return groupedNumber(yen, fractionDigits: 0) + "円"
+    }
+
+    /// 一株指標・取得単価。単位は円/株。
+    static func yenPerShare(_ yen: Double?) -> String {
+        guard let yen else { return "—" }
+        let digits = yen.rounded() == yen ? 0 : 2
+        return groupedNumber(yen, fractionDigits: digits) + "円/株"
+    }
+
+    static func shares(_ quantity: Double?) -> String {
+        guard let quantity else { return "—" }
+        let digits = quantity.rounded() == quantity ? 0 : 2
+        return groupedNumber(quantity, fractionDigits: digits) + "株"
+    }
+
     static func percent(_ value: Double?, digits: Int = 1, includeUnit: Bool = true) -> String {
         guard let value else { return "—" }
         let number = String(format: "%.\(digits)f", value)

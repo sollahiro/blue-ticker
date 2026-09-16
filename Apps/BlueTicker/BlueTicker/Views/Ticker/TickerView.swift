@@ -81,8 +81,12 @@ struct TickerView: View {
         .accessibilityLabel("カード \(page.rawValue + 1) / \(TickerPage.allCases.count)")
     }
 
+    private var matchingRows: [WatchedCompany] {
+        watched.filter { $0.code == company.code }
+    }
+
     private var isWatched: Bool {
-        watched.contains { $0.code == company.code }
+        !matchingRows.isEmpty
     }
 
     private var displaySector: String {
@@ -167,19 +171,23 @@ struct TickerView: View {
     }
 
     private func toggleWatch() {
-        if let existing = watched.first(where: { $0.code == company.code }) {
-            modelContext.delete(existing)
-            Task { await APIClient.shared.unpinCode(company.code) }
-        } else {
+        let matching = matchingRows
+        if matching.isEmpty {
             modelContext.insert(
                 WatchedCompany(
                     code: company.code,
                     name: company.name,
                     sector: displaySector,
-                    iconURL: company.iconURL
+                    iconURL: company.iconURL,
+                    sortOrder: WatchedCompany.nextSortOrder(among: watched)
                 )
             )
             Task { await APIClient.shared.pinCode(company.code) }
+        } else {
+            for item in matching {
+                modelContext.delete(item)
+            }
+            Task { await APIClient.shared.unpinCode(company.code) }
         }
     }
 
@@ -187,9 +195,9 @@ struct TickerView: View {
     private func backfillWatchedSectorIfNeeded() {
         let sector = displaySector
         guard !sector.isEmpty else { return }
-        guard let existing = watched.first(where: { $0.code == company.code }) else { return }
-        guard existing.sector.isEmpty else { return }
-        existing.sector = sector
+        for existing in watched where existing.code == company.code && existing.sector.isEmpty {
+            existing.sector = sector
+        }
     }
 }
 
