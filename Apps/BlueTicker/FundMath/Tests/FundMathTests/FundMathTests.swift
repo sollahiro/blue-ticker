@@ -43,8 +43,10 @@ import Testing
         let share = FundMath.PerShare(fyEnd: "2025-03-31", epsYen: 69.77, bpsYen: 751.01)
         let row = FundMath.rowMetrics(position: holding, perShare: share)
         #expect(row.isHolding)
-        #expect(row.lookThroughProfitYen == 69.77 * 100)
-        #expect(row.lookThroughBookYen == 751.01 * 100)
+        let profit = 69.77 * 100
+        let book = 751.01 * 100
+        #expect(row.lookThroughProfitYen == profit)
+        #expect(row.lookThroughBookYen == book)
         #expect(row.investedCapitalYen == 150_000)
     }
 
@@ -97,7 +99,8 @@ import Testing
         #expect(snap.lookThroughProfitYen == 1_500)
         #expect(snap.lookThroughBookYen == 20_000)
         #expect(snap.investedCapitalYen == 180_000)
-        #expect(snap.fundROEPercent == (1_500.0 / 160_000.0) * 100)
+        let expectedROE = (1_500.0 / 160_000.0) * 100
+        #expect(snap.fundROEPercent == expectedROE)
     }
 
     @Test func fundROEUsesInvestedCapitalNotBookAndIgnoresWatch() {
@@ -109,9 +112,11 @@ import Testing
             positions: positions,
             perShareByCode: ["4901": FundMath.PerShare(epsYen: 216.67, bpsYen: 2_779.5)]
         )
-        #expect(snap.lookThroughProfitYen == 216.67 * 20)
+        let profit = 216.67 * 20.0
+        let expectedROE = (profit / 50_000.0) * 100.0
+        #expect(snap.lookThroughProfitYen == profit)
         #expect(snap.investedCapitalYen == 50_000)
-        #expect(snap.fundROEPercent == ((216.67 * 20) / 50_000) * 100)
+        #expect(snap.fundROEPercent == expectedROE)
         #expect(snap.tickerTotals.count == 1)
     }
 
