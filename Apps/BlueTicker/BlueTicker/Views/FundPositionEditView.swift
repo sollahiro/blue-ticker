@@ -8,16 +8,17 @@ struct FundPositionEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var quantityText = ""
     @State private var priceText = ""
-    @State private var broker = ""
-    @State private var accountType = ""
     @State private var parseError: String?
 
     init(item: WatchedCompany, onAddAccount: @escaping () -> WatchedCompany) {
         _current = State(initialValue: item)
         self.onAddAccount = onAddAccount
+        _quantityText = State(initialValue: Self.string(from: item.quantity))
+        _priceText = State(initialValue: Self.string(from: item.acquisitionPriceYen))
     }
 
     var body: some View {
+        @Bindable var model = current
         Form {
             Section("銘柄") {
                 LabeledContent("社名", value: Format.displayName(current.name, fallback: current.code))
@@ -25,27 +26,27 @@ struct FundPositionEditView: View {
             }
 
             Section {
-                Picker("証券会社", selection: $broker) {
-                    Text("未選択").tag("")
+                Picker("証券会社", selection: optionalChoice($model.broker)) {
+                    Text("未選択").tag(String?.none)
                     ForEach(
                         WatchedCompany.choices(WatchedCompany.brokerChoices, including: current.broker),
                         id: \.self
                     ) { name in
-                        Text(name).tag(name)
+                        Text(name).tag(String?.some(name))
                     }
                 }
-                .pickerStyle(.navigationLink)
-                Picker("口座", selection: $accountType) {
-                    Text("未選択").tag("")
+                .pickerStyle(.menu)
+                Picker("口座", selection: optionalChoice($model.accountType)) {
+                    Text("未選択").tag(String?.none)
                     ForEach(
                         WatchedCompany.choices(
                             WatchedCompany.accountTypeChoices, including: current.accountType),
                         id: \.self
                     ) { name in
-                        Text(name).tag(name)
+                        Text(name).tag(String?.some(name))
                     }
                 }
-                .pickerStyle(.navigationLink)
+                .pickerStyle(.menu)
             } header: {
                 Text("口座（任意）")
             } footer: {
@@ -75,7 +76,7 @@ struct FundPositionEditView: View {
                 Button("同じ銘柄を別口座で追加") {
                     guard commit() else { return }
                     current = onAddAccount()
-                    load()
+                    loadAmounts()
                 }
             }
         }
@@ -92,17 +93,22 @@ struct FundPositionEditView: View {
                 }
             }
         }
-        .onAppear(perform: load)
         .onDisappear {
             _ = commit()
         }
     }
 
-    private func load() {
-        quantityText = string(from: current.quantity)
-        priceText = string(from: current.acquisitionPriceYen)
-        broker = current.broker ?? ""
-        accountType = current.accountType ?? ""
+    private func loadAmounts() {
+        quantityText = Self.string(from: current.quantity)
+        priceText = Self.string(from: current.acquisitionPriceYen)
+    }
+
+    /// 空文字は未選択。`tag("")` だと Picker が選択を戻す。
+    private func optionalChoice(_ value: Binding<String?>) -> Binding<String?> {
+        Binding(
+            get: { WatchedCompany.nonEmpty(value.wrappedValue) },
+            set: { value.wrappedValue = WatchedCompany.nonEmpty($0) }
+        )
     }
 
     @discardableResult
@@ -125,13 +131,11 @@ struct FundPositionEditView: View {
             parseError = "取得単価は円/株の数値で入力してください"
             return false
         }
-        current.broker = WatchedCompany.nonEmpty(broker)
-        current.accountType = WatchedCompany.nonEmpty(accountType)
         parseError = nil
         return true
     }
 
-    private func string(from value: Double?) -> String {
+    private static func string(from value: Double?) -> String {
         guard let value else { return "" }
         if value.rounded() == value {
             return String(Int(value))
