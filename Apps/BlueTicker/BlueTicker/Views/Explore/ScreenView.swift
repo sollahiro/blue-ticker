@@ -79,7 +79,7 @@ struct ScreenView: View {
                     .listRowBackground(Theme.control)
                 }
             } header: {
-                Text("プリセット")
+                Text("こんな企業を探す")
                     .foregroundStyle(Theme.textMuted)
             }
         }
@@ -100,9 +100,14 @@ struct ScreenView: View {
 
     private func presetRow(_ preset: ScreenPreset) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(preset.title)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.text)
+            HStack(spacing: 8) {
+                SectorTag(sector: preset.title, selected: true)
+                Text(preset.descriptionText)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
             Text(preset.reasonText)
                 .font(.footnote)
                 .foregroundStyle(Theme.textMuted)
