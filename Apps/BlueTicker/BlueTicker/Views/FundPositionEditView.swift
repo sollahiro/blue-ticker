@@ -194,7 +194,7 @@ struct TickerAccountListView: View {
     }
 
     private var rows: [WatchedCompany] {
-        watched.filter { $0.code == code }
+        watched.filter { $0.code == code && !$0.isBlankHoldingsRow }
     }
 
     private var lot: (quantity: Double?, averageAcquisitionYen: Double?) {

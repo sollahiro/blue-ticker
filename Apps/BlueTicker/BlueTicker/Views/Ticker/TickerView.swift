@@ -237,11 +237,12 @@ struct TickerView: View {
 
     private func openHoldings() {
         let matching = matchingRows
-        if matching.count >= 2 {
+        let accounts = matching.filter { !$0.isBlankHoldingsRow }
+        if accounts.count >= 2 {
             holdingsRoute = .accounts
             return
         }
-        editingItem = matching.first ?? insertWatchRow()
+        editingItem = accounts.first ?? matching.first ?? insertWatchRow()
         holdingsRoute = .editor
     }
 
@@ -260,6 +261,9 @@ struct TickerView: View {
     }
 
     private func addAccount() -> WatchedCompany {
+        if let blank = matchingRows.first(where: \.isBlankHoldingsRow) {
+            return blank
+        }
         let template = matchingRows.first
         let created =
             template?.duplicateAccountRow(

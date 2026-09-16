@@ -55,6 +55,11 @@ final class WatchedCompany {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    /// 株数・単価・証券会社・口座がすべて空。リスト追加だけの行。
+    var isBlankHoldingsRow: Bool {
+        quantity == nil && acquisitionPriceYen == nil && accountCaption == nil
+    }
+
     var listCaption: String {
         var parts = [kindLabel]
         if let accountCaption {
