@@ -22,7 +22,6 @@ struct FundPositionEditView: View {
             Section("銘柄") {
                 LabeledContent("社名", value: Format.displayName(current.name, fallback: current.code))
                 LabeledContent("コード", value: current.code)
-                LabeledContent("区分", value: current.kindLabel)
             }
 
             Section {
@@ -61,7 +60,7 @@ struct FundPositionEditView: View {
             } header: {
                 Text("この口座の保有")
             } footer: {
-                Text("株数は口座ごとです。株数と取得単価の両方が入ると保有、片方だけならウォッチです。")
+                Text("株数は口座ごとです。株数と取得単価の両方が入るとファンド明細に出ます。")
             }
 
             if let parseError {
@@ -157,23 +156,30 @@ struct TickerAccountListView: View {
 
     var body: some View {
         List {
-            ForEach(rows) { item in
-                Button {
-                    editingID = item.persistentModelID
-                } label: {
-                    LabeledContent {
-                        Text(quantityLabel(item))
-                    } label: {
-                        Text(item.accountCaption ?? "口座未選択")
-                        Text(item.kindLabel)
-                    }
+            if rows.count >= 2 {
+                Section {
+                    LabeledContent("合計保有数量", value: Format.shares(lot.quantity))
+                    LabeledContent("平均取得単価", value: Format.yenPerShare(lot.averageAcquisitionYen))
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(Theme.elevated)
             }
-            Button("口座を追加") {
-                let created = onAddAccount()
-                editingID = created.persistentModelID
+            Section {
+                ForEach(rows) { item in
+                    Button {
+                        editingID = item.persistentModelID
+                    } label: {
+                        accountRow(item)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Theme.elevated)
+                }
+                Button("口座を追加") {
+                    let created = onAddAccount()
+                    editingID = created.persistentModelID
+                }
+            } header: {
+                if rows.count >= 2 {
+                    Text("口座")
+                }
             }
         }
         .navigationTitle("保有情報")
@@ -191,11 +197,29 @@ struct TickerAccountListView: View {
         watched.filter { $0.code == code }
     }
 
-    private func quantityLabel(_ item: WatchedCompany) -> String {
-        guard let quantity = item.quantity else { return "—" }
-        if quantity.rounded() == quantity {
-            return "\(Int(quantity))株"
+    private var lot: (quantity: Double?, averageAcquisitionYen: Double?) {
+        FundMath.lotAverage(
+            positions: rows.map {
+                FundMath.Position(
+                    id: String(describing: $0.persistentModelID),
+                    code: $0.code,
+                    quantity: $0.quantity,
+                    acquisitionPriceYen: $0.acquisitionPriceYen
+                )
+            }
+        )
+    }
+
+    private func accountRow(_ item: WatchedCompany) -> some View {
+        LabeledContent {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Format.shares(item.quantity))
+                Text(Format.yenPerShare(item.acquisitionPriceYen))
+            }
+        } label: {
+            if let caption = item.accountCaption {
+                Text(caption)
+            }
         }
-        return "\(quantity)株"
     }
 }

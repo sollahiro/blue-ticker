@@ -51,6 +51,24 @@ enum FundMath {
         return quantity.isFinite && acquisitionPriceYen.isFinite
     }
 
+    /// 保有行の株数合計と、投下÷株数の加重平均取得単価。ウォッチは除外。
+    static func lotAverage(positions: [Position]) -> (quantity: Double?, averageAcquisitionYen: Double?) {
+        var quantity = 0.0
+        var invested = 0.0
+        var seen = false
+        for position in positions where position.isHolding {
+            guard let lot = position.quantity, let price = position.acquisitionPriceYen else {
+                continue
+            }
+            quantity += lot
+            invested += lot * price
+            seen = true
+        }
+        guard seen else { return (nil, nil) }
+        let average = quantity == 0 ? nil : invested / quantity
+        return (quantity, average)
+    }
+
     /// `fy_end` が空でない年度のうち、文字列最大（最新 FY）。
     static func latestYear<T>(_ years: [T], fyEnd: (T) -> String?) -> T? {
         years

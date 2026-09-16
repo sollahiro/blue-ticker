@@ -144,10 +144,10 @@ struct TickerView: View {
             VStack(alignment: .trailing, spacing: Theme.headerChipSpacing) {
                 headerChipButton(
                     title: isWatched ? "追加済み" : "リストに追加",
-                    filled: !isWatched,
+                    style: isWatched ? .outlineAccent : .filledAccent,
                     action: toggleWatch
                 )
-                headerChipButton(title: "保有情報", filled: false, action: openHoldings)
+                headerChipButton(title: "保有情報", style: .paper, action: openHoldings)
             }
             .frame(height: Theme.headerSideHeight)
         }
@@ -160,23 +160,49 @@ struct TickerView: View {
         return .system(size: size, weight: .bold)
     }
 
-    private func headerChipButton(title: String, filled: Bool, action: @escaping () -> Void)
-        -> some View
-    {
+    private enum HeaderChipStyle {
+        case filledAccent
+        case outlineAccent
+        case paper
+    }
+
+    private func headerChipButton(
+        title: String, style: HeaderChipStyle, action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 10)
                 .frame(height: Theme.headerRowHeight)
-                .background(filled ? Theme.accent : Color.clear)
-                .foregroundStyle(filled ? .black : Theme.accent)
+                .background(chipBackground(style))
+                .foregroundStyle(chipForeground(style))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay {
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(Theme.accent, lineWidth: filled ? 0 : 1.5)
+                        .stroke(chipStroke(style), lineWidth: style == .outlineAccent ? 1.5 : 0)
                 }
         }
         .buttonStyle(.plain)
+    }
+
+    private func chipBackground(_ style: HeaderChipStyle) -> Color {
+        switch style {
+        case .filledAccent: Theme.accent
+        case .outlineAccent: Color.clear
+        case .paper: Color.white
+        }
+    }
+
+    private func chipForeground(_ style: HeaderChipStyle) -> Color {
+        switch style {
+        case .filledAccent: .black
+        case .outlineAccent: Theme.accent
+        case .paper: .black
+        }
+    }
+
+    private func chipStroke(_ style: HeaderChipStyle) -> Color {
+        style == .outlineAccent ? Theme.accent : Color.clear
     }
 
     private func hydrateSector() async {

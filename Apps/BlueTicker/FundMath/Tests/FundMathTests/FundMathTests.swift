@@ -13,6 +13,22 @@ import Testing
         #expect(FundMath.isHolding(quantity: 100, acquisitionPriceYen: .infinity) == false)
     }
 
+    @Test func lotAverageIsQuantityWeightedAndIgnoresWatch() {
+        let positions = [
+            FundMath.Position(id: "a", code: "2802", quantity: 100, acquisitionPriceYen: 1_000),
+            FundMath.Position(id: "b", code: "2802", quantity: 50, acquisitionPriceYen: 1_200),
+            FundMath.Position(id: "w", code: "2802", quantity: 10, acquisitionPriceYen: nil),
+        ]
+        let lot = FundMath.lotAverage(positions: positions)
+        #expect(lot.quantity == 150)
+        #expect(lot.averageAcquisitionYen == 160_000.0 / 150.0)
+        let empty = FundMath.lotAverage(positions: [
+            FundMath.Position(id: "w", code: "1", quantity: 1, acquisitionPriceYen: nil)
+        ])
+        #expect(empty.quantity == nil)
+        #expect(empty.averageAcquisitionYen == nil)
+    }
+
     @Test func restYearKeysAreEpsAndBpsYenPerShare() throws {
         let json = Data(
             #"""
