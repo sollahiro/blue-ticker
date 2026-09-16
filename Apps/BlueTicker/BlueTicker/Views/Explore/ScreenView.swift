@@ -98,10 +98,18 @@ struct ScreenView: View {
         return selectedSectors.sorted()
     }
 
+    private func presetTint(_ preset: ScreenPreset) -> Color {
+        switch preset {
+        case .quality: Theme.accent
+        case .growth: Theme.growthTint
+        case .healthyGrowth: Theme.positive
+        }
+    }
+
     private func presetRow(_ preset: ScreenPreset) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                SectorTag(sector: preset.title, selected: true)
+                SectorTag(sector: preset.title, selected: true, tint: presetTint(preset))
                 Text(preset.descriptionText)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Theme.text)

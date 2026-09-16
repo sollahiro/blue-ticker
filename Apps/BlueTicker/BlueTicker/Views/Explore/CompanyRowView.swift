@@ -29,6 +29,7 @@ struct SectorTag: View {
     var sector: String
     var selected: Bool = false
     var height: CGFloat? = nil
+    var tint: Color = Theme.positive
 
     var body: some View {
         Text(sector)
@@ -36,12 +37,12 @@ struct SectorTag: View {
             .padding(.horizontal, 10)
             .padding(.vertical, height == nil ? 6 : 0)
             .frame(height: height)
-            .background(selected ? Theme.sectorFill : Theme.idleTab)
-            .foregroundStyle(selected ? Theme.positive : .white)
+            .background(selected ? tint.opacity(0.22) : Theme.idleTab)
+            .foregroundStyle(selected ? tint : .white)
             .clipShape(Capsule())
             .overlay {
                 Capsule()
-                    .stroke(selected ? Theme.positive : Color.clear, lineWidth: 1.5)
+                    .stroke(selected ? tint : Color.clear, lineWidth: 1.5)
             }
     }
 }
