@@ -34,7 +34,7 @@ struct TickerHoldingsView: View {
                     addedBlankIDs.insert(created.persistentModelID)
                 }
             } footer: {
-                Text("株数と取得単価の両方が入るとファンド明細に出ます。登録口座は各グループの削除で外せます。")
+                Text("株数と取得単価の両方が入るとファンドの銘柄別に出ます。登録口座は各グループの削除で外せます。")
             }
         }
         .listSectionSpacing(.compact)
@@ -49,6 +49,10 @@ struct TickerHoldingsView: View {
                 }
             }
         }
+        .onChange(of: holdingSignature) { _, _ in
+            pruneLeftoverWatches()
+        }
+        .onAppear { pruneLeftoverWatches() }
     }
 
     private var matching: [WatchedCompany] {
@@ -57,6 +61,10 @@ struct TickerHoldingsView: View {
 
     private var filledRows: [WatchedCompany] {
         matching.filter { !$0.isBlankHoldingsRow }
+    }
+
+    private var holdingSignature: String {
+        matching.map { "\($0.persistentModelID)-\($0.isHolding)" }.joined(separator: ",")
     }
 
     private var rows: [WatchedCompany] {
@@ -106,6 +114,13 @@ struct TickerHoldingsView: View {
         } else {
             modelContext.delete(item)
         }
+        pruneLeftoverWatches()
+    }
+
+    /// 保有がある銘柄の空ウォッチ行はリストに残さない。
+    private func pruneLeftoverWatches() {
+        WatchedCompany.pruneBlankRowsCoveredByHoldings(
+            matching, keeping: addedBlankIDs, in: modelContext)
     }
 }
 
@@ -150,10 +165,20 @@ private struct HoldingsAccountGroup: View {
                 }
             }
             .pickerStyle(.menu)
-            TextField("株数", text: $quantityText)
-                .keyboardType(.decimalPad)
-            TextField("取得単価（円/株）", text: $priceText)
-                .keyboardType(.decimalPad)
+            LabeledContent("株数") {
+                TextField("", text: $quantityText, prompt: Text("0"))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+            }
+            LabeledContent("取得単価") {
+                HStack(spacing: 4) {
+                    TextField("", text: $priceText, prompt: Text("0"))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                    Text("円/株")
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
             if let parseError {
                 Text(parseError)
                     .font(.footnote)

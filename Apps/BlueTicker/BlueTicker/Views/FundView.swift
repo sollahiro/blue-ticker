@@ -18,27 +18,20 @@ struct FundView: View {
                 Text(lookThroughFooter)
             }
 
-            if snapshot.tickerTotals.count > 1 {
+            if snapshot.tickerTotals.isEmpty {
+                Section {
+                    Text("銘柄の保有情報から、口座ごとの株数と取得単価を入れると保有になります。")
+                        .foregroundStyle(Theme.textMuted)
+                }
+            } else {
                 Section("銘柄別") {
                     ForEach(snapshot.tickerTotals, id: \.code) { total in
-                        tickerTotalRow(total)
-                            .listRowBackground(Theme.elevated)
+                        NavigationLink(value: companyRef(for: total)) {
+                            tickerTotalRow(total)
+                        }
+                        .listRowBackground(Theme.elevated)
                     }
                 }
-            }
-
-            Section {
-                if holdings.isEmpty {
-                    Text("銘柄の保有情報から、口座ごとの株数と取得単価を入れると保有になります。ウォッチはここに出ません。")
-                        .foregroundStyle(Theme.textMuted)
-                } else {
-                    ForEach(holdings) { item in
-                        holdingLabel(item)
-                            .listRowBackground(Theme.elevated)
-                    }
-                }
-            } header: {
-                Text("明細")
             }
 
             #if DEBUG
@@ -103,17 +96,20 @@ struct FundView: View {
         return short
     }
 
+    private func companyRef(for total: FundMath.TickerTotal) -> CompanyRef {
+        let item = companies.first { $0.code == total.code }
+        return CompanyRef(
+            code: total.code,
+            name: item?.name ?? total.code,
+            sector: item?.sector ?? "",
+            iconURL: item?.iconURL
+        )
+    }
+
     private func tickerTotalRow(_ total: FundMath.TickerTotal) -> some View {
         let item = companies.first { $0.code == total.code }
         return HStack(spacing: 12) {
-            CompanyIconView(
-                CompanyRef(
-                    code: total.code,
-                    name: item?.name ?? total.code,
-                    sector: item?.sector ?? "",
-                    iconURL: item?.iconURL
-                )
-            )
+            CompanyIconView(companyRef(for: total))
             LabeledContent {
                 Text(Format.yenCash(total.lookThroughProfitYen))
             } label: {
@@ -123,27 +119,6 @@ struct FundView: View {
                 Text(
                     "純資産 \(Format.yenCash(total.lookThroughBookYen)) · 投下 \(Format.yenCash(total.investedCapitalYen))"
                 )
-            }
-        }
-    }
-
-    private func holdingLabel(_ item: WatchedCompany) -> some View {
-        let metrics = FundMath.rowMetrics(
-            position: FundMath.Position(
-                id: String(describing: item.persistentModelID),
-                code: item.code,
-                quantity: item.quantity,
-                acquisitionPriceYen: item.acquisitionPriceYen
-            ),
-            perShare: perShareByCode[item.code] ?? FundMath.PerShare()
-        )
-        return HStack(spacing: 12) {
-            CompanyIconView(CompanyRef(item))
-            LabeledContent {
-                Text(Format.yenCash(metrics.lookThroughProfitYen))
-            } label: {
-                Text(Format.displayName(item.name, fallback: item.code))
-                Text(item.fundCaption)
             }
         }
     }

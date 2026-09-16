@@ -60,16 +60,21 @@ final class WatchedCompany {
         quantity == nil && acquisitionPriceYen == nil && accountCaption == nil
     }
 
-    var listCaption: String {
-        var parts = [kindLabel]
-        if let accountCaption {
-            parts.append(accountCaption)
+    /// 同じ銘柄に保有があるウォッチ行は削除する（追加中の空行は残す）。
+    static func pruneBlankRowsCoveredByHoldings(
+        _ items: [WatchedCompany],
+        keeping addedIDs: Set<PersistentIdentifier> = [],
+        in context: ModelContext
+    ) {
+        let codesWithHoldings = Set(items.filter(\.isHolding).map(\.code))
+        for item in items where !item.isHolding && codesWithHoldings.contains(item.code) {
+            if addedIDs.contains(item.persistentModelID) { continue }
+            context.delete(item)
         }
-        return parts.joined(separator: " · ")
     }
 
-    var fundCaption: String {
-        var parts = [code, kindLabel]
+    var listCaption: String {
+        var parts = [kindLabel]
         if let accountCaption {
             parts.append(accountCaption)
         }
