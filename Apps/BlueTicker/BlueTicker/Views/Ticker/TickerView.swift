@@ -8,11 +8,6 @@ enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
     var id: TickerPage { self }
 }
 
-private enum HoldingsRoute: Hashable {
-    case editor
-    case accounts
-}
-
 struct TickerView: View {
     var company: CompanyRef
     @Environment(\.modelContext) private var modelContext
@@ -21,8 +16,7 @@ struct TickerView: View {
     @State private var summarySection: SummarySection = .performance
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
-    @State private var holdingsRoute: HoldingsRoute?
-    @State private var editingItem: WatchedCompany?
+    @State private var showsHoldings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,15 +30,8 @@ struct TickerView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
-        .navigationDestination(item: $holdingsRoute) { route in
-            switch route {
-            case .editor:
-                if let item = editingItem {
-                    FundPositionEditView(item: item, onAddAccount: addAccount)
-                }
-            case .accounts:
-                TickerAccountListView(code: company.code, onAddAccount: addAccount)
-            }
+        .navigationDestination(isPresented: $showsHoldings) {
+            TickerHoldingsView(code: company.code, onAddAccount: addAccount)
         }
         .task { await hydrateSector() }
     }
@@ -236,14 +223,10 @@ struct TickerView: View {
     }
 
     private func openHoldings() {
-        let matching = matchingRows
-        let accounts = matching.filter { !$0.isBlankHoldingsRow }
-        if accounts.count >= 2 {
-            holdingsRoute = .accounts
-            return
+        if matchingRows.isEmpty {
+            _ = insertWatchRow()
         }
-        editingItem = accounts.first ?? matching.first ?? insertWatchRow()
-        holdingsRoute = .editor
+        showsHoldings = true
     }
 
     @discardableResult
