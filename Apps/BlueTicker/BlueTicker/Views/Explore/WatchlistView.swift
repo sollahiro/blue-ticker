@@ -4,6 +4,7 @@ import SwiftUI
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.editMode) private var editMode
 
     var body: some View {
         Group {
@@ -16,11 +17,26 @@ struct WatchlistView: View {
             } else {
                 List {
                     ForEach(companies) { item in
-                        NavigationLink(value: CompanyRef(item)) {
-                            CompanyRowView(
-                                company: CompanyRef(item),
-                                caption: item.listCaption
-                            )
+                        Group {
+                            if isEditing {
+                                NavigationLink {
+                                    FundPositionEditView(item: item) {
+                                        addAccount(from: item)
+                                    }
+                                } label: {
+                                    CompanyRowView(
+                                        company: CompanyRef(item),
+                                        caption: item.listCaption
+                                    )
+                                }
+                            } else {
+                                NavigationLink(value: CompanyRef(item)) {
+                                    CompanyRowView(
+                                        company: CompanyRef(item),
+                                        caption: item.listCaption
+                                    )
+                                }
+                            }
                         }
                         .listRowBackground(Theme.elevated)
                     }
@@ -39,6 +55,10 @@ struct WatchlistView: View {
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
         }
+    }
+
+    private var isEditing: Bool {
+        editMode?.wrappedValue.isEditing == true
     }
 
     private func delete(at offsets: IndexSet) {
@@ -61,5 +81,11 @@ struct WatchlistView: View {
         for (index, item) in ordered.enumerated() {
             item.sortOrder = index
         }
+    }
+
+    private func addAccount(from item: WatchedCompany) {
+        modelContext.insert(
+            item.duplicateAccountRow(sortOrder: WatchedCompany.nextSortOrder(among: companies))
+        )
     }
 }
