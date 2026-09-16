@@ -145,7 +145,11 @@ PublicDoc/
 | Instant FieldSet | Instant | 貸借対照表・従業員数 |
 | 非連結 Duration / Instant FieldSet | — | 連結値がない場合の個別財務諸表フォールバック |
 
-### 4.2 エクストラクター一覧（`Analysis/Extractors.swift`）
+### 4.2 エクストラクター一覧（`Analysis/*Extractor.swift`）
+
+結果型は各抽出器と同居する。CF・設備投資・自己株式・配当は `CashFlowExtractors.swift`、BS・運転資本は `BalanceSheetExtractors.swift` にまとめる。
+
+共通処理は `XBRLUtils.swift`（値・名前・ファイル探索・索引変換）、`XBRLDocumentLoader.swift`（linkbase SAX・キャッシュ付き document 読み込み）、`XBRLNumericParser.swift`（数値 SAX）、`XBRLTextBlocks.swift`（TextBlock / HTML / regex）に分ける。呼び出し口は `XBRLUtils` のまま。
 
 | エクストラクター | 抽出内容 |
 |---|---|
@@ -452,4 +456,3 @@ grep -A3 "営業利益" /tmp/taxonomy_ifrs/taxonomy/jpigp/2025-11-01/label/jpigp
 ### 7.7 タクソノミカバレッジ
 
 提出書類で使われる標準タグ（jppfs_cor / jpigp_cor）は JPPFS＋JPIGP の両タクソノミでほぼ全てカバーされる。欠落は `...TextBlock`（注記テキスト格納タグ）のみで、数値 fact ではないためラベル引き・抽出ロジックに影響しない。
-
