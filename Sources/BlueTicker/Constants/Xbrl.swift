@@ -46,6 +46,13 @@ enum Xbrl {
         "OperatingRevenueELE",  // 電気事業（東電HD S100YIHR）
         "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益（S100YA84）
         "OperatingRevenueSEC",  // 証券業の営業収益計（大和証券G S100YCMP）
+        "OperatingRevenueIFRS",  // 単数。NSグループ 471A S100XSQQ・SBIアルヒ 7198 S100YFMO
+        "OperatingRevenueContinuingOperationsIFRS",  // Jトラスト 8508 S100XSDT
+        "OperatingRevenueRevenueIFRS",
+        "OperatingRevenueSPF",  // 貸金・割賦の営業収益合計（アコム 8572 S100YBXA）
+        "OperatingRevenueCMD",  // 商品先物等の営業収益合計（日産証券G 8705 S100YB7U）
+        "OperatingRevenueIVT",  // 投資顧問の営業収益計（スパークス 8739 S100Y7MV）
+        "OperatingRevenueOILTelecommunications",  // 沖縄セルラー 9436
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -82,6 +89,56 @@ enum Xbrl {
         "OperatingIncomeINS",  // 保険業の経常収益（かんぽ S100YD29・第一 S100VZZW）
         "OrdinaryIncomeBNK",
         "OrdinaryIncomeSummaryOfBusinessResults",
+        // 以下は末尾追加（既存値は候補順で変わらない限定フォールバック）。業種別本表の合計行。
+        "NetSalesAndOperatingRevenueIFRS",  // コナミ 9766 S100YKX5 売上高及び営業収入合計
+        "OperatingRevenueContinuingOperationsIFRS",
+        "OperatingRevenueSPF",
+        "OperatingRevenueCMD",
+        "OperatingRevenueIVT",
+        "GrossOperatingRevenue",  // ミニストップ 9946 S100Y4UH 営業総収入
+        "OperatingRevenue2",  // 営業収入（東宝 9602 S100Y5O3、アミューズ 4301）
+        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",  // 川崎汽船 9107 S100YC6B
+        "ShippingBusinessRevenueWAT",
+        "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueIFRS",
+        "OperatingRevenueRevenueIFRS",
+        "ContractsCompletedRevOA",  // 完成業務高（E・J HD 2153 S100YYLT）
+        "NetSalesCompletedWork",
+        "NetSalesOfMerchandiseAndFinishedGoodsRevOA",  // あじかん 2907 S100YGFU
+        "BusinessRevenues",  // アンジェス 4563 S100XTMQ 事業収益合計
+        "OperatingRevenues",
+        "OperatingRevenuesRevOA",
+        "BusinessRevenueRevOA",  // スカイマーク 9204 S100YJR8 事業収益合計
+        "OperatingRevenueRevOA",
+        "OperatingBusinessRevenueRevOA",
+        "OperatingRevenue",  // キャンバス 4575 等の本表「事業収益」
+    ]
+
+    /// 創薬等の本表「事業収益」。売上原価が無く GP＝売上（原価0）になるのを防ぐ。
+    static let businessRevenueTags: [String] = [
+        "BusinessRevenue",
+        "BusinessRevenues",
+        "BusinessRevenueRevOA",
+        "OperatingRevenuesRevOA",
+        "OperatingRevenueRevOA",
+        "OperatingBusinessRevenueRevOA",
+        "OperatingRevenue",
+        "OperatingRevenues",
+    ]
+
+    /// 売上−原価の計算法に使わない営業収益合計（金融・通信・海運・コンビニ営業総収入）。
+    /// 売上原価タグが無く GP＝売上（原価0）になるのを防ぐ。
+    static let operatingRevenueWithoutMerchandiseCogsTags: [String] = [
+        "OperatingRevenueSPF",
+        "OperatingRevenueCMD",
+        "OperatingRevenueIVT",
+        "OperatingRevenueIFRS",
+        "OperatingRevenueContinuingOperationsIFRS",
+        "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueRevenueIFRS",
+        "GrossOperatingRevenue",
+        "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",
+        "ShippingBusinessRevenueWAT",
     ]
 
     /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に
@@ -289,7 +346,8 @@ enum Xbrl {
     // 「GP＝売上（原価0扱い）」という無意味な値を誤算出するのを防ぐ。
     static let grossProfitSalesTags: [String] = netSalesTags.filter {
         !ordinaryRevenueTags.contains($0) && !insuranceSalesTags.contains($0)
-            && $0 != "BusinessRevenue"
+            && !businessRevenueTags.contains($0)
+            && !operatingRevenueWithoutMerchandiseCogsTags.contains($0)
     }
 
     static let grossProfitCostsTags: [String] = [

@@ -422,6 +422,52 @@ import Foundation
         #expect(financials?.operatingProfit == 116_289_000_000)
     }
 
+    /// 東宝: 本表行は `OperatingRevenue2`（営業収入）。
+    @Test
+    func tohoSummarySalesUsesOperatingRevenue2() async throws {
+        guard await Self.ensureAvailable("S100Y5O3") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100Y5O3", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenue2" }?.value
+                == 360_663_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100Y5O3_xbrl"))
+        #expect(financials?.sales == 360_663_000_000)
+        #expect(financials?.salesLabel == "営業収入")
+    }
+
+    /// コナミ: 本表合計は `NetSalesAndOperatingRevenueIFRS`（製品売上高は内訳）。
+    @Test
+    func konamiSummarySalesUsesNetSalesAndOperatingRevenueIFRS() async throws {
+        guard await Self.ensureAvailable("S100YKX5") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YKX5", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "NetSalesAndOperatingRevenueIFRS" }?.value
+                == 493_677_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YKX5_xbrl"))
+        #expect(financials?.sales == 493_677_000_000)
+        #expect(financials?.salesLabel == "売上高及び営業収入")
+    }
+
+    /// アコム: 本表合計は `OperatingRevenueSPF`。売上原価が無いので GP は出さない。
+    @Test
+    func acomSummarySalesUsesOperatingRevenueSPF() async throws {
+        guard await Self.ensureAvailable("S100YBXA") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YBXA", statementTypes: [.incomeStatement]))
+        #expect(
+            year.incomeStatement.first { $0.tag == "OperatingRevenueSPF" }?.value
+                == 337_709_000_000)
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100YBXA_xbrl"))
+        #expect(financials?.sales == 337_709_000_000)
+        #expect(financials?.salesLabel == "営業収益")
+        #expect(financials?.grossProfit == nil)
+    }
+
     /// 三菱商事: 本表先頭は `Revenue2IFRS`「収益」（顧客契約+その他の源泉）。Summary sales にする。
     @Test
     func mitsubishiSummarySalesUsesRevenue2IFRS() async throws {

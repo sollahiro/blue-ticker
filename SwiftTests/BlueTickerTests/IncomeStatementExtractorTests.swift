@@ -233,4 +233,68 @@ import Foundation
         #expect(result.sales == 198_735_000_000.0)
         #expect(result.salesLabel == "営業収益")
     }
+
+    @Test func testOperatingRevenue2Label() {
+        let fs = makeFieldSet(("OperatingRevenue2", 360_663_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 360_663_000_000.0)
+        #expect(result.salesLabel == "営業収入")
+    }
+
+    @Test func testNetSalesPreferredOverOperatingRevenue2() {
+        let fs = makeFieldSet(
+            ("NetSales", 1_000.0, nil),
+            ("OperatingRevenue2", 360_663_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_000.0)
+        #expect(result.salesLabel == "売上高")
+    }
+
+    @Test func testNetSalesAndOperatingRevenueIFRS() {
+        let fs = makeFieldSet(("NetSalesAndOperatingRevenueIFRS", 493_677_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.sales == 493_677_000_000.0)
+        #expect(result.salesLabel == "売上高及び営業収入")
+    }
+
+    @Test func testShippingBusinessRevenueWAT() {
+        let fs = makeFieldSet(
+            ("ShippingBusinessRevenueAndOtherOperatingRevenueWAT", 1_018_364_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_018_364_000_000.0)
+        #expect(result.salesLabel == "海運業収益")
+    }
+
+    @Test func testOperatingRevenueSPF() {
+        let fs = makeFieldSet(("OperatingRevenueSPF", 337_709_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 337_709_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    @Test func testContractsCompletedRevOA() {
+        let fs = makeFieldSet(("ContractsCompletedRevOA", 46_586_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 46_586_000_000.0)
+        #expect(result.salesLabel == "完成業務高")
+    }
+
+    @Test func testBusinessRevenuesTotalPreferredOverGoodsComponent() {
+        let fs = makeFieldSet(
+            ("NetSalesOfGoodsRevOA", 302_845_000.0, nil),
+            ("BusinessRevenues", 874_120_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 874_120_000.0)
+        #expect(result.salesLabel == "事業収益")
+    }
+
+    @Test func testGrossOperatingRevenue() {
+        let fs = makeFieldSet(("GrossOperatingRevenue", 91_788_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 91_788_000_000.0)
+        #expect(result.salesLabel == "営業総収入")
+    }
 }
