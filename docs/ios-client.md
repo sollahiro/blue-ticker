@@ -94,7 +94,7 @@
 
 - 業種は横スクロール 3 段のチップで複数選択。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行・銘柄ヘッダの業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。未選択と全選択は `sector` を送らない。1 業種は `sector=` 完全一致。2 業種以上は AND にせず、業種ごとに `GET /v1/screen` して ROIC 降順 50 件へマージする（サーバーは `sector` 1 件）
 - DualRangeSlider・指標の詳細トグル・`ScreenMetricFilter` 組み立て UI は出さない。フローは業種（任意）→ プリセットタップ → 結果 → 銘柄
-- プリセットは 3 つ。セクション見出しは「こんな企業を探す」。行はラベル（優良=青 / 成長=橙 / 安定=緑。業種タグと同形の枠）+ 1 行の説明文（「高収益で財務が健全な企業」など 15 字前後、1 行に収める）。クライアントが `GET /v1/screen` の min/max + `sort=roic` desc に写す（閾値は整数、ネット D/E は 1 桁）:
+- プリセットは 3 つ。セクション見出しは「こんな企業を探す」。行はラベル（優良=青 / 成長=橙 / 安定=緑。業種タグと同形の枠）+ 1 行の説明文（「高収益で財務が健全な企業」など 15 字前後、1 行に収める）。右端に該当件数（`GET /v1/screen` の `matched`。`limit=1`。業種変更から 400ms debounce。未選択・全選択は 3 リクエスト。9 業種以上の部分選択は件数を出さない）。クライアントが `GET /v1/screen` の min/max + `sort=roic` desc に写す（閾値は整数、ネット D/E は 1 桁）:
   - **優良**: `roic_min=10`、`operating_margin_min=8`、`net_de_max=0.5`。成長フィルタなし
   - **成長**: `sales_cagr_3y_min=10`、`operating_margin_min=5`、`roic_min=8`。CAGR 上限なし
   - **安定**（旧 健全成長）: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
@@ -106,7 +106,7 @@
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 6 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落は次回 ingest の skip 時に補完、列定義変更後は `blt-server screen-rebuild` で全件再生成する（`screenIndexVersion` = `screen-v2`。`fin-vN` は上げない）。skills カタログには載せない（BLT-49）。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 6 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、欠落および `sales_cagr_3y` 未算出は次回 ingest の skip 時に補完、列定義変更後は `blt-server screen-rebuild` で全件再生成する（`screenIndexVersion` = `screen-v2`。`fin-vN` は上げない）。skills カタログには載せない（BLT-49）。
 
 ## 認証
 
