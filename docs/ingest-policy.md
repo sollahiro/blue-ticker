@@ -125,6 +125,8 @@ Screen 索引の列定義が変わったあと（`sales_cagr_3y` など）は `f
 
 ```bash
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild
+# 部分実行（走査 N 件。孤児削除はしない）:
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild --limit 100
 ```
 
 `/healthz` の `cache_versions.screen_index` がイメージの `screenIndexVersion` と一致することを確認する。

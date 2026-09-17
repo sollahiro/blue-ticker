@@ -23,8 +23,9 @@
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
-//   blt-server screen-rebuild                               company_financials から screen_index
-//                                                            （Screen 検索用 Read Model）を全件再生成
+//   blt-server screen-rebuild [--limit N]                   company_financials から screen_index
+//                                                            （Screen 検索用 Read Model）を再生成。
+//                                                            --limit は走査件数上限（部分実行では孤児削除なし）
 //   blt-server status-report                                5 ステージ（financials/statements/
 //                                                            filing_sections/breakdown_business/
 //                                                            breakdown_geography）のカバレッジ・鮮度・
@@ -112,7 +113,13 @@ do {
         }
         try await runMasterDataUploadCommand(path: argv[2])
     } else if argv.count > 1, argv[1] == "screen-rebuild" {
-        try await runScreenRebuildCommand()
+        let limitPresent = argv.contains("--limit")
+        let limit = optionValue("--limit", in: argv).flatMap(Int.init)
+        if limitPresent, limit == nil || (limit ?? 0) < 1 {
+            printError("blt-server error: --limit は 1 以上の整数で指定してください\n")
+            exit(1)
+        }
+        try await runScreenRebuildCommand(limit: limit)
     } else if argv.count > 1, argv[1] == "status-report" {
         try await runStatusReportCommand()
     } else {

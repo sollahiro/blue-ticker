@@ -64,17 +64,19 @@ public struct ScreenRebuildSummary: Sendable, Equatable {
     public let removed: Int
 }
 
-/// company_financials 全件から screen_index を再生成する。code 昇順の keyset ページングで走査する。
-/// 既存 screen_index にあって company_financials に無い code は削除する（走査後に再確認し、
+/// company_financials から screen_index を再生成する。code 昇順の keyset ページングで走査する。
+/// `limit` は走査件数の上限（手動スモーク用）。未指定なら全件。部分走査では孤児削除をしない。
+/// 全件時、既存 screen_index にあって company_financials に無い code は削除する（走査後に再確認し、
 /// 同時 ingest で増えた行は孤児にしない）。
-func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil) async throws
-    -> ScreenRebuildSummary
-{
+func rebuildScreenIndex(
+    db: Database, pageSize: Int = 200, limit: Int? = nil, logger: Logger? = nil
+) async throws -> ScreenRebuildSummary {
     var scanned = 0
     var indexed = 0
     var removed = 0
     var seen = Set<String>()
     var afterCode: String? = nil
+    var reachedLimit = false
     while true {
         let last = afterCode
         let page = try await withDbRetry(
@@ -101,9 +103,17 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
                 }
             }
             if row != nil { indexed += 1 } else { removed += 1 }
+            if let limit, scanned >= limit {
+                reachedLimit = true
+                break
+            }
         }
+        if reachedLimit { break }
         afterCode = page.last?.id
         if page.count < pageSize { break }
+    }
+    if reachedLimit {
+        return ScreenRebuildSummary(scanned: scanned, indexed: indexed, removed: removed)
     }
     let candidates = try await ScreenIndexCodeOnly.query(on: db).all().compactMap(\.id).filter {
         !seen.contains($0)
@@ -122,7 +132,7 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
 }
 
 /// `blt-server screen-rebuild` エントリ。DATABASE_URL 未設定なら databaseUnavailable。
-public func runScreenRebuildCommand() async throws {
+public func runScreenRebuildCommand(limit: Int? = nil) async throws {
     guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
         throw DocumentSyncError.databaseUnavailable
     }
@@ -131,7 +141,7 @@ public func runScreenRebuildCommand() async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let summary = try await rebuildScreenIndex(db: app.db, logger: app.logger)
+        let summary = try await rebuildScreenIndex(db: app.db, limit: limit, logger: app.logger)
         app.logger.notice(
             "screen_index rebuild completed",
             metadata: [

@@ -130,6 +130,35 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func rebuildLimitStopsBeforeOrphanCleanup() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0001", latest: ["sales": 1210.0, "roic": 5.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0002", latest: ["sales": 1210.0, "roic": 9.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            let orphan = ScreenIndex()
+            orphan.apply(
+                ScreenRow(
+                    code: "9999", name: "", market: "プライム", sector: "", periodEnd: "2025-03-31",
+                    metrics: [:]))
+            try await orphan.create(on: app.db)
+
+            let summary = try await rebuildScreenIndex(db: app.db, pageSize: 2, limit: 1)
+            #expect(summary == ScreenRebuildSummary(scanned: 1, indexed: 1, removed: 0))
+            let row = try #require(try await ScreenIndex.find("0001", on: app.db))
+            #expect(row.cacheVersion == screenIndexVersion)
+            #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(try await ScreenIndex.find("0002", on: app.db) == nil)
+            #expect(try await ScreenIndex.find("9999", on: app.db) != nil)
+        }
+    }
+
     @Test func ingestSkipBackfillsMissingScreenIndex() async throws {
         try await withApp { app in
             let doc = EdinetDocument()
