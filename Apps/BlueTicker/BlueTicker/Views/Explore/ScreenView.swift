@@ -43,6 +43,7 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
 
 struct ScreenView: View {
     @State private var selectedSectors: Set<String> = []
+    @State private var presetMatched: [ScreenPreset: Int] = [:]
 
     var body: some View {
         Form {
@@ -88,6 +89,11 @@ struct ScreenView: View {
         .navigationDestination(for: ScreenQuery.self) { query in
             ScreenResultsView(sectors: query.sectors, preset: query.preset)
         }
+        .task(id: screenSectors) {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await loadPresetCounts()
+        }
     }
 
     /// 未選択と全選択は同じ（業種フィルタなし）。複数はサーバーが 1 業種なので呼び出し側で OR する。
@@ -115,12 +121,43 @@ struct ScreenView: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                Spacer(minLength: 8)
+                if let matched = presetMatched[preset] {
+                    Text("\(matched)件")
+                        .font(.footnote.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(matched == 0 ? Theme.textMuted : Theme.text)
+                        .accessibilityLabel("\(matched)件")
+                }
             }
             Text(preset.reasonText)
                 .font(.footnote)
                 .foregroundStyle(Theme.textMuted)
         }
         .padding(.vertical, 6)
+    }
+
+    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。未選択・全選択は 3 リクエスト。
+    /// 業種を多く選ぶと業種×プリセットになるので、8 業種超は出さない。
+    /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
+    private func loadPresetCounts() async {
+        let sectors = screenSectors
+        if sectors.count > 8 {
+            presetMatched = [:]
+            return
+        }
+        var next: [ScreenPreset: Int] = [:]
+        for preset in ScreenPreset.allCases {
+            guard !Task.isCancelled else { return }
+            do {
+                let response = try await APIClient.shared.screen(
+                    sectors: sectors, filters: preset.filters, limit: 1)
+                next[preset] = response.matched
+            } catch {
+                continue
+            }
+        }
+        guard !Task.isCancelled else { return }
+        presetMatched = next
     }
 
     private var sectorChips: some View {

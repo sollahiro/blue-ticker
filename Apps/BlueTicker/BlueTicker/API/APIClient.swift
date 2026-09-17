@@ -81,18 +81,26 @@ actor APIClient {
     }
 
     /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。2 件以上は完全一致を業種ごとに叩き
-    /// （並列数はゲートに任せる）、ROIC 降順で 50 件にまとめる（サーバーは `sector` 1 件）。
+    /// （並列数はゲートに任せる）、ROIC 降順で `limit` 件にまとめる（サーバーは `sector` 1 件）。
     /// プリセットは `filters` の min/max に写す。スライダー UI は出さない。
-    func screen(sectors: [String], filters: [ScreenMetricFilter]) async throws -> ScreenResponse {
+    /// 件数だけ欲しいときは `limit: 1`（`matched` は LIMIT 前の件数）。
+    func screen(sectors: [String], filters: [ScreenMetricFilter], limit: Int = 50) async throws
+        -> ScreenResponse
+    {
+        let capped = min(max(limit, 1), 200)
         let targets: [String?] =
             sectors.isEmpty ? [nil] : sectors.map { Optional($0) }
         if targets.count == 1 {
-            return try await screenOnce(sector: targets[0], filters: filters)
+            return try await screenOnce(sector: targets[0], filters: filters, limit: capped)
         }
         let pages = try await withThrowingTaskGroup(of: (Int, ScreenResponse).self) { group in
             for (index, sector) in targets.enumerated() {
                 group.addTask {
-                    (index, try await self.screenOnce(sector: sector, filters: filters))
+                    (
+                        index,
+                        try await self.screenOnce(
+                            sector: sector, filters: filters, limit: capped)
+                    )
                 }
             }
             var collected: [(Int, ScreenResponse)] = []
@@ -117,18 +125,18 @@ actor APIClient {
                 let rightROIC = $1.roic ?? -.infinity
                 if leftROIC != rightROIC { return leftROIC > rightROIC }
                 return $0.code < $1.code
-            }.prefix(50))
+            }.prefix(capped))
         return ScreenResponse(
             items: items, returned: items.count, matched: matched, sort: sort)
     }
 
-    private func screenOnce(sector: String?, filters: [ScreenMetricFilter]) async throws
+    private func screenOnce(sector: String?, filters: [ScreenMetricFilter], limit: Int) async throws
         -> ScreenResponse
     {
         var items = [
             URLQueryItem(name: "sort", value: "roic"),
             URLQueryItem(name: "order", value: "desc"),
-            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "limit", value: String(limit)),
         ]
         if let sector, !sector.isEmpty {
             items.append(URLQueryItem(name: "sector", value: sector))

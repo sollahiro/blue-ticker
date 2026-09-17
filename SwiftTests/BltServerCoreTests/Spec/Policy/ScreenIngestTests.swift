@@ -164,6 +164,49 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func ingestSkipBackfillsNullSalesCagr3y() async throws {
+        try await withApp { app in
+            let doc = EdinetDocument()
+            doc.id = "S1"
+            doc.edinetCode = "E00001"
+            doc.secCode = "67580"
+            doc.filerName = "テスト"
+            doc.docTypeCode = "120"
+            doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+            doc.formCode = "030000"
+            doc.submitDateTime = "2025-06-20 09:00"
+            try await doc.create(on: app.db)
+
+            let threeYear = try makeResponse(
+                code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                prior: ["sales": 1100.0], older: ["sales": 1000.0])
+            let fin = CompanyFinancials()
+            fin.id = "6758"
+            fin.response = threeYear
+            fin.cacheVersion = companyFinancialsCacheVersion
+            fin.requestedYears = 5
+            fin.highWater = "2025-06-20 09:00"
+            fin.assemblyFingerprint = financialsAssemblyFingerprint()
+            try await fin.create(on: app.db)
+
+            try await upsertScreenIndex(
+                code: "6758",
+                response: try makeResponse(code: "6758", latest: ["sales": 1210.0, "roic": 12.0]),
+                db: app.db)
+            #expect(try await ScreenIndex.find("6758", on: app.db)?.salesCagr3y == nil)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run for a current company")
+                return .failed
+            }
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(row.roic == 12)
+        }
+    }
+
     @Test func screenEndpointReturnsEmptyOkWhenIndexHasRowsButNoMatch() async throws {
         try await withApp { app in
             try await upsertScreenIndex(

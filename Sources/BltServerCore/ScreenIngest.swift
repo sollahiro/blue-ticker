@@ -1,7 +1,8 @@
 // Screen（BLT-49）: company_financials → screen_index の派生更新と、REST `GET /v1/screen` の read 経路。
 //
 // - 財務取り込み が company_financials を UPSERT した直後に 1 社分を派生更新する（Screen 側の失敗で
-//   ingest は落とさない。欠落は次回 ingest の skip 時に補完、残るずれは `screen-rebuild`）。
+//   ingest は落とさない。欠落および `sales_cagr_3y` 未算出は次回 ingest の skip 時に補完、
+//   残るずれは `screen-rebuild`）。
 // - `blt-server screen-rebuild` は company_financials を code の keyset ページングで走査して全件再生成する
 //   （offset は使わない。`.all()` で全 JSONB を一度に載せない）。
 // - read は screen_index の型付き列に対する AND フィルタ + 1 キーソート + LIMIT のみ。
@@ -47,7 +48,7 @@ func refreshScreenIndexAfterFinancials(
         try await upsertScreenIndex(code: code, response: response, db: db)
     } catch {
         logger?.warning(
-            "screen_index 更新失敗（欠落は次回 ingest で再試行、残るずれは screen-rebuild）: code=\(code) \(redactSecrets(String(reflecting: error)))"
+            "screen_index 更新失敗（欠落と CAGR 未算出は次回 ingest で再試行、残るずれは screen-rebuild）: code=\(code) \(redactSecrets(String(reflecting: error)))"
         )
     }
 }
@@ -153,6 +154,19 @@ final class ScreenIndexCodeOnly: Model, @unchecked Sendable {
     init() {}
 }
 
+/// skip 補完用。CAGR 未算出の既存行だけ JSONB を読む。
+final class ScreenIndexCagrOnly: Model, @unchecked Sendable {
+    static let schema = ScreenIndex.schema
+
+    @ID(custom: "code", generatedBy: .user)
+    var id: String?
+
+    @OptionalField(key: "sales_cagr_3y")
+    var salesCagr3y: Double?
+
+    init() {}
+}
+
 // MARK: - read 経路（REST screen）
 
 /// screen_index を AND フィルタ + 1 キーソート + LIMIT で検索する。
@@ -187,14 +201,20 @@ func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any]?
     return screenResponseJSON(rows: rows.map { $0.toRow() }, matched: matched, query: query)
 }
 
-/// 財務取り込みが current 判定で skip した社のうち、screen_index が無いものだけを格納済み JSON から補完する。
-/// JSONB は欠落 code だけ読む。Screen 失敗で ingest は落とさない。
+/// 財務取り込みが current 判定で skip した社のうち、screen_index が無い、または
+/// `sales_cagr_3y` が null のものだけを格納済み JSON から補完する。
+/// 列追加後に rebuild していない索引を、再計算なしで自己修復する。
+/// JSONB は対象 code だけ読む。Screen 失敗で ingest は落とさない。
 func backfillMissingScreenIndex(codes: [String], db: Database, logger: Logger?) async {
     guard !codes.isEmpty else { return }
     do {
-        let indexed = Set(
-            try await ScreenIndexCodeOnly.query(on: db).filter(\.$id ~~ codes).all().compactMap(\.id))
-        for code in codes where !indexed.contains(code) {
+        let existing = try await ScreenIndexCagrOnly.query(on: db).filter(\.$id ~~ codes).all()
+        let fresh = Set(
+            existing.compactMap { row -> String? in
+                guard let id = row.id, row.salesCagr3y != nil else { return nil }
+                return id
+            })
+        for code in codes where !fresh.contains(code) {
             let fin = try await CompanyFinancials.find(code, on: db)
             guard let fin else { continue }
             await refreshScreenIndexAfterFinancials(

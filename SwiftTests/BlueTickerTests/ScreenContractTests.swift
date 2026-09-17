@@ -30,6 +30,20 @@ import Testing
         #expect(abs(cagr - 10) < 1e-9)
     }
 
+    @Test func screenRowDerivesSalesCagr3yFromMoreThanThreeYears() throws {
+        let row = try response(years: [
+            ["fy_end": "2021-03-31", "sales": 27_214_594.0],
+            ["fy_end": "2022-03-31", "sales": 31_379_507.0],
+            ["fy_end": "2023-03-31", "sales": 37_154_298.0],
+            ["fy_end": "2024-03-31", "sales": 45_095_325.0],
+            ["fy_end": "2025-03-31", "sales": 48_036_704.0],
+            ["fy_end": "2026-03-31", "sales": 50_684_952.0, "roic": 8.0],
+        ]).screenRow()
+        let cagr = try #require(row?[.salesCagr3y])
+        let expected = ((50_684_952.0 / 45_095_325.0).squareRoot() - 1) * 100
+        #expect(abs(cagr - expected) < 1e-9)
+    }
+
     @Test func screenRowLeavesSalesCagrNullWithoutThreePositivePeriods() throws {
         let two = try response(years: [
             ["fy_end": "2024-03-31", "sales": 1000.0],
