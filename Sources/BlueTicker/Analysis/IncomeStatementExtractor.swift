@@ -51,6 +51,7 @@ enum IncomeStatementExtractor {
         guard let tag = tag else { return "売上高" }
         if Xbrl.ordinaryRevenueTags.contains(tag) { return "経常収益" }
         if Xbrl.operatingRevenueTags.contains(tag) { return "営業収益" }
+        if Xbrl.businessRevenueTags.contains(tag) { return "事業収益" }
         switch tag {
         case "NetSalesIFRS", "TotalNetRevenuesIFRS", "RevenueIFRS",
             "RevenueIFRSSummaryOfBusinessResults", "Revenue":
@@ -62,8 +63,16 @@ enum IncomeStatementExtractor {
         case "NetSalesOfCompletedConstructionContractsCNS",
              "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults":
             return "完成工事高"
-        case "BusinessRevenue":
-            return "事業収益"
+        case "ContractsCompletedRevOA", "NetSalesCompletedWork":
+            return "完成業務高"
+        case "OperatingRevenue2":
+            return "営業収入"
+        case "GrossOperatingRevenue":
+            return "営業総収入"
+        case "ShippingBusinessRevenueAndOtherOperatingRevenueWAT", "ShippingBusinessRevenueWAT":
+            return "海運業収益"
+        case "NetSalesAndOperatingRevenueIFRS":
+            return "売上高及び営業収入"
         default:
             return "売上高"
         }

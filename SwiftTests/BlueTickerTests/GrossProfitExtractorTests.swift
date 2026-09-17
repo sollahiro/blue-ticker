@@ -565,4 +565,27 @@ import Foundation
         #expect(result.method == "not_found")
         #expect(result.grossProfit == nil)
     }
+
+    @Test func testOperatingRevenueSPFDoesNotComputeGrossProfitWithoutCogs() {
+        let fs = makeFieldSet(("OperatingRevenueSPF", 337_709_000_000.0, nil))
+        let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+    }
+
+    @Test func testShippingRevenueDoesNotComputeGrossProfitWithoutCogs() {
+        let fs = makeFieldSet(
+            ("ShippingBusinessRevenueAndOtherOperatingRevenueWAT", 1_018_364_000_000.0, nil)
+        )
+        let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+    }
+
+    @Test func testGrossOperatingRevenueDoesNotComputeGrossProfitWithoutCogs() {
+        let fs = makeFieldSet(("GrossOperatingRevenue", 91_788_000_000.0, nil))
+        let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+    }
 }
