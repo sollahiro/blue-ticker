@@ -77,6 +77,7 @@ enum Xbrl {
         "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益。Revenue2IFRS（収益計）より先
         "Revenue2IFRS",  // 三菱商事等の本表「収益」。JPX では営業収益+その他なので上より後
         "OperatingRevenueSEC",
+        "BusinessRevenue",  // 創薬等の本表「事業収益」（Veritas In Silico S100XSIT）。売上高/営業収益より後
         "InsuranceRevenueIFRS",  // 損保等（東京海上HD S100YLS8）
         "OperatingIncomeINS",  // 保険業の経常収益（かんぽ S100YD29・第一 S100VZZW）
         "OrdinaryIncomeBNK",
@@ -284,10 +285,11 @@ enum Xbrl {
     // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）と
     // 保険売上タグ（insuranceSalesTags）を除外して導出する。独立手書きリストを持たないことで
     // 「片側だけタグが腐り not_found に落ちる」事故を防ぎ（issue #24）、かつ売上原価を持たない
-    // 金融（銀行の経常収益・保険の保険収益）が「GP＝売上（原価0扱い）」という無意味な値を
-    // 誤算出するのを防ぐ。
+    // 金融（銀行の経常収益・保険の保険収益）と事業収益（創薬の事業費用型 PL）が
+    // 「GP＝売上（原価0扱い）」という無意味な値を誤算出するのを防ぐ。
     static let grossProfitSalesTags: [String] = netSalesTags.filter {
         !ordinaryRevenueTags.contains($0) && !insuranceSalesTags.contains($0)
+            && $0 != "BusinessRevenue"
     }
 
     static let grossProfitCostsTags: [String] = [

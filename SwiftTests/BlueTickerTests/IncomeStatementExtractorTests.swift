@@ -206,6 +206,23 @@ import Foundation
         #expect(result.salesLabel == "収益")
     }
 
+    @Test func testJgaapBusinessRevenue() {
+        let fs = makeFieldSet(("BusinessRevenue", 91_140_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 91_140_000.0)
+        #expect(result.salesLabel == "事業収益")
+    }
+
+    @Test func testNetSalesPreferredOverBusinessRevenue() {
+        let fs = makeFieldSet(
+            ("NetSales", 1_000.0, nil),
+            ("BusinessRevenue", 91_140_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_000.0)
+        #expect(result.salesLabel == "売上高")
+    }
+
     @Test func testOperatingRevenueRevenue2IFRSPreferredOverRevenue2IFRS() {
         // JPX: 営業収益は OperatingRevenueRevenue2IFRS。Revenue2IFRS は収益計。
         let fs = makeFieldSet(

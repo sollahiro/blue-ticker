@@ -558,4 +558,11 @@ import Foundation
             #expect(result.grossProfitPrior == 100_000_000_000)
         }
     }
+
+    @Test func testBusinessRevenueDoesNotComputeGrossProfitWithoutCogs() {
+        let fs = makeFieldSet(("BusinessRevenue", 91_140_000.0, nil))
+        let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+    }
 }
