@@ -15,7 +15,7 @@ struct WatchlistView: View {
                 )
             } else {
                 List {
-                    ForEach(companies) { item in
+                    ForEach(listRows) { item in
                         NavigationLink(value: CompanyRef(item)) {
                             CompanyRowView(
                                 company: CompanyRef(item),
@@ -38,11 +38,20 @@ struct WatchlistView: View {
         }
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
+            WatchedCompany.pruneBlankRowsCoveredByHoldings(companies, in: modelContext)
+        }
+    }
+
+    /// 同じ銘柄に保有があるとき、残ったウォッチ行は出さない。
+    private var listRows: [WatchedCompany] {
+        companies.filter { item in
+            if item.isHolding { return true }
+            return !companies.contains { $0.code == item.code && $0.isHolding }
         }
     }
 
     private func delete(at offsets: IndexSet) {
-        let removed = offsets.map { companies[$0] }
+        let removed = offsets.map { listRows[$0] }
         let removedCodes = Set(removed.map(\.code))
         for item in removed {
             modelContext.delete(item)
@@ -56,7 +65,7 @@ struct WatchlistView: View {
     }
 
     private func move(from source: IndexSet, to destination: Int) {
-        var ordered = companies
+        var ordered = listRows
         ordered.move(fromOffsets: source, toOffset: destination)
         for (index, item) in ordered.enumerated() {
             item.sortOrder = index

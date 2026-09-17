@@ -55,16 +55,26 @@ final class WatchedCompany {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    var listCaption: String {
-        var parts = [kindLabel]
-        if let accountCaption {
-            parts.append(accountCaption)
-        }
-        return parts.joined(separator: " · ")
+    /// 株数・単価・証券会社・口座がすべて空。リスト追加だけの行。
+    var isBlankHoldingsRow: Bool {
+        quantity == nil && acquisitionPriceYen == nil && accountCaption == nil
     }
 
-    var fundCaption: String {
-        var parts = [code, kindLabel]
+    /// 同じ銘柄に保有があるウォッチ行は削除する（追加中の空行は残す）。
+    static func pruneBlankRowsCoveredByHoldings(
+        _ items: [WatchedCompany],
+        keeping addedIDs: Set<PersistentIdentifier> = [],
+        in context: ModelContext
+    ) {
+        let codesWithHoldings = Set(items.filter(\.isHolding).map(\.code))
+        for item in items where !item.isHolding && codesWithHoldings.contains(item.code) {
+            if addedIDs.contains(item.persistentModelID) { continue }
+            context.delete(item)
+        }
+    }
+
+    var listCaption: String {
+        var parts = [kindLabel]
         if let accountCaption {
             parts.append(accountCaption)
         }
@@ -79,6 +89,32 @@ final class WatchedCompany {
             iconURL: iconURL,
             sortOrder: sortOrder
         )
+    }
+
+    /// 選択式。未選択（空白）も保有入力できる。
+    static let brokerChoices = [
+        "SBI証券",
+        "楽天証券",
+        "マネックス証券",
+        "松井証券",
+        "三菱UFJ eスマート証券",
+        "野村證券",
+        "大和証券",
+        "SMBC日興証券",
+        "みずほ証券",
+        "岡三証券",
+        "GMOクリック証券",
+        "PayPay証券",
+    ]
+
+    static let accountTypeChoices = ["一般", "特定", "NISA"]
+
+    static func choices(_ catalog: [String], including extra: String?) -> [String] {
+        var list = catalog
+        if let extra = nonEmpty(extra), !list.contains(extra) {
+            list.append(extra)
+        }
+        return list
     }
 
     static func nextSortOrder(among items: [WatchedCompany]) -> Int {

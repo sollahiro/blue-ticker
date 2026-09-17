@@ -16,6 +16,7 @@ struct TickerView: View {
     @State private var summarySection: SummarySection = .performance
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
+    @State private var showsHoldings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +30,9 @@ struct TickerView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
+        .navigationDestination(isPresented: $showsHoldings) {
+            TickerHoldingsView(code: company.code, onAddAccount: addAccount)
+        }
         .task { await hydrateSector() }
     }
 
@@ -124,7 +128,15 @@ struct TickerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: Theme.headerRowHeight)
             }
-            watchButton
+            VStack(alignment: .trailing, spacing: Theme.headerChipSpacing) {
+                headerChipButton(
+                    title: isWatched ? "追加済み" : "リストに追加",
+                    style: isWatched ? .outlineAccent : .filledAccent,
+                    action: toggleWatch
+                )
+                headerChipButton(title: "保有情報", style: .paper, action: openHoldings)
+            }
+            .frame(height: Theme.headerSideHeight)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -135,21 +147,49 @@ struct TickerView: View {
         return .system(size: size, weight: .bold)
     }
 
-    private var watchButton: some View {
-        Button(action: toggleWatch) {
-            Text(isWatched ? "追加済み" : "リストに追加")
+    private enum HeaderChipStyle {
+        case filledAccent
+        case outlineAccent
+        case paper
+    }
+
+    private func headerChipButton(
+        title: String, style: HeaderChipStyle, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 10)
                 .frame(height: Theme.headerRowHeight)
-                .background(isWatched ? Color.clear : Theme.accent)
-                .foregroundStyle(isWatched ? Theme.accent : .black)
+                .background(chipBackground(style))
+                .foregroundStyle(chipForeground(style))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay {
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(Theme.accent, lineWidth: isWatched ? 1.5 : 0)
+                        .stroke(chipStroke(style), lineWidth: style == .outlineAccent ? 1.5 : 0)
                 }
         }
         .buttonStyle(.plain)
+    }
+
+    private func chipBackground(_ style: HeaderChipStyle) -> Color {
+        switch style {
+        case .filledAccent: Theme.accent
+        case .outlineAccent: Color.clear
+        case .paper: Color.white
+        }
+    }
+
+    private func chipForeground(_ style: HeaderChipStyle) -> Color {
+        switch style {
+        case .filledAccent: .black
+        case .outlineAccent: Theme.accent
+        case .paper: .black
+        }
+    }
+
+    private func chipStroke(_ style: HeaderChipStyle) -> Color {
+        style == .outlineAccent ? Theme.accent : Color.clear
     }
 
     private func hydrateSector() async {
@@ -173,22 +213,55 @@ struct TickerView: View {
     private func toggleWatch() {
         let matching = matchingRows
         if matching.isEmpty {
-            modelContext.insert(
-                WatchedCompany(
-                    code: company.code,
-                    name: company.name,
-                    sector: displaySector,
-                    iconURL: company.iconURL,
-                    sortOrder: WatchedCompany.nextSortOrder(among: watched)
-                )
-            )
-            Task { await APIClient.shared.pinCode(company.code) }
+            _ = insertWatchRow()
         } else {
             for item in matching {
                 modelContext.delete(item)
             }
             Task { await APIClient.shared.unpinCode(company.code) }
         }
+    }
+
+    private func openHoldings() {
+        if matchingRows.isEmpty {
+            _ = insertWatchRow()
+        }
+        showsHoldings = true
+    }
+
+    @discardableResult
+    private func insertWatchRow() -> WatchedCompany {
+        let row = WatchedCompany(
+            code: company.code,
+            name: company.name,
+            sector: displaySector,
+            iconURL: company.iconURL,
+            sortOrder: WatchedCompany.nextSortOrder(among: watched)
+        )
+        modelContext.insert(row)
+        Task { await APIClient.shared.pinCode(company.code) }
+        return row
+    }
+
+    private func addAccount() -> WatchedCompany {
+        if let blank = matchingRows.first(where: \.isBlankHoldingsRow) {
+            return blank
+        }
+        let template = matchingRows.first
+        let created =
+            template?.duplicateAccountRow(
+                sortOrder: WatchedCompany.nextSortOrder(among: watched)
+            )
+            ?? WatchedCompany(
+                code: company.code,
+                name: company.name,
+                sector: displaySector,
+                iconURL: company.iconURL,
+                sortOrder: WatchedCompany.nextSortOrder(among: watched)
+            )
+        modelContext.insert(created)
+        Task { await APIClient.shared.pinCode(company.code) }
+        return created
     }
 
     /// Feed から先に追加しても、後から取れた業種でウォッチ行を埋める。

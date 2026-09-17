@@ -3,7 +3,6 @@ import SwiftUI
 
 struct FundView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
-    @Environment(\.modelContext) private var modelContext
     @State private var perShareByCode: [String: FundMath.PerShare] = [:]
 
     var body: some View {
@@ -19,41 +18,20 @@ struct FundView: View {
                 Text(lookThroughFooter)
             }
 
-            if snapshot.tickerTotals.count > 1 {
+            if snapshot.tickerTotals.isEmpty {
+                Section {
+                    Text("銘柄の保有情報から、口座ごとの株数と取得単価を入れると保有になります。")
+                        .foregroundStyle(Theme.textMuted)
+                }
+            } else {
                 Section("銘柄別") {
                     ForEach(snapshot.tickerTotals, id: \.code) { total in
-                        let name = companies.first { $0.code == total.code }?.name ?? total.code
-                        LabeledContent {
-                            Text(Format.yenCash(total.lookThroughProfitYen))
-                        } label: {
-                            Text("\(Format.displayName(name, fallback: total.code)) \(total.code)")
-                            Text(
-                                "純資産 \(Format.yenCash(total.lookThroughBookYen)) · 投下 \(Format.yenCash(total.investedCapitalYen))"
-                            )
-                        }
-                    }
-                }
-            }
-
-            Section {
-                if companies.isEmpty {
-                    Text("銘柄画面からリストに追加し、ここで株数と取得単価を入れると保有になります。")
-                        .foregroundStyle(Theme.textMuted)
-                } else {
-                    ForEach(companies) { item in
-                        NavigationLink {
-                            FundPositionEditView(item: item) {
-                                addAccount(from: item)
-                            }
-                        } label: {
-                            holdingLabel(item)
+                        NavigationLink(value: companyRef(for: total)) {
+                            tickerTotalRow(total)
                         }
                         .listRowBackground(Theme.elevated)
                     }
-                    .onDelete(perform: delete)
                 }
-            } header: {
-                Text("明細")
             }
 
             #if DEBUG
@@ -78,6 +56,10 @@ struct FundView: View {
         FundMath.snapshot(positions: fundPositions, perShareByCode: perShareByCode)
     }
 
+    private var holdings: [WatchedCompany] {
+        companies.filter(\.isHolding)
+    }
+
     private var fundPositions: [FundMath.Position] {
         companies.map {
             FundMath.Position(
@@ -100,7 +82,7 @@ struct FundView: View {
     private var uniqueFyEnds: [String] {
         Array(
             Set(
-                companies.compactMap { perShareByCode[$0.code]?.fyEnd }.filter { !$0.isEmpty }
+                holdings.compactMap { perShareByCode[$0.code]?.fyEnd }.filter { !$0.isEmpty }
             ))
     }
 
@@ -114,42 +96,31 @@ struct FundView: View {
         return short
     }
 
-    private func holdingLabel(_ item: WatchedCompany) -> some View {
-        let metrics = FundMath.rowMetrics(
-            position: FundMath.Position(
-                id: String(describing: item.persistentModelID),
-                code: item.code,
-                quantity: item.quantity,
-                acquisitionPriceYen: item.acquisitionPriceYen
-            ),
-            perShare: perShareByCode[item.code] ?? FundMath.PerShare()
+    private func companyRef(for total: FundMath.TickerTotal) -> CompanyRef {
+        let item = companies.first { $0.code == total.code }
+        return CompanyRef(
+            code: total.code,
+            name: item?.name ?? total.code,
+            sector: item?.sector ?? "",
+            iconURL: item?.iconURL
         )
-        return LabeledContent {
-            Text(Format.yenCash(metrics.lookThroughProfitYen))
-        } label: {
-            Text(Format.displayName(item.name, fallback: item.code))
-            Text(item.fundCaption)
-        }
     }
 
-    private func delete(at offsets: IndexSet) {
-        let removed = offsets.map { companies[$0] }
-        let removedCodes = Set(removed.map(\.code))
-        for item in removed {
-            modelContext.delete(item)
+    private func tickerTotalRow(_ total: FundMath.TickerTotal) -> some View {
+        let item = companies.first { $0.code == total.code }
+        return HStack(spacing: 12) {
+            CompanyIconView(companyRef(for: total))
+            LabeledContent {
+                Text(Format.yenCash(total.lookThroughProfitYen))
+            } label: {
+                Text(
+                    "\(Format.displayName(item?.name ?? total.code, fallback: total.code)) \(total.code)"
+                )
+                Text(
+                    "純資産 \(Format.yenCash(total.lookThroughBookYen)) · 投下 \(Format.yenCash(total.investedCapitalYen))"
+                )
+            }
         }
-        let remaining = companies.filter { item in
-            !removed.contains { $0.persistentModelID == item.persistentModelID }
-        }
-        for code in removedCodes where !remaining.contains(where: { $0.code == code }) {
-            Task { await APIClient.shared.unpinCode(code) }
-        }
-    }
-
-    private func addAccount(from item: WatchedCompany) {
-        modelContext.insert(
-            item.duplicateAccountRow(sortOrder: WatchedCompany.nextSortOrder(among: companies))
-        )
     }
 
     private func loadPerShare() async {
