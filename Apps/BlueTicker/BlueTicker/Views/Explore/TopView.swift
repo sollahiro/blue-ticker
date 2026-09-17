@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TopView: View {
+    /// 銘柄面に push しているあいだは `.searchable` を外す。常時ドロワーが空ヘッダとして残るため。
+    var hidesSearch = false
     @State private var query = ""
     @State private var searchResults: [CompanyHit] = []
     @State private var updates: [FeedUpdateItem] = []
@@ -45,11 +47,7 @@ struct TopView: View {
                 }
             }
         }
-        .searchable(
-            text: $query,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "会社名を入力してください"
-        )
+        .modifier(NameSearchChrome(query: $query, enabled: showsSearchChrome))
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
         .scrollDismissesKeyboard(.immediately)
@@ -77,6 +75,10 @@ struct TopView: View {
 
     private var showsSearchSection: Bool {
         !searchResults.isEmpty || searchError != nil || isSearching
+    }
+
+    private var showsSearchChrome: Bool {
+        !hidesSearch && !showHistory
     }
 
     private func companyLink(_ company: CompanyRef, submittedAt: String? = nil) -> some View {
@@ -171,9 +173,7 @@ struct HistoryView: View {
             } else {
                 List {
                     ForEach(items) { company in
-                        NavigationLink {
-                            TickerView(company: company)
-                        } label: {
+                        NavigationLink(value: company) {
                             CompanyRowView(company: company)
                         }
                         .listRowBackground(Theme.elevated)
@@ -184,6 +184,28 @@ struct HistoryView: View {
         .navigationTitle("履歴")
         .bltChrome()
         .onAppear { items = CompanyHistory.load() }
+    }
+}
+
+/// 名称検索のルートにいるときだけ標準検索欄を付ける。
+/// 常時ドロワー（`.always`）は銘柄 push 後も空ヘッダとして残る。
+private struct NameSearchChrome: ViewModifier {
+    @Binding var query: String
+    var enabled: Bool
+    @State private var isPresented = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(
+                text: $query,
+                isPresented: $isPresented,
+                prompt: "会社名を入力してください"
+            )
+            .onAppear { isPresented = true }
+        } else {
+            content
+        }
     }
 }
 

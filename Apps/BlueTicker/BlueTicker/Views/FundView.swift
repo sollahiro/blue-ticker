@@ -8,19 +8,19 @@ struct FundView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("ルックスルー利益", value: Format.yenCash(snapshot.lookThroughProfitYen))
-                LabeledContent("ルックスルー純資産", value: Format.yenCash(snapshot.lookThroughBookYen))
-                LabeledContent("投下資本", value: Format.yenCash(snapshot.investedCapitalYen))
+                LabeledContent("純利益", value: Format.yenCash(snapshot.lookThroughProfitYen))
+                LabeledContent("純資産", value: Format.yenCash(snapshot.lookThroughBookYen))
+                LabeledContent("投資元本", value: Format.yenCash(snapshot.investedCapitalYen))
                 LabeledContent("ファンドROE", value: Format.percent(snapshot.fundROEPercent))
             } header: {
-                Text("ルックスルー")
+                Text("保有企業")
             } footer: {
-                Text(lookThroughFooter)
+                Text("保有株に応じた利益・純資産")
             }
 
             if snapshot.tickerTotals.isEmpty {
                 Section {
-                    Text("銘柄の保有情報から、口座ごとの株数と取得単価を入れると保有になります。")
+                    Text("銘柄画面の保有情報で、株数と取得単価を入れるとここに出ます。")
                         .foregroundStyle(Theme.textMuted)
                 }
             } else {
@@ -41,6 +41,13 @@ struct FundView: View {
                     }
                 }
             #endif
+
+            Section {
+                VersionMarkFooter()
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
         }
         .navigationTitle("ファンド")
         .bltChrome()
@@ -56,10 +63,6 @@ struct FundView: View {
         FundMath.snapshot(positions: fundPositions, perShareByCode: perShareByCode)
     }
 
-    private var holdings: [WatchedCompany] {
-        companies.filter(\.isHolding)
-    }
-
     private var fundPositions: [FundMath.Position] {
         companies.map {
             FundMath.Position(
@@ -69,31 +72,6 @@ struct FundView: View {
                 acquisitionPriceYen: $0.acquisitionPriceYen
             )
         }
-    }
-
-    private var lookThroughFooter: String {
-        let fy = uniqueFyEnds
-        let fyText = fy.isEmpty ? "最新FY" : fy.sorted().map(Format.fy).joined(separator: "・")
-        return """
-        利益＝最新FY EPS（円/株）×株数。純資産＝BPS（円/株）×株数。投下＝取得単価（円/株）×株数。ROE＝利益÷投下（EPSがある保有のみ）。本表の百万円とは単位が違います。欠測は —。\(fyText)。バージョン \(Self.versionText)
-        """
-    }
-
-    private var uniqueFyEnds: [String] {
-        Array(
-            Set(
-                holdings.compactMap { perShareByCode[$0.code]?.fyEnd }.filter { !$0.isEmpty }
-            ))
-    }
-
-    private static var versionText: String {
-        let short =
-            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        if let build, !build.isEmpty {
-            return "\(short) (\(build))"
-        }
-        return short
     }
 
     private func companyRef(for total: FundMath.TickerTotal) -> CompanyRef {
@@ -108,18 +86,30 @@ struct FundView: View {
 
     private func tickerTotalRow(_ total: FundMath.TickerTotal) -> some View {
         let item = companies.first { $0.code == total.code }
-        return HStack(spacing: 12) {
+        let name = Format.displayName(item?.name ?? total.code, fallback: total.code)
+        return HStack(alignment: .top, spacing: 12) {
             CompanyIconView(companyRef(for: total))
-            LabeledContent {
-                Text(Format.yenCash(total.lookThroughProfitYen))
-            } label: {
-                Text(
-                    "\(Format.displayName(item?.name ?? total.code, fallback: total.code)) \(total.code)"
-                )
-                Text(
-                    "純資産 \(Format.yenCash(total.lookThroughBookYen)) · 投下 \(Format.yenCash(total.investedCapitalYen))"
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(name) \(total.code)")
+                    .font(.headline)
+                    .foregroundStyle(Theme.text)
+                metricRow("純利益", Format.yenCash(total.lookThroughProfitYen))
+                metricRow("純資産", Format.yenCash(total.lookThroughBookYen))
+                metricRow("投資元本", Format.yenCash(total.investedCapitalYen))
             }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func metricRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(Theme.textMuted)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Theme.text)
         }
     }
 
