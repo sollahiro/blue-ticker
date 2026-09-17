@@ -67,7 +67,7 @@ struct BreakdownView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
                 if metric == .businessProfit {
-                    Text("事業利益は売上総利益 − 販管費です。開示の営業利益行ではありません。")
+                    Text("事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
                 }

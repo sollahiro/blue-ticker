@@ -75,8 +75,8 @@ final class WatchedCompany {
 
     var listCaption: String {
         var parts = [kindLabel]
-        if let accountCaption {
-            parts.append(accountCaption)
+        if isHolding {
+            parts.append(Format.shares(quantity))
         }
         return parts.joined(separator: " · ")
     }

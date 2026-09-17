@@ -3,12 +3,13 @@ import SwiftUI
 
 struct RootView: View {
     @State private var tab = 0
+    @State private var searchPath = NavigationPath()
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
         TabView(selection: $tab) {
-            NavigationStack {
-                TopView()
+            NavigationStack(path: $searchPath) {
+                TopView(hidesSearch: !searchPath.isEmpty)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
                     .exploreToolbar()
             }

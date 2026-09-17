@@ -11,6 +11,7 @@ enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
 struct TickerView: View {
     var company: CompanyRef
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismissSearch) private var dismissSearch
     @Query private var watched: [WatchedCompany]
     @State private var page: TickerPage = .summary
     @State private var summarySection: SummarySection = .performance
@@ -26,9 +27,19 @@ struct TickerView: View {
             pageDots
         }
         .background(Theme.shell.ignoresSafeArea())
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(Theme.shell, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                BrandMark()
+            }
+            .sharedBackgroundVisibility(.hidden)
+        }
+        .onAppear { dismissSearch() }
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
         .navigationDestination(isPresented: $showsHoldings) {
             TickerHoldingsView(code: company.code, onAddAccount: addAccount)
@@ -157,17 +168,21 @@ struct TickerView: View {
         title: String, style: HeaderChipStyle, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .frame(height: Theme.headerRowHeight)
-                .background(chipBackground(style))
-                .foregroundStyle(chipForeground(style))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(chipStroke(style), lineWidth: style == .outlineAccent ? 1.5 : 0)
-                }
+            ZStack {
+                Text("リストに追加")
+                    .hidden()
+                Text(title)
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .frame(height: Theme.headerRowHeight)
+            .background(chipBackground(style))
+            .foregroundStyle(chipForeground(style))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay {
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(chipStroke(style), lineWidth: style == .outlineAccent ? 1.5 : 0)
+            }
         }
         .buttonStyle(.plain)
     }
