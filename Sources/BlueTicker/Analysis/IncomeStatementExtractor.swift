@@ -62,6 +62,8 @@ enum IncomeStatementExtractor {
         case "NetSalesOfCompletedConstructionContractsCNS",
              "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults":
             return "完成工事高"
+        case "BusinessRevenue":
+            return "事業収益"
         default:
             return "売上高"
         }

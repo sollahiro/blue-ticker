@@ -1,7 +1,8 @@
 // Screen（BLT-49）: company_financials → screen_index の派生更新と、REST `GET /v1/screen` の read 経路。
 //
 // - 財務取り込み が company_financials を UPSERT した直後に 1 社分を派生更新する（Screen 側の失敗で
-//   ingest は落とさない。欠落および `sales_cagr_3y` 未算出は次回 ingest の skip 時に補完、
+//   ingest は落とさない。公開床 `isServableCompanyFinancialsCacheVersion` の行は、現行 fin-vN
+//   一致（skip）を問わず screen_index へ投影する。未投影・`screenIndexVersion` 不一致なら rebuild。
 //   残るずれは `screen-rebuild`）。
 // - `blt-server screen-rebuild` は company_financials を code の keyset ページングで走査して全件再生成する
 //   （offset は使わない。`.all()` で全 JSONB を一度に載せない）。
@@ -48,7 +49,7 @@ func refreshScreenIndexAfterFinancials(
         try await upsertScreenIndex(code: code, response: response, db: db)
     } catch {
         logger?.warning(
-            "screen_index 更新失敗（欠落と CAGR 未算出は次回 ingest で再試行、残るずれは screen-rebuild）: code=\(code) \(redactSecrets(String(reflecting: error)))"
+            "screen_index 更新失敗（servable は次回 ingest で再試行、残るずれは screen-rebuild）: code=\(code) \(redactSecrets(String(reflecting: error)))"
         )
     }
 }
@@ -63,17 +64,19 @@ public struct ScreenRebuildSummary: Sendable, Equatable {
     public let removed: Int
 }
 
-/// company_financials 全件から screen_index を再生成する。code 昇順の keyset ページングで走査する。
-/// 既存 screen_index にあって company_financials に無い code は削除する（走査後に再確認し、
+/// company_financials から screen_index を再生成する。code 昇順の keyset ページングで走査する。
+/// `limit` は走査件数の上限（手動スモーク用）。未指定なら全件。部分走査では孤児削除をしない。
+/// 全件時、既存 screen_index にあって company_financials に無い code は削除する（走査後に再確認し、
 /// 同時 ingest で増えた行は孤児にしない）。
-func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil) async throws
-    -> ScreenRebuildSummary
-{
+func rebuildScreenIndex(
+    db: Database, pageSize: Int = 200, limit: Int? = nil, logger: Logger? = nil
+) async throws -> ScreenRebuildSummary {
     var scanned = 0
     var indexed = 0
     var removed = 0
     var seen = Set<String>()
     var afterCode: String? = nil
+    var reachedLimit = false
     while true {
         let last = afterCode
         let page = try await withDbRetry(
@@ -100,9 +103,17 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
                 }
             }
             if row != nil { indexed += 1 } else { removed += 1 }
+            if let limit, scanned >= limit {
+                reachedLimit = true
+                break
+            }
         }
+        if reachedLimit { break }
         afterCode = page.last?.id
         if page.count < pageSize { break }
+    }
+    if reachedLimit {
+        return ScreenRebuildSummary(scanned: scanned, indexed: indexed, removed: removed)
     }
     let candidates = try await ScreenIndexCodeOnly.query(on: db).all().compactMap(\.id).filter {
         !seen.contains($0)
@@ -121,7 +132,7 @@ func rebuildScreenIndex(db: Database, pageSize: Int = 200, logger: Logger? = nil
 }
 
 /// `blt-server screen-rebuild` エントリ。DATABASE_URL 未設定なら databaseUnavailable。
-public func runScreenRebuildCommand() async throws {
+public func runScreenRebuildCommand(limit: Int? = nil) async throws {
     guard let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty else {
         throw DocumentSyncError.databaseUnavailable
     }
@@ -130,7 +141,7 @@ public func runScreenRebuildCommand() async throws {
     let app = try await Application.make(env)
     do {
         try await configureDatabase(app)
-        let summary = try await rebuildScreenIndex(db: app.db, logger: app.logger)
+        let summary = try await rebuildScreenIndex(db: app.db, limit: limit, logger: app.logger)
         app.logger.notice(
             "screen_index rebuild completed",
             metadata: [
@@ -144,25 +155,15 @@ public func runScreenRebuildCommand() async throws {
     try await app.asyncShutdown()
 }
 
-/// code 列だけの軽量射影（rebuild の孤児検出用）。
+/// code / cache_version の軽量射影（rebuild の孤児検出と skip 時の版ずれ判定）。
 final class ScreenIndexCodeOnly: Model, @unchecked Sendable {
     static let schema = ScreenIndex.schema
 
     @ID(custom: "code", generatedBy: .user)
     var id: String?
 
-    init() {}
-}
-
-/// skip 補完用。CAGR 未算出の既存行だけ JSONB を読む。
-final class ScreenIndexCagrOnly: Model, @unchecked Sendable {
-    static let schema = ScreenIndex.schema
-
-    @ID(custom: "code", generatedBy: .user)
-    var id: String?
-
-    @OptionalField(key: "sales_cagr_3y")
-    var salesCagr3y: Double?
+    @OptionalField(key: "cache_version")
+    var cacheVersion: String?
 
     init() {}
 }
@@ -201,28 +202,67 @@ func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any]?
     return screenResponseJSON(rows: rows.map { $0.toRow() }, matched: matched, query: query)
 }
 
-/// 財務取り込みが current 判定で skip した社のうち、screen_index が無い、または
-/// `sales_cagr_3y` が null のものだけを格納済み JSON から補完する。
-/// 列追加後に rebuild していない索引を、再計算なしで自己修復する。
-/// JSONB は対象 code だけ読む。Screen 失敗で ingest は落とさない。
-func backfillMissingScreenIndex(codes: [String], db: Database, logger: Logger?) async {
-    guard !codes.isEmpty else { return }
+/// 公開床（servable）の `company_financials` を screen_index へ載せる。
+/// 現行 fin-vN 一致や ingest skip は問わない。既存行の stamp が現行 `screenIndexVersion`
+/// でなければ全件 rebuild（CAGR を含む）。欠落だけなら JSONB は欠落 code だけ読む。
+/// `company_financials` は code 昇順の keyset ページで走査し、`screen_index` は当該ページの
+/// code だけ読む（全件 `.all()` しない）。Screen 失敗で ingest は落とさない。
+func backfillScreenIndexForServableFinancials(
+    db: Database, pageSize: Int = 200, logger: Logger? = nil
+) async {
     do {
-        let existing = try await ScreenIndexCagrOnly.query(on: db).filter(\.$id ~~ codes).all()
-        let fresh = Set(
-            existing.compactMap { row -> String? in
-                guard let id = row.id, row.salesCagr3y != nil else { return nil }
+        var afterCode: String? = nil
+        while true {
+            let last = afterCode
+            let page = try await withDbRetry(
+                logger: logger, context: "screen-backfill after=\(last ?? "")"
+            ) {
+                var query = CompanyFinancialsCacheVersionOnly.query(on: db).sort(\.$id)
+                if let last { query = query.filter(\.$id > last) }
+                return try await query.limit(pageSize).all()
+            }
+            if page.isEmpty { break }
+
+            let servable = page.compactMap { row -> String? in
+                guard let id = row.id, isServableCompanyFinancialsCacheVersion(row.cacheVersion)
+                else {
+                    return nil
+                }
                 return id
-            })
-        for code in codes where !fresh.contains(code) {
-            let fin = try await CompanyFinancials.find(code, on: db)
-            guard let fin else { continue }
-            await refreshScreenIndexAfterFinancials(
-                code: code, response: fin.response, db: db, logger: logger)
+            }
+            if !servable.isEmpty {
+                let indexedRows = try await ScreenIndexCodeOnly.query(on: db).filter(
+                    \.$id ~~ servable
+                ).all()
+                var indexed: [String: ScreenIndexCodeOnly] = [:]
+                indexed.reserveCapacity(indexedRows.count)
+                var stale = false
+                for row in indexedRows {
+                    guard let id = row.id else { continue }
+                    if row.cacheVersion != screenIndexVersion {
+                        stale = true
+                        break
+                    }
+                    indexed[id] = row
+                }
+                if stale {
+                    _ = try await rebuildScreenIndex(db: db, logger: logger)
+                    return
+                }
+                for code in servable where indexed[code] == nil {
+                    let fin = try await CompanyFinancials.find(code, on: db)
+                    guard let fin else { continue }
+                    await refreshScreenIndexAfterFinancials(
+                        code: code, response: fin.response, db: db, logger: logger)
+                }
+            }
+
+            afterCode = page.last?.id
+            if page.count < pageSize { break }
         }
     } catch {
         logger?.warning(
-            "screen_index 欠落補完失敗（screen-rebuild で再試行）: \(redactSecrets(String(reflecting: error)))"
+            "screen_index servable 補完失敗（screen-rebuild で再試行）: \(redactSecrets(String(reflecting: error)))"
         )
     }
 }

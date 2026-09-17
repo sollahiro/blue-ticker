@@ -31,6 +31,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(CreateScreenIndex())
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
+        app.migrations.add(AddCacheVersionToScreenIndex())
         try await app.autoMigrate()
         try await registerRoutes(app, context: makeContext())
         try await body(app)
@@ -94,6 +95,7 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(row.periodEnd == "2025-03-31")
             #expect(row.roic == 12)
             #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(row.cacheVersion == screenIndexVersion)
 
             try await upsertScreenIndex(
                 code: "6759",
@@ -125,6 +127,35 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(summary == ScreenRebuildSummary(scanned: 3, indexed: 1, removed: 3))
             let remaining = try await ScreenIndex.query(on: app.db).all().compactMap(\.id)
             #expect(remaining == ["0001"])
+        }
+    }
+
+    @Test func rebuildLimitStopsBeforeOrphanCleanup() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0001", latest: ["sales": 1210.0, "roic": 5.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0002", latest: ["sales": 1210.0, "roic": 9.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            let orphan = ScreenIndex()
+            orphan.apply(
+                ScreenRow(
+                    code: "9999", name: "", market: "プライム", sector: "", periodEnd: "2025-03-31",
+                    metrics: [:]))
+            try await orphan.create(on: app.db)
+
+            let summary = try await rebuildScreenIndex(db: app.db, pageSize: 2, limit: 1)
+            #expect(summary == ScreenRebuildSummary(scanned: 1, indexed: 1, removed: 0))
+            let row = try #require(try await ScreenIndex.find("0001", on: app.db))
+            #expect(row.cacheVersion == screenIndexVersion)
+            #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(try await ScreenIndex.find("0002", on: app.db) == nil)
+            #expect(try await ScreenIndex.find("9999", on: app.db) != nil)
         }
     }
 
@@ -161,10 +192,11 @@ private func codes(_ json: [String: Any]?) -> [String] {
             let row = try #require(try await ScreenIndex.find("6758", on: app.db))
             #expect(row.roic == 12)
             #expect(row.sales == 1200)
+            #expect(row.cacheVersion == screenIndexVersion)
         }
     }
 
-    @Test func ingestSkipBackfillsNullSalesCagr3y() async throws {
+    @Test func ingestSkipRebuildsStaleScreenIndexAndDerivesSalesCagr3y() async throws {
         try await withApp { app in
             let doc = EdinetDocument()
             doc.id = "S1"
@@ -177,23 +209,22 @@ private func codes(_ json: [String: Any]?) -> [String] {
             doc.submitDateTime = "2025-06-20 09:00"
             try await doc.create(on: app.db)
 
-            let threeYear = try makeResponse(
-                code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
-                prior: ["sales": 1100.0], older: ["sales": 1000.0])
             let fin = CompanyFinancials()
             fin.id = "6758"
-            fin.response = threeYear
+            fin.response = try makeResponse(
+                code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                prior: ["sales": 1100.0], older: ["sales": 1000.0])
             fin.cacheVersion = companyFinancialsCacheVersion
             fin.requestedYears = 5
             fin.highWater = "2025-06-20 09:00"
             fin.assemblyFingerprint = financialsAssemblyFingerprint()
             try await fin.create(on: app.db)
 
-            try await upsertScreenIndex(
-                code: "6758",
-                response: try makeResponse(code: "6758", latest: ["sales": 1210.0, "roic": 12.0]),
-                db: app.db)
-            #expect(try await ScreenIndex.find("6758", on: app.db)?.salesCagr3y == nil)
+            try await upsertScreenIndex(code: "6758", response: fin.response, db: app.db)
+            let stale = try #require(try await ScreenIndex.find("6758", on: app.db))
+            stale.cacheVersion = nil
+            stale.salesCagr3y = nil
+            try await stale.update(on: app.db)
 
             let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
                 Issue.record("computer must not run for a current company")
@@ -202,8 +233,143 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
             let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.cacheVersion == screenIndexVersion)
             #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
-            #expect(row.roic == 12)
+        }
+    }
+
+    @Test func ingestProjectsScreenCagrFromServableNonCurrentFinancials() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                cacheVersion: "fin-v4", db: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run without documents")
+                return .failed
+            }
+            #expect(summary.skipped == 0)
+            #expect(summary.attempted == 0)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.cacheVersion == screenIndexVersion)
+            #expect(row.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+        }
+    }
+
+    @Test func ingestDoesNotIndexUnservableFinancials() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                cacheVersion: "fin-v1", db: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run without documents")
+                return .failed
+            }
+            #expect(summary.attempted == 0)
+            #expect(try await ScreenIndex.find("6758", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestSkipLeavesCurrentScreenIndexUntouched() async throws {
+        try await withApp { app in
+            let doc = EdinetDocument()
+            doc.id = "S1"
+            doc.edinetCode = "E00001"
+            doc.secCode = "67580"
+            doc.filerName = "テスト"
+            doc.docTypeCode = "120"
+            doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+            doc.formCode = "030000"
+            doc.submitDateTime = "2025-06-20 09:00"
+            try await doc.create(on: app.db)
+
+            let fin = CompanyFinancials()
+            fin.id = "6758"
+            fin.response = try makeResponse(
+                code: "6758", latest: ["sales": 1210.0, "roic": 12.0],
+                prior: ["sales": 1100.0], older: ["sales": 1000.0])
+            fin.cacheVersion = companyFinancialsCacheVersion
+            fin.requestedYears = 5
+            fin.highWater = "2025-06-20 09:00"
+            fin.assemblyFingerprint = financialsAssemblyFingerprint()
+            try await fin.create(on: app.db)
+
+            try await upsertScreenIndex(code: "6758", response: fin.response, db: app.db)
+            let current = try #require(try await ScreenIndex.find("6758", on: app.db))
+            current.salesCagr3y = 99
+            try await current.update(on: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in
+                Issue.record("computer must not run for a current company")
+                return .failed
+            }
+            #expect(summary.skipped == 1)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.cacheVersion == screenIndexVersion)
+            #expect(row.salesCagr3y == 99)
+        }
+    }
+
+    @Test func ingestSkipBackfillPagesServableFinancials() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0001", latest: ["sales": 1210.0, "roic": 5.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0002", latest: ["sales": 1210.0, "roic": 9.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await seedFinancials(
+                try makeResponse(code: "0003", latest: ["roic": 7.0]), cacheVersion: "fin-v1",
+                db: app.db)
+
+            await backfillScreenIndexForServableFinancials(db: app.db, pageSize: 1, logger: nil)
+            let first = try #require(try await ScreenIndex.find("0001", on: app.db))
+            let second = try #require(try await ScreenIndex.find("0002", on: app.db))
+            #expect(first.cacheVersion == screenIndexVersion)
+            #expect(second.cacheVersion == screenIndexVersion)
+            #expect(first.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(second.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(try await ScreenIndex.find("0003", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestSkipBackfillRebuildsStaleStampOnLaterPage() async throws {
+        try await withApp { app in
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0001", latest: ["sales": 1210.0, "roic": 5.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await seedFinancials(
+                try makeResponse(
+                    code: "0002", latest: ["sales": 1210.0, "roic": 9.0],
+                    prior: ["sales": 1100.0], older: ["sales": 1000.0]),
+                db: app.db)
+            try await upsertScreenIndex(
+                code: "0002",
+                response: try makeResponse(code: "0002", latest: ["sales": 1210.0, "roic": 9.0]),
+                db: app.db)
+            let stale = try #require(try await ScreenIndex.find("0002", on: app.db))
+            stale.cacheVersion = nil
+            stale.salesCagr3y = nil
+            try await stale.update(on: app.db)
+
+            await backfillScreenIndexForServableFinancials(db: app.db, pageSize: 1, logger: nil)
+            let first = try #require(try await ScreenIndex.find("0001", on: app.db))
+            let second = try #require(try await ScreenIndex.find("0002", on: app.db))
+            #expect(first.cacheVersion == screenIndexVersion)
+            #expect(second.cacheVersion == screenIndexVersion)
+            #expect(first.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
+            #expect(second.salesCagr3y.map { abs($0 - 10) < 1e-9 } == true)
         }
     }
 

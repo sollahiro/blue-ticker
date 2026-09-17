@@ -121,13 +121,15 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
 
 `--codes` は `--limit` を無視して全件。定期ジョブでは使わない。
 
-Screen 索引の列定義が変わったあと（`sales_cagr_3y` など）は financials を再 ingest せず、デプロイ後に WRITE で一発再生成する:
+Screen 索引の列定義が変わったあと（`sales_cagr_3y` など）は `fin-vN` を上げない。次回の financials ingest は公開床（servable）の `company_financials` から screen_index を投影する（現行 fin-vN 一致・skip は問わない）。手動で急ぐときだけ WRITE で一発再生成する:
 
 ```bash
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild
+# 部分実行（走査 N 件。孤児削除はしない）:
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild --limit 100
 ```
 
-`fin-vN` は上げない。`/healthz` の `cache_versions.screen_index` がイメージの `screenIndexVersion` と一致することを確認してから rebuild する。次回の財務取り込み skip でも `sales_cagr_3y` が null の行は格納済み JSON から補完する（全件の即時修復は `screen-rebuild`）。
+`/healthz` の `cache_versions.screen_index` がイメージの `screenIndexVersion` と一致することを確認する。
 
 LLM 出力だけの訂正は `cache_version` を上げない。現行版の clean な LLM 行は `--codes` でも skip されるため、対象の `company_breakdowns` 行を消すか `needs_review=true` にしてから個別 ingest する。決定論ロジックを変えたときだけ軸の `cache_version` をバンプする。LLM 実害は先に現行ロジックのまま当該コードだけ個別 ingest して MCP×有報を突合し、直ればプロンプトは触らない（切り分け順の正本は `AGENTS.md`）。
 
