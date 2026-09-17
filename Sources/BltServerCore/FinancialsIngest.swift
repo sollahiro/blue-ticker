@@ -56,7 +56,6 @@ func runFinancialsIngest(
     var staleVersion: [(code: String, highWater: String?)] = []
     var staleYears: [(code: String, highWater: String?)] = []
     var staleHighWater: [(code: String, highWater: String?)] = []
-    var skippedCurrent: [String] = []
 
     let classifyRows = try await withDbRetry(
         logger: logger, context: "財務取り込み 分類", onRetry: { unhealthyRetries += 1 }
@@ -81,7 +80,6 @@ func runFinancialsIngest(
             staleVersion.append((code, highWater))
         } else {
             skipped += 1
-            skippedCurrent.append(code)
         }
     }
     let missingCodes = Set(missing.map(\.code))
@@ -117,7 +115,6 @@ func runFinancialsIngest(
             isCurrentFinancialsAssemblyFingerprint(row.assemblyFingerprint)
         {
             skipped += 1
-            skippedCurrent.append(code)
             continue
         }
         if let lim = limit, attempted >= lim { break }
@@ -156,7 +153,7 @@ func runFinancialsIngest(
         }
     }
 
-    await backfillMissingScreenIndex(codes: skippedCurrent, db: db, logger: logger)
+    await backfillScreenIndexForServableFinancials(db: db, logger: logger)
 
     return FinancialsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,

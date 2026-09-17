@@ -23,6 +23,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(CreateScreenIndex())
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
+        app.migrations.add(AddCacheVersionToScreenIndex())
         try await app.autoMigrate()
         try await body(app)
     } catch {

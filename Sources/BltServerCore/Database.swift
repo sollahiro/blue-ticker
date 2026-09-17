@@ -77,6 +77,7 @@ func configureDatabase(_ app: Application) async throws {
     // Screen: company_financials 最新 FY の 1 社 1 行 Read Model（screen_index、BLT-49）。
     app.migrations.add(CreateScreenIndex())
     app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
+    app.migrations.add(AddCacheVersionToScreenIndex())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

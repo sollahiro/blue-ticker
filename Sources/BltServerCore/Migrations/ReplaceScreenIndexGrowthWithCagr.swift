@@ -2,7 +2,8 @@
 // 旧 `sales_growth` / `gross_profit_margin` は物理テーブルに nullable のまま残す（本番列の
 // deleteField はしない）。許可リスト・書き込み・GET /v1/screen からは除外済み。
 // `sales_cagr_3y` は未作成のときだけ ADD する（autoMigrate リトライで列だけ先にできた場合に備える）。
-// 値の再計算は `blt-server screen-rebuild`（または次回 financials ingest の派生更新）。
+// 値の再計算は次回 financials ingest（公開床 servable の company_financials を投影）
+// または `blt-server screen-rebuild`。
 
 import Fluent
 import SQLKit
@@ -29,7 +30,7 @@ struct ReplaceScreenIndexGrowthWithCagr: AsyncMigration {
     }
 }
 
-private func screenIndexHasColumn(_ sql: SQLDatabase, _ column: String) async throws -> Bool {
+func screenIndexHasColumn(_ sql: SQLDatabase, _ column: String) async throws -> Bool {
     if sql.dialect.name == "sqlite" {
         let rows = try await sql.raw("PRAGMA table_info(screen_index)").all()
         for row in rows {

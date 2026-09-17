@@ -10,6 +10,7 @@ import Vapor
 
 private func withScreenIndexApp(
     includeCagrMigration: Bool = true,
+    includeCacheVersionMigration: Bool = true,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -18,6 +19,9 @@ private func withScreenIndexApp(
         app.migrations.add(CreateScreenIndex())
         if includeCagrMigration {
             app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
+        }
+        if includeCacheVersionMigration {
+            app.migrations.add(AddCacheVersionToScreenIndex())
         }
         try await app.autoMigrate()
         try await body(app)
@@ -39,6 +43,7 @@ private func columnNames(on sql: SQLDatabase) async throws -> Set<String> {
             let sql = try #require(app.db as? SQLDatabase)
             let names = try await columnNames(on: sql)
             #expect(names.contains("sales_cagr_3y"))
+            #expect(names.contains("cache_version"))
             #expect(names.contains("sales_growth"))
             #expect(names.contains("gross_profit_margin"))
         }
@@ -53,6 +58,17 @@ private func columnNames(on sql: SQLDatabase) async throws -> Set<String> {
             #expect(names.contains("sales_cagr_3y"))
             #expect(names.contains("sales_growth"))
             #expect(names.contains("gross_profit_margin"))
+        }
+    }
+
+    @Test func addsCacheVersionWithoutFillingExistingRows() async throws {
+        try await withScreenIndexApp(includeCacheVersionMigration: false) { app in
+            try await AddCacheVersionToScreenIndex().prepare(on: app.db)
+            let sql = try #require(app.db as? SQLDatabase)
+            let names = try await columnNames(on: sql)
+            #expect(names.contains("cache_version"))
+            try await AddCacheVersionToScreenIndex().prepare(on: app.db)
+            #expect(try await columnNames(on: sql).contains("cache_version"))
         }
     }
 }

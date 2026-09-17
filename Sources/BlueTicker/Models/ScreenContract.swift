@@ -4,6 +4,7 @@
 // 行定義と、REST `GET /v1/screen` のクエリ解析。`company_financials` の契約は複製しない。
 // 数値キーは Summary `years[]` の公開キーのうち Screen が受け付ける許可リストだけ。
 // `sales_cagr_3y` は Summary `years[]` に無い派生列（最新から売上 > 0 の 3 期・同一 fy_end は先勝ち）。
+// 行の `cache_version` に `screenIndexVersion` を刻む。公開床の financials は次回 ingest で投影（現行 fin-vN 一致は問わない）。
 // YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。

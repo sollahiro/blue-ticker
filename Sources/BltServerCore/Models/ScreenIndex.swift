@@ -44,6 +44,11 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "sales_cagr_3y")
     var salesCagr3y: Double?
 
+    /// 派生契約の版（`screenIndexVersion`）。GET /v1/screen には出さない。
+    /// NULL は未投影。公開床の financials は次回 ingest で投影する（現行 fin-vN 一致は問わない）。
+    @OptionalField(key: "cache_version")
+    var cacheVersion: String?
+
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?
 
@@ -61,6 +66,7 @@ final class ScreenIndex: Model, @unchecked Sendable {
         roe = row[.roe]
         netDe = row[.netDe]
         salesCagr3y = row[.salesCagr3y]
+        cacheVersion = screenIndexVersion
     }
 
     func toRow() -> ScreenRow {

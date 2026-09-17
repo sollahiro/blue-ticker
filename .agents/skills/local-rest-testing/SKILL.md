@@ -55,7 +55,8 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
   CAGR/YoY onto Summary `years[]`. `sales_growth` is not on the allow-list.
 - Screen empty/valueless/whitespace-only range bounds intentionally mean omitted filters.
 - SQL seeding plus rebuild does **not** prove the live financial ingest hook, skip-path
-  backfill, or their best-effort error handling. State that limitation explicitly.
+  backfill of servable `company_financials` into `screen_index`, or their best-effort
+  error handling. State that limitation explicitly.
 
 Capture curl status, headers, JSON, and expected-vs-actual assertions. No recording
 is needed for shell-only API checks. Stop local server processes and the Postgres
