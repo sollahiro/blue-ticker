@@ -185,6 +185,43 @@ import Testing
         }
     }
 
+    /// 2026-09-18: listed × company_icons 欠行の売上上位。自動 ingest が使える会社は含まない。
+    /// 6902 デンソーは対象外のまま。
+    @Test func pins20260918MissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("8001", "https://www.itochu.co.jp/ja/apple-touch-icon.png"),
+            ("8002", "https://www.marubeni.com/apple-touch-icon.png"),
+            ("7459", "https://www.medipal.co.jp/favicon.ico"),
+            ("2784", "https://www.alfresa.com/assets/img/common/ogp.png"),
+            ("9508", "https://www.kyuden.co.jp/library/2017/images/common/fb.png"),
+            ("2181", "https://www.persol-group.co.jp/images/common/apple-touch-icon-152x152.png"),
+            ("3291", "https://www.ighd.co.jp/assets/common/images/favicon-192x192.png"),
+            ("4324", "https://www.group.dentsu.com/common/image/apple-touch-icon.png"),
+            ("5334", "https://www.niterragroup.com/ogp.png"),
+            ("3360", "https://www.shiphd.co.jp/wp-content/themes/shiptheme/assets/img/common/favicon.png"),
+            ("8060", "https://corporate.jp.canon/-/media/Project/Canon/CanonJP/Website/shared/image/icon/apple-touch-icon.png?la=ja-JP"),
+            ("2602", "https://www.nisshin-oillio.com/icon-192x192.png"),
+            ("3105", "https://www.nisshinbo.co.jp/apple-touch-icon.png"),
+            ("9401", "https://www.tbsholdings.co.jp/img/ogp.png"),
+            ("2678", "https://www.askul.co.jp/apple-touch-icon.png"),
+            ("1766", "https://www.token.co.jp/favicon.ico"),
+            ("2670", "https://www.abc-mart.co.jp/new_img/common/logo.png"),
+            ("1885", "https://www.toa-const.co.jp/common/img/og_image.png"),
+            ("8572", "https://www.acom.co.jp/img/apple-touch-icon.png"),
+            ("7994", "https://www.okamura.co.jp/global_assets/images/apple-touch-icon.png"),
+        ]
+        #expect(expected.count == 20)
+        #expect(Set(expected.map(\.0)).count == 20)
+        #expect(CompanyIconOriginOverride.manualSources["6902"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
