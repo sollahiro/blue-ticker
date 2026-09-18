@@ -1,18 +1,41 @@
 import SwiftUI
 
+@Observable
+final class FeedSession {
+    var updates: [FeedUpdateItem] = []
+    var ready = false
+    var error: String?
+
+    /// 成功したら以後は取り直さない。失敗は次に名称検索へ戻ったときに再試行する。
+    /// タブ移動で `.task` が cancel されただけなら状態を触らず、次回にそのまま読み直す。
+    func loadIfNeeded() async {
+        guard !ready || error != nil else { return }
+        ready = false
+        do {
+            updates = try await APIClient.shared.feedUpdates().items
+            error = nil
+        } catch is CancellationError {
+            return
+        } catch APIClientError.needsAccessLogin {
+            updates = []
+            error = APIClientError.needsAccessLogin.errorDescription
+        } catch {
+            updates = []
+            self.error = "有報一覧を取得できませんでした"
+        }
+        ready = true
+    }
+}
+
 struct TopView: View {
-    /// 銘柄面に push しているあいだは `.searchable` を外す。常時ドロワーが空ヘッダとして残るため。
-    var hidesSearch = false
-    @State private var query = ""
+    @Binding var query: String
+    @Binding var path: NavigationPath
+    @Bindable var feed: FeedSession
     @State private var searchResults: [CompanyHit] = []
-    @State private var updates: [FeedUpdateItem] = []
-    @State private var updatesReady = false
-    @State private var updatesError: String?
     @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var searchGeneration = 0
-    @State private var showHistory = false
 
     var body: some View {
         List {
@@ -31,54 +54,56 @@ struct TopView: View {
                 }
             }
 
-            Section("最近新しい有報がアップロードされました") {
-                if !updatesReady {
-                    ProgressView()
-                } else if let updatesError {
-                    Text(updatesError)
+            Section {
+                if let error = feed.error {
+                    Text(error)
                         .foregroundStyle(Theme.textMuted)
-                } else if updates.isEmpty {
+                } else if feed.ready && feed.updates.isEmpty {
                     Text("直近の有報はありません")
                         .foregroundStyle(Theme.textMuted)
                 } else {
-                    ForEach(updates.prefix(10)) { item in
+                    ForEach(feed.updates.prefix(10)) { item in
                         companyLink(CompanyRef(item), submittedAt: item.submittedAt)
                     }
                 }
+            } header: {
+                HStack {
+                    Text("最近新しい有報がアップロードされました")
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer(minLength: 8)
+                    if !feed.ready {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Theme.textMuted)
+                            .accessibilityLabel("有報を読み込み中")
+                    }
+                }
+                .textCase(nil)
             }
         }
-        .modifier(NameSearchChrome(query: $query, enabled: showsSearchChrome))
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
         .scrollDismissesKeyboard(.immediately)
-        .navigationTitle("名称検索")
-        .bltChrome()
+        .bltChrome("名称検索")
+        .safeAreaBar(edge: .bottom) {
+            NameSearchField(query: $query)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("履歴") {
-                    showHistory = true
+                    path.append(HistoryRoute())
                 }
-                .foregroundStyle(Theme.text)
             }
         }
-        .navigationDestination(isPresented: $showHistory) {
+        .navigationDestination(for: HistoryRoute.self) { _ in
             HistoryView()
         }
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
-        .onSubmit(of: .search) {
-            scheduleSearch(query)
-        }
-        .task { await loadFeeds() }
+        .task { await feed.loadIfNeeded() }
     }
 
     private var showsSearchSection: Bool {
         !searchResults.isEmpty || searchError != nil || isSearching
-    }
-
-    private var showsSearchChrome: Bool {
-        !hidesSearch && !showHistory
     }
 
     private func companyLink(_ company: CompanyRef, submittedAt: String? = nil) -> some View {
@@ -99,20 +124,6 @@ struct TopView: View {
                 }
             }
         }
-    }
-
-    private func loadFeeds() async {
-        do {
-            updates = try await APIClient.shared.feedUpdates().items
-            updatesError = nil
-        } catch APIClientError.needsAccessLogin {
-            updates = []
-            updatesError = APIClientError.needsAccessLogin.errorDescription
-        } catch {
-            updates = []
-            updatesError = "有報一覧を取得できませんでした"
-        }
-        updatesReady = true
     }
 
     private func scheduleSearch(_ raw: String, debounce: Duration? = nil) {
@@ -159,6 +170,8 @@ struct TopView: View {
     }
 }
 
+struct HistoryRoute: Hashable {}
+
 struct HistoryView: View {
     @State private var items: [CompanyRef] = CompanyHistory.load()
 
@@ -181,31 +194,72 @@ struct HistoryView: View {
                 }
             }
         }
-        .navigationTitle("履歴")
-        .bltChrome()
+        .bltChrome("履歴")
         .onAppear { items = CompanyHistory.load() }
     }
 }
 
-/// 名称検索のルートにいるときだけ標準検索欄を付ける。
-/// 常時ドロワー（`.always`）は銘柄 push 後も空ヘッダとして残る。
-private struct NameSearchChrome: ViewModifier {
+/// 名称検索のルートに付ける。`tabViewBottomAccessory` はタブに固定されキーボードに隠れ、
+/// `.searchable` のドロワーは上に寄る。`safeAreaBar` はタブの上に置き、キーボードにも追従する。
+/// タブを選んだだけではキーボードを出さず、欄をタップしてから入力する。
+struct NameSearchField: View {
     @Binding var query: String
-    var enabled: Bool
-    @State private var isPresented = false
+    @FocusState private var focused: Bool
+    @State private var editing = false
 
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content.searchable(
-                text: $query,
-                isPresented: $isPresented,
-                prompt: "会社名を入力してください"
-            )
-            .onAppear { isPresented = true }
-        } else {
-            content
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.textMuted)
+                .accessibilityHidden(true)
+            Group {
+                if editing {
+                    TextField("会社名を入力してください", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                        .foregroundStyle(Theme.text)
+                        .focused($focused)
+                        .onSubmit { stopEditing() }
+                        .onAppear { focused = true }
+                } else {
+                    Text(query.isEmpty ? "会社名を入力してください" : query)
+                        .foregroundStyle(query.isEmpty ? Theme.textMuted : Theme.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !editing else { return }
+                editing = true
+            }
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("クリア")
+            }
         }
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.interactive())
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .onAppear { stopEditing() }
+        .onChange(of: focused) { _, isFocused in
+            if !isFocused { editing = false }
+        }
+    }
+
+    private func stopEditing() {
+        focused = false
+        editing = false
     }
 }
 

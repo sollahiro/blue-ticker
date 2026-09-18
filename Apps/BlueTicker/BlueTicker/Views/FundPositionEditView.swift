@@ -38,10 +38,8 @@ struct TickerHoldingsView: View {
             }
         }
         .listSectionSpacing(.compact)
-        .navigationTitle("保有情報")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .bltChrome()
+        .bltChrome("保有情報")
         .toolbar {
             if !addedBlankIDs.isEmpty {
                 ToolbarItem(placement: .confirmationAction) {

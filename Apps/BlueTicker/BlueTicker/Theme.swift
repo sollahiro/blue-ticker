@@ -55,8 +55,9 @@ enum Theme {
         let elevated = UIColor(red: 0.20, green: 0.21, blue: 0.22, alpha: 1)
         let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: textColor]
         let bar = UINavigationBarAppearance()
-        bar.configureWithOpaqueBackground()
-        bar.backgroundColor = shell
+        bar.configureWithTransparentBackground()
+        bar.backgroundColor = .clear
+        bar.shadowColor = .clear
         bar.titleTextAttributes = attrs
         bar.largeTitleTextAttributes = attrs
         UINavigationBar.appearance().standardAppearance = bar
@@ -149,18 +150,17 @@ enum TSESector {
 }
 
 extension View {
-    func bltChrome() -> some View {
+    func bltChrome(_ title: String) -> some View {
         self
             .scrollContentBackground(.hidden)
             .background(Theme.shell)
             .foregroundStyle(Theme.text)
             .tint(Theme.accent)
-            .toolbarBackground(Theme.shell, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationTitle(title)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleDisplayMode(.inline)
-            .scrollEdgeEffectHidden(true, for: .top)
     }
 
     func bltCardSurface() -> some View {

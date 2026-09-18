@@ -5,14 +5,24 @@ import UIKit
 struct CompanyRowView: View {
     var company: CompanyRef
     var caption: String? = nil
+    var showsIcon = true
+    var showsSector = true
+    /// 編集中など、社名の折り返しを非編集時の幅のままにする。
+    var locksNameLayout = false
+
+    @State private var nameWidth: CGFloat?
 
     var body: some View {
         HStack(spacing: 12) {
-            CompanyIconView(company)
+            if showsIcon {
+                CompanyIconView(company)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(Format.displayName(company.name, fallback: company.code))
                     .font(.headline)
                     .foregroundStyle(Theme.text)
+                    .lineLimit(3)
+                    .truncationMode(.tail)
                 Text(company.code)
                     .font(.subheadline)
                     .foregroundStyle(Theme.textMuted)
@@ -22,12 +32,25 @@ struct CompanyRowView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
             }
-            Spacer()
-            if !company.sector.isEmpty {
+            .frame(width: locksNameLayout ? nameWidth : nil, alignment: .leading)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onChange(of: geo.size.width, initial: true) { _, width in
+                            guard !locksNameLayout, width > 0 else { return }
+                            nameWidth = width
+                        }
+                }
+            }
+            Spacer(minLength: 0)
+            if showsSector, !company.sector.isEmpty {
                 SectorTag(sector: company.sector, selected: true)
             }
         }
         .padding(0)
+        .animation(nil, value: showsIcon)
+        .animation(nil, value: showsSector)
+        .animation(nil, value: locksNameLayout)
     }
 }
 
@@ -40,6 +63,8 @@ struct SectorTag: View {
     var body: some View {
         Text(sector)
             .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 10)
             .padding(.vertical, height == nil ? 6 : 0)
             .frame(height: height)

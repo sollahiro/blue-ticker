@@ -83,8 +83,7 @@ struct SettingsView: View {
                 }
             #endif
         }
-        .navigationTitle("開発ラボ")
-        .bltChrome()
+        .bltChrome("開発ラボ")
         #if DEBUG
             .sheet(isPresented: $showLogin, onDismiss: { loginStatus = LoginStatus.read() }) {
                 AccessLoginView(baseURL: APIConfiguration.baseURL) {
