@@ -15,6 +15,7 @@ description: Neon を使った disposable 検証、本番 ingest、RO 同期、�
 ## 接続境界
 
 - アプリが読む接続スロットは `DATABASE_URL` だけ。通常の手元検証では `BLT_NEON_DISPOSABLE_DATABASE_URL` を束ねる。
+- disposable compute は scale-to-zero / 低 CU（never-suspend・高い max CU は手元 serve に付けない）。ブランチ削除後は接続 URL を差し替える。ブランチ名はドキュメントに固定しない。詳細は `.env.example`。
 - `BLT_NEON_RO_DATABASE_URL` は SELECT 専用で、WRITE 親の自動同期 replica ではない。`autoMigrate` があるため RO を `DATABASE_URL` にしてサーバーを起動しない。
 - 本番 write はユーザーが明示した場合だけ、コマンド単位で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL"` を指定する。手元 `.env` の既定を WRITE に変更しない。
 - Fly は配信 read 専用。本番 write ingest はローカルから実行する。
