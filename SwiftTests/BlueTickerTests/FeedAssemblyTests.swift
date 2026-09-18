@@ -197,6 +197,21 @@ private func rec(
         #expect(feedSubmitDatePrefix("2026-08-22 09:00") == "2026-08-22")
     }
 
+    @Test func updatesUseProvidedTotalsInsteadOfScanningRecords() {
+        let now = utcCalendar.date(from: DateComponents(year: 2026, month: 6, day: 20, hour: 12))!
+        let records = (0..<10).map { i in
+            rec("S\(String(format: "%02d", i))", submit: String(format: "2026-06-20 %02d:00", 15 - i))
+        }
+        let json = assembleFeedUpdates(
+            from: records, limit: 10, days: 7, docTypes: ["120"], now: now,
+            dayTotal: 15, weekTotal: 40)
+        let total = json["total"] as? [String: Any]
+        #expect(total?["day"] as? Int == 15)
+        #expect(total?["week"] as? Int == 40)
+        let items = json["items"] as? [[String: Any]]
+        #expect(items?.count == 10)
+    }
+
     @Test func updatesSkipTrustBeneficiaryOrdinance030() {
         let now = utcCalendar.date(from: DateComponents(year: 2026, month: 8, day: 29, hour: 12))!
         let records = [

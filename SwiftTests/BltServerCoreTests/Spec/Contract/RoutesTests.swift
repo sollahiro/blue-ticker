@@ -626,6 +626,38 @@ private func send(
         }
     }
 
+    @Test func feedUpdatesTotalsCountListedBeyondItemLimit() async throws {
+        try await withApp(databases: true) { app in
+            let today = feedDateString()
+            for i in 0..<15 {
+                try await seedFeedDocument(
+                    app, id: "D-busy-\(i)", secCode: String(format: "%04d0", i + 1),
+                    filer: "上場\(i)", type: "120", submit: String(format: "\(today) %02d:00", i))
+            }
+            try await seedFeedDocument(
+                app, id: "D-unlisted", secCode: nil, filer: "某ファンド",
+                type: "120", submit: "\(today) 20:00")
+            try await seedFeedDocument(
+                app, id: "D-unassigned", secCode: "00000", filer: "未割当",
+                type: "120", submit: "\(today) 21:00")
+            try await seedFeedDocument(
+                app, id: "D-trust", secCode: "72030", filer: "信託",
+                type: "120", submit: "\(today) 22:00", ordinance: "030")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 15)
+            #expect(total?["week"] as? Int == 15)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.count == 10)
+            let ids = items?.compactMap { $0["doc_id"] as? String } ?? []
+            #expect(ids.contains("D-unlisted") == false)
+            #expect(ids.contains("D-unassigned") == false)
+            #expect(ids.contains("D-trust") == false)
+        }
+    }
+
     // MARK: - Feed Trend
 
     @Test func feedTrendReturns503WhenUnconfigured() async throws {
@@ -734,7 +766,8 @@ private func seedOverview(
 }
 
 private func seedFeedDocument(
-    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String
+    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String,
+    ordinance: String = Api.ordinanceCompanyDisclosure
 ) async throws {
     let doc = EdinetDocument()
     doc.id = id
@@ -742,7 +775,7 @@ private func seedFeedDocument(
     doc.secCode = secCode
     doc.filerName = filer
     doc.docTypeCode = type
-    doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+    doc.ordinanceCode = ordinance
     doc.formCode = type == "160" ? "043A00" : "030000"
     doc.periodEnd = "2025-03-31"
     doc.submitDateTime = submit
