@@ -6,11 +6,16 @@ final class FeedSession {
     var ready = false
     var error: String?
 
+    /// 成功したら以後は取り直さない。失敗は次に名称検索へ戻ったときに再試行する。
+    /// タブ移動で `.task` が cancel されただけなら状態を触らず、次回にそのまま読み直す。
     func loadIfNeeded() async {
-        guard !ready else { return }
+        guard !ready || error != nil else { return }
+        ready = false
         do {
             updates = try await APIClient.shared.feedUpdates().items
             error = nil
+        } catch is CancellationError {
+            return
         } catch APIClientError.needsAccessLogin {
             updates = []
             error = APIClientError.needsAccessLogin.errorDescription

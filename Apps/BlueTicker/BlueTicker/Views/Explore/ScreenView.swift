@@ -114,8 +114,8 @@ struct ScreenView: View {
             session.countsLoading = true
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-            await loadPresetCounts()
-            guard !Task.isCancelled else { return }
+            let complete = await loadPresetCounts()
+            guard !Task.isCancelled, complete else { return }
             session.loadedSectors = sectors
         }
     }
@@ -163,16 +163,17 @@ struct ScreenView: View {
     /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。未選択・全選択は 3 リクエスト。
     /// 業種を多く選ぶと業種×プリセットになるので、8 業種超は出さない。
     /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
-    private func loadPresetCounts() async {
+    /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
+    private func loadPresetCounts() async -> Bool {
         let sectors = screenSectors
         if sectors.count > 8 {
             session.presetMatched = [:]
             session.countsLoading = false
-            return
+            return true
         }
         var next: [ScreenPreset: Int] = [:]
         for preset in ScreenPreset.allCases {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return false }
             do {
                 let response = try await APIClient.shared.screen(
                     sectors: sectors, filters: preset.filters, limit: 1)
@@ -181,9 +182,10 @@ struct ScreenView: View {
                 continue
             }
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return false }
         session.presetMatched = next
         session.countsLoading = false
+        return next.count == ScreenPreset.allCases.count
     }
 
     private var sectorChips: some View {
