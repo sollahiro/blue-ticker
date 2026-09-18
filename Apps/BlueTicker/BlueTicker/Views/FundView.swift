@@ -13,18 +13,16 @@ struct FundView: View {
                 LabeledContent("投資元本", value: Format.yenCash(snapshot.investedCapitalYen))
                 LabeledContent("ファンドROE", value: Format.percent(snapshot.fundROEPercent))
             } header: {
-                Text("保有企業")
-            } footer: {
-                Text("保有株に応じた利益・純資産")
+                Text("保有株数に応じた業績")
             }
 
             if snapshot.tickerTotals.isEmpty {
-                Section {
+                Section("あなたの保有している企業") {
                     Text("銘柄画面の保有情報で、株数と取得単価を入れるとここに出ます。")
                         .foregroundStyle(Theme.textMuted)
                 }
             } else {
-                Section("銘柄別") {
+                Section("あなたの保有している企業") {
                     ForEach(snapshot.tickerTotals, id: \.code) { total in
                         NavigationLink(value: companyRef(for: total)) {
                             tickerTotalRow(total)
@@ -49,8 +47,7 @@ struct FundView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets())
         }
-        .navigationTitle("ファンド")
-        .bltChrome()
+        .bltChrome("ファンド")
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
         }

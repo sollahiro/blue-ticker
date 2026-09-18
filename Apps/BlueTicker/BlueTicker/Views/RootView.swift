@@ -4,23 +4,24 @@ import SwiftUI
 struct RootView: View {
     @State private var tab = 0
     @State private var searchPath = NavigationPath()
+    @State private var searchQuery = ""
+    @State private var screenSession = ScreenSession()
+    @State private var feedSession = FeedSession()
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $searchPath) {
-                TopView(hidesSearch: !searchPath.isEmpty)
+                TopView(query: $searchQuery, path: $searchPath, feed: feedSession)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("名称検索", systemImage: "magnifyingglass") }
             .tag(0)
 
             NavigationStack {
-                ScreenView()
+                ScreenView(session: screenSession)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("条件検索", systemImage: "slider.horizontal.3") }
@@ -29,7 +30,6 @@ struct RootView: View {
             NavigationStack {
                 WatchlistView()
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("リスト", systemImage: "list.bullet") }
@@ -38,7 +38,6 @@ struct RootView: View {
             NavigationStack {
                 FundView()
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
-                    .exploreToolbar()
             }
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("ファンド", systemImage: "chart.pie.fill") }
@@ -59,16 +58,5 @@ struct RootView: View {
 
     private func ticker(_ company: CompanyRef) -> some View {
         TickerView(company: company)
-    }
-}
-
-extension View {
-    func exploreToolbar() -> some View {
-        toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                BrandMark()
-            }
-            .withoutSharedBackground()
-        }
     }
 }

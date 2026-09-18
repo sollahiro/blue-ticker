@@ -11,7 +11,6 @@ enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
 struct TickerView: View {
     var company: CompanyRef
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismissSearch) private var dismissSearch
     @Query private var watched: [WatchedCompany]
     @State private var page: TickerPage = .summary
     @State private var summarySection: SummarySection = .performance
@@ -29,17 +28,8 @@ struct TickerView: View {
         .background(Theme.shell.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
-        .toolbarBackground(Theme.shell, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                BrandMark()
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
-        .onAppear { dismissSearch() }
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
         .navigationDestination(isPresented: $showsHoldings) {
             TickerHoldingsView(code: company.code, onAddAccount: addAccount)

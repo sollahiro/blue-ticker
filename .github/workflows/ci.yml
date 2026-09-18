@@ -123,7 +123,7 @@ jobs:
   ios:
     # Apps/BlueTicker は SwiftPM 外。Cloud Agent の Linux VM では xcodebuild が無い。
     # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
-    # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
+    # iOS 27 SDK は macos-26 イメージの既定 Xcode に入っている。
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
     # シミュレータ不要の iOS Foundation 単体は swift-macos / swift-linux の
     # `Apps/BlueTicker/HAPISConsumer` と `Apps/BlueTicker/ZeroAxisFill` と

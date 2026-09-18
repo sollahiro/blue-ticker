@@ -41,9 +41,16 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
     }
 }
 
+@Observable
+final class ScreenSession {
+    var selectedSectors: Set<String> = []
+    var presetMatched: [ScreenPreset: Int] = [:]
+    var countsLoading = true
+    var loadedSectors: [String]?
+}
+
 struct ScreenView: View {
-    @State private var selectedSectors: Set<String> = []
-    @State private var presetMatched: [ScreenPreset: Int] = [:]
+    @Bindable var session: ScreenSession
 
     var body: some View {
         Form {
@@ -52,19 +59,19 @@ struct ScreenView: View {
                     .listRowBackground(Theme.elevated)
             } header: {
                 HStack {
-                    Text("業種")
+                    Text("業種を選ぶ")
                         .foregroundStyle(Theme.textMuted)
                     Spacer()
-                    Button("全選択") { selectedSectors = Set(TSESector.catalog) }
+                    Button("全選択") { session.selectedSectors = Set(TSESector.catalog) }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                         .buttonStyle(.plain)
-                        .disabled(selectedSectors.count == TSESector.catalog.count)
-                    Button("全解除") { selectedSectors.removeAll() }
+                        .disabled(session.selectedSectors.count == TSESector.catalog.count)
+                    Button("全解除") { session.selectedSectors.removeAll() }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                         .buttonStyle(.plain)
-                        .disabled(selectedSectors.isEmpty)
+                        .disabled(session.selectedSectors.isEmpty)
                 }
                 .textCase(nil)
             } footer: {
@@ -80,28 +87,45 @@ struct ScreenView: View {
                     .listRowBackground(Theme.control)
                 }
             } header: {
-                Text("こんな企業を探す")
-                    .foregroundStyle(Theme.textMuted)
+                HStack {
+                    Text("こんな企業を探す")
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer()
+                    if session.countsLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Theme.textMuted)
+                            .accessibilityLabel("件数を読み込み中")
+                    }
+                }
+                .textCase(nil)
             }
         }
-        .navigationTitle("条件検索")
-        .bltChrome()
+        .bltChrome("条件検索")
         .navigationDestination(for: ScreenQuery.self) { query in
             ScreenResultsView(sectors: query.sectors, preset: query.preset)
         }
         .task(id: screenSectors) {
+            let sectors = screenSectors
+            if session.loadedSectors == sectors {
+                session.countsLoading = false
+                return
+            }
+            session.countsLoading = true
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             await loadPresetCounts()
+            guard !Task.isCancelled else { return }
+            session.loadedSectors = sectors
         }
     }
 
     /// 未選択と全選択は同じ（業種フィルタなし）。複数はサーバーが 1 業種なので呼び出し側で OR する。
     private var screenSectors: [String] {
-        if selectedSectors.isEmpty || selectedSectors.count == TSESector.catalog.count {
+        if session.selectedSectors.isEmpty || session.selectedSectors.count == TSESector.catalog.count {
             return []
         }
-        return selectedSectors.sorted()
+        return session.selectedSectors.sorted()
     }
 
     private func presetTint(_ preset: ScreenPreset) -> Color {
@@ -122,7 +146,7 @@ struct ScreenView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 8)
-                if let matched = presetMatched[preset] {
+                if let matched = session.presetMatched[preset] {
                     Text("\(matched)件")
                         .font(.footnote.monospacedDigit().weight(.semibold))
                         .foregroundStyle(matched == 0 ? Theme.textMuted : Theme.text)
@@ -142,7 +166,8 @@ struct ScreenView: View {
     private func loadPresetCounts() async {
         let sectors = screenSectors
         if sectors.count > 8 {
-            presetMatched = [:]
+            session.presetMatched = [:]
+            session.countsLoading = false
             return
         }
         var next: [ScreenPreset: Int] = [:]
@@ -157,7 +182,8 @@ struct ScreenView: View {
             }
         }
         guard !Task.isCancelled else { return }
-        presetMatched = next
+        session.presetMatched = next
+        session.countsLoading = false
     }
 
     private var sectorChips: some View {
@@ -197,12 +223,12 @@ struct ScreenView: View {
     }
 
     private func sectorChip(_ sector: String) -> some View {
-        let selected = selectedSectors.contains(sector)
+        let selected = session.selectedSectors.contains(sector)
         return Button {
             if selected {
-                selectedSectors.remove(sector)
+                session.selectedSectors.remove(sector)
             } else {
-                selectedSectors.insert(sector)
+                session.selectedSectors.insert(sector)
             }
         } label: {
             SectorTag(sector: sector, selected: selected)
@@ -258,8 +284,7 @@ private struct ScreenResultsView: View {
                 }
             }
         }
-        .navigationTitle(preset.title)
-        .bltChrome()
+        .bltChrome(preset.title)
         .task {
             guard !loaded else { return }
             await run()

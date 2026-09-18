@@ -40,13 +40,12 @@ struct AccessLoginView: View {
                     .background(Theme.shell.opacity(0.92))
                 }
             }
-            .navigationTitle("ログイン")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }
             }
-            .bltChrome()
+            .bltChrome("ログイン")
         }
     }
 }

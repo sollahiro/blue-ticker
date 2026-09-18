@@ -4,6 +4,7 @@ import SwiftUI
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.editMode) private var editMode
 
     var body: some View {
         Group {
@@ -15,22 +16,29 @@ struct WatchlistView: View {
                 )
             } else {
                 List {
-                    ForEach(listRows) { item in
-                        NavigationLink(value: CompanyRef(item)) {
-                            CompanyRowView(
-                                company: CompanyRef(item),
-                                caption: item.listCaption
-                            )
+                    Section("あなたの追加した企業") {
+                        ForEach(listRows) { item in
+                            NavigationLink(value: CompanyRef(item)) {
+                                CompanyRowView(
+                                    company: CompanyRef(item),
+                                    caption: item.listCaption,
+                                    showsIcon: !isEditing,
+                                    showsSector: !isEditing,
+                                    locksNameLayout: isEditing
+                                )
+                            }
+                            .navigationLinkIndicatorVisibility(isEditing ? .hidden : .visible)
+                            .disabled(isEditing)
+                            .listRowBackground(Theme.elevated)
+                            .animation(nil, value: isEditing)
                         }
-                        .listRowBackground(Theme.elevated)
+                        .onDelete(perform: delete)
+                        .onMove(perform: move)
                     }
-                    .onDelete(perform: delete)
-                    .onMove(perform: move)
                 }
             }
         }
-        .navigationTitle("リスト")
-        .bltChrome()
+        .bltChrome("リスト")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
@@ -40,6 +48,10 @@ struct WatchlistView: View {
             WatchedCompany.repairSortOrderIfNeeded(companies)
             WatchedCompany.pruneBlankRowsCoveredByHoldings(companies, in: modelContext)
         }
+    }
+
+    private var isEditing: Bool {
+        editMode?.wrappedValue == .active
     }
 
     /// 同じ銘柄に保有があるとき、残ったウォッチ行は出さない。
