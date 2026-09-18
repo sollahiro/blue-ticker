@@ -69,11 +69,24 @@ public func feedInclusiveCutoffDateString(days: Int, now: Date = Date()) -> Stri
 }
 
 /// `submit_date_time` の日付部分（YYYY-MM-DD）。短い値はそのまま。
-func feedSubmitDatePrefix(_ submitDateTime: String) -> String {
+public func feedSubmitDatePrefix(_ submitDateTime: String) -> String {
     if submitDateTime.count >= DateFormat.hyphenatedLength {
         return String(submitDateTime.prefix(DateFormat.hyphenatedLength))
     }
     return submitDateTime
+}
+
+/// UTC 暦日（YYYY-MM-DD）の翌日。`submit_date_time` の辞書順で「その日まで」を切る上限（含まない）。
+/// 形式外は nil。
+public func feedNextDateString(_ date: String) -> String? {
+    let formatter = DateFormatter()
+    formatter.dateFormat = DateFormat.hyphenated
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    guard date.count == DateFormat.hyphenatedLength, let parsed = formatter.date(from: date),
+        let next = utcCalendar.date(byAdding: .day, value: 1, to: parsed)
+    else { return nil }
+    return feedDateString(next)
 }
 
 /// 上場の 4 桁コード。secCode が 5 桁かつ末尾 0 のときだけ。

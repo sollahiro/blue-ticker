@@ -197,6 +197,15 @@ private func rec(
         #expect(feedSubmitDatePrefix("2026-08-22 09:00") == "2026-08-22")
     }
 
+    @Test func nextDateStringRollsOverMonthAndYear() {
+        #expect(feedNextDateString("2026-08-22") == "2026-08-23")
+        #expect(feedNextDateString("2026-02-28") == "2026-03-01")
+        #expect(feedNextDateString("2028-02-28") == "2028-02-29")
+        #expect(feedNextDateString("2026-12-31") == "2027-01-01")
+        #expect(feedNextDateString("2026-08-22 09:00") == nil)
+        #expect(feedNextDateString("") == nil)
+    }
+
     @Test func updatesUseProvidedTotalsInsteadOfScanningRecords() {
         let now = utcCalendar.date(from: DateComponents(year: 2026, month: 6, day: 20, hour: 12))!
         let records = (0..<10).map { i in

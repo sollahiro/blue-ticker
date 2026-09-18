@@ -19,7 +19,7 @@ func serveFeedUpdates(
     let itemsCutoff = feedInclusiveCutoffDateString(days: days, now: now)
     let weekCutoff = feedInclusiveCutoffDateString(days: Api.feedUpdateWeekDays, now: now)
     let today = feedDateString(now)
-    let tomorrow = feedDateString(now.addingTimeInterval(86_400))
+    let tomorrow = feedNextDateString(today) ?? today
     do {
         let snapshot = try await withDbRetry(
             maxAttempts: Api.dbReadRetryMaxAttempts,
@@ -30,8 +30,7 @@ func serveFeedUpdates(
                 db: db, docTypes: docTypes, today: today, tomorrow: tomorrow,
                 weekCutoff: weekCutoff)
             let records = try await loadFeedListedItemRecords(
-                db: db, docTypes: docTypes, since: itemsCutoff,
-                limit: Api.feedUpdateItemScanLimit)
+                db: db, docTypes: docTypes, since: itemsCutoff, limit: limit)
             return (totals, records)
         }
         return .ok(assembleFeedUpdates(
@@ -41,23 +40,6 @@ func serveFeedUpdates(
         logger.warning("Feed updates の DB 読み取りに失敗: \(error)")
         return .dbUnavailable
     }
-}
-
-/// 提出日時降順で書類を読む。`since` は `submit_date_time` の辞書順下限（YYYY-MM-DD）。
-func loadFeedRecords(
-    db: Database, docTypes: [String], since: String?, limit: Int
-) async throws -> [EdinetDocumentRecord] {
-    guard limit > 0, !docTypes.isEmpty else { return [] }
-    var query = EdinetDocument.query(on: db)
-    applyFeedDocTypeFilter(&query, docTypes: docTypes)
-    if let since {
-        query = query.filter(\.$submitDateTime >= since)
-    }
-    let rows = try await query
-        .sort(\.$submitDateTime, .descending)
-        .limit(limit)
-        .all()
-    return rows.map { $0.toRecord() }
 }
 
 struct FeedListedTotals: Sendable {
@@ -81,14 +63,35 @@ func loadFeedListedTotals(
     return FeedListedTotals(day: day, week: week)
 }
 
-/// items 用。listed のみ、提出日時降順で `limit` 件。
+/// items 用。listed のみ、提出日時降順で `limit` 件。`limit` 件目が乗る暦日は全件そろえる。
+/// 同日過多の安定サンプリング（`feedSelectItems`）はその日の listed を全部見ないと成り立たず、
+/// 半期報告書（160）は 1 日 700 件近く出る日がある。
 func loadFeedListedItemRecords(
     db: Database, docTypes: [String], since: String?, limit: Int
 ) async throws -> [EdinetDocumentRecord] {
     guard limit > 0, !docTypes.isEmpty else { return [] }
+    let newest = try await loadFeedListedRows(
+        db: db, docTypes: docTypes, since: since, before: nil, limit: limit)
+    guard newest.count == limit, let last = newest.last else { return newest }
+    let boundaryDate = feedSubmitDatePrefix(last.submitDateTime)
+    guard let nextDate = feedNextDateString(boundaryDate) else { return newest }
+    let boundaryDay = try await loadFeedListedRows(
+        db: db, docTypes: docTypes, since: boundaryDate, before: nextDate,
+        limit: Api.feedUpdateDayScanLimit)
+    let newerDays = newest.filter { feedSubmitDatePrefix($0.submitDateTime) != boundaryDate }
+    return newerDays + boundaryDay
+}
+
+/// listed 行を提出日時降順で `limit` 件。`since` は下限（含む）、`before` は上限（含まない）。
+private func loadFeedListedRows(
+    db: Database, docTypes: [String], since: String?, before: String?, limit: Int
+) async throws -> [EdinetDocumentRecord] {
     var query = feedListedQuery(on: db, docTypes: docTypes)
     if let since {
         query = query.filter(\.$submitDateTime >= since)
+    }
+    if let before {
+        query = query.filter(\.$submitDateTime < before)
     }
     applyFeedItemColumns(&query)
     let rows = try await query

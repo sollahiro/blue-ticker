@@ -104,7 +104,7 @@ private func record(
 
             let filingsBefore = try await loadStoredFilingRecords(code: "1773", db: app.db)
             #expect(filingsBefore.map(\.docID) == ["S-FOREIGN"])
-            let feedBefore = try await loadFeedRecords(
+            let feedBefore = try await loadFeedListedItemRecords(
                 db: app.db, docTypes: ["120"], since: nil, limit: 10)
             #expect(Set(feedBefore.map(\.docID)) == ["S-FOREIGN", "S-DOMESTIC"])
 
@@ -118,7 +118,7 @@ private func record(
             #expect(filingsAfter.isEmpty)
             let domesticFilings = try await loadStoredFilingRecords(code: "7203", db: app.db)
             #expect(domesticFilings.map(\.docID) == ["S-DOMESTIC"])
-            let feedAfter = try await loadFeedRecords(
+            let feedAfter = try await loadFeedListedItemRecords(
                 db: app.db, docTypes: ["120"], since: nil, limit: 10)
             #expect(feedAfter.map(\.docID) == ["S-DOMESTIC"])
         }

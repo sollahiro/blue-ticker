@@ -658,6 +658,53 @@ private func send(
         }
     }
 
+    @Test func feedItemRecordsCompleteTheBoundaryDay() async throws {
+        try await withApp(databases: true) { app in
+            // 3 日分: 新しい日 2 件、境界日 5 件、古い日 3 件。
+            for i in 0..<2 {
+                try await seedFeedDocument(
+                    app, id: "D-new-\(i)", secCode: "100\(i)0", filer: "新\(i)",
+                    type: "120", submit: String(format: "2099-03-03 %02d:00", 9 + i))
+            }
+            for i in 0..<5 {
+                try await seedFeedDocument(
+                    app, id: "D-mid-\(i)", secCode: "200\(i)0", filer: "中\(i)",
+                    type: "120", submit: String(format: "2099-03-02 %02d:00", 9 + i))
+            }
+            for i in 0..<3 {
+                try await seedFeedDocument(
+                    app, id: "D-old-\(i)", secCode: "300\(i)0", filer: "旧\(i)",
+                    type: "120", submit: String(format: "2099-03-01 %02d:00", 9 + i))
+            }
+
+            // limit 3: 新しい日 2 件 + 境界日（3 件目が乗る 03-02）を全 5 件そろえる。古い日は読まない。
+            let three = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 3)
+            let threeIDs = three.map(\.docID)
+            #expect(threeIDs.count == 7)
+            #expect(threeIDs.prefix(2) == ["D-new-1", "D-new-0"])
+            #expect(
+                Set(threeIDs.dropFirst(2))
+                    == ["D-mid-0", "D-mid-1", "D-mid-2", "D-mid-3", "D-mid-4"])
+            #expect(three.map(\.submitDateTime) == three.map(\.submitDateTime).sorted(by: >))
+
+            // limit 2: 境界日は 03-03 で、その 2 件で完結。
+            let two = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 2)
+            #expect(two.map(\.docID) == ["D-new-1", "D-new-0"])
+
+            // limit が全件を超えるときは追加読みなし。
+            let all = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 50)
+            #expect(all.count == 10)
+
+            // since で境界日より新しい範囲に絞っても壊れない。
+            let sinceMid = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: "2099-03-02", limit: 3)
+            #expect(sinceMid.count == 7)
+        }
+    }
+
     // MARK: - Feed Trend
 
     @Test func feedTrendReturns503WhenUnconfigured() async throws {
