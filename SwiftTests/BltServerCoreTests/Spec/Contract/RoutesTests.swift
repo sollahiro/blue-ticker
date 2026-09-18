@@ -626,6 +626,85 @@ private func send(
         }
     }
 
+    @Test func feedUpdatesTotalsCountListedBeyondItemLimit() async throws {
+        try await withApp(databases: true) { app in
+            let today = feedDateString()
+            for i in 0..<15 {
+                try await seedFeedDocument(
+                    app, id: "D-busy-\(i)", secCode: String(format: "%04d0", i + 1),
+                    filer: "上場\(i)", type: "120", submit: String(format: "\(today) %02d:00", i))
+            }
+            try await seedFeedDocument(
+                app, id: "D-unlisted", secCode: nil, filer: "某ファンド",
+                type: "120", submit: "\(today) 20:00")
+            try await seedFeedDocument(
+                app, id: "D-unassigned", secCode: "00000", filer: "未割当",
+                type: "120", submit: "\(today) 21:00")
+            try await seedFeedDocument(
+                app, id: "D-trust", secCode: "72030", filer: "信託",
+                type: "120", submit: "\(today) 22:00", ordinance: "030")
+
+            let (status, json) = try await send(app, "/v1/feed/updates?limit=10")
+            #expect(status == .ok)
+            let total = json?["total"] as? [String: Any]
+            #expect(total?["day"] as? Int == 15)
+            #expect(total?["week"] as? Int == 15)
+            let items = json?["items"] as? [[String: Any]]
+            #expect(items?.count == 10)
+            let ids = items?.compactMap { $0["doc_id"] as? String } ?? []
+            #expect(ids.contains("D-unlisted") == false)
+            #expect(ids.contains("D-unassigned") == false)
+            #expect(ids.contains("D-trust") == false)
+        }
+    }
+
+    @Test func feedItemRecordsCompleteTheBoundaryDay() async throws {
+        try await withApp(databases: true) { app in
+            // 3 日分: 新しい日 2 件、境界日 5 件、古い日 3 件。
+            for i in 0..<2 {
+                try await seedFeedDocument(
+                    app, id: "D-new-\(i)", secCode: "100\(i)0", filer: "新\(i)",
+                    type: "120", submit: String(format: "2099-03-03 %02d:00", 9 + i))
+            }
+            for i in 0..<5 {
+                try await seedFeedDocument(
+                    app, id: "D-mid-\(i)", secCode: "200\(i)0", filer: "中\(i)",
+                    type: "120", submit: String(format: "2099-03-02 %02d:00", 9 + i))
+            }
+            for i in 0..<3 {
+                try await seedFeedDocument(
+                    app, id: "D-old-\(i)", secCode: "300\(i)0", filer: "旧\(i)",
+                    type: "120", submit: String(format: "2099-03-01 %02d:00", 9 + i))
+            }
+
+            // limit 3: 新しい日 2 件 + 境界日（3 件目が乗る 03-02）を全 5 件そろえる。古い日は読まない。
+            let three = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 3)
+            let threeIDs = three.map(\.docID)
+            #expect(threeIDs.count == 7)
+            #expect(threeIDs.prefix(2) == ["D-new-1", "D-new-0"])
+            #expect(
+                Set(threeIDs.dropFirst(2))
+                    == ["D-mid-0", "D-mid-1", "D-mid-2", "D-mid-3", "D-mid-4"])
+            #expect(three.map(\.submitDateTime) == three.map(\.submitDateTime).sorted(by: >))
+
+            // limit 2: 境界日は 03-03 で、その 2 件で完結。
+            let two = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 2)
+            #expect(two.map(\.docID) == ["D-new-1", "D-new-0"])
+
+            // limit が全件を超えるときは追加読みなし。
+            let all = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: nil, limit: 50)
+            #expect(all.count == 10)
+
+            // since で境界日より新しい範囲に絞っても壊れない。
+            let sinceMid = try await loadFeedListedItemRecords(
+                db: app.db, docTypes: ["120"], since: "2099-03-02", limit: 3)
+            #expect(sinceMid.count == 7)
+        }
+    }
+
     // MARK: - Feed Trend
 
     @Test func feedTrendReturns503WhenUnconfigured() async throws {
@@ -734,7 +813,8 @@ private func seedOverview(
 }
 
 private func seedFeedDocument(
-    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String
+    _ app: Application, id: String, secCode: String?, filer: String, type: String, submit: String,
+    ordinance: String = Api.ordinanceCompanyDisclosure
 ) async throws {
     let doc = EdinetDocument()
     doc.id = id
@@ -742,7 +822,7 @@ private func seedFeedDocument(
     doc.secCode = secCode
     doc.filerName = filer
     doc.docTypeCode = type
-    doc.ordinanceCode = Api.ordinanceCompanyDisclosure
+    doc.ordinanceCode = ordinance
     doc.formCode = type == "160" ? "043A00" : "030000"
     doc.periodEnd = "2025-03-31"
     doc.submitDateTime = submit

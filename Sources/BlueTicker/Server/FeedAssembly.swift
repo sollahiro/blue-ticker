@@ -69,11 +69,24 @@ public func feedInclusiveCutoffDateString(days: Int, now: Date = Date()) -> Stri
 }
 
 /// `submit_date_time` の日付部分（YYYY-MM-DD）。短い値はそのまま。
-func feedSubmitDatePrefix(_ submitDateTime: String) -> String {
+public func feedSubmitDatePrefix(_ submitDateTime: String) -> String {
     if submitDateTime.count >= DateFormat.hyphenatedLength {
         return String(submitDateTime.prefix(DateFormat.hyphenatedLength))
     }
     return submitDateTime
+}
+
+/// UTC 暦日（YYYY-MM-DD）の翌日。`submit_date_time` の辞書順で「その日まで」を切る上限（含まない）。
+/// 形式外は nil。
+public func feedNextDateString(_ date: String) -> String? {
+    let formatter = DateFormatter()
+    formatter.dateFormat = DateFormat.hyphenated
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    guard date.count == DateFormat.hyphenatedLength, let parsed = formatter.date(from: date),
+        let next = utcCalendar.date(byAdding: .day, value: 1, to: parsed)
+    else { return nil }
+    return feedDateString(next)
 }
 
 /// 上場の 4 桁コード。secCode が 5 桁かつ末尾 0 のときだけ。
@@ -86,25 +99,26 @@ public func listedTickerCode(fromSecCode secCode: String?) -> String? {
 }
 
 /// Feed Update: 提出日時降順の書類ストリーム（1 行 = 1 書類）。
-/// `records` は呼び出し側が max(days, week) 窓・種別で絞り、提出日時降順にして渡す。
-/// `total.day` はその UTC 暦日、`total.week` は直近 7 日の上場提出件数（`limit` で切る前）。
+/// `records` は items 用（提出日時降順。同日過多ならその日の listed を全部含む）。
+/// `total.day` / `total.week` は `dayTotal` / `weekTotal` があればそれを使い、
+/// なければ `records` から数える（単体テスト用）。
 /// `items` はクエリ `days` 窓を新しい暦日から埋め、同日が `limit` を超えるとその日から安定サンプリングする。
 public func assembleFeedUpdates(
     from records: [EdinetDocumentRecord], limit: Int, days: Int, docTypes: [String],
-    now: Date = Date()
+    now: Date = Date(), dayTotal: Int? = nil, weekTotal: Int? = nil
 ) -> [String: Any] {
     let today = feedDateString(now)
     let itemsCutoff = feedInclusiveCutoffDateString(days: days, now: now)
     let weekCutoff = feedInclusiveCutoffDateString(days: Api.feedUpdateWeekDays, now: now)
     var rows: [FeedUpdateRow] = []
-    var dayTotal = 0
-    var weekTotal = 0
+    var countedDay = 0
+    var countedWeek = 0
     for record in records {
         guard let item = feedFilingItem(from: record) else { continue }
         let submitted = record.submitDateTime
         let date = feedSubmitDatePrefix(submitted)
-        if date == today { dayTotal += 1 }
-        if submitted >= weekCutoff { weekTotal += 1 }
+        if date == today { countedDay += 1 }
+        if submitted >= weekCutoff { countedWeek += 1 }
         if submitted >= itemsCutoff {
             rows.append(
                 FeedUpdateRow(docID: record.docID, submitted: submitted, date: date, item: item))
@@ -114,7 +128,10 @@ public func assembleFeedUpdates(
         "schema_version": Api.feedSchemaVersion,
         "date": today,
         "days": days,
-        "total": ["day": dayTotal, "week": weekTotal] as [String: Any],
+        "total": [
+            "day": dayTotal ?? countedDay,
+            "week": weekTotal ?? countedWeek,
+        ] as [String: Any],
         "doc_types": docTypes,
         "items": feedSelectItems(rows, limit: limit, seed: today),
     ]
