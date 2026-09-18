@@ -23,7 +23,7 @@
 | 会社アイコン | 角丸四角・白背景。リスト行と銘柄ヘッダで同じ |
 | App Icon | `assets/blt-icon/icons_ios_light.png` / `icons_ios_dark.png` を 1024・不透明 PNG にして `AppIcon` に載せる。角まで絵の色。`bb_mark.png` はファンドのバージョンフッター用 |
 | 社名表示 | 検索結果・銘柄ヘッダから「株式会社」を除く |
-| 最低対応 OS | iOS 27.0。`IPHONEOS_DEPLOYMENT_TARGET` はプロジェクト側だけに置き、ターゲットは継承させる。iOS 27 の UI 作法（透過タブバー、ツールバー操作の Liquid Glass、`safeAreaBar` 等）をそのまま使い、`if #available` で古い OS に分岐させない |
+| 最低対応 OS | iOS 26.0。`IPHONEOS_DEPLOYMENT_TARGET` はプロジェクト側だけに置き、ターゲットは継承させる。iOS 26 の UI 作法（透過タブバー、ツールバー操作の Liquid Glass、`safeAreaBar` 等）をそのまま使い、`if #available` で古い OS に分岐させない。CI の `macos-26` 既定 Xcode 26.6 に iOS 27 SDK は無いので、27 へ上げるのは 27 専用 API が要るときだけ |
 | 背景 | 株価アプリ風のダーク。シェルはほぼ黒、カードは背景から浮かぶ濃いグレー、リスト行・コントロールはカードより黒寄り（`Theme.shell` / `Theme.card` / `Theme.control`）。紺の `#16446F` は使わない |
 | 履歴 | 名称検索の右上ツールバー。開いた銘柄をクライアントローカル（`UserDefaults`、最大 30 件）に残す |
 | 条件 | Screen。業種チップ + 3 プリセット。DualRangeSlider は出さない |
