@@ -29,7 +29,6 @@ final class FeedSession {
 
 struct TopView: View {
     @Binding var query: String
-    @Binding var path: NavigationPath
     @Bindable var feed: FeedSession
     @State private var searchResults: [CompanyHit] = []
     @State private var searchError: String?
@@ -83,18 +82,9 @@ struct TopView: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .bltChrome("名称検索")
+        .bltHistoryToolbar()
         .safeAreaBar(edge: .bottom) {
             NameSearchField(query: $query)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("履歴") {
-                    path.append(HistoryRoute())
-                }
-            }
-        }
-        .navigationDestination(for: HistoryRoute.self) { _ in
-            HistoryView()
         }
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
@@ -170,35 +160,6 @@ struct TopView: View {
     }
 }
 
-struct HistoryRoute: Hashable {}
-
-struct HistoryView: View {
-    @State private var items: [CompanyRef] = CompanyHistory.load()
-
-    var body: some View {
-        Group {
-            if items.isEmpty {
-                ContentUnavailableView(
-                    "履歴はありません",
-                    systemImage: "clock",
-                    description: Text("開いた銘柄がここに残ります。")
-                )
-            } else {
-                List {
-                    ForEach(items) { company in
-                        NavigationLink(value: company) {
-                            CompanyRowView(company: company)
-                        }
-                        .listRowBackground(Theme.elevated)
-                    }
-                }
-            }
-        }
-        .bltChrome("履歴")
-        .onAppear { items = CompanyHistory.load() }
-    }
-}
-
 /// 名称検索のルートに付ける。`tabViewBottomAccessory` はタブに固定されキーボードに隠れ、
 /// `.searchable` のドロワーは上に寄る。`safeAreaBar` はタブの上に置き、キーボードにも追従する。
 /// タブを選んだだけではキーボードを出さず、欄をタップしてから入力する。
@@ -260,30 +221,5 @@ struct NameSearchField: View {
     private func stopEditing() {
         focused = false
         editing = false
-    }
-}
-
-enum CompanyHistory {
-    private static let key = "blt.company.history"
-    private static let limit = 30
-
-    static func load() -> [CompanyRef] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-            let items = try? JSONDecoder().decode([CompanyRef].self, from: data)
-        else {
-            return []
-        }
-        return items
-    }
-
-    static func record(_ company: CompanyRef) {
-        var items = load().filter { $0.code != company.code }
-        items.insert(company, at: 0)
-        if items.count > limit {
-            items = Array(items.prefix(limit))
-        }
-        if let data = try? JSONEncoder().encode(items) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
     }
 }

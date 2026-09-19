@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4CCED69B305EDAFE003CAB8E /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCED69A305EDAFE003CAB8E /* HistoryView.swift */; };
 		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* BlueTickerApp.swift */; };
 		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Theme.swift */; };
 		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Format.swift */; };
@@ -42,6 +43,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		4CCED69A305EDAFE003CAB8E /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000000 /* BlueTicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlueTicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000001 /* BlueTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueTickerApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -173,6 +175,7 @@
 				BB0000000000000000000013 /* TopView.swift */,
 				BB0000000000000000000014 /* ScreenView.swift */,
 				BB0000000000000000000015 /* WatchlistView.swift */,
+				4CCED69A305EDAFE003CAB8E /* HistoryView.swift */,
 			);
 			path = Explore;
 			sourceTree = "<group>";
@@ -305,6 +308,7 @@
 				AA0000000000000000000023 /* AccessLoginView.swift in Sources */,
 				AA0000000000000000000007 /* WatchedCompany.swift in Sources */,
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
+				4CCED69B305EDAFE003CAB8E /* HistoryView.swift in Sources */,
 				AA0000000000000000000009 /* RootView.swift in Sources */,
 				AA0000000000000000000021 /* BrandMark.swift in Sources */,
 				AA0000000000000000000010 /* SettingsView.swift in Sources */,

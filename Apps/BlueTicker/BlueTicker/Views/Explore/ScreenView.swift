@@ -102,6 +102,7 @@ struct ScreenView: View {
             }
         }
         .bltChrome("条件検索")
+        .bltHistoryToolbar()
         .navigationDestination(for: ScreenQuery.self) { query in
             ScreenResultsView(sectors: query.sectors, preset: query.preset)
         }

@@ -40,8 +40,18 @@ struct WatchlistView: View {
         }
         .bltChrome("リスト")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                EditButton()
+            if isEditing {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        withAnimation { editMode?.wrappedValue = .inactive }
+                    }
+                }
+            } else if !companies.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("編集", systemImage: "pencil") {
+                        withAnimation { editMode?.wrappedValue = .active }
+                    }
+                }
             }
         }
         .onAppear {

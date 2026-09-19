@@ -13,7 +13,7 @@ enum Theme {
     static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
     /// 銘柄カード・概要カード。背景から浮かぶ濃いグレー。
     static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
-    /// 銘柄ヘッダ全体の高さ（アイコン・社名＋コード／業種。右のウォッチは中央揃え）。
+    /// 銘柄ヘッダ全体の高さ（アイコン・社名＋コード／業種）。
     static let headerSideHeight: CGFloat = 56
     /// 社名行とコード行の段間。
     static let headerChipSpacing: CGFloat = 4
