@@ -21,4 +21,4 @@ read 床・バンプ規則は `.agents/rules/versioning.md` のみ（ここへ�
 
 ## 関連
 
-`architecture.md` · `eu-esef-roadmap.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `ingest-policy.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `ios-client.md` · `.agents/rules/versioning.md` · `.agents/skills/deploy/SKILL.md`
+`architecture.md` · `public-api.md` · `api-auth.md` · `api-compatibility.md` · `ingest-policy.md` · `breakdown.md` · `statement.md` · `financials-summary-separation.md` · `ios-client.md` · `.agents/rules/versioning.md` · `.agents/skills/deploy/SKILL.md`
