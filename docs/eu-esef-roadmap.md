@@ -17,7 +17,7 @@ Meta → Struct → Norm → Viz
 | **Meta** | 誰の・どの書類か | Search, Icon |
 | **Struct** | 開示の構造化（正本） | Filing, Statement, Statement-Notes |
 | **Norm** | 正本からの正規化・組立 | Breakdown（内訳正本）, **Summary（組立スナップショット）** |
-| **Viz** | 正規化値の分解・可視化 | Waterfall, Sankey |
+| **Viz** | 正規化値の分解・可視化 | Waterfall |
 
 **Summary の位置（重要）**: 独立の XBRL→Summary 本流ではない。JP と同じく次の経路から組む:
 
@@ -58,7 +58,6 @@ Statement / Statement-Notes / Breakdown
 | Norm | Breakdown | 内訳正本。Summary 組立の入力にもなる |
 | Norm | Summary | **組立ビュー**。Filing/Statement/Notes/Breakdown 後に正式配置。直 extract は正にしない |
 | Viz | Waterfall | Summary 行（組立結果）の投影。計算は流用可 |
-| Viz | Sankey | Breakdown + Statement 等の材料後。要求具体化まで設計しない |
 | Feed | Update / Status | Meta〜Norm の母集団ができた段で足す |
 | Feed | Trend / Report | 構想。Report は本来クライアント責務 |
 
@@ -71,7 +70,7 @@ Statement / Statement-Notes / Breakdown
 | 2 | Struct | Filing 方針 + Statement。smoke/golden 固定 LEI | ローカル |
 | 3 | Struct | Statement-Notes（EU note_type） | ローカル |
 | 4 | Norm | Breakdown。続けて **正本→Summary 組立**（直 extract を正にしない） | ローカル→使い捨て |
-| 5 | Viz | Waterfall（組立 Summary の投影）。Sankey は要求具体化後 | 同上 |
+| 5 | Viz | Waterfall（組立 Summary の投影） | 同上 |
 | 6 | Feed | Update / Status | 同上 |
 | 7 | 配信 | REST に Region/Source（要確認） | 公開は都度確認 |
 | 8 | 母集団拡大 | 選定ユニバース → 定着後バンプ | 本番 write は明示時のみ |
