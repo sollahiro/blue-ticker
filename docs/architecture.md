@@ -35,7 +35,7 @@ Meta → Struct → Norm → Viz
 
 市場は `JP`、開示 Source は `EDINET`。実装の正は `Sources/BlueTicker/`、探索スクリプトは `scripts/jp/edinet/`、cache は `tmp_cache/edinet/`。規律の短文正本: `.agents/rules/regions.md`。
 
-EU / ESEF 製品トラックは中止（Linear BLT-15/16/17 Canceled）。
+EU / ESEF 製品トラックは中止。
 
 ## デプロイモード
 
