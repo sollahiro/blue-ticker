@@ -12,7 +12,7 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $searchPath) {
-                TopView(query: $searchQuery, path: $searchPath, feed: feedSession)
+                TopView(query: $searchQuery, feed: feedSession)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
             }
             .toolbarTitleDisplayMode(.inline)

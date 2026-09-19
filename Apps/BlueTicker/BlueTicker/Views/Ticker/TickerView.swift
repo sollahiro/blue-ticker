@@ -30,6 +30,17 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
+                Button(
+                    isWatched ? "リストから削除" : "リストに追加",
+                    systemImage: isWatched ? "star.fill" : "star",
+                    action: toggleWatch
+                )
+                .accessibilityAddTraits(isWatched ? .isSelected : [])
+            }
+        }
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary) }
         .navigationDestination(isPresented: $showsHoldings) {
             TickerHoldingsView(code: company.code, onAddAccount: addAccount)
@@ -129,15 +140,6 @@ struct TickerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: Theme.headerRowHeight)
             }
-            VStack(alignment: .trailing, spacing: Theme.headerChipSpacing) {
-                headerChipButton(
-                    title: isWatched ? "追加済み" : "リストに追加",
-                    style: isWatched ? .outlineAccent : .filledAccent,
-                    action: toggleWatch
-                )
-                headerChipButton(title: "保有情報", style: .paper, action: openHoldings)
-            }
-            .frame(height: Theme.headerSideHeight)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -146,55 +148,6 @@ struct TickerView: View {
     private var nameFont: Font {
         let size = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
         return .system(size: size, weight: .bold)
-    }
-
-    private enum HeaderChipStyle {
-        case filledAccent
-        case outlineAccent
-        case paper
-    }
-
-    private func headerChipButton(
-        title: String, style: HeaderChipStyle, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            ZStack {
-                Text("リストに追加")
-                    .hidden()
-                Text(title)
-            }
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 10)
-            .frame(height: Theme.headerRowHeight)
-            .background(chipBackground(style))
-            .foregroundStyle(chipForeground(style))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay {
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(chipStroke(style), lineWidth: style == .outlineAccent ? 1.5 : 0)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func chipBackground(_ style: HeaderChipStyle) -> Color {
-        switch style {
-        case .filledAccent: Theme.accent
-        case .outlineAccent: Color.clear
-        case .paper: Color.white
-        }
-    }
-
-    private func chipForeground(_ style: HeaderChipStyle) -> Color {
-        switch style {
-        case .filledAccent: .black
-        case .outlineAccent: Theme.accent
-        case .paper: .black
-        }
-    }
-
-    private func chipStroke(_ style: HeaderChipStyle) -> Color {
-        style == .outlineAccent ? Theme.accent : Color.clear
     }
 
     private func hydrateSector() async {
