@@ -2,7 +2,9 @@
 
 App Store 用の公開ページは Cloudflare Worker `workers/legal/`（静的 HTML）。
 
-公開 URL: https://blt-legal.sollahiro.workers.dev/ （同じ本文は `/privacy`）
+公開 URL: https://sollahiro.com/blue-ticker/privacy
+
+`blt-legal` の Custom Domain が `sollahiro.com`。同じ本文は `/` · `/blue-ticker` · workers.dev でも出る。
 
 正本は公開 HTML。App Store Connect の App Privacy は、次と揃える（`PrivacyInfo.xcprivacy` も同じ種類）。
 
