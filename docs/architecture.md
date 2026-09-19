@@ -26,7 +26,7 @@ Meta → Struct → Norm → Viz
 | Meta | 発行体・書類の同定 | Search, Icon |
 | Struct | 開示の構造化（**正本**） | Filing, Statement, Statement-Notes |
 | Norm | 正規化・組立 | Breakdown（内訳正本）, Summary（組立スナップショット） |
-| Viz | 正規化値の分解・配分 | Waterfall, Sankey |
+| Viz | 正規化値の分解・配分 | Waterfall |
 | Feed | 縦依存の外 | Trend, Update, Status, Report |
 
 **Summary** は Statement / Statement-Notes / Breakdown 経路の組立（Filing は本文。`financials-summary-separation.md`）。

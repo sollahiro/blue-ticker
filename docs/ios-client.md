@@ -2,7 +2,7 @@
 
 ネイティブ iOS の IA・画面対応。実装は `Apps/BlueTicker`（`open Apps/BlueTicker/BlueTicker.xcodeproj`）。REST `/v1` の HTTP クライアント。サーバー契約の正本は REST（`architecture.md`）。見た目は iOS SDK 標準コンポーネント。Figma の長方形はプレースホルダ。
 
-ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。進捗は Linear Team `blue-ticker`（[BLT-53](https://linear.app/sollahiro/issue/BLT-53/ios-クライアントポンチ絵)）。条件面（Screen）は [BLT-49](https://linear.app/sollahiro/issue/BLT-49/jp-screen-v1-summary-横断検索)。
+ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。変動する進捗は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）。いまの床は Summary / Statement-Notes / Breakdown。条件面（Screen）は実装済み。
 
 `BlueTickerCore` をリンクしない。iOS 専用の非公開エンドポイントを足さない。DTO は公開 JSON の手書き。Core の内部型をコピーしない。
 
@@ -70,7 +70,6 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 背景 | 株価アプリ風のダーク。シェルはほぼ黒、カードは背景から浮かぶ濃いグレー、リスト行・コントロールはカードより黒寄り（`Theme.shell` / `Theme.card` / `Theme.control`）。紺の `#16446F` は使わない |
 | 履歴 | 名称検索の右上ツールバー。開いた銘柄をクライアントローカル（`UserDefaults`、最大 30 件）に残す |
 | 条件 | Screen。業種チップ + 3 プリセット。DualRangeSlider は出さない |
-| フロー | Sankey。未実装。銘柄の次カード（3 枚目）にする。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | 構想。銘柄カードからは外し、ロードマップに残す |
 | ニュース | 開発廃止。銘柄カードから外す。Brave 等の外部ニュースは載せない |
 | 概要の中タブ | 概要カード上端のピルで `業績` / `資産` / `効率性` を切り替える。`業績` は売上高・売上総利益・営業利益・純利益・営業CF・投資CF・フリーCF。`資産` は正味現金・ネットD/E・自己資本比率・流動比率・固定比率。`効率性` は粗利率・営業利益率・純利益率・ROIC・ROE |
@@ -111,7 +110,6 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 概要 | Summary | 年次の水準値。未集計は 404 |
 | 分解 | Waterfall | 行タップで要因分解。事業利益は売上差 / 粗利率差 / 販管費差。ROIC は利益率 / 回転率。ROE は純利益率 / 回転率 / レバレッジ。要因を選ぶと、緑／赤に応じた一文と計算式（と可能な範囲で計算に使った数値）を出す |
 | レポート | Filing | 銘柄カードから廃止。有報一覧は当面出さない |
-| フロー | Sankey | 銘柄の次カード。ロードマップ。smoke・`/sankey` は作らない。描画はクライアント責務（`sankey.md`） |
 | インタビュー | Report（構想） | ロードマップ。本来クライアント責務 |
 
 ## マイファンド（BLT-72）
@@ -246,4 +244,4 @@ Starter の MCP 月次上限で、銘柄ヘッダのコードと分解の一文�
 
 ## 関連
 
-`architecture.md` · `sankey.md` · `financials-summary-separation.md` · `api-auth.md` · `public-api.md` · `ios-privacy.md`
+`architecture.md` · `financials-summary-separation.md` · `api-auth.md` · `public-api.md` · `ios-privacy.md`
