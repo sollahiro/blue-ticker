@@ -4,8 +4,10 @@ App Store 用の免責とプライバシー方針。静的 HTML だけ。認証�
 
 **この Worker を `api.*` / `mcp.*` の前段に置かない。** Tunnel + Access はそのまま。
 
-公開 URL（workers.dev）: https://blt-legal.sollahiro.workers.dev/  
-同じ本文は `/privacy` でも出る。独自ドメイン（例: `legal.sollahiro.com`）は Cloudflare の Custom Domain で後から足せる。
+公開 URL:
+
+- https://sollahiro.com/blue-ticker/privacy
+- https://blt-legal.sollahiro.workers.dev/
 
 正本は `workers/legal/public/index.html`。
 
@@ -19,3 +21,5 @@ App Store 用の免責とプライバシー方針。静的 HTML だけ。認証�
 cd workers/legal
 npx wrangler@4 deploy
 ```
+
+`workers_dev` は必ず `true`（ルートだけだと workers.dev が消える）。
