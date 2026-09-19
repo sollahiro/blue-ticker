@@ -5,7 +5,7 @@ description: Fly / self-host / Cloudflare Tunnel・Access・GitHub Actions の�
 
 # デプロイと運用
 
-Neon write・RO 同期・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リリース tag は `.agents/skills/release/SKILL.md`。
+Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リリース tag は `.agents/skills/release/SKILL.md`。
 
 # blt-server デプロイ手順
 
