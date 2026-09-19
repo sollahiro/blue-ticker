@@ -63,7 +63,7 @@ set -a; . ./.env; set +a
 | 変数 | 意味 |
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
-| `BLT_INGEST_SKIP_POST` | `1` で status ページ・Linear 投稿・RO reset をスキップ |
+| `BLT_INGEST_SKIP_POST` | `1` で status ページ・Linear 投稿をスキップ |
 | `BLT_INGEST_SKIP_00` … `06` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
@@ -91,7 +91,7 @@ financials               … 組立スナップショット再計算
         ↓
 overviews                … 銘柄の短い会社説明（LLM。最新有報1件。financials 非依存。LLM 成功行は cache_version バンプでは再生成せず、最新 doc_id 変更と needs_review。`not_applicable` は版ずれで再実行）
         ↓
-（任意）status ページ / Linear 投稿 / RO reset
+（任意）status ページ / Linear 投稿
 ```
 
 `notes-heavy` と `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。
@@ -106,7 +106,6 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 
 1. `scripts/generate-status-page.sh` — `BLT_STATUS_HTML` が指すファイルがあればマーカー置換（無ければ skip。git は触らない）。失敗しても ingest 成否に影響させない
 2. `scripts/post-ingest-linear.sh` — `LINEAR_API_KEY` かつ `BLT_INGEST_WRITE=1` のとき、`status-report` を Linear Project「JP 機能サイクル」の status update へ投稿（Issue コメントはしない。未設定なら skip）
-3. `scripts/neon-reset-ro-from-parent.sh` — `NEON_*` 4 変数が揃うときのみ（WRITE 後）
 
 鮮度監視: `scripts/check-ingest-freshness.sh`。
 

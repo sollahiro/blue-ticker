@@ -85,11 +85,4 @@ ingest_post_hooks() {
       echo "WARN: post-ingest-linear.sh failed (ingest 成否には影響させない)" >&2
     fi
   fi
-
-  if [[ -x "$REPO/scripts/neon-reset-ro-from-parent.sh" ]]; then
-    echo "=== post: neon-reset-ro-from-parent ==="
-    if ! "$REPO/scripts/neon-reset-ro-from-parent.sh"; then
-      echo "WARN: neon-reset-ro-from-parent.sh failed (ingest 成否には影響させない)" >&2
-    fi
-  fi
 }
