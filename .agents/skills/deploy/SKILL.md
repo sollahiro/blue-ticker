@@ -103,6 +103,17 @@ fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev
   BLT_FEED_TREND_TOKEN='...'
 ```
 
+### Legal page Worker
+
+App Store 用の免責・プライバシーは静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+
+```bash
+cd workers/legal
+npx wrangler@4 deploy
+```
+
+`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は `https://blt-legal.<account>.workers.dev/`。独自ドメインは後から Custom Domain。
+
 ### REST Service Token
 
 ```bash
@@ -195,6 +206,6 @@ Tunnel + Access（SSO / Service Token / MCP OAuth。MCP は開発用）。Bearer
 |---|---|---|
 | Fly secrets | API キー / DB / Access / Tunnel | 再発行・`fly secrets set` |
 | Neon | 全テーブル | dump または再 ingest |
-| Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット） | 本 skill で再作成。ZIP は EDINET 再取得可 |
+| Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット）/ Workers（Feed Trend・Legal page） | 本 skill で再作成。ZIP は EDINET 再取得可 |
 | ローカル Mac | 手元スケジュール・`.env` | 本 skill 定期同期 |
 | Fly Volume `/data` | EDINET キャッシュ（L1） | 再取得または R2 L2 |

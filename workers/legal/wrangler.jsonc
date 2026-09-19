@@ -1,0 +1,8 @@
+{
+  "name": "blt-legal",
+  "compatibility_date": "2026-09-19",
+  // App Store 用の免責・プライバシー静的ページ。api.* / mcp.* の前段に置かない。
+  "assets": {
+    "directory": "./public"
+  }
+}

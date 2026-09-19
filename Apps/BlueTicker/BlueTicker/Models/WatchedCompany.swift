@@ -3,11 +3,12 @@ import SwiftData
 
 @Model
 final class WatchedCompany {
-    var code: String
-    var name: String
-    var sector: String
+    /// CloudKit 同期のため、非 Optional は既定値を持つ。
+    var code: String = ""
+    var name: String = ""
+    var sector: String = ""
     var iconURL: String?
-    var addedAt: Date
+    var addedAt: Date = Date.now
     /// リスト全体の並び。小さいほど上。
     var sortOrder: Int = 0
     /// 株数。取得単価と揃って初めて保有。
