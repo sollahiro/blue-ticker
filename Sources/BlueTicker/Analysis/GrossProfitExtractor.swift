@@ -30,7 +30,7 @@ enum GrossProfitExtractor {
         }
 
         // 保険は粗利益を全年 null にする。direct / 営業収益−営業費用+販管費 / 業務粗利益 /
-        // 営業総利益 / TextBlock / 売上−原価（原価0）のいずれも採用しない。
+        // 営業総利益 / TextBlock / 売上−原価のいずれも採用しない。
         if Xbrl.isInsuranceFiling(fieldSet) {
             return GrossProfitResult(
                 grossProfit: nil, grossProfitPrior: nil, grossProfitLabel: nil,
@@ -98,10 +98,15 @@ enum GrossProfitExtractor {
             return textblockResult
         }
 
-        // 計算法: 売上高 − 売上原価（売上原価タグがない場合は 0 扱い）
-        if salesItem.tag != nil {
-            let gpCurrent: Double? = salesItem.current.map { $0 - (costsItem.current ?? 0.0) }
-            let gpPrior: Double? = salesItem.prior.map { $0 - (costsItem.prior ?? 0.0) }
+        // 計算法: 売上高 − 売上原価。その年に原価の開示が無いときは計算しない。
+        // 欠測原価を 0 にすると GP＝売上（粗利率 100%）を発明する（NTT S100YCP3）。
+        if salesItem.tag != nil, costsItem.tag != nil {
+            let gpCurrent = salesItem.current.flatMap { sales in
+                costsItem.current.map { sales - $0 }
+            }
+            let gpPrior = salesItem.prior.flatMap { sales in
+                costsItem.prior.map { sales - $0 }
+            }
             if gpCurrent != nil || gpPrior != nil {
                 return GrossProfitResult(
                     grossProfit: gpCurrent,

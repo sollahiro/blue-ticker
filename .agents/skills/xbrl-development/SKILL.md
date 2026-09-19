@@ -187,7 +187,7 @@ J-GAAP / IFRS:
   3. 営業収益 − 営業費用 + 販管費: 販管費が営業費用の内数であるクレジット・割賦等
      （`OperatingRevenue1` / `OperatingExpenses` / `sgaDirectTags`。銀行部品より先）
   4. 銀行業: Xbrl.businessGrossProfitComponents（収益/費用の符号付き合算）
-  5. 計算法: 売上高タグ − 売上原価タグ
+  5. 計算法: 売上高タグ − 売上原価タグ（両方ある年だけ。原価欠測を 0 にして売上を GP にしない）
      - Xbrl.grossProfitSalesTags / Xbrl.grossProfitCostsTags 参照
   6. IFRS PL TextBlock フォールバック（連結PLがTextBlockのみの場合）
   7. 連結値がなければ個別値にフォールバック

@@ -1,6 +1,6 @@
 // 損益計算書（Duration コンテキスト）から売上総利益を抽出するロジックを検証する。
 // 抽出戦略: 直接法（販管費の直上が営業総利益ならそちら。イオンは事業利益＝営業利益）
-// → 営業総利益 → 営業収益−営業費用+販管費 → 銀行業務粗利益 → 計算法
+// → 営業総利益 → 営業収益−営業費用+販管費 → 銀行業務粗利益 → 計算法（売上−原価。原価欠測は null）
 
 import Testing
 import Foundation
@@ -324,11 +324,48 @@ import Foundation
         }
     }
 
-    @Test func testComputedNoCogsUsesSalesOnly() {
-        // 売上原価タグがない場合、売上高がそのまま売上総利益になる（COGS=0扱い）
+    @Test func testComputedNoCogsLeavesGrossProfitNil() {
+        // 売上原価タグが無いときは売上高を粗利益にしない（粗利率 100% を発明しない）
         let xml = XBRLTestSupport.makeXbrlDuration("""
             <jppfs_cor:NetSales contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:NetSales>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+            #expect(result.grossProfitPrior == nil)
+        }
+    }
+
+    @Test func testIfrsOperatingRevenuesWithoutGrossProfitIsNil() {
+        // NTT S100YCP3: OperatingRevenuesIFRS と営業利益はあるが、売上総利益タグも売上原価も無い。
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:OperatingRevenuesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">14409121000000</jpifrs_cor:OperatingRevenuesIFRS>
+            <jpifrs_cor:OperatingRevenuesIFRS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">13704727000000</jpifrs_cor:OperatingRevenuesIFRS>
+            <jpifrs_cor:OperatingProfitLossIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1706221000000</jpifrs_cor:OperatingProfitLossIFRS>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.accountingStandard == "IFRS")
+            #expect(result.method == "not_found")
+            #expect(result.grossProfit == nil)
+            #expect(result.grossProfitPrior == nil)
+        }
+    }
+
+    @Test func testComputedDisclosedZeroCogsStillComputes() {
+        // 売上原価タグが 0 として開示されているときは計算する（欠測とは違う）
+        let xml = XBRLTestSupport.makeXbrlDuration("""
+            <jppfs_cor:NetSales contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jppfs_cor:NetSales>
+            <jppfs_cor:CostOfSales contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">0</jppfs_cor:CostOfSales>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
@@ -587,5 +624,13 @@ import Foundation
         let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
         #expect(result.method == "not_found")
         #expect(result.grossProfit == nil)
+    }
+
+    @Test func testOperatingRevenuesIFRSDoesNotComputeGrossProfitWithoutCogs() {
+        let fs = makeFieldSet(("OperatingRevenuesIFRS", 14_409_121_000_000.0, 13_704_727_000_000.0))
+        let result = GrossProfitExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+        #expect(result.grossProfitPrior == nil)
     }
 }
