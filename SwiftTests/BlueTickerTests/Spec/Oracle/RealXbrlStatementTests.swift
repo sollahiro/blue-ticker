@@ -343,6 +343,7 @@ import Foundation
     func nttSummarySalesUsesOperatingRevenuesIFRS() async throws {
         // 回帰: Summary 売上候補に本表 `OperatingRevenuesIFRS`（営業収益）が無いと sales=nil になる。
         // 実データ: 9432 NTT S100YCP3（2026-03期）営業収益 14,409,121 百万円。
+        // 売上総利益は未開示。営業収益を GP にコピーしない。
         guard await Self.ensureAvailable("S100YCP3") else { return }
         let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100YCP3", statementTypes: [.incomeStatement]))
@@ -354,6 +355,7 @@ import Foundation
         #expect(financials?.sales == 14_409_121_000_000)
         #expect(financials?.salesLabel == "営業収益")
         #expect(financials?.operatingProfit == 1_706_221_000_000)
+        #expect(financials?.grossProfit == nil)
     }
 
     // MARK: - 業種別本表売上タグ（fin-v14）

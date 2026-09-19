@@ -14,6 +14,10 @@
 // 3,910,376 が両方ある。販管費 3,639,916 は営業総利益から落ち、営業利益 270,459。
 // Waterfall 事業利益 = GP − 販管費 なので GP は営業総利益。事業利益＝営業利益。
 //
+// NTT 9432 / S100YCP3（26/03 有報）:
+// 本表は営業収益 / 営業費用 / 営業利益。売上総利益行も GrossProfit タグも無い。
+// 営業収益を GP にコピーして粗利率 100% にしてはいけない。
+//
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
 import Foundation
@@ -79,5 +83,25 @@ import Testing
         let sga = try #require(values.sga)
         let op = try #require(values.operatingProfit)
         #expect(abs((gp - sga) - op) < 2_000_000)
+    }
+
+    @Test func nttS100YCP3LeavesGrossProfitNilWhenUndisclosed() async throws {
+        // NTT 26/03。本表は営業収益 / 営業費用 / 営業利益。売上総利益行も GrossProfit タグも無い。
+        // 営業収益を GP にコピーして粗利率 100% にしてはいけない。
+        guard let dir = await Self.ensureAvailable("S100YCP3") else { return }
+
+        let (fs, std) = XBRLTestSupport.durationFieldSet(in: dir)
+        let result = GrossProfitExtractor.extract(
+            fieldSet: fs, accountingStandard: std, xbrlDir: dir)
+
+        #expect(std == "IFRS")
+        #expect(result.method == "not_found")
+        #expect(result.grossProfit == nil)
+        #expect(result.grossProfitPrior == nil)
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(values.sales == 14_409_121_000_000)
+        #expect(values.operatingProfit == 1_706_221_000_000)
+        #expect(values.grossProfit == nil)
     }
 }

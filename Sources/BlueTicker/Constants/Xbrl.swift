@@ -114,7 +114,7 @@ enum Xbrl {
         "OperatingRevenue",  // キャンバス 4575 等の本表「事業収益」
     ]
 
-    /// 創薬等の本表「事業収益」。売上原価が無く GP＝売上（原価0）になるのを防ぐ。
+    /// 創薬等の本表「事業収益」。売上−原価の計算法の売上側に載せない。
     static let businessRevenueTags: [String] = [
         "BusinessRevenue",
         "BusinessRevenues",
@@ -127,12 +127,15 @@ enum Xbrl {
     ]
 
     /// 売上−原価の計算法に使わない営業収益合計（金融・通信・海運・コンビニ営業総収入）。
-    /// 売上原価タグが無く GP＝売上（原価0）になるのを防ぐ。
+    /// Extractor は原価欠測時に売上を GP へコピーしないが、ここからも除外して二重に防ぐ。
     static let operatingRevenueWithoutMerchandiseCogsTags: [String] = [
         "OperatingRevenueSPF",
         "OperatingRevenueCMD",
         "OperatingRevenueIVT",
         "OperatingRevenueIFRS",
+        "OperatingRevenuesIFRS",  // NTT。本表の営業収益。売上総利益行も売上原価も無い
+        "OperatingRevenuesIFRSKeyFinancialData",
+        "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenueContinuingOperationsIFRS",
         "OperatingRevenueOILTelecommunications",
         "OperatingRevenueRevenueIFRS",
@@ -342,8 +345,8 @@ enum Xbrl {
     // netSalesTags を単一の真実源とし、そこから経常収益タグ（銀行等の ordinaryRevenueTags）と
     // 保険売上タグ（insuranceSalesTags）を除外して導出する。独立手書きリストを持たないことで
     // 「片側だけタグが腐り not_found に落ちる」事故を防ぎ（issue #24）、かつ売上原価を持たない
-    // 金融（銀行の経常収益・保険の保険収益）と事業収益（創薬の事業費用型 PL）が
-    // 「GP＝売上（原価0扱い）」という無意味な値を誤算出するのを防ぐ。
+    // 金融（銀行の経常収益・保険の保険収益）と事業収益（創薬の事業費用型 PL）を計算法に載せない。
+    // 原価欠測時の売上コピー自体は GrossProfitExtractor が拒否する。
     static let grossProfitSalesTags: [String] = netSalesTags.filter {
         !ordinaryRevenueTags.contains($0) && !insuranceSalesTags.contains($0)
             && !businessRevenueTags.contains($0)
