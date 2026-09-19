@@ -13,14 +13,6 @@
 		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* APIConfiguration.swift */; };
 		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* DTOs.swift */; };
 		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* APIClient.swift */; };
-		AA0000000000000000000024 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000024 /* ResponseCache.swift */; };
-		AA0000000000000000000022 /* AccessSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* AccessSession.swift */; };
-		AA0000000000000000000023 /* AccessLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000023 /* AccessLoginView.swift */; };
-		AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000025 /* HAPISConsumerModels.swift */; };
-		AA0000000000000000000026 /* HAPISAttestation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000026 /* HAPISAttestation.swift */; };
-		AA0000000000000000000027 /* HAPISTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000027 /* HAPISTokenStore.swift */; };
-		AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000028 /* HAPISConsumerClient.swift */; };
-		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000007 /* WatchedCompany.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* WatchedCompany.swift */; };
 		AA0000000000000000000008 /* CompanyRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* CompanyRef.swift */; };
 		AA0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000009 /* RootView.swift */; };
@@ -32,12 +24,21 @@
 		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016 /* TickerView.swift */; };
 		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* SummaryView.swift */; };
 		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
+		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
+		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
+		AA0000000000000000000022 /* AccessSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* AccessSession.swift */; };
+		AA0000000000000000000023 /* AccessLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000023 /* AccessLoginView.swift */; };
+		AA0000000000000000000024 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000024 /* ResponseCache.swift */; };
+		AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000025 /* HAPISConsumerModels.swift */; };
+		AA0000000000000000000026 /* HAPISAttestation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000026 /* HAPISAttestation.swift */; };
+		AA0000000000000000000027 /* HAPISTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000027 /* HAPISTokenStore.swift */; };
+		AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000028 /* HAPISConsumerClient.swift */; };
+		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* ZeroAxisFill.swift */; };
 		AA0000000000000000000033 /* FundMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* FundMath.swift */; };
 		AA0000000000000000000034 /* FundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* FundView.swift */; };
 		AA0000000000000000000035 /* FundPositionEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* FundPositionEditView.swift */; };
-		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
-		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
+		AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000037 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,14 +49,6 @@
 		BB0000000000000000000004 /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
 		BB0000000000000000000005 /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		BB0000000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		BB0000000000000000000024 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
-		BB0000000000000000000022 /* AccessSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSession.swift; sourceTree = "<group>"; };
-		BB0000000000000000000023 /* AccessLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessLoginView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000025 /* HAPISConsumerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerModels.swift; sourceTree = "<group>"; };
-		BB0000000000000000000026 /* HAPISAttestation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISAttestation.swift; sourceTree = "<group>"; };
-		BB0000000000000000000027 /* HAPISTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISTokenStore.swift; sourceTree = "<group>"; };
-		BB0000000000000000000028 /* HAPISConsumerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerClient.swift; sourceTree = "<group>"; };
-		BB0000000000000000000031 /* HAPISOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISOriginGate.swift; sourceTree = "<group>"; };
 		BB0000000000000000000007 /* WatchedCompany.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedCompany.swift; sourceTree = "<group>"; };
 		BB0000000000000000000008 /* CompanyRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRef.swift; sourceTree = "<group>"; };
 		BB0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -67,15 +60,25 @@
 		BB0000000000000000000016 /* TickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000017 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
+		BB0000000000000000000022 /* AccessSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSession.swift; sourceTree = "<group>"; };
+		BB0000000000000000000023 /* AccessLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessLoginView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000024 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
+		BB0000000000000000000025 /* HAPISConsumerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerModels.swift; sourceTree = "<group>"; };
+		BB0000000000000000000026 /* HAPISAttestation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISAttestation.swift; sourceTree = "<group>"; };
+		BB0000000000000000000027 /* HAPISTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISTokenStore.swift; sourceTree = "<group>"; };
+		BB0000000000000000000028 /* HAPISConsumerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerClient.swift; sourceTree = "<group>"; };
+		BB0000000000000000000029 /* BlueTicker-Debug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BlueTicker-Debug.entitlements"; sourceTree = "<group>"; };
+		BB0000000000000000000030 /* BlueTicker-Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BlueTicker-Release.entitlements"; sourceTree = "<group>"; };
+		BB0000000000000000000031 /* HAPISOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISOriginGate.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZeroAxisFill.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* FundMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundMath.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* FundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000035 /* FundPositionEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundPositionEditView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
-		BB0000000000000000000029 /* BlueTicker-Debug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BlueTicker-Debug.entitlements"; sourceTree = "<group>"; };
-		BB0000000000000000000030 /* BlueTicker-Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BlueTicker-Release.entitlements"; sourceTree = "<group>"; };
+		BB0000000000000000000037 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		BB0000000000000000000038 /* Info-Release.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,6 +114,8 @@
 				DD0000000000000000000006 /* Views */,
 				BB0000000000000000000019 /* Assets.xcassets */,
 				BB0000000000000000000020 /* Info.plist */,
+				BB0000000000000000000038 /* Info-Release.plist */,
+				BB0000000000000000000037 /* PrivacyInfo.xcprivacy */,
 				BB0000000000000000000029 /* BlueTicker-Debug.entitlements */,
 				BB0000000000000000000030 /* BlueTicker-Release.entitlements */,
 			);
@@ -144,37 +149,6 @@
 				BB0000000000000000000008 /* CompanyRef.swift */,
 			);
 			path = Models;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000009 /* HAPISConsumer */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000025 /* HAPISConsumerModels.swift */,
-				BB0000000000000000000026 /* HAPISAttestation.swift */,
-				BB0000000000000000000027 /* HAPISTokenStore.swift */,
-				BB0000000000000000000028 /* HAPISConsumerClient.swift */,
-				BB0000000000000000000031 /* HAPISOriginGate.swift */,
-			);
-			name = HAPISConsumer;
-			path = HAPISConsumer/Sources/HAPISConsumer;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000010 /* ZeroAxisFill */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000032 /* ZeroAxisFill.swift */,
-			);
-			name = ZeroAxisFill;
-			path = ZeroAxisFill/Sources/ZeroAxisFill;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000011 /* FundMath */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000033 /* FundMath.swift */,
-			);
-			name = FundMath;
-			path = FundMath/Sources/FundMath;
 			sourceTree = "<group>";
 		};
 		DD0000000000000000000006 /* Views */ = {
@@ -211,6 +185,37 @@
 				BB0000000000000000000018 /* BreakdownView.swift */,
 			);
 			path = Ticker;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000009 /* HAPISConsumer */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000025 /* HAPISConsumerModels.swift */,
+				BB0000000000000000000026 /* HAPISAttestation.swift */,
+				BB0000000000000000000027 /* HAPISTokenStore.swift */,
+				BB0000000000000000000028 /* HAPISConsumerClient.swift */,
+				BB0000000000000000000031 /* HAPISOriginGate.swift */,
+			);
+			name = HAPISConsumer;
+			path = HAPISConsumer/Sources/HAPISConsumer;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000010 /* ZeroAxisFill */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000032 /* ZeroAxisFill.swift */,
+			);
+			name = ZeroAxisFill;
+			path = ZeroAxisFill/Sources/ZeroAxisFill;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000011 /* FundMath */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000033 /* FundMath.swift */,
+			);
+			name = FundMath;
+			path = FundMath/Sources/FundMath;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -273,6 +278,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000019 /* Assets.xcassets in Resources */,
+				AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -361,13 +367,15 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "BlueTicker/BlueTicker-Debug.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = BM744XMK6M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueTicker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "同じ Wi-Fi 上の開発サーバーに接続します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -395,12 +403,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "BlueTicker/BlueTicker-Release.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = BM744XMK6M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = BlueTicker/Info.plist;
+				INFOPLIST_FILE = "BlueTicker/Info-Release.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
