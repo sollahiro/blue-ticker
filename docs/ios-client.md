@@ -8,7 +8,50 @@
 
 ## 置き場
 
-`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。CI は `.github/workflows/ci.yml` の `ios` ジョブ（`macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし）。`ios-paths` が `Apps/BlueTicker/` または `.github/workflows/ci.yml` の差分を見たときだけ走る。サーバーの `swift test` とはジョブを分けて並列に回す。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` を `swift test` する。別リポジトリは App Store 署名がサーバー CI を汚し始めたら分ける。Cloud Agent の Linux VM では `xcodebuild` が無い。
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
+
+マージ品質と配布は分け、同じ検証を二箇所で走らせない。
+
+| 経路 | 役割 |
+|---|---|
+| GitHub Actions `.github/workflows/ci.yml` | マージ品質。`ios` ジョブは `macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし。`ios-paths` が `Apps/BlueTicker/` または `ci.yml` の差分を見たときだけ走る。サーバーの `swift test` とはジョブを分けて並列 |
+| Xcode Cloud | 配布のみ。Release Archive → TestFlight Internal。ワークフローは App Store Connect が正本 |
+
+Xcode Cloud を GitHub の required check にしない。PR Changes も、Archive ワークフローへの Test / Analyze も足さない。GHA に Archive や TestFlight アップロードを足さない。証明書と ASC API キーは GitHub secrets に置かない。
+
+品質ゲートを Xcode Cloud に寄せるのは、アプリに XCTest が載ってシミュレータ実行がマージ条件になるとき、または署名なし compile では entitlements 差を捉えられなくなったときに限る。そのときは GHA `ios` を消して **PR + Test 専用の別ワークフロー**に置き換える（並走させない。Archive ワークフローに Test を足さない）。
+
+別リポジトリ化は、Xcode Cloud が署名を隔離しているあいだはしない。
+
+## 配布（TestFlight）
+
+導入範囲は Internal TestFlight まで。External と App Store Submit は公開範囲の拡張なので別判断。`v*` サーバー tag とは連動しない。チーム向け要約は Linear [Xcode Cloud（TestFlight 配布専用）](https://linear.app/sollahiro/document/xcode-cloudtestflight-配布専用-1f8cd760dc6f)（正本はこの節）。
+
+### ワークフロー（ASC に 1 本）
+
+- Project: `Apps/BlueTicker/BlueTicker.xcodeproj`、Scheme `BlueTicker`、configuration `Release`
+- Action: Archive のみ。Deployment Preparation は TestFlight (Internal Testing Only)
+- Post-action: TestFlight Internal（グループ 1 つ）
+- スタート条件: Tag Changes `ios-tf-*` のみ（導入後はタグを切らない）。日常は Xcode / App Store Connect の Start Build で、GHA 緑の `main` を選ぶ
+- Environment: Xcode を GHA `macos-26` にピン（現行コメントは 26.6）。Clean
+- `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `0.1.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する
+
+### ASC 手順（人が一度だけ）
+
+1. Xcode Cloud を有効化し、この GitHub リポジトリを接続する（Account Holder）
+2. 証明書作成を Xcode Cloud に許可する。手元の Development 証明書は触らない・失効しない。`.p12` を書き出さない。Fastlane match は使わない。`CODE_SIGN_STYLE = Automatic` のまま
+3. ワークフローを 1 本作る。ウィザードが付けがちな Test / Analyze は削除する
+4. Internal テスターグループを 1 つ作り、自分を入れる
+5. App Privacy と暗号申告は既存のまま（`ITSAppUsesNonExemptEncryption = NO`、文面は `ios-privacy.md`）。未入力なら埋めるだけ
+6. Team `BM744XMK6M`、Bundle `com.sollahiro.BlueTicker`、アプリ ID `6807425773` は新規発行しない。Release entitlements（App Attest production、CloudKit `iCloud.com.sollahiro.BlueTicker`、Push）もこの導入で足したり外したりしない
+
+Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight でも TestFlight 配信なら Attest は production。初回で HAPIS `enforce` が拒否したら、そのときだけ Deployment Preparation を TestFlight and App Store に上げ、Submit は足さない。
+
+### 運用
+
+1. iOS を含む変更は PR → GHA 緑 → `main`
+2. TestFlight に載せるときだけ、緑の `main` を Xcode Cloud で手動 Start Build
+3. Internal で実機確認（Release は開発ラボ無し、HAPIS ゲートウェイ固定）
 
 ## 決めたこと
 
