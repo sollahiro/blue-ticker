@@ -17,13 +17,6 @@ import Vapor
 @testable import BlueTickerCore
 @testable import BltServerCore
 
-private struct StubRoutesEsefTransport: EsefHTTPTransport {
-    var handler: @Sendable (URLRequest) throws -> (Data, URLResponse)
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try handler(request)
-    }
-}
-
 private func makeContext() -> BltServerContext {
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("blt-routes-tests-\(UUID().uuidString)", isDirectory: true)
@@ -430,65 +423,6 @@ private func send(
             #expect(status == .notFound)
             #expect(json?["status"] as? Int == 404)
         }
-    }
-
-
-    @Test func euCompaniesSearchEmptyQueryReturnsOkArray() async throws {
-        // GET /v1/eu/companies は EU/ESEF preview（skills 未掲載）。空クエリはネットワークなしで []。
-        try await withApp { app in
-            let request = Request(
-                application: app, method: .GET, url: URI(string: "/v1/eu/companies?q="),
-                on: app.eventLoopGroup.next())
-            let response = try await app.responder.respond(to: request).get()
-            #expect(response.status == .ok)
-            let body = response.body.string ?? ""
-            let data = Data(body.utf8)
-            let rows = try JSONSerialization.jsonObject(with: data) as? [Any]
-            #expect(rows?.isEmpty == true)
-        }
-    }
-
-    @Test func euCompaniesSearchReturnsSeededIdentifierHit() async throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blt-eu-search-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let transport = StubRoutesEsefTransport { _ in
-            throw EsefFilingsAPIError.httpStatus(500)
-        }
-        let client = EsefFilingsAPIClient(transport: transport)
-        let esefSearch = EsefSearchService(client: client, cacheDir: dir)
-        await esefSearch.seedIndex([
-            EsefEntity(identifier: "213800T8PC8Q4FYJZR07", name: "ATLAS COPCO AKTIEBOLAG"),
-        ])
-
-        let chatClient = ChatCompletionClient(
-            endpoint: ChatCompletionEndpoint(baseURL: "", apiKey: "", model: ""))
-        let context = BltServerContext(
-            apiKey: "test-key", cacheDir: dir, businessChatClient: chatClient,
-            geographyChatClient: chatClient, esefSearch: esefSearch)
-
-        let app = try await Application.make(.testing)
-        do {
-            try await registerRoutes(app, context: context, cfAccessTeamDomain: nil)
-            let request = Request(
-                application: app, method: .GET,
-                url: URI(string: "/v1/eu/companies?q=213800T8PC8Q4FYJZR07"),
-                on: app.eventLoopGroup.next())
-            let response = try await app.responder.respond(to: request).get()
-            #expect(response.status == .ok)
-            let data = Data((response.body.string ?? "").utf8)
-            let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-            #expect(rows?.count == 1)
-            #expect(rows?.first?["identifier"] as? String == "213800T8PC8Q4FYJZR07")
-            #expect(rows?.first?["region"] as? String == "EU")
-            #expect(rows?.first?["source"] as? String == "ESEF")
-        } catch {
-            try? await app.asyncShutdown()
-            throw error
-        }
-        try await app.asyncShutdown()
     }
 
     // MARK: - iconURLs（company_icons バッチ lookup）

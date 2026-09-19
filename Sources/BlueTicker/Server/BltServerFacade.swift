@@ -32,8 +32,6 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
-    /// EU/ESEF Meta Search（REST preview。skills/MCP 未掲載）。
-    let esefSearch: EsefSearchService
     /// 内訳取り込み business 軸の html_table 正規化（LLM）に使うクライアント。
     /// `XAI_BUSINESS_*` / `OPENAI_BUSINESS_*` が無いときは `UnavailableChatClient`。
     /// xbrl_facts 経路はこのフィールドに触れない。
@@ -51,8 +49,7 @@ public struct BltServerContext: Sendable {
         apiKey: String, cacheDir: URL, businessChatClient: ChatCompleting,
         geographyChatClient: ChatCompleting,
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
-        overviewModel: String = companyOverviewDefaultModel,
-        esefSearch: EsefSearchService? = nil
+        overviewModel: String = companyOverviewDefaultModel
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -61,7 +58,6 @@ public struct BltServerContext: Sendable {
         self.edinetClient = EdinetAPIClient(
             apiKey: apiKey, cacheStore: store, xbrlObjectStore: xbrlObjectStore)
         self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
-        self.esefSearch = esefSearch ?? EsefSearchService(cacheDir: esefCacheDir(cacheDir))
         self.businessChatClient = businessChatClient
         self.geographyChatClient = geographyChatClient
         self.overviewChatClient = overviewChatClient
@@ -175,19 +171,6 @@ public extension BltServerContext {
     func searchCompanies(q: String) async -> BltServerResponse {
         let results = await masterDataManager.search(q, limit: Api.companySearchLimit)
         return .ok(results.map(companyJSON))
-    }
-
-    /// EU/ESEF Meta Search（`GET /v1/eu/companies`）。skills / MCP 未掲載の preview。
-    func searchEuCompanies(q: String) async -> BltServerResponse {
-        do {
-            let results = try await esefSearch.search(q, limit: Api.companySearchLimit)
-            return .ok(results.map(esefCompanyJSON))
-        } catch EsefSearchError.emptyIndex {
-            // 索引未構築時は空配列（呼び出し側で refreshIndex が必要）。
-            return .ok([[String: Any]]())
-        } catch {
-            return .upstreamFailure("ESEF search failed")
-        }
     }
 
     func getFilings(code: String, maxYears: Int) async -> BltServerResponse {
@@ -941,28 +924,6 @@ private extension BltServerContext {
     /// 企業検索結果の公開 JSON。
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
-    }
-
-    func esefCompanyJSON(_ s: EsefSearchResult) -> [String: Any] {
-        var row: [String: Any] = [
-            "identifier": s.identifier,
-            "name": s.name,
-            "region": s.region,
-            "source": s.source,
-        ]
-        if let filing = s.matchedFiling {
-            row["matched_filing"] = [
-                "fxo_id": filing.fxoId,
-                "country": filing.country,
-                "period_end": filing.periodEnd,
-                "json_url": filing.jsonURL ?? NSNull(),
-                "package_url": filing.packageURL ?? NSNull(),
-                "report_url": filing.reportURL ?? NSNull(),
-            ] as [String: Any]
-        } else {
-            row["matched_filing"] = NSNull()
-        }
-        return row
     }
 }
 

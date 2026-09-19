@@ -15,7 +15,7 @@
 
 ## Class 依存
 
-実装・理解の順（下は上に依存）。JP / EU とも同じ。
+実装・理解の順（下は上に依存）。
 
 ```text
 Meta → Struct → Norm → Viz
@@ -31,22 +31,11 @@ Meta → Struct → Norm → Viz
 
 **Summary** は Statement / Statement-Notes / Breakdown 経路の組立（Filing は本文。`financials-summary-separation.md`）。
 
-## Region × Source（モノレポ命名）
+## Region × Source
 
-単一リポジトリで複数市場を扱う。命名の対応は固定:
+市場は `JP`、開示 Source は `EDINET`。実装の正は `Sources/BlueTicker/`、探索スクリプトは `scripts/jp/edinet/`、cache は `tmp_cache/edinet/`。規律の短文正本: `.agents/rules/regions.md`。
 
-| 軸 | 対 |
-|---|---|
-| **Region** | `JP` ↔ `EU` |
-| **Source** | `EDINET` ↔ `ESEF` |
-
-| | JP / EDINET | EU / ESEF |
-|---|---|---|
-| 実装の正 | `Sources/BlueTicker/`（現行） | 探索: `scripts/eu/esef/`（Core 追加時は Region/Source がパスから分かる場所） |
-| 探索スクリプト | `scripts/jp/edinet/`（ポインタ） | `scripts/eu/esef/` |
-| cache | `tmp_cache/edinet/` | `tmp_cache/eu/esef/` |
-
-規律の短文正本: `.agents/rules/regions.md`。共有するのは FieldSet / resolve / 配信契約など Source 非依存層。コンテキスト名・タグ定数・パッケージ取得は Source 配下に閉じる。EU の方針は `eu-esef-roadmap.md`、進捗・未決は Linear（[EU 現在地](https://linear.app/sollahiro/document/eu-現在地-844f7112eb70)）。
+EU / ESEF 製品トラックは中止。
 
 ## デプロイモード
 
@@ -128,7 +117,6 @@ flowchart LR
 | `GET /healthz` | ヘルス（認証不要）・`cache_versions` |
 | `GET /v1/skills` · `/v1/skills/{id}` | 能力カタログ |
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
-| `GET /v1/eu/companies?q=` | EU/ESEF Meta Search（**preview**。skills 未掲載） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。MCP には出さない） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |

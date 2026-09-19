@@ -43,5 +43,3 @@ chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
 # limit 等は ingest.local.env を編集するだけ
 ./scripts/jp/edinet/ingest-run-cycle.local.sh
 ```
-
-対となる EU / ESEF 探索: `scripts/eu/esef/`。
