@@ -72,6 +72,9 @@ enum CompanyIconOriginOverride {
     /// 5334 の ogp は niterragroup.com へリダイレクトする。
     /// 2026-09-20: visual GO。9432 NTT 公式 apple-touch。9439 / 7427 / 9412 は R2 CDN。
     /// prtimes.jp 直リンクは使わない。
+    /// 2026-09-20 weekly: listed × company_icons 欠行。自動 pipeline 不能（紙面・URL無し・
+    /// Pronexus・先頭 rel=icon が極小）の公式画像。5805 の origin apple-touch は小冊子なので不採用。
+    /// 7236 ティラドは添付高解像度ロゴを白地・余白の 512 PNG にして R2 CDN へ（公式 192 は低解像）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -177,6 +180,21 @@ enum CompanyIconOriginOverride {
         "9439": .imageURL("https://icons.sollahiro.com/company-icons/9439.png"), // R2 CDN // pragma: allowlist secret
         "7427": .imageURL("https://icons.sollahiro.com/company-icons/7427.png"), // R2 CDN // pragma: allowlist secret
         "9412": .imageURL("https://icons.sollahiro.com/company-icons/9412.png"), // R2 CDN // pragma: allowlist secret
+
+        "8198": .imageURL(
+            "https://www.mv-tokai.co.jp/wp/wp-content/uploads/fbrfg/apple-touch-icon.png"),
+        "2206": .imageURL("https://www.glico.com/assets/images/original/glicoogp__1.png"),
+        "6432": .imageURL("https://www.takeuchi-japan.com/apple-icon.png"),
+        "8897": .imageURL("https://mirarth.co.jp/assets/img/common/apple-touch-icon.png"),
+        "2790": .imageURL("https://www.nafco.tv/app-files/img/symbol/apple-touch-icon.webp"),
+        "9706": .imageURL(
+            "https://www.tokyo-airport-bldg.co.jp/site_resource/common/img/000013562.png"),
+        "9682": .imageURL("https://www.dts.co.jp/apple-touch-icon.png"),
+        "9413": .imageURL("https://www.tv-tokyo.co.jp/apple-touch-icon.png"),
+        "2109": .imageURL(
+            "https://www.msdm-hd.com/jp/app-files/img/symbol/apple-touch-icon.png"),
+        "7236": .imageURL("https://icons.sollahiro.com/company-icons/7236.png"), // R2 CDN white-padded TRAD // pragma: allowlist secret
+        "7414": .imageURL("https://www.onoken.co.jp/apple-touch-icon.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
