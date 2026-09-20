@@ -1224,6 +1224,102 @@ import Foundation
         #expect(reconciled == 31_514)
     }
 
+    /// 親を分割しきれない「うち」子を subtotal へ落とす（商船三井 S100YI2T）。
+    /// SPEC_ORACLE: コンテナ船 57 / 不動産 1,255 は内数。製品輸送・ウェルビーイングは segment のまま。
+    /// 花王型（親落とし）の逆。rows はフラット。memberParents が無いと needs_review のまま。
+    @Test func employeesDemotesPartialNestedChildrenAsSubtotal() throws {
+        let facts = [
+            Self.employeeFact("AssociatedBusinessesReportableSegmentsMember", 483),
+            Self.employeeFact("ContainershipsReportableSegmentsMember", 57),
+            Self.employeeFact("CorporateSharedMember", 548),
+            Self.employeeFact("DryBulkBusinessReportableSegmentsMember", 328),
+            Self.employeeFact("EnergyBusinessReportableSegmentsMember", 1_230),
+            Self.employeeFact(Self.otherBusinessMember, 989),
+            Self.employeeFact("ProductTransportBusinessReportableSegmentsMember", 5_341),
+            Self.employeeFact("RealEstateBusinessReportableSegmentsMember", 1_255),
+            Self.employeeFact("WellbeingAndLifestyleBusinessReportableSegmentsMember", 2_648),
+        ]
+        let labels: [String: String] = [
+            "AssociatedBusinessesReportableSegmentsMember": "関連事業",
+            "ContainershipsReportableSegmentsMember": "コンテナ船事業",
+            "DryBulkBusinessReportableSegmentsMember": "ドライバルク事業",
+            "EnergyBusinessReportableSegmentsMember": "エネルギー事業",
+            "ProductTransportBusinessReportableSegmentsMember": "製品輸送事業",
+            "RealEstateBusinessReportableSegmentsMember": "不動産事業",
+            "WellbeingAndLifestyleBusinessReportableSegmentsMember": "ウェルビーイングライフ事業",
+        ]
+        let parents = [
+            "ContainershipsReportableSegmentsMember": "ProductTransportBusinessReportableSegmentsMember",
+            "RealEstateBusinessReportableSegmentsMember": "WellbeingAndLifestyleBusinessReportableSegmentsMember",
+        ]
+
+        let unresolved = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: breakdownAxisEmployees, labelsByTag: labels))
+        #expect(unresolved.needsReview == true)
+        #expect(unresolved.warnings.contains("employees_segment_sum_far_from_total"))
+
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: breakdownAxisEmployees, labelsByTag: labels,
+                memberParents: parents))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.denominator == 11_567)
+        let containerships = try #require(
+            snap.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "subtotal")
+        #expect(containerships.amount == 57)
+        let realEstate = try #require(
+            snap.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "subtotal")
+        #expect(realEstate.amount == 1_255)
+        let product = try #require(
+            snap.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
+        #expect(product.rowKind == "segment")
+        let wellbeing = try #require(
+            snap.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
+        #expect(wellbeing.rowKind == "segment")
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 11_567)
+        #expect(snap.rows.contains { $0.rowKind == "subtotal" && $0.labelRaw.contains("Containerships") })
+    }
+
+    /// 花王型の親落としは memberParents があっても先に走り、うち落としは分母が既に合うので触らない。
+    @Test func employeesKeepsKaoParentDemotionWhenChildrenPartitionParent() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("BusinessConnectedBusinessReportableSegmentMember", 841),
+                    Self.employeeFact("ChemicalBusinessReportableSegmentMember", 4_068),
+                    Self.employeeFact("CosmeticsBusinessReportableSegmentMember", 9_331),
+                    Self.employeeFact("GlobalConsumerCareBusinessReportableSegmentMember", 26_192),
+                    Self.employeeFact("HealthBeautyCareBusinessReportableSegmentMember", 7_521),
+                    Self.employeeFact("HygieneLivingCareBusinessReportableSegmentMember", 8_499),
+                    Self.employeeFact("CorporateSharedMember", 1_254),
+                ],
+                total: 31_514, axis: breakdownAxisEmployees,
+                memberParents: [
+                    "CosmeticsBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                    "HealthBeautyCareBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                    "HygieneLivingCareBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                ]))
+        #expect(snap.needsReview == false)
+        let parent = try #require(
+            snap.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
+        #expect(parent.rowKind == "subtotal")
+        let cosmetics = try #require(
+            snap.rows.first { $0.labelRaw == "CosmeticsBusinessReportableSegmentMember" })
+        #expect(cosmetics.rowKind == "segment")
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 31_514)
+    }
+
     /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。
     @Test func researchAndDevelopmentSubtractsEliminationWhenThatReconcilesToTotal() throws {
         let snap = try #require(

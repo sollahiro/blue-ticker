@@ -122,9 +122,11 @@ import Foundation
     @Test func kaoEmployeesDemotesGlobalConsumerCareParent() async throws {
         guard await Self.ensureAvailable("S100XT6G") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100XT6G")
+        let parents = XBRLUtils.operatingSegmentMemberParents(in: Self.xbrlDir("S100XT6G"))
         let emp = try #require(
             BreakdownNormalizer.normalizeEmployees(
-                facts: facts, total: 31_514, axis: "employees", labelsByTag: labels))
+                facts: facts, total: 31_514, axis: "employees", labelsByTag: labels,
+                memberParents: parents))
         #expect(emp.needsReview == false)
         let parent = try #require(
             emp.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
@@ -132,6 +134,41 @@ import Foundation
         let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
         #expect(reconciled == 31_514)
+    }
+
+    @Test func mitsuiOSKEmployeesDemotesOfWhichNestedChildren() async throws {
+        guard await Self.ensureAvailable("S100YI2T") else { return }
+        let dir = Self.xbrlDir("S100YI2T")
+        let (facts, labels) = Self.employeesFactsAndLabels("S100YI2T")
+        let parents = XBRLUtils.operatingSegmentMemberParents(in: dir)
+        #expect(parents["ContainershipsReportableSegmentsMember"]
+            == "ProductTransportBusinessReportableSegmentsMember")
+        #expect(parents["RealEstateBusinessReportableSegmentsMember"]
+            == "WellbeingAndLifestyleBusinessReportableSegmentsMember")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: "employees", labelsByTag: labels,
+                memberParents: parents))
+        #expect(emp.needsReview == false)
+        #expect(emp.warnings.isEmpty)
+        #expect(emp.denominator == 11_567)
+        let containerships = try #require(
+            emp.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "subtotal")
+        #expect(containerships.amount == 57)
+        let realEstate = try #require(
+            emp.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "subtotal")
+        #expect(realEstate.amount == 1_255)
+        let product = try #require(
+            emp.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
+        #expect(product.rowKind == "segment")
+        let wellbeing = try #require(
+            emp.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
+        #expect(wellbeing.rowKind == "segment")
+        let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 11_567)
     }
 
     @Test func nttResearchAndDevelopmentSubtractsIntersegmentElimination() async throws {

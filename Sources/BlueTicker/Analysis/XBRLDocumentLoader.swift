@@ -142,6 +142,26 @@ extension XBRLUtils {
         return labelsByTag[child]
     }
 
+    /// 報告セグメント member の presentation 直親。`ReportableSegmentsMember` 等のラッパは除く。
+    /// 内訳の「うち」（親を分割しきれない子）判定用。child local name → parent local name。
+    /// 複数 role で親が割れたときは辞書順の小さい親を残す（走査順に依存させない）。
+    static func operatingSegmentMemberParents(in dir: URL) -> [String: String] {
+        let skipParents = Xbrl.segmentSubtotalMemberNames.union(Xbrl.segmentReconcilingMemberNames)
+        var result: [String: String] = [:]
+        for roleParents in loadPresentationParents(in: dir).values {
+            for (child, parents) in roleParents {
+                let relevant = parents.subtracting(skipParents)
+                guard relevant.count == 1, let parent = relevant.first, parent != child else { continue }
+                if let existing = result[child], existing != parent {
+                    result[child] = min(existing, parent)
+                } else {
+                    result[child] = parent
+                }
+            }
+        }
+        return result
+    }
+
     /// ラベルリンクベースから {local_tag: {ラベルロールURI: テキスト}} を作る（`loadLabelsByTag` の
     /// ロール別・非収束版）。`preferredLabel`（presentation linkbase の presentationArc 属性。合計行・
     /// 期首/期末残高等でどのロールのラベルを使うべきかを示す）に応じて Statement 取り込み Statement が正しい
