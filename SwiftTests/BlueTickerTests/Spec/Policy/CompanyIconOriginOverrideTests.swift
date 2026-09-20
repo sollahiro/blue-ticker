@@ -242,6 +242,36 @@ import Testing
         }
     }
 
+    /// 2026-09-20 weekly: listed × company_icons 欠行。自動 pipeline 不能分の公式画像。
+    /// 5805 の origin apple-touch は小冊子なのでマップに載せない。
+    @Test func pins20260920WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("8198", "https://www.mv-tokai.co.jp/wp/wp-content/uploads/fbrfg/apple-touch-icon.png"),
+            ("2206", "https://www.glico.com/assets/images/original/glicoogp__1.png"),
+            ("6432", "https://www.takeuchi-japan.com/apple-icon.png"),
+            ("8897", "https://mirarth.co.jp/assets/img/common/apple-touch-icon.png"),
+            ("2790", "https://www.nafco.tv/app-files/img/symbol/apple-touch-icon.webp"),
+            ("9706", "https://www.tokyo-airport-bldg.co.jp/site_resource/common/img/000013562.png"),
+            ("9682", "https://www.dts.co.jp/apple-touch-icon.png"),
+            ("9413", "https://www.tv-tokyo.co.jp/apple-touch-icon.png"),
+            ("2109", "https://www.msdm-hd.com/jp/app-files/img/symbol/apple-touch-icon.png"),
+            ("7236", "https://www.trad.co.jp/wp-content/uploads/2026/06/cropped-favicon-192x192.png"),
+            ("7414", "https://www.onoken.co.jp/apple-touch-icon.png"),
+        ]
+        #expect(expected.count == 11)
+        #expect(Set(expected.map(\.0)).count == 11)
+        #expect(CompanyIconOriginOverride.manualSources["6902"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["5805"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
