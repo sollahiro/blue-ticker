@@ -309,7 +309,7 @@ private func dispatchMcpTool(
         let docId = args["doc_id"]?.stringValue
         let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
         return mapReasonedResult(
-            await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger).reasoned,
+            await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
 
     case "get_statement":
@@ -327,7 +327,7 @@ private func dispatchMcpTool(
             return errorToolResult("note_type は必須です")
         }
         return mapReasonedResult(
-            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger).reasoned,
+            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger),
             notFoundMessage: "指定された note_type の注記は未算出です")
 
     case "get_feed_updates":

@@ -198,7 +198,7 @@ func registerRoutes(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
                 logger: req.logger
-            ).reasoned,
+            ),
             notFoundMessage: breakdownNotFoundMessage(axis: axis))
     }
 
@@ -233,7 +233,7 @@ func registerRoutes(
             await serveStoredStatementNote(
                 code: code, docId: docId, noteType: noteType, db: dbAvailable ? req.db : nil,
                 logger: req.logger
-            ).reasoned,
+            ),
             notFoundMessage: "指定された note_type の注記は未算出です")
     }
 
@@ -285,14 +285,22 @@ func registerRoutes(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
 }
 
-/// クエリ文字列をキー→値の辞書へ落とす（同一キー重複は後勝ち）。Screen の `{metric}_min` 等、
+/// クエリ文字列をキー→値の辞書へ落とす（同一キー重複はカンマ連結。`sector=A&sector=B` は
+/// `sector=A,B` と同義。単一値キーの重複は不正値として 400 になる）。Screen の `{metric}_min` 等、
 /// キー集合が動的なクエリを許可リスト検証へ渡すために使う。
 private func rawQueryItems(_ req: Request) -> [String: String] {
     guard let query = req.url.query,
         let items = URLComponents(string: "?\(query)")?.queryItems
     else { return [:] }
     var result: [String: String] = [:]
-    for item in items { result[item.name] = item.value ?? "" }
+    for item in items {
+        let value = item.value ?? ""
+        if let existing = result[item.name] {
+            result[item.name] = "\(existing),\(value)"
+        } else {
+            result[item.name] = value
+        }
+    }
     return result
 }
 
@@ -379,12 +387,13 @@ enum StoredDataServeResult {
     case dbUnavailable
 }
 
-/// `financials` の DB 読み取り共通ロジック。ライブ計算へのフォールバックは行わない（OOM 回避）。
+/// `stored` 系エンドポイントの DB 読み取り共通枠。db ガード（未接続→dbUnavailable）→
+/// `withDbRetry`（読み取りリトライ）→ nil→notFound / throw→dbUnavailable。
 /// `db` は DB 未接続時 `nil` を渡す（`Database` の取得自体が未接続時に fatalError するため、
-/// 呼び出し側で dbAvailable ガード済みの値のみ渡すこと。呼び出し例は Routes.swift 内を参照）。
-/// `fields` は `years[]` 要素の射影（BLT-57）。nil なら従来どおり全キー。
-func serveStoredFinancials(
-    code: String, years: Int, fields: Set<String>? = nil, db: Database?, logger: Logger
+/// 呼び出し側で dbAvailable ガード済みの値のみ渡すこと）。
+private func serveStored(
+    db: Database?, logger: Logger,
+    load: @escaping @Sendable (Database) async throws -> [String: Any]?
 ) async -> StoredDataServeResult {
     guard let db else { return .dbUnavailable }
     do {
@@ -393,12 +402,22 @@ func serveStoredFinancials(
             maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
             logger: logger
         ) {
-            try await loadStoredFinancials(code: code, years: years, fields: fields, db: db)
+            try await load(db)
         }
         guard let stored else { return .notFound }
         return .ok(stored)
     } catch {
         return .dbUnavailable
+    }
+}
+
+/// `financials` の DB 読み取り共通ロジック。ライブ計算へのフォールバックは行わない（OOM 回避）。
+/// `fields` は `years[]` 要素の射影（BLT-57）。nil なら従来どおり全キー。
+func serveStoredFinancials(
+    code: String, years: Int, fields: Set<String>? = nil, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredFinancials(code: code, years: years, fields: fields, db: db)
     }
 }
 
@@ -406,19 +425,8 @@ func serveStoredFinancials(
 func serveStoredAnalysis(
     code: String, years: Int, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredAnalysis(code: code, years: years, db: db)
-        }
-        guard let stored else { return .notFound }
-        return .ok(stored)
-    } catch {
-        return .dbUnavailable
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredAnalysis(code: code, years: years, db: db)
     }
 }
 
@@ -426,19 +434,8 @@ func serveStoredAnalysis(
 func serveStoredOverview(
     code: String, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredOverview(code: code, db: db)
-        }
-        guard let stored else { return .notFound }
-        return .ok(stored)
-    } catch {
-        return .dbUnavailable
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredOverview(code: code, db: db)
     }
 }
 
@@ -447,20 +444,9 @@ func serveStoredFilingSections(
     code: String, docId: String?, sections: [String]?, db: Database?,
     logger: Logger
 ) async -> StoredDataServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredFilingSections(
-                code: code, docId: docId, sections: sections, db: db)
-        }
-        guard let stored else { return .notFound }
-        return .ok(stored)
-    } catch {
-        return .dbUnavailable
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredFilingSections(
+            code: code, docId: docId, sections: sections, db: db)
     }
 }
 
@@ -469,6 +455,54 @@ func serveStoredFilingSections(
 func serveStoredStatement(
     code: String, docId: String?, years: Int, db: Database?, logger: Logger
 ) async -> StoredDataServeResult {
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredStatement(code: code, docId: docId, years: years, db: db)
+    }
+}
+
+/// notApplicable の reason を持つ read 結果の共通形。
+/// `breakdown` / `statement-notes` の応答変換（REST/MCP）を共通化するための型。
+/// E/F/unknown の reason を 404 応答へ載せるため、他エンドポイントが共有する
+/// `StoredDataServeResult` とは別に持つ（影響範囲を reason 付き応答に限定。issue #132）。
+enum ReasonedServeResult {
+    case ok([String: Any])
+    case notApplicable(reason: String)
+    case notFound
+    case dbUnavailable
+}
+
+/// 3値の load 結果（`BreakdownLoadResult` / `StatementNoteLoadResult`）を serve 結果へ写すための
+/// 共通プロトコル。`.found`→ok / `.notApplicable`→notApplicable / `.absent`→notFound。
+private protocol ReasonedLoadResult {
+    var reasoned: ReasonedServeResult { get }
+}
+
+extension BreakdownLoadResult: ReasonedLoadResult {
+    var reasoned: ReasonedServeResult {
+        switch self {
+        case .found(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .absent: return .notFound
+        }
+    }
+}
+
+extension StatementNoteLoadResult: ReasonedLoadResult {
+    var reasoned: ReasonedServeResult {
+        switch self {
+        case .found(let value): return .ok(value)
+        case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .absent: return .notFound
+        }
+    }
+}
+
+/// reason 付き `stored` 系（breakdown / statement-notes）の DB 読み取り共通枠。
+/// `serveStored` と同じ db ガード・リトライ・エラーマッピングを、3値の load 結果に適用する。
+private func serveStoredReasoned(
+    db: Database?, logger: Logger,
+    load: @escaping @Sendable (Database) async throws -> ReasonedLoadResult
+) async -> ReasonedServeResult {
     guard let db else { return .dbUnavailable }
     do {
         let stored = try await withDbRetry(
@@ -476,26 +510,12 @@ func serveStoredStatement(
             maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
             logger: logger
         ) {
-            try await loadStoredStatement(code: code, docId: docId, years: years, db: db)
+            try await load(db)
         }
-        guard let stored else { return .notFound }
-        return .ok(stored)
+        return stored.reasoned
     } catch {
         return .dbUnavailable
     }
-}
-
-/// `breakdown` 専用の DB 読み取り結果。E/F/unknown の reason を 404 応答へ載せるため、他の
-/// エンドポイントが共有する `StoredDataServeResult` とは別に持つ（影響範囲を breakdown に限定。issue #132）。
-enum BreakdownServeResult {
-    /// 成功。JSON 値（`[String: Any]`）。
-    case ok([String: Any])
-    /// 行はあるが business 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。404 だが理由を返す。
-    case notApplicable(reason: String)
-    /// 未格納（404 相当。reason 無し）。
-    case notFound
-    /// DB 未接続・読み取り失敗（503 相当）。
-    case dbUnavailable
 }
 
 /// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
@@ -521,67 +541,9 @@ func breakdownNotFoundMessage(axis: String) -> String {
 /// ライブ解決へのフォールバックは行わない（有報セクション取り込み と同じ理由。LLM 呼び出しを serving 経路に持ち込まない）。
 func serveStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database?, logger: Logger
-) async -> BreakdownServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredBreakdown(code: code, docId: docId, axis: axis, db: db)
-        }
-        switch stored {
-        case .found(let value): return .ok(value)
-        case .notApplicable(let reason): return .notApplicable(reason: reason)
-        case .absent: return .notFound
-        }
-    } catch {
-        return .dbUnavailable
-    }
-}
-
-/// `statement/notes` 専用の DB 読み取り結果。`BreakdownServeResult` と同型（対象外 reason を
-/// 404 応答へ載せるため、他エンドポイントが共有する `StoredDataServeResult` とは別に持つ）。
-enum StatementNoteServeResult {
-    /// 成功。JSON 値（`[String: Any]`）。
-    case ok([String: Any])
-    /// 行はあるが当該 note_type が対象外だった（`statementNoteNotApplicable*` のいずれか）。404 だが理由を返す。
-    case notApplicable(reason: String)
-    /// 未格納（404 相当。reason 無し）。
-    case notFound
-    /// DB 未接続・読み取り失敗（503 相当）。
-    case dbUnavailable
-}
-
-/// notApplicable の reason を持つ read 結果の共通形。
-/// `BreakdownServeResult` / `StatementNoteServeResult` の応答変換（REST/MCP）を共通化するための型。
-enum ReasonedServeResult {
-    case ok([String: Any])
-    case notApplicable(reason: String)
-    case notFound
-    case dbUnavailable
-}
-
-extension BreakdownServeResult {
-    var reasoned: ReasonedServeResult {
-        switch self {
-        case .ok(let value): return .ok(value)
-        case .notApplicable(let reason): return .notApplicable(reason: reason)
-        case .notFound: return .notFound
-        case .dbUnavailable: return .dbUnavailable
-        }
-    }
-}
-
-extension StatementNoteServeResult {
-    var reasoned: ReasonedServeResult {
-        switch self {
-        case .ok(let value): return .ok(value)
-        case .notApplicable(let reason): return .notApplicable(reason: reason)
-        case .notFound: return .notFound
-        case .dbUnavailable: return .dbUnavailable
-        }
+) async -> ReasonedServeResult {
+    await serveStoredReasoned(db: db, logger: logger) { db in
+        try await loadStoredBreakdown(code: code, docId: docId, axis: axis, db: db)
     }
 }
 
@@ -589,23 +551,9 @@ extension StatementNoteServeResult {
 /// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
 func serveStoredStatementNote(
     code: String, docId: String?, noteType: String, db: Database?, logger: Logger
-) async -> StatementNoteServeResult {
-    guard let db else { return .dbUnavailable }
-    do {
-        let stored = try await withDbRetry(
-            maxAttempts: Api.dbReadRetryMaxAttempts,
-            maxBackoffSeconds: Api.dbReadRetryMaxBackoffSeconds,
-            logger: logger
-        ) {
-            try await loadStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db)
-        }
-        switch stored {
-        case .found(let value): return .ok(value)
-        case .notApplicable(let reason): return .notApplicable(reason: reason)
-        case .absent: return .notFound
-        }
-    } catch {
-        return .dbUnavailable
+) async -> ReasonedServeResult {
+    await serveStoredReasoned(db: db, logger: logger) { db in
+        try await loadStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db)
     }
 }
 

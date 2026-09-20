@@ -177,8 +177,8 @@ func loadScreen(query: ScreenQuery, db: Database) async throws -> [String: Any]?
     guard try await ScreenIndex.query(on: db).limit(1).first() != nil else { return nil }
     func base() -> QueryBuilder<ScreenIndex> {
         var builder = ScreenIndex.query(on: db)
-        if let sector = query.sector {
-            builder = builder.filter(\.$sector == sector)
+        if !query.sectors.isEmpty {
+            builder = builder.filter(\.$sector ~~ query.sectors)
         }
         for metric in ScreenMetric.allCases {
             let field = ScreenIndex.field(metric)

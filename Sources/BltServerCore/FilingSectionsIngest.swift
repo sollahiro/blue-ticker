@@ -183,6 +183,20 @@ struct FilingSectionCandidateSets {
     let purge: [String]
 }
 
+/// 会社有報（120・府令010）の候補書類一覧を 1 回だけ読む。対象府令・書類種別は SQL で絞る。
+/// ステージ間で候補集合を共有するときはこの一覧を `filingSectionCandidates(docs:...)` へ渡すと
+/// DB 再往復しない。
+func annualReportDisclosureDocs(db: Database, logger: Logger? = nil) async throws
+    -> [EdinetDocumentListing]
+{
+    try await withDbRetry(logger: logger, context: "有報一覧") {
+        try await EdinetDocumentListing.query(on: db)
+            .filter(\.$docTypeCode == Api.docTypeAnnualReport)
+            .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
+            .all()
+    }
+}
+
 /// 取り込み候補（保持窓内）と purge 対象をまとめて返す。
 /// 「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep、
 /// それを超えた分を purge とする。docType 120 でも特定有価証券府令(030)の信託受益証券等は除外。
@@ -192,22 +206,26 @@ func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
     logger: Logger? = nil
 ) async throws -> FilingSectionCandidateSets {
+    await filingSectionCandidates(
+        docs: try annualReportDisclosureDocs(db: db, logger: logger),
+        listedCodes: listedCodes, explicitCodes: explicitCodes, years: years)
+}
+
+/// `annualReportDisclosureDocs` の読み済み一覧から候補集合を組み立てる（DB 再往復なし）。
+func filingSectionCandidates(
+    docs: [EdinetDocumentListing], listedCodes: Set<String>, explicitCodes: Set<String>? = nil,
+    years: Int
+) async -> FilingSectionCandidateSets {
     let listedSecByEdinet = await listedSecCodeByEdinetCode()
-    let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
-        try await EdinetDocumentListing.query(on: db)
-            .filter(\.$docTypeCode == Api.docTypeAnnualReport)
-            .all()
-    }
 
     // 4 桁コードごとに会社有報をまとめる。secCode は 5 桁（4 桁＋種別 1 桁 "0"）。
     // 空の secCode は listed な edinet_code があればその発行体に寄せる。
     var byCode: [String: [(docID: String, submitDateTime: String)]] = [:]
-    for doc in documents {
+    for doc in docs {
         guard let docID = doc.id,
             let code = listedIssuerCode(
                 secCode: doc.secCode, edinetCode: doc.edinetCode,
-                listedSecCodeByEdinetCode: listedSecByEdinet),
-            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
+                listedSecCodeByEdinetCode: listedSecByEdinet)
         else { continue }
         guard listedCodes.contains(code) else { continue }
         if let explicit = explicitCodes, !explicit.contains(code) { continue }

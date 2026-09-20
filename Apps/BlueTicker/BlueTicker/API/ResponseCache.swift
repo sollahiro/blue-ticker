@@ -8,15 +8,21 @@ struct ResponseCacheRecord: Codable {
 /// 解析 REST（概要・分解・Overview）の端末キャッシュ。
 /// 有報は年次なので短時間の再取得を避け、ウォッチリスト銘柄はより長く持つ。
 /// iOS は `BlueTickerCore` をリンクしないため、サーバー側の `CacheManager` は使わない。
+/// メモリは `memoryLimit` 件まで（参照の古い順に退避）。ディスクは最長 TTL を超えた
+/// ファイルを起動時に sweep する。
 actor ResponseCache {
     static let shared = ResponseCache()
 
     /// 通常の解析応答。6 時間。
     static let analysisTTL: TimeInterval = 6 * 60 * 60
-    /// ウォッチリスト銘柄。7 日。
+    /// ウォッチリスト銘柄。7 日。ディスク上の最長保持期間でもある（sweep の基準）。
     static let watchlistTTL: TimeInterval = 7 * 24 * 60 * 60
+    /// メモリキャッシュの保持件数上限。超過分は参照の古いものからメモリのみ退避する。
+    static let memoryLimit = 200
 
     private var memory: [String: ResponseCacheRecord] = [:]
+    /// 参照順のキー列（末尾が直近。`memory` と同じキー集合を保つ）。
+    private var order: [String] = []
     private let directory: URL
     private let fileDecoder: JSONDecoder
     private let fileEncoder: JSONEncoder
@@ -37,6 +43,8 @@ actor ResponseCache {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         fileEncoder = encoder
+        // 最長 TTL を超えたキャッシュは二度とヒットしないので起動時に捨てる（完了は待たない）。
+        Task { await self.purgeExpired(maxAge: Self.watchlistTTL) }
     }
 
     static func key(for url: URL) -> String {
@@ -59,16 +67,44 @@ actor ResponseCache {
     func store(key: String, data: Data, savedAt: Date = Date()) {
         let record = ResponseCacheRecord(savedAt: savedAt, data: data)
         memory[key] = record
+        touch(key)
+        evictMemoryIfNeeded()
         persist(key: key, record: record)
     }
 
     func remove(key: String) {
         memory.removeValue(forKey: key)
+        order.removeAll { $0 == key }
         try? FileManager.default.removeItem(at: fileURL(for: key))
+    }
+
+    /// `maxAge` を超えたディスクキャッシュを削除し、メモリ上の該当レコードも落とす。
+    /// デコード不能なファイルは復元できないため削除対象に含める。
+    func purgeExpired(maxAge: TimeInterval) {
+        let now = Date()
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasSuffix(".json") {
+            let key = String(name.dropLast(".json".count))
+            let url = fileURL(for: key)
+            let expired: Bool
+            if let raw = try? Data(contentsOf: url),
+                let record = try? fileDecoder.decode(ResponseCacheRecord.self, from: raw)
+            {
+                expired = now.timeIntervalSince(record.savedAt) > maxAge
+            } else {
+                expired = true
+            }
+            guard expired else { continue }
+            memory.removeValue(forKey: key)
+            order.removeAll { $0 == key }
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private func record(for key: String) -> ResponseCacheRecord? {
         if let memory = memory[key] {
+            touch(key)
             return memory
         }
         let url = fileURL(for: key)
@@ -78,7 +114,23 @@ actor ResponseCache {
             return nil
         }
         memory[key] = record
+        touch(key)
+        evictMemoryIfNeeded()
         return record
+    }
+
+    private func touch(_ key: String) {
+        if let index = order.firstIndex(of: key) {
+            order.remove(at: index)
+        }
+        order.append(key)
+    }
+
+    private func evictMemoryIfNeeded() {
+        while memory.count > Self.memoryLimit, !order.isEmpty {
+            let oldest = order.removeFirst()
+            memory.removeValue(forKey: oldest)
+        }
     }
 
     private func persist(key: String, record: ResponseCacheRecord) {

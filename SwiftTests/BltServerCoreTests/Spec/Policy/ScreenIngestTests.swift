@@ -451,6 +451,37 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func screenEndpointFiltersMultipleSectorsWithIn() async throws {
+        try await withApp { app in
+            let rows: [(String, String, [String: Any])] = [
+                ("0001", "電気機器", ["roic": 20.0]),
+                ("0002", "輸送用機器", ["roic": 25.0]),
+                ("0003", "小売業", ["roic": 30.0]),
+            ]
+            for (code, sector, latest) in rows {
+                try await upsertScreenIndex(
+                    code: code, response: try makeResponse(code: code, sector: sector, latest: latest),
+                    db: app.db)
+            }
+
+            // `sector=A,B` のカンマ区切りは OR（IN 検索）になる。
+            let (status, json) = try await send(
+                app,
+                "/v1/screen?sector=%E9%9B%BB%E6%B0%97%E6%A9%9F%E5%99%A8,%E8%BC%B8%E9%80%81%E7%94%A8%E6%A9%9F%E5%99%A8&sort=roic&order=desc")
+            #expect(status == .ok)
+            #expect(codes(json) == ["0002", "0001"])
+            #expect(json?["matched"] as? Int == 2)
+
+            // `sector=A&sector=B` のキー重複も同じ OR になる。
+            let (repeatStatus, repeatJson) = try await send(
+                app,
+                "/v1/screen?sector=%E9%9B%BB%E6%B0%97%E6%A9%9F%E5%99%A8&sector=%E5%B0%8F%E5%A3%B2%E6%A5%AD")
+            #expect(repeatStatus == .ok)
+            #expect(codes(repeatJson) == ["0003", "0001"])
+            #expect(repeatJson?["matched"] as? Int == 2)
+        }
+    }
+
     @Test func screenEndpointRejectsUnknownKeysAndServes503WithoutDb() async throws {
         try await withApp { app in
             let (emptyStatus, emptyJson) = try await send(app, "/v1/screen")
