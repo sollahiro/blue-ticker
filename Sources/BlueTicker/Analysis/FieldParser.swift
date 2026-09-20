@@ -57,6 +57,11 @@ func fieldSetFromDuration(
             fieldSet[tag] = fv
         }
     }
+    // IFRS 本表 P&L が `CurrentYearDuration_NonConsolidatedMember` に載る書類
+    // （ベイカレント S100TI4B）は、書類単位の連結ゲートで単体フォールバックが
+    // 落ちる。P&L タグに限り、連結 Duration が無い期だけ純粋な NonConsolidated を埋める。
+    // CF/BS のゲートは変えない。同一期に連結があれば連結を残す。
+    mergeMissingPnLFromPureNonConsolidatedDuration(into: &fieldSet, from: tagElements)
     // Instant コンテキストのみのタグ（会計基準マーカー等）も存在記録として追加
     for tag in tagElements.keys where fieldSet[tag] == nil {
         fieldSet[tag] = FieldValue(current: nil, prior: nil)
@@ -192,6 +197,37 @@ private func isPureNonConsolidated(_ ctx: String, patterns: [String]) -> Bool {
     return patterns.contains(where: {
         ctx == "\($0)_NonConsolidatedMember" || ctx == "\($0)_NonConsolidated"
     })
+}
+
+private func exactPureNonConsolidatedValue(
+    in ctxMap: [String: Double], patterns: [String]
+) -> Double? {
+    for pattern in patterns {
+        if let value = ctxMap["\(pattern)_NonConsolidatedMember"]
+            ?? ctxMap["\(pattern)_NonConsolidated"]
+        {
+            return value
+        }
+    }
+    return nil
+}
+
+private func mergeMissingPnLFromPureNonConsolidatedDuration(
+    into fieldSet: inout FieldSet,
+    from tagElements: XbrlTagElements
+) {
+    for tag in Xbrl.summaryIfrsPnLTags {
+        guard let ctxMap = tagElements[tag] else { continue }
+        let ncCurrent = exactPureNonConsolidatedValue(
+            in: ctxMap, patterns: Xbrl.durationContextPatterns)
+        let ncPrior = exactPureNonConsolidatedValue(
+            in: ctxMap, patterns: Xbrl.priorDurationContextPatterns)
+        guard ncCurrent != nil || ncPrior != nil else { continue }
+        var fv = fieldSet[tag] ?? FieldValue(current: nil, prior: nil)
+        if fv.current == nil { fv.current = ncCurrent }
+        if fv.prior == nil { fv.prior = ncPrior }
+        fieldSet[tag] = fv
+    }
 }
 
 private func normalizeConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {

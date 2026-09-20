@@ -177,6 +177,9 @@ enum Xbrl {
         "ProfitLossAttributableToOwnersOfParentIFRS",
         "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
         "ProfitLossAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
+        // 個別 IFRS 本表の当期利益。親会社帰属タグが無い書類（ベイカレント S100TI4B）向け。
+        // 親会社帰属がある連結 IFRS は上のタグが先に勝つ。
+        "ProfitLossIFRS",
         "NetIncomeLossAttributableToOwnersOfParentUSGAAP",
         "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
         "NetIncomeLoss",
@@ -187,6 +190,20 @@ enum Xbrl {
         "ProfitLoss",
         "NetIncomeLossSummaryOfBusinessResults",
     ]
+
+    /// Summary P&L が IFRS 本表タグを FieldSet に残すための候補。
+    /// Statement が個別 J-GAAP PL role を選んでも、これらのタグはマスクから落とさない。
+    /// 主要な経営指標等（Summary / KeyFinancialData）は混ぜない。
+    static var summaryIfrsPnLTags: Set<String> {
+        Set(
+            (netSalesTags + operatingProfitDirectTags + netProfitTags + parentAttributableNetProfitTags)
+                .filter {
+                    $0.contains("IFRS")
+                        && !$0.contains("SummaryOfBusinessResults")
+                        && !$0.contains("KeyFinancialData")
+                }
+        )
+    }
 
     // MARK: - 1株当たり利益（基本EPS・連結当期）
 

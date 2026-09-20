@@ -91,4 +91,106 @@ import Foundation
         #expect(result.netAssets == nil)
         #expect(result.totalAssets == nil)
     }
+
+    // MARK: - IFRS P&L on NonConsolidatedMember（ベイカレント S100TI4B 型）
+
+    /// IFRS 本表 P&L が純粋な NonConsolidatedMember にだけ載る。CF 等の IFRS タグで
+    /// 書類単位ゲートが立っても、sales / OP / NP は NC の値を使う。
+    @Test func testIfrsPnLOnNonConsolidatedMemberFillsSummary() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 93_909_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 76_090_000_000.0,
+            ],
+            "OperatingProfitLossIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 34_219_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 29_916_000_000.0,
+            ],
+            "ProfitLossIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 25_382_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 21_910_000_000.0,
+            ],
+            "NetCashProvidedByUsedInOperatingActivitiesIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 24_348_000_000.0,
+            ],
+        ]
+        let fs = fieldSetFromDuration(tagElements)
+        #expect(fs["RevenueIFRS"]?.current == 93_909_000_000.0)
+        #expect(fs["OperatingProfitLossIFRS"]?.current == 34_219_000_000.0)
+        #expect(fs["ProfitLossIFRS"]?.current == 25_382_000_000.0)
+        // CF は書類単位ゲートのまま（P&L 限定フォールバック）。
+        #expect(fs["NetCashProvidedByUsedInOperatingActivitiesIFRS"]?.current ?? nil == nil)
+
+        let result = IncomeStatementExtractor.extract(
+            fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
+        #expect(result.sales == 93_909_000_000.0)
+        #expect(result.operatingProfit == 34_219_000_000.0)
+        #expect(result.netProfit == 25_382_000_000.0)
+        #expect(result.salesPrior == 76_090_000_000.0)
+    }
+
+    /// S100VTPA 型: 同じ IFRS タグが plain CurrentYearDuration にあれば従来どおり連結を使う。
+    @Test func testIfrsPnLOnPlainCurrentYearDurationStillFills() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration": 116_056_000_000.0,
+                "Prior1YearDuration": 93_909_000_000.0,
+            ],
+            "OperatingProfitLossIFRS": [
+                "CurrentYearDuration": 42_615_000_000.0,
+                "Prior1YearDuration": 34_219_000_000.0,
+            ],
+            "ProfitLossIFRS": [
+                "CurrentYearDuration": 30_760_000_000.0,
+                "Prior1YearDuration": 25_382_000_000.0,
+            ],
+        ]
+        let fs = fieldSetFromDuration(tagElements)
+        let result = IncomeStatementExtractor.extract(
+            fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
+        #expect(result.sales == 116_056_000_000.0)
+        #expect(result.operatingProfit == 42_615_000_000.0)
+        #expect(result.netProfit == 30_760_000_000.0)
+    }
+
+    /// 同一期に連結と NonConsolidatedMember があるときは連結を残す。
+    @Test func testIfrsPnLPrefersConsolidatedOverNonConsolidatedMember() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration": 9_783_370_000_000.0,
+                "CurrentYearDuration_NonConsolidatedMember": 1_774_233_000_000.0,
+                "Prior1YearDuration": 9_728_716_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 1_756_937_000_000.0,
+            ],
+            "OperatingProfitLossIFRS": [
+                "CurrentYearDuration": 800.0,
+                "CurrentYearDuration_NonConsolidatedMember": 100.0,
+            ],
+            "ProfitLossIFRS": [
+                "CurrentYearDuration": 500.0,
+                "CurrentYearDuration_NonConsolidatedMember": 50.0,
+            ],
+        ]
+        let fs = fieldSetFromDuration(tagElements)
+        #expect(fs["RevenueIFRS"]?.current == 9_783_370_000_000.0)
+        #expect(fs["RevenueIFRS"]?.prior == 9_728_716_000_000.0)
+        let result = IncomeStatementExtractor.extract(
+            fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
+        #expect(result.sales == 9_783_370_000_000.0)
+        #expect(result.operatingProfit == 800.0)
+        #expect(result.netProfit == 500.0)
+    }
+
+    /// 連結が無い期だけ NonConsolidatedMember を埋める（期ごとの exact match）。
+    @Test func testIfrsPnLFillsMissingPeriodOnlyFromNonConsolidatedMember() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration": 116_056_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 93_909_000_000.0,
+            ]
+        ]
+        let fs = fieldSetFromDuration(tagElements)
+        #expect(fs["RevenueIFRS"]?.current == 116_056_000_000.0)
+        #expect(fs["RevenueIFRS"]?.prior == 93_909_000_000.0)
+    }
 }
