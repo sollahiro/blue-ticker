@@ -297,6 +297,7 @@ enum BreakdownNormalizer {
     /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。
     /// `memberParents` は presentation の報告セグメント直親（`operatingSegmentMemberParents`）。
     /// 「うち」の子を `subtotal` に落とすために使う。空なら従来どおり花王型の親落としだけ。
+    /// うち落としとタグ付き分母補完は employees 限定（RD / goodwill / セグメント指標には付けない）。
     static func normalizeEmployees(
         facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:],
         memberParents: [String: String] = [:]
@@ -304,7 +305,7 @@ enum BreakdownNormalizer {
         normalizeCountBasis(
             facts: facts, amountTags: Xbrl.employeeTags, total: total, axis: axis,
             warningPrefix: "employees", labelsByTag: labelsByTag, memberParents: memberParents,
-            complementFromTaggedDenominator: true)
+            applyOfWhichNestedChildDemotion: true, complementFromTaggedDenominator: true)
     }
 
     /// 研究開発費の事業セグメント別内訳（内訳取り込み research_and_development 軸）。
@@ -372,6 +373,7 @@ enum BreakdownNormalizer {
     private static func normalizeCountBasis(
         facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:],
+        applyOfWhichNestedChildDemotion: Bool = false,
         complementFromTaggedDenominator: Bool = false
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
@@ -384,6 +386,7 @@ enum BreakdownNormalizer {
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
             warningPrefix: warningPrefix, labelsByTag: labelsByTag, memberParents: memberParents,
+            applyOfWhichNestedChildDemotion: applyOfWhichNestedChildDemotion,
             complementFromTaggedDenominator: complementFromTaggedDenominator)
     }
 
@@ -619,6 +622,7 @@ enum BreakdownNormalizer {
         warningPrefix: String, labelsByTag: [String: String], memberParents: [String: String] = [:],
         warnOnDerivedTotal: Bool = true,
         useEntityTotalAsDenominator: Bool = true,
+        applyOfWhichNestedChildDemotion: Bool = false,
         complementFromTaggedDenominator: Bool = false
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
@@ -639,8 +643,10 @@ enum BreakdownNormalizer {
             amounts[member] = fact.value
         }
         demoteRedundantParentSegments(kinds: &kinds, amounts: amounts, total: total)
-        demotePartialNestedChildren(
-            kinds: &kinds, amounts: amounts, total: total, memberParents: memberParents)
+        if applyOfWhichNestedChildDemotion {
+            demotePartialNestedChildren(
+                kinds: &kinds, amounts: amounts, total: total, memberParents: memberParents)
+        }
         applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
         if complementFromTaggedDenominator {
             demoteTaggedTotalEqualToDenominator(kinds: &kinds, amounts: amounts, total: total)

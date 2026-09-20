@@ -1286,6 +1286,39 @@ import Foundation
         #expect(snap.rows.contains { $0.rowKind == "subtotal" && $0.labelRaw.contains("Containerships") })
     }
 
+    /// うち落としは employees 限定。RD に同じ memberParents を渡しても子は segment のまま
+    /// （RD / goodwill では実 XBRL 未検証のため広げない）。
+    @Test func researchAndDevelopmentIgnoresOfWhichNestedChildDemotion() throws {
+        let facts = [
+            Self.rdFact("AssociatedBusinessesReportableSegmentsMember", 483),
+            Self.rdFact("ContainershipsReportableSegmentsMember", 57),
+            Self.rdFact("CorporateSharedMember", 548),
+            Self.rdFact("DryBulkBusinessReportableSegmentsMember", 328),
+            Self.rdFact("EnergyBusinessReportableSegmentsMember", 1_230),
+            Self.rdFact(Self.otherBusinessMember, 989),
+            Self.rdFact("ProductTransportBusinessReportableSegmentsMember", 5_341),
+            Self.rdFact("RealEstateBusinessReportableSegmentsMember", 1_255),
+            Self.rdFact("WellbeingAndLifestyleBusinessReportableSegmentsMember", 2_648),
+        ]
+        let parents = [
+            "ContainershipsReportableSegmentsMember": "ProductTransportBusinessReportableSegmentsMember",
+            "RealEstateBusinessReportableSegmentsMember":
+                "WellbeingAndLifestyleBusinessReportableSegmentsMember",
+        ]
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 11_567, axis: breakdownAxisResearchAndDevelopment,
+                memberParents: parents))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("research_and_development_segment_sum_far_from_total"))
+        let containerships = try #require(
+            snap.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "segment")
+        let realEstate = try #require(
+            snap.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "segment")
+    }
+
     /// 花王型の親落としは memberParents があっても先に走り、うち落としは分母が既に合うので触らない。
     @Test func employeesKeepsKaoParentDemotionWhenChildrenPartitionParent() throws {
         let snap = try #require(

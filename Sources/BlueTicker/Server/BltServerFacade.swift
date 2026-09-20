@@ -568,12 +568,10 @@ public extension BltServerContext {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
-        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
                 facts: cached.facts, total: rd.value, totalTag: rd.tag,
-                axis: breakdownAxisResearchAndDevelopment, labelsByTag: cached.labelsByTag,
-                memberParents: memberParents)
+                axis: breakdownAxisResearchAndDevelopment, labelsByTag: cached.labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -591,12 +589,10 @@ public extension BltServerContext {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let goodwill = BreakdownFinancialsResolver.financialsCanonicalGoodwillItem(xbrlDir: xbrlDir)
-        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeGoodwill(
                 facts: cached.facts, total: goodwill.value, totalTag: goodwill.tag,
-                axis: breakdownAxisGoodwill, labelsByTag: cached.labelsByTag,
-                memberParents: memberParents)
+                axis: breakdownAxisGoodwill, labelsByTag: cached.labelsByTag)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -614,27 +610,26 @@ private extension BltServerContext {
     func resolveSegmentMetricBreakdown(docID: String, axis: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
-        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         let snapshot: BreakdownSnapshot?
         switch axis {
         case breakdownAxisSegmentAssets:
             snapshot = BreakdownNormalizer.normalizeSegmentAssets(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisDepreciationAndAmortization:
             snapshot = BreakdownNormalizer.normalizeDepreciationAndAmortization(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisGoodwillAmortization:
             snapshot = BreakdownNormalizer.normalizeGoodwillAmortization(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisImpairmentLoss:
             snapshot = BreakdownNormalizer.normalizeImpairmentLoss(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisEquityMethodInvestments:
             snapshot = BreakdownNormalizer.normalizeEquityMethodInvestments(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisCapitalExpenditures:
             snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisCapitalExpendituresOverview:
             if case .resolved(let payload, _, _) =
                 StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
@@ -648,11 +643,11 @@ private extension BltServerContext {
                     xbrlDir: xbrlDir)
                 snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
                     facts: cached.facts, total: overview.value, totalTag: overview.tag,
-                    labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                    labelsByTag: cached.labelsByTag)
             }
         case breakdownAxisNoncurrentAssetAdditions:
             snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
-                facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                facts: cached.facts, labelsByTag: cached.labelsByTag)
         default:
             snapshot = nil
         }
