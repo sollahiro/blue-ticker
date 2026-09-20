@@ -32,7 +32,7 @@ Xcode Cloud を GitHub の required check にしない。PR Changes も、Archiv
 - Project: `Apps/BlueTicker/BlueTicker.xcodeproj`、Scheme `BlueTicker`、configuration `Release`
 - Action: Archive のみ。Deployment Preparation は TestFlight (Internal Testing Only)
 - Post-action: TestFlight Internal（グループ 1 つ）
-- スタート条件: Tag Changes `ios-tf-*` のみ（導入後はタグを切らない）。日常は Xcode / App Store Connect の Start Build で、GHA 緑の `main` を選ぶ
+- スタート条件: Branch Changes（ブランチ `main`。Files and Folders は Custom Conditions、`Apps/BlueTicker` 配下の Any File。Auto-cancel Builds）。手動再実行用に Manual Start - Branch を残す。タグ `ios-tf-*` は日常切らない
 - Environment: Xcode を GHA `macos-26` にピン（現行コメントは 26.6）。Clean
 - `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `1.0.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する
 
@@ -49,9 +49,9 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 
 ### 運用
 
-1. iOS を含む変更は PR → GHA 緑 → `main`
-2. TestFlight に載せるときだけ、緑の `main` を Xcode Cloud で手動 Start Build
-3. Internal で実機確認（Release は開発ラボ無し、HAPIS ゲートウェイ固定）
+1. iOS 変更は PR → GHA `ios` 緑 → `main`（マージ品質は GHA。Xcode Cloud はマージゲートにしない）
+2. `main` に `Apps/BlueTicker` の差分が入ると Xcode Cloud が Archive → Internal TestFlight。同じ `main` に続く iOS push は Auto-cancel
+3. Internal で実機確認（Release は開発ラボ無し、HAPIS ゲートウェイ固定）。同じコミットの再実行や `main` 以外を載せるときだけ Manual Start - Branch
 
 ## 決めたこと
 
@@ -59,7 +59,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 |---|---|
 | 探索 3 面 | `名称検索` / `条件検索` / `リスト`。OS 標準 `TabView`（タブバー）。各タブは `NavigationStack` + 標準ツールバー。右端は `ファンド`（設定タブは置かない） |
 | 探索ツールバー | 不透明なトップバーは置かない。画面タイトルは標準のインライン `navigationTitle`。Liquid Glass のカプセルはツールバー操作だけ（履歴 `clock`、リスト編集 `pencil`、編集中は `完了`）。B マークは探索に出さない。設定歯車タブは出さない |
-| キーワード検索 | 名称検索の入力は `safeAreaBar`（タブバーの上。キーボード表示時はその上へ追従）。タブ選択だけではキーボードを出さない。`GET /v1/companies?q=`。銘柄・履歴へ push すると外れる |
+| キーワード検索 | 名称検索の入力は `safeAreaBar`（タブバーの上。キーボード表示時はその上へ追従）。タブ選択だけではキーボードを出さない。編集中は Safari と同じく欄を縮め、欄内 `xmark.circle.fill`（クリア）と欄外の円形 `xmark`（キーボードを閉じる。VoiceOver は「キャンセル」）を並べる。キーボードの検索とリストのスクロールでも閉じる。`GET /v1/companies?q=`。銘柄・履歴へ push すると外れる |
 | 銘柄面 | 探索から `NavigationStack` で push。タブの入れ子にしない。下部タブバー（`名称検索`〜`ファンド`）は探索と同じまま出す。カードとタブバーのあいだに 2 枚分のページ点を置く |
 | 銘柄ヘッダ | ツールバーに B マークは出さない。戻るは標準の Liquid Glass。`探す` は出さない。右上は同一グループのアイコン。保有情報は `square.and.pencil`、リストは未追加 `star` / 追加済み `star.fill`（プラスは使わない。塗り分けやチップ色は付けない。VoiceOver は「保有情報」「リストに追加」「リストから削除」）。ヘッダは社名（Headline +2pt）とコード＋業種だけ。業種タグは緑枠・薄緑地・緑文字 |
 | 銘柄ページ | `概要` / `分解` の 2 枚。タイルは出さない。左右スライドのみ。銘柄の短い会社説明（Overview）はヘッダ（社名・コード・業種）とカードのあいだ、カード外に置く。切替は各カード上端のピル型ボタン（概要は `業績` / `資産` / `効率性`、分解は `事業利益` / `ROIC` / `ROE`）。各カード内は縦スクロール可。カードは角丸。概要の表はカード幅に収める。`レポート` は廃止 |
@@ -80,7 +80,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
 | ウォッチリスト | クライアントの SwiftData。同じ Apple ID の端末へ iCloud（CloudKit、コンテナ `iCloud.com.sollahiro.BlueTicker`）で同期する。保有の株数・取得単価・証券会社・口座の区分も同じ行なので一緒に同期する。Blue Ticker のサーバーへは送らない。1 本のリスト。見出しは「あなたの追加した企業」。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替えはリスト右上の `pencil`（編集中は `完了`）+ `onMove`（システムの editMode。独自のドラッグハンドルは足さない。編集中は会社アイコン・業種タグ・行の `>` を隠して、削除と並べ替えハンドルの余地を取る）。保有行のキャプションは口座ではなく保有数量。保有・口座の入力は銘柄画面ツールバーの保有情報。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
 | 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索・Feed はキャッシュしない。iOS は Core をリンクしないので `CacheManager` は使わない |
-| ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に B マークと「バージョン x.y.z (ビルド n)」。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`）。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS）をファンド内の「開発ラボ」から開く。設定タブは復活させない |
+| ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に B マークと「バージョン x.y.z (ビルド n)」。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`）。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS）。`銘柄面（7203）` は通信なしで銘柄ツールバーの保有情報まで行ける（リストには入れない。保有を保存したときだけウォッチ行になる）。設定タブは復活させない |
 | 会社行 | 社名・業種に加え銘柄コードを載せる。社名は最大3行 |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`）。Feed からの遷移は `CompanyRef.sector` が空なので、銘柄面は `GET /v1/companies/{code}/financials` の `sector` で補う |
 
@@ -123,7 +123,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 - 投資元本（投下資本）= 取得単価（円/株）× 株数
 - ファンドROE = Σ(EPS×株数) / Σ(取得単価×株数)（保有かつ EPS がある行だけ。時価・純資産合計は分母にしない）
 
-同じ銘柄の口座行は管理上は分割してよい。公開合計は銘柄単位で株数を足してから掛ける。証券会社（SBI証券・楽天証券など）と口座区分（一般・特定・NISA）は選択式。未選択のままでもその行に株数を入れられる。株数は口座行ごと。保有の入力は銘柄画面ツールバーの保有情報（証券会社・口座・株数・取得単価を口座ごとの1グループにまとめ、追加は下に足す。`口座を追加` のあとだけ `完了` を出し、空の追加入力を止められる。登録口座は各グループの `この口座を削除`。最後の1件はリストから外さず空のウォッチに戻す。複数口座なら先頭に合計保有数量と平均取得単価。`口座未選択` / `ウォッチ` と、株数・単価・口座が空の行は出さない。同じ銘柄に保有がある空ウォッチはリストに残さない）。並べ替えはリストタブの `pencil` / `完了`。ファンドは「保有株数に応じた業績」と「あなたの保有している企業」のみ（口座明細は出さない。保有企業一覧は社名+コードと純利益・純資産・投資元本の 3 行。行から銘柄面へ遷移する）。バージョンはリスト末尾に B マークと「バージョン x.y.z (ビルド n)」。
+同じ銘柄の口座行は管理上は分割してよい。公開合計は銘柄単位で株数を足してから掛ける。証券会社（SBI証券・楽天証券など）と口座区分（一般・特定・NISA）は選択式。未選択のままでもその行に株数を入れられる。株数は口座行ごと。保有の入力は銘柄画面ツールバーの保有情報（証券会社・口座・株数・取得単価を口座ごとの1グループにまとめ、追加は下に足す。株数・取得単価の入力中だけ右上に `完了` を出し、キーボードを閉じて空の追加入力を止める。画面を戻っても空の追加は片付ける。登録口座は各グループの `この口座を削除`。最後の1件はリストから外さず空のウォッチに戻す。複数口座なら先頭に合計保有数量と平均取得単価。`口座未選択` / `ウォッチ` と、株数・単価・口座が空の行は出さない。同じ銘柄に保有がある空ウォッチはリストに残さない）。並べ替えはリストタブの `pencil` / `完了`。ファンドは「保有株数に応じた業績」と「あなたの保有している企業」のみ（口座明細は出さない。保有企業一覧は社名+コードと純利益・純資産・投資元本の 3 行。行から銘柄面へ遷移する）。バージョンはリスト末尾に B マークと「バージョン x.y.z (ビルド n)」。
 
 計算の切り出しは `Apps/BlueTicker/FundMath`（Linux / macOS の `swift test`）。
 
@@ -216,10 +216,11 @@ HAPIS の制限は 60/分のレートで同時数ではない。interactive（Fe
 Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
 
 1. Debug → ファンド → 開発ラボ → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
-2. Debug → ファンド → 開発ラボ → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
-3. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
-4. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
-5. Release はファンドの開発ラボを触らず検索できること（API base は HAPIS ゲートウェイ。バージョンはファンドのフッター）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
+2. Debug → ファンド → 開発ラボ → 銘柄面（7203）→ 保有情報。通信不要。株数タップで右上の `完了` が出ること
+3. Debug → ファンド → 開発ラボ → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
+4. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
+5. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
+6. Release はファンドの開発ラボを触らず検索できること（API base は HAPIS ゲートウェイ。バージョンはファンドのフッター）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
 
 #### 実機 App Attest（後で。Simulator では不可）
 

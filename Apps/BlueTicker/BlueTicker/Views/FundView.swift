@@ -37,6 +37,9 @@ struct FundView: View {
                     NavigationLink("サーバー / Access / HAPIS") {
                         SettingsView()
                     }
+                    NavigationLink(value: Self.debugTicker) {
+                        Text("銘柄面（7203）")
+                    }
                 }
             #endif
 
@@ -134,4 +137,10 @@ struct FundView: View {
         }
         return FundMath.PerShare(fyEnd: year.fyEnd, epsYen: year.eps, bpsYen: year.bps)
     }
+
+    #if DEBUG
+        /// 通信なしで銘柄面 → 保有情報まで行く。リストやフィードには入れない。
+        static let debugTicker = CompanyRef(
+            code: "7203", name: "トヨタ自動車", sector: "輸送用機器")
+    #endif
 }
