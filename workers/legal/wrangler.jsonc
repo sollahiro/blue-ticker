@@ -3,7 +3,7 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-19",
   "workers_dev": true,
-  // App Store 用の免責・プライバシー静的ページ。api.* / mcp.* の前段に置かない。
+  // App Store 用の免責・プライバシー・利用規約静的ページ。api.* / mcp.* の前段に置かない。
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
