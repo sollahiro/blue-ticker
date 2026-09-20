@@ -222,6 +222,26 @@ import Testing
         }
     }
 
+    /// 2026-09-20: visual GO。NTT 公式 apple-touch と R2 CDN（prtimes.jp 直リンク禁止）。
+    @Test func pins20260920VisualGoManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("9432", "https://group.ntt/apple-touch-icon.png"),
+            ("9439", "https://icons.sollahiro.com/company-icons/9439.png"), // pragma: allowlist secret
+            ("7427", "https://icons.sollahiro.com/company-icons/7427.png"), // pragma: allowlist secret
+            ("9412", "https://icons.sollahiro.com/company-icons/9412.png"), // pragma: allowlist secret
+        ]
+        #expect(expected.count == 4)
+        #expect(Set(expected.map(\.0)).count == 4)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
@@ -317,6 +337,32 @@ import Testing
                 "https://www.tokaitokyo-fh.jp/asset/img/common/apple-touch-icon.png"),
             ("2653", "https://www.aeon-kyushu.info",
                 "https://www.aeon-kyushu.info/apple-touch-icon-precomposed.png"),
+        ]
+        for (code, oldOrigin, png) in pinned {
+            #expect(
+                companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsCacheVersion, sourceURL: oldOrigin),
+                "code=\(code)")
+            #expect(
+                companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsManualCacheVersion, sourceURL: oldOrigin),
+                "code=\(code)")
+            #expect(
+                !companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsManualCacheVersion, sourceURL: png),
+                "code=\(code)")
+        }
+    }
+
+    @Test func visualGoIconsRefreshUntilManualImageURLIsStored() {
+        let pinned: [(String, String, String)] = [
+            ("9432", "https://group.ntt", "https://group.ntt/apple-touch-icon.png"),
+            ("9439", "https://icons.sollahiro.com", // pragma: allowlist secret
+                "https://icons.sollahiro.com/company-icons/9439.png"), // pragma: allowlist secret
+            ("7427", "https://icons.sollahiro.com", // pragma: allowlist secret
+                "https://icons.sollahiro.com/company-icons/7427.png"), // pragma: allowlist secret
+            ("9412", "https://icons.sollahiro.com", // pragma: allowlist secret
+                "https://icons.sollahiro.com/company-icons/9412.png"), // pragma: allowlist secret
         ]
         for (code, oldOrigin, png) in pinned {
             #expect(
