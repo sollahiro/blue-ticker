@@ -1385,10 +1385,6 @@ import Foundation
         #expect(bank.rowKind == "subtotal")
         #expect(bank.amount == 22_024)
         #expect(bank.label == "三井住友信託銀行")
-        #expect(
-            snap.rows.contains {
-                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
-            } == false)
         #expect(snap.rows.contains { $0.label?.contains("運用") == true } == false)
         let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
@@ -1398,10 +1394,10 @@ import Foundation
         #expect(retail.rowKind == "segment")
     }
 
-    /// タグ付き合計が無く ident が分母から 5% 超不足するとき、denom−ident を reconciling で補う
+    /// 未タグ人数は省略する。タグ付き合計が無く ident が分母から不足しても合成 reconciling は足さない
     /// （リコー S100LKDZ。「上記３分野共通」12,553 は HTML 未タグ）。
-    /// SPEC_ORACLE: 合成 member のみ。HTML ラベルは作らない。全社共通は reconciling のまま。
-    @Test func employeesComplementsUntaggedGapFromTaggedSegmentsAndDenominator() throws {
+    /// SPEC_ORACLE: タグ付き行のみ。ident=68,631、denom=81,184、far_from_total。
+    @Test func employeesOmitsUntaggedGapWithoutSyntheticReconcilingRow() throws {
         let snap = try #require(
             BreakdownNormalizer.normalizeEmployees(
                 facts: [
@@ -1418,17 +1414,11 @@ import Foundation
                     "OfficePrintingReportableSegmentMember": "オフィスプリンティング分野",
                     "CorporateSharedMember": "全社（共通）",
                 ]))
-        #expect(snap.needsReview == false)
-        #expect(snap.warnings.isEmpty)
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("employees_segment_sum_far_from_total"))
         #expect(snap.denominator == 81_184)
-        let complement = try #require(
-            snap.rows.first {
-                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
-            })
-        #expect(complement.rowKind == "reconciling")
-        #expect(complement.amount == 12_553)
-        #expect(complement.label == nil)
         #expect(snap.rows.contains { $0.label?.contains("上記") == true } == false)
+        #expect(snap.rows.contains { $0.labelRaw.contains("BlueTicker") } == false)
         let corporate = try #require(snap.rows.first { $0.labelRaw == "CorporateSharedMember" })
         #expect(corporate.rowKind == "reconciling")
         #expect(corporate.amount == 2_734)
@@ -1437,7 +1427,8 @@ import Foundation
         #expect(printing.rowKind == "segment")
         let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
-        #expect(ident == 81_184)
+        #expect(ident == 68_631)
+        #expect(snap.rows.count == 7)
     }
 
     /// 単一セグメントが分母と一致するだけでは合計列扱いにしない。
@@ -1449,10 +1440,7 @@ import Foundation
         #expect(snap.needsReview == false)
         let car = try #require(snap.rows.first { $0.labelRaw == "CarSegmentMember" })
         #expect(car.rowKind == "segment")
-        #expect(
-            snap.rows.contains {
-                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
-            } == false)
+        #expect(snap.rows.count == 1)
     }
 
     /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。

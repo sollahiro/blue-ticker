@@ -189,10 +189,6 @@ import Foundation
             })
         #expect(bank.rowKind == "subtotal")
         #expect(bank.amount == 22_024)
-        #expect(
-            emp.rows.contains {
-                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
-            } == false)
         #expect(emp.rows.contains { $0.labelRaw.lowercased().contains("assetmanagement") } == false)
         #expect(emp.rows.contains { $0.label?.contains("運用") == true } == false)
         let ident = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
@@ -204,23 +200,17 @@ import Foundation
         #expect(retail.amount == 8_594)
     }
 
-    /// リコー S100LKDZ: 「上記３分野共通」は未タグ。タグ付きセグメント＋分母から 12,553 を reconciling で補う。
-    @Test func ricohEmployeesComplementsUntaggedSharedThreeFieldsGap() async throws {
+    /// リコー S100LKDZ: 「上記３分野共通」は未タグのまま省略。合成 reconciling は足さない。
+    @Test func ricohEmployeesOmitsUntaggedSharedThreeFieldsWithoutSyntheticRow() async throws {
         guard await Self.ensureAvailable("S100LKDZ") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100LKDZ")
         let emp = try #require(
             BreakdownNormalizer.normalizeEmployees(
                 facts: facts, total: 81_184, axis: "employees", labelsByTag: labels))
-        #expect(emp.needsReview == false)
-        #expect(emp.warnings.isEmpty)
+        #expect(emp.needsReview == true)
+        #expect(emp.warnings.contains("employees_segment_sum_far_from_total"))
         #expect(emp.denominator == 81_184)
-        let complement = try #require(
-            emp.rows.first {
-                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
-            })
-        #expect(complement.rowKind == "reconciling")
-        #expect(complement.amount == 12_553)
-        #expect(complement.label == nil)
+        #expect(emp.rows.contains { $0.labelRaw.contains("BlueTicker") } == false)
         #expect(emp.rows.contains { $0.label?.contains("上記") == true } == false)
         let corporate = try #require(emp.rows.first { $0.labelRaw == "CorporateSharedMember" })
         #expect(corporate.rowKind == "reconciling")
@@ -231,7 +221,7 @@ import Foundation
         #expect(printing.amount == 32_474)
         let ident = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
-        #expect(ident == 81_184)
+        #expect(ident == 68_631)
     }
 
     @Test func nttResearchAndDevelopmentSubtractsIntersegmentElimination() async throws {

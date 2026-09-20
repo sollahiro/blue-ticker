@@ -297,7 +297,7 @@ enum BreakdownNormalizer {
     /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。
     /// `memberParents` は presentation の報告セグメント直親（`operatingSegmentMemberParents`）。
     /// 「うち」の子を `subtotal` に落とすために使う。空なら従来どおり花王型の親落としだけ。
-    /// うち落としとタグ付き分母補完は employees 限定（RD / goodwill / セグメント指標には付けない）。
+    /// うち落としとタグ付き合計列の subtotal 化は employees 限定（RD / goodwill / セグメント指標には付けない）。
     static func normalizeEmployees(
         facts: [BreakdownFact], total: Double?, axis: String, labelsByTag: [String: String] = [:],
         memberParents: [String: String] = [:]
@@ -305,7 +305,7 @@ enum BreakdownNormalizer {
         normalizeCountBasis(
             facts: facts, amountTags: Xbrl.employeeTags, total: total, axis: axis,
             warningPrefix: "employees", labelsByTag: labelsByTag, memberParents: memberParents,
-            applyOfWhichNestedChildDemotion: true, complementFromTaggedDenominator: true)
+            applyOfWhichNestedChildDemotion: true, applyTaggedTotalEqualToDenominator: true)
     }
 
     /// 研究開発費の事業セグメント別内訳（内訳取り込み research_and_development 軸）。
@@ -363,10 +363,6 @@ enum BreakdownNormalizer {
 
     private static let countBasisEliminationMemberName = "UnallocatedAmountsAndEliminationMember"
     private static let countBasisReportableSegmentsMemberName = "ReportableSegmentsMember"
-    /// 人数内訳で、タグ付き行の合計が分母から 5% 超不足するときだけ足す合成 member。
-    /// HTML 表の未タグラベルは使わない（公開層は `label ?? labelRaw`）。
-    static let countBasisDenominatorComplementMemberName =
-        "BlueTickerCountBasisDenominatorComplement"
     /// 人数は整数。タグ付き「合計」列と分母の一致判定に 5% は使わない。
     private static let countBasisPeopleEqualityEpsilon = 0.5
 
@@ -374,7 +370,7 @@ enum BreakdownNormalizer {
         facts: [BreakdownFact], amountTags: [String], total: Double?, axis: String, warningPrefix: String,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:],
         applyOfWhichNestedChildDemotion: Bool = false,
-        complementFromTaggedDenominator: Bool = false
+        applyTaggedTotalEqualToDenominator: Bool = false
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
@@ -387,7 +383,7 @@ enum BreakdownNormalizer {
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
             warningPrefix: warningPrefix, labelsByTag: labelsByTag, memberParents: memberParents,
             applyOfWhichNestedChildDemotion: applyOfWhichNestedChildDemotion,
-            complementFromTaggedDenominator: complementFromTaggedDenominator)
+            applyTaggedTotalEqualToDenominator: applyTaggedTotalEqualToDenominator)
     }
 
     /// のれんのセグメント別内訳（内訳取り込み goodwill 軸、2026-08-12追加）。
@@ -623,7 +619,7 @@ enum BreakdownNormalizer {
         warnOnDerivedTotal: Bool = true,
         useEntityTotalAsDenominator: Bool = true,
         applyOfWhichNestedChildDemotion: Bool = false,
-        complementFromTaggedDenominator: Bool = false
+        applyTaggedTotalEqualToDenominator: Bool = false
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
@@ -648,9 +644,8 @@ enum BreakdownNormalizer {
                 kinds: &kinds, amounts: amounts, total: total, memberParents: memberParents)
         }
         applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
-        if complementFromTaggedDenominator {
+        if applyTaggedTotalEqualToDenominator {
             demoteTaggedTotalEqualToDenominator(kinds: &kinds, amounts: amounts, total: total)
-            appendDenominatorComplementIfNeeded(amounts: &amounts, kinds: &kinds, total: total)
         }
 
         // 合計チェック・フォールバック分母は segment に加え reconciling（本社機能等の少額バケツ）も
@@ -665,7 +660,7 @@ enum BreakdownNormalizer {
                 .reduce(0.0) { $0 + amounts[$1]! }
             if segmentSum > 0, abs(segmentSum - total) / total > 0.05 {
                 let taggedTotalCoversDenominator =
-                    complementFromTaggedDenominator
+                    applyTaggedTotalEqualToDenominator
                     && hasTaggedTotalEqualToDenominator(kinds: kinds, amounts: amounts, total: total)
                     && segmentSum < total
                 if !taggedTotalCoversDenominator {
@@ -789,24 +784,6 @@ enum BreakdownNormalizer {
         }
         guard othersPositive else { return }
         kinds[taggedTotal] = "subtotal"
-    }
-
-    /// タグ付き合計が分母を既に表しているときは残差行を足さない（未タグ人数は省略）。
-    /// そうでなく ident が 5% 超不足するときだけ `denom − ident` を reconciling で補う
-    /// （リコー S100LKDZ）。HTML 由来のラベルは付けない。
-    private static func appendDenominatorComplementIfNeeded(
-        amounts: inout [String: Double], kinds: inout [String: String], total: Double?
-    ) {
-        guard let total, total > 0 else { return }
-        guard !hasTaggedTotalEqualToDenominator(kinds: kinds, amounts: amounts, total: total) else {
-            return
-        }
-        let ident = reconciledAmount(kinds: kinds, amounts: amounts)
-        guard ident > 0 else { return }
-        let gap = total - ident
-        guard gap > 0, gap / total > 0.05 else { return }
-        amounts[countBasisDenominatorComplementMemberName] = gap
-        kinds[countBasisDenominatorComplementMemberName] = "reconciling"
     }
 
     private static func hasTaggedTotalEqualToDenominator(
