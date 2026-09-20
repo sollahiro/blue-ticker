@@ -61,7 +61,6 @@ func runFilingSectionsIngest(
             db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years,
             logger: logger)
     }
-    }
     let baseCandidates = sets.keep
 
     var attempted = 0
