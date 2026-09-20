@@ -70,6 +70,8 @@ enum CompanyIconOriginOverride {
     /// 2026-09-18: 欠行の売上上位 20 社。先頭 rel=icon が小さい／origin 直下が 404 のため imageURL。
     /// 7459 の logo_facebook.png は Facebook マークなので favicon.ico（256px 本体マーク）を使う。
     /// 5334 の ogp は niterragroup.com へリダイレクトする。
+    /// 2026-09-20 visual GO: 9432 NTT 公式 apple-touch 320px。9439 MH Group は公式 favicon が
+    /// 16×16 のため PR Times 200×200 会社ロゴ。9412 / 7427 は安定公開 URL 未確定のため載せない。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -171,6 +173,9 @@ enum CompanyIconOriginOverride {
         "1885": .imageURL("https://www.toa-const.co.jp/common/img/og_image.png"),
         "8572": .imageURL("https://www.acom.co.jp/img/apple-touch-icon.png"),
         "7994": .imageURL("https://www.okamura.co.jp/global_assets/images/apple-touch-icon.png"),
+        "9432": .imageURL("https://group.ntt/apple-touch-icon.png"),
+        "9439": .imageURL(
+            "https://prtimes.jp/data/corp/122597/logo/sp-46258ab09fb99d79b265b3c42535ef24-36f02b09cef201479f6eff9086433389.jpeg"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {

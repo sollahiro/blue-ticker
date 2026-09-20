@@ -333,4 +333,33 @@ import Testing
                 "code=\(code)")
         }
     }
+
+    /// 2026-09-20 visual GO: 安定公開 URL がある 9432 / 9439 のみ。9412 / 7427 はローカル裁ち落としのみ。
+    @Test func pins20260920VisualGoManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("9432", "https://group.ntt/apple-touch-icon.png"),
+            (
+                "9439",
+                "https://prtimes.jp/data/corp/122597/logo/sp-46258ab09fb99d79b265b3c42535ef24-36f02b09cef201479f6eff9086433389.jpeg"
+            ),
+        ]
+        #expect(expected.count == 2)
+        #expect(CompanyIconOriginOverride.manualSources["9412"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["7427"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+            #expect(
+                companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsCacheVersion, sourceURL: "https://example.invalid"),
+                "code=\(code)")
+            #expect(
+                !companyIconShouldRefresh(
+                    code: code, cacheVersion: companyIconsManualCacheVersion, sourceURL: url),
+                "code=\(code)")
+        }
+    }
 }
