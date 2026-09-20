@@ -7,8 +7,13 @@
 
 import BlueTickerCore
 import Fluent
+import FluentSQL
 import Foundation
+import SQLKit
 import Vapor
+
+/// `sec_code` が未設定（NULL / 空 / 空白のみ）。SQLite と Postgres 共通。
+private let emptySecCodeSQL = SQLRaw("(sec_code IS NULL OR TRIM(sec_code) = '')")
 
 /// 同期結果のサマリ。
 public struct DocumentSyncSummary: Sendable, Equatable {
@@ -247,6 +252,7 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 /// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため、`XXXX0`…`XXXX9` の等価比較で突き合わせる
 /// （ライブ探索の hasPrefix(code4) と同条件。btree 索引が LIKE 前方一致に使えないロケールでも効く）。
 /// `sec_code` が空の行は master の EDINETコードでも拾う（提出当日の欠落がキャッシュに残るため）。
+/// EDINET フォールバックは空/`null` の `sec_code` に限る（非空の別銘柄行は混ぜない）。
 /// 該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 /// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
@@ -257,7 +263,10 @@ func loadStoredFilingRecords(code: String, db: Database) async throws -> [Edinet
         .group(.or) { group in
             group.filter(\.$secCode ~~ secCodes)
             if let listedEdinet {
-                group.filter(\.$edinetCode == listedEdinet)
+                group.group(.and) { fallback in
+                    fallback.filter(\.$edinetCode == listedEdinet)
+                    fallback.filter(.sql(emptySecCodeSQL))
+                }
             }
         }
         .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
@@ -267,29 +276,43 @@ func loadStoredFilingRecords(code: String, db: Database) async throws -> [Edinet
 
 /// 既存行で `sec_code` が空のものへ、上場 master の EDINETコード→5 桁証券コードを書く。
 /// 過去日キャッシュが提出当日の欠落を抱えたまま残るため、再取得せずに直す。
-/// 非空の `sec_code` は触らない。
+/// 非空の `sec_code` は触らない。欠落行だけを `doc_id` の keyset ページで読む。
 func fillMissingListedSecCodes(
-    listedSecCodeByEdinetCode: [String: String], db: Database, logger: Logger? = nil
+    listedSecCodeByEdinetCode: [String: String], db: Database, logger: Logger? = nil,
+    pageSize: Int = 200
 ) async throws -> Int {
     guard !listedSecCodeByEdinetCode.isEmpty else { return 0 }
-    let listings = try await withDbRetry(logger: logger, context: "sec_code 欠落の補完") {
-        try await EdinetDocumentListing.query(on: db).all()
-    }
     var filled = 0
-    for listing in listings {
-        let existing = listing.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard existing.isEmpty, let docID = listing.id else { continue }
-        guard let mapped = listedSecCodeByEdinetCode[listing.edinetCode],
-            listedTickerCode(fromSecCode: mapped) != nil
-        else { continue }
-        try await withDbRetry(logger: logger, context: "docID=\(docID) sec_code fill") {
-            guard let row = try await EdinetDocument.find(docID, on: db) else { return }
-            let current = row.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard current.isEmpty else { return }
-            row.secCode = mapped
-            try await row.update(on: db)
+    var afterDocID: String? = nil
+    while true {
+        let last = afterDocID
+        let page = try await withDbRetry(
+            logger: logger, context: "sec_code 欠落の補完 after=\(last ?? "")"
+        ) {
+            var query = EdinetDocumentListing.query(on: db)
+                .filter(.sql(emptySecCodeSQL))
+                .sort(\.$id)
+            if let last { query = query.filter(\.$id > last) }
+            return try await query.limit(pageSize).all()
         }
-        filled += 1
+        if page.isEmpty { break }
+        for listing in page {
+            let existing = listing.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard existing.isEmpty, let docID = listing.id else { continue }
+            guard let mapped = listedSecCodeByEdinetCode[listing.edinetCode],
+                listedTickerCode(fromSecCode: mapped) != nil
+            else { continue }
+            try await withDbRetry(logger: logger, context: "docID=\(docID) sec_code fill") {
+                guard let row = try await EdinetDocument.find(docID, on: db) else { return }
+                let current = row.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard current.isEmpty else { return }
+                row.secCode = mapped
+                try await row.update(on: db)
+            }
+            filled += 1
+        }
+        afterDocID = page.last?.id
+        if page.count < pageSize { break }
     }
     if filled > 0 {
         logger?.notice(

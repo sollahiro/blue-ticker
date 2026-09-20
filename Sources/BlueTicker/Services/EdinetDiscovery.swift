@@ -246,13 +246,15 @@ enum EdinetDiscovery {
         return result
     }
 
-    /// secCode 前方一致、または master の EDINETコード一致。
+    /// secCode 前方一致、または（`secCode` が空のときだけ）master の EDINETコード一致。
     /// 提出当日の一覧が `secCode` を欠いても、上場発行体の有報を seed にできる。
+    /// 非空の別銘柄 `secCode` は EDINETコード一致でも拾わない。
     private static func matchesListedIssuer(
         _ doc: [String: Any], code4: String, listedEdinetCode: String?
     ) -> Bool {
         let sec = (doc["secCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         if !code4.isEmpty, sec.hasPrefix(code4) { return true }
+        guard sec.isEmpty else { return false }
         if let listedEdinetCode, !listedEdinetCode.isEmpty,
             (doc["edinetCode"] as? String) == listedEdinetCode
         {
