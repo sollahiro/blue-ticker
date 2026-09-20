@@ -545,10 +545,11 @@ public extension BltServerContext {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         guard
             let snapshot = BreakdownNormalizer.normalizeEmployees(
                 facts: cached.facts, total: total, axis: breakdownAxisEmployees,
-                labelsByTag: cached.labelsByTag)
+                labelsByTag: cached.labelsByTag, memberParents: memberParents)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }

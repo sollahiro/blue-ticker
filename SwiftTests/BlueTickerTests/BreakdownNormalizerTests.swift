@@ -1224,6 +1224,225 @@ import Foundation
         #expect(reconciled == 31_514)
     }
 
+    /// 親を分割しきれない「うち」子を subtotal へ落とす（商船三井 S100YI2T）。
+    /// SPEC_ORACLE: コンテナ船 57 / 不動産 1,255 は内数。製品輸送・ウェルビーイングは segment のまま。
+    /// 花王型（親落とし）の逆。rows はフラット。memberParents が無いと needs_review のまま。
+    @Test func employeesDemotesPartialNestedChildrenAsSubtotal() throws {
+        let facts = [
+            Self.employeeFact("AssociatedBusinessesReportableSegmentsMember", 483),
+            Self.employeeFact("ContainershipsReportableSegmentsMember", 57),
+            Self.employeeFact("CorporateSharedMember", 548),
+            Self.employeeFact("DryBulkBusinessReportableSegmentsMember", 328),
+            Self.employeeFact("EnergyBusinessReportableSegmentsMember", 1_230),
+            Self.employeeFact(Self.otherBusinessMember, 989),
+            Self.employeeFact("ProductTransportBusinessReportableSegmentsMember", 5_341),
+            Self.employeeFact("RealEstateBusinessReportableSegmentsMember", 1_255),
+            Self.employeeFact("WellbeingAndLifestyleBusinessReportableSegmentsMember", 2_648),
+        ]
+        let labels: [String: String] = [
+            "AssociatedBusinessesReportableSegmentsMember": "関連事業",
+            "ContainershipsReportableSegmentsMember": "コンテナ船事業",
+            "DryBulkBusinessReportableSegmentsMember": "ドライバルク事業",
+            "EnergyBusinessReportableSegmentsMember": "エネルギー事業",
+            "ProductTransportBusinessReportableSegmentsMember": "製品輸送事業",
+            "RealEstateBusinessReportableSegmentsMember": "不動産事業",
+            "WellbeingAndLifestyleBusinessReportableSegmentsMember": "ウェルビーイングライフ事業",
+        ]
+        let parents = [
+            "ContainershipsReportableSegmentsMember": "ProductTransportBusinessReportableSegmentsMember",
+            "RealEstateBusinessReportableSegmentsMember": "WellbeingAndLifestyleBusinessReportableSegmentsMember",
+        ]
+
+        let unresolved = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: breakdownAxisEmployees, labelsByTag: labels))
+        #expect(unresolved.needsReview == true)
+        #expect(unresolved.warnings.contains("employees_segment_sum_far_from_total"))
+
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: breakdownAxisEmployees, labelsByTag: labels,
+                memberParents: parents))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.denominator == 11_567)
+        let containerships = try #require(
+            snap.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "subtotal")
+        #expect(containerships.amount == 57)
+        let realEstate = try #require(
+            snap.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "subtotal")
+        #expect(realEstate.amount == 1_255)
+        let product = try #require(
+            snap.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
+        #expect(product.rowKind == "segment")
+        let wellbeing = try #require(
+            snap.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
+        #expect(wellbeing.rowKind == "segment")
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 11_567)
+        #expect(snap.rows.contains { $0.rowKind == "subtotal" && $0.labelRaw.contains("Containerships") })
+    }
+
+    /// うち落としは employees 限定。RD に同じ memberParents を渡しても子は segment のまま
+    /// （RD / goodwill では実 XBRL 未検証のため広げない）。
+    @Test func researchAndDevelopmentIgnoresOfWhichNestedChildDemotion() throws {
+        let facts = [
+            Self.rdFact("AssociatedBusinessesReportableSegmentsMember", 483),
+            Self.rdFact("ContainershipsReportableSegmentsMember", 57),
+            Self.rdFact("CorporateSharedMember", 548),
+            Self.rdFact("DryBulkBusinessReportableSegmentsMember", 328),
+            Self.rdFact("EnergyBusinessReportableSegmentsMember", 1_230),
+            Self.rdFact(Self.otherBusinessMember, 989),
+            Self.rdFact("ProductTransportBusinessReportableSegmentsMember", 5_341),
+            Self.rdFact("RealEstateBusinessReportableSegmentsMember", 1_255),
+            Self.rdFact("WellbeingAndLifestyleBusinessReportableSegmentsMember", 2_648),
+        ]
+        let parents = [
+            "ContainershipsReportableSegmentsMember": "ProductTransportBusinessReportableSegmentsMember",
+            "RealEstateBusinessReportableSegmentsMember":
+                "WellbeingAndLifestyleBusinessReportableSegmentsMember",
+        ]
+        let snap = try #require(
+            BreakdownNormalizer.normalizeResearchAndDevelopment(
+                facts: facts, total: 11_567, axis: breakdownAxisResearchAndDevelopment,
+                memberParents: parents))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("research_and_development_segment_sum_far_from_total"))
+        let containerships = try #require(
+            snap.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "segment")
+        let realEstate = try #require(
+            snap.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "segment")
+    }
+
+    /// 花王型の親落としは memberParents があっても先に走り、うち落としは分母が既に合うので触らない。
+    @Test func employeesKeepsKaoParentDemotionWhenChildrenPartitionParent() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("BusinessConnectedBusinessReportableSegmentMember", 841),
+                    Self.employeeFact("ChemicalBusinessReportableSegmentMember", 4_068),
+                    Self.employeeFact("CosmeticsBusinessReportableSegmentMember", 9_331),
+                    Self.employeeFact("GlobalConsumerCareBusinessReportableSegmentMember", 26_192),
+                    Self.employeeFact("HealthBeautyCareBusinessReportableSegmentMember", 7_521),
+                    Self.employeeFact("HygieneLivingCareBusinessReportableSegmentMember", 8_499),
+                    Self.employeeFact("CorporateSharedMember", 1_254),
+                ],
+                total: 31_514, axis: breakdownAxisEmployees,
+                memberParents: [
+                    "CosmeticsBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                    "HealthBeautyCareBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                    "HygieneLivingCareBusinessReportableSegmentMember":
+                        "GlobalConsumerCareBusinessReportableSegmentMember",
+                ]))
+        #expect(snap.needsReview == false)
+        let parent = try #require(
+            snap.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
+        #expect(parent.rowKind == "subtotal")
+        let cosmetics = try #require(
+            snap.rows.first { $0.labelRaw == "CosmeticsBusinessReportableSegmentMember" })
+        #expect(cosmetics.rowKind == "segment")
+        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 31_514)
+    }
+
+    /// タグ付き「合計」member が分母と整数一致するとき subtotal にし、未タグ残差は省略する
+    /// （三井住友トラスト S100O9U5。運用ビジネス 1,421 は HTML 未タグ）。
+    /// SPEC_ORACLE: 銀行 22,024 は合計列。ident は 20,603 のまま。残差行も HTML ラベルも作らない。
+    @Test func employeesDemotesTaggedTotalEqualToDenominatorWithoutInventingUntaggedRow() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact(
+                        "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember", 22_024),
+                    Self.employeeFact("RetailTotalSolutionServicesReportableSegmentMember", 8_594),
+                    Self.employeeFact("WholesaleFinancialServicesReportableSegmentMember", 4_199),
+                    Self.employeeFact("OtherReportableSegmentsMember", 3_588),
+                    Self.employeeFact("RealEstateReportableSegmentMember", 1_834),
+                    Self.employeeFact("FiduciaryServicesReportableSegmentMember", 1_571),
+                    Self.employeeFact("StockTransferAgencyServicesReportableSegmentMember", 467),
+                    Self.employeeFact("GlobalMarketsReportableSegmentMember", 350),
+                ],
+                total: 22_024, axis: breakdownAxisEmployees,
+                labelsByTag: [
+                    "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember": "三井住友信託銀行",
+                    "RetailTotalSolutionServicesReportableSegmentMember": "個人トータルソリューション",
+                ]))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.denominator == 22_024)
+        let bank = try #require(
+            snap.rows.first {
+                $0.labelRaw == "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember"
+            })
+        #expect(bank.rowKind == "subtotal")
+        #expect(bank.amount == 22_024)
+        #expect(bank.label == "三井住友信託銀行")
+        #expect(snap.rows.contains { $0.label?.contains("運用") == true } == false)
+        let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 20_603)
+        let retail = try #require(
+            snap.rows.first { $0.labelRaw == "RetailTotalSolutionServicesReportableSegmentMember" })
+        #expect(retail.rowKind == "segment")
+    }
+
+    /// 未タグ人数は省略する。タグ付き合計が無く ident が分母から不足しても合成 reconciling は足さない
+    /// （リコー S100LKDZ。「上記３分野共通」12,553 は HTML 未タグ）。
+    /// SPEC_ORACLE: タグ付き行のみ。ident=68,631、denom=81,184、far_from_total。
+    @Test func employeesOmitsUntaggedGapWithoutSyntheticReconcilingRow() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("OfficePrintingReportableSegmentMember", 32_474),
+                    Self.employeeFact("OfficeServicesReportableSegmentMember", 19_976),
+                    Self.employeeFact("OtherReportableSegmentsMember", 5_783),
+                    Self.employeeFact("CommercialPrintingReportableSegmentMember", 5_388),
+                    Self.employeeFact("CorporateSharedMember", 2_734),
+                    Self.employeeFact("ThermalMediaReportableSegmentMember", 1_405),
+                    Self.employeeFact("IndustrialPrintingReportableSegmentMember", 871),
+                ],
+                total: 81_184, axis: breakdownAxisEmployees,
+                labelsByTag: [
+                    "OfficePrintingReportableSegmentMember": "オフィスプリンティング分野",
+                    "CorporateSharedMember": "全社（共通）",
+                ]))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("employees_segment_sum_far_from_total"))
+        #expect(snap.denominator == 81_184)
+        #expect(snap.rows.contains { $0.label?.contains("上記") == true } == false)
+        #expect(snap.rows.contains { $0.labelRaw.contains("BlueTicker") } == false)
+        let corporate = try #require(snap.rows.first { $0.labelRaw == "CorporateSharedMember" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(corporate.amount == 2_734)
+        let printing = try #require(
+            snap.rows.first { $0.labelRaw == "OfficePrintingReportableSegmentMember" })
+        #expect(printing.rowKind == "segment")
+        let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 68_631)
+        #expect(snap.rows.count == 7)
+    }
+
+    /// 単一セグメントが分母と一致するだけでは合計列扱いにしない。
+    @Test func employeesKeepsSoleSegmentEqualToDenominatorAsSegment() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [Self.employeeFact("CarSegmentMember", 1_000)],
+                total: 1_000, axis: breakdownAxisEmployees))
+        #expect(snap.needsReview == false)
+        let car = try #require(snap.rows.first { $0.labelRaw == "CarSegmentMember" })
+        #expect(car.rowKind == "segment")
+        #expect(snap.rows.count == 1)
+    }
+
     /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。
     @Test func researchAndDevelopmentSubtractsEliminationWhenThatReconcilesToTotal() throws {
         let snap = try #require(

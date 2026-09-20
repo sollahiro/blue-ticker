@@ -122,9 +122,11 @@ import Foundation
     @Test func kaoEmployeesDemotesGlobalConsumerCareParent() async throws {
         guard await Self.ensureAvailable("S100XT6G") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100XT6G")
+        let parents = XBRLUtils.operatingSegmentMemberParents(in: Self.xbrlDir("S100XT6G"))
         let emp = try #require(
             BreakdownNormalizer.normalizeEmployees(
-                facts: facts, total: 31_514, axis: "employees", labelsByTag: labels))
+                facts: facts, total: 31_514, axis: "employees", labelsByTag: labels,
+                memberParents: parents))
         #expect(emp.needsReview == false)
         let parent = try #require(
             emp.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
@@ -132,6 +134,94 @@ import Foundation
         let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
         #expect(reconciled == 31_514)
+    }
+
+    @Test func mitsuiOSKEmployeesDemotesOfWhichNestedChildren() async throws {
+        guard await Self.ensureAvailable("S100YI2T") else { return }
+        let dir = Self.xbrlDir("S100YI2T")
+        let (facts, labels) = Self.employeesFactsAndLabels("S100YI2T")
+        let parents = XBRLUtils.operatingSegmentMemberParents(in: dir)
+        #expect(parents["ContainershipsReportableSegmentsMember"]
+            == "ProductTransportBusinessReportableSegmentsMember")
+        #expect(parents["RealEstateBusinessReportableSegmentsMember"]
+            == "WellbeingAndLifestyleBusinessReportableSegmentsMember")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 11_567, axis: "employees", labelsByTag: labels,
+                memberParents: parents))
+        #expect(emp.needsReview == false)
+        #expect(emp.warnings.isEmpty)
+        #expect(emp.denominator == 11_567)
+        let containerships = try #require(
+            emp.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
+        #expect(containerships.rowKind == "subtotal")
+        #expect(containerships.amount == 57)
+        let realEstate = try #require(
+            emp.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
+        #expect(realEstate.rowKind == "subtotal")
+        #expect(realEstate.amount == 1_255)
+        let product = try #require(
+            emp.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
+        #expect(product.rowKind == "segment")
+        let wellbeing = try #require(
+            emp.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
+        #expect(wellbeing.rowKind == "segment")
+        let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(reconciled == 11_567)
+    }
+
+    /// 三井住友トラスト S100O9U5: 銀行 member 22,024 はタグ付き合計列。運用ビジネス 1,421 は未タグのまま省略。
+    @Test func sumitomoMitsuiTrustEmployeesDemotesTaggedBankTotalWithoutUntaggedAssetManagement()
+        async throws
+    {
+        guard await Self.ensureAvailable("S100O9U5") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100O9U5")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 22_024, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == false)
+        #expect(emp.warnings.isEmpty)
+        #expect(emp.denominator == 22_024)
+        let bank = try #require(
+            emp.rows.first {
+                $0.labelRaw == "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember"
+            })
+        #expect(bank.rowKind == "subtotal")
+        #expect(bank.amount == 22_024)
+        #expect(emp.rows.contains { $0.labelRaw.lowercased().contains("assetmanagement") } == false)
+        #expect(emp.rows.contains { $0.label?.contains("運用") == true } == false)
+        let ident = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 20_603)
+        let retail = try #require(
+            emp.rows.first { $0.labelRaw == "RetailTotalSolutionServicesReportableSegmentMember" })
+        #expect(retail.rowKind == "segment")
+        #expect(retail.amount == 8_594)
+    }
+
+    /// リコー S100LKDZ: 「上記３分野共通」は未タグのまま省略。合成 reconciling は足さない。
+    @Test func ricohEmployeesOmitsUntaggedSharedThreeFieldsWithoutSyntheticRow() async throws {
+        guard await Self.ensureAvailable("S100LKDZ") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100LKDZ")
+        let emp = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 81_184, axis: "employees", labelsByTag: labels))
+        #expect(emp.needsReview == true)
+        #expect(emp.warnings.contains("employees_segment_sum_far_from_total"))
+        #expect(emp.denominator == 81_184)
+        #expect(emp.rows.contains { $0.labelRaw.contains("BlueTicker") } == false)
+        #expect(emp.rows.contains { $0.label?.contains("上記") == true } == false)
+        let corporate = try #require(emp.rows.first { $0.labelRaw == "CorporateSharedMember" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(corporate.amount == 2_734)
+        let printing = try #require(
+            emp.rows.first { $0.labelRaw == "OfficePrintingReportableSegmentMember" })
+        #expect(printing.rowKind == "segment")
+        #expect(printing.amount == 32_474)
+        let ident = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 68_631)
     }
 
     @Test func nttResearchAndDevelopmentSubtractsIntersegmentElimination() async throws {

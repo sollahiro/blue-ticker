@@ -80,6 +80,7 @@ public let businessBreakdownCacheVersion = "breakdown-business-v13"
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v11 のままでは決定論変更後も clean 行が skip される。
 public let geographyBreakdownCacheVersion = "breakdown-geography-v12"
+/// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
