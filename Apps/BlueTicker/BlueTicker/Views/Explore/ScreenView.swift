@@ -121,7 +121,7 @@ struct ScreenView: View {
         }
     }
 
-    /// 未選択と全選択は同じ（業種フィルタなし）。複数はサーバーが 1 業種なので呼び出し側で OR する。
+    /// 未選択と全選択は同じ（業種フィルタなし）。複数業種はサーバーの IN 検索が OR する。
     private var screenSectors: [String] {
         if session.selectedSectors.isEmpty || session.selectedSectors.count == TSESector.catalog.count {
             return []
@@ -161,17 +161,12 @@ struct ScreenView: View {
         .padding(.vertical, 6)
     }
 
-    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。未選択・全選択は 3 リクエスト。
-    /// 業種を多く選ぶと業種×プリセットになるので、8 業種超は出さない。
+    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 3 プリセットで
+    /// 3 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
     /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
     /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
     private func loadPresetCounts() async -> Bool {
         let sectors = screenSectors
-        if sectors.count > 8 {
-            session.presetMatched = [:]
-            session.countsLoading = false
-            return true
-        }
         var next: [ScreenPreset: Int] = [:]
         for preset in ScreenPreset.allCases {
             guard !Task.isCancelled else { return false }

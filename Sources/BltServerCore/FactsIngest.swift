@@ -227,13 +227,18 @@ public func runFactsIngestCommand(
         let needsNikkeiFilings =
             targets.contains(.notes) || targets.contains(.breakdowns)
 
+        // 会社有報の一覧読みは全候補集合で 1 回だけにする（listed / 日経225 ごとの再走査を避ける）。
+        var annualDocs: [EdinetDocumentListing]?
         func loadCandidateSets(_ listedCodes: Set<String>) async throws -> FilingSectionCandidateSets {
             if listedCodes.isEmpty {
                 return FilingSectionCandidateSets(keep: [], purge: [])
             }
-            return try await filingSectionCandidates(
-                db: app.db, listedCodes: listedCodes, explicitCodes: codes,
-                years: filingSectionsIngestYears, logger: app.logger)
+            if annualDocs == nil {
+                annualDocs = try await annualReportDisclosureDocs(db: app.db, logger: app.logger)
+            }
+            return await filingSectionCandidates(
+                docs: annualDocs ?? [], listedCodes: listedCodes, explicitCodes: codes,
+                years: filingSectionsIngestYears)
         }
 
         let listedFilingSets: FilingSectionCandidateSets
@@ -335,154 +340,125 @@ public func runFactsIngestCommand(
             let unpublishedSets =
                 nikkeiListed == publicBreakdownListed
                 ? publicBreakdownSets : nikkeiFilingSets
-            let s6Business = try await runBreakdownIngest(
-                db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisBusiness, candidateSets: publicBreakdownSets, logger: app.logger
-            ) { docID in
-                await context.resolveBusinessBreakdown(docID: docID)
+
+            /// 1 軸分の実行定義。`target` はログ用の ingest 対象名。
+            struct BreakdownStage {
+                let axis: String
+                let target: String
+                let listedCodes: Set<String>
+                let limit: Int?
+                let candidateSets: FilingSectionCandidateSets
+                let resolve: BreakdownResolveFn
             }
-            let s6Geography = try await runBreakdownIngest(
-                db: app.db, listedCodes: publicBreakdownListed, years: filingSectionsIngestYears, limit: stageLimit,
-                explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisGeography, candidateSets: publicBreakdownSets, logger: app.logger
-            ) { docID in
-                await context.resolveGeographyBreakdown(docID: docID)
-            }
-            let s6Employees = try await runBreakdownIngest(
-                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
-                explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisEmployees, candidateSets: unpublishedSets, logger: app.logger
-            ) { docID in
-                await context.resolveEmployeesBreakdown(docID: docID)
-            }
-            let s6RD = try await runBreakdownIngest(
-                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
-                explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisResearchAndDevelopment, candidateSets: unpublishedSets, logger: app.logger
-            ) { docID in
-                await context.resolveResearchAndDevelopmentBreakdown(docID: docID)
-            }
-            let s6Goodwill = try await runBreakdownIngest(
-                db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears, limit: unpublishedLimit,
-                explicitCodes: codes, priorityCodes: priority,
-                cachedDocIDs: cachedDocIDs,
-                axis: breakdownAxisGoodwill, candidateSets: unpublishedSets, logger: app.logger
-            ) { docID in
-                await context.resolveGoodwillBreakdown(docID: docID)
-            }
-            let segmentMetricAxes = [
-                breakdownAxisSegmentAssets,
-                breakdownAxisDepreciationAndAmortization,
-                breakdownAxisGoodwillAmortization,
-                breakdownAxisImpairmentLoss,
-                breakdownAxisEquityMethodInvestments,
-                breakdownAxisCapitalExpenditures,
-                breakdownAxisCapitalExpendituresOverview,
-                breakdownAxisNoncurrentAssetAdditions,
+            let stages: [BreakdownStage] = [
+                BreakdownStage(
+                    axis: breakdownAxisBusiness, target: "breakdowns",
+                    listedCodes: publicBreakdownListed, limit: stageLimit,
+                    candidateSets: publicBreakdownSets
+                ) { docID in
+                    await context.resolveBusinessBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisGeography, target: "breakdowns-geography",
+                    listedCodes: publicBreakdownListed, limit: stageLimit,
+                    candidateSets: publicBreakdownSets
+                ) { docID in
+                    await context.resolveGeographyBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisEmployees, target: "breakdowns-employees",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveEmployeesBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisResearchAndDevelopment, target: "breakdowns-rd",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveResearchAndDevelopmentBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisGoodwill, target: "breakdowns-goodwill",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveGoodwillBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisSegmentAssets, target: "breakdowns-\(breakdownAxisSegmentAssets)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveSegmentAssetsBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisDepreciationAndAmortization,
+                    target: "breakdowns-\(breakdownAxisDepreciationAndAmortization)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveDepreciationAndAmortizationBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisGoodwillAmortization,
+                    target: "breakdowns-\(breakdownAxisGoodwillAmortization)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveGoodwillAmortizationBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisImpairmentLoss,
+                    target: "breakdowns-\(breakdownAxisImpairmentLoss)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveImpairmentLossBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisEquityMethodInvestments,
+                    target: "breakdowns-\(breakdownAxisEquityMethodInvestments)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveEquityMethodInvestmentsBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisCapitalExpenditures,
+                    target: "breakdowns-\(breakdownAxisCapitalExpenditures)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveCapitalExpendituresBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisCapitalExpendituresOverview,
+                    target: "breakdowns-\(breakdownAxisCapitalExpendituresOverview)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveCapitalExpendituresOverviewBreakdown(docID: docID)
+                },
+                BreakdownStage(
+                    axis: breakdownAxisNoncurrentAssetAdditions,
+                    target: "breakdowns-\(breakdownAxisNoncurrentAssetAdditions)",
+                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveNoncurrentAssetAdditionsBreakdown(docID: docID)
+                },
             ]
-            var segmentMetricSummaries: [(axis: String, summary: BreakdownIngestSummary)] = []
-            for axis in segmentMetricAxes {
-                let resolver: BreakdownResolveFn
-                switch axis {
-                case breakdownAxisSegmentAssets:
-                    resolver = { docID in await context.resolveSegmentAssetsBreakdown(docID: docID) }
-                case breakdownAxisDepreciationAndAmortization:
-                    resolver = { docID in
-                        await context.resolveDepreciationAndAmortizationBreakdown(docID: docID)
-                    }
-                case breakdownAxisGoodwillAmortization:
-                    resolver = { docID in
-                        await context.resolveGoodwillAmortizationBreakdown(docID: docID)
-                    }
-                case breakdownAxisImpairmentLoss:
-                    resolver = { docID in await context.resolveImpairmentLossBreakdown(docID: docID) }
-                case breakdownAxisEquityMethodInvestments:
-                    resolver = { docID in
-                        await context.resolveEquityMethodInvestmentsBreakdown(docID: docID)
-                    }
-                case breakdownAxisCapitalExpenditures:
-                    resolver = { docID in
-                        await context.resolveCapitalExpendituresBreakdown(docID: docID)
-                    }
-                case breakdownAxisCapitalExpendituresOverview:
-                    resolver = { docID in
-                        await context.resolveCapitalExpendituresOverviewBreakdown(docID: docID)
-                    }
-                case breakdownAxisNoncurrentAssetAdditions:
-                    resolver = { docID in
-                        await context.resolveNoncurrentAssetAdditionsBreakdown(docID: docID)
-                    }
-                default:
-                    continue
-                }
+            var summaries: [(stage: BreakdownStage, summary: BreakdownIngestSummary)] = []
+            for stage in stages {
                 let summary = try await runBreakdownIngest(
-                    db: app.db, listedCodes: nikkeiListed, years: filingSectionsIngestYears,
-                    limit: unpublishedLimit, explicitCodes: codes, priorityCodes: priority,
-                    cachedDocIDs: cachedDocIDs, axis: axis, candidateSets: unpublishedSets,
-                    logger: app.logger, resolve: resolver)
-                segmentMetricSummaries.append((axis: axis, summary: summary))
+                    db: app.db, listedCodes: stage.listedCodes, years: filingSectionsIngestYears,
+                    limit: stage.limit, explicitCodes: codes, priorityCodes: priority,
+                    cachedDocIDs: cachedDocIDs, axis: stage.axis, candidateSets: stage.candidateSets,
+                    logger: app.logger, resolve: stage.resolve)
+                summaries.append((stage, summary))
             }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
             ) {
                 try await countServableBreakdowns(db: app.db)
             }
-            logIngestSummary(
-                app.logger, target: "breakdowns", attempted: s6Business.attempted, stored: s6Business.stored,
-                failed: s6Business.failed, skipped: s6Business.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6Business.notApplicable,
-                notApplicableGeographyOnly: s6Business.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6Business.notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6Business.notApplicableUnknown,
-                purged: s6Business.purged)
-            logIngestSummary(
-                app.logger, target: "breakdowns-geography", attempted: s6Geography.attempted,
-                stored: s6Geography.stored, failed: s6Geography.failed, skipped: s6Geography.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6Geography.notApplicable,
-                notApplicableGeographyOnly: s6Geography.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6Geography
-                    .notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6Geography.notApplicableUnknown,
-                purged: s6Geography.purged)
-            logIngestSummary(
-                app.logger, target: "breakdowns-employees", attempted: s6Employees.attempted,
-                stored: s6Employees.stored, failed: s6Employees.failed, skipped: s6Employees.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6Employees.notApplicable,
-                notApplicableGeographyOnly: s6Employees.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6Employees
-                    .notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6Employees.notApplicableUnknown,
-                purged: s6Employees.purged)
-            logIngestSummary(
-                app.logger, target: "breakdowns-rd", attempted: s6RD.attempted,
-                stored: s6RD.stored, failed: s6RD.failed, skipped: s6RD.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6RD.notApplicable,
-                notApplicableGeographyOnly: s6RD.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6RD.notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6RD.notApplicableUnknown,
-                purged: s6RD.purged)
-            logIngestSummary(
-                app.logger, target: "breakdowns-goodwill", attempted: s6Goodwill.attempted,
-                stored: s6Goodwill.stored, failed: s6Goodwill.failed, skipped: s6Goodwill.skipped,
-                servable: coverage?.servable, unservable: coverage?.unservable,
-                notApplicable: s6Goodwill.notApplicable,
-                notApplicableGeographyOnly: s6Goodwill.notApplicableGeographyOnly,
-                notApplicableSingleSegmentDisclosed: s6Goodwill.notApplicableSingleSegmentDisclosed,
-                notApplicableUnknown: s6Goodwill.notApplicableUnknown,
-                purged: s6Goodwill.purged)
-            for item in segmentMetricSummaries {
-                let summary = item.summary
+            for (stage, summary) in summaries {
                 logIngestSummary(
-                    app.logger, target: "breakdowns-\(item.axis)",
+                    app.logger, target: stage.target,
                     attempted: summary.attempted, stored: summary.stored,
                     failed: summary.failed, skipped: summary.skipped,
                     servable: coverage?.servable, unservable: coverage?.unservable,
@@ -566,6 +542,7 @@ public func runFactsIngestCommand(
                     ),
                 ]
             let noteTypeFilter = noteTypes
+            var notesSummaries: [(noteType: String, summary: StatementNotesIngestSummary)] = []
             for entry in statementNoteTypes {
                 if let noteTypeFilter, !noteTypeFilter.contains(entry.noteType) { continue }
                 let s8 = try await runStatementNotesIngest(
@@ -575,15 +552,20 @@ public func runFactsIngestCommand(
                     noteType: entry.noteType,
                     candidateSets: nikkeiFilingSets,
                     logger: app.logger, resolve: entry.resolve)
-                let coverage = try? await withDbRetry(
-                    logger: app.logger, context: "company_statement_notes(\(entry.noteType)) 集計"
-                ) {
-                    try await countServableStatementNotes(db: app.db)
-                }
+                notesSummaries.append((noteType: entry.noteType, summary: s8))
+            }
+            // カバレッジ集計は noteType 非依存のためループの外で 1 回だけ発行する。
+            let notesCoverage = try? await withDbRetry(
+                logger: app.logger, context: "company_statement_notes 集計"
+            ) {
+                try await countServableStatementNotes(db: app.db)
+            }
+            for entry in notesSummaries {
+                let s8 = entry.summary
                 logIngestSummary(
                     app.logger, target: "statement-notes-\(entry.noteType)", attempted: s8.attempted,
                     stored: s8.stored, failed: s8.failed, skipped: s8.skipped,
-                    servable: coverage?.servable, unservable: coverage?.unservable,
+                    servable: notesCoverage?.servable, unservable: notesCoverage?.unservable,
                     notApplicable: s8.notApplicable, purged: s8.purged)
             }
         }

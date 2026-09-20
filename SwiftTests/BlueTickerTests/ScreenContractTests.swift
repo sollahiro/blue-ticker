@@ -111,6 +111,20 @@ import Testing
         #expect(query.projectedMetrics == [.sales, .operatingMargin, .roic, .netDe, .salesCagr3y])
     }
 
+    @Test func parseScreenQueryAcceptsMultipleSectors() throws {
+        // カンマ区切りは OR。空白トリム・重複除去・空要素は落とす。
+        let comma = try parseScreenQuery(["sector": "電気機器, 輸送用機器 ,電気機器,,"]).get()
+        #expect(comma.sectors == ["電気機器", "輸送用機器"])
+        // キー重複は呼び出し側でカンマ連結済みなので同じ形になる。
+        #expect(comma.sector == nil)
+        let single = try parseScreenQuery(["sector": "電気機器"]).get()
+        #expect(single.sector == "電気機器")
+        #expect(single.sectors == ["電気機器"])
+        let empty = try parseScreenQuery(["sector": " , "]).get()
+        #expect(empty.sectors == [])
+        #expect(empty.sector == nil)
+    }
+
     @Test func parseScreenQueryRejectsUnknownAndInvalid() {
         #expect(parseScreenQuery(["foo": "1"]) == .failure(.unknownKeys(["foo"])))
         #expect(parseScreenQuery(["working_capital_min": "1"]) == .failure(.unknownKeys(["working_capital_min"])))

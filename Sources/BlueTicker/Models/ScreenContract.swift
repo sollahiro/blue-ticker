@@ -125,8 +125,10 @@ public enum ScreenSortOrder: String, Sendable {
 
 /// `GET /v1/screen` の解析済みクエリ。
 public struct ScreenQuery: Sendable, Equatable {
-    /// `sector=` 完全一致（省略時は全業種）。
-    public var sector: String?
+    /// `sector=` の完全一致業種（複数指定は OR。空は全業種）。カンマ区切り・キー重複の両方を受理する。
+    public var sectors: [String]
+    /// 単一業種の後方互換ビュー（複数指定・未指定は nil）。新規コードは `sectors` を使う。
+    public var sector: String? { sectors.count == 1 ? sectors.first : nil }
     /// `{metric}_min` / `{metric}_max`。対象指標が null の行は落とす（0 扱いにしない）。
     public var ranges: [ScreenMetric: ScreenRange]
     /// `sort=`（既定 `roic`）。null の行は結果に載せない。
@@ -137,11 +139,11 @@ public struct ScreenQuery: Sendable, Equatable {
     public var limit: Int
 
     public init(
-        sector: String? = nil, ranges: [ScreenMetric: ScreenRange] = [:],
+        sectors: [String] = [], ranges: [ScreenMetric: ScreenRange] = [:],
         sort: ScreenMetric = .roic, order: ScreenSortOrder = .desc,
         limit: Int = Api.screenLimitDefault
     ) {
-        self.sector = sector
+        self.sectors = sectors
         self.ranges = ranges
         self.sort = sort
         self.order = order
@@ -165,7 +167,13 @@ public func parseScreenQuery(_ raw: [String: String]) -> Result<ScreenQuery, Scr
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         switch key {
         case "sector":
-            query.sector = trimmed.isEmpty ? nil : trimmed
+            // `sector=A,B` と `sector=A&sector=B`（呼び出し側でカンマ連結済み）の両方を OR に展開する。
+            for part in trimmed.split(separator: ",") {
+                let sector = part.trimmingCharacters(in: .whitespaces)
+                if !sector.isEmpty, !query.sectors.contains(sector) {
+                    query.sectors.append(sector)
+                }
+            }
         case "sort":
             guard let metric = ScreenMetric(rawValue: trimmed) else {
                 return .failure(.invalidValue(key: key, value: value))

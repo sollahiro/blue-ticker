@@ -10,6 +10,7 @@ import BlueTickerCore
 import Fluent
 import Foundation
 import Logging
+import SQLKit
 
 /// 財務取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
 /// `failed`（抽出できず要調査）と分けて数える（issue #86）。
@@ -160,6 +161,54 @@ func runFinancialsIngest(
         skipped: skipped)
 }
 
+/// 発行体（sec_code × edinet_code の組）単位の集約行。`highWater` は
+/// `docTypes` ∩ 会社開示府令(010) の doc だけの `MAX(submit_date_time)`（無ければ nil）。
+private typealias IssuerHighWater = (secCode: String?, edinetCode: String, highWater: String?)
+
+/// edinet_documents を発行体組へ SQL 集約して読む（全行転送しない）。
+/// コード列挙は財務行の対象社集合を変えないため全 doc の DISTINCT 組を使い、
+/// high-water は `docTypes` ∩ 会社開示府令(010) の doc のみ条件付き MAX で取る。
+/// 非 SQL ドライバでは一覧射影を読んで同じ形へ畳む（テスト差し替え用のフォールバック）。
+private func issuerHighWaterRows(
+    db: Database, docTypes: Set<String>
+) async throws -> [IssuerHighWater] {
+    if let sql = db as? SQLDatabase {
+        let rows = try await sql.raw("""
+            SELECT \(ident: "sec_code") AS sec_code,
+                \(ident: "edinet_code") AS edinet_code,
+                MAX(CASE WHEN \(ident: "doc_type_code") IN (\(binds: Array(docTypes)))
+                        AND \(ident: "ordinance_code") = \(bind: Api.ordinanceCompanyDisclosure)
+                    THEN \(ident: "submit_date_time") END) AS high_water
+            FROM \(ident: EdinetDocument.schema)
+            GROUP BY \(ident: "sec_code"), \(ident: "edinet_code")
+            ORDER BY \(ident: "edinet_code"), \(ident: "sec_code")
+            """).all()
+        return try rows.map { row in
+            (
+                try row.decode(column: "sec_code", as: String?.self),
+                try row.decode(column: "edinet_code", as: String.self),
+                try row.decode(column: "high_water", as: String?.self)
+            )
+        }
+    }
+    let documents = try await EdinetDocumentListing.query(on: db).all()
+    var order: [String] = []
+    var byIssuer: [String: IssuerHighWater] = [:]
+    for doc in documents {
+        let key = "\(doc.secCode ?? "")\u{1F}\(doc.edinetCode)"
+        var row = byIssuer[key] ?? (secCode: doc.secCode, edinetCode: doc.edinetCode, highWater: nil)
+        if byIssuer[key] == nil { order.append(key) }
+        if let docType = doc.docTypeCode, docTypes.contains(docType),
+            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode),
+            doc.submitDateTime > (row.highWater ?? "")
+        {
+            row.highWater = doc.submitDateTime
+        }
+        byIssuer[key] = row
+    }
+    return order.compactMap { byIssuer[$0] }
+}
+
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
 /// secCode が無い／非上場（末尾 0 でない・桁数不一致）は、master の EDINETコードで
 /// 上場発行体に写せるときだけ対象にする（提出当日の secCode 欠落対策）。
@@ -171,26 +220,20 @@ func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
 ) async throws -> (codes: [String], highWater: [String: String]) {
     let listedSecByEdinet = await listedSecCodeByEdinetCode()
-    let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
-        try await EdinetDocumentListing.query(on: db).all()
+    let issuers = try await withDbRetry(logger: logger, context: "全書類一覧") {
+        try await issuerHighWaterRows(db: db, docTypes: docTypes)
     }
     var seen = Set<String>()
     var codes: [String] = []
     var highWater: [String: String] = [:]
-    for doc in documents {
+    for issuer in issuers {
         guard let code = listedIssuerCode(
-            secCode: doc.secCode, edinetCode: doc.edinetCode,
+            secCode: issuer.secCode, edinetCode: issuer.edinetCode,
             listedSecCodeByEdinetCode: listedSecByEdinet)
         else { continue }
         if seen.insert(code).inserted { codes.append(code) }
-
-        guard let docType = doc.docTypeCode, docTypes.contains(docType),
-            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
-        else { continue }
-        if let current = highWater[code] {
-            if doc.submitDateTime > current { highWater[code] = doc.submitDateTime }
-        } else {
-            highWater[code] = doc.submitDateTime
+        if let water = issuer.highWater, water > (highWater[code] ?? "") {
+            highWater[code] = water
         }
     }
     return (codes, highWater)

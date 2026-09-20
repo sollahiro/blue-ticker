@@ -158,6 +158,8 @@ enum USGAAPStatementHtml {
         return (balanceSheet, incomeStatement, cashFlow, changesInEquity)
     }
 
+    // MARK: - 表示ラベル整形
+
     /// components 結線のあとで項番だけ落とす（キヤノン型の番号打ち切りを壊さない）。
     private static func polishDisplayLabels(_ items: inout [StatementLineItem]) {
         for i in items.indices {
@@ -244,7 +246,7 @@ enum USGAAPStatementHtml {
         return String(String.UnicodeScalarView(scalars[i...])).trimmingCharacters(in: .whitespaces)
     }
 
-    // MARK: - File discovery
+    // MARK: - File discovery / 表探索・種別判定
 
     private static func findStatementHtml(in xbrlDir: URL) -> URL? {
         XBRLUtils.findUSGAAPStatementHtml(in: xbrlDir)
@@ -303,7 +305,7 @@ enum USGAAPStatementHtml {
         return labels.contains { vocab.isEquityBalanceRowLabel($0) }
     }
 
-    // MARK: - Row parsing
+    // MARK: - Row parsing / 行走査・行パース（共通）
 
     private static func tableRows(_ table: Element) -> [[String]] {
         guard let trs = try? table.select("tr") else { return [] }
@@ -490,6 +492,8 @@ enum USGAAPStatementHtml {
     /// 2年分が1表に混在する場合は3回以上現れるため、最後から2番目の時系列残高行
     /// （＝当期の期首）より前（前期分）を切り捨てて当期のみを返す。1年度のみの表
     /// （時系列残高2回）では最後から2番目＝期首そのものなので何も切り捨てない。
+    // MARK: - 持分変動計算書パース
+
     private static func parseEquityStatementRows(_ table: Element) -> [StatementLineItem] {
         let parsedRows = parsedTableRows(table)
         let rows = parsedRows.map(\.cells)
@@ -676,6 +680,8 @@ enum USGAAPStatementHtml {
     /// 右が親の小計/累計になる（例: 信用損失引当金 △15,841 / 受取債権合計 699,986）。
     /// 単純行は右だけに金額が入る。キヤノン形式の構成比列も「左=金額・右=%」のため同じ優先で良い。
     /// `－` は 0。空欄はスキップ。`filterFinancialTableAmounts` は使わない（小さい当期額が落ちるため）。
+    // MARK: - 金額セル・ラベル判定
+
     private static func currentYenValue(_ row: [String]) -> Double? {
         currentLineAndGroupSubtotal(from: row)?.line
     }
