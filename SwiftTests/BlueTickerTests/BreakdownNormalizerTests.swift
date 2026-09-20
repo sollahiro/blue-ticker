@@ -1320,6 +1320,108 @@ import Foundation
         #expect(reconciled == 31_514)
     }
 
+    /// タグ付き「合計」member が分母と整数一致するとき subtotal にし、未タグ残差は省略する
+    /// （三井住友トラスト S100O9U5。運用ビジネス 1,421 は HTML 未タグ）。
+    /// SPEC_ORACLE: 銀行 22,024 は合計列。ident は 20,603 のまま。残差行も HTML ラベルも作らない。
+    @Test func employeesDemotesTaggedTotalEqualToDenominatorWithoutInventingUntaggedRow() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact(
+                        "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember", 22_024),
+                    Self.employeeFact("RetailTotalSolutionServicesReportableSegmentMember", 8_594),
+                    Self.employeeFact("WholesaleFinancialServicesReportableSegmentMember", 4_199),
+                    Self.employeeFact("OtherReportableSegmentsMember", 3_588),
+                    Self.employeeFact("RealEstateReportableSegmentMember", 1_834),
+                    Self.employeeFact("FiduciaryServicesReportableSegmentMember", 1_571),
+                    Self.employeeFact("StockTransferAgencyServicesReportableSegmentMember", 467),
+                    Self.employeeFact("GlobalMarketsReportableSegmentMember", 350),
+                ],
+                total: 22_024, axis: breakdownAxisEmployees,
+                labelsByTag: [
+                    "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember": "三井住友信託銀行",
+                    "RetailTotalSolutionServicesReportableSegmentMember": "個人トータルソリューション",
+                ]))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.denominator == 22_024)
+        let bank = try #require(
+            snap.rows.first {
+                $0.labelRaw == "SumitomoMitsuiTrustBankLimitedReportableSegmentsMember"
+            })
+        #expect(bank.rowKind == "subtotal")
+        #expect(bank.amount == 22_024)
+        #expect(bank.label == "三井住友信託銀行")
+        #expect(
+            snap.rows.contains {
+                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
+            } == false)
+        #expect(snap.rows.contains { $0.label?.contains("運用") == true } == false)
+        let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 20_603)
+        let retail = try #require(
+            snap.rows.first { $0.labelRaw == "RetailTotalSolutionServicesReportableSegmentMember" })
+        #expect(retail.rowKind == "segment")
+    }
+
+    /// タグ付き合計が無く ident が分母から 5% 超不足するとき、denom−ident を reconciling で補う
+    /// （リコー S100LKDZ。「上記３分野共通」12,553 は HTML 未タグ）。
+    /// SPEC_ORACLE: 合成 member のみ。HTML ラベルは作らない。全社共通は reconciling のまま。
+    @Test func employeesComplementsUntaggedGapFromTaggedSegmentsAndDenominator() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [
+                    Self.employeeFact("OfficePrintingReportableSegmentMember", 32_474),
+                    Self.employeeFact("OfficeServicesReportableSegmentMember", 19_976),
+                    Self.employeeFact("OtherReportableSegmentsMember", 5_783),
+                    Self.employeeFact("CommercialPrintingReportableSegmentMember", 5_388),
+                    Self.employeeFact("CorporateSharedMember", 2_734),
+                    Self.employeeFact("ThermalMediaReportableSegmentMember", 1_405),
+                    Self.employeeFact("IndustrialPrintingReportableSegmentMember", 871),
+                ],
+                total: 81_184, axis: breakdownAxisEmployees,
+                labelsByTag: [
+                    "OfficePrintingReportableSegmentMember": "オフィスプリンティング分野",
+                    "CorporateSharedMember": "全社（共通）",
+                ]))
+        #expect(snap.needsReview == false)
+        #expect(snap.warnings.isEmpty)
+        #expect(snap.denominator == 81_184)
+        let complement = try #require(
+            snap.rows.first {
+                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
+            })
+        #expect(complement.rowKind == "reconciling")
+        #expect(complement.amount == 12_553)
+        #expect(complement.label == nil)
+        #expect(snap.rows.contains { $0.label?.contains("上記") == true } == false)
+        let corporate = try #require(snap.rows.first { $0.labelRaw == "CorporateSharedMember" })
+        #expect(corporate.rowKind == "reconciling")
+        #expect(corporate.amount == 2_734)
+        let printing = try #require(
+            snap.rows.first { $0.labelRaw == "OfficePrintingReportableSegmentMember" })
+        #expect(printing.rowKind == "segment")
+        let ident = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(ident == 81_184)
+    }
+
+    /// 単一セグメントが分母と一致するだけでは合計列扱いにしない。
+    @Test func employeesKeepsSoleSegmentEqualToDenominatorAsSegment() throws {
+        let snap = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: [Self.employeeFact("CarSegmentMember", 1_000)],
+                total: 1_000, axis: breakdownAxisEmployees))
+        #expect(snap.needsReview == false)
+        let car = try #require(snap.rows.first { $0.labelRaw == "CarSegmentMember" })
+        #expect(car.rowKind == "segment")
+        #expect(
+            snap.rows.contains {
+                $0.labelRaw == BreakdownNormalizer.countBasisDenominatorComplementMemberName
+            } == false)
+    }
+
     /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。
     @Test func researchAndDevelopmentSubtractsEliminationWhenThatReconcilesToTotal() throws {
         let snap = try #require(
