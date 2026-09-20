@@ -42,8 +42,12 @@ test("terms page is auxiliary to the original filing", () => {
   const html = readFileSync(join(publicDir, "terms.html"), "utf8");
   assert.match(html, /運営: Sorahiro Shuto/);
   assert.match(html, /App Store から入手して使用する利用者を対象とします/);
-  assert.match(html, /必ず金融庁の EDINET 等で公式な原本を直接確認してください/);
+  assert.match(html, /必ず金融庁の EDINET や当該企業が開示する公式情報・原本を直接確認してください/);
   assert.match(html, /有価証券報告書等の原本を補完・閲覧しやすくするための補助ツール/);
+  assert.match(html, /自動処理や生成AI等により再構成/);
+  assert.match(html, /App Attest 等による安全確認・認証が正常に完了しない場合/);
+  assert.match(html, /運営者が定める一定の表示基準・閾値に達していない項目/);
+  assert.match(html, /EDINET 等で開示される原本の完全な再現や、全銘柄・全年度の完全な網羅を提供するものではありません/);
   assert.match(html, /売上高や営業利益などの一般化された項目名に正規化/);
   assert.match(html, /画面上の項目名が各発行体の公式な科目名と一致しないことがあります/);
   assert.match(html, /表示内容を参考に利用した結果生じた一切の損害（投資損失等を含む）について、運営者は補償を行いません/);
