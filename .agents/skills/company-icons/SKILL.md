@@ -30,9 +30,11 @@ App Icon は対象外。1社1枚。
 
 やらない: PR Times 等をマップ／テストに書く、画像バイナリを Git へ、Core への画像パイプライン、icons-vN バンプ、TLS 弱体化、無関係リファクタ、明示のない Linear コメント、明示のない既存 URL 変更、Icon Clerk へ渡す。
 
-欠測の新規ピンは GO なしで Ready PR 可。差し替えは Before/After と Sorahiro visual GO 必須。未 GO はマップに入れない。
+欠測の新規ピンは visual GO なしで Ready PR 可。差し替えは Before/After とユーザー visual GO 必須。未 GO はマップに入れない。差し替えと欠測を同じ Ready PR に混ぜない。
 
-マージと visual GO は Maintainer / Sorahiro。本番 WRITE はマージ後、この CA が skill の ingest 節に従って実行する。
+visual GO = ユーザー。merge = 通常は Maintainer risk GO のあと CA が実行。WRITE = マージ後、この CA が skill の ingest 節に従う。
+
+週次 icons Automation の狭い例外: skill に書いた 5 条件がすべて揃ったときだけ、GrokBot 部屋ターンを待たずに Automations がこの CA を起動して merge+WRITE してよい。例外外は Maintainer risk GO → そのあと CA が merge。
 ```
 
 ## 境界
@@ -42,7 +44,7 @@ App Icon は対象外。1社1枚。
 - 公式サイト由来: 公開 HTTPS の `.homepageOrigin` / `.imageURL` を `manualSources` に足す（Git はテキストのみ）
 - 公式が無く外部（PR Times 等）だけ: **外部 URL は Git に書かない**。実 GET → R2 `company-icons/{code}.*` → マップは CDN URL のみ（`$BLT_R2_PUBLIC_BASE_URL/company-icons/{code}.*`。既存行と同じ `pragma: allowlist secret`）
 - テスト 1:1
-- Ready PR（GO・merge は Maintainer / Sorahiro）
+- Ready PR（visual GO / merge の可否は権限節）
 - マージ後 WRITE ingest（下記）
 - スキップ台帳の更新
 - このランの失敗を手順に残すなら **この SKILL を更新**
@@ -60,6 +62,28 @@ App Icon は対象外。1社1枚。
 - Icon Clerk へのハンドオフ
 - Wayback / アーカイブ URL をマップに書く
 - コードの発明。実在する証券コードだけ
+
+## 権限（visual GO / merge / WRITE）
+
+役割は混ぜない。個人名は書かない。visual GO を出す人は **ユーザー**。
+
+| 行為 | 誰 |
+| --- | --- |
+| visual GO | **ユーザー**。差し替え / Before-After に必須。欠測の新規ピンは不要 |
+| merge | 通常は **Maintainer risk GO** のあと、CA が merge してよい |
+| WRITE | マージ後、CA が本 skill の ingest 節に従う |
+
+### 週次 icons Automation の狭い例外
+
+icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Automations は GrokBot 部屋ターンを待たずに CA を起動して merge+WRITE してよい。
+
+1. **company-icons skill 範囲だけ。** 変更は `manualSources` マップ、スキップ台帳、この skill、それらへの docs 参照に限る。契約 / MCP / REST / HAPIS / Neon schema は触らない。`icons-vN` バンプなし。
+2. **差し替えは記録済み visual GO のある code だけ。** 欠測ピンは GO なしで可。差し替えと欠測を同じ Ready PR に混ぜない。
+3. **tip の CI が緑。**
+4. **CA が tip で次の 3 フラグを自己確認し、いずれも該当しない。** `issuer contains` / `new .all()` / `Blocked-by` ignore。
+5. **マージ後 WRITE** は本 skill の ingest 節。完了後、Blue Ticker 部屋へ短い FYI を出す。
+
+1つでも欠ける、または例外の外は **Maintainer risk GO → そのあと CA が merge**。WRITE はどちらもマージ後に ingest 節へ。
 
 ## データ源
 
@@ -80,7 +104,7 @@ App Icon は対象外。1社1枚。
 
 対象外: 台帳済み、自動 pipeline で十分、既にマップにあるコード（変更指示なし、かつこの CA から GET できる）。
 
-## 差し替え — Sorahiro visual GO 必須
+## 差し替え — ユーザー visual GO 必須
 
 既存行があっても候補にする:
 
@@ -93,7 +117,7 @@ App Icon は対象外。1社1枚。
 **差し替え**は必須:
 
 1. 候補ごとに Before（現行）/ After（提案）を並べる
-2. Sorahiro の明示 GO がある銘柄だけマップ／R2／PR へ
+2. ユーザーの明示 visual GO がある銘柄だけマップ／R2／PR へ
 3. GO なし・却下・無回答はマップに入れない。台帳に `awaiting_go` / `rejected`
 4. 差し替えを未 GO のまま Ready PR に混ぜない。欠測だけ先に出すなら PR を分ける
 
@@ -155,15 +179,17 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 
 短い現状を出す（GO 待ちの差し替えと欠測を混ぜない）:
 
-- 欠測ピン: code とソース種別（公式 URL / CDN）。GO 不要
-- 差し替え: GO 済みだけ。未 GO は Before/After のみでマップに入れない
+- 欠測ピン: code とソース種別（公式 URL / CDN）。ユーザー visual GO 不要
+- 差し替え: ユーザー visual GO 済みだけ。未 GO は Before/After のみでマップに入れない
 - ingest はマージ後。未マージで WRITE しない
+- 差し替えと欠測を同じ Ready PR に載せない
 
 ## Ready PR
 
 必須:
 
-- マージ後この CA が WRITE ingest する旨
+- マージ後この CA が WRITE ingest する旨（merge 可否は権限節）
+- 差し替えと欠測を混ぜていないこと。差し替えは記録済みユーザー visual GO のみ
 - `--codes` に **新規ピン + キャッチアップ**（マップにあるが欠行、または `icons-manual` であるべきのに古い `icons-vN`）
 - ピンした code → マップ値（公式 or CDN）。外部元 URL は PR 本文にも書かない
 - スキップした code と理由
@@ -174,7 +200,7 @@ Git に Linear ID（`BLT-N`）を新たに書かない。
 
 ## マージ後 WRITE ingest
 
-接続・禁止事項は `production-ingest`。icons の実行権限はこの Automation の「マージ後 WRITE」とユーザーのマージ表明。
+接続・禁止事項は `production-ingest`。WRITE はマージ後に限り、本節に従う。merge 自体の可否は権限節（通常は Maintainer risk GO。週次 icons は 5 条件がすべて揃ったときだけ例外）。
 
 1. CI 緑・merge を確認。作業ツリーは merge commit（main）に合わせる
 2. 必要なら R2 オブジェクトの存在確認
@@ -209,7 +235,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 1. ピン／ingest／CDN／GO で、このファイルに無い判断をしたら、**再利用できる一文**を該当節へ足す
 2. 日記や銘柄名の羅列は書かない。銘柄は台帳。クラス化した失敗だけ skill に残す
 3. 既存の節と矛盾するなら古い方を消して一本化する
-4. Automation ダッシュボードの長文は増やさない。権限・GO・「この skill を読め」だけ
+4. Automation ダッシュボードの長文は増やさない。権限・visual GO・merge 例外・「この skill を読め」だけ
 5. 小さく済む訂正はピンと同じ PR。ピンが 0 社でも手順の穴があれば skill だけの Ready PR を出してよい
 6. 秘密・CDN ホストの生値・外部画像 URL を skill に貼らない
 
@@ -227,9 +253,10 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 
 - [ ] 本番 DB から候補を取り、台帳と既存マップを除外済み
 - [ ] 新規ピンは実 GET + マジックバイト + 視認性ゲート合格（この CA から取れる URL、または CDN）
-- [ ] 差し替えは Before/After と GO 済み（未 GO は含めない）
+- [ ] 差し替えは Before/After とユーザー visual GO 済み（未 GO は含めない。欠測と混ぜない）
 - [ ] 外部由来は Git に外部 URL なし、R2 + CDN のみ
 - [ ] テスト緑、Ready PR、事前確認を出している
+- [ ] merge は権限節（Maintainer risk GO、または週次 icons の 5 条件例外）に従っている
 - [ ] マージ後 WRITE ingest 完了（または 0 社で PR なし）。キャッチアップ含む
 - [ ] バイナリ commit / icons-vN バンプ / Core 画像処理 / SQL upsert なし
 - [ ] 手順の穴があればこの SKILL を更新している
