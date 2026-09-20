@@ -52,4 +52,7 @@ test("terms page is auxiliary to the original filing", () => {
   assert.doesNotMatch(html, /わかりやすい説明/);
   assert.doesNotMatch(html, /要確認/);
   assert.doesNotMatch(html, /対価の範囲/);
+  assert.doesNotMatch(html, /13歳/);
+  assert.doesNotMatch(html, /MCP/);
+  assert.doesNotMatch(html, /ChatGPT/);
 });
