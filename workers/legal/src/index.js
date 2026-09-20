@@ -13,7 +13,8 @@ export function assetPathFor(pathname) {
     return "/";
   }
   if (path === "/terms" || path === "/blue-ticker/terms") {
-    return "/terms.html";
+    // Assets は /terms.html を /terms へ 307 するため、.html に書き換えない。
+    return "/terms";
   }
   return pathname;
 }

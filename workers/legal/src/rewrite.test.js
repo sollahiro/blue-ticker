@@ -16,11 +16,11 @@ test("privacy aliases rewrite to /", () => {
   assert.equal(assetPathFor("/blue-ticker/privacy/"), "/");
 });
 
-test("terms aliases rewrite to /terms.html", () => {
-  assert.equal(assetPathFor("/terms"), "/terms.html");
-  assert.equal(assetPathFor("/terms/"), "/terms.html");
-  assert.equal(assetPathFor("/blue-ticker/terms"), "/terms.html");
-  assert.equal(assetPathFor("/blue-ticker/terms/"), "/terms.html");
+test("terms aliases rewrite to /terms", () => {
+  assert.equal(assetPathFor("/terms"), "/terms");
+  assert.equal(assetPathFor("/terms/"), "/terms");
+  assert.equal(assetPathFor("/blue-ticker/terms"), "/terms");
+  assert.equal(assetPathFor("/blue-ticker/terms/"), "/terms");
 });
 
 test("root and unknown paths pass through", () => {
