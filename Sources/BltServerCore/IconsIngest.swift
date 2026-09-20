@@ -125,6 +125,7 @@ func runIconsIngest(
 func latestAnnualReportPerCompany(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
 ) async throws -> [(docID: String, code: String, submitDateTime: String)] {
+    let listedSecByEdinet = await listedSecCodeByEdinetCode()
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocumentListing.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
@@ -134,7 +135,9 @@ func latestAnnualReportPerCompany(
     var byCode: [String: (docID: String, submitDateTime: String)] = [:]
     for doc in documents {
         guard let docID = doc.id,
-            let code = listedTickerCode(fromSecCode: doc.secCode),
+            let code = listedIssuerCode(
+                secCode: doc.secCode, edinetCode: doc.edinetCode,
+                listedSecCodeByEdinetCode: listedSecByEdinet),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
         // `--codes` はマスタ未収録の新規上場（英数字コード等）でも、有報 120 があれば取り込む。

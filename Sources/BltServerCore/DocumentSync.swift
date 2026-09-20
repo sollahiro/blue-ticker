@@ -56,6 +56,9 @@ func runDocumentSync(
     let excludedCodes = await context.foreignFilerCodes()
     _ = try await purgeForeignFilerDocuments(
         excludedCodes: excludedCodes, db: db, logger: logger)
+    let listedSecByEdinet = await context.listedSecCodeByEdinetCode()
+    _ = try await fillMissingListedSecCodes(
+        listedSecCodeByEdinetCode: listedSecByEdinet, db: db, logger: logger)
     let counts = try await applyDocuments(
         fetchResult.records, db: db, excludedCodes: excludedCodes, logger: logger)
     let syncedThrough = computeDocumentSyncedThrough(
@@ -243,16 +246,60 @@ func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil)
 /// 指定銘柄（4 桁証券コード）の 書類同期 書類を DB から引いて正規化レコードで返す。
 /// EDINET の secCode は 5 桁（4 桁＋種別 1 桁）のため、`XXXX0`…`XXXX9` の等価比較で突き合わせる
 /// （ライブ探索の hasPrefix(code4) と同条件。btree 索引が LIKE 前方一致に使えないロケールでも効く）。
+/// `sec_code` が空の行は master の EDINETコードでも拾う（提出当日の欠落がキャッシュに残るため）。
 /// 該当 0 件なら空配列（呼び出し側はライブ探索へフォールバック）。
 /// 会社開示府令(010)のみ。同じ secCode に載る信託受益証券等(030)の 120/160 は会社の書類一覧に出さない。
 func loadStoredFilingRecords(code: String, db: Database) async throws -> [EdinetDocumentRecord] {
     let secCodes = edinetSecCodes(forIssuerCode: code)
     guard !secCodes.isEmpty else { return [] }
+    let listedEdinet = await listedEdinetCode(forCode: code)
     let rows = try await EdinetDocument.query(on: db)
-        .filter(\.$secCode ~~ secCodes)
+        .group(.or) { group in
+            group.filter(\.$secCode ~~ secCodes)
+            if let listedEdinet {
+                group.filter(\.$edinetCode == listedEdinet)
+            }
+        }
         .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
         .all()
     return rows.map { $0.toRecord() }
+}
+
+/// 既存行で `sec_code` が空のものへ、上場 master の EDINETコード→5 桁証券コードを書く。
+/// 過去日キャッシュが提出当日の欠落を抱えたまま残るため、再取得せずに直す。
+/// 非空の `sec_code` は触らない。
+func fillMissingListedSecCodes(
+    listedSecCodeByEdinetCode: [String: String], db: Database, logger: Logger? = nil
+) async throws -> Int {
+    guard !listedSecCodeByEdinetCode.isEmpty else { return 0 }
+    let listings = try await withDbRetry(logger: logger, context: "sec_code 欠落の補完") {
+        try await EdinetDocumentListing.query(on: db).all()
+    }
+    var filled = 0
+    for listing in listings {
+        let existing = listing.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard existing.isEmpty, let docID = listing.id else { continue }
+        guard let mapped = listedSecCodeByEdinetCode[listing.edinetCode],
+            listedTickerCode(fromSecCode: mapped) != nil
+        else { continue }
+        try await withDbRetry(logger: logger, context: "docID=\(docID) sec_code fill") {
+            guard let row = try await EdinetDocument.find(docID, on: db) else { return }
+            let current = row.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard current.isEmpty else { return }
+            row.secCode = mapped
+            try await row.update(on: db)
+        }
+        filled += 1
+    }
+    if filled > 0 {
+        logger?.notice(
+            "書類同期: sec_code 欠落 \(filled) 件を master の EDINETコードから補完",
+            metadata: [
+                "event": "sync_sec_code_filled_from_master",
+                "filled": .stringConvertible(filled),
+            ])
+    }
+    return filled
 }
 
 extension EdinetDocument {

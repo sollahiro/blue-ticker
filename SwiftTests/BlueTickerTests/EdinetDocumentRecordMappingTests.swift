@@ -72,4 +72,25 @@ import Testing
         #expect(shouldStoreEdinetDocumentForSync(secCode: nil, excludedCodes: ["1773"]))
         #expect(shouldStoreEdinetDocumentForSync(secCode: "17730", excludedCodes: []))
     }
+
+    @Test func fillsMissingSecCodeFromListedEdinetMap() throws {
+        let docs = [doc("S100Y5S8", docType: "120", edinet: "E41361", sec: nil)]
+        let record = try #require(
+            mapEdinetDocumentRecords(docs, listedSecCodeByEdinetCode: ["E41361": "542A0"]).first)
+        #expect(record.secCode == "542A0")
+        #expect(record.edinetCode == "E41361")
+    }
+
+    @Test func doesNotOverrideNonEmptySecCodeWithEdinetMap() throws {
+        let docs = [doc("S1", docType: "120", edinet: "E41361", sec: "72030")]
+        let record = try #require(
+            mapEdinetDocumentRecords(docs, listedSecCodeByEdinetCode: ["E41361": "542A0"]).first)
+        #expect(record.secCode == "72030")
+    }
+
+    @Test func leavesSecCodeNilWhenEdinetMapMisses() throws {
+        let docs = [doc("S1", docType: "120", edinet: "E41361", sec: nil)]
+        let record = try #require(mapEdinetDocumentRecords(docs).first)
+        #expect(record.secCode == nil)
+    }
 }

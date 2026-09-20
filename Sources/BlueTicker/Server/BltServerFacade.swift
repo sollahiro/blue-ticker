@@ -264,6 +264,16 @@ public extension BltServerContext {
         await masterDataManager.foreignFilerCodes()
     }
 
+    /// 上場・国内法人の EDINETコード → 5 桁証券コード。書類の空 `secCode` を補う。
+    func listedSecCodeByEdinetCode() async -> [String: String] {
+        await masterDataManager.listedSecCodeByEdinetCode()
+    }
+
+    /// 4 桁上場コードに対応する EDINET 提出者コード。未収録は nil。
+    func edinetCode(forListedCode code: String) async -> String? {
+        await masterDataManager.edinetCode(forListedCode: code)
+    }
+
     /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。決定論のみ（LLM不要）。
     /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
@@ -775,8 +785,11 @@ public extension BltServerContext {
         }
         let allDocs = byDate.values.compactMap { $0 }.flatMap { $0 }
         let excludedCodes = await masterDataManager.foreignFilerCodes()
+        let listedSecByEdinet = await masterDataManager.listedSecCodeByEdinetCode()
         return DocumentFetchResult(
-            records: mapEdinetDocumentRecords(allDocs, excludedCodes: excludedCodes),
+            records: mapEdinetDocumentRecords(
+                allDocs, excludedCodes: excludedCodes,
+                listedSecCodeByEdinetCode: listedSecByEdinet),
             failedDates: failedDates
         )
     }
@@ -786,8 +799,11 @@ public extension BltServerContext {
 /// seed 種別フィルタ・外国法人・組合除外・docID 重複排除・日付正規化を行う純粋関数
 /// （ネットワーク非依存・テスト対象）。`excludedCodes` は
 /// `MasterDataManager.foreignFilerCodes()`（4 桁）を渡す。
+/// API / キャッシュが `secCode` を欠くときは `listedSecCodeByEdinetCode` で補う。
+/// 非空の EDINET `secCode` は上書きしない。
 func mapEdinetDocumentRecords(
-    _ docs: [[String: Any]], excludedCodes: Set<String> = []
+    _ docs: [[String: Any]], excludedCodes: Set<String> = [],
+    listedSecCodeByEdinetCode: [String: String] = [:]
 ) -> [EdinetDocumentRecord] {
     var seen = Set<String>()
     var records: [EdinetDocumentRecord] = []
@@ -796,12 +812,14 @@ func mapEdinetDocumentRecords(
         guard let docType = doc["docTypeCode"] as? String,
               Api.documentSyncDocTypes.contains(docType) else { continue }
         guard seen.insert(docID).inserted else { continue }
-        let secCode = nonEmptyString(doc["secCode"])
+        let edinetCode = nonEmptyString(doc["edinetCode"]) ?? ""
+        let apiSecCode = nonEmptyString(doc["secCode"])
+        let secCode = apiSecCode ?? listedSecCodeByEdinetCode[edinetCode]
         guard shouldStoreEdinetDocumentForSync(secCode: secCode, excludedCodes: excludedCodes)
         else { continue }
         records.append(EdinetDocumentRecord(
             docID: docID,
-            edinetCode: nonEmptyString(doc["edinetCode"]) ?? "",
+            edinetCode: edinetCode,
             secCode: secCode,
             filerName: nonEmptyString(doc["filerName"]) ?? "",
             docTypeCode: docType,

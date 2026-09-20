@@ -161,7 +161,8 @@ func runFinancialsIngest(
 }
 
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
-/// secCode が無い／非上場（末尾 0 でない・桁数不一致）は対象外。
+/// secCode が無い／非上場（末尾 0 でない・桁数不一致）は、master の EDINETコードで
+/// 上場発行体に写せるときだけ対象にする（提出当日の secCode 欠落対策）。
 /// コード列挙は財務行の対象社集合を変えないため全 doc から行うが、high-water は
 /// `docTypes` に含まれる **かつ会社開示府令(010)** の doc のみで `code -> max(submitDateTime)`
 /// （辞書順）を構築する。信託受益証券等の 120 では通期再計算を起こさない。
@@ -169,6 +170,7 @@ func runFinancialsIngest(
 func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
 ) async throws -> (codes: [String], highWater: [String: String]) {
+    let listedSecByEdinet = await listedSecCodeByEdinetCode()
     let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await EdinetDocumentListing.query(on: db).all()
     }
@@ -176,7 +178,10 @@ func distinctCompanyCodesWithHighWater(
     var codes: [String] = []
     var highWater: [String: String] = [:]
     for doc in documents {
-        guard let code = listedTickerCode(fromSecCode: doc.secCode) else { continue }
+        guard let code = listedIssuerCode(
+            secCode: doc.secCode, edinetCode: doc.edinetCode,
+            listedSecCodeByEdinetCode: listedSecByEdinet)
+        else { continue }
         if seen.insert(code).inserted { codes.append(code) }
 
         guard let docType = doc.docTypeCode, docTypes.contains(docType),

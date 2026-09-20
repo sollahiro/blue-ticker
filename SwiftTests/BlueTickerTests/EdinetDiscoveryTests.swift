@@ -462,4 +462,27 @@ import Foundation
         #expect(docs.count == 1)
         #expect(docs.first?["docID"] as? String == "S100PUYZ")
     }
+
+    @Test func testBuildDocumentIndexFindsFilingWhenSecCodeMissingButEdinetMatchesListed() async throws {
+        let year = support.currentUTCYear()
+        let todayStr = support.iso(support.utcToday())
+        let recent: [String: Any] = [
+            "docID": "S100Y5S8",
+            "edinetCode": "E41361",
+            "secCode": "",
+            "docTypeCode": "120",
+            "ordinanceCode": Api.ordinanceCompanyDisclosure,
+            "formCode": "030000",
+            "periodStart": "\(year - 1)-03-01",
+            "periodEnd": "\(year)-02-28",
+            "submitDateTime": "\(todayStr) 10:00",
+        ]
+        seedIndexes((year - 1)...year, [year: [recent]])
+
+        let docs = await EdinetDiscovery.buildDocumentIndexForCode(
+            code: "542A", client: client, analysisYears: 3
+        )
+        #expect(docs.contains { ($0["docID"] as? String) == "S100Y5S8" })
+        #expect(docs.allSatisfy { ($0["edinetCode"] as? String) == "E41361" })
+    }
 }
