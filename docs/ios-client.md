@@ -34,7 +34,7 @@ Xcode Cloud を GitHub の required check にしない。PR Changes も、Archiv
 - Post-action: TestFlight Internal（グループ 1 つ）
 - スタート条件: Tag Changes `ios-tf-*` のみ（導入後はタグを切らない）。日常は Xcode / App Store Connect の Start Build で、GHA 緑の `main` を選ぶ
 - Environment: Xcode を GHA `macos-26` にピン（現行コメントは 26.6）。Clean
-- `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `0.1.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する
+- `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `1.0.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する
 
 ### ASC 手順（人が一度だけ）
 
