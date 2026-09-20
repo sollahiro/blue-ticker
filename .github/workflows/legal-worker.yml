@@ -1,6 +1,6 @@
 name: Legal page Worker
 
-# App Store 用の免責・プライバシー静的ページ（workers/legal）。
+# App Store 用の免責・プライバシー・利用規約静的ページ（workers/legal）。
 # api.* / mcp.* の前段には置かない。
 #
 # GitHub secrets（Feed Trend と同じ）:

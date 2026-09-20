@@ -300,3 +300,6 @@ jobs:
 
       - name: Feed Trend Worker の入力正規化
         run: node --test workers/feed-trend/src/validate.test.js
+
+      - name: Legal Worker の経路
+        run: node --test workers/legal/src/rewrite.test.js

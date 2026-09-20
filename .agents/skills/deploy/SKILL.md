@@ -112,7 +112,7 @@ cd workers/legal
 npx wrangler@4 deploy
 ```
 
-`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は `https://sollahiro.com/blue-ticker/privacy`。workers.dev も残す。
+`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は `https://sollahiro.com/blue-ticker/privacy` と `https://sollahiro.com/blue-ticker/terms`。workers.dev も残す。
 
 ### REST Service Token
 
