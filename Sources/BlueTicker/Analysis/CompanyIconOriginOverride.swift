@@ -74,6 +74,7 @@ enum CompanyIconOriginOverride {
     /// prtimes.jp 直リンクは使わない。
     /// 2026-09-20 weekly: listed × company_icons 欠行。自動 pipeline 不能（紙面・URL無し・
     /// Pronexus・先頭 rel=icon が極小）の公式画像。5805 の origin apple-touch は小冊子なので不採用。
+    /// 7236 ティラドは添付高解像度ロゴを白地・余白の 512 PNG にして R2 CDN へ（公式 192 は低解像）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -192,8 +193,7 @@ enum CompanyIconOriginOverride {
         "9413": .imageURL("https://www.tv-tokyo.co.jp/apple-touch-icon.png"),
         "2109": .imageURL(
             "https://www.msdm-hd.com/jp/app-files/img/symbol/apple-touch-icon.png"),
-        "7236": .imageURL(
-            "https://www.trad.co.jp/wp-content/uploads/2026/06/cropped-favicon-192x192.png"),
+        "7236": .imageURL("https://icons.sollahiro.com/company-icons/7236.png"), // R2 CDN white-padded TRAD // pragma: allowlist secret
         "7414": .imageURL("https://www.onoken.co.jp/apple-touch-icon.png"),
     ]
 

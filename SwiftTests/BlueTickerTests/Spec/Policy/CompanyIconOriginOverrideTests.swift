@@ -255,7 +255,7 @@ import Testing
             ("9682", "https://www.dts.co.jp/apple-touch-icon.png"),
             ("9413", "https://www.tv-tokyo.co.jp/apple-touch-icon.png"),
             ("2109", "https://www.msdm-hd.com/jp/app-files/img/symbol/apple-touch-icon.png"),
-            ("7236", "https://www.trad.co.jp/wp-content/uploads/2026/06/cropped-favicon-192x192.png"),
+            ("7236", "https://icons.sollahiro.com/company-icons/7236.png"), // pragma: allowlist secret
             ("7414", "https://www.onoken.co.jp/apple-touch-icon.png"),
         ]
         #expect(expected.count == 11)
