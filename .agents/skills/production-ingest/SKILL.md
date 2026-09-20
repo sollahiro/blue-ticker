@@ -11,6 +11,7 @@ description: Neon を使った disposable 検証、本番 ingest、訂正有報�
 - CLI と障害対応: `.agents/skills/deploy/SKILL.md`
 - 接続変数: `.env.example`
 - 訂正有報: `.agents/rules/amendments.md`
+- 会社アイコン週次ピンと icons WRITE: `.agents/skills/company-icons/SKILL.md`
 
 ## 接続境界
 
