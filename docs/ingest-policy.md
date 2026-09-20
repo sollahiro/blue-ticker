@@ -1,6 +1,6 @@
 # ingest 運用方針
 
-本番 write・定期ジョブ・R2 温めの正本（ジョブ編成）。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。接続と Neon write 手順は `.agents/skills/production-ingest/SKILL.md`。Fly / Tunnel は `.agents/skills/deploy/SKILL.md`。
+本番 write・定期ジョブ・R2 温めの正本（ジョブ編成）。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。接続と Neon write 手順は `.agents/skills/production-ingest/SKILL.md`。会社アイコン週次ピンは `.agents/skills/company-icons/SKILL.md`。Fly / Tunnel は `.agents/skills/deploy/SKILL.md`。
 
 ## 原則
 
