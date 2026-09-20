@@ -58,7 +58,8 @@ func runFilingSectionsIngest(
         sets = candidateSets
     } else {
         sets = try await filingSectionCandidates(
-            db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years, logger: logger)
+            db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, years: years,
+            logger: logger)
     }
     let baseCandidates = sets.keep
 
@@ -186,10 +187,12 @@ struct FilingSectionCandidateSets {
 /// 「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep、
 /// それを超えた分を purge とする。docType 120 でも特定有価証券府令(030)の信託受益証券等は除外。
 /// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
+/// `sec_code` が空の行は master の EDINETコード→証券コードで発行体を特定する。
 func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
     logger: Logger? = nil
 ) async throws -> FilingSectionCandidateSets {
+    let listedSecByEdinet = await listedSecCodeByEdinetCode()
     let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
         try await EdinetDocumentListing.query(on: db)
             .filter(\.$docTypeCode == Api.docTypeAnnualReport)
@@ -197,10 +200,13 @@ func filingSectionCandidates(
     }
 
     // 4 桁コードごとに会社有報をまとめる。secCode は 5 桁（4 桁＋種別 1 桁 "0"）。
+    // 空の secCode は listed な edinet_code があればその発行体に寄せる。
     var byCode: [String: [(docID: String, submitDateTime: String)]] = [:]
     for doc in documents {
         guard let docID = doc.id,
-            let code = listedTickerCode(fromSecCode: doc.secCode),
+            let code = listedIssuerCode(
+                secCode: doc.secCode, edinetCode: doc.edinetCode,
+                listedSecCodeByEdinetCode: listedSecByEdinet),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode)
         else { continue }
         guard listedCodes.contains(code) else { continue }

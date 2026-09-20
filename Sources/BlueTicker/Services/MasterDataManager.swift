@@ -100,6 +100,26 @@ actor MasterDataManager {
         return Set(stocks.filter { $0.filerType == foreignFilerType }.map { $0.code })
     }
 
+    /// 上場・国内法人の EDINETコード → 5 桁証券コード（末尾 0）。
+    /// 書類一覧が `secCode` を欠くときに発行体を特定する。EDINET 側の非空 secCode は上書きしない。
+    func listedSecCodeByEdinetCode() async -> [String: String] {
+        await loadIfNeeded()
+        var map: [String: String] = [:]
+        for stock in stocks where stock.mktNm == "上場" && stock.filerType != foreignFilerType {
+            guard !stock.edinetCode.isEmpty else { continue }
+            map[stock.edinetCode] = stock.code + "0"
+        }
+        return map
+    }
+
+    /// 4 桁上場コードに対応する EDINET 提出者コード。未収録・空は nil。
+    func edinetCode(forListedCode code: String) async -> String? {
+        await loadIfNeeded()
+        let code4 = String(code.prefix(4))
+        let edinet = codeIndex[code4]?.edinetCode.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return edinet.isEmpty ? nil : edinet
+    }
+
     // MARK: - Private
 
     private func loadCSV(from url: URL) async {
@@ -141,6 +161,7 @@ actor MasterDataManager {
         let listingIdx = normalizedCols.firstIndex(of: normalizeHeaderName("上場区分"))
         let locationIdx = normalizedCols.firstIndex(of: normalizeHeaderName("所在地"))
         let filerTypeIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者種別"))
+        let edinetIdx = normalizedCols.firstIndex(of: normalizeHeaderName("ＥＤＩＮＥＴコード"))
 
         var loaded: [MasterStock] = []
         var index: [String: MasterStock] = [:]
@@ -178,6 +199,15 @@ actor MasterDataManager {
             } else {
                 filerType = ""
             }
+            let edinetCode: String
+            if let idx = edinetIdx, idx < fields.count {
+                edinetCode = fields[idx]
+                    .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                    .uppercased()
+            } else {
+                edinetCode = ""
+            }
             let stock = MasterStock(
                 code: code,
                 coName: name,
@@ -187,7 +217,8 @@ actor MasterDataManager {
                 mktNm: market,
                 location: location,
                 s33: industry,
-                filerType: filerType
+                filerType: filerType,
+                edinetCode: edinetCode
             )
             loaded.append(stock)
             index[code] = stock
@@ -229,6 +260,16 @@ actor MasterDataManager {
 }
 
 let masterDataManager = MasterDataManager()
+
+/// 上場・国内法人の EDINETコード → 5 桁証券コード。BltServerCore の候補選定から使う。
+public func listedSecCodeByEdinetCode() async -> [String: String] {
+    await masterDataManager.listedSecCodeByEdinetCode()
+}
+
+/// 4 桁上場コードの EDINET 提出者コード。未収録は nil。
+public func listedEdinetCode(forCode code: String) async -> String? {
+    await masterDataManager.edinetCode(forListedCode: code)
+}
 
 /// RFC 4180 の `""` エスケープを含む 1 行をフィールドへ分割する。
 func parseCSVRow(_ line: String) -> [String] {

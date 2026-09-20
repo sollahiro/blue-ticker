@@ -98,6 +98,22 @@ public func listedTickerCode(fromSecCode secCode: String?) -> String? {
     return code
 }
 
+/// 書類の発行体 4 桁コード。secCode が上場形式ならそれを使い、空のときだけ
+/// master の EDINETコード→5 桁証券コードで補う。非空だが上場形式でない secCode
+/// （末尾 0 以外など）は従来どおり対象外（上書きしない）。
+public func listedIssuerCode(
+    secCode: String?,
+    edinetCode: String?,
+    listedSecCodeByEdinetCode: [String: String]
+) -> String? {
+    if let code = listedTickerCode(fromSecCode: secCode) { return code }
+    let trimmedSec = secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard trimmedSec.isEmpty else { return nil }
+    let edinet = edinetCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !edinet.isEmpty else { return nil }
+    return listedTickerCode(fromSecCode: listedSecCodeByEdinetCode[edinet])
+}
+
 /// Feed Update: 提出日時降順の書類ストリーム（1 行 = 1 書類）。
 /// `records` は items 用（提出日時降順。同日過多ならその日の listed を全部含む）。
 /// `total.day` / `total.week` は `dayTotal` / `weekTotal` があればそれを使い、

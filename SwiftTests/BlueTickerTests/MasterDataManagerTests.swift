@@ -133,6 +133,20 @@ import Testing
         #expect(!foreign.contains("6501"))
     }
 
+    @Test func testCurrentEdinetCSVLoadsEdinetCodeForListedIssuer() async throws {
+        let manager = MasterDataManager()
+        let stock = try #require(await manager.getByCode("542A"))
+        #expect(stock.edinetCode == "E41361")
+        #expect(stock.mktNm == "上場")
+        #expect(stock.coName.contains("ビタブリッド"))
+
+        let byEdinet = await manager.listedSecCodeByEdinetCode()
+        #expect(byEdinet["E41361"] == "542A0")
+        #expect(await manager.edinetCode(forListedCode: "542A") == "E41361")
+        #expect(await listedEdinetCode(forCode: "542A") == "E41361")
+        #expect(await listedSecCodeByEdinetCode()["E41361"] == "542A0")
+    }
+
     @Test func parseCSVRowKeepsCommasInsideQuotes() {
         let fields = parseCSVRow(#"72030,"株式会社 ""例"" 商会",製造業"#)
         #expect(fields.count == 3)

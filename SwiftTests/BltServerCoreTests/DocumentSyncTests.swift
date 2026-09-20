@@ -27,10 +27,11 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 private func record(
     _ docID: String, filerName: String = "テスト株式会社", secCode: String? = "72030",
     ordinanceCode: String? = "010", formCode: String? = "030000",
-    docTypeCode: String = "120", docDescription: String = "有価証券報告書"
+    docTypeCode: String = "120", docDescription: String = "有価証券報告書",
+    edinetCode: String = "E00001"
 ) -> EdinetDocumentRecord {
     EdinetDocumentRecord(
-        docID: docID, edinetCode: "E00001", secCode: secCode, filerName: filerName,
+        docID: docID, edinetCode: edinetCode, secCode: secCode, filerName: filerName,
         docTypeCode: docTypeCode, ordinanceCode: ordinanceCode, formCode: formCode,
         periodStart: "2024-04-01", periodEnd: "2025-03-31",
         submitDateTime: "2025-06-20 09:00", docDescription: docDescription)
@@ -194,6 +195,75 @@ private func record(
             // 未同期銘柄は空（呼び出し側はライブ探索へフォールバックする）。
             let records = try await loadStoredFilingRecords(code: "9999", db: app.db)
             #expect(records.isEmpty)
+        }
+    }
+
+    @Test func loadStoredFilingRecordsMatchesNilSecCodeByListedEdinet() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S100Y5S8", secCode: nil, edinetCode: "E41361"),
+                    record("OTHER", secCode: "12340", edinetCode: "E00004"),
+                ], db: app.db)
+
+            let records = try await loadStoredFilingRecords(code: "542A", db: app.db)
+            #expect(records.map(\.docID) == ["S100Y5S8"])
+        }
+    }
+
+    @Test func loadStoredFilingRecordsIgnoresEdinetSiblingsWithNonEmptySecCode() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S100Y5S8", secCode: nil, edinetCode: "E41361"),
+                    record("EMPTYSTR", secCode: "", edinetCode: "E41361"),
+                    record("SIBLING", secCode: "99990", edinetCode: "E41361"),
+                ], db: app.db)
+
+            let records = try await loadStoredFilingRecords(code: "542A", db: app.db)
+            #expect(Set(records.map(\.docID)) == ["S100Y5S8", "EMPTYSTR"])
+        }
+    }
+
+    @Test func fillMissingListedSecCodesWritesMappedTicker() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("S100Y5S8", secCode: nil, edinetCode: "E41361"),
+                    record("KEEP", secCode: "72030", edinetCode: "E00001"),
+                ], db: app.db)
+
+            let filled = try await fillMissingListedSecCodes(
+                listedSecCodeByEdinetCode: ["E41361": "542A0"], db: app.db)
+            #expect(filled == 1)
+            let vitabrid = try #require(try await EdinetDocument.find("S100Y5S8", on: app.db))
+            #expect(vitabrid.secCode == "542A0")
+            let keep = try #require(try await EdinetDocument.find("KEEP", on: app.db))
+            #expect(keep.secCode == "72030")
+        }
+    }
+
+    @Test func fillMissingListedSecCodesFillsOnlyEmptyRowsAcrossPages() async throws {
+        try await withMigratedApp { app in
+            _ = try await applyDocuments(
+                [
+                    record("EMPTY1", secCode: nil, edinetCode: "E41361"),
+                    record("EMPTY2", secCode: "", edinetCode: "E41361"),
+                    record("EMPTY3", secCode: nil, edinetCode: "E41361"),
+                    record("SIBLING", secCode: "99990", edinetCode: "E41361"),
+                    record("KEEP", secCode: "72030", edinetCode: "E00001"),
+                    record("UNMAPPED", secCode: nil, edinetCode: "E99999"),
+                ], db: app.db)
+
+            let filled = try await fillMissingListedSecCodes(
+                listedSecCodeByEdinetCode: ["E41361": "542A0"], db: app.db, pageSize: 2)
+            #expect(filled == 3)
+            #expect(try await EdinetDocument.find("EMPTY1", on: app.db)?.secCode == "542A0")
+            #expect(try await EdinetDocument.find("EMPTY2", on: app.db)?.secCode == "542A0")
+            #expect(try await EdinetDocument.find("EMPTY3", on: app.db)?.secCode == "542A0")
+            #expect(try await EdinetDocument.find("SIBLING", on: app.db)?.secCode == "99990")
+            #expect(try await EdinetDocument.find("KEEP", on: app.db)?.secCode == "72030")
+            #expect(try await EdinetDocument.find("UNMAPPED", on: app.db)?.secCode == nil)
         }
     }
 

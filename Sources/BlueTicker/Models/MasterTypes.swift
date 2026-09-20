@@ -10,6 +10,8 @@ struct MasterStock: Codable {
     let s33: String
     /// EDINET「提出者種別」の値（例: "内国法人・組合" / "外国法人・組合"）。
     let filerType: String
+    /// EDINET 提出者コード（例: E41361）。CSV に無い行は空文字。
+    let edinetCode: String
 
     // CSV の列名と対応させる CodingKeys
     enum CodingKeys: String, CodingKey {
@@ -22,6 +24,7 @@ struct MasterStock: Codable {
         case location  = "Location"
         case s33       = "S33"
         case filerType = "FilerType"
+        case edinetCode = "EdinetCode"
     }
 }
 

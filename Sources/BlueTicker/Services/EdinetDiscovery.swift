@@ -170,14 +170,14 @@ enum EdinetDiscovery {
         scanDays: Int
     ) async -> [String: Any]? {
         let code4 = String(code.prefix(4))
+        let listedEdinet = await masterDataManager.edinetCode(forListedCode: code)
         let today = utcStartOfDay(Date())
         let scanStart = addDays(today, -(scanDays - 1))
 
         let docsByDate = await client.getDocumentsForDateRange(start: scanStart, end: today)
         for dateStr in docsByDate.keys.sorted(by: >) {
             for doc in (docsByDate[dateStr] ?? []) ?? [] {
-                let sec = (doc["secCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-                guard sec.hasPrefix(code4) else { continue }
+                guard matchesListedIssuer(doc, code4: code4, listedEdinetCode: listedEdinet) else { continue }
                 guard let docType = doc["docTypeCode"] as? String, seedDocTypes.contains(docType) else { continue }
                 // 会社開示府令のみ（信託受益証券等の 120 で edinetCode を拾わない）
                 guard Api.isCompanyDisclosureOrdinance(doc["ordinanceCode"] as? String) else { continue }
@@ -195,6 +195,7 @@ enum EdinetDiscovery {
         client: EdinetAPIClient
     ) async -> [String: Any]? {
         let code4 = String(code.prefix(4))
+        let listedEdinet = await masterDataManager.edinetCode(forListedCode: code)
         let halfEnd = addDays(addMonthsSafe(periodStart, 6), -1)
         let fyEndStr = formatDateString(fyEnd)
         let halfEndStr = formatDateString(halfEnd)
@@ -208,8 +209,7 @@ enum EdinetDiscovery {
         var candidates: [[String: Any]] = []
         for dateStr in docsByDate.keys.sorted(by: >) {
             for doc in (docsByDate[dateStr] ?? []) ?? [] {
-                let sec = (doc["secCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-                guard sec.hasPrefix(code4) else { continue }
+                guard matchesListedIssuer(doc, code4: code4, listedEdinetCode: listedEdinet) else { continue }
                 guard let docType = doc["docTypeCode"] as? String,
                       halfYearDocTypes.contains(docType) else { continue }
                 // 会社開示府令のみ（信託・投信の 160 を会社半期として採用しない）
@@ -244,6 +244,23 @@ enum EdinetDiscovery {
         result["edinet_period_start"] = periodStartStr
         result["edinet_period_end"] = halfEndStr
         return result
+    }
+
+    /// secCode 前方一致、または（`secCode` が空のときだけ）master の EDINETコード一致。
+    /// 提出当日の一覧が `secCode` を欠いても、上場発行体の有報を seed にできる。
+    /// 非空の別銘柄 `secCode` は EDINETコード一致でも拾わない。
+    private static func matchesListedIssuer(
+        _ doc: [String: Any], code4: String, listedEdinetCode: String?
+    ) -> Bool {
+        let sec = (doc["secCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        if !code4.isEmpty, sec.hasPrefix(code4) { return true }
+        guard sec.isEmpty else { return false }
+        if let listedEdinetCode, !listedEdinetCode.isEmpty,
+            (doc["edinetCode"] as? String) == listedEdinetCode
+        {
+            return true
+        }
+        return false
     }
 
     // MARK: - Date helpers

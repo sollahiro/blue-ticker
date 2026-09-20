@@ -31,11 +31,12 @@ private func seedDoc(
     submit: String = "2025-06-20 09:00",
     ordinance: String? = Api.ordinanceCompanyDisclosure,
     form: String? = "030000",
+    edinetCode: String = "E00001",
     db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
-    model.edinetCode = "E00001"
+    model.edinetCode = edinetCode
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = docType
@@ -132,6 +133,22 @@ private let keys = "business_risks,mda,segments"
 
             #expect(summary.attempted == 0)
             #expect(try await CompanyFilingSections.query(on: app.db).count() == 0)
+        }
+    }
+
+    @Test func ingestIncludesNilSecCodeWhenEdinetMapsToListed() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S100Y5S8", secCode: nil, edinetCode: "E41361", db: app.db)
+            try await seedDoc("S-SKIP", secCode: nil, edinetCode: "E00001", db: app.db)
+
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["542A"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in fakePayload() }
+
+            #expect(summary.attempted == 1)
+            let row = try #require(try await CompanyFilingSections.find("S100Y5S8", on: app.db))
+            #expect(row.code == "542A")
+            #expect(try await CompanyFilingSections.find("S-SKIP", on: app.db) == nil)
         }
     }
 

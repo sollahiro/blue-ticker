@@ -40,11 +40,12 @@ private func seedDocument(
     submitDateTime: String = "2025-06-20 09:00",
     ordinanceCode: String? = Api.ordinanceCompanyDisclosure,
     formCode: String? = "030000",
+    edinetCode: String = "E00001",
     db: Database
 ) async throws {
     let model = EdinetDocument()
     model.id = docID
-    model.edinetCode = "E00001"
+    model.edinetCode = edinetCode
     model.secCode = secCode
     model.filerName = "テスト株式会社"
     model.docTypeCode = docTypeCode
@@ -112,6 +113,23 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
             let toyota = try #require(try await CompanyFinancials.find("7203", on: app.db))
             #expect(toyota.assemblyFingerprint == financialsAssemblyFingerprint())
             #expect(try await CompanyFinancials.find("6758", on: app.db) != nil)
+        }
+    }
+
+    @Test func ingestIncludesNilSecCodeWhenEdinetMapsToListed() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S100Y5S8", secCode: nil, edinetCode: "E41361", db: app.db)
+
+            let summary = try await runFinancialsIngest(
+                db: app.db, years: 5, limit: nil, listedCodes: ["542A"]
+            ) { code in
+                fakeSuccess(code: code, years: 5)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyFinancials.find("542A", on: app.db))
+            #expect(row.highWater == "2025-06-20 09:00")
         }
     }
 

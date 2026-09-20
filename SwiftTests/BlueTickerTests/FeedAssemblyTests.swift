@@ -69,6 +69,29 @@ private func rec(
         #expect(listedTickerCode(fromSecCode: "00000") == nil)
     }
 
+    @Test func listedIssuerCodeFillsEmptySecCodeFromEdinetMap() {
+        let map = ["E41361": "542A0"]
+        #expect(
+            listedIssuerCode(
+                secCode: nil, edinetCode: "E41361", listedSecCodeByEdinetCode: map) == "542A")
+        #expect(
+            listedIssuerCode(
+                secCode: "  ", edinetCode: "E41361", listedSecCodeByEdinetCode: map) == "542A")
+        #expect(
+            listedIssuerCode(
+                secCode: "542A0", edinetCode: "E00000", listedSecCodeByEdinetCode: map) == "542A")
+    }
+
+    @Test func listedIssuerCodeDoesNotOverrideNonEmptyInvalidSecCode() {
+        let map = ["E41361": "542A0"]
+        #expect(
+            listedIssuerCode(
+                secCode: "12345", edinetCode: "E41361", listedSecCodeByEdinetCode: map) == nil)
+        #expect(
+            listedIssuerCode(
+                secCode: nil, edinetCode: "E99999", listedSecCodeByEdinetCode: map) == nil)
+    }
+
     @Test func updatesSkipUnassignedSecCode00000() {
         let now = utcCalendar.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 12))!
         let records = [
