@@ -163,62 +163,94 @@ struct TopView: View {
 /// 名称検索のルートに付ける。`tabViewBottomAccessory` はタブに固定されキーボードに隠れ、
 /// `.searchable` のドロワーは上に寄る。`safeAreaBar` はタブの上に置き、キーボードにも追従する。
 /// タブを選んだだけではキーボードを出さず、欄をタップしてから入力する。
+/// 編集中は Safari のアドレス欄と同じく欄を縮め、欄内クリアと欄外の円形バツを分ける。
 struct NameSearchField: View {
     @Binding var query: String
     @FocusState private var focused: Bool
     @State private var editing = false
+    @State private var fieldIdentity = 0
+    @State private var keepEditing = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Theme.textMuted)
-                .accessibilityHidden(true)
-            Group {
-                if editing {
-                    TextField("会社名を入力してください", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .foregroundStyle(Theme.text)
-                        .focused($focused)
-                        .onSubmit { stopEditing() }
-                        .onAppear { focused = true }
-                } else {
-                    Text(query.isEmpty ? "会社名を入力してください" : query)
-                        .foregroundStyle(query.isEmpty ? Theme.textMuted : Theme.text)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Theme.textMuted)
+                    .accessibilityHidden(true)
+                Group {
+                    if editing {
+                        TextField("会社名を入力してください", text: $query)
+                            .id(fieldIdentity)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.search)
+                            .foregroundStyle(Theme.text)
+                            .focused($focused)
+                            .onSubmit { stopEditing() }
+                            .onAppear { focused = true }
+                    } else {
+                        Text(query.isEmpty ? "会社名を入力してください" : query)
+                            .foregroundStyle(query.isEmpty ? Theme.textMuted : Theme.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard !editing else { return }
+                    editing = true
+                }
+                if !query.isEmpty {
+                    Button(action: clearQuery) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("クリア")
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard !editing else { return }
-                editing = true
-            }
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Theme.textMuted)
+            .padding(.leading, 16)
+            .padding(.trailing, 12)
+            .padding(.vertical, 10)
+            .glassEffect(.regular.interactive())
+
+            if editing {
+                Button(action: stopEditing) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("クリア")
+                .glassEffect(.regular.interactive(), in: Circle())
+                .accessibilityLabel("キャンセル")
             }
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 12)
-        .padding(.vertical, 10)
-        .glassEffect(.regular.interactive())
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
+        .animation(.snappy(duration: 0.22), value: editing)
         .onAppear { stopEditing() }
         .onChange(of: focused) { _, isFocused in
-            if !isFocused { editing = false }
+            if isFocused {
+                editing = true
+                keepEditing = false
+            } else if keepEditing {
+                focused = true
+            } else {
+                editing = false
+            }
         }
     }
 
+    private func clearQuery() {
+        keepEditing = true
+        query = ""
+        fieldIdentity += 1
+    }
+
     private func stopEditing() {
+        keepEditing = false
         focused = false
         editing = false
     }

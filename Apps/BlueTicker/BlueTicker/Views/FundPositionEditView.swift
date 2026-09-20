@@ -2,6 +2,11 @@ import SwiftData
 import SwiftUI
 import UIKit
 
+private enum HoldingsNumberField: Hashable {
+    case quantity(PersistentIdentifier)
+    case price(PersistentIdentifier)
+}
+
 struct TickerHoldingsView: View {
     var code: String
     var onAddAccount: () -> WatchedCompany
@@ -10,6 +15,7 @@ struct TickerHoldingsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var addedBlankIDs: Set<PersistentIdentifier> = []
     @State private var editorEpoch = 0
+    @FocusState private var focusedField: HoldingsNumberField?
 
     var body: some View {
         Form {
@@ -24,6 +30,7 @@ struct TickerHoldingsView: View {
                     item: item,
                     heading: rows.count >= 2 ? (item.accountCaption ?? "口座 \(index + 1)") : nil,
                     showsDelete: !item.isBlankHoldingsRow,
+                    focusedField: $focusedField,
                     onDelete: { deleteAccount(item) }
                 )
                 .id("\(item.persistentModelID)-\(editorEpoch)")
@@ -41,7 +48,7 @@ struct TickerHoldingsView: View {
         .toolbar(.visible, for: .navigationBar)
         .bltChrome("保有情報")
         .toolbar {
-            if !addedBlankIDs.isEmpty {
+            if focusedField != nil {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { finishAdding() }
                 }
@@ -51,6 +58,7 @@ struct TickerHoldingsView: View {
             pruneLeftoverWatches()
         }
         .onAppear { pruneLeftoverWatches() }
+        .onDisappear { finishAdding() }
     }
 
     private var matching: [WatchedCompany] {
@@ -126,15 +134,23 @@ private struct HoldingsAccountGroup: View {
     @Bindable var item: WatchedCompany
     var heading: String?
     var showsDelete: Bool
+    var focusedField: FocusState<HoldingsNumberField?>.Binding
     var onDelete: () -> Void
     @State private var quantityText: String
     @State private var priceText: String
     @State private var parseError: String?
 
-    init(item: WatchedCompany, heading: String?, showsDelete: Bool, onDelete: @escaping () -> Void) {
+    init(
+        item: WatchedCompany,
+        heading: String?,
+        showsDelete: Bool,
+        focusedField: FocusState<HoldingsNumberField?>.Binding,
+        onDelete: @escaping () -> Void
+    ) {
         self.item = item
         self.heading = heading
         self.showsDelete = showsDelete
+        self.focusedField = focusedField
         self.onDelete = onDelete
         _quantityText = State(initialValue: Self.string(from: item.quantity))
         _priceText = State(initialValue: Self.string(from: item.acquisitionPriceYen))
@@ -167,12 +183,14 @@ private struct HoldingsAccountGroup: View {
                 TextField("", text: $quantityText, prompt: Text("0"))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
+                    .focused(focusedField, equals: .quantity(item.persistentModelID))
             }
             LabeledContent("取得単価") {
                 HStack(spacing: 4) {
                     TextField("", text: $priceText, prompt: Text("0"))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused(focusedField, equals: .price(item.persistentModelID))
                     Text("円/株")
                         .foregroundStyle(Theme.textMuted)
                 }

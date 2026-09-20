@@ -13,4 +13,4 @@ description: ユーザーからリリースまたは version tag の作成を依
 
 `v*` tag 自体は deploy trigger ではない。release、main への統合、tag 操作はいずれもユーザーの明示依頼なしに行わない。
 
-iOS の TestFlight は Xcode Cloud。`v*` も `ios-tf-*` もこの skill の対象ではない。iOS 配布は `docs/ios-client.md`。
+iOS の TestFlight は Xcode Cloud（`main` の `Apps/BlueTicker` 差分で Archive）。`v*` も `ios-tf-*` もこの skill の対象ではない。iOS 配布は `docs/ios-client.md`。
