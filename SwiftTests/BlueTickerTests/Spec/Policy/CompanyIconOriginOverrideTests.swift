@@ -222,6 +222,32 @@ import Testing
         }
     }
 
+    /// 2026-09-20: Sorahiro visual GO。9412 はローカル PNG のみで公開 URL 未確定のため対象外。
+    @Test func pinsSorahiroVisualGoManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("9432", "https://group.ntt/apple-touch-icon.png"),
+            (
+                "9439",
+                "https://prtimes.jp/data/corp/122597/logo/sp-46258ab09fb99d79b265b3c42535ef24-36f02b09cef201479f6eff9086433389.jpeg"
+            ),
+            (
+                "7427",
+                "https://prtimes.jp/data/corp/65349/tmp-0abfefe96a812f76f6f1a403c440e70c-2d3e354745c331b9721ecd5c022a42e0.jpg"
+            ),
+        ]
+        #expect(expected.count == 3)
+        #expect(Set(expected.map(\.0)).count == 3)
+        #expect(CompanyIconOriginOverride.manualSources["9412"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["1429"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
