@@ -422,15 +422,19 @@ enum BreakdownNormalizer {
     /// `denominatorTag` には実際に採用した指標タグ名を残す。
     private static func normalizeSegmentMetric(
         facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
-        labelsByTag: [String: String], memberParents: [String: String] = [:]
+        labelsByTag: [String: String], memberParents: [String: String] = [:],
+        allowNonConsolidatedEntityTotal: Bool = true
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
         }) else { return nil }
         let perMember = withEntityTotal(
-            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
+            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag,
+            allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
         guard !perMember.isEmpty else { return nil }
-        let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
+        let total = resolveEntityTotal(
+            facts: facts, tag: amountTag,
+            allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)?.value
         // 分母=segment+reconciling は本軸の正方針なので derived 警告は立てない。
         // EntityTotal との乖離だけ needs_review にする。
         return buildCountBasisSnapshot(
@@ -446,7 +450,8 @@ enum BreakdownNormalizer {
     ) -> BreakdownSnapshot? {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
-            warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents)
+            warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false)
     }
 
     /// 減価償却費及び償却費。
@@ -851,20 +856,38 @@ enum BreakdownNormalizer {
     /// セグメント dimension が付かない当期の全社合計 fact（表の「連結財務諸表計上額」列）。
     /// `resolvePerMember` は primaryMember 必須のため、ここでのみ拾う。
     /// employees / rd の人数・費用基準は呼ばない（既存の全社合計は呼び出し側の `total`）。
-    private static func resolveEntityTotal(facts: [BreakdownFact], tag: String) -> BreakdownFact? {
+    ///
+    /// 連結を優先し、連結が無ければ非連結へフォールバックする（他軸の従来動作）。
+    /// `segment_assets` だけフォールバックしない: 銀行は連結の無 dimension `NoncurrentAssets`
+    /// が無く、個別固定資産を EntityTotal に載せると表のセグメント行・分母は正しいのに
+    /// `segment_assets_entity_total_differs_from_table_total` が立つ
+    ///（8306 `S100YJQO` / 8411 `S100YF8Y` / 8309 `S100YBGM`）。
+    /// セグメント member 行の抽出（`resolvePerMember`）は変えない。
+    private static func resolveEntityTotal(
+        facts: [BreakdownFact], tag: String, allowNonConsolidatedEntityTotal: Bool = true
+    ) -> BreakdownFact? {
         let candidateFacts = facts.filter {
-            $0.tag == tag && isCurrentPeriod($0.contextRef) && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
+            $0.tag == tag && isCurrentPeriod($0.contextRef)
+                && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
         }
-        let consolidatedFacts = candidateFacts.filter(isConsolidated)
-        let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
-        return source.sorted { $0.contextRef < $1.contextRef }.first
+        let consolidatedFacts = candidateFacts.filter {
+            isConsolidated($0) && !($0.contextRef.contains("NonConsolidatedMember"))
+        }
+        if !consolidatedFacts.isEmpty {
+            return consolidatedFacts.sorted { $0.contextRef < $1.contextRef }.first
+        }
+        guard allowNonConsolidatedEntityTotal else { return nil }
+        return candidateFacts.sorted { $0.contextRef < $1.contextRef }.first
     }
 
     private static func withEntityTotal(
-        _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String
+        _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String,
+        allowNonConsolidatedEntityTotal: Bool = true
     ) -> [String: BreakdownFact] {
         guard perMember[Xbrl.entityTotalMemberName] == nil,
-              let entity = resolveEntityTotal(facts: facts, tag: tag)
+              let entity = resolveEntityTotal(
+                facts: facts, tag: tag,
+                allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
         else { return perMember }
         var result = perMember
         result[Xbrl.entityTotalMemberName] = entity

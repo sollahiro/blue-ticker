@@ -85,6 +85,7 @@ public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
 /// v2: 分母を常に segment+reconciling に固定（表小計の閾値切替を廃止）。
+/// segment_assets の EntityTotal 個別フォールバック停止は targeted `--codes`。v3 は上げない。
 public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v2"
 public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v2"
 public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v2"
