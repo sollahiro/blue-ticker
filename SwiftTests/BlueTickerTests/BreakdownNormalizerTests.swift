@@ -1078,6 +1078,54 @@ import Foundation
         #expect(snap.rows.contains { $0.labelRaw == "RetailReportableSegmentMember" && $0.rowKind == "segment" })
     }
 
+    @Test func konamiExternalNetSalesTagResolvesWithoutAmbiguity() throws {
+        func fact(_ tag: String, _ member: String?, _ value: Double) -> BreakdownFact {
+            let ctx: String
+            let dims: [String: String]
+            if let member {
+                ctx = "CurrentYearDuration_\(member)"
+                dims = ["OperatingSegmentsAxis": member]
+            } else {
+                ctx = "CurrentYearDuration"
+                dims = [:]
+            }
+            return BreakdownFact(
+                tag: tag, contextRef: ctx, dimensions: dims,
+                value: value, label: nil, unitRef: "JPY", decimals: "-6"
+            )
+        }
+        let external = "NetSalesAndOperatingRevenueFromExternalCustomersIFRS"
+        let inclusive = "NetSalesAndOperatingRevenueIFRS"
+        let facts = [
+            fact(external, "DigitalEntertainmentReportableSegmentMember", 370_225_000_000),
+            fact(external, "ArcadeGameReportableSegmentMember", 25_295_000_000),
+            fact(external, "GamingAndSystemsReportableSegmentMember", 43_062_000_000),
+            fact(external, "SportsReportableSegmentMember", 49_146_000_000),
+            fact(external, "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember", 5_949_000_000),
+            fact(external, "ReconcilingItemsMember", 0),
+            fact(external, nil, 493_677_000_000),
+            fact(inclusive, "DigitalEntertainmentReportableSegmentMember", 370_950_000_000),
+            fact(inclusive, "ArcadeGameReportableSegmentMember", 25_295_000_000),
+            fact(inclusive, "GamingAndSystemsReportableSegmentMember", 43_062_000_000),
+            fact(inclusive, "SportsReportableSegmentMember", 49_146_000_000),
+            fact(inclusive, "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember", 5_949_000_000),
+            fact(inclusive, "ReconcilingItemsMember", 0),
+            fact(inclusive, nil, 494_402_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 493_677_000_000))
+
+        #expect(snap.denominatorTag == external)
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("denominator_tag_ambiguous"))
+        #expect(snap.denominator == 493_677_000_000)
+        let digital = try #require(
+            snap.rows.first { $0.labelRaw == "DigitalEntertainmentReportableSegmentMember" })
+        #expect(digital.amount == 370_225_000_000)
+        #expect(digital.rowKind == "segment")
+    }
+
     @Test func mazdaGeographySegmentsWithOtherBucketResolveAsGeographyNotBusiness() throws {
         // マツダ（7261）: 有報に「単一の製品・サービスの区分（自動車関連事業）の外部顧客への
         // 売上高が、連結損益計算書の売上高の90％を超えるため、事業種類別セグメント情報の記載を

@@ -410,5 +410,31 @@ import Foundation
         #expect(overseas.amount == 1_229_340_000_000)
         #expect(await client.timesCalled() == 1)
     }
+
+    @Test func konamiBusinessResolvesViaXbrlFactsWithoutLLM() async throws {
+        guard await Self.ensureAvailable("S100YKX5") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YKX5"))
+        let client = RealXbrlMockChat(responseJSON: nil)
+        let sales = 493_677_000_000.0
+
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client
+        )
+
+        #expect(source == .xbrlFacts)
+        #expect(audit == nil)
+        #expect(await client.timesCalled() == 0)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == "business")
+        #expect(snap.denominatorTag == "NetSalesAndOperatingRevenueFromExternalCustomersIFRS")
+        #expect(snap.denominator == sales)
+        #expect(snap.denominator / sales < 10)
+        #expect(!snap.needsReview)
+        let digital = try #require(snap.rows.first {
+            $0.labelRaw.contains("DigitalEntertainment") || $0.label == "デジタルエンタテインメント事業"
+        })
+        #expect(digital.amount == 370_225_000_000)
+        #expect(digital.rowKind == "segment")
+    }
 }
 

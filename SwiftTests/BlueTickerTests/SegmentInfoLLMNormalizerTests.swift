@@ -305,4 +305,38 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshotOrNil != nil)
         #expect(audit?.notApplicableReason == nil)
     }
+
+    /// コナミ型: LLM が unit=million_yen と申告しつつ行金額を既に円で返す。
+    /// 一律 ×1e6 すると分母が約 1e12（百万円表示比）に膨らむ。円スケールのまま採用する。
+    @Test func millionYenUnitDoesNotInflateAlreadyYenScaleAmounts() async throws {
+        let sales = 493_677 * Financial.millionYen
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 2,
+            "period_column": "当期",
+            "profit_disclosed": true,
+            "rows": [
+                ["label": "デジタルエンタテインメント事業", "amount": 370_225_000_000, "profit": 136_006_000_000, "row_kind": "segment"],
+                ["label": "アーケードゲーム事業", "amount": 25_295_000_000, "profit": 6_779_000_000, "row_kind": "segment"],
+                ["label": "ゲーミング＆システム事業", "amount": 43_062_000_000, "profit": 3_650_000_000, "row_kind": "segment"],
+                ["label": "スポーツ事業", "amount": 49_146_000_000, "profit": 3_411_000_000, "row_kind": "segment"],
+                ["label": "その他", "amount": 5_949_000_000, "profit": 538_000_000, "row_kind": "segment"],
+                ["label": "調整額", "amount": 0, "profit": -6_801_000_000, "row_kind": "reconciling"],
+                ["label": "連結計", "amount": 493_677_000_000, "profit": 143_583_000_000, "row_kind": "subtotal"],
+            ],
+            "notes": "連結外部売上高493,677百万円と一致する事業別セグメント表の当期列を採用。",
+        ]
+        let client = MockChatCompleting(responseJSON: response)
+        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+            Self.htmlTableResult(), consolidatedSales: sales, client: client
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.denominator == sales)
+        #expect(snapshot.denominator / sales < 10)
+        let digital = try #require(snapshot.rows.first { $0.labelRaw == "デジタルエンタテインメント事業" })
+        #expect(digital.amount == 370_225_000_000)
+        #expect(digital.profit == 136_006_000_000)
+        #expect(!snapshot.needsReview)
+    }
 }

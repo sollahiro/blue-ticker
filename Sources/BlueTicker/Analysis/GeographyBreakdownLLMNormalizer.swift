@@ -132,34 +132,48 @@ enum GeographyBreakdownLLMNormalizer {
         var warnings: [String] = []
         var needsReview = false
 
-        let unitMultiplier: Double
-        switch unit {
-        case "yen":
-            unitMultiplier = 1
-        case "million_yen":
-            unitMultiplier = Financial.millionYen
-        default:
-            unitMultiplier = 1
-            needsReview = true
-            warnings.append("llm_unit_unresolved")
+        struct ParsedRow {
+            let label: String
+            let rawAmount: Double
+            let rowKind: String
         }
-
-        // 脚注マーカー除去はプロンプト指示が本線。ここは LLM が残したときの決定的保険。
-        // 「うち」ラベルの内数除去も同様（プロンプトが「中国」へ言い換えた場合は抽出側の列落としが本線）。
-        var rows: [BreakdownRow] = []
+        var parsed: [ParsedRow] = []
         var strippedFootnotes: [String] = []
         for raw in rawRows {
             guard let rawLabel = raw["label"] as? String,
                   let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
                   let rowKind = raw["row_kind"] as? String
             else { continue }
+            // 脚注マーカー除去はプロンプト指示が本線。ここは LLM が残したときの決定的保険。
+            // 「うち」ラベルの内数除去も同様（プロンプトが「中国」へ言い換えた場合は抽出側の列落としが本線）。
             let label = stripGeographyLabelFootnotes(rawLabel)
             if label != rawLabel {
                 strippedFootnotes.append("\(rawLabel)→\(label)")
             }
-            rows.append(BreakdownRow(labelRaw: label, amount: rawAmount * unitMultiplier, share: nil, profit: nil, rowKind: rowKind))
+            parsed.append(ParsedRow(
+                label: label, rawAmount: rawAmount, rowKind: rowKind
+            ))
         }
-        guard !rows.isEmpty else { return (nil, audit) }
+        guard !parsed.isEmpty else { return (nil, audit) }
+
+        let scale = BreakdownLLMAmountScale.yenMultiplier(
+            declaredUnit: unit,
+            rawAmounts: parsed.map(\.rawAmount),
+            consolidatedSales: consolidatedSales
+        )
+        if scale.unresolved {
+            needsReview = true
+            warnings.append("llm_unit_unresolved")
+        }
+        let unitMultiplier = scale.multiplier
+
+        var rows: [BreakdownRow] = []
+        for row in parsed {
+            rows.append(BreakdownRow(
+                labelRaw: row.label, amount: row.rawAmount * unitMultiplier, share: nil,
+                profit: nil, rowKind: row.rowKind
+            ))
+        }
         if !strippedFootnotes.isEmpty {
             let suffix = "label_footnotes_stripped: " + strippedFootnotes.joined(separator: "; ")
             audit.notes = audit.notes.isEmpty ? suffix : audit.notes + " / " + suffix
