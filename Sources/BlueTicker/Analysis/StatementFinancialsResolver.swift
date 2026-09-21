@@ -73,15 +73,17 @@ enum StatementFinancialsResolver {
         // 済み本表 Extractor（sales 等）の候補には混ぜない。
         // Statement は role カバレッジで個別 J-GAAP PL を選ぶことがある
         // （ベイカレント S100TI4B: `Revenue` / `OperatingIncome`）。
-        // IFRS 本表 P&L（`RevenueIFRS` 等）はマスクに残し、FieldSet 側で
-        // NonConsolidatedMember フォールバックする。
+        // IFRS 本表 P&L（`RevenueIFRS` 等）はマスクに残し、Summary の Duration
+        // FieldSet だけで NonConsolidatedMember をスロット単位フォールバックする
+        // （同一スロットに連結候補がある期は埋めない。notes / breakdown には使わない）。
         let mainTags = Set(
             (year.balanceSheet + year.incomeStatement + year.cashFlow).map(\.tag)
         ).union(Xbrl.summaryIfrsPnLTags)
         let equityTags = Set(year.changesInEquity.map(\.tag))
         let maskedMain = tagElements.filter { mainTags.contains($0.key) }
         let maskedEquity = tagElements.filter { mainTags.union(equityTags).contains($0.key) }
-        let durationFS = fieldSetFromDuration(maskedMain)
+        let durationFS = fieldSetFromDuration(
+            maskedMain, fillMissingIfrsPnLFromNonConsolidated: true)
         let instantFS = fieldSetFromInstant(maskedMain)
 
         let is_ = IncomeStatementExtractor.extract(

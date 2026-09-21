@@ -44,9 +44,14 @@ func detectAccountingStandard(_ tagElements: XbrlTagElements) -> String {
 // MARK: - FieldSet Builders
 
 /// XbrlTagElements から Duration（フロー）コンテキストを正規化して FieldSet を返す。
+///
+/// `fillMissingIfrsPnLFromNonConsolidated` は Summary 組立専用。notes / breakdown は
+/// 渡さない。IFRS P&L スロット（売上 / 営業利益 / 純利益）に連結候補が無い期だけ、
+/// 純粋な `*_NonConsolidatedMember` を埋める。
 func fieldSetFromDuration(
     _ tagElements: XbrlTagElements,
-    financialTags: Set<String>? = nil
+    financialTags: Set<String>? = nil,
+    fillMissingIfrsPnLFromNonConsolidated: Bool = false
 ) -> FieldSet {
     var fieldSet = normalizeConsolidatedDuration(tagElements)
 
@@ -57,11 +62,9 @@ func fieldSetFromDuration(
             fieldSet[tag] = fv
         }
     }
-    // IFRS 本表 P&L が `CurrentYearDuration_NonConsolidatedMember` に載る書類
-    // （ベイカレント S100TI4B）は、書類単位の連結ゲートで単体フォールバックが
-    // 落ちる。P&L タグに限り、連結 Duration が無い期だけ純粋な NonConsolidated を埋める。
-    // CF/BS のゲートは変えない。同一期に連結があれば連結を残す。
-    mergeMissingPnLFromPureNonConsolidatedDuration(into: &fieldSet, from: tagElements)
+    if fillMissingIfrsPnLFromNonConsolidated {
+        mergeMissingPnLFromPureNonConsolidatedDuration(into: &fieldSet, from: tagElements)
+    }
     // Instant コンテキストのみのタグ（会計基準マーカー等）も存在記録として追加
     for tag in tagElements.keys where fieldSet[tag] == nil {
         fieldSet[tag] = FieldValue(current: nil, prior: nil)
@@ -216,17 +219,26 @@ private func mergeMissingPnLFromPureNonConsolidatedDuration(
     into fieldSet: inout FieldSet,
     from tagElements: XbrlTagElements
 ) {
-    for tag in Xbrl.summaryIfrsPnLTags {
-        guard let ctxMap = tagElements[tag] else { continue }
-        let ncCurrent = exactPureNonConsolidatedValue(
-            in: ctxMap, patterns: Xbrl.durationContextPatterns)
-        let ncPrior = exactPureNonConsolidatedValue(
-            in: ctxMap, patterns: Xbrl.priorDurationContextPatterns)
-        guard ncCurrent != nil || ncPrior != nil else { continue }
-        var fv = fieldSet[tag] ?? FieldValue(current: nil, prior: nil)
-        if fv.current == nil { fv.current = ncCurrent }
-        if fv.prior == nil { fv.prior = ncPrior }
-        fieldSet[tag] = fv
+    // タグ単位ではなく Extractor スロット単位。連結 `RevenueIFRS` がある期に
+    // `NetSalesIFRS` の NC を入れると、候補順で親会社売上が勝つ。
+    for slot in Xbrl.summaryIfrsPnLSlots {
+        let hasConsolidatedCurrent = slot.contains { tag in fieldSet[tag]?.current != nil }
+        let hasConsolidatedPrior = slot.contains { tag in fieldSet[tag]?.prior != nil }
+        guard !hasConsolidatedCurrent || !hasConsolidatedPrior else { continue }
+        for tag in slot {
+            guard let ctxMap = tagElements[tag] else { continue }
+            let ncCurrent = exactPureNonConsolidatedValue(
+                in: ctxMap, patterns: Xbrl.durationContextPatterns)
+            let ncPrior = exactPureNonConsolidatedValue(
+                in: ctxMap, patterns: Xbrl.priorDurationContextPatterns)
+            guard ncCurrent != nil || ncPrior != nil else { continue }
+            var fv = fieldSet[tag] ?? FieldValue(current: nil, prior: nil)
+            if !hasConsolidatedCurrent, fv.current == nil { fv.current = ncCurrent }
+            if !hasConsolidatedPrior, fv.prior == nil { fv.prior = ncPrior }
+            if fv.current != nil || fv.prior != nil {
+                fieldSet[tag] = fv
+            }
+        }
     }
 }
 

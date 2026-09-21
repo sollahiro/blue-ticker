@@ -195,14 +195,22 @@ enum Xbrl {
     /// Statement が個別 J-GAAP PL role を選んでも、これらのタグはマスクから落とさない。
     /// 主要な経営指標等（Summary / KeyFinancialData）は混ぜない。
     static var summaryIfrsPnLTags: Set<String> {
-        Set(
-            (netSalesTags + operatingProfitDirectTags + netProfitTags + parentAttributableNetProfitTags)
-                .filter {
-                    $0.contains("IFRS")
-                        && !$0.contains("SummaryOfBusinessResults")
-                        && !$0.contains("KeyFinancialData")
-                }
-        )
+        Set(summaryIfrsPnLSlots.flatMap { $0 })
+    }
+
+    /// Summary IFRS P&L の穴埋め単位（売上 / 営業利益 / 純利益）。
+    /// 同一スロットに連結候補がある期は、別タグの NonConsolidatedMember を入れない。
+    static var summaryIfrsPnLSlots: [Set<String>] {
+        let isSummaryIfrsPnLTag: (String) -> Bool = {
+            $0.contains("IFRS")
+                && !$0.contains("SummaryOfBusinessResults")
+                && !$0.contains("KeyFinancialData")
+        }
+        return [
+            Set(netSalesTags.filter(isSummaryIfrsPnLTag)),
+            Set(operatingProfitDirectTags.filter(isSummaryIfrsPnLTag)),
+            Set((netProfitTags + parentAttributableNetProfitTags).filter(isSummaryIfrsPnLTag)),
+        ]
     }
 
     // MARK: - 1株当たり利益（基本EPS・連結当期）

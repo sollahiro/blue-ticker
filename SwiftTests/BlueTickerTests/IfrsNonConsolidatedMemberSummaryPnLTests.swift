@@ -73,6 +73,65 @@ import Testing
         }
     }
 
+    @Test func prefersConsolidatedRevenueIFRSOverNonConsolidatedNetSalesIFRS() throws {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpifrs_cor:RevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">9783370000000</jpifrs_cor:RevenueIFRS>
+            <jpifrs_cor:NetSalesIFRS contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">1774233000000</jpifrs_cor:NetSalesIFRS>
+            <jpifrs_cor:OperatingProfitLossIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">800</jpifrs_cor:OperatingProfitLossIFRS>
+            <jpifrs_cor:ProfitLossAttributableToOwnersOfParentIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">500</jpifrs_cor:ProfitLossAttributableToOwnersOfParentIFRS>
+            <jpifrs_cor:ProfitLossIFRS contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">50</jpifrs_cor:ProfitLossIFRS>
+            """
+        )
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+            #expect(values.sales == 9_783_370_000_000)
+            #expect(values.operatingProfit == 800)
+            #expect(values.netProfit == 500)
+        }
+    }
+
+    /// notes / breakdown の Duration FieldSet は Summary の NC P&L 穴埋めを共有しない。
+    @Test func notesAndBreakdownDurationFieldSetDoesNotFillNcIfrsPnL() throws {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpifrs_cor:RevenueIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">9783370000000</jpifrs_cor:RevenueIFRS>
+            <jpifrs_cor:NetSalesIFRS contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">1774233000000</jpifrs_cor:NetSalesIFRS>
+            <jpifrs_cor:OperatingProfitLossIFRS contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">100</jpifrs_cor:OperatingProfitLossIFRS>
+            <jpifrs_cor:ResearchAndDevelopmentCostsIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">500000000</jpifrs_cor:ResearchAndDevelopmentCostsIFRS>
+            <jpifrs_cor:NetCashProvidedByUsedInOperatingActivitiesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1000</jpifrs_cor:NetCashProvidedByUsedInOperatingActivitiesIFRS>
+            """
+        )
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let allTags = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+            let notesFS = fieldSetFromDuration(allTags)
+            #expect(notesFS["NetSalesIFRS"]?.current ?? nil == nil)
+            #expect(notesFS["OperatingProfitLossIFRS"]?.current ?? nil == nil)
+            #expect(notesFS["RevenueIFRS"]?.current == 9_783_370_000_000)
+
+            let unmaskedSales = resolveItemPreferCurrent(notesFS, tags: Xbrl.netSalesTags)
+            #expect(unmaskedSales.current == 9_783_370_000_000)
+            #expect(unmaskedSales.tag == "RevenueIFRS")
+
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == 500_000_000)
+
+            let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+            #expect(values.sales == 9_783_370_000_000)
+            #expect(values.operatingProfit == 100)
+        }
+    }
+
     @Test func prefersConsolidatedDurationWhenBothExist() throws {
         let xml = XBRLTestSupport.makeXbrlDuration(
             """

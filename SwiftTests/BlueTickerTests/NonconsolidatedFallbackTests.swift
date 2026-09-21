@@ -114,7 +114,8 @@ import Foundation
                 "CurrentYearDuration_NonConsolidatedMember": 24_348_000_000.0,
             ],
         ]
-        let fs = fieldSetFromDuration(tagElements)
+        let fs = fieldSetFromDuration(
+            tagElements, fillMissingIfrsPnLFromNonConsolidated: true)
         #expect(fs["RevenueIFRS"]?.current == 93_909_000_000.0)
         #expect(fs["OperatingProfitLossIFRS"]?.current == 34_219_000_000.0)
         #expect(fs["ProfitLossIFRS"]?.current == 25_382_000_000.0)
@@ -127,6 +128,20 @@ import Foundation
         #expect(result.operatingProfit == 34_219_000_000.0)
         #expect(result.netProfit == 25_382_000_000.0)
         #expect(result.salesPrior == 76_090_000_000.0)
+    }
+
+    /// notes / breakdown が使う既定 FieldSet には NC IFRS P&L を入れない。
+    @Test func testIfrsPnLNonConsolidatedFillDoesNotLeakIntoDefaultDurationFieldSet() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 93_909_000_000.0,
+            ],
+            "NetCashProvidedByUsedInOperatingActivitiesIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 24_348_000_000.0,
+            ],
+        ]
+        let notesFS = fieldSetFromDuration(tagElements)
+        #expect(notesFS["RevenueIFRS"]?.current ?? nil == nil)
     }
 
     /// S100VTPA 型: 同じ IFRS タグが plain CurrentYearDuration にあれば従来どおり連結を使う。
@@ -145,7 +160,8 @@ import Foundation
                 "Prior1YearDuration": 25_382_000_000.0,
             ],
         ]
-        let fs = fieldSetFromDuration(tagElements)
+        let fs = fieldSetFromDuration(
+            tagElements, fillMissingIfrsPnLFromNonConsolidated: true)
         let result = IncomeStatementExtractor.extract(
             fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
         #expect(result.sales == 116_056_000_000.0)
@@ -171,9 +187,45 @@ import Foundation
                 "CurrentYearDuration_NonConsolidatedMember": 50.0,
             ],
         ]
-        let fs = fieldSetFromDuration(tagElements)
+        let fs = fieldSetFromDuration(
+            tagElements, fillMissingIfrsPnLFromNonConsolidated: true)
         #expect(fs["RevenueIFRS"]?.current == 9_783_370_000_000.0)
         #expect(fs["RevenueIFRS"]?.prior == 9_728_716_000_000.0)
+        let result = IncomeStatementExtractor.extract(
+            fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
+        #expect(result.sales == 9_783_370_000_000.0)
+        #expect(result.operatingProfit == 800.0)
+        #expect(result.netProfit == 500.0)
+    }
+
+    /// 連結 `RevenueIFRS` がある期に、優先度の高い `NetSalesIFRS` NC を入れない。
+    @Test func testIfrsPnLDoesNotLetNonConsolidatedNetSalesBeatConsolidatedRevenue() {
+        let tagElements: XbrlTagElements = [
+            "RevenueIFRS": [
+                "CurrentYearDuration": 9_783_370_000_000.0,
+                "Prior1YearDuration": 9_728_716_000_000.0,
+            ],
+            "NetSalesIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 1_774_233_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 1_756_937_000_000.0,
+            ],
+            "OperatingProfitLossIFRS": [
+                "CurrentYearDuration": 800.0,
+                "CurrentYearDuration_NonConsolidatedMember": 100.0,
+            ],
+            "ProfitLossAttributableToOwnersOfParentIFRS": [
+                "CurrentYearDuration": 500.0,
+            ],
+            "ProfitLossIFRS": [
+                "CurrentYearDuration_NonConsolidatedMember": 50.0,
+            ],
+        ]
+        let fs = fieldSetFromDuration(
+            tagElements, fillMissingIfrsPnLFromNonConsolidated: true)
+        #expect(fs["RevenueIFRS"]?.current == 9_783_370_000_000.0)
+        #expect(fs["NetSalesIFRS"]?.current ?? nil == nil)
+        #expect(fs["NetSalesIFRS"]?.prior ?? nil == nil)
+        #expect(fs["ProfitLossIFRS"]?.current ?? nil == nil)
         let result = IncomeStatementExtractor.extract(
             fieldSet: fs, accountingStandard: detectAccountingStandard(tagElements))
         #expect(result.sales == 9_783_370_000_000.0)
@@ -189,7 +241,8 @@ import Foundation
                 "Prior1YearDuration_NonConsolidatedMember": 93_909_000_000.0,
             ]
         ]
-        let fs = fieldSetFromDuration(tagElements)
+        let fs = fieldSetFromDuration(
+            tagElements, fillMissingIfrsPnLFromNonConsolidated: true)
         #expect(fs["RevenueIFRS"]?.current == 116_056_000_000.0)
         #expect(fs["RevenueIFRS"]?.prior == 93_909_000_000.0)
     }
