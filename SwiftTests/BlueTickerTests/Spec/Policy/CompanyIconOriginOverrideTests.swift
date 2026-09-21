@@ -272,6 +272,45 @@ import Testing
         }
     }
 
+    /// 2026-09-21 weekly: listed × company_icons 欠行。公告 URL 無し／紙面の公式画像。
+    /// フッター SNS・別名ドメイン・横長ワードマーク OGP はマップに載せない。
+    @Test func pins20260921WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("6349", "https://www.komori.com/global_common/img/webclip.png"),
+            ("8370", "https://icons.sollahiro.com/company-icons/8370.png"), // pragma: allowlist secret
+            ("4410", "https://www.harima.co.jp/apple_touch_icon.png"),
+            ("8005", "https://www.scroll.jp/wp-content/themes/scr-corporate/common/img/base/apple-touch-icon.png"),
+            ("6999", "https://www.koaglobal.com/common/images/iosicon.png"),
+            ("7630", "https://www.ichibanya.co.jp/apple-touch-icon.png"),
+            ("2698", "https://www.cando-web.co.jp/apple-touch-icon.png"),
+            ("4998", "https://www.fumakilla.co.jp/apple-touch-icon.png"),
+            ("8386", "https://www.114bank.co.jp/apple-touch-icon.png"),
+            ("8160", "https://www.kisoji.co.jp/themes/kisoji/assets/favicon/apple-touch-icon.png"),
+            ("8275", "https://www.forval.co.jp/webclip.png"),
+            ("6941", "https://www.yamaichi.co.jp/img/apple-touch-icon-152x152.png"),
+            ("8387", "https://www.shikokubank.co.jp/apple-touch-icon-precomposed.png"),
+            ("1892", "https://www.tokura.co.jp/media/001/202602/ogp.png"),
+            ("1798", "https://www.moriya-s.co.jp/files/favicon/apple-touch-icon.png"),
+            ("4635", "https://www.tokyoink.co.jp/apple-touch-icon.png"),
+            ("7879", "https://www.noda-co.jp/common/favicon/apple-touch-icon.png"),
+            ("2329", "https://www.tfc.co.jp/cms/apple-touch-icon.png"),
+            ("7715", "https://www.naganokeiki.co.jp/common/favicon/apple-touch-icon.png"),
+            ("9622", "https://www.space-tokyo.co.jp/assets/img/apple-touch-icon.png"),
+        ]
+        #expect(expected.count == 20)
+        #expect(Set(expected.map(\.0)).count == 20)
+        #expect(CompanyIconOriginOverride.manualSources["3817"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["7595"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
