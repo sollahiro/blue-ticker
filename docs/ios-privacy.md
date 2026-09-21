@@ -1,10 +1,10 @@
-# 免責とプライバシー方針
+# 免責事項およびプライバシーポリシー
 
 App Store 用の公開ページは Cloudflare Worker `workers/legal/`（静的 HTML）。
 
 公開 URL:
 
-- 免責とプライバシー方針: https://sollahiro.com/blue-ticker/privacy
+- 免責事項およびプライバシーポリシー: https://sollahiro.com/blue-ticker/privacy
 - 利用規約: https://sollahiro.com/blue-ticker/terms
 
 `blt-legal` の Custom Domain が `sollahiro.com`。プライバシーの同じ本文は `/` · `/blue-ticker` · workers.dev でも出る。利用規約は `/terms` · `/blue-ticker/terms`。

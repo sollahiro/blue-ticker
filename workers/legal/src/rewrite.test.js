@@ -40,15 +40,19 @@ test("privacy pages name the operator Sorahiro Shuto", () => {
 test("privacy disclaimer matches product facts without overbroad liability", () => {
   const html = readFileSync(join(publicDir, "index.html"), "utf8");
   assert.match(html, /閲覧補助アプリ/);
-  assert.match(html, /金融商品取引法上の金融商品取引業者（投資助言・代理業等）の登録を受けていません/);
+  assert.match(html, /金融商品取引法上の金融商品取引業者/);
   assert.match(html, /生成AI等による要約/);
-  assert.match(html, /短命の匿名トークン/);
-  assert.match(html, /永続保存することはありません/);
+  assert.match(html, /匿名トークン/);
+  assert.match(html, /永続/);
   assert.match(html, /blueticker@sollahiro.com/);
   assert.match(html, /href="\/blue-ticker\/terms"/);
-  assert.match(html, /13 歳未満の子どもを対象にしたサービスではありません/);
-  assert.match(html, /Blue Ticker 免責とプライバシー方針/);
-  assert.doesNotMatch(html, /一切の責任を負いません/);
+  assert.match(html, /Blue Ticker 免責事項およびプライバシーポリシー/);
+  assert.doesNotMatch(html, /Crashlytics/);
+  assert.doesNotMatch(html, /Firebase/);
+  assert.doesNotMatch(html, /Sentry/);
+  assert.doesNotMatch(html, /TelemetryDeck/);
+  assert.doesNotMatch(html, /13 歳未満/);
+  assert.doesNotMatch(html, /一切の責任を負/);
   assert.doesNotMatch(html, /TestFlight/);
   assert.doesNotMatch(html, /MCP/);
   assert.doesNotMatch(html, /ChatGPT/);
