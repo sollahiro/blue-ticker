@@ -77,6 +77,7 @@ enum CompanyIconOriginOverride {
     /// 7236 ティラドは添付高解像度ロゴを白地・余白の 512 PNG にして R2 CDN へ（公式 192 は低解像）。
     /// 2026-09-21 weekly: 公告 URL 無し／紙面／Pronexus の欠行。公式 apple-touch / 正方形 /
     /// 検証済み OGP。フッター SNS・別名ドメイン・横長ワードマーク OGP は載せない。
+    /// 8370 紀陽銀行はユーザー指定でマスコット中央のみを 512 白地にして R2 CDN へ（公式 OGP は横長ロックアップ）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -198,7 +199,7 @@ enum CompanyIconOriginOverride {
         "7236": .imageURL("https://icons.sollahiro.com/company-icons/7236.png"), // R2 CDN white-padded TRAD // pragma: allowlist secret
         "7414": .imageURL("https://www.onoken.co.jp/apple-touch-icon.png"),
         "6349": .imageURL("https://www.komori.com/global_common/img/webclip.png"),
-        "8370": .imageURL("https://www.kiyobank.co.jp/assets/image/common/img/opg.jpg"),
+        "8370": .imageURL("https://icons.sollahiro.com/company-icons/8370.png"), // R2 CDN mascot crop 512 // pragma: allowlist secret
         "4410": .imageURL("https://www.harima.co.jp/apple_touch_icon.png"),
         "8005": .imageURL(
             "https://www.scroll.jp/wp-content/themes/scr-corporate/common/img/base/apple-touch-icon.png"),

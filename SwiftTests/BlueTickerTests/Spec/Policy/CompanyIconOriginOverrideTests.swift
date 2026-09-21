@@ -277,7 +277,7 @@ import Testing
     @Test func pins20260921WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
             ("6349", "https://www.komori.com/global_common/img/webclip.png"),
-            ("8370", "https://www.kiyobank.co.jp/assets/image/common/img/opg.jpg"),
+            ("8370", "https://icons.sollahiro.com/company-icons/8370.png"), // pragma: allowlist secret
             ("4410", "https://www.harima.co.jp/apple_touch_icon.png"),
             ("8005", "https://www.scroll.jp/wp-content/themes/scr-corporate/common/img/base/apple-touch-icon.png"),
             ("6999", "https://www.koaglobal.com/common/images/iosicon.png"),
