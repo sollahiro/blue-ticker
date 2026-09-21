@@ -362,6 +362,11 @@ enum BreakdownNormalizer {
     ]
 
     private static let countBasisEliminationMemberName = "UnallocatedAmountsAndEliminationMember"
+    /// セグメント間消去・調整の符号は EntityTotal（連結 BS 等）との一致で決める。
+    private static let countBasisEliminationMemberNames: [String] = [
+        "UnallocatedAmountsAndEliminationMember",
+        "ReconcilingItemsMember",
+    ]
     private static let countBasisReportableSegmentsMemberName = "ReportableSegmentsMember"
     /// 人数は整数。タグ付き「合計」列と分母の一致判定に 5% は使わない。
     private static let countBasisPeopleEqualityEpsilon = 0.5
@@ -803,23 +808,25 @@ enum BreakdownNormalizer {
         abs(a - b) <= countBasisPeopleEqualityEpsilon
     }
 
-    /// `UnallocatedAmountsAndEliminationMember` を足すと分母からずれ、引くと ±5% に収まるとき
-    /// 符号を反転する（NTT S100YCP3 のセグメント間取引消去）。足す方が合う場合は正のまま
+    /// 消去・調整 member を足すと EntityTotal からずれ、引くと ±5% に収まるとき符号を反転する
+    /// （NTT S100YCP3 / NTN 6472 の `ReconcilingItemsMember`）。足す方が合う場合は正のまま
     /// （味の素 S100VXJA の未配賦 R&D）。
     private static func applyEliminationSign(
         amounts: inout [String: Double], kinds: [String: String], total: Double?
     ) {
         guard let total, total > 0 else { return }
-        let member = countBasisEliminationMemberName
-        guard kinds[member] == "reconciling", let value = amounts[member], value != 0 else { return }
-
-        var without = kinds
-        without[member] = "subtotal"
-        let sumExcl = reconciledAmount(kinds: without, amounts: amounts)
-        let addErr = abs(sumExcl + value - total) / total
-        let subErr = abs(sumExcl - value - total) / total
-        if subErr <= 0.05, addErr > 0.05 {
-            amounts[member] = -abs(value)
+        for member in countBasisEliminationMemberNames {
+            guard kinds[member] == "reconciling", let value = amounts[member], value != 0 else {
+                continue
+            }
+            var without = kinds
+            without[member] = "subtotal"
+            let sumExcl = reconciledAmount(kinds: without, amounts: amounts)
+            let addErr = abs(sumExcl + value - total) / total
+            let subErr = abs(sumExcl - value - total) / total
+            if subErr <= 0.05, addErr > 0.05 {
+                amounts[member] = -abs(value)
+            }
         }
     }
 

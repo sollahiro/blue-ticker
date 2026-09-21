@@ -31,8 +31,9 @@ import Foundation
         let facts = BreakdownExtractor.extractFactsByDimension(
             xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
             contextMap: contextMap)
-        return BreakdownNormalizer.normalizeSegmentAssets(
+        let base = BreakdownNormalizer.normalizeSegmentAssets(
             facts: facts, labelsByTag: XBRLUtils.breakdownMemberLabels(in: dir))
+        return BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(snapshot: base, xbrlDir: dir)
     }
 
     /// 三菱 UFJ S100YJQO: 表合計 TotalMember ≈ 分母。個別 NoncurrentAssets は EntityTotal にしない。
@@ -73,30 +74,52 @@ import Foundation
         #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
     }
 
-    /// あおぞら S100YCRO: 表合計は分母一致、連結 EntityTotal = BS 資産合計。警告は残す。
-    @Test func aozoraKeepsConsolidatedBsTotalEntityTotalWarning() async throws {
+    /// あおぞら S100YCRO: 差額表の非分類行を reconciling に足し分母=連結 BS。
+    @Test func aozoraDifferenceTableReconcilingMatchesConsolidatedBs() async throws {
         guard await Self.ensureAvailable("S100YCRO") else { return }
         let snapshot = try #require(Self.snapshot("S100YCRO"))
         #expect(snapshot.denominatorTag == "Assets")
         let tableTotal = try #require(
             snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
-        #expect(abs(snapshot.denominator - tableTotal.amount) / snapshot.denominator <= 0.05)
-        #expect(snapshot.needsReview == true)
-        #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        #expect(tableTotal.rowKind == "subtotal")
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        #expect(snapshot.rows.contains { $0.rowKind == "reconciling" && ($0.label ?? "").contains("貸倒引当金") })
         let entity = try #require(
             snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 8_601_673_000_000)
+        #expect(abs(snapshot.denominator - entity.amount) / entity.amount <= 0.0001)
     }
 
-    /// NTN S100Y8YZ: ReconcilingItems 符号のずれ。警告は残す。
-    @Test func ntnKeepsReconcilingEntityTotalWarning() async throws {
+    /// NTN S100Y8YZ: ReconcilingItems 消去後分母 = 連結 BS 資産合計。
+    @Test func ntnReconcilingSignMatchesConsolidatedBsTotal() async throws {
         guard await Self.ensureAvailable("S100Y8YZ") else { return }
         let snapshot = try #require(Self.snapshot("S100Y8YZ"))
         #expect(snapshot.denominatorTag == "Assets")
-        #expect(snapshot.needsReview == true)
-        #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        #expect(abs(snapshot.denominator - 878_676_000_000) <= 2_000_000)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        let reconciling = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReconcilingItemsMember" })
+        #expect(reconciling.amount < 0)
         let entity = try #require(
             snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 878_676_000_000)
+    }
+
+    /// アコム S100YBXA / ミニストップ S100Y4UH: 差額表非分類を reconciling に載せ分母=BS。
+    @Test func acomAndMinistopDifferenceTableReconcilingMatchesBs() async throws {
+        for docID in ["S100YBXA", "S100Y4UH"] {
+            guard await Self.ensureAvailable(docID) else { continue }
+            let snapshot = try #require(Self.snapshot(docID))
+            let tableTotal = try #require(
+                snapshot.rows.first {
+                    $0.rowKind == "subtotal"
+                        && abs($0.amount - snapshot.denominator) / snapshot.denominator <= 0.05
+                })
+            #expect(tableTotal.rowKind == "subtotal")
+            #expect(snapshot.needsReview == false)
+            #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        }
     }
 }

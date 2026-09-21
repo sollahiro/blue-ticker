@@ -613,8 +613,10 @@ private extension BltServerContext {
         let snapshot: BreakdownSnapshot?
         switch axis {
         case breakdownAxisSegmentAssets:
-            snapshot = BreakdownNormalizer.normalizeSegmentAssets(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
+            snapshot = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
+                snapshot: BreakdownNormalizer.normalizeSegmentAssets(
+                    facts: cached.facts, labelsByTag: cached.labelsByTag),
+                xbrlDir: xbrlDir)
         case breakdownAxisDepreciationAndAmortization:
             snapshot = BreakdownNormalizer.normalizeDepreciationAndAmortization(
                 facts: cached.facts, labelsByTag: cached.labelsByTag)
