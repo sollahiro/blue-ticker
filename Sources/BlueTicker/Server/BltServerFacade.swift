@@ -656,7 +656,16 @@ private extension BltServerContext {
         guard let snapshot else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
-        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
+        var extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
+        if axis == breakdownAxisSegmentAssets,
+           let html = SegmentAssetsDifferenceTable.differenceTextBlockHtml(in: xbrlDir)
+        {
+            extracted.tables = [
+                BreakdownTable(
+                    heading: SegmentAssetsDifferenceTable.textBlockTag, markdown: html,
+                    period: "当期", unitCaption: nil),
+            ]
+        }
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: snapshot.denominator)
         return .resolved(
             payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
