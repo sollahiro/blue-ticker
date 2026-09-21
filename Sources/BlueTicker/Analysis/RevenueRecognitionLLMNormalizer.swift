@@ -150,32 +150,45 @@ enum RevenueRecognitionLLMNormalizer {
             warnings.append("llm_profit_disclosed_unresolved")
         }
 
-        let unitMultiplier: Double
-        switch unit {
-        case "yen":
-            unitMultiplier = 1
-        case "million_yen":
-            unitMultiplier = Financial.millionYen
-        default:
-            unitMultiplier = 1
-            needsReview = true
-            warnings.append("llm_unit_unresolved")
+        struct ParsedRow {
+            let label: String
+            let rawAmount: Double
+            let rawProfit: Double?
+            let rowKind: String
         }
-
-        var rows: [BreakdownRow] = []
+        var parsed: [ParsedRow] = []
         for raw in rawRows {
             guard let label = raw["label"] as? String,
                   let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
                   let rowKind = raw["row_kind"] as? String
             else { continue }
-            // profit は任意（JSON null も許容。null なら raw["profit"] as? NSNumber が自然に nil になる）。
-            let rawProfit = (raw["profit"] as? NSNumber)?.doubleValue
-            rows.append(BreakdownRow(
-                labelRaw: label, amount: rawAmount * unitMultiplier, share: nil,
-                profit: rawProfit.map { $0 * unitMultiplier }, rowKind: rowKind
+            parsed.append(ParsedRow(
+                label: label,
+                rawAmount: rawAmount,
+                rawProfit: (raw["profit"] as? NSNumber)?.doubleValue,
+                rowKind: rowKind
             ))
         }
-        guard !rows.isEmpty else { return (nil, audit) }
+        guard !parsed.isEmpty else { return (nil, audit) }
+
+        let scale = BreakdownLLMAmountScale.yenMultiplier(
+            declaredUnit: unit,
+            rawAmounts: parsed.map(\.rawAmount),
+            consolidatedSales: consolidatedSales
+        )
+        if scale.unresolved {
+            needsReview = true
+            warnings.append("llm_unit_unresolved")
+        }
+        let unitMultiplier = scale.multiplier
+
+        var rows: [BreakdownRow] = []
+        for row in parsed {
+            rows.append(BreakdownRow(
+                labelRaw: row.label, amount: row.rawAmount * unitMultiplier, share: nil,
+                profit: row.rawProfit.map { $0 * unitMultiplier }, rowKind: row.rowKind
+            ))
+        }
 
         // profit_disclosed の自己申告と実際の rows の整合性チェック（決定的）。
         let hasAnySegmentProfit = rows.contains { $0.rowKind == "segment" && $0.profit != nil }

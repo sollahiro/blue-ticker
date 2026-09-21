@@ -1086,6 +1086,7 @@ enum Xbrl {
         "TransactionsWithExternalCustomersIFRS",  // NTTなど（実データ検証済み、issue調査 2026-07-21）
         "RevenueIFRS",  // ファーストリテイリングなど（実データ検証済み、issue調査 2026-07-21）
         "Revenue2IFRS",  // 電通など報告セグメント収益タグ（実データ検証: S100XS0O、issue #163）
+        "NetSalesAndOperatingRevenueFromExternalCustomersIFRS",  // コナミなど売上高及び営業収入（外部）
     ]
 
     /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
