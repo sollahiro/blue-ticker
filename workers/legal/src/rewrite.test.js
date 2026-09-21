@@ -42,7 +42,7 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.match(html, /閲覧補助アプリ/);
   assert.match(
     html,
-    /金融商品取引法上の金融商品取引業者（投資助言・代理業者等）の登録を受けておりません/,
+    /金融商品取引法上の金融商品取引業者（投資助言・代理業者等）の登録を受けていません/,
   );
   assert.match(html, /生成AI等による要約/);
   assert.match(html, /有効期限の短い匿名トークン/);
@@ -55,14 +55,15 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.match(html, /Blue Ticker 免責事項およびプライバシーポリシー/);
   assert.match(
     html,
-    /このページを Blue Ticker の免責およびプライバシー方針の正本とします/,
-  );
-  assert.match(
-    html,
     /iOSのKeychainに保存された匿名トークンやApp Attestの記録は、アプリ削除だけでは消えない場合があります/,
   );
   assert.match(html, /広告用識別子ではなく/);
-  assert.match(
+  assert.equal((html.match(/広告[用]?識別子/g) || []).length, 1);
+  assert.doesNotMatch(html, /正本/);
+  assert.doesNotMatch(html, /いたしかねます/);
+  assert.doesNotMatch(html, /お知らせいたします/);
+  assert.doesNotMatch(html, /運営者は保証を行いません/);
+  assert.doesNotMatch(
     html,
     /App Attestの鍵は、正規アプリからのアクセス確認と不正利用防止のための証明用であり、広告識別子ではありません/,
   );
