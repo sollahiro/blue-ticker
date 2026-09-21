@@ -396,6 +396,26 @@ import Testing
                 code: "581A", cacheVersion: companyIconsManualCacheVersion, sourceURL: png))
     }
 
+    /// 603A: 欠行。先頭 rel=icon が 16.jpg のため公式 apple-touch 256.jpg。
+    @Test func pinsIgridSolutionsMissingListedManualImageURL() {
+        let jpeg = "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"
+        #expect(
+            CompanyIconOriginOverride.manualSources["603A"] == .imageURL(jpeg))
+        #expect(
+            CompanyIconOriginOverride.pronexusDisclosureHomepages["603A"] == nil)
+        #expect(
+            companyIconShouldRefresh(
+                code: "603A", cacheVersion: companyIconsCacheVersion,
+                sourceURL: "https://igrid.co.jp"))
+        #expect(
+            companyIconShouldRefresh(
+                code: "603A", cacheVersion: companyIconsManualCacheVersion,
+                sourceURL: "https://igrid.co.jp"))
+        #expect(
+            !companyIconShouldRefresh(
+                code: "603A", cacheVersion: companyIconsManualCacheVersion, sourceURL: jpeg))
+    }
+
     @Test func lowResHoldingsIconsRefreshUntilManualImageURLIsStored() {
         let pinned: [(String, String, String)] = [
             ("8473", "https://www.sbigroup.co.jp", "https://www.sbisec.co.jp/apple-touch-icon.png"),
