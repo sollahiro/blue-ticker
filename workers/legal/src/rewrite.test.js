@@ -40,13 +40,32 @@ test("privacy pages name the operator Sorahiro Shuto", () => {
 test("privacy disclaimer matches product facts without overbroad liability", () => {
   const html = readFileSync(join(publicDir, "index.html"), "utf8");
   assert.match(html, /閲覧補助アプリ/);
-  assert.match(html, /金融商品取引法上の金融商品取引業者/);
+  assert.match(
+    html,
+    /金融商品取引法上の金融商品取引業者（投資助言・代理業者等）の登録を受けておりません/,
+  );
   assert.match(html, /生成AI等による要約/);
-  assert.match(html, /匿名トークン/);
-  assert.match(html, /永続/);
+  assert.match(html, /有効期限の短い匿名トークン/);
+  assert.match(
+    html,
+    /運営者のデータベースにIPアドレスを永続的に保存することはありません/,
+  );
   assert.match(html, /blueticker@sollahiro.com/);
   assert.match(html, /href="\/blue-ticker\/terms"/);
   assert.match(html, /Blue Ticker 免責事項およびプライバシーポリシー/);
+  assert.match(
+    html,
+    /このページを Blue Ticker の免責およびプライバシー方針の正本とします/,
+  );
+  assert.match(
+    html,
+    /iOSのKeychainに保存された匿名トークンやApp Attestの記録は、アプリ削除だけでは消えない場合があります/,
+  );
+  assert.match(html, /広告用識別子ではなく/);
+  assert.match(
+    html,
+    /App Attestの鍵は、正規アプリからのアクセス確認と不正利用防止のための証明用であり、広告識別子ではありません/,
+  );
   assert.doesNotMatch(html, /Crashlytics/);
   assert.doesNotMatch(html, /Firebase/);
   assert.doesNotMatch(html, /Sentry/);
@@ -57,6 +76,11 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.doesNotMatch(html, /MCP/);
   assert.doesNotMatch(html, /ChatGPT/);
   assert.doesNotMatch(html, /2026-09-19/);
+  assert.doesNotMatch(html, /端末を識別できない/);
+  assert.doesNotMatch(
+    html,
+    /端末内のデータや認証情報は、アプリをアンインストールすることで消去されます/,
+  );
 });
 
 test("terms page is auxiliary to the original filing", () => {

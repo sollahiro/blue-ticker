@@ -26,6 +26,7 @@ App Store 用の公開ページは Cloudflare Worker `workers/legal/`（静的 H
 - HAPIS は運営者自身の Cloudflare Workers（制御面 `hapis`、ゲートウェイ `hapis-blue-ticker-production`）。外部銘柄ベンダーではない
 - 制御面・ゲートウェイとも `observability.enabled`、全件サンプリング。Logpush 先は無い。Workers Logs の保持は Cloudflare プラン（無料 3 日 / 有料 7 日）
 - HAPIS D1 に IP は保存しない。ゲートウェイは `cf-connecting-ip` / `x-forwarded-for` を上流へ転送しない
-- App Attest: challenge は 5 分、消費後およそ 1 時間で削除。attestation / assertion 本体は保存しない。`attested_keys`（key_id・公開鍵・sign_count）は期限なし
+- App Attest: challenge は 5 分、消費後およそ 1 時間で削除。attestation / assertion 本体は保存しない。`attested_keys`（key_id・公開鍵・sign_count）は期限なし。key_id は広告識別子ではなく、不正防止の証明用識別子（App Store 申告は Device ID）
 - トークン TTL 約 1 時間。JWT は D1 に置かない
+- consumer JWT と App Attest 鍵レコードは端末の Keychain。アプリ削除後も OS / 利用者が消すまで残ることがある
 - リストと保有情報は SwiftData + CloudKit（`iCloud.com.sollahiro.BlueTicker`）。HAPIS / blt-server には送らない
