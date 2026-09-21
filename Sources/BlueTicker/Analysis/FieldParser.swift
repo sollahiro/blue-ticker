@@ -44,9 +44,14 @@ func detectAccountingStandard(_ tagElements: XbrlTagElements) -> String {
 // MARK: - FieldSet Builders
 
 /// XbrlTagElements から Duration（フロー）コンテキストを正規化して FieldSet を返す。
+///
+/// `fillMissingIfrsPnLFromNonConsolidated` は Summary 組立専用。notes / breakdown は
+/// 渡さない。IFRS P&L スロット（売上 / 営業利益 / 純利益）に連結候補が無い期だけ、
+/// 純粋な `*_NonConsolidatedMember` を埋める。
 func fieldSetFromDuration(
     _ tagElements: XbrlTagElements,
-    financialTags: Set<String>? = nil
+    financialTags: Set<String>? = nil,
+    fillMissingIfrsPnLFromNonConsolidated: Bool = false
 ) -> FieldSet {
     var fieldSet = normalizeConsolidatedDuration(tagElements)
 
@@ -56,6 +61,9 @@ func fieldSetFromDuration(
         for (tag, fv) in ncSet where fieldSet[tag] == nil {
             fieldSet[tag] = fv
         }
+    }
+    if fillMissingIfrsPnLFromNonConsolidated {
+        mergeMissingPnLFromPureNonConsolidatedDuration(into: &fieldSet, from: tagElements)
     }
     // Instant コンテキストのみのタグ（会計基準マーカー等）も存在記録として追加
     for tag in tagElements.keys where fieldSet[tag] == nil {
@@ -192,6 +200,46 @@ private func isPureNonConsolidated(_ ctx: String, patterns: [String]) -> Bool {
     return patterns.contains(where: {
         ctx == "\($0)_NonConsolidatedMember" || ctx == "\($0)_NonConsolidated"
     })
+}
+
+private func exactPureNonConsolidatedValue(
+    in ctxMap: [String: Double], patterns: [String]
+) -> Double? {
+    for pattern in patterns {
+        if let value = ctxMap["\(pattern)_NonConsolidatedMember"]
+            ?? ctxMap["\(pattern)_NonConsolidated"]
+        {
+            return value
+        }
+    }
+    return nil
+}
+
+private func mergeMissingPnLFromPureNonConsolidatedDuration(
+    into fieldSet: inout FieldSet,
+    from tagElements: XbrlTagElements
+) {
+    // タグ単位ではなく Extractor スロット単位。連結 `RevenueIFRS` がある期に
+    // `NetSalesIFRS` の NC を入れると、候補順で親会社売上が勝つ。
+    for slot in Xbrl.summaryIfrsPnLSlots {
+        let hasConsolidatedCurrent = slot.contains { tag in fieldSet[tag]?.current != nil }
+        let hasConsolidatedPrior = slot.contains { tag in fieldSet[tag]?.prior != nil }
+        guard !hasConsolidatedCurrent || !hasConsolidatedPrior else { continue }
+        for tag in slot {
+            guard let ctxMap = tagElements[tag] else { continue }
+            let ncCurrent = exactPureNonConsolidatedValue(
+                in: ctxMap, patterns: Xbrl.durationContextPatterns)
+            let ncPrior = exactPureNonConsolidatedValue(
+                in: ctxMap, patterns: Xbrl.priorDurationContextPatterns)
+            guard ncCurrent != nil || ncPrior != nil else { continue }
+            var fv = fieldSet[tag] ?? FieldValue(current: nil, prior: nil)
+            if !hasConsolidatedCurrent, fv.current == nil { fv.current = ncCurrent }
+            if !hasConsolidatedPrior, fv.prior == nil { fv.prior = ncPrior }
+            if fv.current != nil || fv.prior != nil {
+                fieldSet[tag] = fv
+            }
+        }
+    }
 }
 
 private func normalizeConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {

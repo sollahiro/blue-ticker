@@ -54,6 +54,21 @@ import Foundation
         #expect(result.accountingStandard == "IFRS")
     }
 
+    @Test func testIfrsProfitLossIFRSWhenParentAttributableAbsent() {
+        let fs = makeFieldSet(("ProfitLossIFRS", 25_382_000_000.0, nil))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.netProfit == 25_382_000_000.0)
+    }
+
+    @Test func testIfrsParentAttributableBeatsProfitLossIFRS() {
+        let fs = makeFieldSet(
+            ("ProfitLossAttributableToOwnersOfParentIFRS", 90.0, nil),
+            ("ProfitLossIFRS", 100.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
+        #expect(result.netProfit == 90.0)
+    }
+
     @Test func testIfrsTotalNetRevenues() {
         let fs = makeFieldSet(
             ("TotalNetRevenuesIFRS", 48_036_704_000_000.0, 45_095_325_000_000.0)
