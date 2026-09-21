@@ -128,6 +128,7 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 - 欠測で公式の正方形が無いとき、検証済み OGP（多く 1200×630）はピンしてよい（グリコ型）
 - 正方形化するとワードマークだけが小さくなる OGP は不採用 → 台帳 `low_vis_no_source`
 - 白地パッド 512 はユーザー指示または差し替え GO のあと。欠測ピンで勝手にやらない
+- 縦積み（スローガン／マーク／社名）はユーザーが中央マークのみ指定したらワンオフクロップ→CDN。公式の横長ロックアップ URL は残さない
 
 ## 公式 origin / 画像 URL
 
@@ -246,7 +247,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **マップ ≠ 格納。** 公式 URL が Git にあっても `company_icons` 行が無いことがある。キャッチアップを `--codes` に入れる。GET できない公式は CDN 化するか台帳 `tls`。公式 URL を残したまま SQL upsert しない
 - **TLS handshake hang。** TCP 443 成功でも ClientHello に応答しないホストがある（やまや `www.yamaya.jp`）。FaviconFetcher 8s でも openssl 15s でも同じ。グローバル timeout を伸ばさない
 - **CDN 確認の UA。** カスタムドメインはデフォルト Python/curl UA の HEAD/GET が 403、ブラウザ UA の GET は 200 になりうる
-- **ユーザー添付・ワンオフ 512 白地。** 公式低解像をマップに残さない。CDN のみ（7236 型）
+- **ユーザー添付・ワンオフ 512 白地。** 公式低解像や横長／縦積みロックアップをマップに残さない。中央マークのみ指定ならワンオフクロップして CDN（7236 型）
 - **Wayback。** ライブ origin が TLS 不能なときのバイト源にはしてよい。マップ禁止
 - **SNS フッター。** Facebook / X 等の共有ボタン画像は会社マークではない。`logo` パスの部分一致で拾わない
 - **OGP スクリーンショット。** トップページ全体のキャプチャはアイコンではない
