@@ -34,7 +34,7 @@ XBRL → statement / notes / breakdown（正本）
 | 項目 | 方針 |
 |---|---|
 | 格納 | `company_financials` 維持 |
-| `fin-vN` | 存続。IA 切替（値の意味が変わらない配線）ではバンプしない。Extractor の符号・抽出意味が変わったら上げる |
+| `fin-vN` | 存続。破壊的変更だけバンプ（`.agents/rules/versioning.md`）。IA 切替や既存の正しい値を保つ細粒度修正では上げない |
 | 新規生値 | まず正本へ。financials に足さない |
 | 組立 | statement → notes → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ** |
 | IBD | 有利子負債の**項目タグを合算**する。statement にある項目（内訳でも「社債及び借入金」のような集約でも、BS の粒度）を使う。その上に notes の内訳を足さない（二重計上）。statement に無い項目は notes のタグを足してよい（典型はリース帳簿。`borrowings_schedule` 区分 / `lease_liabilities`）。notes の合計行で IBD 全体を置き換えない。金融負債そのものは使わない |
