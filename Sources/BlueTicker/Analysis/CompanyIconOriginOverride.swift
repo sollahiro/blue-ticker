@@ -75,6 +75,8 @@ enum CompanyIconOriginOverride {
     /// 2026-09-20 weekly: listed × company_icons 欠行。自動 pipeline 不能（紙面・URL無し・
     /// Pronexus・先頭 rel=icon が極小）の公式画像。5805 の origin apple-touch は小冊子なので不採用。
     /// 7236 ティラドは添付高解像度ロゴを白地・余白の 512 PNG にして R2 CDN へ（公式 192 は低解像）。
+    /// 2026-09-21 weekly: 公告 URL 無し／紙面／Pronexus の欠行。公式 apple-touch / 正方形 /
+    /// 検証済み OGP。フッター SNS・別名ドメイン・横長ワードマーク OGP は載せない。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -195,6 +197,30 @@ enum CompanyIconOriginOverride {
             "https://www.msdm-hd.com/jp/app-files/img/symbol/apple-touch-icon.png"),
         "7236": .imageURL("https://icons.sollahiro.com/company-icons/7236.png"), // R2 CDN white-padded TRAD // pragma: allowlist secret
         "7414": .imageURL("https://www.onoken.co.jp/apple-touch-icon.png"),
+        "6349": .imageURL("https://www.komori.com/global_common/img/webclip.png"),
+        "8370": .imageURL("https://www.kiyobank.co.jp/assets/image/common/img/opg.jpg"),
+        "4410": .imageURL("https://www.harima.co.jp/apple_touch_icon.png"),
+        "8005": .imageURL(
+            "https://www.scroll.jp/wp-content/themes/scr-corporate/common/img/base/apple-touch-icon.png"),
+        "6999": .imageURL("https://www.koaglobal.com/common/images/iosicon.png"),
+        "7630": .imageURL("https://www.ichibanya.co.jp/apple-touch-icon.png"),
+        "2698": .imageURL("https://www.cando-web.co.jp/apple-touch-icon.png"),
+        "4998": .imageURL("https://www.fumakilla.co.jp/apple-touch-icon.png"),
+        "8386": .imageURL("https://www.114bank.co.jp/apple-touch-icon.png"),
+        "8160": .imageURL(
+            "https://www.kisoji.co.jp/themes/kisoji/assets/favicon/apple-touch-icon.png"),
+        "8275": .imageURL("https://www.forval.co.jp/webclip.png"),
+        "6941": .imageURL("https://www.yamaichi.co.jp/img/apple-touch-icon-152x152.png"),
+        "8387": .imageURL(
+            "https://www.shikokubank.co.jp/apple-touch-icon-precomposed.png"),
+        "1892": .imageURL("https://www.tokura.co.jp/media/001/202602/ogp.png"),
+        "1798": .imageURL("https://www.moriya-s.co.jp/files/favicon/apple-touch-icon.png"),
+        "4635": .imageURL("https://www.tokyoink.co.jp/apple-touch-icon.png"),
+        "7879": .imageURL("https://www.noda-co.jp/common/favicon/apple-touch-icon.png"),
+        "2329": .imageURL("https://www.tfc.co.jp/cms/apple-touch-icon.png"),
+        "7715": .imageURL(
+            "https://www.naganokeiki.co.jp/common/favicon/apple-touch-icon.png"),
+        "9622": .imageURL("https://www.space-tokyo.co.jp/assets/img/apple-touch-icon.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {

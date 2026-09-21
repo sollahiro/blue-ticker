@@ -40,3 +40,27 @@
 | 1879 | low_vis_no_source | 2026-09-20 | 新日本建設。ヘッダー logo 372×78。正方形アイコン無し |
 | 8228 | low_vis_no_source | 2026-09-20 | マルイチ産商。favicon 48×48 ICO のみ |
 | 7570 | low_vis_no_source | 2026-09-20 | 橋本総業HD。apple-touch が単色青矩形のみ |
+| 6101 | low_vis_no_source | 2026-09-21 | ツガミ。ヘッダー GIF 202×57 のみ |
+| 7483 | needs_link | 2026-09-21 | ドウシシャ。公告 Pronexus。favicon 48×48 / 横長 logo のみ |
+| 8079 | low_vis_no_source | 2026-09-21 | 正栄食品。lh_logo 339×47 / favicon 16×16 |
+| 6023 | timeout | 2026-09-21 | ダイハツインフィニアース。d-infi.com timeout |
+| 6652 | low_vis_no_source | 2026-09-21 | IDEC。正方形なし（IR 写真・横長） |
+| 6517 | needs_link | 2026-09-21 | デンヨー。raster なし（SVG logo / favicon 48） |
+| 4078 | low_vis_no_source | 2026-09-21 | 堺化学。favicon 32×32 のみ |
+| 6516 | low_vis_no_source | 2026-09-21 | 山洋電気。先頭 favicon 極小、img-logo 539×65 |
+| 5142 | low_vis_no_source | 2026-09-21 | アキレス。favicon 16×16。og:image はスライド写真 |
+| 6062 | needs_link | 2026-09-21 | チャーム・ケア。favicon 48×48 のみ |
+| 3320 | needs_link | 2026-09-21 | クロスプラス。favicon 48×48 のみ |
+| 3947 | timeout | 2026-09-21 | ダイナパック。公式 origin 取得 timeout |
+| 9357 | timeout | 2026-09-21 | 名港海運。公式 origin 取得 timeout |
+| 9612 | low_vis_no_source | 2026-09-21 | ラックランド。logo 554×358 |
+| 7721 | timeout | 2026-09-21 | 東京計器。公式 origin 取得 timeout |
+| 7898 | low_vis_no_source | 2026-09-21 | ウッドワン。favicon 32×32 のみ |
+| 1967 | low_vis_no_source | 2026-09-21 | ヤマト（建設）。tag-logo 51×50 |
+| 3486 | needs_link | 2026-09-21 | グローバル・リンク・マネジメント。公式 origin 未確定 |
+| 5986 | timeout | 2026-09-21 | モリテックスチール。公式 origin 取得 timeout |
+| 3817 | needs_link | 2026-09-21 | SRA HD。ページ内の Facebook アイコン以外に正方形なし |
+| 6638 | low_vis_no_source | 2026-09-21 | ミマキ。公式 OGP 1200×630 ワードマークのみ |
+| 8877 | low_vis_no_source | 2026-09-21 | エスリード。公式 OGP 1200×630 ワードマークのみ |
+| 8141 | low_vis_no_source | 2026-09-21 | 新光商事。OGP がトップページのスクリーンショット |
+| 7595 | low_vis_no_source | 2026-09-21 | アルゴグラフィックス。corp.argo-graph.co.jp は 16×16 と横長 logo のみ |
