@@ -10,7 +10,7 @@ App Store 用の免責・プライバシー方針および利用規約。静的 
 - https://sollahiro.com/blue-ticker/terms
 - https://blt-legal.sollahiro.workers.dev/
 
-プライバシーの正本は `workers/legal/public/index.html`（`/privacy.html` も同じ本文）。利用規約は `workers/legal/public/terms.html`。
+公開ページの本文は `workers/legal/public/index.html`（`privacy.html` も同じ）。利用規約は `workers/legal/public/terms.html`。
 
 ## デプロイ
 
