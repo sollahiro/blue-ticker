@@ -362,6 +362,11 @@ enum BreakdownNormalizer {
     ]
 
     private static let countBasisEliminationMemberName = "UnallocatedAmountsAndEliminationMember"
+    /// セグメント間消去・調整の符号は EntityTotal（連結 BS 等）との一致で決める。
+    private static let countBasisEliminationMemberNames: [String] = [
+        "UnallocatedAmountsAndEliminationMember",
+        "ReconcilingItemsMember",
+    ]
     private static let countBasisReportableSegmentsMemberName = "ReportableSegmentsMember"
     /// 人数は整数。タグ付き「合計」列と分母の一致判定に 5% は使わない。
     private static let countBasisPeopleEqualityEpsilon = 0.5
@@ -422,15 +427,19 @@ enum BreakdownNormalizer {
     /// `denominatorTag` には実際に採用した指標タグ名を残す。
     private static func normalizeSegmentMetric(
         facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
-        labelsByTag: [String: String], memberParents: [String: String] = [:]
+        labelsByTag: [String: String], memberParents: [String: String] = [:],
+        allowNonConsolidatedEntityTotal: Bool = true
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
         }) else { return nil }
         let perMember = withEntityTotal(
-            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag)
+            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag,
+            allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
         guard !perMember.isEmpty else { return nil }
-        let total = resolveEntityTotal(facts: facts, tag: amountTag)?.value
+        let total = resolveEntityTotal(
+            facts: facts, tag: amountTag,
+            allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)?.value
         // 分母=segment+reconciling は本軸の正方針なので derived 警告は立てない。
         // EntityTotal との乖離だけ needs_review にする。
         return buildCountBasisSnapshot(
@@ -446,7 +455,8 @@ enum BreakdownNormalizer {
     ) -> BreakdownSnapshot? {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
-            warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents)
+            warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false)
     }
 
     /// 減価償却費及び償却費。
@@ -798,23 +808,25 @@ enum BreakdownNormalizer {
         abs(a - b) <= countBasisPeopleEqualityEpsilon
     }
 
-    /// `UnallocatedAmountsAndEliminationMember` を足すと分母からずれ、引くと ±5% に収まるとき
-    /// 符号を反転する（NTT S100YCP3 のセグメント間取引消去）。足す方が合う場合は正のまま
+    /// 消去・調整 member を足すと EntityTotal からずれ、引くと ±5% に収まるとき符号を反転する
+    /// （NTT S100YCP3 / NTN 6472 の `ReconcilingItemsMember`）。足す方が合う場合は正のまま
     /// （味の素 S100VXJA の未配賦 R&D）。
     private static func applyEliminationSign(
         amounts: inout [String: Double], kinds: [String: String], total: Double?
     ) {
         guard let total, total > 0 else { return }
-        let member = countBasisEliminationMemberName
-        guard kinds[member] == "reconciling", let value = amounts[member], value != 0 else { return }
-
-        var without = kinds
-        without[member] = "subtotal"
-        let sumExcl = reconciledAmount(kinds: without, amounts: amounts)
-        let addErr = abs(sumExcl + value - total) / total
-        let subErr = abs(sumExcl - value - total) / total
-        if subErr <= 0.05, addErr > 0.05 {
-            amounts[member] = -abs(value)
+        for member in countBasisEliminationMemberNames {
+            guard kinds[member] == "reconciling", let value = amounts[member], value != 0 else {
+                continue
+            }
+            var without = kinds
+            without[member] = "subtotal"
+            let sumExcl = reconciledAmount(kinds: without, amounts: amounts)
+            let addErr = abs(sumExcl + value - total) / total
+            let subErr = abs(sumExcl - value - total) / total
+            if subErr <= 0.05, addErr > 0.05 {
+                amounts[member] = -abs(value)
+            }
         }
     }
 
@@ -851,20 +863,38 @@ enum BreakdownNormalizer {
     /// セグメント dimension が付かない当期の全社合計 fact（表の「連結財務諸表計上額」列）。
     /// `resolvePerMember` は primaryMember 必須のため、ここでのみ拾う。
     /// employees / rd の人数・費用基準は呼ばない（既存の全社合計は呼び出し側の `total`）。
-    private static func resolveEntityTotal(facts: [BreakdownFact], tag: String) -> BreakdownFact? {
+    ///
+    /// 連結を優先し、連結が無ければ非連結へフォールバックする（他軸の従来動作）。
+    /// `segment_assets` だけフォールバックしない: 銀行は連結の無 dimension `NoncurrentAssets`
+    /// が無く、個別固定資産を EntityTotal に載せると表のセグメント行・分母は正しいのに
+    /// `segment_assets_entity_total_differs_from_table_total` が立つ
+    ///（8306 `S100YJQO` / 8411 `S100YF8Y` / 8309 `S100YBGM`）。
+    /// セグメント member 行の抽出（`resolvePerMember`）は変えない。
+    private static func resolveEntityTotal(
+        facts: [BreakdownFact], tag: String, allowNonConsolidatedEntityTotal: Bool = true
+    ) -> BreakdownFact? {
         let candidateFacts = facts.filter {
-            $0.tag == tag && isCurrentPeriod($0.contextRef) && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
+            $0.tag == tag && isCurrentPeriod($0.contextRef)
+                && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
         }
-        let consolidatedFacts = candidateFacts.filter(isConsolidated)
-        let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
-        return source.sorted { $0.contextRef < $1.contextRef }.first
+        let consolidatedFacts = candidateFacts.filter {
+            isConsolidated($0) && !($0.contextRef.contains("NonConsolidatedMember"))
+        }
+        if !consolidatedFacts.isEmpty {
+            return consolidatedFacts.sorted { $0.contextRef < $1.contextRef }.first
+        }
+        guard allowNonConsolidatedEntityTotal else { return nil }
+        return candidateFacts.sorted { $0.contextRef < $1.contextRef }.first
     }
 
     private static func withEntityTotal(
-        _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String
+        _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String,
+        allowNonConsolidatedEntityTotal: Bool = true
     ) -> [String: BreakdownFact] {
         guard perMember[Xbrl.entityTotalMemberName] == nil,
-              let entity = resolveEntityTotal(facts: facts, tag: tag)
+              let entity = resolveEntityTotal(
+                facts: facts, tag: tag,
+                allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
         else { return perMember }
         var result = perMember
         result[Xbrl.entityTotalMemberName] = entity

@@ -1729,6 +1729,157 @@ import Foundation
         #expect(entity.amount == 999)
     }
 
+    /// SPEC_ORACLE: 銀行 8306/8411/8309。連結の無 dimension `NoncurrentAssets` が無く、
+    /// 個別（NonConsolidatedMember）固定資産が EntityTotal に載ると表合計は分母一致なのに NR。
+    /// 分母は v2 どおり segment+reconciling。個別 EntityTotal は比較にも行にも使わない。
+    @Test func metricDoesNotCompareNonConsolidatedEntityTotalWhenTableTotalMatches() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "NoncurrentAssets",
+                contextRef: "CurrentYearInstant_RetailAndDigitalBusinessGroupMember",
+                dimensions: ["OperatingSegmentsAxis": "RetailAndDigitalBusinessGroupMember"],
+                value: 333_050_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "NoncurrentAssets",
+                contextRef: "CurrentYearInstant_OtherMember",
+                dimensions: ["OperatingSegmentsAxis": "OtherMember"],
+                value: 488_297_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "NoncurrentAssets",
+                contextRef: "CurrentYearInstant_TotalMember",
+                dimensions: ["OperatingSegmentsAxis": "TotalMember"],
+                value: 821_347_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "NoncurrentAssets",
+                contextRef: "CurrentYearInstant_NonConsolidatedMember",
+                dimensions: ["ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember"],
+                value: 22_785_517_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 821_347_000_000)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        #expect(!snapshot.rows.contains { $0.labelRaw == Xbrl.entityTotalMemberName })
+        let tableTotal = try #require(snapshot.rows.first { $0.labelRaw == "TotalMember" })
+        #expect(tableTotal.rowKind == "subtotal")
+        #expect(tableTotal.amount == 821_347_000_000)
+    }
+
+    /// SPEC_ORACLE: contextRef に NonConsolidatedMember があり dimensions が空でも個別扱いにする。
+    @Test func metricDoesNotCompareNonConsolidatedEntityTotalFromContextRefOnly() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "NoncurrentAssets", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "NoncurrentAssets", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "NoncurrentAssets",
+                contextRef: "CurrentYearInstant_NonConsolidatedMember",
+                dimensions: [:], value: 9_999, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.rows.contains { $0.labelRaw == Xbrl.entityTotalMemberName })
+    }
+
+    /// SPEC_ORACLE: 他軸（D&A）は個別 EntityTotal フォールバックを残す。全軸から個別を外さない。
+    @Test func otherMetricAxesStillFallBackToNonConsolidatedEntityTotal() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "DepreciationSegmentInformation",
+                contextRef: "CurrentYearDuration_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "DepreciationSegmentInformation",
+                contextRef: "CurrentYearDuration_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 100, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "DepreciationSegmentInformation",
+                contextRef: "CurrentYearDuration_NonConsolidatedMember",
+                dimensions: ["ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember"],
+                value: 9_999, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeDepreciationAndAmortization(facts: facts))
+        #expect(snapshot.denominator == 100)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains(
+            "depreciation_and_amortization_entity_total_differs_from_table_total"))
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 9_999)
+    }
+
+    /// SPEC_ORACLE: ミニストップ 9946 型。差額表の非分類（全社資産）を reconciling に足すと EntityTotal と一致。
+    @Test func metricEnrichesDifferenceTableReconcilingToMatchEntityTotal() throws {
+        let docID = "S100Y4UH"
+        let xbrlRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+        let dir = xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let base = try #require(
+            BreakdownNormalizer.normalizeSegmentAssets(
+                facts: facts, labelsByTag: XBRLUtils.breakdownMemberLabels(in: dir)))
+        let snapshot = try #require(
+            BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(snapshot: base, xbrlDir: dir))
+        #expect(snapshot.rows.contains { $0.rowKind == "reconciling" && ($0.label ?? "").contains("全社資産") })
+        #expect(snapshot.needsReview == false)
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(abs(snapshot.denominator - entity.amount) / entity.amount <= 0.0001)
+    }
+
+    /// SPEC_ORACLE: NTN 6472 S100Y8YZ。ReconcilingItems は消去として引き、分母=連結 BS 資産合計。
+    @Test func metricFlipsReconcilingItemsSignToMatchConsolidatedEntityTotal() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_JapanMember",
+                dimensions: ["OperatingSegmentsAxis": "JapanReportableSegmentMember"],
+                value: 705_865_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_AmericasMember",
+                dimensions: ["OperatingSegmentsAxis": "AmericasReportableSegmentMember"],
+                value: 177_257_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_EuropeMember",
+                dimensions: ["OperatingSegmentsAxis": "EuropeReportableSegmentMember"],
+                value: 173_068_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_AsiaMember",
+                dimensions: ["OperatingSegmentsAxis": "AsiaReportableSegmentMember"],
+                value: 232_354_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReportableSegmentsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
+                value: 1_288_546_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_ReconcilingItemsMember",
+                dimensions: ["OperatingSegmentsAxis": "ReconcilingItemsMember"],
+                value: 409_870_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 878_676_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(abs(snapshot.denominator - 878_676_000_000) <= 2_000_000)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        let reconciling = try #require(
+            snapshot.rows.first { $0.labelRaw == "ReconcilingItemsMember" })
+        #expect(reconciling.amount == -409_870_000_000)
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 878_676_000_000)
+    }
+
     @Test func metricDenominatorKeepsSmallReconcilingInShareBase() throws {
         // 調整が総額の5%未満でも、報告セグメント小計へ分母を落とさない。
         let facts = [
