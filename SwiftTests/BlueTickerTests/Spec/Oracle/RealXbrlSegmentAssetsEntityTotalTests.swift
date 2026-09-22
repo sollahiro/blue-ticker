@@ -107,19 +107,33 @@ import Foundation
         #expect(entity.amount == 878_676_000_000)
     }
 
-    /// アコム S100YBXA / ミニストップ S100Y4UH: 差額表非分類を reconciling に載せ分母=BS。
+    /// アコム S100YBXA / ミニストップ S100Y4UH: 差額表非分類を reconciling に載せ分母=連結 BS。
     @Test func acomAndMinistopDifferenceTableReconcilingMatchesBs() async throws {
         for docID in ["S100YBXA", "S100Y4UH"] {
             guard await Self.ensureAvailable(docID) else { continue }
             let snapshot = try #require(Self.snapshot(docID))
-            let tableTotal = try #require(
-                snapshot.rows.first {
-                    $0.rowKind == "subtotal"
-                        && abs($0.amount - snapshot.denominator) / snapshot.denominator <= 0.05
-                })
-            #expect(tableTotal.rowKind == "subtotal")
+            let entity = try #require(
+                snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
             #expect(snapshot.needsReview == false)
             #expect(!snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+            #expect(!snapshot.warnings.contains("segment_assets_segment_sum_far_from_total"))
+            #expect(abs(snapshot.denominator - entity.amount) / entity.amount <= 0.0001)
         }
+    }
+
+    /// アコム S100YBXA: 「その他」区分と同額の差額表 reconciling は落とし、分母=1,616,379 百万円相当。
+    @Test func acomDropsDuplicateDifferenceTableReconciling() async throws {
+        guard await Self.ensureAvailable("S100YBXA") else { return }
+        let snapshot = try #require(Self.snapshot("S100YBXA"))
+        let duplicateLabel = "その他の区分の資産"
+        #expect(!snapshot.rows.contains {
+            $0.rowKind == "reconciling"
+                && ($0.label ?? "").replacingOccurrences(of: " ", with: "").contains(
+                    duplicateLabel.replacingOccurrences(of: " ", with: ""))
+        })
+        let entity = try #require(
+            snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 1_616_379_000_000)
+        #expect(abs(snapshot.denominator - entity.amount) <= 2_000_000)
     }
 }

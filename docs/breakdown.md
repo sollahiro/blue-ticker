@@ -19,7 +19,7 @@
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
 | `geography` | 地域別注記 |
-| `segment_assets` | 報告セグメントごとの資産（銀行の「固定資産」含む） |
+| `segment_assets` | 連結資産の内訳（報告セグメント + 非分類。銀行の「固定資産」含む） |
 | `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費（J-GAAPは減価償却費） |
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
 | `impairment_loss` | 報告セグメントごとの減損損失 |
@@ -46,7 +46,7 @@
 - `not_found` は行を作らない。business の E/F/unknown は `not_applicable` プレースホルダ。REST と開発用 MCP は 404＋ボディ `reason`（200 化しない）。
 - 対象母集団: business/geography は上場全体（日経225は処理順の優先のみ）。employees / rd / goodwill および報告セグメント別指標軸は日経225。read は Fly 専用（ingest 時に LLM 計算）。処理順は各社の最新有報 → 前年以降。同一年次内は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決）。
-- 報告セグメント別指標の分母は常に segment + reconciling（表の小計・EntityTotal は行として保持し、分母切替には使わない）。
+- 報告セグメント別指標の分母は通常 segment + reconciling（表の小計・EntityTotal は行として保持）。`segment_assets` は連結の無 dimension EntityTotal（連結 BS 計上額）があるとき分母をそれに固定し、銀行の固定資産など EntityTotal が無いときだけ segment + reconciling。差額表 reconciling が既存 segment 行と同額のときは reconciling を落とす（ラベル非依存）。
 
 ## 非目標
 

@@ -606,7 +606,7 @@ public extension BltServerContext {
 
 private extension BltServerContext {
     /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
-    /// 分母は normalizer が segment + reconciling で決定論に組み立てる（表小計は行のみ）。
+    /// `segment_assets` は連結資産の内訳（segment + 非分類 reconciling、分母=連結 EntityTotal）。
     func resolveSegmentMetricBreakdown(docID: String, axis: String) async -> BreakdownResolveResult {
         guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)

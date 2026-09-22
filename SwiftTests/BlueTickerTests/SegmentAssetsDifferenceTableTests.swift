@@ -70,6 +70,42 @@ import Testing
         #expect(rows[0].amountYen == 25_000_000)
     }
 
+    /// アコム型: segment と同額の差額表行は reconciling に載せず、分母=EntityTotal。
+    @Test func enrichDropsDifferenceRowMatchingSegmentAmount() throws {
+        let otherMember = "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"
+        let facts = [
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_SegmentAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
+                value: 100_000_000, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant_OtherMember",
+                dimensions: ["OperatingSegmentsAxis": otherMember],
+                value: 40_000_000, label: nil, unitRef: "JPY", decimals: "0"),
+            BreakdownFact(
+                tag: "Assets", contextRef: "CurrentYearInstant",
+                dimensions: [:], value: 200_000_000, label: nil, unitRef: "JPY", decimals: "0"),
+        ]
+        let base = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        let body = """
+        <table><tr><td>資産</td><td>当連結会計年度（百万円）</td></tr>
+        <tr><td>その他の区分の資産</td><td>40</td></tr>
+        <tr><td>本社資産</td><td>60</td></tr>
+        </table>
+        """
+        let dir = try writeFixtureHtml(body)
+        let enriched = try #require(
+            BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(snapshot: base, xbrlDir: dir))
+        #expect(enriched.denominator == 200_000_000)
+        #expect(!enriched.rows.contains {
+            $0.rowKind == "reconciling" && ($0.label ?? "").contains("その他")
+        })
+        #expect(enriched.rows.contains { $0.rowKind == "reconciling" && ($0.label ?? "").contains("本社") })
+        let reconciled = enriched.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        #expect(abs(reconciled - 200_000_000) <= 1)
+    }
+
     @Test func enrichSkipsWhenXbrlReconcilingAlreadyPresent() throws {
         let facts = [
             BreakdownFact(

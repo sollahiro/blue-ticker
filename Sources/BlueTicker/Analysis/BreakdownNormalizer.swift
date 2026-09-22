@@ -421,14 +421,16 @@ enum BreakdownNormalizer {
 
     /// 「報告セグメントごとの情報」に載る数値指標を、指標ごとの breakdown 軸へ正規化する。
     ///
-    /// 分母は常に segment + reconciling の合計（会社間で同じ形の割合）。表の小計・無dimension
-    /// 全社合計（EntityTotal）は行として残し、分母選択には使わない。全社合計が分母から
-    /// 5%超ずれるときだけ `needs_review`（比較の床を会社ごとに切り替えない）。
+    /// 分母は通常 segment + reconciling。`segment_assets` は連結資産の内訳軸として、連結の無
+    /// dimension EntityTotal（連結財務諸表の資産合計）があるとき分母をそれに固定する。
+    /// 銀行の固定資産など連結 EntityTotal が無いときだけ segment+reconciling。
+    /// 非分類は `reconciling`（差額表 HTML / XBRL 調整 member）。表小計・EntityTotal 行は表示用。
     /// `denominatorTag` には実際に採用した指標タグ名を残す。
     private static func normalizeSegmentMetric(
         facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
         labelsByTag: [String: String], memberParents: [String: String] = [:],
-        allowNonConsolidatedEntityTotal: Bool = true
+        allowNonConsolidatedEntityTotal: Bool = true,
+        useConsolidatedEntityTotalAsDenominatorWhenPresent: Bool = false
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
@@ -440,12 +442,12 @@ enum BreakdownNormalizer {
         let total = resolveEntityTotal(
             facts: facts, tag: amountTag,
             allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)?.value
-        // 分母=segment+reconciling は本軸の正方針なので derived 警告は立てない。
-        // EntityTotal との乖離だけ needs_review にする。
+        let useEntityDenom = useConsolidatedEntityTotalAsDenominatorWhenPresent && total != nil
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
             warningPrefix: warningPrefix, labelsByTag: labelsByTag, memberParents: memberParents,
-            warnOnDerivedTotal: false, useEntityTotalAsDenominator: false)
+            warnOnDerivedTotal: false, useEntityTotalAsDenominator: useEntityDenom,
+            dedupeReconcilingMatchingSegmentAmounts: axis == breakdownAxisSegmentAssets)
     }
 
     /// セグメント資産。
@@ -453,10 +455,13 @@ enum BreakdownNormalizer {
         facts: [BreakdownFact], axis: String = breakdownAxisSegmentAssets,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
     ) -> BreakdownSnapshot? {
-        normalizeSegmentMetric(
+        guard let snapshot = normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
             warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents,
-            allowNonConsolidatedEntityTotal: false)
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true)
+        else { return nil }
+        return finalizeSegmentAssetsSnapshot(snapshot)
     }
 
     /// 減価償却費及び償却費。
@@ -628,6 +633,7 @@ enum BreakdownNormalizer {
         warningPrefix: String, labelsByTag: [String: String], memberParents: [String: String] = [:],
         warnOnDerivedTotal: Bool = true,
         useEntityTotalAsDenominator: Bool = true,
+        dedupeReconcilingMatchingSegmentAmounts: Bool = false,
         applyOfWhichNestedChildDemotion: Bool = false,
         applyTaggedTotalEqualToDenominator: Bool = false
     ) -> BreakdownSnapshot? {
@@ -656,6 +662,9 @@ enum BreakdownNormalizer {
         applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
         if applyTaggedTotalEqualToDenominator {
             demoteTaggedTotalEqualToDenominator(kinds: &kinds, amounts: amounts, total: total)
+        }
+        if dedupeReconcilingMatchingSegmentAmounts {
+            dedupeReconcilingAmountsDuplicatingSegments(amounts: &amounts, kinds: kinds)
         }
 
         // 合計チェック・フォールバック分母は segment に加え reconciling（本社機能等の少額バケツ）も
@@ -834,6 +843,81 @@ enum BreakdownNormalizer {
         let reconciledKinds: Set<String> = ["segment", "reconciling"]
         return amounts.keys.filter { reconciledKinds.contains(kinds[$0] ?? "") }
             .reduce(0.0) { $0 + amounts[$1]! }
+    }
+
+    /// 差額表 reconciling が既存 segment 行と同額のとき二重計上を避ける（ラベルは見ない）。
+    static func segmentAssetsAmountsEqual(_ a: Double, _ b: Double) -> Bool {
+        let scale = max(1.0, abs(a), abs(b))
+        return abs(a - b) / scale <= 1e-9
+    }
+
+    private static func dedupeReconcilingAmountsDuplicatingSegments(
+        amounts: inout [String: Double], kinds: [String: String]
+    ) {
+        let segmentAmounts = amounts.filter { kinds[$0.key] == "segment" }.map(\.value)
+        guard !segmentAmounts.isEmpty else { return }
+        for member in amounts.keys where kinds[member] == "reconciling" {
+            guard let value = amounts[member] else { continue }
+            if segmentAmounts.contains(where: { segmentAssetsAmountsEqual($0, value) }) {
+                amounts.removeValue(forKey: member)
+            }
+        }
+    }
+
+    static func dedupeReconcilingRowsDuplicatingSegmentAmounts(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        let segmentAmounts = rows.filter { $0.rowKind == "segment" }.map(\.amount)
+        guard !segmentAmounts.isEmpty else { return rows }
+        return rows.filter { row in
+            guard row.rowKind == "reconciling" else { return true }
+            return !segmentAmounts.contains(where: { segmentAssetsAmountsEqual($0, row.amount) })
+        }
+    }
+
+    /// `segment_assets` の分母（連結 EntityTotal 優先）・差額表 dedupe・share を揃える。
+    static func finalizeSegmentAssetsSnapshot(_ snapshot: BreakdownSnapshot) -> BreakdownSnapshot {
+        guard snapshot.axis == breakdownAxisSegmentAssets else { return snapshot }
+
+        let reconciledKinds: Set<String> = ["segment", "reconciling"]
+        let rows = dedupeReconcilingRowsDuplicatingSegmentAmounts(snapshot.rows)
+        let entityAmount = rows.first(where: { $0.labelRaw == Xbrl.entityTotalMemberName })?.amount
+        let reconciledSum = rows.filter { reconciledKinds.contains($0.rowKind) }.map(\.amount).reduce(0, +)
+
+        var warnings = snapshot.warnings.filter {
+            $0 != "segment_assets_entity_total_differs_from_table_total"
+                && $0 != "segment_assets_segment_sum_far_from_total"
+        }
+
+        let denominator: Double
+        if let entity = entityAmount, entity > 0 {
+            denominator = entity
+            let scale = max(1.0, abs(entity), abs(reconciledSum))
+            if reconciledSum > 0, abs(reconciledSum - entity) / scale > 0.05 {
+                warnings.append("segment_assets_segment_sum_far_from_total")
+            }
+        } else if reconciledSum > 0 {
+            denominator = reconciledSum
+            if let entity = entityAmount, entity > 0 {
+                let scale = max(1.0, abs(entity), abs(denominator))
+                if abs(entity - denominator) / scale > 0.05 {
+                    warnings.append("segment_assets_entity_total_differs_from_table_total")
+                }
+            }
+        } else {
+            return snapshot
+        }
+
+        let resolvedRows = rows.map { row -> BreakdownRow in
+            var copy = row
+            if reconciledKinds.contains(row.rowKind) || row.labelRaw == Xbrl.entityTotalMemberName {
+                copy.share = row.amount / denominator
+            }
+            return copy
+        }
+
+        return BreakdownSnapshot(
+            axis: snapshot.axis, denominator: denominator, denominatorTag: snapshot.denominatorTag,
+            rows: resolvedRows.sorted { $0.labelRaw < $1.labelRaw }, sourceKind: snapshot.sourceKind,
+            needsReview: !warnings.isEmpty, warnings: warnings)
     }
 
     // MARK: - 内部ロジック
