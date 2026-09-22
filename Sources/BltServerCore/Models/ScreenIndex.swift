@@ -44,7 +44,7 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "sales_cagr_3y")
     var salesCagr3y: Double?
 
-    // screen-v3（BLT-73〜76）。定義・null 方針は `ScreenContract.swift`。
+    // screen-v3（高CF・高効率・改善・高還元）。定義・null 方針は `ScreenContract.swift`。
 
     @OptionalField(key: "cfo")
     var cfo: Double?

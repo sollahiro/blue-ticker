@@ -479,7 +479,7 @@ private func codes(_ json: [String: Any]?) -> [String] {
                     db: app.db)
             }
 
-            // 高CF（BLT-73）: cfo_margin ≥ 10 かつ fcf > 0。
+            // 高CF: cfo_margin ≥ 10 かつ fcf > 0。
             let (status, json) = try await send(
                 app, "/v1/screen?cfo_margin_min=10&fcf_min=0&sort=fcf&order=desc")
             #expect(status == .ok)
@@ -489,11 +489,11 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(item?["fcf"] as? Double == 200)
             #expect(item?["payout_ratio"] == nil)
 
-            // 高還元（BLT-76）: payout_ratio ≥ 20 → 0001 のみ（0002 は 10、0003 は null）。
+            // 高還元: payout_ratio ≥ 20 → 0001 のみ（0002 は 10、0003 は null）。
             let (_, payout) = try await send(app, "/v1/screen?payout_ratio_min=20")
             #expect(codes(payout) == ["0001"])
 
-            // 改善（BLT-75）: roic_yoy ≥ +5 → 0001 (+10) と 0002 (+15)。0003 は roic が無い。
+            // 改善: roic_yoy ≥ +5 → 0001 (+10) と 0002 (+15)。0003 は roic が無い。
             let (_, improving) = try await send(app, "/v1/screen?roic_yoy_min=5&sort=roic_yoy&order=desc")
             #expect(codes(improving) == ["0002", "0001"])
         }

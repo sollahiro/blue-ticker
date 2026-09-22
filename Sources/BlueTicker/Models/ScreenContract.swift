@@ -7,11 +7,11 @@
 // 行の `cache_version` に `screenIndexVersion` を刻む。公開床の financials は次回 ingest で投影（現行 fin-vN 一致は問わない）。
 // YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
 //
-// screen-v3（BLT-73〜76 プリセット用の指標追加）:
-// - `cfo` / `cfo_margin` / `fcf` は高CF（BLT-73）向け。`fcf` = cfo − capex（Summary の
+// screen-v3（高CF・高効率・改善・高還元プリセット用の指標追加）:
+// - `cfo` / `cfo_margin` / `fcf` は高CF向け。`fcf` = cfo − capex（Summary の
 //   `cfc`（= cfo + cfi）とは別定義なので混同しない）。
-// - `operating_margin_yoy` / `roic_yoy` は改善（BLT-75）向けの前年差（pp）。
-// - `payout_ratio` は高還元（BLT-76）向け。定義: SS 配当額（`dividend_ss`、当期帰属）÷ 親会社
+// - `operating_margin_yoy` / `roic_yoy` は改善向けの前年差（pp）。
+// - `payout_ratio` は高還元向け。定義: SS 配当額（`dividend_ss`、当期帰属）÷ 親会社
 //   帰属純利益 ×100。CF `dividend_paid_cf` は支払時点の実績で期ズレするため不採用。赤字期
 //   （net_profit ≤ 0）と配当行が無い期は null（無配と未抽出を区別しない）。記念・特別配当は
 //   区別しない（SS 合計のまま）。プリセットの閾値は契約外（実装時に決める）。
@@ -21,8 +21,8 @@
 import Foundation
 
 /// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
-/// BLT-49 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
-/// BLT-73〜76 の 6 指標追加（cfo・cfo_margin・fcf・前年差 2 軸・payout_ratio）を v3 とする。
+/// 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
+/// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・前年差 2 軸・payout_ratio）を v3 とする。
 public let screenIndexVersion = "screen-v3"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
@@ -39,7 +39,7 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     case netDe = "net_de"
     /// 3 期売上 CAGR（%、売上 > 0 の直近 3 期・2 年間）。足りなければ null。
     case salesCagr3y = "sales_cagr_3y"
-    /// 営業CF（百万円）。最新 FY の Summary `cfo`。高CF（BLT-73）・サイズ用。
+    /// 営業CF（百万円）。最新 FY の Summary `cfo`。高CF・サイズ用。
     case cfo
     /// 営業CFマージン（%、cfo ÷ sales ×100）。sales > 0 と cfo があるときだけ。
     case cfoMargin = "cfo_margin"
@@ -104,7 +104,7 @@ extension FinancialsResponse {
         put(.netDe, latest.netDe)
         put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
 
-        // screen-v3（BLT-73〜76）。直前期は dated を fy_end で重複除去した次の要素
+        // screen-v3。直前期は dated を fy_end で重複除去した次の要素
         // （CAGR と同じ「同一 fy_end は先勝ち」。暦の連続性は要求しない）。
         let unique = dedupeFyEnd(dated)
         let previous = unique.count > 1 ? unique[1].1 : nil

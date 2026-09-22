@@ -1,4 +1,4 @@
-// screen_index: screen-v3（BLT-73〜76）の 6 指標列を足す。既存マイグレーションは本番適用済みのため触らない。
+// screen_index: screen-v3（高CF・高効率・改善・高還元）の 6 指標列を足す。既存マイグレーションは本番適用済みのため触らない。
 // 列はすべて nullable（既存行は NULL＝未投影のまま）。値の再計算は次回 financials ingest
 // （公開床 servable の company_financials を投影。旧 stamp の行は検出して全件 rebuild）または
 // `blt-server screen-rebuild`。列ごとに未作成のときだけ ADD する（autoMigrate リトライ対策）。
