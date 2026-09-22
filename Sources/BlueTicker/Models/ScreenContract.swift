@@ -89,7 +89,12 @@ extension FinancialsResponse {
     /// `years` が空・`fy_end` 無し・`market` 空（notApplicable プレースホルダ）は nil。
     public func screenRow() -> ScreenRow? {
         guard !market.isEmpty else { return nil }
+        // 同一 fy_end は配列順の先勝ちで 1 期にしてから降順化する。sort は同キーで
+        // 不安定なので、並べ替え後に重複除去すると latest / 直前期の選ばれ方が揺れる
+        // （配信側 `uniquedByFyEnd` と同じ規則）。
+        var seenFyEnd = Set<String>()
         let dated = years.compactMap { year in year.fyEnd.map { ($0, year) } }
+            .filter { seenFyEnd.insert($0.0).inserted }
             .sorted { $0.0 > $1.0 }
         guard let (periodEnd, latest) = dated.first else { return nil }
 
@@ -104,10 +109,8 @@ extension FinancialsResponse {
         put(.netDe, latest.netDe)
         put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
 
-        // screen-v3。直前期は dated を fy_end で重複除去した次の要素
-        // （CAGR と同じ「同一 fy_end は先勝ち」。暦の連続性は要求しない）。
-        let unique = dedupeFyEnd(dated)
-        let previous = unique.count > 1 ? unique[1].1 : nil
+        // screen-v3。直前期は dated（重複除去済み）の次の要素（暦の連続性は要求しない）。
+        let previous = dated.count > 1 ? dated[1].1 : nil
         put(.cfo, latest.cfo)
         put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
         put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
@@ -118,14 +121,6 @@ extension FinancialsResponse {
             code: code, name: name, market: market, sector: sector, periodEnd: periodEnd,
             metrics: metrics)
     }
-}
-
-/// (fy_end, year) 降順列を fy_end で重複除去（先勝ち）。前年差の直前期を取るのに使う。
-private func dedupeFyEnd(
-    _ dated: [(fyEnd: String, year: FinancialsYear)]
-) -> [(fyEnd: String, year: FinancialsYear)] {
-    var seen = Set<String>()
-    return dated.filter { seen.insert($0.fyEnd).inserted }
 }
 
 /// 営業CFマージン（%、cfo ÷ sales ×100）。sales ≤ 0・欠測・非有限なら nil。

@@ -132,13 +132,14 @@ import Testing
     }
 
     @Test func screenRowYoyDedupesDuplicateFyEnd() throws {
-        // 同一 fy_end が 2 行あるとき直前期はその次の一意期（CAGR と同じ先勝ち。
-        // 重複行は同一値にしてソート順の揺れを除く）。
+        // 同一 fy_end が 2 行あるとき配列順の先勝ちで latest を決め、
+        // 直前期はその次の一意期（配信側 `uniquedByFyEnd` と同じ規則）。
         let row = try response(years: [
             ["fy_end": "2025-03-31", "roic": 14.0],
-            ["fy_end": "2025-03-31", "roic": 14.0],
+            ["fy_end": "2025-03-31", "roic": 99.0],
             ["fy_end": "2024-03-31", "roic": 11.0],
         ]).screenRow()
+        #expect(row?[.roic] == 14)
         #expect(row?[.roicYoy] == 3)
     }
 
