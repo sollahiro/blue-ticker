@@ -21,7 +21,7 @@
 | Statement | `GET /v1/companies/{code}/statement` | `get_statement` |
 | Notes | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` |
 
-対象母集団は上場全体（日経225は処理順の優先のみ。Notes は当面225）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
+対象母集団は上場全体（Statement / Notes とも。日経225は処理順の優先のみ）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
 
 ## 契約（骨組み）
 
