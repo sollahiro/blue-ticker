@@ -120,7 +120,7 @@ extension FinancialsResponse {
     }
 }
 
-/// (fy_end, year) 降順列を fy_end で重複除去（先勝ち）。前年差の直前期とに使う。
+/// (fy_end, year) 降順列を fy_end で重複除去（先勝ち）。前年差の直前期を取るのに使う。
 private func dedupeFyEnd(
     _ dated: [(fyEnd: String, year: FinancialsYear)]
 ) -> [(fyEnd: String, year: FinancialsYear)] {
