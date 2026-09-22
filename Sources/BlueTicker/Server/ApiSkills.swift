@@ -433,7 +433,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 （株主資本等変動計算書）を、企業間の科目統一を試みずそのまま構造化して返します
                 （格納済みデータのみ）。Summary/Waterfall の絞り込んだ ~20指標とは異なり、開示された
                 全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列のみ（資本構成員別の
-                行列展開はしない）。対象は日経225構成銘柄に限ります。doc_id を省略すると最新の
+                行列展開はしない）。対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の
                 有価証券報告書を使用します。注記（statement-notes）は別ツール get-statement-notes の対象。
                 """,
             method: "GET",
@@ -466,7 +466,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Statement（BS/PL/CF/SS の全項目正規化）。絞り込んだ主要指標だけなら get-financials。
-                日経225構成銘柄のみ。格納済みデータのみ。未抽出は 404、DB 非接続は 503。
+                対象は上場企業（日経225は ingest の処理順の優先のみ）。格納済みデータのみ。未抽出は 404、DB 非接続は 503。
                 表示順（order）は有価証券報告書の presentation linkbase 通り（取得できないタグはタグ名
                 アルファベット順へフォールバック）。BS/CF の各行には区分（section: assets/liabilities/
                 net_assets、operating/investing/financing）が付く場合がある（複数区分にまたがる合計行は
@@ -494,7 +494,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細・
                 リース負債）を
                 note_type 単位で取得します（格納済みデータのみ）。
-                対象は日経225構成銘柄に限ります。doc_id を省略すると最新の有価証券報告書を使用します。
+                対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の有価証券報告書を使用します。
                 注記が取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
                 not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
@@ -540,7 +540,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Statement Notes（get-statement 本体の外にある財務諸表注記、note_type 単位）。
-                日経225構成銘柄のみ。格納済みデータのみ。未算出は 404（reason 無し）、
+                対象は上場企業（日経225は ingest の処理順の優先のみ）。格納済みデータのみ。未算出は 404（reason 無し）、
                 対象外・非開示は 404 + reason（not_found / available_via_statement /
                 available_via_notes / us_gaap_unsupported）、DB 非接続は 503。
                 property_plant_equipment_schedule / lease_liabilities は IFRS 注記（または TextBlock）を

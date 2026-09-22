@@ -1,7 +1,7 @@
 // Statement（BS/PL/CF/SS 完全正規化、Statement 取り込み）API の公開契約。
 // docs/statement.md 参照。
 //
-// compute 関数・DB モデル・ingest・REST・MCP 配線は実装済み（日経225限定）。
+// compute 関数・DB モデル・ingest・REST・MCP 配線は実装済み（対象は上場全体。日経225は処理順の優先のみ）。
 // FinancialsContract.swift のバージョニング四点セット（cache_version 文字列・
 // min_servable 整数・数値パーサー・servable 判定）と同型で用意している。
 //

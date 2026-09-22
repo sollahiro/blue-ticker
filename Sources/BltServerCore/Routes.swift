@@ -188,7 +188,7 @@ func registerRoutes(
     // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
     // axis は business / geography / 決定論指標軸（省略時 business）。
-    // 内訳取り込み: business/geography は上場全体、決定論指標軸は日経225（docs/breakdown.md）。
+    // 内訳取り込み: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。docs/breakdown.md）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)
@@ -221,7 +221,7 @@ func registerRoutes(
     // GET /v1/companies/{code}/statement/notes?note_type=policy_holding_securities&doc_id=...
     // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
     // `statement` 本体とは別エンドポイント（バージョニング独立。docs/statement.md）。
-    // 財務諸表注記取り込み の対象母集団は日経225構成銘柄のみ（ingest 側の制約）。
+    // 財務諸表注記取り込み の対象母集団は上場全体（日経225は処理順のみ。2026-09 に限定を廃止して拡大。ingest 側）。
     v1.get("companies", ":code", "statement", "notes") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_statement_notes", code: code)

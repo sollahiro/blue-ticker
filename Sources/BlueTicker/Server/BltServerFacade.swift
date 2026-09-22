@@ -315,8 +315,8 @@ public extension BltServerContext {
     }
 
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
-    /// financials/filing-sections 取り込みの処理順序づけに使う（対象選定ではなく優先度のみ）。
-    /// ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
+    /// financials/filing-sections/breakdowns/statement-notes 取り込みの処理順序づけに使う
+    /// （対象選定ではなく優先度のみ）。ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
     func priorityIngestCodes() async -> Set<String> {
         loadPriorityIngestCodes()
     }
