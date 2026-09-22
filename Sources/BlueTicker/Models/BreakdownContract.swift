@@ -84,9 +84,9 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v12"
 public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
-/// v2: 分母を常に segment+reconciling に固定（表小計の閾値切替を廃止）。
-/// segment_assets の EntityTotal 個別フォールバック停止は targeted `--codes`。v3 は上げない。
-public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v2"
+/// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
+/// v3: 連結の無 dimension EntityTotal があるとき分母を連結 BS 計上額に固定。差額表と segment の同額 reconciling を dedupe。
+public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v3"
 public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v2"
 public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v2"
 public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v2"

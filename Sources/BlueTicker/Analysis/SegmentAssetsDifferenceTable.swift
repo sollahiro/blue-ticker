@@ -149,16 +149,11 @@ enum SegmentAssetsDifferenceTable {
 }
 
 extension BreakdownNormalizer {
-    /// XBRL セグメント資産に無い非分類行を差額表 HTML から足し、分母を segment+reconciling で再計算する。
+    /// XBRL セグメント資産に無い非分類行を差額表 HTML から足し、`finalizeSegmentAssetsSnapshot` で分母・dedupe を揃える。
     static func enrichSegmentAssetsWithDifferenceTable(
         snapshot: BreakdownSnapshot?, xbrlDir: URL
     ) -> BreakdownSnapshot? {
         guard let snapshot, snapshot.axis == breakdownAxisSegmentAssets else { return snapshot }
-
-        let reconciledKinds: Set<String> = ["segment", "reconciling"]
-        func reconciledSum(_ rows: [BreakdownRow]) -> Double {
-            rows.filter { reconciledKinds.contains($0.rowKind) }.map(\.amount).reduce(0, +)
-        }
 
         let entityAmount = snapshot.rows.first(where: { $0.labelRaw == Xbrl.entityTotalMemberName })?.amount
         let existingReconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
@@ -171,7 +166,11 @@ extension BreakdownNormalizer {
         guard !parsed.isEmpty else { return snapshot }
 
         let segmentOnlySum = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount).reduce(0, +)
-        let parsedSum = parsed.map(\.amountYen).reduce(0, +)
+        let segmentAmounts = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount)
+        let parsedNoSegmentDupes = parsed.filter { item in
+            !segmentAmounts.contains(where: { BreakdownNormalizer.segmentAssetsAmountsEqual($0, item.amountYen) })
+        }
+        let parsedSum = parsedNoSegmentDupes.map(\.amountYen).reduce(0, +)
         if let entity = entityAmount, entity > 0 {
             let gap = entity - segmentOnlySum
             let scale = max(1.0, abs(entity), abs(gap), abs(parsedSum))
@@ -180,7 +179,7 @@ extension BreakdownNormalizer {
 
         var rows = snapshot.rows
         let existingLabels = Set(rows.map { normalizeDifferenceLabel($0.label ?? $0.labelRaw) })
-        for (label, amountYen) in parsed {
+        for (label, amountYen) in parsedNoSegmentDupes {
             let key = normalizeDifferenceLabel(label)
             if existingLabels.contains(key) { continue }
             let labelRaw = "segmentAssetsDifference:\(key)"
@@ -191,29 +190,12 @@ extension BreakdownNormalizer {
         }
         guard rows.count > snapshot.rows.count else { return snapshot }
 
-        let denominator = reconciledSum(rows)
-        guard denominator > 0 else { return snapshot }
-
-        var warnings = snapshot.warnings.filter { $0 != "segment_assets_entity_total_differs_from_table_total" }
-        if let entity = entityAmount {
-            let scale = max(1.0, abs(entity), abs(denominator))
-            if abs(entity - denominator) / scale > 0.05 {
-                warnings.append("segment_assets_entity_total_differs_from_table_total")
-            }
-        }
-
-        rows = rows.map { row in
-            var copy = row
-            if reconciledKinds.contains(row.rowKind) || row.labelRaw == Xbrl.entityTotalMemberName {
-                copy.share = row.amount / denominator
-            }
-            return copy
-        }
-
-        return BreakdownSnapshot(
-            axis: snapshot.axis, denominator: denominator, denominatorTag: snapshot.denominatorTag,
+        let merged = BreakdownSnapshot(
+            axis: snapshot.axis, denominator: snapshot.denominator,
+            denominatorTag: snapshot.denominatorTag,
             rows: rows.sorted { $0.labelRaw < $1.labelRaw }, sourceKind: snapshot.sourceKind,
-            needsReview: !warnings.isEmpty, warnings: warnings)
+            needsReview: snapshot.needsReview, warnings: snapshot.warnings)
+        return BreakdownNormalizer.finalizeSegmentAssetsSnapshot(merged)
     }
 
     private static func normalizeDifferenceLabel(_ label: String) -> String {

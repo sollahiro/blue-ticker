@@ -15,6 +15,6 @@ import Testing
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v1")
         #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v1")
         #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v1")
-        #expect(segmentAssetsBreakdownCacheVersion == "breakdown-segment-assets-v2")
+        #expect(segmentAssetsBreakdownCacheVersion == "breakdown-segment-assets-v3")
     }
 }

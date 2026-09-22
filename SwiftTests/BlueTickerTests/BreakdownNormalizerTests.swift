@@ -1721,10 +1721,10 @@ import Foundation
                 dimensions: [:], value: 999, label: nil, unitRef: "JPY", decimals: "0"),
         ]
         let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
-        // 分母は常に segment+reconciling（小計・EntityTotal は行のみ）。
-        #expect(snapshot.denominator == 100)
+        // 連結 EntityTotal があるとき分母は BS 計上額。segment+reconciling との差は NR。
+        #expect(snapshot.denominator == 999)
         #expect(snapshot.needsReview == true)
-        #expect(snapshot.warnings.contains("segment_assets_entity_total_differs_from_table_total"))
+        #expect(snapshot.warnings.contains("segment_assets_segment_sum_far_from_total"))
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 999)
     }
