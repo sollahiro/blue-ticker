@@ -446,8 +446,7 @@ enum BreakdownNormalizer {
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
             warningPrefix: warningPrefix, labelsByTag: labelsByTag, memberParents: memberParents,
-            warnOnDerivedTotal: false, useEntityTotalAsDenominator: useEntityDenom,
-            dedupeReconcilingMatchingSegmentAmounts: axis == breakdownAxisSegmentAssets)
+            warnOnDerivedTotal: false, useEntityTotalAsDenominator: useEntityDenom)
     }
 
     /// セグメント資産。
@@ -633,7 +632,6 @@ enum BreakdownNormalizer {
         warningPrefix: String, labelsByTag: [String: String], memberParents: [String: String] = [:],
         warnOnDerivedTotal: Bool = true,
         useEntityTotalAsDenominator: Bool = true,
-        dedupeReconcilingMatchingSegmentAmounts: Bool = false,
         applyOfWhichNestedChildDemotion: Bool = false,
         applyTaggedTotalEqualToDenominator: Bool = false
     ) -> BreakdownSnapshot? {
@@ -662,9 +660,6 @@ enum BreakdownNormalizer {
         applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
         if applyTaggedTotalEqualToDenominator {
             demoteTaggedTotalEqualToDenominator(kinds: &kinds, amounts: amounts, total: total)
-        }
-        if dedupeReconcilingMatchingSegmentAmounts {
-            dedupeReconcilingAmountsDuplicatingSegments(amounts: &amounts, kinds: kinds)
         }
 
         // 合計チェック・フォールバック分母は segment に加え reconciling（本社機能等の少額バケツ）も
@@ -845,40 +840,21 @@ enum BreakdownNormalizer {
             .reduce(0.0) { $0 + amounts[$1]! }
     }
 
-    /// 差額表 reconciling が既存 segment 行と同額のとき二重計上を避ける（ラベルは見ない）。
+    /// 差額表（HTML）の非分類行が既存 segment 行と同額のとき二重計上を避ける（ラベルは見ない）。
+    /// XBRL タグ付き reconciling member（`ReconcilingItemsMember` 等）には適用しない——真正の
+    /// 調整額が偶然 segment と同額でも削除しない（Devin review, PR #424）。呼び出しは
+    /// `enrichSegmentAssetsWithDifferenceTable` の `parsedNoSegmentDupes` のみ（挿入前フィルタ）。
     static func segmentAssetsAmountsEqual(_ a: Double, _ b: Double) -> Bool {
         let scale = max(1.0, abs(a), abs(b))
         return abs(a - b) / scale <= 1e-9
     }
 
-    private static func dedupeReconcilingAmountsDuplicatingSegments(
-        amounts: inout [String: Double], kinds: [String: String]
-    ) {
-        let segmentAmounts = amounts.filter { kinds[$0.key] == "segment" }.map(\.value)
-        guard !segmentAmounts.isEmpty else { return }
-        for member in amounts.keys where kinds[member] == "reconciling" {
-            guard let value = amounts[member] else { continue }
-            if segmentAmounts.contains(where: { segmentAssetsAmountsEqual($0, value) }) {
-                amounts.removeValue(forKey: member)
-            }
-        }
-    }
-
-    static func dedupeReconcilingRowsDuplicatingSegmentAmounts(_ rows: [BreakdownRow]) -> [BreakdownRow] {
-        let segmentAmounts = rows.filter { $0.rowKind == "segment" }.map(\.amount)
-        guard !segmentAmounts.isEmpty else { return rows }
-        return rows.filter { row in
-            guard row.rowKind == "reconciling" else { return true }
-            return !segmentAmounts.contains(where: { segmentAssetsAmountsEqual($0, row.amount) })
-        }
-    }
-
-    /// `segment_assets` の分母（連結 EntityTotal 優先）・差額表 dedupe・share を揃える。
+    /// `segment_assets` の分母（連結 EntityTotal 優先）・share を揃える。
     static func finalizeSegmentAssetsSnapshot(_ snapshot: BreakdownSnapshot) -> BreakdownSnapshot {
         guard snapshot.axis == breakdownAxisSegmentAssets else { return snapshot }
 
         let reconciledKinds: Set<String> = ["segment", "reconciling"]
-        let rows = dedupeReconcilingRowsDuplicatingSegmentAmounts(snapshot.rows)
+        let rows = snapshot.rows
         let entityAmount = rows.first(where: { $0.labelRaw == Xbrl.entityTotalMemberName })?.amount
         let reconciledSum = rows.filter { reconciledKinds.contains($0.rowKind) }.map(\.amount).reduce(0, +)
 
