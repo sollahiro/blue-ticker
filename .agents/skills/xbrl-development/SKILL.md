@@ -18,13 +18,13 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 2. 抽出値と元の開示 HTML、コンテキスト、実タグ名を照合する。推測やモックだけで採否を決めない。
 3. smoke で拾えない失敗事例を該当 `RealXbrl*Tests.swift` の golden に追加する。新しい note type / breakdown 軸は smoke の床も広げる。
 4. Contract `cache_version` のバンプ可否は `.agents/rules/versioning.md`（破壊的変更だけ上げる。細粒度・非破壊は行削除 / `--codes`）。LLM 実害の切り分けも同ファイル。細かな連続バンプはマージ前に 1 つへまとめる。
-5. ロジックが安定したら disposable Neon へ日経225限定で ingest し、件数・欠測・`needs_review` と `/v1` の配信契約を確認する。
+5. ロジックが安定したら disposable Neon へ ingest し、件数・欠測・`needs_review` と `/v1` の配信契約を確認する。コスト抑制のため `--codes` で日経225サブセットにしてもよいが、それは本番母集団ではない。
 6. 本番 write、公開、対象母集団の拡張はユーザー確認後に `.agents/skills/production-ingest/SKILL.md` に従う。
 
 ## 母集団
 
-- statements、financials、filing-sections、breakdowns の business / geography は上場全体が最終母集団。`assets/nikkei225.csv` は処理優先度であり対象限定ではない。
-- notes と breakdowns の employees / rd / goodwill は日経225限定。限定実行では `--codes` 等で対象を明示する。
+- statements、financials、filing-sections、statement-notes、breakdowns の全軸（business / geography、employees / rd / goodwill、報告セグメント別指標軸）は上場全体が最終母集団。`assets/nikkei225.csv` は処理優先度（同一年次内の先頭寄せ）であり対象限定ではない。
+- 特定銘柄の再計算では `--codes` 等で対象を明示する（母集団ポリシーの縮小ではない）。
 - 最新有報を取得できた会社を分母とし、欠測が正当か抽出不具合かを実データで判定する。
 - coverage の分母は最新 120 がある対象社・書類とし、120 がない上場社は含めない。
 

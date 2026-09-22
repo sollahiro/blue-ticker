@@ -123,7 +123,7 @@ flowchart LR
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |
-| `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement（上場） / Notes（日経225） |
+| `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（上場。日経225は処理順の優先のみ） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 90 日・10 件。同日過多は安定サンプル。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
 | `GET /v1/screen` | Screen（`screen_index` 横断検索。skills / MCP 未掲載。索引未生成は 404。`sales_cagr_3y` は ingest 時の派生列） |
