@@ -1,12 +1,13 @@
-// 財務諸表注記取り込み: 日経225構成銘柄の有報について note_type 別の財務諸表注記を解決し
+// 財務諸表注記取り込み: 上場企業の有報について note_type 別の財務諸表注記を解決し
 // company_statement_notes へ upsert する。解決は BlueTickerCore のファサード
 // （resolveStatementNote 系）に委譲し、ここでは対象選定・staleness 判定・DB upsert のみを担う
 // （ネットワーク非依存でテスト可能）。内訳取り込み（`BreakdownIngest.swift`）の axis 別構造をそのまま
 // note_type 別に踏襲する。呼び出し元（`FactsIngest.swift`）が note_type ごとに本関数を呼ぶ。
 //
-// 対象は日経225構成銘柄に限定する（statements の上場拡大とは独立。呼び出し元
-// `FactsIngest.swift` が `priorityIngestCodes()` を `filingSectionCandidates` の `listedCodes`
-// 引数として渡すことで実現する）。候補選定ロジックは 有報セクション取り込み・内訳取り込み・
+// 対象母集団は statements と同じ上場全体（2026-09: 日経225限定を廃止して拡大。呼び出し元
+// `FactsIngest.swift` が `listedCompanyCodes()` を `filingSectionCandidates` の `listedCodes`
+// 引数として渡すことで実現する）。日経225（`priorityIngestCodes()`）は処理順の先頭寄せのみ。
+// 候補選定ロジックは 有報セクション取り込み・内訳取り込み・
 // Statement 取り込み と同じ `filingSectionCandidates` を再利用する。
 //
 // staleness 判定は 内訳取り込み と同型（`docs/breakdown.md`）。
@@ -41,7 +42,7 @@ public struct StatementNotesIngestSummary: Sendable, Equatable {
 public typealias StatementNoteResolveFn =
     @Sendable (String, String) async -> StatementNoteResolveResult
 
-/// `listedCodes`（日経225構成銘柄集合）の有報（直近 years 年ぶん）を走査し、未解決 or
+/// `listedCodes`（上場企業集合）の有報（直近 years 年ぶん）を走査し、未解決 or
 /// 再試行対象（needs_review・xbrl_facts のバージョン不一致）のものを解決・格納する。
 /// `limit` は新規解決件数の上限。`explicitCodes` / `priorityCodes` は 有報セクション取り込み・
 /// 内訳取り込み・Statement 取り込み と同じ意味。`noteType` は `statementNoteType*` 定数のいずれか。

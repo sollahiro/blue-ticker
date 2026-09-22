@@ -6,9 +6,9 @@
 // REST/MCP の read（loadStoredBreakdown）は business / geography の両軸を公開する
 // （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
-// 対象母集団は呼び出し元が `listedCodes` に渡す集合。business/geography は上場全体、
-// 決定論指標軸は日経225。日経225（`priorityCodes`）は処理順の先頭寄せにも使う。
-// `--codes` 指定時はその集合に絞る。
+// 対象母集団は呼び出し元が `listedCodes` に渡す集合。全軸とも上場全体
+// （2026-09: employees/rd/goodwill・報告セグメント別指標軸も日経225限定を廃止して拡大）。
+// 日経225（`priorityCodes`）は処理順の先頭寄せに使う。`--codes` 指定時はその集合に絞る。
 //
 // 候補選定ロジック自体は有報セクション取り込み（`filingSectionCandidates`、「対象 × 有報(120) × 直近 years 件」）を再利用する
 // （事業別内訳は有報と同じ書類集合から取れるため）。年数（`years`）は呼び出し元が有報セクション取り込みと同じ

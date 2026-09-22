@@ -156,13 +156,13 @@ final class EdinetXbrlFactsCacheVersionOnly: Model, @unchecked Sendable {
 /// （REST の financials は years 既定 5。read 時に要求年数へ縮める）。
 let financialsIngestYears = 6
 
-/// 報告セグメント別の決定論指標軸の1ジョブ上限。日経225限定。
+/// 報告セグメント別の決定論指標軸の1ジョブ上限。対象母集団は上場全体（日経225は処理順の先頭寄せ）。
 /// business / geography の `--limit`（定期ジョブ既定 50）とは独立。`--codes` 時は無視して全件。
 let unpublishedBreakdownIngestLimit = 30
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
-/// 内訳取り込み（business/geography は上場全体、決定論指標軸は日経225限定）を取り込む。
+/// 内訳取り込み（business/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
 ///
 /// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**。生 XBRL の R2 L2 から
 /// 再導出できるパース済み投影で、配信も他 stage も読まない。全件投影は Neon 512MB を超える。
@@ -178,8 +178,8 @@ let unpublishedBreakdownIngestLimit = 30
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
-/// 内訳取り込み: business/geography は `listed`（上場全体。日経225は処理順の先頭寄せ）、
-/// 決定論指標軸は `priority`（日経225）。`--codes` 指定時は全軸その集合。
+/// 内訳取り込み: business/geography・決定論指標軸ともに `listed`（上場全体。日経225=`priority`は
+/// 処理順の先頭寄せのみ）。`--codes` 指定時は全軸その集合。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
@@ -203,7 +203,8 @@ public func runFactsIngestCommand(
         // 上場廃止・外国法人など二度と成功しない企業への無駄なリトライを避ける。
         let listed = await context.listedCompanyCodes()
         // ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）。対象選定ではなく
-        // financials/filing-sections 共通の処理順序づけにのみ使う（未配置なら空集合＝優先なし）。
+        // financials/filing-sections/breakdowns/statement-notes 共通の処理順序づけにのみ使う
+        // （未配置なら空集合＝優先なし）。
         let priority = await context.priorityIngestCodes()
         if !priority.isEmpty {
             app.logger.notice(
@@ -220,14 +221,16 @@ public func runFactsIngestCommand(
         }
         let cachedDocIDs = await context.cachedXbrlDocIDs()
         let publicBreakdownListed = codes ?? listed
-        let nikkeiListed = codes ?? priority
+        // 決定論指標軸（employees/rd/goodwill・報告セグメント別指標）・statement-notes の対象母集団。
+        // 2026-09: 日経225限定を廃止し上場全体へ拡大（`priority` は処理順の先頭寄せとして残す）。
+        let deterministicMetricsListed = codes ?? listed
         let needsListedFilings =
             targets.contains(.filingSections) || targets.contains(.breakdowns)
             || targets.contains(.statements)
-        let needsNikkeiFilings =
+        let needsDeterministicMetricsFilings =
             targets.contains(.notes) || targets.contains(.breakdowns)
 
-        // 会社有報の一覧読みは全候補集合で 1 回だけにする（listed / 日経225 ごとの再走査を避ける）。
+        // 会社有報の一覧読みは全候補集合で 1 回だけにする（母集団ごとの再走査を避ける）。
         var annualDocs: [EdinetDocumentListing]?
         func loadCandidateSets(_ listedCodes: Set<String>) async throws -> FilingSectionCandidateSets {
             if listedCodes.isEmpty {
@@ -259,17 +262,17 @@ public func runFactsIngestCommand(
             publicBreakdownSets = FilingSectionCandidateSets(keep: [], purge: [])
         }
 
-        let nikkeiFilingSets: FilingSectionCandidateSets
-        if needsNikkeiFilings {
-            if nikkeiListed == listed && needsListedFilings {
-                nikkeiFilingSets = listedFilingSets
-            } else if nikkeiListed == publicBreakdownListed && targets.contains(.breakdowns) {
-                nikkeiFilingSets = publicBreakdownSets
+        let deterministicMetricsFilingSets: FilingSectionCandidateSets
+        if needsDeterministicMetricsFilings {
+            if deterministicMetricsListed == listed && needsListedFilings {
+                deterministicMetricsFilingSets = listedFilingSets
+            } else if deterministicMetricsListed == publicBreakdownListed && targets.contains(.breakdowns) {
+                deterministicMetricsFilingSets = publicBreakdownSets
             } else {
-                nikkeiFilingSets = try await loadCandidateSets(nikkeiListed)
+                deterministicMetricsFilingSets = try await loadCandidateSets(deterministicMetricsListed)
             }
         } else {
-            nikkeiFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
+            deterministicMetricsFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
         }
 
         if includeFacts {
@@ -323,23 +326,23 @@ public func runFactsIngestCommand(
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
         if targets.contains(.breakdowns) {
-            // 内訳取り込み: business/geography は上場全体（`listed`。日経225は処理順の先頭寄せ）。
-            // 決定論指標軸は日経225（`priority`）限定。`--codes` 時は全軸その集合。
+            // 内訳取り込み: business/geography・決定論指標軸ともに上場全体（`listed`。日経225=
+            // `priority` は処理順の先頭寄せのみ）。`--codes` 時は全軸その集合。
             // `--limit` は business/geography に適用。決定論指標軸は `unpublishedBreakdownIngestLimit`。
             if publicBreakdownListed.isEmpty {
                 app.logger.warning(
                     "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping business/geography",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
-            if nikkeiListed.isEmpty {
+            if deterministicMetricsListed.isEmpty {
                 app.logger.warning(
-                    "内訳取り込み unpublished axes empty (nikkei225.csv missing and no --codes); skipping deterministic metric axes",
-                    metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_priority_codes"])
+                    "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping deterministic metric axes",
+                    metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
             let unpublishedLimit = codes == nil ? unpublishedBreakdownIngestLimit : nil
             let unpublishedSets =
-                nikkeiListed == publicBreakdownListed
-                ? publicBreakdownSets : nikkeiFilingSets
+                deterministicMetricsListed == publicBreakdownListed
+                ? publicBreakdownSets : deterministicMetricsFilingSets
 
             /// 1 軸分の実行定義。`target` はログ用の ingest 対象名。
             struct BreakdownStage {
@@ -367,77 +370,77 @@ public func runFactsIngestCommand(
                 },
                 BreakdownStage(
                     axis: breakdownAxisEmployees, target: "breakdowns-employees",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveEmployeesBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisResearchAndDevelopment, target: "breakdowns-rd",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveResearchAndDevelopmentBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisGoodwill, target: "breakdowns-goodwill",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit,
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveGoodwillBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisSegmentAssets, target: "breakdowns-\(breakdownAxisSegmentAssets)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveSegmentAssetsBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisDepreciationAndAmortization,
                     target: "breakdowns-\(breakdownAxisDepreciationAndAmortization)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveDepreciationAndAmortizationBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisGoodwillAmortization,
                     target: "breakdowns-\(breakdownAxisGoodwillAmortization)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveGoodwillAmortizationBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisImpairmentLoss,
                     target: "breakdowns-\(breakdownAxisImpairmentLoss)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveImpairmentLossBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisEquityMethodInvestments,
                     target: "breakdowns-\(breakdownAxisEquityMethodInvestments)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveEquityMethodInvestmentsBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisCapitalExpenditures,
                     target: "breakdowns-\(breakdownAxisCapitalExpenditures)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveCapitalExpendituresBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisCapitalExpendituresOverview,
                     target: "breakdowns-\(breakdownAxisCapitalExpendituresOverview)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveCapitalExpendituresOverviewBreakdown(docID: docID)
                 },
                 BreakdownStage(
                     axis: breakdownAxisNoncurrentAssetAdditions,
                     target: "breakdowns-\(breakdownAxisNoncurrentAssetAdditions)",
-                    listedCodes: nikkeiListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveNoncurrentAssetAdditionsBreakdown(docID: docID)
                 },
@@ -496,14 +499,15 @@ public func runFactsIngestCommand(
                 notApplicable: s7.notApplicable, purged: s7.purged)
         }
         if targets.contains(.notes) {
-            // 財務諸表注記取り込み: 日経225（`priority`）限定のまま（statements の上場拡大とは独立）。
+            // 財務諸表注記取り込み: 対象母集団は上場全体（`listed`。日経225=`priority`は処理順の
+            // 先頭寄せのみ。2026-09: 日経225限定を廃止し statements と同じ上場全体へ拡大）。
             // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
             // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
             // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（進捗は Linear Team `blue-ticker`）。
-            let statementNotesListed = codes ?? priority
+            let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {
                 app.logger.warning(
-                    "財務諸表注記取り込み listed codes empty (nikkei225.csv missing and no --codes); skipping",
+                    "財務諸表注記取り込み listed codes empty (listed universe empty and no --codes); skipping",
                     metadata: ["event": "ingest_skipped", "target": "statement-notes", "reason": "empty_listed_codes"])
             }
             let statementNoteTypes:
@@ -547,10 +551,10 @@ public func runFactsIngestCommand(
                 if let noteTypeFilter, !noteTypeFilter.contains(entry.noteType) { continue }
                 let s8 = try await runStatementNotesIngest(
                     db: app.db, listedCodes: statementNotesListed, years: filingSectionsIngestYears,
-                    limit: stageLimit, explicitCodes: codes,
+                    limit: stageLimit, explicitCodes: codes, priorityCodes: priority,
                     cachedDocIDs: cachedDocIDs,
                     noteType: entry.noteType,
-                    candidateSets: nikkeiFilingSets,
+                    candidateSets: deterministicMetricsFilingSets,
                     logger: app.logger, resolve: entry.resolve)
                 notesSummaries.append((noteType: entry.noteType, summary: s8))
             }

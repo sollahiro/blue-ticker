@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Job 4: breakdowns（business/geography=上場、決定論指標軸=225）
+# Job 4: breakdowns（全13軸とも上場全体。225は処理順の先頭寄せのみ）
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"

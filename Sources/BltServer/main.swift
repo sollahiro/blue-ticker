@@ -8,9 +8,10 @@
 //                     [--note-types per_share_information,borrowings_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
 //                                                            breakdowns: business/geography は上場全体（--limit 適用）、
-//                                                            employees/rd/goodwill は日経225（1ジョブ 30）。
+//                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
+//                                                            （1ジョブ 30。日経225は処理順の優先のみ）。
 //                                                            statements は上場全体（日経225は処理順の優先のみ）。
-//                                                            statement-notes は日経225構成銘柄限定。
+//                                                            statement-notes も上場全体（日経225は処理順の優先のみ）。
 //                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
 //                                                            overviews は OPENROUTER_OVERVIEW_API_KEY 未設定時は
 //                                                            スキップされる。上場全体・最新有報1件（日経225は処理順）。
