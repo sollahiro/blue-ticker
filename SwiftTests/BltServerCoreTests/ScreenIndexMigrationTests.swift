@@ -11,6 +11,7 @@ import Vapor
 private func withScreenIndexApp(
     includeCagrMigration: Bool = true,
     includeCacheVersionMigration: Bool = true,
+    includeV3Migration: Bool = true,
     _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
@@ -22,6 +23,9 @@ private func withScreenIndexApp(
         }
         if includeCacheVersionMigration {
             app.migrations.add(AddCacheVersionToScreenIndex())
+        }
+        if includeV3Migration {
+            app.migrations.add(AddScreenV3MetricsToScreenIndex())
         }
         try await app.autoMigrate()
         try await body(app)
@@ -69,6 +73,28 @@ private func columnNames(on sql: SQLDatabase) async throws -> Set<String> {
             #expect(names.contains("cache_version"))
             try await AddCacheVersionToScreenIndex().prepare(on: app.db)
             #expect(try await columnNames(on: sql).contains("cache_version"))
+        }
+    }
+
+    @Test func addsScreenV3MetricColumns() async throws {
+        try await withScreenIndexApp { app in
+            let names = try await columnNames(on: try #require(app.db as? SQLDatabase))
+            for column in AddScreenV3MetricsToScreenIndex.columns {
+                #expect(names.contains(column))
+            }
+        }
+    }
+
+    @Test func addsScreenV3ColumnsIdempotently() async throws {
+        try await withScreenIndexApp(includeV3Migration: false) { app in
+            try await AddScreenV3MetricsToScreenIndex().prepare(on: app.db)
+            let sql = try #require(app.db as? SQLDatabase)
+            for column in AddScreenV3MetricsToScreenIndex.columns {
+                #expect(try await columnNames(on: sql).contains(column))
+            }
+            // 2 回目は列が揃っていても失敗しない（autoMigrate リトライ対策）。
+            try await AddScreenV3MetricsToScreenIndex().prepare(on: app.db)
+            #expect(try await columnNames(on: sql).count == 21)
         }
     }
 }

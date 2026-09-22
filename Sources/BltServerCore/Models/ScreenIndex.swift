@@ -44,6 +44,26 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "sales_cagr_3y")
     var salesCagr3y: Double?
 
+    // screen-v3（BLT-73〜76）。定義・null 方針は `ScreenContract.swift`。
+
+    @OptionalField(key: "cfo")
+    var cfo: Double?
+
+    @OptionalField(key: "cfo_margin")
+    var cfoMargin: Double?
+
+    @OptionalField(key: "fcf")
+    var fcf: Double?
+
+    @OptionalField(key: "operating_margin_yoy")
+    var operatingMarginYoy: Double?
+
+    @OptionalField(key: "roic_yoy")
+    var roicYoy: Double?
+
+    @OptionalField(key: "payout_ratio")
+    var payoutRatio: Double?
+
     /// 派生契約の版（`screenIndexVersion`）。GET /v1/screen には出さない。
     /// NULL は未投影。公開床の financials は次回 ingest で投影する（現行 fin-vN 一致は問わない）。
     @OptionalField(key: "cache_version")
@@ -66,6 +86,12 @@ final class ScreenIndex: Model, @unchecked Sendable {
         roe = row[.roe]
         netDe = row[.netDe]
         salesCagr3y = row[.salesCagr3y]
+        cfo = row[.cfo]
+        cfoMargin = row[.cfoMargin]
+        fcf = row[.fcf]
+        operatingMarginYoy = row[.operatingMarginYoy]
+        roicYoy = row[.roicYoy]
+        payoutRatio = row[.payoutRatio]
         cacheVersion = screenIndexVersion
     }
 
@@ -87,6 +113,12 @@ final class ScreenIndex: Model, @unchecked Sendable {
         case .roe: return roe
         case .netDe: return netDe
         case .salesCagr3y: return salesCagr3y
+        case .cfo: return cfo
+        case .cfoMargin: return cfoMargin
+        case .fcf: return fcf
+        case .operatingMarginYoy: return operatingMarginYoy
+        case .roicYoy: return roicYoy
+        case .payoutRatio: return payoutRatio
         }
     }
 
@@ -99,6 +131,12 @@ final class ScreenIndex: Model, @unchecked Sendable {
         case .roe: return \.$roe
         case .netDe: return \.$netDe
         case .salesCagr3y: return \.$salesCagr3y
+        case .cfo: return \.$cfo
+        case .cfoMargin: return \.$cfoMargin
+        case .fcf: return \.$fcf
+        case .operatingMarginYoy: return \.$operatingMarginYoy
+        case .roicYoy: return \.$roicYoy
+        case .payoutRatio: return \.$payoutRatio
         }
     }
 }

@@ -142,12 +142,13 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 - 結果行は常に core4 を出す（欠測は `—`。CAGR が null でも YoY に落とさない）: `roic` / `operating_margin` / `sales_cagr_3y` / `net_de`
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
-- サーバー許可リスト: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y`
+- サーバー許可リスト（screen-v3 で 6 → 12 指標。BLT-73〜76）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_yoy` / `roic_yoy` / `payout_ratio`
 - 3 期売上 CAGR `sales_cagr_3y` は `screen_index` の派生列。最新 Summary 年から売上 > 0 の直近 3 期を取り、`((latest/oldest)^(1/2) - 1) * 100`。3 期に満たなければ null。Summary の `years[]` には CAGR / YoY キーを足さない
+- screen-v3 の派生列（いずれも ingest 時に Summary から派生。Summary の同義語と単位・符号は揃える）: `cfo` = 営業 CF（百万円）。`cfo_margin` = cfo ÷ sales × 100（%）で sales ≤ 0 は null。`fcf` = cfo − capex（百万円。Summary の `cfc` = cfo + cfi とは別物）。`operating_margin_yoy` / `roic_yoy` = 前年差（pp）。直前期は同一 `fy_end` 重複を除いた次の一意期で、CAGR と同じ null 方針（直前期が無ければ null）。`payout_ratio` = dividend_ss ÷ net_profit × 100（%）で net_profit ≤ 0（赤字期）または配当行無しは null（無配と未抽出を区別しない。特別配当も区別しない。SS 当期帰属を採り CF 実払いは使わない）
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 6 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v2`。`fin-vN` は上げない）。skills カタログには載せない（BLT-49）。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v3`。`fin-vN` は上げない）。skills カタログには載せない（BLT-49）。
 
 ## 認証
 

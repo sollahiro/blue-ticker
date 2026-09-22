@@ -7,13 +7,23 @@
 // 行の `cache_version` に `screenIndexVersion` を刻む。公開床の financials は次回 ingest で投影（現行 fin-vN 一致は問わない）。
 // YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
 //
+// screen-v3（BLT-73〜76 プリセット用の指標追加）:
+// - `cfo` / `cfo_margin` / `fcf` は高CF（BLT-73）向け。`fcf` = cfo − capex（Summary の
+//   `cfc`（= cfo + cfi）とは別定義なので混同しない）。
+// - `operating_margin_yoy` / `roic_yoy` は改善（BLT-75）向けの前年差（pp）。
+// - `payout_ratio` は高還元（BLT-76）向け。定義: SS 配当額（`dividend_ss`、当期帰属）÷ 親会社
+//   帰属純利益 ×100。CF `dividend_paid_cf` は支払時点の実績で期ズレするため不採用。赤字期
+//   （net_profit ≤ 0）と配当行が無い期は null（無配と未抽出を区別しない）。記念・特別配当は
+//   区別しない（SS 合計のまま）。プリセットの閾値は契約外（実装時に決める）。
+//
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
 import Foundation
 
 /// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
-/// BLT-49 初稿（YoY `sales_growth`）を v1 とし、3 期売上 CAGR への切替が v2。
-public let screenIndexVersion = "screen-v2"
+/// BLT-49 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
+/// BLT-73〜76 の 6 指標追加（cfo・cfo_margin・fcf・前年差 2 軸・payout_ratio）を v3 とする。
+public let screenIndexVersion = "screen-v3"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
 public enum ScreenMetric: String, CaseIterable, Sendable {
@@ -29,8 +39,21 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     case netDe = "net_de"
     /// 3 期売上 CAGR（%、売上 > 0 の直近 3 期・2 年間）。足りなければ null。
     case salesCagr3y = "sales_cagr_3y"
+    /// 営業CF（百万円）。最新 FY の Summary `cfo`。高CF（BLT-73）・サイズ用。
+    case cfo
+    /// 営業CFマージン（%、cfo ÷ sales ×100）。sales > 0 と cfo があるときだけ。
+    case cfoMargin = "cfo_margin"
+    /// FCF（百万円、cfo − capex）。Summary `cfc`（= cfo + cfi）とは別定義。両方あるときだけ。
+    case fcf
+    /// 営業利益率の前年差（pp、最新期 − 直前の一意期）。どちらか欠測なら null（新規上場は CAGR と同じく null）。
+    case operatingMarginYoy = "operating_margin_yoy"
+    /// ROIC の前年差（pp）。`operating_margin_yoy` と同じ走査・null 方針。
+    case roicYoy = "roic_yoy"
+    /// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。net_profit > 0 かつ dividend_ss があるときだけ。
+    case payoutRatio = "payout_ratio"
 
     /// 結果行に常に載せる指標（iOS core4）。フィルタ未使用でも null を返す。
+    /// screen-v3 の新指標は core に足さない（フィルタ / ソートで使ったときだけ投影）。
     public static let coreDisplayMetrics: [ScreenMetric] = [
         .roic, .operatingMargin, .salesCagr3y, .netDe,
     ]
@@ -80,10 +103,58 @@ extension FinancialsResponse {
         put(.roe, latest.roe)
         put(.netDe, latest.netDe)
         put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
+
+        // screen-v3（BLT-73〜76）。直前期は dated を fy_end で重複除去した次の要素
+        // （CAGR と同じ「同一 fy_end は先勝ち」。暦の連続性は要求しない）。
+        let unique = dedupeFyEnd(dated)
+        let previous = unique.count > 1 ? unique[1].1 : nil
+        put(.cfo, latest.cfo)
+        put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
+        put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
+        put(.operatingMarginYoy, yoyDelta(latest.operatingMargin, previous?.operatingMargin))
+        put(.roicYoy, yoyDelta(latest.roic, previous?.roic))
+        put(.payoutRatio, payoutRatio(dividend: latest.dividendSs, netProfit: latest.netProfit))
         return ScreenRow(
             code: code, name: name, market: market, sector: sector, periodEnd: periodEnd,
             metrics: metrics)
     }
+}
+
+/// (fy_end, year) 降順列を fy_end で重複除去（先勝ち）。前年差の直前期とに使う。
+private func dedupeFyEnd(
+    _ dated: [(fyEnd: String, year: FinancialsYear)]
+) -> [(fyEnd: String, year: FinancialsYear)] {
+    var seen = Set<String>()
+    return dated.filter { seen.insert($0.fyEnd).inserted }
+}
+
+/// 営業CFマージン（%、cfo ÷ sales ×100）。sales ≤ 0・欠測・非有限なら nil。
+private func cfoMargin(cfo: Double?, sales: Double?) -> Double? {
+    guard let cfo, let sales, sales > 0, cfo.isFinite, sales.isFinite else { return nil }
+    let margin = cfo / sales * 100
+    return margin.isFinite ? margin : nil
+}
+
+/// FCF（百万円、cfo − capex。Summary `capex` は投資額・正）。両方有限のときだけ。
+private func freeCashFlow(cfo: Double?, capex: Double?) -> Double? {
+    guard let cfo, let capex, cfo.isFinite, capex.isFinite else { return nil }
+    return cfo - capex
+}
+
+/// 前年差（pp、最新期 − 直前期）。どちらか欠測・非有限なら nil。
+private func yoyDelta(_ latest: Double?, _ previous: Double?) -> Double? {
+    guard let latest, let previous, latest.isFinite, previous.isFinite else { return nil }
+    return latest - previous
+}
+
+/// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。
+/// net_profit ≤ 0（赤字期は性向を定義しない）・dividend 欠測（無配 / 未抽出を区別しない）・
+/// 非有限なら nil。記念・特別配当は区別しない。
+private func payoutRatio(dividend: Double?, netProfit: Double?) -> Double? {
+    guard let dividend, let netProfit, netProfit > 0, dividend.isFinite, netProfit.isFinite
+    else { return nil }
+    let ratio = dividend / netProfit * 100
+    return ratio.isFinite ? ratio : nil
 }
 
 /// 最新 Summary 年から売上 > 0 の直近 3 期を取り、2 年間の CAGR% = `((latest/oldest)^(1/2) - 1) * 100`。
