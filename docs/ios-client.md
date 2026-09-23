@@ -34,7 +34,7 @@ Xcode Cloud を GitHub の required check にしない。PR Changes も、Archiv
 - Post-action: TestFlight Internal（グループ 1 つ）
 - スタート条件: Branch Changes（ブランチ `main`。Files and Folders は Custom Conditions、`Apps/BlueTicker` 配下の Any File。Auto-cancel Builds）。手動再実行用に Manual Start - Branch を残す。タグ `ios-tf-*` は日常切らない
 - Environment: Xcode を GHA `macos-26` にピン（現行コメントは 26.6）。Clean
-- `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `1.0.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する
+- `ci_scripts` は `Apps/BlueTicker/ci_scripts/ci_pre_xcodebuild.sh` のみ。Archive 時に `CURRENT_PROJECT_VERSION` を `CI_BUILD_NUMBER` へ。`MARKETING_VERSION`（今 `1.1.0`）は Git のユーザー向け版で、`blueTickerVersion` とは独立。初回アップロードが ASC 上の既存 build と衝突したら番号を上げて再実行する。App Store で承認された版はトレインが閉じ、同じ版の build は TestFlight にも上がらない（ASC 90062 / 90186。Xcode Cloud の Archive は「Preparing build for App Store Connect failed」で落ちる）。承認後に `main` へ iOS 差分を入れる前に `MARKETING_VERSION` を上げる（機能追加はマイナー、修正のみはパッチ）
 
 ### ASC 手順（人が一度だけ）
 
