@@ -165,6 +165,9 @@ enum Xbrl {
     /// PL → SS の順で優先し、無いときだけ `netProfitTags` の `ProfitLoss` 等へ戻る。
     static let parentAttributableNetProfitTags: [String] = [
         "ProfitLossAttributableToOwnersOfParentIFRS",
+        // 標準タグ名から "Loss" が落ちた本表拡張（コカ・コーラBJH 2579 / S100XR1L）。
+        // `ProfitLossIFRS`（当期利益＝NCI 込み）より先に見る。
+        "ProfitAttributableToOwnersOfParentIFRS",
         "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
         "ProfitLossAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
         "NetIncomeLossAttributableToOwnersOfParentUSGAAP",
@@ -175,6 +178,7 @@ enum Xbrl {
 
     static let netProfitTags: [String] = [
         "ProfitLossAttributableToOwnersOfParentIFRS",
+        "ProfitAttributableToOwnersOfParentIFRS",
         "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
         "ProfitLossAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
         // 個別 IFRS 本表の当期利益。親会社帰属タグが無い書類（ベイカレント S100TI4B）向け。

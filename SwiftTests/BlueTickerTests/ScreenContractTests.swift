@@ -90,6 +90,46 @@ import Testing
         #expect(abs(cagr - 10) < 1e-9)
     }
 
+    @Test func screenRowPayoutRatioUsesParentNetProfit() throws {
+        // 親会社帰属とグループ当期利益がずれるとき、分母は Summary `net_profit`（親会社）。
+        // コカ・コーラBJH S100XR1L は赤字期なので payout は null。黒字の差額は親会社側。
+        let loss = try response(years: [
+            ["fy_end": "2025-12-31", "net_profit": -50_763.0, "dividend_ss": 9_763.0],
+        ]).screenRow()
+        #expect(loss?[.payoutRatio] == nil)
+
+        let profit = try response(years: [
+            ["fy_end": "2025-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
+        ]).screenRow()
+        #expect(profit?[.payoutRatio] == 10)
+    }
+
+    @Test func screenRowCagrUsesLatestYearOnceSalesIsProjected() throws {
+        // 最新年 sales が null だとその期を飛ばす（ニッカトー S100Y9NY 修正前）。
+        // 投影後は最新年を CAGR の newest にする。
+        let before = try response(years: [
+            ["fy_end": "2023-03-31", "sales": 10_733.0],
+            ["fy_end": "2024-03-31", "sales": 10_239.0],
+            ["fy_end": "2025-03-31", "sales": 10_076.0],
+            ["fy_end": "2026-03-31"],
+        ]).screenRow()
+        let beforeCagr = try #require(before?[.salesCagr3y])
+        let beforeExpected = ((10_076.0 / 10_733.0).squareRoot() - 1) * 100
+        #expect(abs(beforeCagr - beforeExpected) < 1e-9)
+
+        let after = try response(years: [
+            ["fy_end": "2023-03-31", "sales": 10_733.0],
+            ["fy_end": "2024-03-31", "sales": 10_239.0],
+            ["fy_end": "2025-03-31", "sales": 10_076.0],
+            ["fy_end": "2026-03-31", "sales": 11_340.9, "operating_margin": 9.4],
+        ]).screenRow()
+        let afterCagr = try #require(after?[.salesCagr3y])
+        let afterExpected = ((11_340.9 / 10_239.0).squareRoot() - 1) * 100
+        #expect(abs(afterCagr - afterExpected) < 1e-9)
+        #expect(after?[.sales] == 11_340.9)
+        #expect(after?[.operatingMargin] == 9.4)
+    }
+
     @Test func screenRowDerivesScreenV3Metrics() throws {
         let row = try response(years: [
             ["fy_end": "2024-03-31", "operating_margin": 9.0, "roic": 11.0],

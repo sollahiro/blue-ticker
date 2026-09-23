@@ -65,6 +65,17 @@ import Testing
         #expect(np == 1_213_000_000)
     }
 
+    @Test func usesIfrsExtensionParentAttributableWithoutLossInName() {
+        let np = StatementFinancialsResolver.resolveParentAttributableNetProfit(
+            incomeStatement: [
+                line("ProfitLossIFRS", -50_668_000_000),
+                line("ProfitAttributableToOwnersOfParentIFRS", -50_763_000_000),
+            ],
+            changesInEquity: [],
+            fallback: -50_668_000_000)
+        #expect(np == -50_763_000_000)
+    }
+
     @Test func tamaHomeS100YYFRSummaryNetProfitIsParentAttributable() async throws {
         let docID = "S100YYFR"
         let xbrlDir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
