@@ -134,6 +134,9 @@ struct ScreenView: View {
         case .quality: Theme.accent
         case .growth: Theme.growthTint
         case .healthyGrowth: Theme.positive
+        case .highCf: Theme.highCfTint
+        case .improving: Theme.improvingTint
+        case .highPayout: Theme.payoutTint
         }
     }
 
@@ -161,8 +164,8 @@ struct ScreenView: View {
         .padding(.vertical, 6)
     }
 
-    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 3 プリセットで
-    /// 3 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
+    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 6 プリセットで
+    /// 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
     /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
     /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
     private func loadPresetCounts() async -> Bool {
