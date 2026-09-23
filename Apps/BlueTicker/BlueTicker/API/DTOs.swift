@@ -229,15 +229,25 @@ struct ScreenItem: Codable, Hashable, Identifiable {
     var roe: Double?
     var netDe: Double?
     var salesCagr3y: Double?
+    /// 以下はフィルタ・ソートに使ったときだけサーバーが載せる（core4 以外は既定で投影しない）。
+    var cfoMargin: Double?
+    var fcf: Double?
+    var operatingMarginCagr3y: Double?
+    var roicCagr3y: Double?
+    var payoutRatio: Double?
 
     var id: String { code }
 
     enum CodingKeys: String, CodingKey {
-        case code, name, market, sector, sales, roic, roe
+        case code, name, market, sector, sales, roic, roe, fcf
         case periodEnd = "period_end"
         case operatingMargin = "operating_margin"
         case netDe = "net_de"
         case salesCagr3y = "sales_cagr_3y"
+        case cfoMargin = "cfo_margin"
+        case operatingMarginCagr3y = "operating_margin_cagr_3y"
+        case roicCagr3y = "roic_cagr_3y"
+        case payoutRatio = "payout_ratio"
     }
 }
 
@@ -247,11 +257,16 @@ struct ScreenMetricFilter: Sendable, Hashable {
     var max: Double?
 }
 
-/// 条件検索の 3 プリセット。閾値は整数（ネット D/E は 1 桁）で `GET /v1/screen` に載せる。
+/// 条件検索の 6 プリセット。閾値は整数（ネット D/E は 1 桁）で `GET /v1/screen` に載せる。
+/// 高CF・改善・高還元は screen-v3 の派生指標（BLT-73・75・76）。高効率案（BLT-74）は優良と
+/// 重複するため採用しない。高還元の配当性向 40〜60% は暫定。
 enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
     case quality = "優良"
     case growth = "成長"
     case healthyGrowth = "安定"
+    case highCf = "高CF"
+    case improving = "改善"
+    case highPayout = "高還元"
 
     var id: String { rawValue }
     var title: String { rawValue }
@@ -262,6 +277,9 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
         case .quality: "高収益で財務が健全な企業"
         case .growth: "利益を出しながら急成長する企業"
         case .healthyGrowth: "財務健全で安定成長する企業"
+        case .highCf: "キャッシュを多く生み出す企業"
+        case .improving: "収益性が改善している企業"
+        case .highPayout: "配当による還元が手厚い企業"
         }
     }
 
@@ -285,6 +303,39 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
                 ScreenMetricFilter(key: "roic", min: 12, max: nil),
                 ScreenMetricFilter(key: "net_de", min: nil, max: 0.3),
             ]
+        case .highCf:
+            // `fcf` の min は包含比較（>=）なので「FCF > 0」は fcf_min=0 で近似する。
+            [
+                ScreenMetricFilter(key: "cfo_margin", min: 10, max: nil),
+                ScreenMetricFilter(key: "fcf", min: 0, max: nil),
+                ScreenMetricFilter(key: "roic", min: 8, max: nil),
+            ]
+        case .improving:
+            // 3 期年平均変化幅（pp/年。キー名は `_cagr_3y` だが複利ではない）で持続的な改善を拾う。前年差版は 1 年のブレを拾いすぎるため不採用。
+            // 変化幅だけだと赤字からの回復が上位を占めるため、到達水準を ROIC≥8% で縛る。
+            [
+                ScreenMetricFilter(key: "operating_margin_cagr_3y", min: 3, max: nil),
+                ScreenMetricFilter(key: "roic_cagr_3y", min: 2, max: nil),
+                ScreenMetricFilter(key: "roic", min: 8, max: nil),
+            ]
+        case .highPayout:
+            [
+                ScreenMetricFilter(key: "payout_ratio", min: 40, max: 60),
+            ]
+        }
+    }
+
+    /// `GET /v1/screen` の `sort` に載せる指標。サーバーはソート指標が null の行を落とすため、
+    /// フィルタで要求していない指標をソートに使うと暗黙の絞り込みになる。各プリセットが
+    /// 必ず非 null にする指標を選ぶ。
+    var sortMetric: String {
+        switch self {
+        case .quality, .growth, .healthyGrowth, .highCf:
+            "roic"
+        case .improving:
+            "roic_cagr_3y"
+        case .highPayout:
+            "payout_ratio"
         }
     }
 
@@ -297,6 +348,12 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
             "売上CAGR≥10% · 営業利益率≥5% · ROIC≥8%"
         case .healthyGrowth:
             "売上CAGR≥5% · ROIC≥12% · ネットD/E≤0.3倍"
+        case .highCf:
+            "営業CFマージン≥10% · FCF>0 · ROIC≥8%"
+        case .improving:
+            "営業利益率+3pp/年 · ROIC+2pp/年（3期年平均） · ROIC≥8%"
+        case .highPayout:
+            "配当性向40〜60%（暫定）"
         }
     }
 }

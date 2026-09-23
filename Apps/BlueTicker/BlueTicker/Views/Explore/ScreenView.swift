@@ -5,6 +5,11 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
     case operatingMargin = "operating_margin"
     case salesCagr3y = "sales_cagr_3y"
     case netDe = "net_de"
+    case cfoMargin = "cfo_margin"
+    case fcf
+    case operatingMarginCagr3y = "operating_margin_cagr_3y"
+    case roicCagr3y = "roic_cagr_3y"
+    case payoutRatio = "payout_ratio"
 
     var id: String { rawValue }
 
@@ -14,12 +19,17 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
         case .operatingMargin: "営業利益率"
         case .salesCagr3y: "売上CAGR"
         case .netDe: "ネットD/E"
+        case .cfoMargin: "営業CFマージン"
+        case .fcf: "FCF"
+        case .operatingMarginCagr3y: "営業利益率 年変化"
+        case .roicCagr3y: "ROIC 年変化"
+        case .payoutRatio: "配当性向"
         }
     }
 
     var band: MetricBand {
         switch self {
-        case .operatingMargin:
+        case .operatingMargin, .cfoMargin:
             return .higherBetter(lowBelow: 3, midFrom: 5, midTo: 10, highFrom: 15)
         case .roic:
             return .higherBetter(lowBelow: 4, midFrom: 6, midTo: 8, highFrom: 10)
@@ -27,16 +37,44 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
             return .higherBetter(lowBelow: 0, midFrom: 5, midTo: 10, highFrom: 15)
         case .netDe:
             return .lowerBetter(highBelow: 0, midFrom: 0, midTo: 1.0, lowFrom: 1.5)
+        case .fcf:
+            return .higherBetter(lowBelow: 0, midFrom: 0, midTo: 0, highFrom: 0)
+        case .operatingMarginCagr3y, .roicCagr3y:
+            return .higherBetter(lowBelow: 0, midFrom: 1, midTo: 2, highFrom: 3)
+        case .payoutRatio:
+            // 配当性向は高低どちらが良いとも言えないため色で序列を付けない。
+            return .none
         }
     }
 
     func format(_ value: Double?) -> String {
         switch self {
-        case .operatingMargin, .roic, .salesCagr3y:
+        case .operatingMargin, .roic, .salesCagr3y, .cfoMargin, .payoutRatio:
             return Format.percent(value)
         case .netDe:
             guard let value else { return "—" }
             return String(format: "%.1f倍", value)
+        case .fcf:
+            return Format.autoYen(value)
+        case .operatingMarginCagr3y, .roicCagr3y:
+            guard let value else { return "—" }
+            return String(format: "%+.1fpp/年", value)
+        }
+    }
+}
+
+extension ScreenPreset {
+    /// 結果行に出す 4 指標。条件に使った指標を脚注（`reasonText`）と同じ順で先に置き、残りを
+    /// core4 で埋める。core4 以外はフィルタ・ソートに使ったときしかサーバーが返さないため、
+    /// `filters` / `sortMetric` に無い非 core4 指標をここに足さない。
+    var displayMetrics: [ScreenDisplayMetric] {
+        switch self {
+        case .quality: [.roic, .operatingMargin, .netDe, .salesCagr3y]
+        case .growth: [.salesCagr3y, .operatingMargin, .roic, .netDe]
+        case .healthyGrowth: [.salesCagr3y, .roic, .netDe, .operatingMargin]
+        case .highCf: [.cfoMargin, .fcf, .roic, .netDe]
+        case .improving: [.operatingMarginCagr3y, .roicCagr3y, .roic, .operatingMargin]
+        case .highPayout: [.payoutRatio, .roic, .operatingMargin, .netDe]
         }
     }
 }
@@ -134,6 +172,9 @@ struct ScreenView: View {
         case .quality: Theme.accent
         case .growth: Theme.growthTint
         case .healthyGrowth: Theme.positive
+        case .highCf: Theme.highCfTint
+        case .improving: Theme.improvingTint
+        case .highPayout: Theme.payoutTint
         }
     }
 
@@ -161,8 +202,8 @@ struct ScreenView: View {
         .padding(.vertical, 6)
     }
 
-    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 3 プリセットで
-    /// 3 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
+    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 6 プリセットで
+    /// 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
     /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
     /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
     private func loadPresetCounts() async -> Bool {
@@ -172,7 +213,7 @@ struct ScreenView: View {
             guard !Task.isCancelled else { return false }
             do {
                 let response = try await APIClient.shared.screen(
-                    sectors: sectors, filters: preset.filters, limit: 1)
+                    sectors: sectors, filters: preset.filters, limit: 1, sort: preset.sortMetric)
                 next[preset] = response.matched
             } catch {
                 continue
@@ -265,7 +306,7 @@ private struct ScreenResultsView: View {
                     Section {
                         ForEach(items) { item in
                             NavigationLink(value: CompanyRef(item)) {
-                                ScreenResultRow(item: item)
+                                ScreenResultRow(item: item, metrics: preset.displayMetrics)
                             }
                             .listRowBackground(Theme.elevated)
                         }
@@ -291,7 +332,8 @@ private struct ScreenResultsView: View {
 
     private func run() async {
         do {
-            let response = try await APIClient.shared.screen(sectors: sectors, filters: preset.filters)
+            let response = try await APIClient.shared.screen(
+                sectors: sectors, filters: preset.filters, sort: preset.sortMetric)
             items = response.items
             matched = response.matched
             errorMessage = nil
@@ -310,11 +352,12 @@ private struct ScreenResultsView: View {
 
 private struct ScreenResultRow: View {
     var item: ScreenItem
+    var metrics: [ScreenDisplayMetric]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CompanyRowView(company: CompanyRef(item))
-            ScreenMetricValuesView(item: item)
+            ScreenMetricValuesView(item: item, metrics: metrics)
                 .padding(.leading, 48)
         }
         .padding(.vertical, 2)
@@ -323,6 +366,7 @@ private struct ScreenResultRow: View {
 
 private struct ScreenMetricValuesView: View {
     var item: ScreenItem
+    var metrics: [ScreenDisplayMetric]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -350,8 +394,7 @@ private struct ScreenMetricValuesView: View {
     }
 
     private var metricRows: [[ScreenDisplayMetric]] {
-        let metrics = ScreenDisplayMetric.allCases
-        return stride(from: 0, to: metrics.count, by: 2).map { start in
+        stride(from: 0, to: metrics.count, by: 2).map { start in
             Array(metrics[start..<min(start + 2, metrics.count)])
         }
     }
@@ -364,6 +407,11 @@ private extension ScreenItem {
         case .operatingMargin: operatingMargin
         case .salesCagr3y: salesCagr3y
         case .netDe: netDe
+        case .cfoMargin: cfoMargin
+        case .fcf: fcf
+        case .operatingMarginCagr3y: operatingMarginCagr3y
+        case .roicCagr3y: roicCagr3y
+        case .payoutRatio: payoutRatio
         }
     }
 }

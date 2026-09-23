@@ -39,6 +39,12 @@ enum Theme {
     static let negative = Color(red: 0.92, green: 0.28, blue: 0.32)
     /// 条件検索「成長」ラベルのオレンジ。
     static let growthTint = Color(red: 0.98, green: 0.62, blue: 0.25)
+    /// 条件検索「高CF」ラベルのティール。
+    static let highCfTint = Color(red: 0.25, green: 0.80, blue: 0.75)
+    /// 条件検索「改善」ラベルのゴールド。
+    static let improvingTint = Color(red: 0.95, green: 0.78, blue: 0.25)
+    /// 条件検索「高還元」ラベルのパープル。
+    static let payoutTint = Color(red: 0.70, green: 0.55, blue: 0.95)
     static let ratioGreen = Color(red: 0.28, green: 0.78, blue: 0.42)
 
     static let bandLow = SIMD3<Double>(0.95, 0.08, 0.08)

@@ -33,6 +33,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
         app.migrations.add(AddCacheVersionToScreenIndex())
         app.migrations.add(AddScreenV3MetricsToScreenIndex())
+        app.migrations.add(AddScreenCagrMetricsToScreenIndex())
         try await app.autoMigrate()
         try await registerRoutes(app, context: makeContext())
         try await body(app)
@@ -434,14 +435,15 @@ private func codes(_ json: [String: Any]?) -> [String] {
                     "operating_margin": 12.0, "roic": 14.0,
                     "dividend_ss": 60.0, "net_profit": 200.0,
                 ],
-                prior: ["operating_margin": 9.0, "roic": 11.0])
+                prior: ["operating_margin": 9.0, "roic": 11.0],
+                older: ["operating_margin": 6.0, "roic": 8.0])
             try await upsertScreenIndex(code: "6758", response: resp, db: app.db)
             let row = try #require(try await ScreenIndex.find("6758", on: app.db))
             #expect(row.cfo == 300)
             #expect(row.cfoMargin == 15)
             #expect(row.fcf == 200)
-            #expect(row.operatingMarginYoy == 3)
-            #expect(row.roicYoy == 3)
+            #expect(row.operatingMarginCagr3y == 3)
+            #expect(row.roicCagr3y == 3)
             #expect(row.payoutRatio == 30)
         }
     }
@@ -455,9 +457,9 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(row.cfo == nil)
             #expect(row.cfoMargin == nil)
             #expect(row.fcf == nil)
-            // 直前期・配当行が無く、赤字期は性向を定義しない。
-            #expect(row.operatingMarginYoy == nil)
-            #expect(row.roicYoy == nil)
+            // 3 期に満たない・配当行が無く、赤字期は性向を定義しない。
+            #expect(row.operatingMarginCagr3y == nil)
+            #expect(row.roicCagr3y == nil)
             #expect(row.payoutRatio == nil)
         }
     }
@@ -475,7 +477,8 @@ private func codes(_ json: [String: Any]?) -> [String] {
                 try await upsertScreenIndex(
                     code: code,
                     response: try makeResponse(
-                        code: code, latest: latest, prior: ["roic": 10.0]),
+                        code: code, latest: latest,
+                        prior: ["roic": 14.0], older: ["roic": 10.0]),
                     db: app.db)
             }
 
@@ -493,8 +496,9 @@ private func codes(_ json: [String: Any]?) -> [String] {
             let (_, payout) = try await send(app, "/v1/screen?payout_ratio_min=20")
             #expect(codes(payout) == ["0001"])
 
-            // 改善: roic_yoy ≥ +5 → 0001 (+10) と 0002 (+15)。0003 は roic が無い。
-            let (_, improving) = try await send(app, "/v1/screen?roic_yoy_min=5&sort=roic_yoy&order=desc")
+            // 改善: roic_cagr_3y ≥ +3pp/年 → 0001 (+5) と 0002 (+7.5)。0003 は 3 期に満たない。
+            let (_, improving) = try await send(
+                app, "/v1/screen?roic_cagr_3y_min=3&sort=roic_cagr_3y&order=desc")
             #expect(codes(improving) == ["0002", "0001"])
         }
     }

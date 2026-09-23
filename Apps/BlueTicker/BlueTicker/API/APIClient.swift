@@ -84,12 +84,14 @@ actor APIClient {
     /// の 1 リクエスト（サーバーが IN 検索で OR・ソート・件数をまとめる）。
     /// プリセットは `filters` の min/max に写す。スライダー UI は出さない。
     /// 件数だけ欲しいときは `limit: 1`（`matched` は LIMIT 前の件数）。
-    func screen(sectors: [String], filters: [ScreenMetricFilter], limit: Int = 50) async throws
+    /// ソート指標が null の行はサーバーが落とすため、`sort` はフィルタで必ず非 null になる
+    /// 指標を選ぶ（既定 `roic`）。
+    func screen(sectors: [String], filters: [ScreenMetricFilter], limit: Int = 50, sort: String = "roic") async throws
         -> ScreenResponse
     {
         let capped = min(max(limit, 1), 200)
         var items = [
-            URLQueryItem(name: "sort", value: "roic"),
+            URLQueryItem(name: "sort", value: sort),
             URLQueryItem(name: "order", value: "desc"),
             URLQueryItem(name: "limit", value: String(capped)),
         ]

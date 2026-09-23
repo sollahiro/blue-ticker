@@ -132,6 +132,7 @@ import Testing
 
     @Test func screenRowDerivesScreenV3Metrics() throws {
         let row = try response(years: [
+            ["fy_end": "2023-03-31", "operating_margin": 6.0, "roic": 8.0],
             ["fy_end": "2024-03-31", "operating_margin": 9.0, "roic": 11.0],
             ["fy_end": "2025-03-31", "sales": 2000.0, "cfo": 300.0, "capex": 100.0,
              "operating_margin": 12.0, "roic": 14.0, "dividend_ss": 60.0, "net_profit": 200.0],
@@ -140,18 +141,19 @@ import Testing
         #expect(unwrapped[.cfo] == 300)
         #expect(unwrapped[.cfoMargin] == 15)
         #expect(unwrapped[.fcf] == 200)
-        #expect(unwrapped[.operatingMarginYoy] == 3)
-        #expect(unwrapped[.roicYoy] == 3)
+        // 3 期年平均変化幅 =（最新 − 最古）÷ 2。
+        #expect(unwrapped[.operatingMarginCagr3y] == 3)
+        #expect(unwrapped[.roicCagr3y] == 3)
         #expect(unwrapped[.payoutRatio] == 30)
     }
 
     @Test func screenRowScreenV3NullPolicies() throws {
-        // 直前期が無い → 前年差は null（新規上場は CAGR と同じ null 方針）。
+        // 3 期に満たない → CAGR は null（新規上場は sales_cagr_3y と同じ null 方針）。
         let noPrior = try response(years: [
             ["fy_end": "2025-03-31", "operating_margin": 12.0, "roic": 14.0],
         ]).screenRow()
-        #expect(noPrior?[.operatingMarginYoy] == nil)
-        #expect(noPrior?[.roicYoy] == nil)
+        #expect(noPrior?[.operatingMarginCagr3y] == nil)
+        #expect(noPrior?[.roicCagr3y] == nil)
 
         // sales ≤ 0 → cfo_margin は null。capex 欠測 → fcf は null。
         let zeroSales = try response(years: [
@@ -171,16 +173,17 @@ import Testing
         #expect(noDividend?[.payoutRatio] == nil)
     }
 
-    @Test func screenRowYoyDedupesDuplicateFyEnd() throws {
+    @Test func screenRowMetricCagrDedupesDuplicateFyEnd() throws {
         // 同一 fy_end が 2 行あるとき配列順の先勝ちで latest を決め、
-        // 直前期はその次の一意期（配信側 `uniquedByFyEnd` と同じ規則）。
+        // CAGR の期選定は一意期のみ（配信側 `uniquedByFyEnd` と同じ規則）。
         let row = try response(years: [
             ["fy_end": "2025-03-31", "roic": 14.0],
             ["fy_end": "2025-03-31", "roic": 99.0],
             ["fy_end": "2024-03-31", "roic": 11.0],
+            ["fy_end": "2023-03-31", "roic": 8.0],
         ]).screenRow()
         #expect(row?[.roic] == 14)
-        #expect(row?[.roicYoy] == 3)
+        #expect(row?[.roicCagr3y] == 3)
     }
 
     @Test func screenRowIsNilForPlaceholderOrEmptyMarket() throws {
@@ -233,15 +236,15 @@ import Testing
 
     @Test func parseScreenQueryAcceptsScreenV3Keys() throws {
         let query = try parseScreenQuery([
-            "cfo_margin_min": "10", "fcf_min": "0", "roic_yoy_min": "2",
-            "operating_margin_yoy_max": "10", "payout_ratio_min": "30",
+            "cfo_margin_min": "10", "fcf_min": "0", "roic_cagr_3y_min": "2",
+            "operating_margin_cagr_3y_max": "10", "payout_ratio_min": "30",
             "sort": "fcf", "order": "desc",
         ]).get()
         #expect(query.sort == .fcf)
         #expect(query.ranges[.cfoMargin] == ScreenRange(min: 10, max: nil))
         #expect(query.ranges[.fcf] == ScreenRange(min: 0, max: nil))
-        #expect(query.ranges[.roicYoy] == ScreenRange(min: 2, max: nil))
-        #expect(query.ranges[.operatingMarginYoy] == ScreenRange(min: nil, max: 10))
+        #expect(query.ranges[.roicCagr3y] == ScreenRange(min: 2, max: nil))
+        #expect(query.ranges[.operatingMarginCagr3y] == ScreenRange(min: nil, max: 10))
         #expect(query.ranges[.payoutRatio] == ScreenRange(min: 30, max: nil))
         // フィルタ・ソートに使った新指標は投影される（core4 のみ既定投影）。
         #expect(query.projectedMetrics.contains(.fcf))

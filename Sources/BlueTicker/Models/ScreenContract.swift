@@ -10,7 +10,9 @@
 // screen-v3（高CF・高効率・改善・高還元プリセット用の指標追加）:
 // - `cfo` / `cfo_margin` / `fcf` は高CF向け。`fcf` = cfo − capex（Summary の
 //   `cfc`（= cfo + cfi）とは別定義なので混同しない）。
-// - `operating_margin_yoy` / `roic_yoy` は改善向けの前年差（pp）。
+// - `operating_margin_cagr_3y` / `roic_cagr_3y` は改善向けの 3 期年平均変化幅（pp/年）。
+//   利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR は定義せず、直近 3 期の
+//   （最新 − 最古）÷ 2 を取る（sales_cagr_3y の期数選定と同じ規則）。
 // - `payout_ratio` は高還元向け。定義: SS 配当額（`dividend_ss`、当期帰属）÷ 親会社
 //   帰属純利益 ×100。CF `dividend_paid_cf` は支払時点の実績で期ズレするため不採用。赤字期
 //   （net_profit ≤ 0）と配当行が無い期は null（無配と未抽出を区別しない）。記念・特別配当は
@@ -22,7 +24,9 @@ import Foundation
 
 /// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
 /// 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
-/// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・前年差 2 軸・payout_ratio）を v3 とする。
+/// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・3 期 CAGR 2 軸・payout_ratio）を v3 とする。
+/// 改善 2 軸は前年差（`*_yoy`）で出荷した直後に 3 期 CAGR へ差し替えたが、iOS 未使用で
+/// 本番行も v2 stamp のまま（次回 ingest で全件 rebuild）だったため v3 に畳んだ。
 public let screenIndexVersion = "screen-v3"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
@@ -45,10 +49,10 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     case cfoMargin = "cfo_margin"
     /// FCF（百万円、cfo − capex）。Summary `cfc`（= cfo + cfi）とは別定義。両方あるときだけ。
     case fcf
-    /// 営業利益率の前年差（pp、最新期 − 直前の一意期）。どちらか欠測なら null（新規上場は CAGR と同じく null）。
-    case operatingMarginYoy = "operating_margin_yoy"
-    /// ROIC の前年差（pp）。`operating_margin_yoy` と同じ走査・null 方針。
-    case roicYoy = "roic_yoy"
+    /// 営業利益率の 3 期年平均変化幅（pp/年）。直近の非欠測 3 期で（最新 − 最古）÷ 2。
+    case operatingMarginCagr3y = "operating_margin_cagr_3y"
+    /// ROIC の 3 期年平均変化幅（pp/年）。`operating_margin_cagr_3y` と同じ規則。
+    case roicCagr3y = "roic_cagr_3y"
     /// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。net_profit > 0 かつ dividend_ss があるときだけ。
     case payoutRatio = "payout_ratio"
 
@@ -109,13 +113,12 @@ extension FinancialsResponse {
         put(.netDe, latest.netDe)
         put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
 
-        // screen-v3。直前期は dated（重複除去済み）の次の要素（暦の連続性は要求しない）。
-        let previous = dated.count > 1 ? dated[1].1 : nil
+        // screen-v3。
         put(.cfo, latest.cfo)
         put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
         put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
-        put(.operatingMarginYoy, yoyDelta(latest.operatingMargin, previous?.operatingMargin))
-        put(.roicYoy, yoyDelta(latest.roic, previous?.roic))
+        put(.operatingMarginCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.operatingMargin))
+        put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
         put(.payoutRatio, payoutRatio(dividend: latest.dividendSs, netProfit: latest.netProfit))
         return ScreenRow(
             code: code, name: name, market: market, sector: sector, periodEnd: periodEnd,
@@ -136,10 +139,25 @@ private func freeCashFlow(cfo: Double?, capex: Double?) -> Double? {
     return cfo - capex
 }
 
-/// 前年差（pp、最新期 − 直前期）。どちらか欠測・非有限なら nil。
-private func yoyDelta(_ latest: Double?, _ previous: Double?) -> Double? {
-    guard let latest, let previous, latest.isFinite, previous.isFinite else { return nil }
-    return latest - previous
+/// 3 期年平均変化幅（pp/年、直近の非欠測 3 期で（最新 − 最古）÷ 2）。
+/// 利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR ではなく pp の年率変化を取る。
+/// 期の選定は `salesCagr3y` と同じ（`fy_end` 降順・欠測は飛ばす・同一 `fy_end` は先勝ち）。
+/// 3 期に満たない・非有限なら nil。
+private func metricCagr3y(
+    from years: [FinancialsYear], metric: KeyPath<FinancialsYear, Double?>
+) -> Double? {
+    var newest: Double?
+    var oldest: Double?
+    var count = 0
+    for year in years {
+        guard let value = year[keyPath: metric], value.isFinite else { continue }
+        if newest == nil { newest = value }
+        oldest = value
+        count += 1
+        if count == 3 { break }
+    }
+    guard count == 3, let newest, let oldest else { return nil }
+    return (newest - oldest) / 2
 }
 
 /// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。

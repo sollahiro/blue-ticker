@@ -97,4 +97,20 @@ private func columnNames(on sql: SQLDatabase) async throws -> Set<String> {
             #expect(try await columnNames(on: sql).count == 21)
         }
     }
+
+    @Test func addsMetricCagrColumnsWithoutDroppingYoy() async throws {
+        try await withScreenIndexApp { app in
+            let sql = try #require(app.db as? SQLDatabase)
+            try await AddScreenCagrMetricsToScreenIndex().prepare(on: app.db)
+            let names = try await columnNames(on: sql)
+            for column in AddScreenCagrMetricsToScreenIndex.columns {
+                #expect(names.contains(column))
+            }
+            #expect(names.contains("operating_margin_yoy"))
+            #expect(names.contains("roic_yoy"))
+            // 2 回目も失敗しない（autoMigrate リトライ対策）。
+            try await AddScreenCagrMetricsToScreenIndex().prepare(on: app.db)
+            #expect(try await columnNames(on: sql).count == 23)
+        }
+    }
 }
