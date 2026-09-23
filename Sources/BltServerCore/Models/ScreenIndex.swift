@@ -55,11 +55,14 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "fcf")
     var fcf: Double?
 
-    @OptionalField(key: "operating_margin_yoy")
-    var operatingMarginYoy: Double?
+    // 改善プリセット（3 期年平均変化幅 pp/年）。前年差（yoy）列は廃止して置き換え。
+    // 契約は screen-v3 のまま（索引は全消去→再 ingest で整合させる運用）。
 
-    @OptionalField(key: "roic_yoy")
-    var roicYoy: Double?
+    @OptionalField(key: "operating_margin_cagr_3y")
+    var operatingMarginCagr3y: Double?
+
+    @OptionalField(key: "roic_cagr_3y")
+    var roicCagr3y: Double?
 
     @OptionalField(key: "payout_ratio")
     var payoutRatio: Double?
@@ -89,8 +92,8 @@ final class ScreenIndex: Model, @unchecked Sendable {
         cfo = row[.cfo]
         cfoMargin = row[.cfoMargin]
         fcf = row[.fcf]
-        operatingMarginYoy = row[.operatingMarginYoy]
-        roicYoy = row[.roicYoy]
+        operatingMarginCagr3y = row[.operatingMarginCagr3y]
+        roicCagr3y = row[.roicCagr3y]
         payoutRatio = row[.payoutRatio]
         cacheVersion = screenIndexVersion
     }
@@ -116,8 +119,8 @@ final class ScreenIndex: Model, @unchecked Sendable {
         case .cfo: return cfo
         case .cfoMargin: return cfoMargin
         case .fcf: return fcf
-        case .operatingMarginYoy: return operatingMarginYoy
-        case .roicYoy: return roicYoy
+        case .operatingMarginCagr3y: return operatingMarginCagr3y
+        case .roicCagr3y: return roicCagr3y
         case .payoutRatio: return payoutRatio
         }
     }
@@ -134,8 +137,8 @@ final class ScreenIndex: Model, @unchecked Sendable {
         case .cfo: return \.$cfo
         case .cfoMargin: return \.$cfoMargin
         case .fcf: return \.$fcf
-        case .operatingMarginYoy: return \.$operatingMarginYoy
-        case .roicYoy: return \.$roicYoy
+        case .operatingMarginCagr3y: return \.$operatingMarginCagr3y
+        case .roicCagr3y: return \.$roicCagr3y
         case .payoutRatio: return \.$payoutRatio
         }
     }
