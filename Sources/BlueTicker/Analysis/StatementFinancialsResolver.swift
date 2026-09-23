@@ -90,7 +90,8 @@ enum StatementFinancialsResolver {
         // 非連結のみ企業（ニッカトー 5367 / S100Y9NY）は PL/BS が
         // `CurrentYearDuration_NonConsolidatedMember` にだけあり、連結 FieldSet が空のまま
         // sales / OP / NP / BS が全年 null、CF だけ埋まる。IBD の
-        // `overlayStatementCurrentValues` と同じ投影。
+        // `overlayStatementCurrentValues` と同じ「本表当期を載せる」投影だが、
+        // PL/BS では statement 組立の `nilAsZero: true` 合成 0（xsi:nil）は載せない。
         overlayStatementLineCurrents(&durationFS, lines: year.incomeStatement)
         overlayStatementLineCurrents(&instantFS, lines: year.balanceSheet)
         overlayStatementLineCurrents(&equityDurationFS, lines: year.changesInEquity)
@@ -481,11 +482,17 @@ enum StatementFinancialsResolver {
 
     /// Statement 本表の当期値で FieldSet を上書きする。1株当たり行は金額スロットに入れない。
     /// 同一タグが複数行あるときは後勝ち（PL/BS 本表は通常1行。CF の期首/期末はここでは重ねない）。
-    private static func overlayStatementLineCurrents(
+    ///
+    /// statement 組立は既定 `nilAsZero: true` のため `xsi:nil` が 0 行になる。こちらは
+    /// `nilAsZero: false` の FieldSet に載せるので、0 は overlay しない。0 を書くと
+    /// `resolveItemPreferCurrent` が高優先タグの合成 0 で止まり、後位タグの実額を落とす。
+    /// 真の 0 は fact 収集側に既にある。借入金 0 の IBD 投影は `overlayStatementCurrentValues`。
+    static func overlayStatementLineCurrents(
         _ fieldSet: inout FieldSet, lines: [StatementLineItem]
     ) {
         for item in lines {
             guard item.unit != "JPYPerShares" else { continue }
+            guard item.value != 0 else { continue }
             var fv = fieldSet[item.tag] ?? FieldValue(current: nil, prior: nil)
             fv.current = item.value
             fieldSet[item.tag] = fv

@@ -87,4 +87,43 @@ import Testing
         #expect(values.cfo == 1_675_324_000)
         #expect(values.totalAssets == 18_853_231_000)
     }
+
+    /// statement の `xsi:nil` 合成 0 を高優先売上タグへ載せると、後位の実額を潰す。
+    /// overlay は 0 を書かず、IBD の借入金 0 投影とは別ルール。
+    @Test func overlaySkipsNilAsZeroSoLaterSalesTagWins() {
+        var fs: FieldSet = [
+            "NetSales": FieldValue(current: 11_340_906_000, prior: nil)
+        ]
+        StatementFinancialsResolver.overlayStatementLineCurrents(
+            &fs,
+            lines: [
+                StatementLineItem(
+                    tag: "NetSalesIFRS", label: nil, value: 0, unit: "JPY", order: 1),
+                StatementLineItem(
+                    tag: "NetSales", label: nil, value: 11_340_906_000, unit: "JPY", order: 2),
+            ])
+        #expect(fs["NetSalesIFRS"] == nil)
+        #expect(fs["NetSales"]?.current == 11_340_906_000)
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 11_340_906_000)
+    }
+
+    @Test func overlayProjectsNonZeroStatementCurrentOntoEmptyFieldSet() {
+        var fs: FieldSet = [:]
+        StatementFinancialsResolver.overlayStatementLineCurrents(
+            &fs,
+            lines: [
+                StatementLineItem(
+                    tag: "NetSales", label: nil, value: 11_340_906_000, unit: "JPY", order: 1),
+                StatementLineItem(
+                    tag: "OperatingIncome", label: nil, value: 1_071_164_000, unit: "JPY",
+                    order: 2),
+                StatementLineItem(
+                    tag: "ProfitLoss", label: nil, value: 775_702_000, unit: "JPY", order: 3),
+            ])
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 11_340_906_000)
+        #expect(result.operatingProfit == 1_071_164_000)
+        #expect(result.netProfit == 775_702_000)
+    }
 }
