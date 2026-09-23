@@ -20,7 +20,6 @@ struct TickerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             CompanyOverviewView(code: company.code)
             cards
             pageDots
@@ -31,6 +30,16 @@ struct TickerView: View {
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                HStack(alignment: .center, spacing: 8) {
+                    CompanyIconView(company, size: Theme.headerIconSize)
+                    Text(Format.displayName(company.name, fallback: company.code))
+                        .font(nameFont)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                }
+                .fixedSize()
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
                 Button(
@@ -116,33 +125,6 @@ struct TickerView: View {
             sector: displaySector,
             iconURL: company.iconURL
         )
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            CompanyIconView(company, size: Theme.headerSideHeight)
-            VStack(alignment: .leading, spacing: Theme.headerChipSpacing) {
-                Text(Format.displayName(company.name, fallback: company.code))
-                    .font(nameFont)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: Theme.headerRowHeight)
-                HStack(alignment: .center, spacing: 8) {
-                    Text(company.code)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textMuted)
-                    if !displaySector.isEmpty {
-                        SectorTag(sector: displaySector, selected: true, height: Theme.headerRowHeight)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: Theme.headerRowHeight)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
     }
 
     private var nameFont: Font {
