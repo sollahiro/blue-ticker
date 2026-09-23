@@ -90,6 +90,59 @@ import Testing
         #expect(abs(cagr - 10) < 1e-9)
     }
 
+    @Test func screenRowDerivesScreenV3Metrics() throws {
+        let row = try response(years: [
+            ["fy_end": "2024-03-31", "operating_margin": 9.0, "roic": 11.0],
+            ["fy_end": "2025-03-31", "sales": 2000.0, "cfo": 300.0, "capex": 100.0,
+             "operating_margin": 12.0, "roic": 14.0, "dividend_ss": 60.0, "net_profit": 200.0],
+        ]).screenRow()
+        let unwrapped = try #require(row)
+        #expect(unwrapped[.cfo] == 300)
+        #expect(unwrapped[.cfoMargin] == 15)
+        #expect(unwrapped[.fcf] == 200)
+        #expect(unwrapped[.operatingMarginYoy] == 3)
+        #expect(unwrapped[.roicYoy] == 3)
+        #expect(unwrapped[.payoutRatio] == 30)
+    }
+
+    @Test func screenRowScreenV3NullPolicies() throws {
+        // 直前期が無い → 前年差は null（新規上場は CAGR と同じ null 方針）。
+        let noPrior = try response(years: [
+            ["fy_end": "2025-03-31", "operating_margin": 12.0, "roic": 14.0],
+        ]).screenRow()
+        #expect(noPrior?[.operatingMarginYoy] == nil)
+        #expect(noPrior?[.roicYoy] == nil)
+
+        // sales ≤ 0 → cfo_margin は null。capex 欠測 → fcf は null。
+        let zeroSales = try response(years: [
+            ["fy_end": "2025-03-31", "sales": 0.0, "cfo": 300.0],
+        ]).screenRow()
+        #expect(zeroSales?[.cfoMargin] == nil)
+        #expect(zeroSales?[.fcf] == nil)
+
+        // net_profit ≤ 0（赤字期）・配当行無し → payout_ratio は null（無配と未抽出を区別しない）。
+        let loss = try response(years: [
+            ["fy_end": "2025-03-31", "net_profit": -50.0, "dividend_ss": 10.0],
+        ]).screenRow()
+        #expect(loss?[.payoutRatio] == nil)
+        let noDividend = try response(years: [
+            ["fy_end": "2025-03-31", "net_profit": 200.0],
+        ]).screenRow()
+        #expect(noDividend?[.payoutRatio] == nil)
+    }
+
+    @Test func screenRowYoyDedupesDuplicateFyEnd() throws {
+        // 同一 fy_end が 2 行あるとき配列順の先勝ちで latest を決め、
+        // 直前期はその次の一意期（配信側 `uniquedByFyEnd` と同じ規則）。
+        let row = try response(years: [
+            ["fy_end": "2025-03-31", "roic": 14.0],
+            ["fy_end": "2025-03-31", "roic": 99.0],
+            ["fy_end": "2024-03-31", "roic": 11.0],
+        ]).screenRow()
+        #expect(row?[.roic] == 14)
+        #expect(row?[.roicYoy] == 3)
+    }
+
     @Test func screenRowIsNilForPlaceholderOrEmptyMarket() throws {
         #expect(FinancialsResponse.notApplicablePlaceholder(code: "9999").screenRow() == nil)
         #expect(try response(market: "", years: [["fy_end": "2025-03-31"]]).screenRow() == nil)
@@ -136,6 +189,24 @@ import Testing
         #expect(parseScreenQuery(["order": "up"]) == .failure(.invalidValue(key: "order", value: "up")))
         #expect(parseScreenQuery(["limit": "0"]) == .failure(.invalidValue(key: "limit", value: "0")))
         #expect(parseScreenQuery(["roe_min": "10", "roe_max": "5"]) == .failure(.emptyRange(.roe)))
+    }
+
+    @Test func parseScreenQueryAcceptsScreenV3Keys() throws {
+        let query = try parseScreenQuery([
+            "cfo_margin_min": "10", "fcf_min": "0", "roic_yoy_min": "2",
+            "operating_margin_yoy_max": "10", "payout_ratio_min": "30",
+            "sort": "fcf", "order": "desc",
+        ]).get()
+        #expect(query.sort == .fcf)
+        #expect(query.ranges[.cfoMargin] == ScreenRange(min: 10, max: nil))
+        #expect(query.ranges[.fcf] == ScreenRange(min: 0, max: nil))
+        #expect(query.ranges[.roicYoy] == ScreenRange(min: 2, max: nil))
+        #expect(query.ranges[.operatingMarginYoy] == ScreenRange(min: nil, max: 10))
+        #expect(query.ranges[.payoutRatio] == ScreenRange(min: 30, max: nil))
+        // フィルタ・ソートに使った新指標は投影される（core4 のみ既定投影）。
+        #expect(query.projectedMetrics.contains(.fcf))
+        #expect(query.projectedMetrics.contains(.payoutRatio))
+        #expect(!query.projectedMetrics.contains(.cfo))
     }
 
     @Test func parseScreenQueryClampsLimitAndParsesSort() throws {

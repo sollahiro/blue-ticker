@@ -24,6 +24,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateScreenIndex())
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
         app.migrations.add(AddCacheVersionToScreenIndex())
+        app.migrations.add(AddScreenV3MetricsToScreenIndex())
         try await app.autoMigrate()
         try await body(app)
     } catch {

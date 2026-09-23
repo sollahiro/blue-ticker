@@ -32,6 +32,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(CreateScreenIndex())
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
         app.migrations.add(AddCacheVersionToScreenIndex())
+        app.migrations.add(AddScreenV3MetricsToScreenIndex())
         try await app.autoMigrate()
         try await registerRoutes(app, context: makeContext())
         try await body(app)
@@ -421,6 +422,80 @@ private func codes(_ json: [String: Any]?) -> [String] {
 
             let (_, asc) = try await send(app, "/v1/screen?sort=sales&order=asc&limit=2")
             #expect(codes(asc) == ["0002", "0001"])
+        }
+    }
+
+    @Test func upsertDerivesScreenV3Metrics() async throws {
+        try await withApp { app in
+            let resp = try makeResponse(
+                code: "6758",
+                latest: [
+                    "sales": 2000.0, "cfo": 300.0, "capex": 100.0,
+                    "operating_margin": 12.0, "roic": 14.0,
+                    "dividend_ss": 60.0, "net_profit": 200.0,
+                ],
+                prior: ["operating_margin": 9.0, "roic": 11.0])
+            try await upsertScreenIndex(code: "6758", response: resp, db: app.db)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.cfo == 300)
+            #expect(row.cfoMargin == 15)
+            #expect(row.fcf == 200)
+            #expect(row.operatingMarginYoy == 3)
+            #expect(row.roicYoy == 3)
+            #expect(row.payoutRatio == 30)
+        }
+    }
+
+    @Test func upsertLeavesScreenV3MetricsNullWhenInputsMissing() async throws {
+        try await withApp { app in
+            let resp = try makeResponse(
+                code: "6758", latest: ["sales": 2000.0, "roic": 10.0, "net_profit": -50.0])
+            try await upsertScreenIndex(code: "6758", response: resp, db: app.db)
+            let row = try #require(try await ScreenIndex.find("6758", on: app.db))
+            #expect(row.cfo == nil)
+            #expect(row.cfoMargin == nil)
+            #expect(row.fcf == nil)
+            // 直前期・配当行が無く、赤字期は性向を定義しない。
+            #expect(row.operatingMarginYoy == nil)
+            #expect(row.roicYoy == nil)
+            #expect(row.payoutRatio == nil)
+        }
+    }
+
+    @Test func screenEndpointFiltersScreenV3Metrics() async throws {
+        try await withApp { app in
+            let rows: [(String, [String: Any])] = [
+                ("0001", ["sales": 2000.0, "cfo": 300.0, "capex": 100.0, "roic": 20.0,
+                          "dividend_ss": 60.0, "net_profit": 200.0]),
+                ("0002", ["sales": 2000.0, "cfo": 100.0, "capex": 150.0, "roic": 25.0,
+                          "dividend_ss": 10.0, "net_profit": 100.0]),
+                ("0003", ["sales": 1000.0]),
+            ]
+            for (code, latest) in rows {
+                try await upsertScreenIndex(
+                    code: code,
+                    response: try makeResponse(
+                        code: code, latest: latest, prior: ["roic": 10.0]),
+                    db: app.db)
+            }
+
+            // 高CF: cfo_margin ≥ 10 かつ fcf > 0。
+            let (status, json) = try await send(
+                app, "/v1/screen?cfo_margin_min=10&fcf_min=0&sort=fcf&order=desc")
+            #expect(status == .ok)
+            #expect(codes(json) == ["0001"])
+            let item = (json?["items"] as? [[String: Any]])?.first
+            #expect(item?["cfo_margin"] as? Double == 15)
+            #expect(item?["fcf"] as? Double == 200)
+            #expect(item?["payout_ratio"] == nil)
+
+            // 高還元: payout_ratio ≥ 20 → 0001 のみ（0002 は 10、0003 は null）。
+            let (_, payout) = try await send(app, "/v1/screen?payout_ratio_min=20")
+            #expect(codes(payout) == ["0001"])
+
+            // 改善: roic_yoy ≥ +5 → 0001 (+10) と 0002 (+15)。0003 は roic が無い。
+            let (_, improving) = try await send(app, "/v1/screen?roic_yoy_min=5&sort=roic_yoy&order=desc")
+            #expect(codes(improving) == ["0002", "0001"])
         }
     }
 
