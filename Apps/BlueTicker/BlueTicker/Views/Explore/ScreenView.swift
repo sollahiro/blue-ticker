@@ -175,7 +175,7 @@ struct ScreenView: View {
             guard !Task.isCancelled else { return false }
             do {
                 let response = try await APIClient.shared.screen(
-                    sectors: sectors, filters: preset.filters, limit: 1)
+                    sectors: sectors, filters: preset.filters, limit: 1, sort: preset.sortMetric)
                 next[preset] = response.matched
             } catch {
                 continue
@@ -294,7 +294,8 @@ private struct ScreenResultsView: View {
 
     private func run() async {
         do {
-            let response = try await APIClient.shared.screen(sectors: sectors, filters: preset.filters)
+            let response = try await APIClient.shared.screen(
+                sectors: sectors, filters: preset.filters, sort: preset.sortMetric)
             items = response.items
             matched = response.matched
             errorMessage = nil

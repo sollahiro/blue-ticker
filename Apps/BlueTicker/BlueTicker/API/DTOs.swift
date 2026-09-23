@@ -312,6 +312,20 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// `GET /v1/screen` の `sort` に載せる指標。サーバーはソート指標が null の行を落とすため、
+    /// フィルタで要求していない指標をソートに使うと暗黙の絞り込みになる。各プリセットが
+    /// 必ず非 null にする指標を選ぶ。
+    var sortMetric: String {
+        switch self {
+        case .quality, .growth, .healthyGrowth, .highCf:
+            "roic"
+        case .improving:
+            "roic_yoy"
+        case .highPayout:
+            "payout_ratio"
+        }
+    }
+
     /// プリセット条件の短い言い換え（スコアではない）。脚注 / セクション footer 用。
     var reasonText: String {
         switch self {
