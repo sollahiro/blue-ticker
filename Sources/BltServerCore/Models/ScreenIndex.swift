@@ -55,9 +55,8 @@ final class ScreenIndex: Model, @unchecked Sendable {
     @OptionalField(key: "fcf")
     var fcf: Double?
 
-    // 改善プリセット（3 期年平均変化幅 pp/年）。前年差（yoy）列は廃止して置き換え。
-    // 契約は screen-v3 のまま（索引は全消去→再 ingest で整合させる運用）。
-
+    /// 改善プリセット（3 期年平均変化幅 pp/年）。物理テーブルには旧 `operating_margin_yoy` /
+    /// `roic_yoy` が nullable で残る（削除しない）。Model・許可リスト・GET /v1/screen からは除外する。
     @OptionalField(key: "operating_margin_cagr_3y")
     var operatingMarginCagr3y: Double?
 
