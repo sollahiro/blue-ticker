@@ -327,13 +327,12 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
 
     /// `GET /v1/screen` の `sort` に載せる指標。サーバーはソート指標が null の行を落とすため、
     /// フィルタで要求していない指標をソートに使うと暗黙の絞り込みになる。各プリセットが
-    /// 必ず非 null にする指標を選ぶ。
+    /// 必ず非 null にする指標を選ぶ。改善は変化幅で並べると落ち込みの深い赤字回復ほど上位に来るため、
+    /// 変化幅は条件に留めて到達水準（ROIC）で並べる。
     var sortMetric: String {
         switch self {
-        case .quality, .growth, .healthyGrowth, .highCf:
+        case .quality, .growth, .healthyGrowth, .highCf, .improving:
             "roic"
-        case .improving:
-            "roic_cagr_3y"
         case .highPayout:
             "payout_ratio"
         }
