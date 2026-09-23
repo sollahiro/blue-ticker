@@ -17,10 +17,10 @@ struct TickerView: View {
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
+    @State private var barContentWidth: CGFloat = 390
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             CompanyOverviewView(code: company.code)
             cards
             pageDots
@@ -30,7 +30,30 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { barContentWidth = $0 }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                HStack(alignment: .center, spacing: 8) {
+                    CompanyIconView(company, size: Theme.headerIconSize)
+                    // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
+                    ViewThatFits(in: .horizontal) {
+                        Text(Format.displayName(company.name, fallback: company.code))
+                            .font(nameFont)
+                            .lineLimit(1)
+                        Text(Format.displayName(company.name, fallback: company.code))
+                            .font(compactNameFont)
+                            .lineLimit(2)
+                            .lineSpacing(-2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, Theme.headerPillHorizontalPadding)
+                // 戻ると右上グループの残りだけ使い、ピルは残幅いっぱいに広げる。
+                .frame(width: max(barContentWidth - Theme.headerPillReservedWidth, 120), alignment: .leading)
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
                 Button(
@@ -118,36 +141,14 @@ struct TickerView: View {
         )
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            CompanyIconView(company, size: Theme.headerSideHeight)
-            VStack(alignment: .leading, spacing: Theme.headerChipSpacing) {
-                Text(Format.displayName(company.name, fallback: company.code))
-                    .font(nameFont)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: Theme.headerRowHeight)
-                HStack(alignment: .center, spacing: 8) {
-                    Text(company.code)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.textMuted)
-                    if !displaySector.isEmpty {
-                        SectorTag(sector: displaySector, selected: true, height: Theme.headerRowHeight)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: Theme.headerRowHeight)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-    }
-
     private var nameFont: Font {
         let size = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
         return .system(size: size, weight: .bold)
+    }
+
+    /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
+    private var compactNameFont: Font {
+        .system(size: 15, weight: .semibold)
     }
 
     private func hydrateSector() async {

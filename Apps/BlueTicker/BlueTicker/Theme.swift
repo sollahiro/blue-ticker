@@ -13,12 +13,13 @@ enum Theme {
     static let control = Color(red: 0.08, green: 0.08, blue: 0.09)
     /// 銘柄カード・概要カード。背景から浮かぶ濃いグレー。
     static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
-    /// 銘柄ヘッダ全体の高さ（アイコン・社名＋コード／業種）。
-    static let headerSideHeight: CGFloat = 56
-    /// 社名行とコード行の段間。
-    static let headerChipSpacing: CGFloat = 4
-    /// ヘッダ二段それぞれの行高。
-    static var headerRowHeight: CGFloat { (headerSideHeight - headerChipSpacing) / 2 }
+    /// 銘柄ヘッダのアイコン（ナビゲーションバー左端、社名の左）。
+    static let headerIconSize: CGFloat = 30
+    /// 銘柄ピル（アイコン＋社名カプセル）が使える幅＝画面幅−この予約分。
+    /// 戻る・右上グループ・左右余白・カプセル間のすき間。
+    static let headerPillReservedWidth: CGFloat = 216
+    /// ピル内側の水平余白。アイコン左と社名右に足す（カプセル自体の余白とは別）。
+    static let headerPillHorizontalPadding: CGFloat = 10
     /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
     static let tickerPageDotGutter: CGFloat = 36
     /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
