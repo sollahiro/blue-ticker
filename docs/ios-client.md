@@ -142,7 +142,13 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
   - **高CF**（BLT-73）: `cfo_margin_min=10`、`fcf_min=0`（`min` は包含比較なので「FCF > 0」の近似）、`roic_min=8`
   - **改善**（BLT-75）: `operating_margin_cagr_3y_min=3`、`roic_cagr_3y_min=2`、`roic_min=8`。3 期年平均変化幅（pp/年。前年差は 1 年のブレを拾いすぎるため不採用）。変化幅だけだと該当の約 6 割が 3 期前 ROIC < 0 の赤字回復銘柄になるため、到達水準を `roic_min=8` で縛る（2026-09 本番 financials で 277 → 136 社、赤字回復は 162 → 30 社）
   - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。暫定設定。高効率案（BLT-74）は優良と重複するため採用しない
-- 結果行は常に core4 を出す（欠測は `—`。CAGR が null でも YoY に落とさない）: `roic` / `operating_margin` / `sales_cagr_3y` / `net_de`
+- 結果行はプリセットごとに 4 指標（`ScreenPreset.displayMetrics`、2×2）。条件に使った指標を脚注と同じ順で先に置き、残りを core4（`roic` / `operating_margin` / `sales_cagr_3y` / `net_de`）で埋める。サーバーは core4 とフィルタ・ソートに使った指標しか `items[]` に載せないため、それ以外の指標は列に選ばない。欠測は `—`（CAGR が null でも YoY に落とさない）:
+  - **優良**: ROIC / 営業利益率 / ネットD/E / 売上CAGR
+  - **成長**: 売上CAGR / 営業利益率 / ROIC / ネットD/E
+  - **安定**: 売上CAGR / ROIC / ネットD/E / 営業利益率
+  - **高CF**: 営業CFマージン / FCF（`autoYen`、符号で色分け）/ ROIC / ネットD/E
+  - **改善**: 営業利益率 年変化 / ROIC 年変化（`+1.2pp/年`）/ ROIC / 営業利益率
+  - **高還元**: 配当性向（高低の優劣を付けないため色帯なし）/ ROIC / 営業利益率 / ネットD/E
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
 - サーバー許可リスト（12 指標。screen-v3 で 6 → 12。改善は前年差から CAGR へ置き換え。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す。screen-v3 は据え置き — iOS は前年差を使っておらず、本番行は v2 stamp のままなので次回 financials ingest の stamp 検出で全件 rebuild される）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`

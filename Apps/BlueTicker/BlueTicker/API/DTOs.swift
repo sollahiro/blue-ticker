@@ -229,15 +229,25 @@ struct ScreenItem: Codable, Hashable, Identifiable {
     var roe: Double?
     var netDe: Double?
     var salesCagr3y: Double?
+    /// 以下はフィルタ・ソートに使ったときだけサーバーが載せる（core4 以外は既定で投影しない）。
+    var cfoMargin: Double?
+    var fcf: Double?
+    var operatingMarginCagr3y: Double?
+    var roicCagr3y: Double?
+    var payoutRatio: Double?
 
     var id: String { code }
 
     enum CodingKeys: String, CodingKey {
-        case code, name, market, sector, sales, roic, roe
+        case code, name, market, sector, sales, roic, roe, fcf
         case periodEnd = "period_end"
         case operatingMargin = "operating_margin"
         case netDe = "net_de"
         case salesCagr3y = "sales_cagr_3y"
+        case cfoMargin = "cfo_margin"
+        case operatingMarginCagr3y = "operating_margin_cagr_3y"
+        case roicCagr3y = "roic_cagr_3y"
+        case payoutRatio = "payout_ratio"
     }
 }
 
