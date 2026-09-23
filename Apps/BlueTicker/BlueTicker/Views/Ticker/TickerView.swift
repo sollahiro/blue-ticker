@@ -35,13 +35,20 @@ struct TickerView: View {
             ToolbarItem(placement: .topBarLeading) {
                 HStack(alignment: .center, spacing: 8) {
                     CompanyIconView(company, size: Theme.headerIconSize)
-                    Text(Format.displayName(company.name, fallback: company.code))
-                        .font(nameFont)
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
+                    ViewThatFits(in: .horizontal) {
+                        Text(Format.displayName(company.name, fallback: company.code))
+                            .font(nameFont)
+                            .lineLimit(1)
+                        Text(Format.displayName(company.name, fallback: company.code))
+                            .font(compactNameFont)
+                            .lineLimit(2)
+                            .lineSpacing(-2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
                 // 戻ると右上グループの残りだけ使い、ピルは残幅いっぱいに広げる。
@@ -137,6 +144,11 @@ struct TickerView: View {
     private var nameFont: Font {
         let size = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
         return .system(size: size, weight: .bold)
+    }
+
+    /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
+    private var compactNameFont: Font {
+        .system(size: 15, weight: .semibold)
     }
 
     private func hydrateSector() async {

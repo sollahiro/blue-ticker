@@ -17,9 +17,9 @@ enum Theme {
     static let headerIconSize: CGFloat = 30
     /// 銘柄ピル（アイコン＋社名カプセル）が使える幅＝画面幅−この予約分。
     /// 戻る・右上グループ・左右余白・カプセル間のすき間。
-    static let headerPillReservedWidth: CGFloat = 224
+    static let headerPillReservedWidth: CGFloat = 216
     /// ピル内側の水平余白。アイコン左と社名右に足す（カプセル自体の余白とは別）。
-    static let headerPillHorizontalPadding: CGFloat = 6
+    static let headerPillHorizontalPadding: CGFloat = 10
     /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
     static let tickerPageDotGutter: CGFloat = 36
     /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
