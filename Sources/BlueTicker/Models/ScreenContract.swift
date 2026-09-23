@@ -25,6 +25,8 @@ import Foundation
 /// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
 /// 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
 /// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・3 期 CAGR 2 軸・payout_ratio）を v3 とする。
+/// 改善 2 軸は前年差（`*_yoy`）で出荷した直後に 3 期 CAGR へ差し替えたが、iOS 未使用で
+/// 本番行も v2 stamp のまま（次回 ingest で全件 rebuild）だったため v3 に畳んだ。
 public let screenIndexVersion = "screen-v3"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
