@@ -38,12 +38,14 @@ struct TickerView: View {
                     Text(Format.displayName(company.name, fallback: company.code))
                         .font(nameFont)
                         .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                        // 戻ると右上グループの残りだけ使い、長い社名は切り詰める。
-                        .frame(maxWidth: max(barContentWidth - Theme.headerBarReservedWidth, 60))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                // ツールバーの提案幅（ほぼアイコン分）を無視して理想幅で出す。
-                .fixedSize()
+                .padding(.horizontal, Theme.headerPillHorizontalPadding)
+                // 戻ると右上グループの残りだけ使い、ピルは残幅いっぱいに広げる。
+                .frame(width: max(barContentWidth - Theme.headerPillReservedWidth, 120), alignment: .leading)
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
