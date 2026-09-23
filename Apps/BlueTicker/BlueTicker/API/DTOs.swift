@@ -302,9 +302,11 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
             ]
         case .improving:
             // CAGR（3 期年平均変化幅 pp/年）で持続的な改善を拾う。前年差版は 1 年のブレを拾いすぎるため不採用。
+            // 変化幅だけだと赤字からの回復が上位を占めるため、到達水準を ROIC≥8% で縛る。
             [
                 ScreenMetricFilter(key: "operating_margin_cagr_3y", min: 3, max: nil),
                 ScreenMetricFilter(key: "roic_cagr_3y", min: 2, max: nil),
+                ScreenMetricFilter(key: "roic", min: 8, max: nil),
             ]
         case .highPayout:
             [
@@ -339,7 +341,7 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
         case .highCf:
             "営業CFマージン≥10% · FCF>0 · ROIC≥8%"
         case .improving:
-            "営業利益率+3pp/年 · ROIC+2pp/年（3期CAGR）"
+            "営業利益率+3pp/年 · ROIC+2pp/年（3期CAGR） · ROIC≥8%"
         case .highPayout:
             "配当性向40〜60%（暫定）"
         }
