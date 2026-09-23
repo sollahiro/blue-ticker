@@ -15,6 +15,8 @@ enum Theme {
     static let card = Color(red: 0.13, green: 0.14, blue: 0.15)
     /// 銘柄ヘッダのアイコン（ナビゲーションバー左端、社名の左）。
     static let headerIconSize: CGFloat = 30
+    /// 社名が使える幅＝画面幅−この予約分。戻る・右上グループ・左右余白・アイコン＋すき間。
+    static let headerBarReservedWidth: CGFloat = 276
     /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
     static let tickerPageDotGutter: CGFloat = 36
     /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。

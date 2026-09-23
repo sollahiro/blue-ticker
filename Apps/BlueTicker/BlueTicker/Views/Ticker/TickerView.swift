@@ -17,6 +17,7 @@ struct TickerView: View {
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
+    @State private var barContentWidth: CGFloat = 390
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +30,7 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { barContentWidth = $0 }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 HStack(alignment: .center, spacing: 8) {
@@ -37,7 +39,10 @@ struct TickerView: View {
                         .font(nameFont)
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
+                        // 戻ると右上グループの残りだけ使い、長い社名は切り詰める。
+                        .frame(maxWidth: max(barContentWidth - Theme.headerBarReservedWidth, 60))
                 }
+                // ツールバーの提案幅（ほぼアイコン分）を無視して理想幅で出す。
                 .fixedSize()
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
