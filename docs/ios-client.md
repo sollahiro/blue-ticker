@@ -142,13 +142,13 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
   - **高CF**（BLT-73）: `cfo_margin_min=10`、`fcf_min=0`（`min` は包含比較なので「FCF > 0」の近似）、`roic_min=8`
   - **改善**（BLT-75）: `operating_margin_cagr_3y_min=3`、`roic_cagr_3y_min=2`、`roic_min=8`。3 期年平均変化幅（pp/年。前年差は 1 年のブレを拾いすぎるため不採用）。変化幅だけだと該当の約 6 割が 3 期前 ROIC < 0 の赤字回復銘柄になるため、到達水準を `roic_min=8` で縛る（2026-09 本番 financials で 277 → 136 社、赤字回復は 162 → 30 社）
   - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。`payout_ratio` は直近 3 期の年次性向の算術平均（screen-v4。最新 FY 単年は残さない）。高効率案（BLT-74）は優良と重複するため採用しない
-- 結果行の指標は会社アイコンの左端から業種タグの右端まで使う（社名左端には揃えない）。短い 4 指標（優良・成長）は 1 行。項目名・数値が大きい安定・高CF・改善は 2×2 のまま。高還元は上段に配当性向の 3 年平均と直近 3 期、下段に営業利益率 / ROIC / ネットD/E。欠測は `—`（CAGR が null でも YoY に落とさない）:
+- 結果行の指標は会社アイコンの左端から業種タグの右端まで使う（社名左端には揃えない）。短い 4 指標（優良・成長）は 1 行。項目名・数値が大きい安定・高CF・改善は 2×2 のまま。高還元は上段に配当性向3年平均と配当性向3年推移の 2 行、下段に営業利益率 / ROIC / ネットD/E。欠測は `—`（CAGR が null でも YoY に落とさない）:
   - **優良**: ROIC / 営業利益率 / ネットD/E / 売上CAGR（1 行）
   - **成長**: 売上CAGR / 営業利益率 / ROIC / ネットD/E（1 行）
   - **安定**: 売上CAGR / ROIC / ネットD/E / 営業利益率（2 行）
   - **高CF**: 営業CFマージン / FCF（`autoYen`、符号で色分け）/ ROIC / ネットD/E（2 行）
   - **改善**: 営業利益率 年変化 / ROIC 年変化（`+1.2pp/年`）/ ROIC / 営業利益率（2 行）
-  - **高還元**: 上段 `配当性向 年平均XX% 直近3年XX%→XX%→XX%`（高低の優劣を付けないため色帯なし）/ 下段 営業利益率 / ROIC / ネットD/E
+  - **高還元**: 上段は他指標と同じく項目名グレー・数値色付きの 2 行（`配当性向3年平均` / `配当性向3年推移` の `XX%→XX%→XX%`。高低の優劣は付けないため色帯なし、数値は accent）/ 下段 営業利益率 / ROIC / ネットD/E
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
 - サーバー許可リスト（12 指標。screen-v3 で 6 → 12。screen-v4 は `payout_ratio` の意味を最新 FY 単年から直近 3 期算術平均へ差し替えるだけでキーは増やさない。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`

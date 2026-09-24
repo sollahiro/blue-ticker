@@ -23,7 +23,7 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
         case .fcf: "FCF"
         case .operatingMarginCagr3y: "営業利益率 年変化"
         case .roicCagr3y: "ROIC 年変化"
-        case .payoutRatio: "配当性向 年平均"
+        case .payoutRatio: "配当性向3年平均"
         }
     }
 
@@ -64,7 +64,7 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
 }
 
 extension ScreenPreset {
-    /// 結果行の指標グリッド。高還元の平均・年次系列は `ScreenPayoutHeadline` が担うので、
+    /// 結果行の指標グリッド。高還元の平均・推移は `ScreenPayoutHeadline` が担うので、
     /// ここでは下段 3 指標だけ。core4 以外はフィルタ・ソートに使ったときしかサーバーが返さない。
     var displayMetrics: [ScreenDisplayMetric] {
         switch self {
@@ -382,25 +382,71 @@ private struct ScreenPayoutHeadline: View {
     var item: ScreenItem
 
     var body: some View {
-        Text(headline)
-            .font(.subheadline.monospacedDigit())
-            .foregroundStyle(Theme.text)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 6) {
+            ScreenMetricLabelValue(
+                title: "配当性向3年平均",
+                value: Format.percent(item.payoutRatio),
+                color: item.payoutRatio == nil ? Theme.textMuted : Theme.accent
+            )
+            VStack(alignment: .leading, spacing: 1) {
+                Text("配当性向3年推移")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: 0) {
+                    ForEach(Array(years.enumerated()), id: \.offset) { index, value in
+                        if index > 0 {
+                            Text("→")
+                                .font(.subheadline.monospacedDigit().weight(.semibold))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        Text(Format.percent(value))
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(value == nil ? Theme.textMuted : Theme.accent)
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityLabel(headline)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "配当性向3年平均 \(Format.percent(item.payoutRatio))、配当性向3年推移 \(trendText)"
+        )
     }
 
-    private var headline: String {
-        let years = (0..<3).map { index -> String in
-            let value: Double?
-            if let series = item.payoutRatio3y, index < series.count {
-                value = series[index]
-            } else {
-                value = nil
-            }
-            return Format.percent(value)
+    private var years: [Double?] {
+        let series = item.payoutRatio3y ?? []
+        return (0..<3).map { $0 < series.count ? series[$0] : nil }
+    }
+
+    private var trendText: String {
+        years.map { Format.percent($0) }.joined(separator: "→")
+    }
+}
+
+/// 条件検索の結果行指標。項目名はグレー、数値は色付き。
+private struct ScreenMetricLabelValue: View {
+    var title: String
+    var value: String
+    var color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        return "配当性向 年平均\(Format.percent(item.payoutRatio)) 直近3年\(years.joined(separator: "→"))"
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -415,19 +461,11 @@ private struct ScreenMetricValuesView: View {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(metricRows[index]) { metric in
                         let value = item.value(for: metric)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(metric.title)
-                                .font(.caption2)
-                                .foregroundStyle(Theme.textMuted)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                            Text(metric.format(value))
-                                .font(.subheadline.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(value.map { metric.band.color(for: $0) } ?? Theme.textMuted)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        ScreenMetricLabelValue(
+                            title: metric.title,
+                            value: metric.format(value),
+                            color: value.map { metric.band.color(for: $0) } ?? Theme.textMuted
+                        )
                     }
                 }
             }
