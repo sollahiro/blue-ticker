@@ -394,20 +394,10 @@ private struct ScreenPayoutHeadline: View {
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                HStack(spacing: 0) {
-                    ForEach(Array(years.enumerated()), id: \.offset) { index, value in
-                        if index > 0 {
-                            Text("→")
-                                .font(.subheadline.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                        Text(Format.percent(value))
-                            .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(value == nil ? Theme.textMuted : Theme.accent)
-                    }
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                // 年次が横に収まらないときは折り返す（大きい Dynamic Type で切らない）。
+                payoutTrend
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -424,6 +414,16 @@ private struct ScreenPayoutHeadline: View {
 
     private var trendText: String {
         years.map { Format.percent($0) }.joined(separator: "→")
+    }
+
+    private var payoutTrend: Text {
+        years.enumerated().reduce(Text("")) { partial, pair in
+            let (index, value) = pair
+            let piece = Text(Format.percent(value))
+                .foregroundStyle(value == nil ? Theme.textMuted : Theme.accent)
+            if index == 0 { return piece }
+            return partial + Text("→").foregroundStyle(Theme.textMuted) + piece
+        }
     }
 }
 
