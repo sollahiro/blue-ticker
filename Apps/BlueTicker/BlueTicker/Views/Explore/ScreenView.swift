@@ -401,10 +401,12 @@ private struct ScreenPayoutHeadline: View {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(Theme.textMuted)
-                .fixedSize()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             value
                 .font(.subheadline.monospacedDigit().weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
