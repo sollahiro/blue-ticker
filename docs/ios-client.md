@@ -141,23 +141,24 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
   - **安定**（旧 健全成長）: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
   - **高CF**（BLT-73）: `cfo_margin_min=10`、`fcf_min=0`（`min` は包含比較なので「FCF > 0」の近似）、`roic_min=8`
   - **改善**（BLT-75）: `operating_margin_cagr_3y_min=3`、`roic_cagr_3y_min=2`、`roic_min=8`。3 期年平均変化幅（pp/年。前年差は 1 年のブレを拾いすぎるため不採用）。変化幅だけだと該当の約 6 割が 3 期前 ROIC < 0 の赤字回復銘柄になるため、到達水準を `roic_min=8` で縛る（2026-09 本番 financials で 277 → 136 社、赤字回復は 162 → 30 社）
-  - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。暫定設定。高効率案（BLT-74）は優良と重複するため採用しない
-- 結果行はプリセットごとに 4 指標（`ScreenPreset.displayMetrics`、2×2）。条件に使った指標を脚注と同じ順で先に置き、残りを core4（`roic` / `operating_margin` / `sales_cagr_3y` / `net_de`）で埋める。サーバーは core4 とフィルタ・ソートに使った指標しか `items[]` に載せないため、それ以外の指標は列に選ばない。欠測は `—`（CAGR が null でも YoY に落とさない）:
-  - **優良**: ROIC / 営業利益率 / ネットD/E / 売上CAGR
-  - **成長**: 売上CAGR / 営業利益率 / ROIC / ネットD/E
-  - **安定**: 売上CAGR / ROIC / ネットD/E / 営業利益率
-  - **高CF**: 営業CFマージン / FCF（`autoYen`、符号で色分け）/ ROIC / ネットD/E
-  - **改善**: 営業利益率 年変化 / ROIC 年変化（`+1.2pp/年`）/ ROIC / 営業利益率
-  - **高還元**: 配当性向（高低の優劣を付けないため色帯なし）/ ROIC / 営業利益率 / ネットD/E
+  - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。`payout_ratio` は直近 3 期の年次性向の算術平均（screen-v4。最新 FY 単年は残さない）。高効率案（BLT-74）は優良と重複するため採用しない
+- 結果行の指標は会社アイコンの左端から業種タグの右端まで使う（社名左端には揃えない）。短い 4 指標（優良・成長）は 1 行。項目名・数値が大きい安定・高CF・改善は 2×2 のまま。高還元は上段に配当性向の 3 年平均と直近 3 期、下段に営業利益率 / ROIC / ネットD/E。欠測は `—`（CAGR が null でも YoY に落とさない）:
+  - **優良**: ROIC / 営業利益率 / ネットD/E / 売上CAGR（1 行）
+  - **成長**: 売上CAGR / 営業利益率 / ROIC / ネットD/E（1 行）
+  - **安定**: 売上CAGR / ROIC / ネットD/E / 営業利益率（2 行）
+  - **高CF**: 営業CFマージン / FCF（`autoYen`、符号で色分け）/ ROIC / ネットD/E（2 行）
+  - **改善**: 営業利益率 年変化 / ROIC 年変化（`+1.2pp/年`）/ ROIC / 営業利益率（2 行）
+  - **高還元**: 上段 `配当性向 年平均XX% 直近3年XX%→XX%→XX%`（高低の優劣を付けないため色帯なし）/ 下段 営業利益率 / ROIC / ネットD/E
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
-- サーバー許可リスト（12 指標。screen-v3 で 6 → 12。改善は前年差から CAGR へ置き換え。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す。screen-v3 は据え置き — iOS は前年差を使っておらず、本番行は v2 stamp のままなので次回 financials ingest の stamp 検出で全件 rebuild される）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`
+- サーバー許可リスト（12 指標。screen-v3 で 6 → 12。screen-v4 は `payout_ratio` の意味を最新 FY 単年から直近 3 期算術平均へ差し替えるだけでキーは増やさない。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`
 - 3 期売上 CAGR `sales_cagr_3y` は `screen_index` の派生列。最新 Summary 年から売上 > 0 の直近 3 期を取り、`((latest/oldest)^(1/2) - 1) * 100`。3 期に満たなければ null。Summary の `years[]` には CAGR / YoY キーを足さない
-- screen-v3 の派生列（いずれも ingest 時に Summary から派生。Summary の同義語と単位・符号は揃える）: `cfo` = 営業 CF（百万円）。`cfo_margin` = cfo ÷ sales × 100（%）で sales ≤ 0 は null。`fcf` = cfo − capex（百万円。Summary の `cfc` = cfo + cfi とは別物）。`operating_margin_cagr_3y` / `roic_cagr_3y` = 3 期年平均変化幅（pp/年、直近の非欠測 3 期で（最新 − 最古）÷ 2。利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR ではなく pp の年率変化。期の選定は `sales_cagr_3y` と同じで 3 期に満たなければ null）。`payout_ratio` = dividend_ss ÷ net_profit × 100（%）で net_profit ≤ 0（赤字期）または配当行無しは null（無配と未抽出を区別しない。特別配当も区別しない。SS 当期帰属を採り CF 実払いは使わない）
+- screen-v3 の派生列（いずれも ingest 時に Summary から派生。Summary の同義語と単位・符号は揃える）: `cfo` = 営業 CF（百万円）。`cfo_margin` = cfo ÷ sales × 100（%）で sales ≤ 0 は null。`fcf` = cfo − capex（百万円。Summary の `cfc` = cfo + cfi とは別物）。`operating_margin_cagr_3y` / `roic_cagr_3y` = 3 期年平均変化幅（pp/年、直近の非欠測 3 期で（最新 − 最古）÷ 2。利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR ではなく pp の年率変化。期の選定は `sales_cagr_3y` と同じで 3 期に満たなければ null）
+- screen-v4: `payout_ratio` は最新 FY 単年を残さず、直近 3 期の年次性向（各期 `dividend_ss` ÷ `net_profit` × 100）の算術平均に置き換える。3 期とも定義できるときだけ。欠ける・赤字（net_profit ≤ 0）・配当行無しはその期を null とし平均も null（無配と未抽出を区別しない。特別配当も区別しない。SS 当期帰属を採り CF 実払いは使わない）。表示用の年次系列 `payout_ratio_3y`（古→新、不足は先頭 null、許可リスト外）は `payout_ratio` を投影するときだけ `items[]` に載せる
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v3`。`fin-vN` は上げない）。skills カタログには載せない。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標。`payout_ratio` 投影時は `payout_ratio_3y` も）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v4`。`fin-vN` は上げない）。skills カタログには載せない。
 
 ## 認証
 

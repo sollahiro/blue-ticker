@@ -45,6 +45,7 @@ final class ScreenIndex: Model, @unchecked Sendable {
     var salesCagr3y: Double?
 
     // screen-v3（高CF・高効率・改善・高還元）。定義・null 方針は `ScreenContract.swift`。
+    // screen-v4 で `payout_ratio` を最新 FY 単年から直近 3 期算術平均へ差し替え。
 
     @OptionalField(key: "cfo")
     var cfo: Double?
@@ -65,6 +66,16 @@ final class ScreenIndex: Model, @unchecked Sendable {
 
     @OptionalField(key: "payout_ratio")
     var payoutRatio: Double?
+
+    /// 直近 3 期の年次配当性向（古→新）。許可リスト外の表示列。screen-v4。
+    @OptionalField(key: "payout_ratio_y1")
+    var payoutRatioY1: Double?
+
+    @OptionalField(key: "payout_ratio_y2")
+    var payoutRatioY2: Double?
+
+    @OptionalField(key: "payout_ratio_y3")
+    var payoutRatioY3: Double?
 
     /// 派生契約の版（`screenIndexVersion`）。GET /v1/screen には出さない。
     /// NULL は未投影。公開床の financials は次回 ingest で投影する（現行 fin-vN 一致は問わない）。
@@ -94,6 +105,9 @@ final class ScreenIndex: Model, @unchecked Sendable {
         operatingMarginCagr3y = row[.operatingMarginCagr3y]
         roicCagr3y = row[.roicCagr3y]
         payoutRatio = row[.payoutRatio]
+        payoutRatioY1 = row.payoutRatio3y[0]
+        payoutRatioY2 = row.payoutRatio3y[1]
+        payoutRatioY3 = row.payoutRatio3y[2]
         cacheVersion = screenIndexVersion
     }
 
@@ -104,7 +118,7 @@ final class ScreenIndex: Model, @unchecked Sendable {
         }
         return ScreenRow(
             code: id ?? "", name: name, market: market, sector: sector, periodEnd: periodEnd,
-            metrics: metrics)
+            metrics: metrics, payoutRatio3y: [payoutRatioY1, payoutRatioY2, payoutRatioY3])
     }
 
     subscript(_ metric: ScreenMetric) -> Double? {

@@ -92,16 +92,40 @@ import Testing
 
     @Test func screenRowPayoutRatioUsesParentNetProfit() throws {
         // 親会社帰属とグループ当期利益がずれるとき、分母は Summary `net_profit`（親会社）。
-        // コカ・コーラBJH S100XR1L は赤字期なので payout は null。黒字の差額は親会社側。
+        // コカ・コーラBJH S100XR1L は赤字期なのでその期の性向は null。黒字の差額は親会社側。
         let loss = try response(years: [
+            ["fy_end": "2023-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
+            ["fy_end": "2024-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
             ["fy_end": "2025-12-31", "net_profit": -50_763.0, "dividend_ss": 9_763.0],
         ]).screenRow()
         #expect(loss?[.payoutRatio] == nil)
+        #expect(loss?.payoutRatio3y == [10.0, 10.0, nil])
 
         let profit = try response(years: [
+            ["fy_end": "2023-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
+            ["fy_end": "2024-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
             ["fy_end": "2025-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
         ]).screenRow()
         #expect(profit?[.payoutRatio] == 10)
+        #expect(profit?.payoutRatio3y == [10.0, 10.0, 10.0])
+    }
+
+    @Test func screenRowPayoutRatioIsThreeYearAverage() throws {
+        let row = try response(years: [
+            ["fy_end": "2023-03-31", "net_profit": 100.0, "dividend_ss": 20.0],
+            ["fy_end": "2024-03-31", "net_profit": 100.0, "dividend_ss": 30.0],
+            ["fy_end": "2025-03-31", "net_profit": 100.0, "dividend_ss": 40.0],
+            ["fy_end": "2022-03-31", "net_profit": 100.0, "dividend_ss": 90.0],
+        ]).screenRow()
+        let unwrapped = try #require(row)
+        #expect(unwrapped[.payoutRatio] == 30)
+        #expect(unwrapped.payoutRatio3y == [20.0, 30.0, 40.0])
+
+        let single = try response(years: [
+            ["fy_end": "2025-12-31", "net_profit": 90.0, "dividend_ss": 9.0],
+        ]).screenRow()
+        #expect(single?[.payoutRatio] == nil)
+        #expect(single?.payoutRatio3y == [nil, nil, 10.0])
     }
 
     @Test func screenRowCagrUsesLatestYearOnceSalesIsProjected() throws {
@@ -132,10 +156,12 @@ import Testing
 
     @Test func screenRowDerivesScreenV3Metrics() throws {
         let row = try response(years: [
-            ["fy_end": "2023-03-31", "operating_margin": 6.0, "roic": 8.0],
-            ["fy_end": "2024-03-31", "operating_margin": 9.0, "roic": 11.0],
+            ["fy_end": "2023-03-31", "operating_margin": 6.0, "roic": 8.0,
+             "dividend_ss": 40.0, "net_profit": 200.0],
+            ["fy_end": "2024-03-31", "operating_margin": 9.0, "roic": 11.0,
+             "dividend_ss": 50.0, "net_profit": 200.0],
             ["fy_end": "2025-03-31", "sales": 2000.0, "cfo": 300.0, "capex": 100.0,
-             "operating_margin": 12.0, "roic": 14.0, "dividend_ss": 60.0, "net_profit": 200.0],
+             "operating_margin": 12.0, "roic": 14.0, "dividend_ss": 90.0, "net_profit": 200.0],
         ]).screenRow()
         let unwrapped = try #require(row)
         #expect(unwrapped[.cfo] == 300)
@@ -145,6 +171,7 @@ import Testing
         #expect(unwrapped[.operatingMarginCagr3y] == 3)
         #expect(unwrapped[.roicCagr3y] == 3)
         #expect(unwrapped[.payoutRatio] == 30)
+        #expect(unwrapped.payoutRatio3y == [20.0, 25.0, 45.0])
     }
 
     @Test func screenRowScreenV3NullPolicies() throws {
@@ -162,15 +189,21 @@ import Testing
         #expect(zeroSales?[.cfoMargin] == nil)
         #expect(zeroSales?[.fcf] == nil)
 
-        // net_profit ≤ 0（赤字期）・配当行無し → payout_ratio は null（無配と未抽出を区別しない）。
+        // 直近 3 期のうち 1 期でも欠ける / 赤字 / 配当行無し → 平均は null。
         let loss = try response(years: [
+            ["fy_end": "2023-03-31", "net_profit": 200.0, "dividend_ss": 40.0],
+            ["fy_end": "2024-03-31", "net_profit": 200.0, "dividend_ss": 40.0],
             ["fy_end": "2025-03-31", "net_profit": -50.0, "dividend_ss": 10.0],
         ]).screenRow()
         #expect(loss?[.payoutRatio] == nil)
+        #expect(loss?.payoutRatio3y == [20.0, 20.0, nil])
         let noDividend = try response(years: [
-            ["fy_end": "2025-03-31", "net_profit": 200.0],
+            ["fy_end": "2023-03-31", "net_profit": 200.0, "dividend_ss": 40.0],
+            ["fy_end": "2024-03-31", "net_profit": 200.0],
+            ["fy_end": "2025-03-31", "net_profit": 200.0, "dividend_ss": 40.0],
         ]).screenRow()
         #expect(noDividend?[.payoutRatio] == nil)
+        #expect(noDividend?.payoutRatio3y == [20.0, nil, 20.0])
     }
 
     @Test func screenRowMetricCagrDedupesDuplicateFyEnd() throws {
@@ -277,5 +310,23 @@ import Testing
         #expect(item?["operating_margin"] is NSNull)
         #expect(item?["sales_cagr_3y"] is NSNull)
         #expect(item?["roe"] == nil)
+        #expect(item?["payout_ratio_3y"] == nil)
+    }
+
+    @Test func responseJsonProjectsPayoutRatio3yWithPayoutFilter() {
+        let row = ScreenRow(
+            code: "7203", name: "トヨタ", market: "プライム", sector: "輸送用機器",
+            periodEnd: "2025-03-31",
+            metrics: [.payoutRatio: 30, .roic: 10],
+            payoutRatio3y: [20.0, 30.0, 40.0])
+        let query = ScreenQuery(ranges: [.payoutRatio: ScreenRange(min: 20, max: 60)])
+        let json = screenResponseJSON(rows: [row], matched: 1, query: query)
+        let item = (json["items"] as? [[String: Any]])?.first
+        #expect(item?["payout_ratio"] as? Double == 30)
+        let series = item?["payout_ratio_3y"] as? [Any]
+        #expect(series?.count == 3)
+        #expect(series?[0] as? Double == 20)
+        #expect(series?[1] as? Double == 30)
+        #expect(series?[2] as? Double == 40)
     }
 }
