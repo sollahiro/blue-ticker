@@ -34,6 +34,7 @@ struct TickerView: View {
             // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
             ToolbarItem(placement: .title) {
                 HStack(alignment: .center, spacing: 8) {
+                    Spacer(minLength: 0)
                     CompanyIconView(company, size: Theme.headerIconSize)
                     // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
                     ViewThatFits(in: .horizontal) {
@@ -44,11 +45,11 @@ struct TickerView: View {
                             .font(compactNameFont)
                             .lineLimit(2)
                             .lineSpacing(-2)
-                            .multilineTextAlignment(.leading)
+                            .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(Theme.text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
                 .padding(.vertical, Theme.headerPillVerticalPadding)
