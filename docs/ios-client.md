@@ -148,7 +148,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
   - **安定**: 売上CAGR / ROIC / ネットD/E / 営業利益率（2 行）
   - **高CF**: 営業CFマージン / FCF（`autoYen`、符号で色分け）/ ROIC / ネットD/E（2 行）
   - **改善**: 営業利益率 年変化 / ROIC 年変化（`+1.2pp/年`）/ ROIC / 営業利益率（2 行）
-  - **高還元**: 上段は項目名グレー・数値色付きの 2 行（同一行に `配当性向3年平均` `XX%` / `3年推移` `XX%→XX%→XX%`。高低の優劣は付けないため色帯なし、数値は accent。数値は縮小せず幅を確保し、入りきらなければ折り返す。長い項目名は残り幅に収める）/ 下段 営業利益率 / ROIC / ネットD/E
+  - **高還元**: 上段は項目名グレー・数値色付きの 2 行（同一行に `配当性向3年平均` `XX%` / `3年推移` `XX%→XX%→XX%`。高低の優劣は付けないため色帯なし、数値は accent。項目名・数値とも縮小しない。1 行に入らなければ数値だけ次行）/ 下段 営業利益率 / ROIC / ネットD/E
 - 理由はプリセット条件の短い言い換え（ブラックボックスのスコアではない）。プリセット行の脚注と結果セクションの footer に出す。チップは出さない
 - `APIClient.screen` とサーバー許可リストの配線は残す。UI がスライダーを出さないだけ
 - サーバー許可リスト（12 指標。screen-v3 で 6 → 12。screen-v4 は `payout_ratio` の意味を最新 FY 単年から直近 3 期算術平均へ差し替えるだけでキーは増やさない。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`

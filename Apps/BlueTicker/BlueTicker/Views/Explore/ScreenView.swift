@@ -397,16 +397,20 @@ private struct ScreenPayoutHeadline: View {
     }
 
     private func payoutLine(title: String, value: Text) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            value
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(1)
+        let label = Text(title)
+            .font(.caption2)
+            .foregroundStyle(Theme.textMuted)
+        let number = value
+            .font(.subheadline.monospacedDigit().weight(.semibold))
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                label.fixedSize()
+                number.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                label
+                number.fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
