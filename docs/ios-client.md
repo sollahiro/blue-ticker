@@ -141,7 +141,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
   - **安定**（旧 健全成長）: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
   - **高CF**（BLT-73）: `cfo_margin_min=10`、`fcf_min=0`（`min` は包含比較なので「FCF > 0」の近似）、`roic_min=8`
   - **改善**（BLT-75）: `operating_margin_cagr_3y_min=3`、`roic_cagr_3y_min=2`、`roic_min=8`。3 期年平均変化幅（pp/年。前年差は 1 年のブレを拾いすぎるため不採用）。変化幅だけだと該当の約 6 割が 3 期前 ROIC < 0 の赤字回復銘柄になるため、到達水準を `roic_min=8` で縛る（2026-09 本番 financials で 277 → 136 社、赤字回復は 162 → 30 社）
-  - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。`payout_ratio` は直近 3 期の年次性向の算術平均（screen-v4。最新 FY 単年は残さない）。暫定設定。高効率案（BLT-74）は優良と重複するため採用しない
+  - **高還元**（BLT-76）: `payout_ratio_min=40`、`payout_ratio_max=60`。`payout_ratio` は直近 3 期の年次性向の算術平均（screen-v4。最新 FY 単年は残さない）。高効率案（BLT-74）は優良と重複するため採用しない
 - 結果行の指標は会社アイコンの左端から業種タグの右端まで使う（社名左端には揃えない）。短い 4 指標（優良・成長）は 1 行。項目名・数値が大きい安定・高CF・改善は 2×2 のまま。高還元は上段に配当性向の 3 年平均と直近 3 期、下段に営業利益率 / ROIC / ネットD/E。欠測は `—`（CAGR が null でも YoY に落とさない）:
   - **優良**: ROIC / 営業利益率 / ネットD/E / 売上CAGR（1 行）
   - **成長**: 売上CAGR / 営業利益率 / ROIC / ネットD/E（1 行）
