@@ -389,7 +389,7 @@ private struct ScreenPayoutHeadline: View {
                 color: item.payoutRatio == nil ? Theme.textMuted : Theme.accent
             )
             VStack(alignment: .leading, spacing: 1) {
-                Text("配当性向3年推移")
+                Text("3年推移")
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
@@ -403,7 +403,7 @@ private struct ScreenPayoutHeadline: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "配当性向3年平均 \(Format.percent(item.payoutRatio))、配当性向3年推移 \(trendText)"
+            "配当性向3年平均 \(Format.percent(item.payoutRatio))、3年推移 \(trendText)"
         )
     }
 
