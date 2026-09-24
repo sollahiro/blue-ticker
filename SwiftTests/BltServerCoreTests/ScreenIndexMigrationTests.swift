@@ -113,4 +113,18 @@ private func columnNames(on sql: SQLDatabase) async throws -> Set<String> {
             #expect(try await columnNames(on: sql).count == 23)
         }
     }
+
+    @Test func addsPayoutRatio3yColumnsIdempotently() async throws {
+        try await withScreenIndexApp { app in
+            try await AddScreenCagrMetricsToScreenIndex().prepare(on: app.db)
+            try await AddScreenPayoutRatio3yToScreenIndex().prepare(on: app.db)
+            let sql = try #require(app.db as? SQLDatabase)
+            let names = try await columnNames(on: sql)
+            for column in AddScreenPayoutRatio3yToScreenIndex.columns {
+                #expect(names.contains(column))
+            }
+            try await AddScreenPayoutRatio3yToScreenIndex().prepare(on: app.db)
+            #expect(try await columnNames(on: sql).count == 26)
+        }
+    }
 }

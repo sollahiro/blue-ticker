@@ -34,6 +34,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(AddCacheVersionToScreenIndex())
         app.migrations.add(AddScreenV3MetricsToScreenIndex())
         app.migrations.add(AddScreenCagrMetricsToScreenIndex())
+        app.migrations.add(AddScreenPayoutRatio3yToScreenIndex())
         try await app.autoMigrate()
         try await registerRoutes(app, context: makeContext())
         try await body(app)
@@ -433,10 +434,12 @@ private func codes(_ json: [String: Any]?) -> [String] {
                 latest: [
                     "sales": 2000.0, "cfo": 300.0, "capex": 100.0,
                     "operating_margin": 12.0, "roic": 14.0,
-                    "dividend_ss": 60.0, "net_profit": 200.0,
+                    "dividend_ss": 90.0, "net_profit": 200.0,
                 ],
-                prior: ["operating_margin": 9.0, "roic": 11.0],
-                older: ["operating_margin": 6.0, "roic": 8.0])
+                prior: ["operating_margin": 9.0, "roic": 11.0,
+                        "dividend_ss": 50.0, "net_profit": 200.0],
+                older: ["operating_margin": 6.0, "roic": 8.0,
+                        "dividend_ss": 40.0, "net_profit": 200.0])
             try await upsertScreenIndex(code: "6758", response: resp, db: app.db)
             let row = try #require(try await ScreenIndex.find("6758", on: app.db))
             #expect(row.cfo == 300)
@@ -445,6 +448,9 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(row.operatingMarginCagr3y == 3)
             #expect(row.roicCagr3y == 3)
             #expect(row.payoutRatio == 30)
+            #expect(row.payoutRatioY1 == 20)
+            #expect(row.payoutRatioY2 == 25)
+            #expect(row.payoutRatioY3 == 45)
         }
     }
 
@@ -461,6 +467,9 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(row.operatingMarginCagr3y == nil)
             #expect(row.roicCagr3y == nil)
             #expect(row.payoutRatio == nil)
+            #expect(row.payoutRatioY1 == nil)
+            #expect(row.payoutRatioY2 == nil)
+            #expect(row.payoutRatioY3 == nil)
         }
     }
 
@@ -474,11 +483,20 @@ private func codes(_ json: [String: Any]?) -> [String] {
                 ("0003", ["sales": 1000.0]),
             ]
             for (code, latest) in rows {
+                let dividend = latest["dividend_ss"] as? Double
+                let profit = latest["net_profit"] as? Double
+                var prior: [String: Any] = ["roic": 14.0]
+                var older: [String: Any] = ["roic": 10.0]
+                if let dividend, let profit {
+                    prior["dividend_ss"] = dividend
+                    prior["net_profit"] = profit
+                    older["dividend_ss"] = dividend
+                    older["net_profit"] = profit
+                }
                 try await upsertScreenIndex(
                     code: code,
                     response: try makeResponse(
-                        code: code, latest: latest,
-                        prior: ["roic": 14.0], older: ["roic": 10.0]),
+                        code: code, latest: latest, prior: prior, older: older),
                     db: app.db)
             }
 
@@ -492,9 +510,16 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(item?["fcf"] as? Double == 200)
             #expect(item?["payout_ratio"] == nil)
 
-            // 高還元: payout_ratio ≥ 20 → 0001 のみ（0002 は 10、0003 は null）。
+            // 高還元: payout_ratio（3 年平均）≥ 20 → 0001 のみ（0002 は 10、0003 は null）。
             let (_, payout) = try await send(app, "/v1/screen?payout_ratio_min=20")
             #expect(codes(payout) == ["0001"])
+            let payoutItem = (payout?["items"] as? [[String: Any]])?.first
+            #expect(payoutItem?["payout_ratio"] as? Double == 30)
+            let series = payoutItem?["payout_ratio_3y"] as? [Any]
+            #expect(series?.count == 3)
+            #expect(series?[0] as? Double == 30)
+            #expect(series?[1] as? Double == 30)
+            #expect(series?[2] as? Double == 30)
 
             // 改善: roic_cagr_3y ≥ +3pp/年 → 0001 (+5) と 0002 (+7.5)。0003 は 3 期に満たない。
             let (_, improving) = try await send(

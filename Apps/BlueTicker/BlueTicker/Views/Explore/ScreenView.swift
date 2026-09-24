@@ -23,7 +23,7 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
         case .fcf: "FCF"
         case .operatingMarginCagr3y: "営業利益率 年変化"
         case .roicCagr3y: "ROIC 年変化"
-        case .payoutRatio: "配当性向"
+        case .payoutRatio: "配当性向 年平均"
         }
     }
 
@@ -64,9 +64,8 @@ enum ScreenDisplayMetric: String, CaseIterable, Identifiable {
 }
 
 extension ScreenPreset {
-    /// 結果行に出す 4 指標。条件に使った指標を脚注（`reasonText`）と同じ順で先に置き、残りを
-    /// core4 で埋める。core4 以外はフィルタ・ソートに使ったときしかサーバーが返さないため、
-    /// `filters` / `sortMetric` に無い非 core4 指標をここに足さない。
+    /// 結果行の指標グリッド。高還元の平均・年次系列は `ScreenPayoutHeadline` が担うので、
+    /// ここでは下段 3 指標だけ。core4 以外はフィルタ・ソートに使ったときしかサーバーが返さない。
     var displayMetrics: [ScreenDisplayMetric] {
         switch self {
         case .quality: [.roic, .operatingMargin, .netDe, .salesCagr3y]
@@ -74,7 +73,16 @@ extension ScreenPreset {
         case .healthyGrowth: [.salesCagr3y, .roic, .netDe, .operatingMargin]
         case .highCf: [.cfoMargin, .fcf, .roic, .netDe]
         case .improving: [.operatingMarginCagr3y, .roicCagr3y, .roic, .operatingMargin]
-        case .highPayout: [.payoutRatio, .roic, .operatingMargin, .netDe]
+        case .highPayout: [.operatingMargin, .roic, .netDe]
+        }
+    }
+
+    /// 短い 4 指標は 1 行。項目名・数値が大きいプリセットは 2 行のまま。
+    var metricColumnsPerRow: Int {
+        switch self {
+        case .quality, .growth: 4
+        case .highPayout: 3
+        case .healthyGrowth, .highCf, .improving: 2
         }
     }
 }
@@ -306,7 +314,7 @@ private struct ScreenResultsView: View {
                     Section {
                         ForEach(items) { item in
                             NavigationLink(value: CompanyRef(item)) {
-                                ScreenResultRow(item: item, metrics: preset.displayMetrics)
+                                ScreenResultRow(item: item, preset: preset)
                             }
                             .listRowBackground(Theme.elevated)
                         }
@@ -352,41 +360,75 @@ private struct ScreenResultsView: View {
 
 private struct ScreenResultRow: View {
     var item: ScreenItem
-    var metrics: [ScreenDisplayMetric]
+    var preset: ScreenPreset
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CompanyRowView(company: CompanyRef(item))
-            ScreenMetricValuesView(item: item, metrics: metrics)
-                .padding(.leading, 48)
+            if preset == .highPayout {
+                ScreenPayoutHeadline(item: item)
+            }
+            ScreenMetricValuesView(
+                item: item,
+                metrics: preset.displayMetrics,
+                columns: preset.metricColumnsPerRow
+            )
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct ScreenPayoutHeadline: View {
+    var item: ScreenItem
+
+    var body: some View {
+        Text(headline)
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(Theme.text)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(headline)
+    }
+
+    private var headline: String {
+        let years = (0..<3).map { index -> String in
+            let value: Double?
+            if let series = item.payoutRatio3y, index < series.count {
+                value = series[index]
+            } else {
+                value = nil
+            }
+            return Format.percent(value)
+        }
+        return "配当性向 年平均\(Format.percent(item.payoutRatio)) 直近3年\(years.joined(separator: "→"))"
     }
 }
 
 private struct ScreenMetricValuesView: View {
     var item: ScreenItem
     var metrics: [ScreenDisplayMetric]
+    var columns: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(metricRows.indices, id: \.self) { index in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 8) {
                     ForEach(metricRows[index]) { metric in
                         let value = item.value(for: metric)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(metric.title)
                                 .font(.caption2)
                                 .foregroundStyle(Theme.textMuted)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                             Text(metric.format(value))
                                 .font(.subheadline.monospacedDigit().weight(.semibold))
                                 .foregroundStyle(value.map { metric.band.color(for: $0) } ?? Theme.textMuted)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.75)
+                                .minimumScaleFactor(0.7)
                         }
-                        .frame(minWidth: 72, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Spacer(minLength: 0)
                 }
             }
         }
@@ -394,8 +436,9 @@ private struct ScreenMetricValuesView: View {
     }
 
     private var metricRows: [[ScreenDisplayMetric]] {
-        stride(from: 0, to: metrics.count, by: 2).map { start in
-            Array(metrics[start..<min(start + 2, metrics.count)])
+        let width = max(columns, 1)
+        return stride(from: 0, to: metrics.count, by: width).map { start in
+            Array(metrics[start..<min(start + width, metrics.count)])
         }
     }
 }

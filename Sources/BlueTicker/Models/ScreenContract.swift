@@ -13,10 +13,14 @@
 // - `operating_margin_cagr_3y` / `roic_cagr_3y` は改善向けの 3 期年平均変化幅（pp/年）。
 //   利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR は定義せず、直近 3 期の
 //   （最新 − 最古）÷ 2 を取る（sales_cagr_3y の期数選定と同じ規則）。
-// - `payout_ratio` は高還元向け。定義: SS 配当額（`dividend_ss`、当期帰属）÷ 親会社
-//   帰属純利益 ×100。CF `dividend_paid_cf` は支払時点の実績で期ズレするため不採用。赤字期
-//   （net_profit ≤ 0）と配当行が無い期は null（無配と未抽出を区別しない）。記念・特別配当は
-//   区別しない（SS 合計のまま）。プリセットの閾値は契約外（実装時に決める）。
+// - `payout_ratio` は高還元向け。定義: 直近 3 期それぞれの
+//   SS 配当額（`dividend_ss`、当期帰属）÷ 親会社帰属純利益 ×100 の算術平均。
+//   期の並びは `fy_end` 降順の先勝ち（`sales_cagr_3y` と同じ uniqued 年次）。3 期とも
+//   性向が定義できるときだけ平均を置く。欠ける・赤字（net_profit ≤ 0）・配当行無しは
+//   その期を null とし、平均も null（無配と未抽出を区別しない）。記念・特別配当は区別しない。
+//   CF `dividend_paid_cf` は支払時点の実績で期ズレするため不採用。プリセットの閾値は契約外。
+//   表示用の年次系列 `payout_ratio_3y`（古→新、不足は先頭 null、許可リスト外）は
+//   `payout_ratio` を投影するときだけ `items[]` に載せる。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
@@ -24,10 +28,11 @@ import Foundation
 
 /// `screen_index` 派生契約。列・許可リスト・CAGR 定義が変わったときだけバンプ。`fin-vN` 非連動。
 /// 初稿（YoY `sales_growth`）を v1、3 期売上 CAGR への切替を v2、
-/// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・3 期 CAGR 2 軸・payout_ratio）を v3 とする。
+/// 高CF・高効率・改善・高還元向けの 6 指標追加（cfo・cfo_margin・fcf・3 期 CAGR 2 軸・payout_ratio）を v3、
+/// `payout_ratio` を最新 FY 単年から直近 3 期算術平均へ差し替え（表示列 `payout_ratio_3y`）を v4 とする。
 /// 改善 2 軸は前年差（`*_yoy`）で出荷した直後に 3 期 CAGR へ差し替えたが、iOS 未使用で
 /// 本番行も v2 stamp のまま（次回 ingest で全件 rebuild）だったため v3 に畳んだ。
-public let screenIndexVersion = "screen-v3"
+public let screenIndexVersion = "screen-v4"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
 public enum ScreenMetric: String, CaseIterable, Sendable {
@@ -53,7 +58,7 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     case operatingMarginCagr3y = "operating_margin_cagr_3y"
     /// ROIC の 3 期年平均変化幅（pp/年）。`operating_margin_cagr_3y` と同じ規則。
     case roicCagr3y = "roic_cagr_3y"
-    /// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。net_profit > 0 かつ dividend_ss があるときだけ。
+    /// 配当性向 3 年平均（%、直近 3 期の年次性向の算術平均）。3 期とも定義できるときだけ。
     case payoutRatio = "payout_ratio"
 
     /// 結果行に常に載せる指標（iOS core4）。フィルタ未使用でも null を返す。
@@ -72,10 +77,13 @@ public struct ScreenRow: Sendable, Equatable {
     /// 最新 FY の `fy_end`。
     public var periodEnd: String
     public var metrics: [ScreenMetric: Double]
+    /// 直近 3 期の年次配当性向（%）。古い期が先。足りない期は先頭の null。長さは常に 3。
+    /// `GET /v1/screen` では `payout_ratio` を投影するとき `payout_ratio_3y` として出す。
+    public var payoutRatio3y: [Double?]
 
     public init(
         code: String, name: String, market: String, sector: String, periodEnd: String,
-        metrics: [ScreenMetric: Double]
+        metrics: [ScreenMetric: Double], payoutRatio3y: [Double?] = [nil, nil, nil]
     ) {
         self.code = code
         self.name = name
@@ -83,6 +91,9 @@ public struct ScreenRow: Sendable, Equatable {
         self.sector = sector
         self.periodEnd = periodEnd
         self.metrics = metrics
+        var years = Array(payoutRatio3y.prefix(3))
+        while years.count < 3 { years.append(nil) }
+        self.payoutRatio3y = years
     }
 
     public subscript(_ metric: ScreenMetric) -> Double? { metrics[metric] }
@@ -119,10 +130,11 @@ extension FinancialsResponse {
         put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
         put(.operatingMarginCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.operatingMargin))
         put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
-        put(.payoutRatio, payoutRatio(dividend: latest.dividendSs, netProfit: latest.netProfit))
+        let payout = payoutRatio3y(from: dated.map(\.1))
+        put(.payoutRatio, payout.average)
         return ScreenRow(
             code: code, name: name, market: market, sector: sector, periodEnd: periodEnd,
-            metrics: metrics)
+            metrics: metrics, payoutRatio3y: payout.years)
     }
 }
 
@@ -160,7 +172,20 @@ private func metricCagr3y(
     return (newest - oldest) / 2
 }
 
-/// 配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。
+/// 直近 3 期の年次配当性向と、3 期とも定義できるときの算術平均。
+/// `years` は `fy_end` 降順（新しい期が先）。足りない期は系列の先頭を null にする（古→新）。
+private func payoutRatio3y(from years: [FinancialsYear]) -> (average: Double?, years: [Double?]) {
+    let newestFirst = years.prefix(3).map {
+        payoutRatio(dividend: $0.dividendSs, netProfit: $0.netProfit)
+    }
+    var oldestFirst = Array(newestFirst.reversed())
+    while oldestFirst.count < 3 { oldestFirst.insert(nil, at: 0) }
+    let defined = oldestFirst.compactMap { $0 }
+    let average: Double? = defined.count == 3 ? defined.reduce(0, +) / 3 : nil
+    return (average, oldestFirst)
+}
+
+/// 1 期の配当性向（%、SS 配当額 ÷ 親会社帰属純利益 ×100）。
 /// net_profit ≤ 0（赤字期は性向を定義しない）・dividend 欠測（無配 / 未抽出を区別しない）・
 /// 非有限なら nil。記念・特別配当は区別しない。
 private func payoutRatio(dividend: Double?, netProfit: Double?) -> Double? {
@@ -340,6 +365,9 @@ public func screenResponseJSON(
         ]
         for metric in projected {
             item[metric.rawValue] = row[metric].map { $0 as Any } ?? NSNull()
+        }
+        if projected.contains(.payoutRatio) {
+            item["payout_ratio_3y"] = row.payoutRatio3y.map { $0.map { $0 as Any } ?? NSNull() }
         }
         return item
     }

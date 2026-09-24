@@ -235,6 +235,8 @@ struct ScreenItem: Codable, Hashable, Identifiable {
     var operatingMarginCagr3y: Double?
     var roicCagr3y: Double?
     var payoutRatio: Double?
+    /// `payout_ratio` 投影時だけ。直近 3 期の年次性向（古→新）。フィルタキーではない。
+    var payoutRatio3y: [Double?]?
 
     var id: String { code }
 
@@ -248,6 +250,7 @@ struct ScreenItem: Codable, Hashable, Identifiable {
         case operatingMarginCagr3y = "operating_margin_cagr_3y"
         case roicCagr3y = "roic_cagr_3y"
         case payoutRatio = "payout_ratio"
+        case payoutRatio3y = "payout_ratio_3y"
     }
 }
 
@@ -259,7 +262,7 @@ struct ScreenMetricFilter: Sendable, Hashable {
 
 /// 条件検索の 6 プリセット。閾値は整数（ネット D/E は 1 桁）で `GET /v1/screen` に載せる。
 /// 高CF・改善・高還元は screen-v3 の派生指標（BLT-73・75・76）。高効率案（BLT-74）は優良と
-/// 重複するため採用しない。高還元の配当性向 40〜60% は暫定。
+/// 重複するため採用しない。高還元の `payout_ratio` は 3 年平均（screen-v4。40〜60% は暫定）。
 enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
     case quality = "優良"
     case growth = "成長"
@@ -352,7 +355,7 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
         case .improving:
             "営業利益率+3pp/年 · ROIC+2pp/年（3期年平均） · ROIC≥8%"
         case .highPayout:
-            "配当性向40〜60%（暫定）"
+            "配当性向 3年平均 40〜60%（暫定）"
         }
     }
 }
