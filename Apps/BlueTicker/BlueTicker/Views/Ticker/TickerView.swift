@@ -17,7 +17,6 @@ struct TickerView: View {
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
-    @State private var barContentWidth: CGFloat = 390
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,9 +29,10 @@ struct TickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { barContentWidth = $0 }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
+            // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
+            ToolbarItem(placement: .title) {
                 HStack(alignment: .center, spacing: 8) {
                     CompanyIconView(company, size: Theme.headerIconSize)
                     // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
@@ -51,8 +51,8 @@ struct TickerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
-                // 戻ると右上グループの残りだけ使い、ピルは残幅いっぱいに広げる。
-                .frame(width: max(barContentWidth - Theme.headerPillReservedWidth, 120), alignment: .leading)
+                .padding(.vertical, Theme.headerPillVerticalPadding)
+                .glassEffect()
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
