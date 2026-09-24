@@ -383,28 +383,30 @@ private struct ScreenPayoutHeadline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ScreenMetricLabelValue(
+            payoutLine(
                 title: "配当性向3年平均",
-                value: Format.percent(item.payoutRatio),
-                color: item.payoutRatio == nil ? Theme.textMuted : Theme.accent
+                value: Text(Format.percent(item.payoutRatio))
+                    .foregroundStyle(item.payoutRatio == nil ? Theme.textMuted : Theme.accent)
             )
-            VStack(alignment: .leading, spacing: 1) {
-                Text("3年推移")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                // 年次が横に収まらないときは折り返す（大きい Dynamic Type で切らない）。
-                payoutTrend
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            payoutLine(title: "3年推移", value: payoutTrend)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "配当性向3年平均 \(Format.percent(item.payoutRatio))、3年推移 \(trendText)"
         )
+    }
+
+    private func payoutLine(title: String, value: Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize()
+            value
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var years: [Double?] {
