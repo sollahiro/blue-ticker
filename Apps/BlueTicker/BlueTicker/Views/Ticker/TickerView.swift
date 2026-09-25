@@ -438,6 +438,8 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
         private var onDismiss: (() -> Void)?
         private var cardRect: CGRect = .zero
         private var windowTap: UITapGestureRecognizer?
+        /// カードをピルの位置・大きさに重ねる transform。開閉で共通の始点/終点。
+        private var startTransform: CGAffineTransform = .identity
 
         deinit {
             if let tap = windowTap {
@@ -471,6 +473,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                     tap.cancelsTouchesInView = false
                     window.addGestureRecognizer(tap)
                     windowTap = tap
+                    startTransform = pillTransform(card: host.view, from: anchor, in: window)
                     animateIn(card: host.view)
                 }
             } else if let host {
@@ -491,14 +494,54 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             }
         }
 
+        /// カードの左上中央をピルの中心に重ねる transform。
+        /// ピルの実矩形はナビゲーションタイトルビューから取り、取れなければ
+        /// バー中央に近似する。
+        private func pillTransform(card: UIView, from anchor: UIView, in window: UIWindow) -> CGAffineTransform {
+            var center = CGPoint(x: window.bounds.midX, y: topPad + 40)
+            if let rect = pillRect(from: anchor, in: window) {
+                center = CGPoint(x: rect.midX, y: rect.midY)
+            }
+            let scale: CGFloat = 0.25
+            // ウィンドウ上端中央を基点に縮小してから、カードの上端中央
+            // （縮小後の y = topPad * scale）をピルの中心へ移す。
+            let dx = center.x - card.bounds.midX
+            let dy = center.y - topPad * scale
+            return CGAffineTransform(translationX: dx, y: dy).scaledBy(x: scale, y: scale)
+        }
+
+        /// ナビゲーションバー内のタイトル領域（社名ピル）のウィンドウ座標矩形。
+        private func pillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
+            var responder = anchor.next
+            while let next = responder {
+                if let vc = next as? UIViewController,
+                   let bar = vc.navigationController?.navigationBar {
+                    func findTitleView(in view: UIView) -> UIView? {
+                        let name = String(describing: type(of: view))
+                        if name.contains("TitleView") { return view }
+                        for sub in view.subviews {
+                            if let found = findTitleView(in: sub) { return found }
+                        }
+                        return nil
+                    }
+                    if let title = findTitleView(in: bar) {
+                        return title.convert(title.bounds, to: nil)
+                    }
+                    return nil
+                }
+                responder = next.next
+            }
+            return nil
+        }
+
         /// 注入したホスティングビュー内では SwiftUI の withAnimation が効かない
         /// （最初のコミットと同じトランザクションに吸収されて中間フレームが出ない）。
-        /// ピルが上端からカードへ広がる見た目を UIKit の transform/alpha で作る。
+        /// ピル自体が伸縮してカードになる見た目を UIKit の transform で作る。
         private func animateIn(card: UIView) {
             // 上端中央を拡大の基点にするため anchorPoint を動かして位置を補正する。
             card.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
             card.layer.position = CGPoint(x: card.bounds.midX, y: 0)
-            card.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+            card.transform = startTransform
             card.alpha = 0
             UIView.animate(
                 withDuration: 0.32,
@@ -513,7 +556,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
 
         private func animateOut(card: UIView) {
             UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseIn) {
-                card.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
+                card.transform = self.startTransform
                 card.alpha = 0
             } completion: { _ in
                 card.removeFromSuperview()
