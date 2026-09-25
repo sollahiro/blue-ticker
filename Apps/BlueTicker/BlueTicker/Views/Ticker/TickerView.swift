@@ -18,6 +18,8 @@ struct TickerView: View {
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
     @State private var showsCompanyCard = false
+    /// カードのウィンドウ座標での矩形。ウィンドウ級のタップ判定に使う。
+    @State private var cardRect: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
 
     var body: some View {
@@ -30,7 +32,11 @@ struct TickerView: View {
         // 詳細カードはウィンドウ直下に載せ、ナビゲーションバーより上に描く。
         // ビュー内オーバーレイは UIKit のバーより必ず下に合成されてかぶせられない。
         .overlay {
-            WindowOverlayPresenter(isPresented: showsCompanyCard) {
+            WindowOverlayPresenter(
+                isPresented: showsCompanyCard,
+                onDismiss: closeCompanyCard,
+                cardRect: cardRect
+            ) {
                 windowCard
             }
         }
@@ -94,15 +100,15 @@ struct TickerView: View {
 
     /// ウィンドウオーバーレイに載せる詳細カード。上端のオフセットは
     /// `WindowOverlayPresenter` がナビゲーションバーの実フレームから足す。
+    /// 外側タップ判定は presenter 側がウィンドウのジェスチャで行い、
+    /// そのためにカードの矩形をここで測って渡す。
     private var windowCard: some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.001)
-                .contentShape(Rectangle())
-                .onTapGesture { closeCompanyCard() }
-            CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
-                .padding(.horizontal, 8)
-        }
-        .ignoresSafeArea()
+        CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
+            .padding(.horizontal, 8)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { cardRect = $0 }
+            .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -406,6 +412,9 @@ private struct PagerSnapper: UIViewRepresentable {
 /// ナビゲーションバーより上に描く必要がある浮きカード用。
 private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
     var isPresented: Bool
+    var onDismiss: () -> Void
+    /// ウィンドウ座標でのカード矩形。タップがこの内側なら閉じない。
+    var cardRect: CGRect
     @ViewBuilder var content: Content
 
     func makeUIView(context: Context) -> UIView {
@@ -415,7 +424,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.update(isPresented: isPresented, content: content, anchor: uiView)
+        context.coordinator.update(isPresented: isPresented, content: content, onDismiss: onDismiss, cardRect: cardRect, anchor: uiView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -426,12 +435,20 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
     final class Coordinator {
         private var host: UIHostingController<AnyView>?
         private var topPad: CGFloat = 0
+        private var onDismiss: (() -> Void)?
+        private var cardRect: CGRect = .zero
+        private var windowTap: UITapGestureRecognizer?
 
         deinit {
+            if let tap = windowTap {
+                tap.view?.removeGestureRecognizer(tap)
+            }
             host?.view.removeFromSuperview()
         }
 
-        func update(isPresented: Bool, content: Content, anchor: UIView) {
+        func update(isPresented: Bool, content: Content, onDismiss: @escaping () -> Void, cardRect: CGRect, anchor: UIView) {
+            self.onDismiss = onDismiss
+            self.cardRect = cardRect
             if isPresented {
                 if let host {
                     host.rootView = AnyView(content.padding(.top, topPad).ignoresSafeArea())
@@ -448,40 +465,58 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                     window.addSubview(host.view)
                     self.host = host
-                    animateIn(host.view)
+                    // 外側タップはウィンドウのジェスチャで拾い、カードの矩形と
+                    // 照合して閉じる。transform で小さくなるあいだも全面で判定できる。
+                    let tap = UITapGestureRecognizer(target: self, action: #selector(windowTapped(_:)))
+                    tap.cancelsTouchesInView = false
+                    window.addGestureRecognizer(tap)
+                    windowTap = tap
+                    animateIn(card: host.view)
                 }
             } else if let host {
                 self.host = nil
-                animateOut(host.view)
+                if let tap = windowTap {
+                    windowTap = nil
+                    tap.view?.removeGestureRecognizer(tap)
+                }
+                animateOut(card: host.view)
+            }
+        }
+
+        @objc private func windowTapped(_ gesture: UITapGestureRecognizer) {
+            guard let window = gesture.view else { return }
+            let point = gesture.location(in: window)
+            if !cardRect.contains(point) {
+                onDismiss?()
             }
         }
 
         /// 注入したホスティングビュー内では SwiftUI の withAnimation が効かない
         /// （最初のコミットと同じトランザクションに吸収されて中間フレームが出ない）。
         /// ピルが上端からカードへ広がる見た目を UIKit の transform/alpha で作る。
-        private func animateIn(_ view: UIView) {
+        private func animateIn(card: UIView) {
             // 上端中央を拡大の基点にするため anchorPoint を動かして位置を補正する。
-            view.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
-            view.layer.position = CGPoint(x: view.bounds.midX, y: 0)
-            view.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
-            view.alpha = 0
+            card.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
+            card.layer.position = CGPoint(x: card.bounds.midX, y: 0)
+            card.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+            card.alpha = 0
             UIView.animate(
                 withDuration: 0.32,
                 delay: 0,
                 usingSpringWithDamping: 0.82,
                 initialSpringVelocity: 0.4
             ) {
-                view.transform = .identity
-                view.alpha = 1
+                card.transform = .identity
+                card.alpha = 1
             }
         }
 
-        private func animateOut(_ view: UIView) {
+        private func animateOut(card: UIView) {
             UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseIn) {
-                view.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
-                view.alpha = 0
+                card.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
+                card.alpha = 0
             } completion: { _ in
-                view.removeFromSuperview()
+                card.removeFromSuperview()
             }
         }
 
