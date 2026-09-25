@@ -68,10 +68,13 @@ struct TickerView: View {
                     Button {
                         showsCompanyCard = true
                     } label: {
+                        // タイトル枠の提案幅は空きより狭い。maxWidth だけだと
+                        // 1行の社名が空きがあるのに「…」になる。内容幅まで広げ、上限で止める。
                         CompanyPillLabel(company: company)
-                            .frame(maxWidth: titlePillMaxWidth)
+                            .frame(maxWidth: titlePillMaxWidth, alignment: .leading)
                     }
                     .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: true)
                     .glassEffect()
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .global)
@@ -449,10 +452,12 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         ) {
             model.company = company
             model.onExpanded = onExpanded
-            // ホストを載せたあとの計測は、バー側を消すときの縮んだ矩形で上書きされる。
-            // 開閉の始点は、載せたときのピル矩形のままにする。
+            // バー側を消したあとの計測は縮む。開閉の始点は、載せたときのピル矩形。
+            // それより狭い計測では上書きしない。空きがある社名を「…」の幅で固定しない。
             if host == nil, Self.plausiblePill(pillRect) {
-                if model.pillRect.width < 1 || abs(pillRect.minY - model.pillRect.minY) < 24 {
+                let unset = model.pillRect.width < 1
+                let sameBand = abs(pillRect.minY - model.pillRect.minY) < 24
+                if unset || (sameBand && pillRect.width + 1 >= model.pillRect.width) {
                     model.pillRect = pillRect
                 }
             }
@@ -568,9 +573,13 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             container.backgroundColor = .clear
             container.clipsToBounds = true
             container.layer.cornerCurve = .continuous
-            container.frame = model.pillRect
-            container.layer.cornerRadius = model.pillRect.height / 2
-            model.layoutWidth = model.pillRect.width
+            let pill = fittedPill(model.pillRect, window: window)
+            model.pillRect = pill
+            container.frame = pill
+            container.layer.cornerRadius = pill.height / 2
+            let expandedWidth = window.bounds.width - 16
+            model.cardWidth = expandedWidth
+            model.visibleWidth = pill.width
             model.nameLock = CompanyNameLock.measure(
                 name: model.company.name,
                 code: model.company.code,
@@ -581,7 +590,6 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             host.view.backgroundColor = .clear
             host.view.isUserInteractionEnabled = false
             host.view.autoresizingMask = []
-            let expandedWidth = window.bounds.width - 16
             let expandedHeight = measuredHeight(width: expandedWidth)
             host.view.frame = CGRect(x: 0, y: 0, width: expandedWidth, height: expandedHeight)
             container.addSubview(host.view)
@@ -615,6 +623,19 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             rect.width > 80 && rect.height > 28 && rect.height < 90 && rect.minY > 40 && rect.minX > 16
         }
 
+        /// 計測が「…」の幅で止まっていても、1行で入る社名は右のボタンに被せない範囲まで広げる。
+        private func fittedPill(_ measured: CGRect, window: UIWindow) -> CGRect {
+            guard measured.width > 1, measured.height > 1 else { return measured }
+            let display = Format.displayName(model.company.name, fallback: model.company.code)
+            let headline = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
+            let font = UIFont.systemFont(ofSize: headline, weight: .bold)
+            let textWidth = ceil((display as NSString).size(withAttributes: [.font: font]).width)
+            let natural = textWidth + Theme.headerPillHorizontalPadding * 2 + Theme.headerIconSize + 8
+            let maxWidth = max(measured.width, window.bounds.width - measured.minX - 108)
+            let width = min(max(measured.width, natural), maxWidth)
+            return CGRect(x: measured.minX, y: measured.minY, width: width, height: measured.height)
+        }
+
         /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
         /// そのまま `UIView.animate` すると、閉じる矩形が終端へ飛ぶ。
         private func animateExpanded(_ expanded: Bool) {
@@ -635,11 +656,13 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private func animate(expanded: Bool) {
             guard let container = cardContainer, let window = container.window else {
                 morphing = false
+                model.freezesGlyphs = false
                 return
             }
             let pill = model.pillRect
             guard pill.width > 1, pill.height > 1 else {
                 morphing = false
+                model.freezesGlyphs = false
                 return
             }
             let endWidth = window.bounds.width - 16
@@ -674,7 +697,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 guard self.model.expanded == expanded else { return }
                 self.stopMorphTracking()
                 self.model.expansion = expanded ? 1 : 0
-                self.model.layoutWidth = expanded ? endWidth : pill.width
+                self.model.freezesGlyphs = false
+                self.model.visibleWidth = container.frame.width
                 self.wrapper?.cardFrame = container.frame
                 self.openTap?.isEnabled = !expanded
                 self.updateModalAccessibility()
@@ -725,8 +749,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             if abs(model.expansion - expansion) > 0.004 {
                 model.expansion = expansion
             }
-            if abs(model.layoutWidth - frame.width) > 0.5 {
-                model.layoutWidth = frame.width
+            if model.cardWidth > 1, abs(model.visibleWidth - frame.width) > 0.5 {
+                model.visibleWidth = frame.width
             }
             updateModalAccessibility()
         }
@@ -762,6 +786,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
 
         func removeHost() {
             morphing = false
+            model.freezesGlyphs = false
             stopMorphTracking()
             titleHider.stop()
             host?.willMove(toParent: nil)
@@ -876,8 +901,12 @@ private final class CompanyGlassModel {
     var expanded = false
     /// 0 がピル、1 がカード。表示中の枠の高さから毎フレーム更新する。
     var expansion: CGFloat = 0
-    /// 表示中のガラス幅。社名の折り返しはカード全幅ではなくこの幅で決める。
-    var layoutWidth: CGFloat = 0
+    /// ガラスの中身を組む幅。枠のアニメーションでは変えない。
+    var cardWidth: CGFloat = 0
+    /// いま見えている枠の幅。閉じるボタンの位置だけに使い、社名の組み幅には使わない。
+    var visibleWidth: CGFloat = 0
+    /// 開閉中は社名の字間を組み直さない。はみ出しは枠が隠す。
+    var freezesGlyphs = false
     /// ピル幅で決めた社名の行。広がっても行数と1行目は変えない。
     var nameLock: CompanyNameLock = .automatic
     /// 広がっているあいだ（収縮アニメーション中を含む）全面のタップを取る。
@@ -892,6 +921,8 @@ private final class CompanyGlassModel {
 
     func setExpanded(_ value: Bool) {
         guard expanded != value else { return }
+        // フラグを切るより先に字を固定する。閉じ始めの幅で「…」にしない。
+        freezesGlyphs = true
         expanded = value
         if value {
             coversScreen = true
@@ -911,7 +942,7 @@ private final class CompanyGlassModel {
     }
 }
 
-/// ピルと同じ頭を持つ一つのガラス。親の枠が伸び縮みしても、中身はカード幅のまま上に揃える。
+/// ピルと同じ頭を持つ一つのガラス。枠が伸び縮みしても、中身の幅はカードのまま。
 private struct CompanyGlassMorph: View {
     var model: CompanyGlassModel
 
@@ -921,7 +952,7 @@ private struct CompanyGlassMorph: View {
             Theme.cardCornerRadius,
             pillRadius + (Theme.cardCornerRadius - pillRadius) * model.expansion
         )
-        let width = model.layoutWidth > 1 ? model.layoutWidth : nil
+        let width = model.cardWidth > 1 ? model.cardWidth : nil
         // 閉じているあいだも下段は高さを持つ。ガラスの中央ではなく上端に社名を置く。
         Color.clear
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -969,9 +1000,11 @@ private struct CompanyMorphStack: View {
                     .accessibilityHidden(true)
                 CompanyPillLabel(
                     company: model.company,
-                    trailingReserve: (32 + 8) * expansion,
-                    nameLock: model.nameLock
+                    trailingReserve: showsWideName ? 32 + 8 : 0,
+                    nameLock: model.nameLock,
+                    freezeGlyphs: model.freezesGlyphs
                 )
+                .frame(width: showsWideName ? nil : collapsedNameWidth, alignment: .leading)
                     .overlay(alignment: .trailing) {
                         Button {
                             model.setExpanded(false)
@@ -985,6 +1018,7 @@ private struct CompanyMorphStack: View {
                         .buttonStyle(.plain)
                         .padding(.trailing, Theme.headerPillHorizontalPadding)
                         .opacity(expansion)
+                        .offset(x: showsWideName ? model.visibleWidth - model.cardWidth : 0)
                         .accessibilityLabel("閉じる")
                         .accessibilityHidden(!model.expanded)
                     }
@@ -1013,6 +1047,15 @@ private struct CompanyMorphStack: View {
 
     private var subtitle: String {
         model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(model.company.sector)"
+    }
+
+    /// 開いているあいだ、および閉じ切るまではカード幅で組む。途中の枠幅では組み直さない。
+    private var showsWideName: Bool {
+        model.freezesGlyphs || model.expanded
+    }
+
+    private var collapsedNameWidth: CGFloat? {
+        model.pillRect.width > 1 ? model.pillRect.width : nil
     }
 }
 
@@ -1091,6 +1134,8 @@ private struct CompanyPillLabel: View {
     /// 開いたカードで、社名が閉じるボタンに重ならないように空ける幅。
     var trailingReserve: CGFloat = 0
     var nameLock: CompanyNameLock = .automatic
+    /// 開閉中。字間は動かさず、はみ出しは親の枠が隠す。
+    var freezeGlyphs: Bool = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -1118,26 +1163,31 @@ private struct CompanyPillLabel: View {
             Text(display)
                 .font(nameFont)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: true)
         case .compactLine:
             Text(display)
                 .font(compactNameFont)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: true)
         case .twoLine(let first, let rest):
             VStack(alignment: .leading, spacing: -2) {
                 Text(first)
                     .font(compactNameFont)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: true)
                 Text(rest)
                     .font(compactNameFont)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: freezeGlyphs, vertical: true)
+                    .frame(maxWidth: freezeGlyphs ? nil : .infinity, alignment: .leading)
             }
         case .automatic:
             ViewThatFits(in: .horizontal) {
                 Text(display)
                     .font(nameFont)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: true)
                 Text(display)
                     .font(compactNameFont)
                     .lineLimit(2)
