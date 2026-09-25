@@ -17,14 +17,29 @@ struct TickerView: View {
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
+    @State private var showsCompanyCard = false
+    @State private var contentWidth: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            CompanyOverviewView(code: company.code)
             cards
             pageDots
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
         .background(Theme.shell.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            ZStack(alignment: .top) {
+                if showsCompanyCard {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture { closeCompanyCard() }
+                    CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
@@ -33,26 +48,36 @@ struct TickerView: View {
             // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
             // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
             ToolbarItem(placement: .title) {
-                HStack(alignment: .center, spacing: 8) {
-                    CompanyIconView(company, size: Theme.headerIconSize)
-                    // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
-                    ViewThatFits(in: .horizontal) {
-                        Text(Format.displayName(company.name, fallback: company.code))
-                            .font(nameFont)
-                            .lineLimit(1)
-                        Text(Format.displayName(company.name, fallback: company.code))
-                            .font(compactNameFont)
-                            .lineLimit(2)
-                            .lineSpacing(-2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        showsCompanyCard.toggle()
                     }
-                    .foregroundStyle(Theme.text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    HStack(alignment: .center, spacing: 8) {
+                        CompanyIconView(company, size: Theme.headerIconSize)
+                        // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
+                        ViewThatFits(in: .horizontal) {
+                            Text(Format.displayName(company.name, fallback: company.code))
+                                .font(nameFont)
+                                .lineLimit(1)
+                            Text(Format.displayName(company.name, fallback: company.code))
+                                .font(compactNameFont)
+                                .lineLimit(2)
+                                .lineSpacing(-2)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, Theme.headerPillHorizontalPadding)
+                    .padding(.vertical, Theme.headerPillVerticalPadding)
+                    .frame(maxWidth: titlePillMaxWidth)
+                    .glassEffect()
                 }
-                .padding(.horizontal, Theme.headerPillHorizontalPadding)
-                .padding(.vertical, Theme.headerPillVerticalPadding)
-                .glassEffect()
+                .buttonStyle(.plain)
+                .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
+                .accessibilityHint("銘柄コード・業種・Overview を表示します")
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
@@ -149,6 +174,20 @@ struct TickerView: View {
     /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
     private var compactNameFont: Font {
         .system(size: 15, weight: .semibold)
+    }
+
+    /// 社名ピルの上限。戻る・右上2ボタン・左右余白を引いた分だけにし、
+    /// それ以上に広がると編集・星のカプセルの下に潜る。
+    private var titlePillMaxWidth: CGFloat {
+        let reserved: CGFloat = 180
+        guard contentWidth > 0 else { return .infinity }
+        return max(contentWidth - reserved, 120)
+    }
+
+    private func closeCompanyCard() {
+        withAnimation(.snappy(duration: 0.2)) {
+            showsCompanyCard = false
+        }
     }
 
     private func hydrateSector() async {
@@ -352,6 +391,70 @@ private struct PagerSnapper: UIViewRepresentable {
             let delta = abs(scrollView.contentOffset.x - target.x)
             guard delta > 0.5 else { return }
             scrollView.setContentOffset(target, animated: delta > 8)
+        }
+    }
+}
+
+/// 社名ピルを押すと開く詳細カード。コード・業種・Overview をまとめて出す。
+private struct CompanyDetailCard: View {
+    var company: CompanyRef
+    var onClose: () -> Void
+    @State private var overview: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                CompanyIconView(company, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Format.displayName(company.name, fallback: company.code))
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("閉じる")
+            }
+            if let overview {
+                FillWidth {
+                    JustifiedOverviewText(text: overview)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(overview)
+            }
+        }
+        .padding(14)
+        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius))
+        .task(id: company.code) { await load() }
+    }
+
+    private var subtitle: String {
+        company.sector.isEmpty ? company.code : "\(company.code) · \(company.sector)"
+    }
+
+    private func load() async {
+        if let cached = await APIClient.shared.cachedOverview(code: company.code) {
+            let text = cached.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        }
+        do {
+            let loaded = try await APIClient.shared.overview(code: company.code)
+            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        } catch APIClientError.http(let status, _) where status == 404 {
+            overview = nil
+        } catch {
+            // 通信失敗時は最後の成功応答（キャッシュ）を出したままにする。
         }
     }
 }
