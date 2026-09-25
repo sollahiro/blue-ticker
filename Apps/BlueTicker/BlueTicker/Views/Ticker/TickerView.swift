@@ -55,9 +55,15 @@ struct TickerView: View {
                 // 見た目を窓上の一つのガラスへ渡したあとは、バーにアイコンも
                 // カプセルも残さない。opacity ではガラスが残ってカードに映る。
                 if pillHandedOff {
+                    // 見た目は窓上のガラス。読み上げの位置はタイトルのままにする。
                     Color.clear
                         .frame(width: max(pillRect.width, 1), height: max(pillRect.height, 1))
-                        .accessibilityHidden(true)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
+                        .accessibilityHint("銘柄コード・業種・Overview を表示します")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { showsCompanyCard = true }
+                        .accessibilityHidden(showsCompanyCard)
                 } else {
                     Button {
                         showsCompanyCard = true
@@ -426,6 +432,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var disappearHook: GlassDisappearHook?
         private var handoffScheduled = false
         private var didDisappear = false
+        /// 開閉のアニメーション中。SwiftUI の `expanded` は完了まで遅れるので、
+        /// そのあいだの更新で逆方向へアニメーションを始めない。
+        private var morphing = false
         /// 銘柄面が見えていないあいだは、窓上のガラスを付け直さない。
         private var tickerVisible = true
 
@@ -469,11 +478,14 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 self?.wrapper?.hitEverywhere = covers
             }
             model.onToggle = { [weak self] expanded in
+                // onExpanded より先に立てる。SwiftUI の再入で逆方向へ開閉しない。
+                self?.morphing = true
                 self?.animateExpanded(expanded)
             }
             model.onOverview = { [weak self] in
                 self?.growIfNeeded()
             }
+            updateModalAccessibility()
             // ホストを載せた最初のフレームは必ずピルの形から始める。
             // 挿入と同じトランザクションで広げると中間フレームが出ない。
             if created && expanded {
@@ -481,7 +493,14 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 DispatchQueue.main.async { [model] in
                     model.setExpanded(true)
                 }
+            } else if host != nil, !morphing, expanded != model.expanded {
+                // タイトル位置の VoiceOver 操作は SwiftUI 側のフラグだけを変える。
+                model.setExpanded(expanded)
             }
+        }
+
+        private func updateModalAccessibility() {
+            wrapper?.accessibilityViewIsModal = model.expanded || model.expansion > 0.02
         }
 
         private func scheduleHandoff(from nav: UINavigationController, setHandedOff: @escaping (Bool) -> Void) {
@@ -614,9 +633,15 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         }
 
         private func animate(expanded: Bool) {
-            guard let container = cardContainer, let window = container.window else { return }
+            guard let container = cardContainer, let window = container.window else {
+                morphing = false
+                return
+            }
             let pill = model.pillRect
-            guard pill.width > 1, pill.height > 1 else { return }
+            guard pill.width > 1, pill.height > 1 else {
+                morphing = false
+                return
+            }
             let endWidth = window.bounds.width - 16
             let endHeight = max(measuredHeight(width: endWidth), pill.height)
             let end = expanded
@@ -632,6 +657,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
             openTap?.isEnabled = !expanded
             host?.view.isUserInteractionEnabled = expanded
+            morphing = true
+            updateModalAccessibility()
             // 閉じる終端はピルなので、追跡の分母は常に開いた高さにする。
             startMorphTracking(pillHeight: pill.height, cardWidth: endWidth, cardHeight: endHeight)
             UIView.animate(
@@ -650,6 +677,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 self.model.layoutWidth = expanded ? endWidth : pill.width
                 self.wrapper?.cardFrame = container.frame
                 self.openTap?.isEnabled = !expanded
+                self.updateModalAccessibility()
                 if expanded {
                     self.model.onExpanded(true)
                     self.growIfNeeded()
@@ -658,6 +686,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     self.model.onCoversScreen(false)
                     self.model.onExpanded(false)
                 }
+                self.morphing = false
             }
         }
 
@@ -699,6 +728,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             if abs(model.layoutWidth - frame.width) > 0.5 {
                 model.layoutWidth = frame.width
             }
+            updateModalAccessibility()
         }
 
         /// Overview が後から来たら、開いているカードの高さだけ足す。
@@ -731,6 +761,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         }
 
         func removeHost() {
+            morphing = false
             stopMorphTracking()
             titleHider.stop()
             host?.willMove(toParent: nil)
@@ -867,6 +898,10 @@ private final class CompanyGlassModel {
             onCoversScreen(true)
         }
         onToggle(value)
+        if value {
+            // 開いた直後からタイトル位置のボタンを読み上げ対象から外す。
+            onExpanded(true)
+        }
     }
 
     func setOverview(_ text: String?) {
@@ -951,6 +986,7 @@ private struct CompanyMorphStack: View {
                         .padding(.trailing, Theme.headerPillHorizontalPadding)
                         .opacity(expansion)
                         .accessibilityLabel("閉じる")
+                        .accessibilityHidden(!model.expanded)
                     }
             }
             Text(subtitle)
@@ -958,6 +994,7 @@ private struct CompanyMorphStack: View {
                 .foregroundStyle(Theme.textMuted)
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
                 .opacity(expansion)
+                .accessibilityHidden(!model.expanded)
             if let overview = model.overview {
                 FillWidth {
                     JustifiedOverviewText(text: overview)
@@ -966,12 +1003,12 @@ private struct CompanyMorphStack: View {
                 .opacity(expansion)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(overview)
+                .accessibilityHidden(!model.expanded)
             }
         }
         .padding(.bottom, 14)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Format.displayName(model.company.name, fallback: model.company.code))
-        .accessibilityHint("銘柄コード・業種・Overview を表示します")
+        .accessibilityHidden(!model.expanded && model.expansion < 0.02)
     }
 
     private var subtitle: String {
@@ -1000,7 +1037,10 @@ private enum CompanyCardInset {
 /// ピル幅で決めた社名。2行のときは1行目を固定し、2行目の…だけ幅で足す。
 private enum CompanyNameLock: Equatable {
     case automatic
+    /// Headline +2pt の1行。
     case singleLine
+    /// 15pt の1行。大きな字ではピル幅に入らない。
+    case compactLine
     case twoLine(first: String, rest: String)
 
     static func measure(name: String, code: String, pillWidth: CGFloat) -> CompanyNameLock {
@@ -1015,13 +1055,33 @@ private enum CompanyNameLock: Equatable {
         let largeWidth = (display as NSString).size(withAttributes: [.font: large]).width
         if largeWidth <= textWidth { return .singleLine }
         let compact = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        let compactWidth = (display as NSString).size(withAttributes: [.font: compact]).width
+        if compactWidth <= textWidth { return .compactLine }
         let attributed = NSAttributedString(string: display, attributes: [.font: compact])
         let typesetter = CTTypesetterCreateWithAttributedString(attributed)
         let count = CTTypesetterSuggestLineBreak(typesetter, 0, Double(textWidth))
-        let index = display.index(display.startIndex, offsetBy: min(max(count, 1), display.count))
-        let rest = String(display[index...])
-        if rest.isEmpty { return .singleLine }
-        return .twoLine(first: String(display[..<index]), rest: rest)
+        let index = splitIndex(in: display, utf16Offset: count)
+        guard index > display.startIndex, index < display.endIndex else { return .compactLine }
+        return .twoLine(first: String(display[..<index]), rest: String(display[index...]))
+    }
+
+    /// Core Text の折り位置は UTF-16。𠮷 のようなサロゲートは文字境界で切る。
+    private static func splitIndex(in text: String, utf16Offset: Int) -> String.Index {
+        let utf16 = text.utf16
+        guard !utf16.isEmpty else { return text.endIndex }
+        let capped = min(max(utf16Offset, 1), utf16.count)
+        let raw = utf16.index(utf16.startIndex, offsetBy: capped)
+        if let index = String.Index(raw, within: text), index > text.startIndex {
+            return index
+        }
+        var cursor = raw
+        while cursor < utf16.endIndex {
+            cursor = utf16.index(after: cursor)
+            if let index = String.Index(cursor, within: text), index > text.startIndex {
+                return index
+            }
+        }
+        return text.endIndex
     }
 }
 
@@ -1057,6 +1117,10 @@ private struct CompanyPillLabel: View {
         case .singleLine:
             Text(display)
                 .font(nameFont)
+                .lineLimit(1)
+        case .compactLine:
+            Text(display)
+                .font(compactNameFont)
                 .lineLimit(1)
         case .twoLine(let first, let rest):
             VStack(alignment: .leading, spacing: -2) {
