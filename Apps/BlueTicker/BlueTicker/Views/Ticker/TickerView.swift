@@ -20,6 +20,8 @@ struct TickerView: View {
     @State private var showsCompanyCard = false
     /// カードのウィンドウ座標での矩形。ウィンドウ級のタップ判定に使う。
     @State private var cardRect: CGRect = .zero
+    /// 社名ピルのウィンドウ座標での矩形。カードがピルから伸びる始点に使う。
+    @State private var titlePillRect: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
 
     var body: some View {
@@ -35,7 +37,8 @@ struct TickerView: View {
             WindowOverlayPresenter(
                 isPresented: showsCompanyCard,
                 onDismiss: closeCompanyCard,
-                cardRect: cardRect
+                cardRect: cardRect,
+                pillRect: titlePillRect
             ) {
                 windowCard
             }
@@ -76,6 +79,14 @@ struct TickerView: View {
                     .padding(.vertical, Theme.headerPillVerticalPadding)
                     .frame(maxWidth: titlePillMaxWidth)
                     .glassEffect()
+                    // カードはピルが伸びた見た目で出るので、開いている間は
+                    // ピル本体を消す（ナビバーの TitleView の alpha を触ると
+                    // SwiftUI の再描画で戻されるため、ツールバー側で消す）。
+                    .opacity(showsCompanyCard ? 0 : 1)
+                    .allowsHitTesting(!showsCompanyCard)
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .global)
+                    } action: { titlePillRect = $0 }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
@@ -415,6 +426,8 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
     var onDismiss: () -> Void
     /// ウィンドウ座標でのカード矩形。タップがこの内側なら閉じない。
     var cardRect: CGRect
+    /// ウィンドウ座標での社名ピル矩形。伸縮の始点/終点に使う。
+    var pillRect: CGRect
     @ViewBuilder var content: Content
 
     func makeUIView(context: Context) -> UIView {
@@ -424,7 +437,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.update(isPresented: isPresented, content: content, onDismiss: onDismiss, cardRect: cardRect, anchor: uiView)
+        context.coordinator.update(isPresented: isPresented, content: content, onDismiss: onDismiss, cardRect: cardRect, pillRect: pillRect, anchor: uiView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -437,6 +450,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
         private var topPad: CGFloat = 0
         private var onDismiss: (() -> Void)?
         private var cardRect: CGRect = .zero
+        private var pillRect: CGRect = .zero
         private var windowTap: UITapGestureRecognizer?
         /// カードをピルの位置・大きさに重ねる transform。開閉で共通の始点/終点。
         private var startTransform: CGAffineTransform = .identity
@@ -451,9 +465,10 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             host?.view.removeFromSuperview()
         }
 
-        func update(isPresented: Bool, content: Content, onDismiss: @escaping () -> Void, cardRect: CGRect, anchor: UIView) {
+        func update(isPresented: Bool, content: Content, onDismiss: @escaping () -> Void, cardRect: CGRect, pillRect: CGRect, anchor: UIView) {
             self.onDismiss = onDismiss
             self.cardRect = cardRect
+            self.pillRect = pillRect
             if isPresented {
                 if let host {
                     host.rootView = AnyView(content.padding(.top, topPad).ignoresSafeArea())
@@ -498,19 +513,24 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             }
         }
 
-        /// カードの左上中央をピルの中心に重ねる transform。
-        /// ピルの実矩形はナビゲーションタイトルビューから取り、取れなければ
-        /// バー中央に近似する。
+        /// カードをピルの位置・大きさに重ねる transform。
+        /// ピルの矩形は SwiftUI 側の実測値を使い、取れなければ
+        /// ナビゲーションタイトルビュー・バー中央の順に近似する。
         private func pillTransform(card: UIView, from anchor: UIView, in window: UIWindow) -> CGAffineTransform {
-            var center = CGPoint(x: window.bounds.midX, y: topPad + 40)
-            if let rect = pillRect(from: anchor, in: window) {
-                center = CGPoint(x: rect.midX, y: rect.midY)
+            var centerX = window.bounds.midX
+            var top = topPad + 20
+            var scale: CGFloat = 0.25
+            if let rect = measuredPillRect(from: anchor, in: window) {
+                centerX = rect.midX
+                top = rect.minY
+                // 不透明で開くので、横幅もピルを覆えるだけの縮尺にする。
+                scale = max(scale, (rect.width + 8) / card.bounds.width)
             }
-            let scale: CGFloat = 0.25
             // ウィンドウ上端中央を基点に縮小してから、カードの上端中央
-            // （縮小後の y = topPad * scale）をピルの中心へ移す。
-            let dx = center.x - card.bounds.midX
-            let dy = center.y - topPad * scale
+            // （縮小後の y = topPad * scale）をピルの上端へ移す。
+            // 開幕から不透明なので、ピル矩形を少し上にオーバーさせて完全に覆う。
+            let dx = centerX - card.bounds.midX
+            let dy = top - topPad * scale - 14
             return CGAffineTransform(translationX: dx, y: dy).scaledBy(x: scale, y: scale)
         }
 
@@ -535,10 +555,25 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             return nil
         }
 
+        /// ピルのウィンドウ座標矩形。SwiftUI で測った矩形を優先し、
+        /// 未測定のときだけナビゲーションバー内を探して近似する。
+        private func measuredPillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
+            if !pillRect.isEmpty { return pillRect }
+            return navBarPillRect(from: anchor, in: window)
+        }
+
         /// ナビゲーションバー内のタイトル領域（社名ピル）のウィンドウ座標矩形。
-        private func pillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
+        /// TitleView 自身はテキスト等のコンテンツ境界なので、ガラスのカプセル
+        /// 外形に相当する祖先（高さがバーより小さい最外側のビュー）まで辿る。
+        private func navBarPillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
             guard let title = titleView(from: anchor) else { return nil }
-            return title.convert(title.bounds, to: nil)
+            var outer = title
+            while let s = outer.superview,
+                  !(s is UINavigationBar),
+                  s.bounds.height <= 60 {
+                outer = s
+            }
+            return outer.convert(outer.bounds, to: nil)
         }
 
         /// 注入したホスティングビュー内では SwiftUI の withAnimation が効かない
@@ -549,7 +584,10 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             card.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
             card.layer.position = CGPoint(x: card.bounds.midX, y: 0)
             card.transform = startTransform
-            card.alpha = 0
+            // 不透明なままピルの位置から始めることで、ピル本体の非表示が
+            // ツールバーの再描画まで数フレーム遅れてもカードがピルを覆い隠す。
+            card.alpha = 1
+            pill?.alpha = 0
             UIView.animate(
                 withDuration: 0.32,
                 delay: 0,
@@ -557,8 +595,6 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                 initialSpringVelocity: 0.4
             ) {
                 card.transform = .identity
-                card.alpha = 1
-                pill?.alpha = 0
             }
         }
 
@@ -566,9 +602,12 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseIn) {
                 card.transform = self.startTransform
                 card.alpha = 0
-                pill?.alpha = 1
             } completion: { _ in
                 card.removeFromSuperview()
+            }
+            // カードがピルの大きさまで縮んだあとにフェードインさせ、
+            // ピルに戻って見えるようにする。
+            UIView.animate(withDuration: 0.08, delay: 0.14, options: .curveEaseIn) {
                 pill?.alpha = 1
             }
         }
