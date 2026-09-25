@@ -19,7 +19,6 @@ struct TickerView: View {
     @State private var showsHoldings = false
     @State private var showsCompanyCard = false
     @State private var contentWidth: CGFloat = 0
-    @State private var topInset: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,20 +26,12 @@ struct TickerView: View {
             pageDots
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
-        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { topInset = $0 }
         .background(Theme.shell.ignoresSafeArea())
-        .overlay(alignment: .top) {
-            ZStack(alignment: .top) {
-                if showsCompanyCard {
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .onTapGesture { closeCompanyCard() }
-                    // 社名ピルがそのまま拡大した形。上へずらして戻る・右上ボタンの上にかぶせる。
-                    CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
-                        .padding(.horizontal, 8)
-                        .padding(.top, -max(topInset - cardCoverTop, 0))
-                        .transition(.scale(scale: 0.4, anchor: .top).combined(with: .opacity))
-                }
+        // 詳細カードはウィンドウ直下に載せ、ナビゲーションバーより上に描く。
+        // ビュー内オーバーレイは UIKit のバーより必ず下に合成されてかぶせられない。
+        .overlay {
+            WindowOverlayPresenter(isPresented: showsCompanyCard) {
+                windowCard
             }
         }
         .navigationTitle("")
@@ -97,6 +88,19 @@ struct TickerView: View {
             TickerHoldingsView(code: company.code, onAddAccount: addAccount)
         }
         .task { await hydrateSector() }
+    }
+
+    /// ウィンドウオーバーレイに載せる詳細カード。上端のオフセットは
+    /// `WindowOverlayPresenter` がウィンドウの safeAreaInsets から足す。
+    private var windowCard: some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture { closeCompanyCard() }
+            CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
+                .padding(.horizontal, 8)
+        }
+        .ignoresSafeArea()
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -185,12 +189,6 @@ struct TickerView: View {
         let reserved: CGFloat = 180
         guard contentWidth > 0 else { return .infinity }
         return max(contentWidth - reserved, 120)
-    }
-
-    /// 詳細カードをどれだけナビゲーションバー側へはみ出させるか。
-    /// 戻る・右上ボタンが並ぶ高さ（おおよそ 48pt）まで上げてかぶせる。
-    private var cardCoverTop: CGFloat {
-        48
     }
 
     private func closeCompanyCard() {
@@ -400,6 +398,88 @@ private struct PagerSnapper: UIViewRepresentable {
             let delta = abs(scrollView.contentOffset.x - target.x)
             guard delta > 0.5 else { return }
             scrollView.setContentOffset(target, animated: delta > 8)
+        }
+    }
+}
+
+/// isPresented のあいだ、子供を画面の UIWindow 直下のホストビューに載せる。
+/// ナビゲーションバーより上に描く必要がある浮きカード用。
+private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
+    var isPresented: Bool
+    @ViewBuilder var content: Content
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.update(isPresented: isPresented, content: content, anchor: uiView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var host: UIHostingController<AnyView>?
+        private var topPad: CGFloat = 0
+
+        deinit {
+            host?.view.removeFromSuperview()
+        }
+
+        func update(isPresented: Bool, content: Content, anchor: UIView) {
+            if isPresented {
+                if let host {
+                    host.rootView = AnyView(content.padding(.top, topPad).ignoresSafeArea())
+                } else if let window = anchor.window {
+                    // ナビゲーションバーの実フレームの上端からカードを出し、
+                    // 戻る・右上ボタンにかぶせる。safeAreaInsets 系はバーを含む
+                    // 値を返すことがあり、下端にずれるため実測する。
+                    topPad = (navBarTop(from: anchor, in: window) ?? window.safeAreaInsets.top) + 2
+                    let host = UIHostingController(
+                        rootView: AnyView(content.padding(.top, topPad).ignoresSafeArea())
+                    )
+                    host.view.backgroundColor = .clear
+                    host.view.frame = window.bounds
+                    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    window.addSubview(host.view)
+                    self.host = host
+                }
+            } else if let host {
+                host.view.removeFromSuperview()
+                self.host = nil
+            }
+        }
+
+        /// ウィンドウ座標でのナビゲーションバーの上端。
+        /// まずアンカーのレスポンダチェーンから表示中のナビゲーションコントローラを
+        /// 引く。見つからなければウィンドウ内のバーのうち上端が最も小さいものを使う
+        /// （非表示の裏側バーは下端に近い位置を返すことがある）。
+        private func navBarTop(from anchor: UIView, in window: UIWindow) -> CGFloat? {
+            var responder = anchor.next
+            while let next = responder {
+                if let vc = next as? UIViewController,
+                   let bar = vc.navigationController?.navigationBar {
+                    return bar.convert(bar.bounds, to: nil).minY
+                }
+                responder = next.next
+            }
+            var tops: [CGFloat] = []
+            func collect(_ view: UIView) {
+                if let bar = view as? UINavigationBar {
+                    if !bar.isHidden && bar.alpha > 0 {
+                        tops.append(bar.convert(bar.bounds, to: nil).minY)
+                    }
+                    return
+                }
+                view.subviews.forEach(collect)
+            }
+            collect(window)
+            return tops.min()
         }
     }
 }
