@@ -523,12 +523,12 @@ private struct CompanyDetailCard: View {
             }
         }
         .padding(14)
-        // 不透明にして、下の戻る・編集・星ボタンが透けないようにする。
-        .background(
-            Theme.elevated,
-            in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
+        // Liquid Glass のカード。ガラスのブラー越しにナビバー行が滲むだけで
+        // 内容は読めない。社名ピルと同じ素材感に揃える。
+        .glassEffect(
+            .regular.interactive(),
+            in: .rect(cornerRadius: Theme.cardCornerRadius, style: .continuous)
         )
-        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
         .task(id: company.code) { await load() }
     }
 
