@@ -19,6 +19,7 @@ struct TickerView: View {
     @State private var showsHoldings = false
     @State private var showsCompanyCard = false
     @State private var contentWidth: CGFloat = 0
+    @State private var topInset: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +27,7 @@ struct TickerView: View {
             pageDots
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
+        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { topInset = $0 }
         .background(Theme.shell.ignoresSafeArea())
         .overlay(alignment: .top) {
             ZStack(alignment: .top) {
@@ -33,10 +35,11 @@ struct TickerView: View {
                     Color.black.opacity(0.001)
                         .ignoresSafeArea()
                         .onTapGesture { closeCompanyCard() }
+                    // 社名ピルがそのまま拡大した形。上へずらして戻る・右上ボタンの上にかぶせる。
                     CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 4)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .padding(.horizontal, 8)
+                        .padding(.top, -max(topInset - cardCoverTop, 0))
+                        .transition(.scale(scale: 0.4, anchor: .top).combined(with: .opacity))
                 }
             }
         }
@@ -182,6 +185,12 @@ struct TickerView: View {
         let reserved: CGFloat = 180
         guard contentWidth > 0 else { return .infinity }
         return max(contentWidth - reserved, 120)
+    }
+
+    /// 詳細カードをどれだけナビゲーションバー側へはみ出させるか。
+    /// 戻る・右上ボタンが並ぶ高さ（おおよそ 48pt）まで上げてかぶせる。
+    private var cardCoverTop: CGFloat {
+        48
     }
 
     private func closeCompanyCard() {
@@ -434,7 +443,12 @@ private struct CompanyDetailCard: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius))
+        // 不透明にして、下の戻る・編集・星ボタンが透けないようにする。
+        .background(
+            Theme.elevated,
+            in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
         .task(id: company.code) { await load() }
     }
 
