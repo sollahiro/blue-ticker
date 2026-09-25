@@ -426,6 +426,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var disappearHook: GlassDisappearHook?
         private var handoffScheduled = false
         private var didDisappear = false
+        /// 銘柄面が見えていないあいだは、窓上のガラスを付け直さない。
+        private var tickerVisible = true
 
         func update(
             handedOff: Bool,
@@ -483,12 +485,18 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         }
 
         private func scheduleHandoff(from nav: UINavigationController, setHandedOff: @escaping (Bool) -> Void) {
-            guard !handoffScheduled else { return }
+            guard tickerVisible, !handoffScheduled else { return }
             handoffScheduled = true
-            let fire = { setHandedOff(true) }
+            let fire = { [weak self] in
+                guard let self, self.tickerVisible else {
+                    self?.handoffScheduled = false
+                    return
+                }
+                setHandedOff(true)
+            }
             if let transition = nav.transitionCoordinator, transition.isAnimated {
                 transition.animate(alongsideTransition: nil) { context in
-                    if context.isCancelled {
+                    if context.isCancelled || !self.tickerVisible {
                         self.handoffScheduled = false
                     } else {
                         fire()
@@ -508,9 +516,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             ticker.addChild(hook)
             ticker.view.addSubview(hook.view)
             hook.didMove(toParent: ticker)
-            hook.onWillDisappear = { [weak self, weak ticker] in
-                guard let self, let ticker else { return }
-                guard ticker.isMovingFromParent || ticker.isBeingDismissed else { return }
+            hook.onWillDisappear = { [weak self] in
+                guard let self else { return }
+                // 戻る・タブ切替・別画面への push。窓に載っているので、見えなくなったら外す。
+                self.tickerVisible = false
                 self.didDisappear = true
                 self.model.expanded = false
                 self.model.onExpanded(false)
@@ -519,7 +528,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 self.handoffScheduled = false
             }
             hook.onWillAppear = { [weak self] in
-                guard let self, self.didDisappear else { return }
+                guard let self else { return }
+                self.tickerVisible = true
+                guard self.didDisappear else { return }
                 self.didDisappear = false
                 setHandedOff(true)
             }
