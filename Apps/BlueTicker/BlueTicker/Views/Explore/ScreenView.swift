@@ -324,6 +324,10 @@ private struct ScreenResultsView: View {
                                 .foregroundStyle(Theme.textMuted)
                                 .listRowBackground(Color.clear)
                         }
+                    } header: {
+                        Text(preset.descriptionText)
+                            .foregroundStyle(Theme.textMuted)
+                            .textCase(nil)
                     } footer: {
                         Text(preset.reasonText)
                             .foregroundStyle(Theme.textMuted)

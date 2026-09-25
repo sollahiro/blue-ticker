@@ -128,8 +128,8 @@ struct SummaryView: View {
     }
 }
 
-/// 親の提案幅を子に渡し、Overview がヘッダ幅まで広がるようにする。
-private struct FillWidth: Layout {
+/// 親の提案幅を子に渡し、Overview が広がるようにする。
+struct FillWidth: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let subview = subviews.first else { return .zero }
         let width = proposal.width ?? 0
@@ -147,46 +147,9 @@ private struct FillWidth: Layout {
     }
 }
 
-/// 銘柄ヘッダとカードのあいだに置く会社説明。空なら何も出さない。
-struct CompanyOverviewView: View {
-    var code: String
-    @State private var overview: String?
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if let overview, !overview.isEmpty {
-                FillWidth {
-                    JustifiedOverviewText(text: overview)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(overview)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-            }
-        }
-        .task(id: code) { await load() }
-    }
-
-    private func load() async {
-        if let cached = await APIClient.shared.cachedOverview(code: code) {
-            let text = cached.overview.trimmingCharacters(in: .whitespacesAndNewlines)
-            overview = text.isEmpty ? nil : text
-        }
-        do {
-            let loaded = try await APIClient.shared.overview(code: code)
-            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
-            overview = text.isEmpty ? nil : text
-        } catch APIClientError.http(let status, _) where status == 404 {
-            overview = nil
-        } catch {
-            // 通信失敗時は最後の成功応答（キャッシュ）を出したままにする。
-        }
-    }
-}
-
 /// 表と同じ幅で折り返し、途中の行は文字間隔で両端揃え、最終行は左揃え。
 /// 高さ計算と描画は同じ UIFont を使う。
-private struct JustifiedOverviewText: UIViewRepresentable {
+struct JustifiedOverviewText: UIViewRepresentable {
     var text: String
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -209,7 +172,7 @@ private struct JustifiedOverviewText: UIViewRepresentable {
     }
 }
 
-private final class JustifiedOverviewLabel: UIView {
+final class JustifiedOverviewLabel: UIView {
     var text = "" {
         didSet {
             guard oldValue != text else { return }

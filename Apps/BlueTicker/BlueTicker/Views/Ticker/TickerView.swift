@@ -17,14 +17,25 @@ struct TickerView: View {
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
+    @State private var showsCompanyCard = false
+    /// カードの拡大・収縮アニメーション用。true でカードがピルから広がった状態。
+    @State private var cardAppeared = false
+    @State private var contentWidth: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            CompanyOverviewView(code: company.code)
             cards
             pageDots
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
         .background(Theme.shell.ignoresSafeArea())
+        // 詳細カードはウィンドウ直下に載せ、ナビゲーションバーより上に描く。
+        // ビュー内オーバーレイは UIKit のバーより必ず下に合成されてかぶせられない。
+        .overlay {
+            WindowOverlayPresenter(isPresented: showsCompanyCard) {
+                windowCard
+            }
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
@@ -33,26 +44,38 @@ struct TickerView: View {
             // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
             // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
             ToolbarItem(placement: .title) {
-                HStack(alignment: .center, spacing: 8) {
-                    CompanyIconView(company, size: Theme.headerIconSize)
-                    // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
-                    ViewThatFits(in: .horizontal) {
-                        Text(Format.displayName(company.name, fallback: company.code))
-                            .font(nameFont)
-                            .lineLimit(1)
-                        Text(Format.displayName(company.name, fallback: company.code))
-                            .font(compactNameFont)
-                            .lineLimit(2)
-                            .lineSpacing(-2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    if showsCompanyCard {
+                        closeCompanyCard()
+                    } else {
+                        showsCompanyCard = true
                     }
-                    .foregroundStyle(Theme.text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    HStack(alignment: .center, spacing: 8) {
+                        CompanyIconView(company, size: Theme.headerIconSize)
+                        // 1行に収まるときは大きいまま、収まらない社名は小さめ2行に切替。
+                        ViewThatFits(in: .horizontal) {
+                            Text(Format.displayName(company.name, fallback: company.code))
+                                .font(nameFont)
+                                .lineLimit(1)
+                            Text(Format.displayName(company.name, fallback: company.code))
+                                .font(compactNameFont)
+                                .lineLimit(2)
+                                .lineSpacing(-2)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, Theme.headerPillHorizontalPadding)
+                    .padding(.vertical, Theme.headerPillVerticalPadding)
+                    .frame(maxWidth: titlePillMaxWidth)
+                    .glassEffect()
                 }
-                .padding(.horizontal, Theme.headerPillHorizontalPadding)
-                .padding(.vertical, Theme.headerPillVerticalPadding)
-                .glassEffect()
+                .buttonStyle(.plain)
+                .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
+                .accessibilityHint("銘柄コード・業種・Overview を表示します")
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
@@ -69,6 +92,28 @@ struct TickerView: View {
             TickerHoldingsView(code: company.code, onAddAccount: addAccount)
         }
         .task { await hydrateSector() }
+    }
+
+    /// ウィンドウオーバーレイに載せる詳細カード。上端のオフセットは
+    /// `WindowOverlayPresenter` がナビゲーションバーの実フレームから足す。
+    private var windowCard: some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture { closeCompanyCard() }
+            CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
+                .padding(.horizontal, 8)
+                // ピルがそのまま上端からカードに広がる見た目。小さく透明な
+                // 状態からスプリングで拡大し、閉じるときは逆に収縮させる。
+                .scaleEffect(cardAppeared ? 1 : 0.4, anchor: .top)
+                .opacity(cardAppeared ? 1 : 0)
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.spring(duration: 0.3)) {
+                cardAppeared = true
+            }
+        }
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -149,6 +194,24 @@ struct TickerView: View {
     /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
     private var compactNameFont: Font {
         .system(size: 15, weight: .semibold)
+    }
+
+    /// 社名ピルの上限。戻る・右上2ボタン・左右余白を引いた分だけにし、
+    /// それ以上に広がると編集・星のカプセルの下に潜る。
+    private var titlePillMaxWidth: CGFloat {
+        let reserved: CGFloat = 180
+        guard contentWidth > 0 else { return .infinity }
+        return max(contentWidth - reserved, 120)
+    }
+
+    private func closeCompanyCard() {
+        withAnimation(.snappy(duration: 0.18)) {
+            cardAppeared = false
+        }
+        // 収縮アニメーションが終わってからホストビューを外す。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showsCompanyCard = false
+        }
     }
 
     private func hydrateSector() async {
@@ -352,6 +415,157 @@ private struct PagerSnapper: UIViewRepresentable {
             let delta = abs(scrollView.contentOffset.x - target.x)
             guard delta > 0.5 else { return }
             scrollView.setContentOffset(target, animated: delta > 8)
+        }
+    }
+}
+
+/// isPresented のあいだ、子供を画面の UIWindow 直下のホストビューに載せる。
+/// ナビゲーションバーより上に描く必要がある浮きカード用。
+private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
+    var isPresented: Bool
+    @ViewBuilder var content: Content
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.update(isPresented: isPresented, content: content, anchor: uiView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var host: UIHostingController<AnyView>?
+        private var topPad: CGFloat = 0
+
+        deinit {
+            host?.view.removeFromSuperview()
+        }
+
+        func update(isPresented: Bool, content: Content, anchor: UIView) {
+            if isPresented {
+                if let host {
+                    host.rootView = AnyView(content.padding(.top, topPad).ignoresSafeArea())
+                } else if let window = anchor.window {
+                    // ナビゲーションバーの実フレームの上端からカードを出し、
+                    // 戻る・右上ボタンにかぶせる。safeAreaInsets 系はバーを含む
+                    // 値を返すことがあり、下端にずれるため実測する。
+                    topPad = (navBarTop(from: anchor, in: window) ?? window.safeAreaInsets.top) + 2
+                    let host = UIHostingController(
+                        rootView: AnyView(content.padding(.top, topPad).ignoresSafeArea())
+                    )
+                    host.view.backgroundColor = .clear
+                    host.view.frame = window.bounds
+                    host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    window.addSubview(host.view)
+                    self.host = host
+                }
+            } else if let host {
+                host.view.removeFromSuperview()
+                self.host = nil
+            }
+        }
+
+        /// ウィンドウ座標でのナビゲーションバーの上端。
+        /// まずアンカーのレスポンダチェーンから表示中のナビゲーションコントローラを
+        /// 引く。見つからなければウィンドウ内のバーのうち上端が最も小さいものを使う
+        /// （非表示の裏側バーは下端に近い位置を返すことがある）。
+        private func navBarTop(from anchor: UIView, in window: UIWindow) -> CGFloat? {
+            var responder = anchor.next
+            while let next = responder {
+                if let vc = next as? UIViewController,
+                   let bar = vc.navigationController?.navigationBar {
+                    return bar.convert(bar.bounds, to: nil).minY
+                }
+                responder = next.next
+            }
+            var tops: [CGFloat] = []
+            func collect(_ view: UIView) {
+                if let bar = view as? UINavigationBar {
+                    if !bar.isHidden && bar.alpha > 0 {
+                        tops.append(bar.convert(bar.bounds, to: nil).minY)
+                    }
+                    return
+                }
+                view.subviews.forEach(collect)
+            }
+            collect(window)
+            return tops.min()
+        }
+    }
+}
+
+/// 社名ピルを押すと開く詳細カード。コード・業種・Overview をまとめて出す。
+private struct CompanyDetailCard: View {
+    var company: CompanyRef
+    var onClose: () -> Void
+    @State private var overview: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                CompanyIconView(company, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Format.displayName(company.name, fallback: company.code))
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("閉じる")
+            }
+            if let overview {
+                FillWidth {
+                    JustifiedOverviewText(text: overview)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(overview)
+            }
+        }
+        .padding(14)
+        // Liquid Glass のカード。ガラスのブラー越しにナビバー行が滲むだけで
+        // 内容は読めない。社名ピルと同じ素材感に揃える。
+        .glassEffect(
+            .regular.interactive(),
+            in: .rect(cornerRadius: Theme.cardCornerRadius, style: .continuous)
+        )
+        .task(id: company.code) { await load() }
+    }
+
+    private var subtitle: String {
+        company.sector.isEmpty ? company.code : "\(company.code) · \(company.sector)"
+    }
+
+    private func load() async {
+        if let cached = await APIClient.shared.cachedOverview(code: company.code) {
+            let text = cached.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        }
+        do {
+            let loaded = try await APIClient.shared.overview(code: company.code)
+            let text = loaded.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            overview = text.isEmpty ? nil : text
+        } catch APIClientError.http(let status, _) where status == 404 {
+            overview = nil
+        } catch {
+            // 通信失敗時は最後の成功応答（キャッシュ）を出したままにする。
         }
     }
 }
