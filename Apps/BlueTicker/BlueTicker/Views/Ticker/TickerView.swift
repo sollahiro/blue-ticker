@@ -440,11 +440,14 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
         private var windowTap: UITapGestureRecognizer?
         /// カードをピルの位置・大きさに重ねる transform。開閉で共通の始点/終点。
         private var startTransform: CGAffineTransform = .identity
+        /// 表示中は消す社名ピル（ナビバーのタイトルビュー）。
+        private weak var titleView: UIView?
 
         deinit {
             if let tap = windowTap {
                 tap.view?.removeGestureRecognizer(tap)
             }
+            titleView?.alpha = 1
             host?.view.removeFromSuperview()
         }
 
@@ -474,7 +477,8 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                     window.addGestureRecognizer(tap)
                     windowTap = tap
                     startTransform = pillTransform(card: host.view, from: anchor, in: window)
-                    animateIn(card: host.view)
+                    titleView = titleView(from: anchor)
+                    animateIn(card: host.view, pill: titleView)
                 }
             } else if let host {
                 self.host = nil
@@ -482,7 +486,7 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                     windowTap = nil
                     tap.view?.removeGestureRecognizer(tap)
                 }
-                animateOut(card: host.view)
+                animateOut(card: host.view, pill: titleView)
             }
         }
 
@@ -510,8 +514,8 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             return CGAffineTransform(translationX: dx, y: dy).scaledBy(x: scale, y: scale)
         }
 
-        /// ナビゲーションバー内のタイトル領域（社名ピル）のウィンドウ座標矩形。
-        private func pillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
+        /// ナビゲーションバー内のタイトル領域（社名ピル）のビュー。
+        private func titleView(from anchor: UIView) -> UIView? {
             var responder = anchor.next
             while let next = responder {
                 if let vc = next as? UIViewController,
@@ -524,20 +528,23 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                         }
                         return nil
                     }
-                    if let title = findTitleView(in: bar) {
-                        return title.convert(title.bounds, to: nil)
-                    }
-                    return nil
+                    return findTitleView(in: bar)
                 }
                 responder = next.next
             }
             return nil
         }
 
+        /// ナビゲーションバー内のタイトル領域（社名ピル）のウィンドウ座標矩形。
+        private func pillRect(from anchor: UIView, in window: UIWindow) -> CGRect? {
+            guard let title = titleView(from: anchor) else { return nil }
+            return title.convert(title.bounds, to: nil)
+        }
+
         /// 注入したホスティングビュー内では SwiftUI の withAnimation が効かない
         /// （最初のコミットと同じトランザクションに吸収されて中間フレームが出ない）。
         /// ピル自体が伸縮してカードになる見た目を UIKit の transform で作る。
-        private func animateIn(card: UIView) {
+        private func animateIn(card: UIView, pill: UIView?) {
             // 上端中央を拡大の基点にするため anchorPoint を動かして位置を補正する。
             card.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
             card.layer.position = CGPoint(x: card.bounds.midX, y: 0)
@@ -551,15 +558,18 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
             ) {
                 card.transform = .identity
                 card.alpha = 1
+                pill?.alpha = 0
             }
         }
 
-        private func animateOut(card: UIView) {
+        private func animateOut(card: UIView, pill: UIView?) {
             UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseIn) {
                 card.transform = self.startTransform
                 card.alpha = 0
+                pill?.alpha = 1
             } completion: { _ in
                 card.removeFromSuperview()
+                pill?.alpha = 1
             }
         }
 
