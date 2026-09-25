@@ -417,7 +417,11 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var openTap: UITapGestureRecognizer?
         private var host: UIHostingController<CompanyGlassMorph>?
         private var wrapper: GlassPassThroughView?
-        private var cardContainer: UIView?
+        private var cardContainer: MorphClipView?
+        private var morphLink: CADisplayLink?
+        private var trackPillHeight: CGFloat = 0
+        private var trackCardHeight: CGFloat = 0
+        private var trackCardWidth: CGFloat = 0
         private var disappearHook: GlassDisappearHook?
         private var handoffScheduled = false
         private var didDisappear = false
@@ -462,7 +466,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 self?.wrapper?.hitEverywhere = covers
             }
             model.onToggle = { [weak self] expanded in
-                self?.animate(expanded: expanded)
+                self?.animateExpanded(expanded)
             }
             model.onOverview = { [weak self] in
                 self?.growIfNeeded()
@@ -529,7 +533,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             wrapper.backgroundColor = .clear
             wrapper.frame = window.bounds
             wrapper.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            let container = UIView()
+            let container = MorphClipView()
             container.backgroundColor = .clear
             container.clipsToBounds = true
             container.layer.cornerCurve = .continuous
@@ -539,8 +543,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             host.safeAreaRegions = []
             host.view.backgroundColor = .clear
             host.view.isUserInteractionEnabled = false
-            host.view.frame = container.bounds
-            host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            host.view.autoresizingMask = []
+            let expandedWidth = window.bounds.width - 16
+            let expandedHeight = measuredHeight(width: expandedWidth)
+            host.view.frame = CGRect(x: 0, y: 0, width: expandedWidth, height: expandedHeight)
             container.addSubview(host.view)
             wrapper.addSubview(container)
             wrapper.cardFrame = container.frame
@@ -572,6 +578,23 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             rect.width > 80 && rect.height > 28 && rect.height < 90 && rect.minY > 40 && rect.minX > 16
         }
 
+        /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
+        /// そのまま `UIView.animate` すると、閉じる矩形が終端へ飛ぶ。
+        private func animateExpanded(_ expanded: Bool) {
+            let fire = { [weak self] in
+                guard let self else { return }
+                let enabled = UIView.areAnimationsEnabled
+                UIView.setAnimationsEnabled(true)
+                self.animate(expanded: expanded)
+                UIView.setAnimationsEnabled(enabled)
+            }
+            if UIView.areAnimationsEnabled {
+                fire()
+            } else {
+                DispatchQueue.main.async(execute: fire)
+            }
+        }
+
         private func animate(expanded: Bool) {
             guard let container = cardContainer, let window = container.window else { return }
             let pill = model.pillRect
@@ -582,12 +605,19 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 ? CGRect(x: 8, y: pill.minY, width: endWidth, height: endHeight)
                 : pill
             let radius = expanded ? min(end.height / 2, Theme.cardCornerRadius) : pill.height / 2
+            // 中身は広がったサイズのまま置き、枠だけをピルへ戻す。
+            // 枠に合わせて組み直すと、閉じ始めに本文が消えて矩形だけが縮む。
+            if let hostView = host?.view {
+                hostView.frame = CGRect(x: 0, y: 0, width: endWidth, height: endHeight)
+            }
             openTap?.isEnabled = !expanded
             host?.view.isUserInteractionEnabled = expanded
+            // 閉じる終端はピルなので、追跡の分母は常に開いた高さにする。
+            startMorphTracking(pillHeight: pill.height, cardWidth: endWidth, cardHeight: endHeight)
             UIView.animate(
-                withDuration: expanded ? 0.42 : 0.26,
+                withDuration: 0.42,
                 delay: 0,
-                usingSpringWithDamping: expanded ? 0.86 : 1,
+                usingSpringWithDamping: 0.86,
                 initialSpringVelocity: 0.25,
                 options: [.allowUserInteraction, .beginFromCurrentState]
             ) {
@@ -595,6 +625,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 container.layer.cornerRadius = radius
             } completion: { _ in
                 guard self.model.expanded == expanded else { return }
+                self.stopMorphTracking()
+                self.model.expansion = expanded ? 1 : 0
                 self.wrapper?.cardFrame = container.frame
                 self.openTap?.isEnabled = !expanded
                 if expanded {
@@ -608,11 +640,47 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
         }
 
+        private func startMorphTracking(pillHeight: CGFloat, cardWidth: CGFloat, cardHeight: CGFloat) {
+            trackPillHeight = pillHeight
+            trackCardWidth = cardWidth
+            trackCardHeight = cardHeight
+            morphLink?.invalidate()
+            let link = CADisplayLink(target: self, selector: #selector(trackMorph))
+            link.add(to: .main, forMode: .common)
+            morphLink = link
+        }
+
+        private func stopMorphTracking() {
+            morphLink?.invalidate()
+            morphLink = nil
+        }
+
+        /// 表示中の枠の高さに、上余白と下段の出現を合わせる。モデルの矩形は終端へ先に飛ぶ。
+        @objc private func trackMorph() {
+            guard let container = cardContainer else { return }
+            let frame = container.layer.presentation()?.frame ?? container.frame
+            wrapper?.cardFrame = frame
+            if let hostView = host?.view, trackCardWidth > 1, trackCardHeight > 1 {
+                let size = CGSize(width: trackCardWidth, height: trackCardHeight)
+                if abs(hostView.frame.width - size.width) > 0.5 || abs(hostView.frame.height - size.height) > 0.5 {
+                    hostView.frame = CGRect(origin: .zero, size: size)
+                }
+            }
+            let span = trackCardHeight - trackPillHeight
+            let expansion = span > 1
+                ? min(1, max(0, (frame.height - trackPillHeight) / span))
+                : (model.expanded ? 1 : 0)
+            if abs(model.expansion - expansion) > 0.004 {
+                model.expansion = expansion
+            }
+        }
+
         /// Overview が後から来たら、開いているカードの高さだけ足す。
         private func growIfNeeded() {
             guard model.expanded, let container = cardContainer, let window = container.window else { return }
             let height = max(measuredHeight(width: window.bounds.width - 16), model.pillRect.height)
             guard abs(container.frame.height - height) > 1 else { return }
+            host?.view.frame.size.height = height
             UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
                 container.frame.size.height = height
                 container.layer.cornerRadius = min(height / 2, Theme.cardCornerRadius)
@@ -621,7 +689,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
 
         private func measuredHeight(width: CGFloat) -> CGFloat {
             let probe = UIHostingController(
-                rootView: CompanyMorphStack(model: model).frame(width: width, alignment: .topLeading)
+                rootView: CompanyMorphStack(model: model, expansion: 1)
+                    .frame(width: width, alignment: .topLeading)
             )
             probe.safeAreaRegions = []
             return probe.sizeThatFits(in: CGSize(width: width, height: 4000)).height
@@ -636,6 +705,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         }
 
         func removeHost() {
+            stopMorphTracking()
             titleHider.stop()
             host?.willMove(toParent: nil)
             wrapper?.removeFromSuperview()
@@ -712,6 +782,9 @@ private final class GlassTapCatcher: NSObject {
     }
 }
 
+/// 中身は広がったカードの大きさのまま固定し、このビューの矩形だけをピルへ縮める。
+private final class MorphClipView: UIView {}
+
 /// ピル矩形の外のタップは下のバーへ通す。広がっているあいだは全面で受ける。
 private final class GlassPassThroughView: UIView {
     var hitEverywhere = false
@@ -744,6 +817,8 @@ private final class GlassDisappearHook: UIViewController {
 @Observable
 private final class CompanyGlassModel {
     var expanded = false
+    /// 0 がピル、1 がカード。表示中の枠の高さから毎フレーム更新する。
+    var expansion: CGFloat = 0
     /// 広がっているあいだ（収縮アニメーション中を含む）全面のタップを取る。
     var coversScreen = false
     var pillRect: CGRect = .zero
@@ -771,26 +846,24 @@ private final class CompanyGlassModel {
     }
 }
 
-/// ピルと同じ頭を持つ一つのガラス。親の UIView が矩形を伸ばすと、下の行が現れる。
+/// ピルと同じ頭を持つ一つのガラス。親の枠が伸び縮みしても、中身はカード幅のまま上に揃える。
 private struct CompanyGlassMorph: View {
     var model: CompanyGlassModel
 
     var body: some View {
-        GeometryReader { geo in
-            let radius = min(geo.size.height / 2, Theme.cardCornerRadius)
-            let reveal = min(1, max(0, (geo.size.height - model.pillRect.height) / 28))
-            CompanyMorphStack(model: model, reveal: reveal)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(width: geo.size.width, alignment: .topLeading)
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                .clipped()
-                .glassEffect(
-                    .regular,
-                    in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-                )
-        }
-        .ignoresSafeArea()
-        .task(id: model.company.code) { await loadOverview() }
+        let pillRadius = model.pillRect.height / 2
+        let radius = min(
+            Theme.cardCornerRadius,
+            pillRadius + (Theme.cardCornerRadius - pillRadius) * model.expansion
+        )
+        CompanyMorphStack(model: model, expansion: model.expansion)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+            )
+            .ignoresSafeArea()
+            .task(id: model.company.code) { await loadOverview() }
     }
 
     private func loadOverview() async {
@@ -814,36 +887,44 @@ private struct CompanyGlassMorph: View {
 /// 高さ計測と表示で同じ並び。頭は社名ピルそのもの。
 private struct CompanyMorphStack: View {
     var model: CompanyGlassModel
-    var reveal: CGFloat = 1
+    /// 1 のときカード。計測は開いた高さで行う。
+    var expansion: CGFloat = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CompanyPillLabel(company: model.company)
-                .overlay(alignment: .trailing) {
-                    Button {
-                        model.setExpanded(false)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Theme.textMuted)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Circle())
+            VStack(spacing: 0) {
+                // 外側半径 − アイコン半径。ピル自身の上余白を引いた分だけ、開いたとき下げる。
+                Color.clear
+                    .frame(height: CompanyCardInset.extraTop * expansion)
+                    .accessibilityHidden(true)
+                CompanyPillLabel(company: model.company)
+                    .overlay(alignment: .trailing) {
+                        Button {
+                            model.setExpanded(false)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Theme.textMuted)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, Theme.headerPillHorizontalPadding)
+                        .opacity(expansion)
+                        .accessibilityLabel("閉じる")
                     }
-                    .buttonStyle(.plain)
-                    .opacity(reveal)
-                    .accessibilityLabel("閉じる")
-                }
+            }
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted)
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
-                .opacity(reveal)
+                .opacity(expansion)
             if let overview = model.overview {
                 FillWidth {
                     JustifiedOverviewText(text: overview)
                 }
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
-                .opacity(reveal)
+                .opacity(expansion)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(overview)
             }
@@ -856,6 +937,24 @@ private struct CompanyMorphStack: View {
 
     private var subtitle: String {
         model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(model.company.sector)"
+    }
+}
+
+/// カード外側の角と、アイコンの角を同心にする余白。
+private enum CompanyCardInset {
+    /// `CompanyIconView` と同じ。サイズの 0.22、下限 6。
+    static var iconCornerRadius: CGFloat {
+        max(6, Theme.headerIconSize * 0.22)
+    }
+
+    /// 外側 R = 内側 R + padding。アイコン上端からガラス上端までの距離。
+    static var top: CGFloat {
+        max(0, Theme.cardCornerRadius - iconCornerRadius)
+    }
+
+    /// ピルが既に持つ上余白を除いた、開いたカードだけの追加分。
+    static var extraTop: CGFloat {
+        max(0, top - Theme.headerPillVerticalPadding)
     }
 }
 
