@@ -18,8 +18,6 @@ struct TickerView: View {
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
     @State private var showsCompanyCard = false
-    /// カードの拡大・収縮アニメーション用。true でカードがピルから広がった状態。
-    @State private var cardAppeared = false
     @State private var contentWidth: CGFloat = 0
 
     var body: some View {
@@ -103,17 +101,8 @@ struct TickerView: View {
                 .onTapGesture { closeCompanyCard() }
             CompanyDetailCard(company: displayCompany, onClose: closeCompanyCard)
                 .padding(.horizontal, 8)
-                // ピルがそのまま上端からカードに広がる見た目。小さく透明な
-                // 状態からスプリングで拡大し、閉じるときは逆に収縮させる。
-                .scaleEffect(cardAppeared ? 1 : 0.4, anchor: .top)
-                .opacity(cardAppeared ? 1 : 0)
         }
         .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.spring(duration: 0.3)) {
-                cardAppeared = true
-            }
-        }
     }
 
     /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
@@ -205,13 +194,7 @@ struct TickerView: View {
     }
 
     private func closeCompanyCard() {
-        withAnimation(.snappy(duration: 0.18)) {
-            cardAppeared = false
-        }
-        // 収縮アニメーションが終わってからホストビューを外す。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            showsCompanyCard = false
-        }
+        showsCompanyCard = false
     }
 
     private func hydrateSector() async {
@@ -465,10 +448,40 @@ private struct WindowOverlayPresenter<Content: View>: UIViewRepresentable {
                     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                     window.addSubview(host.view)
                     self.host = host
+                    animateIn(host.view)
                 }
             } else if let host {
-                host.view.removeFromSuperview()
                 self.host = nil
+                animateOut(host.view)
+            }
+        }
+
+        /// 注入したホスティングビュー内では SwiftUI の withAnimation が効かない
+        /// （最初のコミットと同じトランザクションに吸収されて中間フレームが出ない）。
+        /// ピルが上端からカードへ広がる見た目を UIKit の transform/alpha で作る。
+        private func animateIn(_ view: UIView) {
+            // 上端中央を拡大の基点にするため anchorPoint を動かして位置を補正する。
+            view.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
+            view.layer.position = CGPoint(x: view.bounds.midX, y: 0)
+            view.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+            view.alpha = 0
+            UIView.animate(
+                withDuration: 0.32,
+                delay: 0,
+                usingSpringWithDamping: 0.82,
+                initialSpringVelocity: 0.4
+            ) {
+                view.transform = .identity
+                view.alpha = 1
+            }
+        }
+
+        private func animateOut(_ view: UIView) {
+            UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseIn) {
+                view.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
+                view.alpha = 0
+            } completion: { _ in
+                view.removeFromSuperview()
             }
         }
 
