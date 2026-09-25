@@ -1,3 +1,4 @@
+import CoreText
 import SwiftData
 import SwiftUI
 import UIKit
@@ -539,6 +540,12 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             container.layer.cornerCurve = .continuous
             container.frame = model.pillRect
             container.layer.cornerRadius = model.pillRect.height / 2
+            model.layoutWidth = model.pillRect.width
+            model.nameLock = CompanyNameLock.measure(
+                name: model.company.name,
+                code: model.company.code,
+                pillWidth: model.pillRect.width
+            )
             let host = UIHostingController(rootView: CompanyGlassMorph(model: model))
             host.safeAreaRegions = []
             host.view.backgroundColor = .clear
@@ -608,7 +615,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             // 中身は広がったサイズのまま置き、枠だけをピルへ戻す。
             // 枠に合わせて組み直すと、閉じ始めに本文が消えて矩形だけが縮む。
             if let hostView = host?.view {
-                hostView.frame = CGRect(x: 0, y: 0, width: endWidth, height: endHeight)
+                UIView.performWithoutAnimation {
+                    hostView.frame = CGRect(x: 0, y: 0, width: endWidth, height: endHeight)
+                }
             }
             openTap?.isEnabled = !expanded
             host?.view.isUserInteractionEnabled = expanded
@@ -627,6 +636,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 guard self.model.expanded == expanded else { return }
                 self.stopMorphTracking()
                 self.model.expansion = expanded ? 1 : 0
+                self.model.layoutWidth = expanded ? endWidth : pill.width
                 self.wrapper?.cardFrame = container.frame
                 self.openTap?.isEnabled = !expanded
                 if expanded {
@@ -663,7 +673,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             if let hostView = host?.view, trackCardWidth > 1, trackCardHeight > 1 {
                 let size = CGSize(width: trackCardWidth, height: trackCardHeight)
                 if abs(hostView.frame.width - size.width) > 0.5 || abs(hostView.frame.height - size.height) > 0.5 {
-                    hostView.frame = CGRect(origin: .zero, size: size)
+                    UIView.performWithoutAnimation {
+                        hostView.frame = CGRect(origin: .zero, size: size)
+                    }
                 }
             }
             let span = trackCardHeight - trackPillHeight
@@ -672,6 +684,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 : (model.expanded ? 1 : 0)
             if abs(model.expansion - expansion) > 0.004 {
                 model.expansion = expansion
+            }
+            if abs(model.layoutWidth - frame.width) > 0.5 {
+                model.layoutWidth = frame.width
             }
         }
 
@@ -819,6 +834,10 @@ private final class CompanyGlassModel {
     var expanded = false
     /// 0 がピル、1 がカード。表示中の枠の高さから毎フレーム更新する。
     var expansion: CGFloat = 0
+    /// 表示中のガラス幅。社名の折り返しはカード全幅ではなくこの幅で決める。
+    var layoutWidth: CGFloat = 0
+    /// ピル幅で決めた社名の行。広がっても行数と1行目は変えない。
+    var nameLock: CompanyNameLock = .automatic
     /// 広がっているあいだ（収縮アニメーション中を含む）全面のタップを取る。
     var coversScreen = false
     var pillRect: CGRect = .zero
@@ -856,13 +875,18 @@ private struct CompanyGlassMorph: View {
             Theme.cardCornerRadius,
             pillRadius + (Theme.cardCornerRadius - pillRadius) * model.expansion
         )
-        CompanyMorphStack(model: model, expansion: model.expansion)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        let width = model.layoutWidth > 1 ? model.layoutWidth : nil
+        // 閉じているあいだも下段は高さを持つ。ガラスの中央ではなく上端に社名を置く。
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                CompanyMorphStack(model: model, expansion: model.expansion)
+                    .frame(width: width, alignment: .topLeading)
+            }
             .glassEffect(
                 .regular,
                 in: RoundedRectangle(cornerRadius: radius, style: .continuous)
             )
-            .ignoresSafeArea()
             .task(id: model.company.code) { await loadOverview() }
     }
 
@@ -897,7 +921,11 @@ private struct CompanyMorphStack: View {
                 Color.clear
                     .frame(height: CompanyCardInset.extraTop * expansion)
                     .accessibilityHidden(true)
-                CompanyPillLabel(company: model.company)
+                CompanyPillLabel(
+                    company: model.company,
+                    trailingReserve: (32 + 8) * expansion,
+                    nameLock: model.nameLock
+                )
                     .overlay(alignment: .trailing) {
                         Button {
                             model.setExpanded(false)
@@ -958,34 +986,91 @@ private enum CompanyCardInset {
     }
 }
 
+/// ピル幅で決めた社名。2行のときは1行目を固定し、2行目の…だけ幅で足す。
+private enum CompanyNameLock: Equatable {
+    case automatic
+    case singleLine
+    case twoLine(first: String, rest: String)
+
+    static func measure(name: String, code: String, pillWidth: CGFloat) -> CompanyNameLock {
+        let display = Format.displayName(name, fallback: code)
+        let textWidth = pillWidth
+            - Theme.headerPillHorizontalPadding * 2
+            - Theme.headerIconSize
+            - 8
+        guard textWidth > 8, !display.isEmpty else { return .singleLine }
+        let headline = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
+        let large = UIFont.systemFont(ofSize: headline, weight: .bold)
+        let largeWidth = (display as NSString).size(withAttributes: [.font: large]).width
+        if largeWidth <= textWidth { return .singleLine }
+        let compact = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        let attributed = NSAttributedString(string: display, attributes: [.font: compact])
+        let typesetter = CTTypesetterCreateWithAttributedString(attributed)
+        let count = CTTypesetterSuggestLineBreak(typesetter, 0, Double(textWidth))
+        let index = display.index(display.startIndex, offsetBy: min(max(count, 1), display.count))
+        let rest = String(display[index...])
+        if rest.isEmpty { return .singleLine }
+        return .twoLine(first: String(display[..<index]), rest: rest)
+    }
+}
+
 /// アイコンと社名。ツールバーのピルと、広がるガラスの頭で同じ並びにする。
 private struct CompanyPillLabel: View {
     var company: CompanyRef
+    /// 開いたカードで、社名が閉じるボタンに重ならないように空ける幅。
+    var trailingReserve: CGFloat = 0
+    var nameLock: CompanyNameLock = .automatic
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             CompanyIconView(company, size: Theme.headerIconSize)
             name
         }
-        .padding(.horizontal, Theme.headerPillHorizontalPadding)
+        .padding(.leading, Theme.headerPillHorizontalPadding)
+        .padding(.trailing, Theme.headerPillHorizontalPadding + trailingReserve)
         .padding(.vertical, Theme.headerPillVerticalPadding)
     }
 
     private var name: some View {
         let display = Format.displayName(company.name, fallback: company.code)
-        return ViewThatFits(in: .horizontal) {
+        return lockedName(display)
+            .foregroundStyle(Theme.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(display)
+    }
+
+    @ViewBuilder
+    private func lockedName(_ display: String) -> some View {
+        switch nameLock {
+        case .singleLine:
             Text(display)
                 .font(nameFont)
                 .lineLimit(1)
-            Text(display)
-                .font(compactNameFont)
-                .lineLimit(2)
-                .lineSpacing(-2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+        case .twoLine(let first, let rest):
+            VStack(alignment: .leading, spacing: -2) {
+                Text(first)
+                    .font(compactNameFont)
+                    .lineLimit(1)
+                Text(rest)
+                    .font(compactNameFont)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .automatic:
+            ViewThatFits(in: .horizontal) {
+                Text(display)
+                    .font(nameFont)
+                    .lineLimit(1)
+                Text(display)
+                    .font(compactNameFont)
+                    .lineLimit(2)
+                    .lineSpacing(-2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .foregroundStyle(Theme.text)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 1行に収まるときの社名。
