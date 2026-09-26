@@ -1,4 +1,3 @@
-import CoreText
 import SwiftData
 import SwiftUI
 import UIKit
@@ -69,13 +68,13 @@ struct TickerView: View {
                     Button {
                         showsCompanyCard = true
                     } label: {
-                        // タイトル枠の提案幅は空きより狭い。maxWidth だけだと
-                        // 1行の社名が空きがあるのに「…」になる。内容幅まで広げ、上限で止める。
+                        // 内容幅まで縮める。上限は中央タイトルが戻る・右ボタンに被らない幅。
                         CompanyPillLabel(company: company)
-                            .frame(maxWidth: titlePillMaxWidth, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .fixedSize(horizontal: true, vertical: true)
+                    .frame(maxWidth: titlePillMaxWidth)
+                    .clipped()
                     .glassEffect()
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .global)
@@ -171,12 +170,11 @@ struct TickerView: View {
         )
     }
 
-    /// 社名ピルの上限。戻る・右上2ボタン・左右余白を引いた分だけにし、
-    /// それ以上に広がると編集・星のカプセルの下に潜る。
+    /// 中央のタイトルは左右へ均等に伸びる。広い側（右の2ボタン）の2倍を空ける。
     private var titlePillMaxWidth: CGFloat {
-        let reserved: CGFloat = 180
+        let side: CGFloat = 122
         guard contentWidth > 0 else { return .infinity }
-        return max(contentWidth - reserved, 120)
+        return max(contentWidth - side * 2, 120)
     }
 
     private func hydrateSector() async {
@@ -582,7 +580,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let measured = model.pillRect
             let pill = fittedPill(measured, bar: nav.navigationBar)
             model.pillRect = pill
-            if pill.width > measured.width + 1 {
+            if abs(pill.width - measured.width) > 1
+                || abs(pill.minX - measured.minX) > 1
+                || abs(pill.height - measured.height) > 1
+            {
                 DispatchQueue.main.async {
                     onFittedPill(pill)
                 }
@@ -635,8 +636,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             rect.width > 80 && rect.height > 28 && rect.height < 90 && rect.minY > 40 && rect.minX > 16
         }
 
-        /// 計測が「…」の幅で止まっていても、1行で入る社名は右のボタンの手前まで広げる。
-        /// 右端はバー上のボタン左端から測る。固定の余白ではボタンに被さる。
+        /// 1行で入る社名は空きまで広げる。長い社名は戻ると右ボタンのあいだに収め、高さは揃える。
+        /// 計測幅より狭くすることもある。広い計測のままにするとボタンに被さる。
         private func fittedPill(_ measured: CGRect, bar: UINavigationBar) -> CGRect {
             guard measured.width > 1, measured.height > 1 else { return measured }
             let display = Format.displayName(model.company.name, fallback: model.company.code)
@@ -644,30 +645,74 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let font = UIFont.systemFont(ofSize: headline, weight: .bold)
             let textWidth = ceil((display as NSString).size(withAttributes: [.font: font]).width)
             let natural = textWidth + Theme.headerPillHorizontalPadding * 2 + Theme.headerIconSize + 8
-            let limit = trailingLeadingEdge(in: bar, pill: measured)
-            let maxWidth = max(measured.width, limit - measured.minX - 8)
-            let width = min(max(measured.width, natural), maxWidth)
-            return CGRect(x: measured.minX, y: measured.minY, width: width, height: measured.height)
+            let chrome = navigationChrome(in: bar)
+            let gap: CGFloat = 10
+            let barInWindow = bar.convert(bar.bounds, to: nil)
+            var left = chrome.leadingMaxX + gap
+            var right = chrome.trailingMinX - gap
+            if chrome.leadingMaxX <= barInWindow.minX + 1 {
+                left = barInWindow.minX + 52 + gap
+            }
+            if chrome.trailingMinX >= barInWindow.maxX - 1 {
+                right = barInWindow.maxX - 122 - gap
+            }
+            let available = right - left
+            let width = available > 80 ? min(natural, available) : min(measured.width, natural)
+            var minX = measured.minX
+            if available > 80 {
+                minX = min(max(minX, left), right - width)
+            }
+            let height: CGFloat
+            let minY: CGFloat
+            if chrome.controlHeight > 28 {
+                height = chrome.controlHeight
+                minY = chrome.controlMidY - height / 2
+            } else {
+                height = measured.height
+                minY = measured.minY
+            }
+            return CGRect(x: minX, y: minY, width: width, height: height)
         }
 
-        /// ピルの右にあるバーボタンの左端（ウィンドウ座標）。無ければ計測の右端で止める。
-        private func trailingLeadingEdge(in bar: UINavigationBar, pill: CGRect) -> CGFloat {
-            let pillInBar = bar.convert(pill, from: nil)
-            var best: CGFloat?
+        /// 戻るの右端・右ボタンの左端・カプセル高さをバーから取る。タイトルは中央なので除く。
+        private func navigationChrome(in bar: UINavigationBar) -> (
+            leadingMaxX: CGFloat, trailingMinX: CGFloat, controlHeight: CGFloat, controlMidY: CGFloat
+        ) {
+            let barInWindow = bar.convert(bar.bounds, to: nil)
+            var leading = barInWindow.minX
+            var trailing = barInWindow.maxX
+            var height: CGFloat = 0
+            var midY = barInWindow.midY
+            let midX = bar.bounds.midX
             func consider(_ view: UIView) {
                 let frame = view.convert(view.bounds, to: bar)
-                let band = abs(frame.midY - pillInBar.midY) < 40
-                let control = frame.width >= 30 && frame.width <= 140
-                    && frame.height >= 28 && frame.height <= 72
-                let toTheRight = frame.minX > pillInBar.minX + 48
-                if band, control, toTheRight {
-                    best = min(best ?? frame.minX, frame.minX)
+                let plausible = frame.width >= 28 && frame.width <= bar.bounds.width * 0.48
+                    && frame.height >= 28 && frame.height <= 56
+                if plausible, frame.minX < midX, frame.maxX > midX {
+                    view.subviews.forEach(consider)
+                    return
+                }
+                if plausible, frame.maxX <= midX + 8 {
+                    let maxX = bar.convert(CGPoint(x: frame.maxX, y: 0), to: nil).x
+                    if maxX > leading {
+                        leading = maxX
+                        height = frame.height
+                        midY = bar.convert(CGPoint(x: 0, y: frame.midY), to: nil).y
+                    }
+                } else if plausible, frame.minX >= midX - 8 {
+                    let minX = bar.convert(CGPoint(x: frame.minX, y: 0), to: nil).x
+                    if minX < trailing {
+                        trailing = minX
+                        if height < 1 {
+                            height = frame.height
+                            midY = bar.convert(CGPoint(x: 0, y: frame.midY), to: nil).y
+                        }
+                    }
                 }
                 view.subviews.forEach(consider)
             }
             consider(bar)
-            guard let best else { return pill.maxX }
-            return bar.convert(CGPoint(x: best, y: 0), to: nil).x
+            return (leading, trailing, height, midY)
         }
 
         /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
@@ -1050,7 +1095,11 @@ private struct CompanyMorphStack: View {
                     nameLock: model.nameLock,
                     freezeGlyphs: model.freezesGlyphs
                 )
-                .frame(width: showsWideName ? nil : collapsedNameWidth, alignment: .leading)
+                .frame(
+                    width: showsWideName ? nil : collapsedNameWidth,
+                    height: showsWideName ? nil : collapsedNameHeight,
+                    alignment: .leading
+                )
                     .overlay(alignment: .trailing) {
                         Button {
                             model.setExpanded(false)
@@ -1103,6 +1152,10 @@ private struct CompanyMorphStack: View {
     private var collapsedNameWidth: CGFloat? {
         model.pillRect.width > 1 ? model.pillRect.width : nil
     }
+
+    private var collapsedNameHeight: CGFloat? {
+        model.pillRect.height > 1 ? model.pillRect.height : nil
+    }
 }
 
 /// カード外側の角と、アイコンの角を同心にする余白。
@@ -1123,14 +1176,13 @@ private enum CompanyCardInset {
     }
 }
 
-/// ピル幅で決めた社名。2行のときは1行目を固定し、2行目の…だけ幅で足す。
+/// ピル幅で決めた社名。高さは両端のカプセルに揃えるので1行に固定する。
 private enum CompanyNameLock: Equatable {
     case automatic
     /// Headline +2pt の1行。
     case singleLine
     /// 15pt の1行。大きな字ではピル幅に入らない。
     case compactLine
-    case twoLine(first: String, rest: String)
 
     static func measure(name: String, code: String, pillWidth: CGFloat) -> CompanyNameLock {
         let display = Format.displayName(name, fallback: code)
@@ -1143,34 +1195,7 @@ private enum CompanyNameLock: Equatable {
         let large = UIFont.systemFont(ofSize: headline, weight: .bold)
         let largeWidth = (display as NSString).size(withAttributes: [.font: large]).width
         if largeWidth <= textWidth { return .singleLine }
-        let compact = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        let compactWidth = (display as NSString).size(withAttributes: [.font: compact]).width
-        if compactWidth <= textWidth { return .compactLine }
-        let attributed = NSAttributedString(string: display, attributes: [.font: compact])
-        let typesetter = CTTypesetterCreateWithAttributedString(attributed)
-        let count = CTTypesetterSuggestLineBreak(typesetter, 0, Double(textWidth))
-        let index = splitIndex(in: display, utf16Offset: count)
-        guard index > display.startIndex, index < display.endIndex else { return .compactLine }
-        return .twoLine(first: String(display[..<index]), rest: String(display[index...]))
-    }
-
-    /// Core Text の折り位置は UTF-16。𠮷 のようなサロゲートは文字境界で切る。
-    private static func splitIndex(in text: String, utf16Offset: Int) -> String.Index {
-        let utf16 = text.utf16
-        guard !utf16.isEmpty else { return text.endIndex }
-        let capped = min(max(utf16Offset, 1), utf16.count)
-        let raw = utf16.index(utf16.startIndex, offsetBy: capped)
-        if let index = String.Index(raw, within: text), index > text.startIndex {
-            return index
-        }
-        var cursor = raw
-        while cursor < utf16.endIndex {
-            cursor = utf16.index(after: cursor)
-            if let index = String.Index(cursor, within: text), index > text.startIndex {
-                return index
-            }
-        }
-        return text.endIndex
+        return .compactLine
     }
 }
 
@@ -1214,20 +1239,9 @@ private struct CompanyPillLabel: View {
             Text(display)
                 .font(compactNameFont)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: true)
-        case .twoLine(let first, let rest):
-            VStack(alignment: .leading, spacing: -2) {
-                Text(first)
-                    .font(compactNameFont)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: true)
-                Text(rest)
-                    .font(compactNameFont)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: freezeGlyphs, vertical: true)
-                    .frame(maxWidth: freezeGlyphs ? nil : .infinity, alignment: .leading)
-            }
+                .truncationMode(.tail)
+                .fixedSize(horizontal: freezeGlyphs, vertical: true)
+                .frame(maxWidth: freezeGlyphs ? nil : .infinity, alignment: .leading)
         case .automatic:
             ViewThatFits(in: .horizontal) {
                 Text(display)
@@ -1236,10 +1250,8 @@ private struct CompanyPillLabel: View {
                     .fixedSize(horizontal: true, vertical: true)
                 Text(display)
                     .font(compactNameFont)
-                    .lineLimit(2)
-                    .lineSpacing(-2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
     }
@@ -1250,7 +1262,7 @@ private struct CompanyPillLabel: View {
         return .system(size: size, weight: .bold)
     }
 
-    /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
+    /// ピル幅に大きな字が入りきらないときの社名。
     private var compactNameFont: Font {
         .system(size: 15, weight: .semibold)
     }
