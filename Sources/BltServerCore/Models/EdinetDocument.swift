@@ -56,6 +56,10 @@ final class EdinetDocument: Model, @unchecked Sendable {
     @OptionalField(key: "doc_description")
     var docDescription: String?
 
+    /// EDINET `parentDocID`（訂正対象の原本 docID）。有報(120)では null。
+    @OptionalField(key: "parent_doc_id")
+    var parentDocID: String?
+
     /// 最終更新時刻（同期で upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?

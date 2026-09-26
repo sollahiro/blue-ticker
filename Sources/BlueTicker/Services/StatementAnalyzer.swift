@@ -13,9 +13,14 @@ struct StatementAnalyzer {
     /// （`USGAAPStatementHtml`）で抽出する。HTML からも取れなければ `.notApplicable`
     /// （個別 BS への silent fallback はしない。notes の borrowings は別途対象外のまま）。
     func extract(
-        docID: String, statementTypes: Set<StatementSectionType>
+        docID: String, statementTypes: Set<StatementSectionType>,
+        correctionDocIDs: [String] = []
     ) async -> StatementDocResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        guard let xbrlDir = await resolveAnnualXbrlDirectory(
+            originalDocID: docID,
+            correctionDocIDs: correctionDocIDs,
+            download: { await edinetClient.downloadDocument($0) }
+        ) else { return .failed }
         return Self.resolveFromXBRL(xbrlDir: xbrlDir, docID: docID, statementTypes: statementTypes)
     }
 

@@ -23,6 +23,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     do {
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
+        app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
         app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
@@ -780,6 +781,24 @@ extension BreakdownLoadResult {
                 code: "6758", docId: nil, axis: breakdownAxisBusiness, db: app.db)
             let xbrlJSON = try #require(xbrl.foundJSON)
             #expect(xbrlJSON["doc_id"] as? String == "S_XBRL")
+        }
+    }
+
+    @Test func loadHidesOverlayRegressionEvenOnXbrlFactsRows() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S100W0S7", code: "8316", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts, needsReview: true,
+                warnings: [
+                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
+                ])
+
+            let hidden = try await loadStoredBreakdown(
+                code: "8316", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            #expect(hidden.isAbsent)
+            let byDoc = try await loadStoredBreakdown(
+                code: "8316", docId: "S100W0S7", axis: breakdownAxisBusiness, db: app.db)
+            #expect(byDoc.isAbsent)
         }
     }
 

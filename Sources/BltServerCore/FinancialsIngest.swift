@@ -39,7 +39,8 @@ public typealias FinancialsComputer = @Sendable (String) async -> FinancialsComp
 /// `priorityCodes` に含まれる企業は候補の中で先頭へ寄せる（対象選定ではなく処理順序のみ。空集合は無効化）。
 func runFinancialsIngest(
     db: Database, years: Int, limit: Int?, listedCodes: Set<String>? = nil,
-    explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [], logger: Logger? = nil,
+    explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
+    forceCodes: Set<String> = [], logger: Logger? = nil,
     compute: FinancialsComputer
 ) async throws -> FinancialsIngestSummary {
     let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
@@ -67,6 +68,10 @@ func runFinancialsIngest(
 
     for code in codes {
         let highWater = highWaterMap[code]
+        if forceCodes.contains(code) {
+            missing.append((code, highWater))
+            continue
+        }
         guard let row = classifyIndex[code] else {
             missing.append((code, highWater))
             continue

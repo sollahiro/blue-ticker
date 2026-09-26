@@ -34,3 +34,16 @@ struct IngestCodesTests {
         #expect(parseIngestCodes(" ") == [])
     }
 }
+
+@Suite("parseIngestDocIDs")
+struct IngestDocIDsTests {
+    @Test("未指定は nil（絞り込みなし）")
+    func nilMeansNoFilter() {
+        #expect(parseIngestDocIDs(nil) == nil)
+    }
+
+    @Test("原本 doc_id をカンマ区切りで選択")
+    func multipleDocIDs() {
+        #expect(parseIngestDocIDs("S100W0S7, S100AAAA") == ["S100W0S7", "S100AAAA"])
+    }
+}

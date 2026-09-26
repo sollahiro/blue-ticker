@@ -68,6 +68,7 @@ func runBreakdownIngest(
     cachedDocIDs: Set<String> = [],
     axis: String = breakdownAxisBusiness,
     candidateSets: FilingSectionCandidateSets? = nil,
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil,
     resolve: BreakdownResolveFn
 ) async throws -> BreakdownIngestSummary {
@@ -106,6 +107,10 @@ func runBreakdownIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         let key = CompanyBreakdown.compositeID(docID: cand.docID, axis: axis)
         guard let existing = classifyIndex[key] else {
             missing.append(cand)
@@ -178,6 +183,9 @@ func runBreakdownIngest(
                     llmAudit: audit, db: db)
             }
             stored += 1
+            await logXbrlOverlayRegressionIfNeeded(
+                warnings: payload.warnings, code: cand.code, docID: cand.docID, db: db,
+                logger: logger)
         case .notApplicable(let reason):
             notApplicable += 1
             switch reason {

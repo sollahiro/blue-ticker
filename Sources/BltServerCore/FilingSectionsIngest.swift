@@ -51,6 +51,7 @@ func runFilingSectionsIngest(
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
     candidateSets: FilingSectionCandidateSets? = nil,
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> FilingSectionsIngestSummary {
     let sets: FilingSectionCandidateSets
@@ -80,6 +81,10 @@ func runFilingSectionsIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         guard let existing = classifyIndex[cand.docID] else {
             missing.append(cand)
             continue
@@ -201,20 +206,23 @@ func annualReportDisclosureDocs(db: Database, logger: Logger? = nil) async throw
 /// 「上場（listedCodes）× 会社有報(120・府令010) × 各社 提出日時降順の直近 years 件」を keep、
 /// それを超えた分を purge とする。docType 120 でも特定有価証券府令(030)の信託受益証券等は除外。
 /// `explicitCodes` を渡すとさらにその集合へ絞る（`--codes` 手動指定。`nil` は絞り込みなし）。
+/// `explicitDocIDs` を渡すと keep をその有報 docID だけにし、purge はしない（`--doc-ids`。
+/// 訂正がある会社-FY だけの再 ingest 用。保持窓の外でも指定 doc は残す）。
 /// `sec_code` が空の行は master の EDINETコード→証券コードで発行体を特定する。
 func filingSectionCandidates(
     db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, years: Int,
-    logger: Logger? = nil
+    logger: Logger? = nil, explicitDocIDs: Set<String>? = nil
 ) async throws -> FilingSectionCandidateSets {
     await filingSectionCandidates(
         docs: try annualReportDisclosureDocs(db: db, logger: logger),
-        listedCodes: listedCodes, explicitCodes: explicitCodes, years: years)
+        listedCodes: listedCodes, explicitCodes: explicitCodes, years: years,
+        explicitDocIDs: explicitDocIDs)
 }
 
 /// `annualReportDisclosureDocs` の読み済み一覧から候補集合を組み立てる（DB 再往復なし）。
 func filingSectionCandidates(
     docs: [EdinetDocumentListing], listedCodes: Set<String>, explicitCodes: Set<String>? = nil,
-    years: Int
+    years: Int, explicitDocIDs: Set<String>? = nil
 ) async -> FilingSectionCandidateSets {
     let listedSecByEdinet = await listedSecCodeByEdinetCode()
 
@@ -244,6 +252,23 @@ func filingSectionCandidates(
         for d in sorted.dropFirst(years) {
             purge.append(d.docID)
         }
+    }
+    if let ids = explicitDocIDs {
+        var selected: [FilingDocCandidate] = []
+        for (code, companyDocs) in byCode {
+            let sorted = companyDocs.sorted { $0.submitDateTime > $1.submitDateTime }
+            for (rank, d) in sorted.enumerated() where ids.contains(d.docID) {
+                selected.append(
+                    FilingDocCandidate(
+                        docID: d.docID, code: code, submitDateTime: d.submitDateTime, yearRank: rank))
+            }
+        }
+        selected.sort {
+            if $0.yearRank != $1.yearRank { return $0.yearRank < $1.yearRank }
+            if $0.submitDateTime != $1.submitDateTime { return $0.submitDateTime > $1.submitDateTime }
+            return $0.docID < $1.docID
+        }
+        return FilingSectionCandidateSets(keep: selected, purge: [])
     }
     keep.sort {
         if $0.yearRank != $1.yearRank { return $0.yearRank < $1.yearRank }

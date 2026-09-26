@@ -16,6 +16,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     do {
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
+        app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
         app.migrations.add(CreateEdinetSyncState())
         try await app.autoMigrate()
@@ -52,6 +53,27 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
             #expect(fetched.periodEnd == "2025-03-31")
             #expect(fetched.submitDateTime == "2025-06-20 09:00")
             #expect(fetched.docDescription == "有価証券報告書")
+            #expect(fetched.parentDocID == nil)
+        }
+    }
+
+    @Test func edinetDocumentStoresParentDocIDForAmendments() async throws {
+        try await withMigratedApp { app in
+            let doc = EdinetDocument()
+            doc.id = "S100WRZH"
+            doc.edinetCode = "E03614"
+            doc.secCode = "83160"
+            doc.filerName = "株式会社三井住友フィナンシャルグループ"
+            doc.docTypeCode = "130"
+            doc.ordinanceCode = "010"
+            doc.submitDateTime = "2025-09-30 15:38"
+            doc.docDescription = "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)"
+            doc.parentDocID = "S100W0S7"
+            try await doc.create(on: app.db)
+
+            let fetched = try #require(try await EdinetDocument.find("S100WRZH", on: app.db))
+            #expect(fetched.parentDocID == "S100W0S7")
+            #expect(fetched.docTypeCode == "130")
         }
     }
 
