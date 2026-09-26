@@ -150,7 +150,8 @@ import Testing
             materialize: { original, overlays in
                 Issue.record("parse失敗の訂正を materialize してはいけない: \(overlays)")
                 return original
-            })
+            },
+            numericFacts: { _ in [:] })
         #expect(chosen == originalURL)
     }
 
@@ -175,7 +176,8 @@ import Testing
                 box.overlays = overlays
                 #expect(original == originalURL)
                 return merged
-            })
+            },
+            numericFacts: { _ in [:] })
         #expect(chosen == merged)
         #expect(box.overlays == [wrzh, x7dx])
     }
@@ -199,7 +201,8 @@ import Testing
             materialize: { _, overlays in
                 box.overlays = overlays
                 return merged
-            })
+            },
+            numericFacts: { _ in [:] })
         #expect(chosen == merged)
         #expect(box.overlays == [wrzh])
     }
@@ -214,7 +217,8 @@ import Testing
             materialize: { original, overlays in
                 #expect(overlays.isEmpty)
                 return original
-            })
+            },
+            numericFacts: { _ in [:] })
         #expect(chosen == originalURL)
     }
 
@@ -231,6 +235,44 @@ import Testing
         #expect(!isRowMemberContext("CurrentYearInstant"))
         #expect(!isRowMemberContext("CurrentYearDuration_ReportableSegmentMember"))
     }
+
+    @Test func resolveAnnualXbrlDirectorySkipsRegressingRowLossCorrection() async {
+        let originalURL = URL(fileURLWithPath: "/tmp/orig-8316")
+        let wrzh = URL(fileURLWithPath: "/tmp/wrzh-8316")
+        let x7dx = URL(fileURLWithPath: "/tmp/x7dx-8316")
+        let merged = URL(fileURLWithPath: "/tmp/merged-8316")
+        let tag = "HoldingShares"
+        let facts: [String: [String: [String: Double]]] = [
+            originalURL.path: [tag: overlayTestRowMembers(13)],
+            wrzh.path: [tag: overlayTestRowMembers(70)],
+            x7dx.path: [tag: overlayTestRowMembers(13)],
+        ]
+        let box = OverlayCapture()
+        let chosen = await resolveAnnualXbrlDirectory(
+            originalDocID: "S100W0S7",
+            correctionDocIDs: ["S100X7DX", "S100WRZH"],
+            download: { id in
+                switch id {
+                case "S100X7DX": return x7dx
+                case "S100WRZH": return wrzh
+                default: return originalURL
+                }
+            },
+            parses: { _ in true },
+            materialize: { _, overlays in
+                box.overlays = overlays
+                return merged
+            },
+            numericFacts: { facts[$0.path] ?? [:] })
+        #expect(chosen == merged)
+        #expect(box.overlays == [wrzh])
+    }
+}
+
+private func overlayTestRowMembers(_ count: Int, value: Double = 1) -> [String: Double] {
+    Dictionary(uniqueKeysWithValues: (1...count).map {
+        ("CurrentYearInstant_Row\($0)Member", value)
+    })
 }
 
 private final class OverlayCapture: @unchecked Sendable {

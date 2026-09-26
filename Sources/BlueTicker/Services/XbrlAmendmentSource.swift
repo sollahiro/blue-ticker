@@ -75,17 +75,38 @@ public func resolveAnnualXbrlDirectory(
     correctionDocIDs: [String],
     download: @Sendable (String) async -> URL?,
     parses: @Sendable (URL) -> Bool = { xbrlPackageParses($0) },
-    materialize: (@Sendable (URL, [URL]) -> URL?)? = nil
+    materialize: (@Sendable (URL, [URL]) -> URL?)? = nil,
+    numericFacts: (@Sendable (URL) -> [String: [String: Double]])? = nil
 ) async -> URL? {
     guard let originalDir = await download(originalDocID) else { return nil }
+    let factsOf = numericFacts ?? {
+        overlayFactValues(XBRLUtils.collectAllNumericFacts(in: $0, nilAsZero: false))
+    }
     var overlayDirs: [URL] = []
+    var regressions: [XbrlOverlayRegression] = []
+    var currentFacts = factsOf(originalDir)
     for docID in correctionDocIDs.reversed() {
         guard let dir = await download(docID), parses(dir) else { continue }
-        overlayDirs.append(dir)
+        let layer = factsOf(dir)
+        let candidate = overlayKeyedFacts(base: currentFacts, overlay: layer)
+        let found = xbrlOverlayRegressions(
+            before: currentFacts, after: candidate, originalDocID: originalDocID,
+            correctionDocID: docID)
+        if found.isEmpty {
+            currentFacts = candidate
+            overlayDirs.append(dir)
+        } else {
+            regressions.append(contentsOf: found)
+        }
     }
-    if overlayDirs.isEmpty { return originalDir }
-    let merged = (materialize ?? { materializeOverlaidXbrlDirectory(original: $0, overlayDirs: $1) })(
-        originalDir, overlayDirs)
+    if overlayDirs.isEmpty, regressions.isEmpty { return originalDir }
+    let merged = (materialize ?? {
+        materializeOverlaidXbrlDirectory(
+            original: $0, overlayDirs: $1, originalDocID: originalDocID, regressions: regressions)
+    })(originalDir, overlayDirs)
+    if let merged {
+        writeOverlayRegressions(regressions, originalDocID: originalDocID, to: merged)
+    }
     return merged ?? originalDir
 }
 
@@ -95,16 +116,22 @@ public func xbrlPackageParses(_ dir: URL) -> Bool {
 }
 
 /// 原本をコピーし、訂正ディレクトリへのマニフェストを書く。収集側が fact / TextBlock を overlay する。
-func materializeOverlaidXbrlDirectory(original: URL, overlayDirs: [URL]) -> URL? {
-    guard !overlayDirs.isEmpty else { return original }
+func materializeOverlaidXbrlDirectory(
+    original: URL, overlayDirs: [URL], originalDocID: String = "",
+    regressions: [XbrlOverlayRegression] = []
+) -> URL? {
+    if overlayDirs.isEmpty, regressions.isEmpty { return original }
     let merged = FileManager.default.temporaryDirectory
         .appendingPathComponent("blt-xbrl-overlay-\(UUID().uuidString)", isDirectory: true)
     do {
         try FileManager.default.copyItem(at: original, to: merged)
-        let body = overlayDirs.map(\.path).joined(separator: "\n") + "\n"
-        try body.write(
-            to: merged.appendingPathComponent(xbrlOverlayManifestFileName),
-            atomically: true, encoding: .utf8)
+        if !overlayDirs.isEmpty {
+            let body = overlayDirs.map(\.path).joined(separator: "\n") + "\n"
+            try body.write(
+                to: merged.appendingPathComponent(xbrlOverlayManifestFileName),
+                atomically: true, encoding: .utf8)
+        }
+        writeOverlayRegressions(regressions, originalDocID: originalDocID, to: merged)
         return merged
     } catch {
         return original

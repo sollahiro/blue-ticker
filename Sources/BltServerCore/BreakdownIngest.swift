@@ -183,6 +183,9 @@ func runBreakdownIngest(
                     llmAudit: audit, db: db)
             }
             stored += 1
+            await logXbrlOverlayRegressionIfNeeded(
+                warnings: payload.warnings, code: cand.code, docID: cand.docID, db: db,
+                logger: logger)
         case .notApplicable(let reason):
             notApplicable += 1
             switch reason {

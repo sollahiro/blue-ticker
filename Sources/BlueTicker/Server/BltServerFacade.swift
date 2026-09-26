@@ -343,7 +343,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する
@@ -355,7 +356,9 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir),
+            xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `goodwill_and_intangibles` note_type を解決する（IFRS連結企業限定、
@@ -366,7 +369,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `lease_liabilities` note_type を解決する。
@@ -377,7 +381,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `sga_expense_breakdown` note_type を解決する。
@@ -388,7 +393,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveSgaExpenseBreakdown(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveSgaExpenseBreakdown(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `per_share_information` note_type を解決する。ロジックは
@@ -401,7 +407,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
@@ -414,7 +421,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
@@ -426,7 +434,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
@@ -439,7 +448,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        return StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir)
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 有報(120)の XBRL。同一 FY の訂正(130)があれば、パースできるものを提出順に overlay する。
@@ -554,9 +564,11 @@ public extension BltServerContext {
                 llmHint: result.audit?.notApplicableReason)
             return .notApplicable(reason: reason.rawValue)
         }
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
@@ -593,9 +605,11 @@ public extension BltServerContext {
             }
             return .notApplicable(reason: breakdownNotApplicableUnknown)
         }
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+            xbrlDir: xbrlDir)
     }
 }
 
@@ -620,9 +634,11 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
@@ -644,9 +660,11 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
@@ -667,9 +685,11 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: goodwill.value)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 }
 
@@ -738,9 +758,11 @@ private extension BltServerContext {
             ]
         }
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: snapshot.denominator)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 }
 

@@ -5,6 +5,7 @@
 import Fluent
 import FluentSQLiteDriver
 import Foundation
+import Logging
 import Testing
 import Vapor
 
@@ -33,6 +34,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 
 private func seedDoc(
     _ docID: String, secCode: String, submit: String = "2025-06-20 09:00",
+    periodEnd: String? = nil,
     ordinance: String? = Api.ordinanceCompanyDisclosure, form: String? = "030000",
     db: Database
 ) async throws {
@@ -45,6 +47,7 @@ private func seedDoc(
     model.ordinanceCode = ordinance
     model.formCode = form
     model.submitDateTime = submit
+    model.periodEnd = periodEnd
     try await model.create(on: db)
 }
 
@@ -466,5 +469,130 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             #expect(coverage.servable == 1)
             #expect(coverage.unservable == 1)
         }
+    }
+
+    @Test func loadHidesNeedsReviewNotesFromPublicSurface() async throws {
+        try await withMigratedApp { app in
+            let row = CompanyStatementNote(
+                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+            row.code = "8316"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = StatementNotePayload(
+                value: 70, unit: "shares", needsReview: true,
+                warnings: [
+                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
+                ])
+            row.needsReview = true
+            row.source = statementNoteSourceXbrlFacts
+            row.contentHash = "70"
+            row.cacheVersion = statementNoteCacheVersion(
+                forType: statementNoteTypePolicyHoldingSecurities)
+            try await row.create(on: app.db)
+
+            let byCode = try await loadStoredStatementNote(
+                code: "8316", docId: nil, noteType: statementNoteTypePolicyHoldingSecurities,
+                db: app.db)
+            guard case .absent = byCode else {
+                Issue.record("expected .absent for needs_review note, got \(byCode)")
+                return
+            }
+            let byDoc = try await loadStoredStatementNote(
+                code: "8316", docId: "S100W0S7",
+                noteType: statementNoteTypePolicyHoldingSecurities, db: app.db)
+            guard case .absent = byDoc else {
+                Issue.record("expected .absent by doc_id, got \(byDoc)")
+                return
+            }
+        }
+    }
+
+    @Test func ingestSkipsDeterministicNeedsReviewWithoutOverwriting() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S100W0S7", secCode: "83160", db: app.db)
+            let pre = CompanyStatementNote(
+                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+            pre.code = "8316"
+            pre.submitDateTime = "2025-06-20 09:00"
+            pre.payload = StatementNotePayload(value: 70, unit: "shares", needsReview: true)
+            pre.needsReview = true
+            pre.source = statementNoteSourceXbrlFacts
+            pre.contentHash = "70"
+            pre.cacheVersion = statementNoteCacheVersion(
+                forType: statementNoteTypePolicyHoldingSecurities)
+            try await pre.create(on: app.db)
+
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["8316"], years: 3, limit: nil,
+                noteType: statementNoteTypePolicyHoldingSecurities
+            ) { _, _ in
+                Issue.record("resolver must not run for deterministic needs_review")
+                return .failed
+            }
+
+            #expect(summary.skipped == 1)
+            #expect(summary.attempted == 0)
+            let key = CompanyStatementNote.compositeID(
+                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
+            #expect(row.payload.value == 70)
+            #expect(row.needsReview == true)
+        }
+    }
+
+    @Test func ingestLogsOverlayRegressionAndKeepsOriginalValuesHidden() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc(
+                "S100W0S7", secCode: "83160", periodEnd: "2025-03-31", db: app.db)
+            let handler = OverlayRegressionLogCapture()
+            let logger = Logger(label: "test") { _ in handler }
+            let warning =
+                "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["8316"], years: 3, limit: nil,
+                noteType: statementNoteTypePolicyHoldingSecurities, logger: logger
+            ) { _, _ in
+                .resolved(
+                    payload: StatementNotePayload(
+                        value: 70, unit: "shares", needsReview: true, warnings: [warning]),
+                    source: statementNoteSourceXbrlFacts, contentHash: "70")
+            }
+
+            #expect(summary.stored == 1)
+            let key = CompanyStatementNote.compositeID(
+                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
+            #expect(row.payload.value == 70)
+            #expect(row.needsReview == true)
+            let published = try await loadStoredStatementNote(
+                code: "8316", docId: nil, noteType: statementNoteTypePolicyHoldingSecurities,
+                db: app.db)
+            guard case .absent = published else {
+                Issue.record("overlay regression must stay hidden, got \(published)")
+                return
+            }
+            #expect(handler.messages.count == 1)
+            #expect(handler.messages[0].level == .warning)
+            #expect(handler.messages[0].metadata["event"] == .string("xbrl_overlay_regression"))
+            #expect(handler.messages[0].metadata["code"] == .string("8316"))
+            #expect(handler.messages[0].metadata["fy"] == .string("2025-03-31"))
+            #expect(handler.messages[0].metadata["original_doc_id"] == .string("S100W0S7"))
+            #expect(handler.messages[0].metadata["correction_doc_id"] == .string("S100X7DX"))
+            #expect(handler.messages[0].metadata["reason"] == .string("row_loss"))
+        }
+    }
+}
+
+private final class OverlayRegressionLogCapture: LogHandler, @unchecked Sendable {
+    var metadata: Logger.Metadata = [:]
+    var logLevel: Logger.Level = .trace
+    var messages: [(level: Logger.Level, metadata: Logger.Metadata)] = []
+
+    subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+        get { metadata[key] }
+        set { metadata[key] = newValue }
+    }
+
+    func log(event: LogEvent) {
+        messages.append((event.level, event.metadata ?? [:]))
     }
 }

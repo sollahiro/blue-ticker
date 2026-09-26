@@ -784,6 +784,24 @@ extension BreakdownLoadResult {
         }
     }
 
+    @Test func loadHidesOverlayRegressionEvenOnXbrlFactsRows() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S100W0S7", code: "8316", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts, needsReview: true,
+                warnings: [
+                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
+                ])
+
+            let hidden = try await loadStoredBreakdown(
+                code: "8316", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            #expect(hidden.isAbsent)
+            let byDoc = try await loadStoredBreakdown(
+                code: "8316", docId: "S100W0S7", axis: breakdownAxisBusiness, db: app.db)
+            #expect(byDoc.isAbsent)
+        }
+    }
+
     /// 公開除外の最新 LLM 行があっても前年の clean 行へは落とさない（未算出と同じ absent）。
     @Test func loadDoesNotFallBackToOlderCleanWhenLatestLLMRowIsHidden() async throws {
         try await withMigratedApp { app in
