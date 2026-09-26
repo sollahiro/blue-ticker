@@ -658,10 +658,13 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 right = barInWindow.maxX - 122 - gap
             }
             let available = right - left
-            let width = available > 80 ? min(natural, available) : min(measured.width, natural)
+            let width: CGFloat
             var minX = measured.minX
-            if available > 80 {
+            if available > 0 {
+                width = min(natural, available)
                 minX = min(max(minX, left), right - width)
+            } else {
+                width = min(measured.width, natural)
             }
             let lock = CompanyNameLock.measure(
                 name: model.company.name,

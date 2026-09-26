@@ -65,7 +65,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 銘柄ページ | `概要` / `分解` の 2 枚。タイルは出さない。左右スライドのみ。銘柄の短い会社説明（Overview）は社名ピルの詳細カードに置く（ヘッダ下の常時表示は廃止）。切替は各カード上端のピル型ボタン（概要は `業績` / `資産` / `効率性`、分解は `事業利益` / `ROIC` / `ROE`）。各カード内は縦スクロール可。カードは角丸。概要の表はカード幅に収める。`レポート` は廃止 |
 | 会社アイコン | 角丸四角・白背景。リスト行と銘柄ヘッダで同じ |
 | App Icon | `assets/blt-icon/icons_ios_light.png` / `icons_ios_dark.png` を 1024・不透明 PNG にして `AppIcon` に載せる。角まで絵の色。`bb_mark.png` はファンドのバージョンフッター用 |
-| 社名表示 | 検索結果・銘柄ヘッダから「株式会社」を除く |
+| 社名表示 | 検索結果・銘柄ヘッダから「株式会社」を除く。「ホールディングス」で言い切るときだけ HD（直前の「・」も付けない）。途中の「ホールディングス・アンド…」は触らない |
 | 最低対応 OS | iOS 26.0。`IPHONEOS_DEPLOYMENT_TARGET` はプロジェクト側だけに置き、ターゲットは継承させる。iOS 26 の UI 作法（透過タブバー、ツールバー操作の Liquid Glass、`safeAreaBar` 等）をそのまま使い、`if #available` で古い OS に分岐させない。CI の `macos-26` 既定 Xcode 26.6 に iOS 27 SDK は無いので、27 へ上げるのは 27 専用 API が要るときだけ |
 | 背景 | 株価アプリ風のダーク。シェルはほぼ黒、カードは背景から浮かぶ濃いグレー、リスト行・コントロールはカードより黒寄り（`Theme.shell` / `Theme.card` / `Theme.control`）。紺の `#16446F` は使わない |
 | 履歴 | 名称検索と条件検索の右上（同じ `clock`。中身は同じ `CompanyHistory`）。開いた銘柄をクライアントローカル（`UserDefaults`、最大 30 件）に残す |
