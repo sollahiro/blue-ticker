@@ -1247,7 +1247,7 @@ enum StatementNotesResolver {
 
     static let issuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
 
-    struct IssuedSharesTableParse: Equatable {
+    struct IssuedSharesTableParse {
         var events: [IssuedSharesEventPayload]
         var needsReview: Bool
         var warnings: [String]
