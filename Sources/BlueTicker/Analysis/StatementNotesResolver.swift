@@ -1104,8 +1104,10 @@ enum StatementNotesResolver {
     ///    履歴用途であり期末の正には使わない。
     ///
     /// 表パースの揺れ（2026-08-02 実データ検証）:
-    /// - 単位が会社ごとに揺れる（株数=株/千株、金額=千円/百万円）。ヘッダー文言から都度判定し、
-    ///   常に「株」「円」の生値へ正規化する（列固定にしない）
+    /// - 単位が会社ごとに揺れる（株数=株/千株、金額=千円/百万円）。表内ヘッダーに加え、
+    ///   表直前の「（単位：千円）」キャプション（`BreakdownExtractor.resolvedUnitCaption`）も見る。
+    ///   どちらも無いときは XBRL 資本金と突合して倍率を決め、それもできなければ
+    ///   ×1 を黙って使わず `needs_review` にする。常に「株」「円」の生値へ正規化する（列固定にしない）
     /// - 「自◯年◯月◯日 至◯年◯月◯日」という期間表記の行が挟まる会社がある。日立は変動なし
     ///   確認用（3つの増減欄＝株数・資本金・資本準備金がすべて「－」）だが、メルカリは新株予約権
     ///   行使の集約開示（増減欄が実数）に使っており、「単発日付か期間表記か」では判定できない。
@@ -1135,7 +1137,9 @@ enum StatementNotesResolver {
         } else {
             asOf = nil
         }
-        let events = parseIssuedSharesTable(xbrlDir: xbrlDir)
+        let parsed = parseIssuedSharesTable(
+            xbrlDir: xbrlDir, xbrlCapital: capitalStock, xbrlReserve: capitalReserve)
+        let events = parsed?.events
 
         guard asOf != nil || !(events ?? []).isEmpty else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
@@ -1151,7 +1155,9 @@ enum StatementNotesResolver {
         return .resolved(
             payload: StatementNotePayload(
                 issuedSharesEvents: events.flatMap { $0.isEmpty ? nil : $0 },
-                issuedSharesAsOf: asOf),
+                issuedSharesAsOf: asOf,
+                needsReview: parsed?.needsReview ?? false,
+                warnings: parsed?.warnings ?? []),
             source: statementNoteSourceXbrlFacts,
             contentHash: "asOf{\(asOfHash)}|events{\(eventHash)}")
     }
@@ -1239,24 +1245,62 @@ enum StatementNotesResolver {
         return XBRLUtils.parseTextblockCellValue(String(lastToken))
     }
 
-    private static func parseIssuedSharesTable(xbrlDir: URL) -> [IssuedSharesEventPayload]? {
+    static let issuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
+
+    struct IssuedSharesTableParse: Equatable {
+        var events: [IssuedSharesEventPayload]
+        var needsReview: Bool
+        var warnings: [String]
+    }
+
+    private static func parseIssuedSharesTable(
+        xbrlDir: URL, xbrlCapital: Double?, xbrlReserve: Double?
+    ) -> IssuedSharesTableParse? {
         guard let html = XBRLUtils.extractTextblockHtml(
-            in: xbrlDir, textblockTag: "ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock"),
-            let soup = try? SwiftSoup.parse(html),
+            in: xbrlDir, textblockTag: "ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock")
+        else { return nil }
+        return parseIssuedSharesEvents(
+            html: html, xbrlCapital: xbrlCapital, xbrlReserve: xbrlReserve)
+    }
+
+    /// HTML 表から発行済株式イベントを読む。テストは caption / XBRL 突合をここに載せる。
+    static func parseIssuedSharesEvents(
+        html: String, xbrlCapital: Double? = nil, xbrlReserve: Double? = nil
+    ) -> IssuedSharesTableParse? {
+        guard let soup = try? SwiftSoup.parse(html),
             let tables = (try? soup.select("table"))?.array()
         else { return nil }
 
         for table in tables {
             let rows = gridRows(from: table)
             var sharesScale = 1.0
-            var yenScale = 1.0
-            var events: [IssuedSharesEventPayload] = []
+            var yenScale: Double?
+            let (caption, _) = BreakdownExtractor.resolvedUnitCaption(
+                grid: rows, pending: nil, table: table)
+            if let caption, let scale = BreakdownLLMAmountScale.yenScale(forHeaderToken: caption) {
+                yenScale = scale
+            }
+
+            struct RawEvent {
+                var date: String
+                var sharesDelta: Double?
+                var sharesBalance: Double?
+                var capitalDelta: Double?
+                var capitalBalance: Double?
+                var reserveDelta: Double?
+                var reserveBalance: Double?
+            }
+            var rawEvents: [RawEvent] = []
             for cols in rows {
                 guard !cols.isEmpty else { continue }
                 let joined = cols.joined(separator: " ")
                 if joined.contains("千株") { sharesScale = 1000 }
-                if joined.contains("百万円") { yenScale = 1_000_000 } else if joined.contains("千円") {
-                    yenScale = 1000
+                if yenScale == nil {
+                    if joined.contains("百万円") {
+                        yenScale = Financial.millionYen
+                    } else if joined.contains("千円") {
+                        yenScale = 1_000
+                    }
                 }
 
                 let amountTokens = cols.filter { isIssuedSharesAmountToken($0) }
@@ -1273,18 +1317,70 @@ enum StatementNotesResolver {
                 guard sharesDelta != nil || capitalDelta != nil || reserveDelta != nil else { continue }
 
                 let date = cols[0].trimmingCharacters(in: .whitespaces)
-                events.append(
-                    IssuedSharesEventPayload(
-                        date: date, sharesDelta: sharesDelta.map { $0 * sharesScale },
-                        sharesBalance: sharesBalance.map { $0 * sharesScale },
-                        capitalDelta: capitalDelta.map { $0 * yenScale },
-                        capitalBalance: capitalBalance.map { $0 * yenScale },
-                        capitalReserveDelta: reserveDelta.map { $0 * yenScale },
-                        capitalReserveBalance: reserveBalance.map { $0 * yenScale }))
+                rawEvents.append(
+                    RawEvent(
+                        date: date, sharesDelta: sharesDelta, sharesBalance: sharesBalance,
+                        capitalDelta: capitalDelta, capitalBalance: capitalBalance,
+                        reserveDelta: reserveDelta, reserveBalance: reserveBalance))
             }
-            if !events.isEmpty { return events }
+            guard !rawEvents.isEmpty else { continue }
+
+            let hasCapital = rawEvents.contains {
+                $0.capitalDelta != nil || $0.capitalBalance != nil
+                    || $0.reserveDelta != nil || $0.reserveBalance != nil
+            }
+            var needsReview = false
+            var warnings: [String] = []
+            if yenScale == nil, hasCapital {
+                yenScale = inferIssuedSharesYenScale(
+                    capitalBalances: rawEvents.compactMap(\.capitalBalance),
+                    reserveBalances: rawEvents.compactMap(\.reserveBalance),
+                    xbrlCapital: xbrlCapital, xbrlReserve: xbrlReserve)
+                if yenScale == nil {
+                    needsReview = true
+                    warnings.append(issuedSharesUnitUnresolvedWarning)
+                    yenScale = 1
+                }
+            }
+            let appliedYen = yenScale ?? 1
+            let events = rawEvents.map { raw in
+                IssuedSharesEventPayload(
+                    date: raw.date,
+                    sharesDelta: raw.sharesDelta.map { $0 * sharesScale },
+                    sharesBalance: raw.sharesBalance.map { $0 * sharesScale },
+                    capitalDelta: raw.capitalDelta.map { $0 * appliedYen },
+                    capitalBalance: raw.capitalBalance.map { $0 * appliedYen },
+                    capitalReserveDelta: raw.reserveDelta.map { $0 * appliedYen },
+                    capitalReserveBalance: raw.reserveBalance.map { $0 * appliedYen })
+            }
+            return IssuedSharesTableParse(
+                events: events, needsReview: needsReview, warnings: warnings)
         }
         return nil
+    }
+
+    /// 表に単位が無いとき、期末残高と XBRL 資本金／資本準備金の比から円倍率を決める。
+    /// 候補は 円 / 千円 / 百万円。どれも 5% 以内に入らなければ nil（黙って ×1 にしない）。
+    static func inferIssuedSharesYenScale(
+        capitalBalances: [Double],
+        reserveBalances: [Double],
+        xbrlCapital: Double?,
+        xbrlReserve: Double?
+    ) -> Double? {
+        matchIssuedSharesYenScale(samples: capitalBalances, xbrl: xbrlCapital)
+            ?? matchIssuedSharesYenScale(samples: reserveBalances, xbrl: xbrlReserve)
+    }
+
+    private static func matchIssuedSharesYenScale(samples: [Double], xbrl: Double?) -> Double? {
+        guard let xbrl, xbrl != 0 else { return nil }
+        guard let sample = samples.last(where: { $0 != 0 }) else { return nil }
+        let candidates: [Double] = [1, 1_000, Financial.millionYen]
+        let hits = candidates.filter { scale in
+            abs(abs(sample) * scale - abs(xbrl)) / abs(xbrl) <= 0.05
+        }
+        return hits.min(by: {
+            abs(abs(sample) * $0 - abs(xbrl)) < abs(abs(sample) * $1 - abs(xbrl))
+        })
     }
 
     /// `<table>` の各 `<tr>` を `rowspan`/`colspan` を展開した仮想グリッド（列固定・欠損セルなし）
