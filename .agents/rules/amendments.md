@@ -8,3 +8,4 @@
 - 財務 high-water に 130 を含める（再計算トリガ）。読む ZIP は原本＋ overlay。
 - 150 / 170 は対象外。専用キューや自動統合経路は作らない。
 - 対象会社-FY の再 ingest は `--doc-ids <原本120>`（`--codes` と併用可）。保持窓外でも指定 doc は残し、他 FY は purge しない。
+- ingest の訂正引き当ては in-flight の原本 `doc_id`（keep / `--doc-ids`）または証券コード（`--codes` / 会社単位ステージ）に限定する。全件 120/130 は読まない。

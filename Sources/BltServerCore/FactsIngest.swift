@@ -284,8 +284,22 @@ public func runFactsIngestCommand(
             deterministicMetricsFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
         }
 
+        var inFlightOriginalIDs = Set(listedFilingSets.keep.map(\.docID))
+        inFlightOriginalIDs.formUnion(publicBreakdownSets.keep.map(\.docID))
+        inFlightOriginalIDs.formUnion(deterministicMetricsFilingSets.keep.map(\.docID))
+        if let docIDs { inFlightOriginalIDs.formUnion(docIDs) }
+        let inFlightListedCodes: Set<String>
+        if inFlightOriginalIDs.isEmpty {
+            let companyWide =
+                targets.contains(.financials) || targets.contains(.icons)
+                || targets.contains(.overviews)
+            inFlightListedCodes = codes ?? (companyWide ? listed : [])
+        } else {
+            inFlightListedCodes = []
+        }
         let correctionIDsByOriginal = try await loadAnnualXbrlCorrectionIDsByOriginal(
-            db: app.db, logger: app.logger)
+            db: app.db, originalDocIDs: inFlightOriginalIDs, listedCodes: inFlightListedCodes,
+            logger: app.logger)
         let forceDocIDs = docIDs ?? []
         let financialsExplicitCodes: Set<String>?
         if let docIDs {

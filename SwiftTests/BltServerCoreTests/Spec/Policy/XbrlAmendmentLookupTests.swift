@@ -60,9 +60,80 @@ private func seed(
                 submit: "2025-11-28 14:35",
                 desc: "訂正有価証券報告書－第21期(2022/04/01－2023/03/31)", db: app.db)
 
-            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(db: app.db)
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, originalDocIDs: ["S100W0S7"])
             #expect(map["S100W0S7"] == ["S100X7DX", "S100WRZH"])
             #expect(map["S100R1RG"] == nil)
+        }
+    }
+
+    @Test func queryIsScopedToInFlightOriginalDocIDs() async throws {
+        try await withMigratedApp { app in
+            try await seed(
+                "S100W0S7", type: "120", periodEnd: "2025-03-31",
+                submit: "2025-06-20 15:37",
+                desc: "有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100WRZH", type: "130", parent: "S100W0S7",
+                submit: "2025-09-30 15:38",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100AAAA", type: "120", edinet: "E00001", sec: "72030",
+                periodEnd: "2025-03-31", submit: "2025-06-20 15:00",
+                desc: "有価証券報告書－第121期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100BBBB", type: "130", edinet: "E00001", sec: "72030", parent: "S100AAAA",
+                submit: "2025-09-30 12:00",
+                desc: "訂正有価証券報告書－第121期(2024/04/01－2025/03/31)", db: app.db)
+
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, originalDocIDs: ["S100W0S7"])
+            #expect(map["S100W0S7"] == ["S100WRZH"])
+            #expect(map["S100AAAA"] == nil)
+            #expect(map.count == 1)
+        }
+    }
+
+    @Test func queryIsScopedToInFlightListedCodes() async throws {
+        try await withMigratedApp { app in
+            try await seed(
+                "S100W0S7", type: "120", periodEnd: "2025-03-31",
+                submit: "2025-06-20 15:37",
+                desc: "有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100WRZH", type: "130", parent: "S100W0S7",
+                submit: "2025-09-30 15:38",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100AAAA", type: "120", edinet: "E00001", sec: "72030",
+                periodEnd: "2025-03-31", submit: "2025-06-20 15:00",
+                desc: "有価証券報告書－第121期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100BBBB", type: "130", edinet: "E00001", sec: "72030", parent: "S100AAAA",
+                submit: "2025-09-30 12:00",
+                desc: "訂正有価証券報告書－第121期(2024/04/01－2025/03/31)", db: app.db)
+
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, listedCodes: ["8316"])
+            #expect(map["S100W0S7"] == ["S100WRZH"])
+            #expect(map["S100AAAA"] == nil)
+            #expect(map.count == 1)
+        }
+    }
+
+    @Test func emptyScopeDoesNotLoadFleetCorrections() async throws {
+        try await withMigratedApp { app in
+            try await seed(
+                "S100W0S7", type: "120", periodEnd: "2025-03-31",
+                submit: "2025-06-20 15:37",
+                desc: "有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100WRZH", type: "130", parent: "S100W0S7",
+                submit: "2025-09-30 15:38",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(db: app.db)
+            #expect(map.isEmpty)
         }
     }
 }
