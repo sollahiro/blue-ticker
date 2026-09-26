@@ -36,9 +36,9 @@ public struct XbrlSourceDocument: Equatable, Sendable {
     }
 }
 
-/// 同一会社・同一期間・同一親有報に紐づく訂正(130)を提出日時の新しい順で返す。
-/// `parentDocID` があるときは親一致を必須にし、期間が取れる場合は親の期末と一致するものだけ残す。
-/// 親リンクが無い行は、期末（または概要文の西暦期間）が原本と一致するときだけ採用する。
+/// 同一会社・同一期間の訂正(130)を提出日時の新しい順で返す。
+/// 引き当ては `edinetCode` と期末（`periodEnd`、無ければ概要文の西暦期間）だけ。
+/// `parentDocID` は同期メタであり、照合には使わない。
 public func matchingXbrlCorrections(
     original: XbrlSourceDocument,
     corrections: [XbrlSourceDocument]
@@ -173,7 +173,8 @@ func overlayDirectories(in dir: URL) -> [URL] {
     overlayDirectoryEntries(in: dir).map(\.url)
 }
 
-/// 訂正 overlay を回帰マスク付きで重ねる。
+/// 訂正 overlay を回帰マスク付きで重ねる。差し戻しは当該 `correctionDocID` の fact だけ。
+/// 直前値は呼び出し側が渡す `base`（この原本パッケージの直前 overlay 状態）。DB は読まない。
 func overlayFactsApplyingLayerReverts<Value>(
     base: [String: [String: Value]],
     correctionDocID: String?,
@@ -258,19 +259,10 @@ func isMatchingXbrlCorrection(
     guard !correction.edinetCode.isEmpty, correction.edinetCode == original.edinetCode else {
         return false
     }
-    let parent = nonEmptyField(correction.parentDocID)
-    if let parent, parent != original.docID { return false }
-
-    let originalPeriod = inferredPeriodEnd(original)
-    let correctionPeriod = inferredPeriodEnd(correction)
-    if let originalPeriod, let correctionPeriod, originalPeriod != correctionPeriod {
-        return false
-    }
-    if parent == nil {
-        guard let originalPeriod, let correctionPeriod, originalPeriod == correctionPeriod else {
-            return false
-        }
-    }
+    guard let originalPeriod = inferredPeriodEnd(original),
+        let correctionPeriod = inferredPeriodEnd(correction),
+        originalPeriod == correctionPeriod
+    else { return false }
     return true
 }
 

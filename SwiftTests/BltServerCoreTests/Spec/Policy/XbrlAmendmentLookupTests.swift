@@ -136,4 +136,46 @@ private func seed(
             #expect(map.isEmpty)
         }
     }
+
+    @Test func nullParentMatchesByEdinetCodeAndPeriod() async throws {
+        try await withMigratedApp { app in
+            try await seed(
+                "S100W0S7", type: "120", periodEnd: "2025-03-31",
+                submit: "2025-06-20 15:37",
+                desc: "有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100WRZH", type: "130", parent: nil,
+                submit: "2025-09-30 15:38",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100X7DT", type: "130", parent: nil,
+                submit: "2025-11-28 14:35",
+                desc: "訂正有価証券報告書－第21期(2022/04/01－2023/03/31)", db: app.db)
+
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, originalDocIDs: ["S100W0S7"])
+            #expect(map["S100W0S7"] == ["S100WRZH"])
+        }
+    }
+
+    @Test func parentPointingAtPriorCorrectionStillMapsSamePeriod() async throws {
+        try await withMigratedApp { app in
+            try await seed(
+                "S100W0S7", type: "120", periodEnd: "2025-03-31",
+                submit: "2025-06-20 15:37",
+                desc: "有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100WRZH", type: "130", parent: "S100W0S7",
+                submit: "2025-09-30 15:38",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+            try await seed(
+                "S100X7DX", type: "130", parent: "S100WRZH",
+                submit: "2025-11-28 14:52",
+                desc: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)", db: app.db)
+
+            let map = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, originalDocIDs: ["S100W0S7"])
+            #expect(map["S100W0S7"] == ["S100X7DX", "S100WRZH"])
+        }
+    }
 }

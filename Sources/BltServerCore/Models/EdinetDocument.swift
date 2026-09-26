@@ -56,7 +56,7 @@ final class EdinetDocument: Model, @unchecked Sendable {
     @OptionalField(key: "doc_description")
     var docDescription: String?
 
-    /// EDINET `parentDocID`（訂正対象の原本 docID）。有報(120)では null。
+    /// EDINET `parentDocID`（訂正対象の原本 docID）。有報(120)では null。同期メタ。overlay 照合には使わない。
     @OptionalField(key: "parent_doc_id")
     var parentDocID: String?
 

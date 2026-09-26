@@ -109,6 +109,7 @@ public func xbrlOverlayRegressions(
 }
 
 /// 提出が古い順の訂正を重ねる。回帰した fact だけ直前値へ戻し、レイヤの残りは採用する。
+/// `base` / 各 `layers[].facts` はこの原本 `originalDocID` のパッケージ。他 doc は見ない。
 public func applyGuardedXbrlOverlays(
     base: [String: [String: Double]],
     layers: [(correctionDocID: String, facts: [String: [String: Double]])],
