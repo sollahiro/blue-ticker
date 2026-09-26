@@ -1,0 +1,54 @@
+{
+  "cell_select_geography" : {
+    "docs" : 37,
+    "lines" : 189
+  },
+  "cell_select_notes" : {
+    "docs" : 20,
+    "lines" : 201
+  },
+  "cell_select_segment_info" : {
+    "docs" : 36,
+    "lines" : 198
+  },
+  "download_failures" : [
+
+  ],
+  "downloaded_docs" : 187,
+  "paths" : [
+    "/workspace/scripts/poc-jev/out/table_select_segment_info.jsonl",
+    "/workspace/scripts/poc-jev/out/table_select_geography.jsonl",
+    "/workspace/scripts/poc-jev/out/cell_select_segment_info.jsonl",
+    "/workspace/scripts/poc-jev/out/cell_select_geography.jsonl",
+    "/workspace/scripts/poc-jev/out/usable_segment_info.jsonl",
+    "/workspace/scripts/poc-jev/out/usable_geography.jsonl",
+    "/workspace/scripts/poc-jev/out/usable_revenue_recognition.jsonl",
+    "/workspace/scripts/poc-jev/out/table_select_notes.jsonl",
+    "/workspace/scripts/poc-jev/out/cell_select_notes.jsonl",
+    "/workspace/scripts/poc-jev/out/period_audit_downloaded.jsonl"
+  ],
+  "table_select_geography" : {
+    "docs" : 70,
+    "lines" : 107
+  },
+  "table_select_notes" : {
+    "docs" : 20,
+    "lines" : 74
+  },
+  "table_select_segment_info" : {
+    "docs" : 70,
+    "lines" : 218
+  },
+  "usable_geography" : {
+    "docs" : 97,
+    "lines" : 97
+  },
+  "usable_revenue_recognition" : {
+    "docs" : 75,
+    "lines" : 75
+  },
+  "usable_segment_info" : {
+    "docs" : 75,
+    "lines" : 75
+  }
+}

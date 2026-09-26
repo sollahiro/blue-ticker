@@ -1,0 +1,254 @@
+[
+  {
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-04-30",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "note_type": "issued_shares_and_capital",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "2914",
+    "doc_id": "S100XSSA",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2025-12-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "6473",
+    "doc_id": "S100YEL3",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "3679",
+    "doc_id": "S100YERG",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "7269",
+    "doc_id": "S100YFG2",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 8,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "3612",
+    "doc_id": "S100Y4W7",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2026-02-28",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "6574",
+    "doc_id": "S100YN95",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "6326",
+    "doc_id": "S100XR0M",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 6,
+    "fy_end": "2025-12-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "5857",
+    "doc_id": "S100YBFP",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 7,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "7731",
+    "doc_id": "S100YKBP",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 7,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "2802",
+    "doc_id": "S100Y992",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 2,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "6376",
+    "doc_id": "S100XU3R",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 1,
+    "fy_end": "2025-12-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "6632",
+    "doc_id": "S100YG3R",
+    "note_type": "lease_liabilities",
+    "source": "xbrl_facts",
+    "n_items": 4,
+    "fy_end": "2026-03-31",
+    "pick_reason": "notes_sample"
+  },
+  {
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-04-30",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "note_type": "borrowings_schedule",
+    "source": "xbrl_facts",
+    "n_items": 0,
+    "fy_end": "2026-03-31",
+    "pick_reason": "reingest_today"
+  }
+]

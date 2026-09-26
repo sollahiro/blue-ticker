@@ -1,0 +1,1340 @@
+[
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "当期",
+      "当期"
+    ],
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:00",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "2224",
+    "doc_id": "S100YICN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:43",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 14:53",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期"
+    ],
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:31",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 5,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "前期",
+      "当期",
+      "当期"
+    ],
+    "code": "3968",
+    "doc_id": "S100XTVB",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 15:38",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "4167",
+    "doc_id": "S100YKE7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:35",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "4231",
+    "doc_id": "S100YK4M",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:00",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "4389",
+    "doc_id": "S100YHXO",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 13:38",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "4481",
+    "doc_id": "S100XUKI",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 16:28",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "当期",
+      "当期"
+    ],
+    "code": "5237",
+    "doc_id": "S100YK4Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 12:00",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "6039",
+    "doc_id": "S100YGKM",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 14:58",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "6424",
+    "doc_id": "S100YEQL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 16:01",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:25",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "fy_end": "2026-04-30",
+    "submit_date_time": "2026-07-29 16:01",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "当期"
+    ],
+    "code": "7073",
+    "doc_id": "S100Y1BL",
+    "fy_end": "2026-01-31",
+    "submit_date_time": "2026-04-28 11:30",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "7096",
+    "doc_id": "S100YI32",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 15:33",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:30",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "7345",
+    "doc_id": "S100YHKS",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 09:20",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:55",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 16:09",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "7464",
+    "doc_id": "S100YJG0",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:47",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "7567",
+    "doc_id": "S100YJKR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:14",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較",
+      "比較"
+    ],
+    "code": "7734",
+    "doc_id": "S100YIB1",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:37",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "8147",
+    "doc_id": "S100YJEU",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:01",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "比較"
+    ],
+    "code": "9780",
+    "doc_id": "S100Y7GN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:30",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9853",
+    "doc_id": "S100YJPB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 16:45",
+    "pick_reason": "reingest_today"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 36,
+    "periods": [
+      "前期"
+    ],
+    "code": "215A",
+    "doc_id": "S100YS8Y",
+    "fy_end": "2026-04-30",
+    "submit_date_time": "2026-07-27 15:30",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 97,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "2370",
+    "doc_id": "S100XB0H",
+    "fy_end": "2025-09-30",
+    "submit_date_time": "2025-12-17 15:32",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 210,
+    "periods": [
+      "前期"
+    ],
+    "code": "3440",
+    "doc_id": "S100X6MC",
+    "fy_end": "2025-08-31",
+    "submit_date_time": "2025-11-26 10:05",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 72,
+    "periods": [
+      "前期"
+    ],
+    "code": "350A",
+    "doc_id": "S100WXET",
+    "fy_end": "2025-07-31",
+    "submit_date_time": "2025-10-30 15:41",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 85,
+    "periods": [
+      "前期"
+    ],
+    "code": "4378",
+    "doc_id": "S100XHNB",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-28 15:59",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 55,
+    "periods": [
+      "前期"
+    ],
+    "code": "463A",
+    "doc_id": "S100YYT8",
+    "fy_end": "2026-05-31",
+    "submit_date_time": "2026-08-26 16:32",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "4891",
+    "doc_id": "S100XVBS",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-30 10:11",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4976",
+    "doc_id": "S100Z3JC",
+    "fy_end": "2026-06-30",
+    "submit_date_time": "2026-09-24 15:57",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 110,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "5704",
+    "doc_id": "S100XSBE",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-24 15:31",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "6635",
+    "doc_id": "S100XUDS",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 12:01",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 52,
+    "periods": [
+      "前期"
+    ],
+    "code": "7357",
+    "doc_id": "S100Y7GV",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-29 10:34",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "7434",
+    "doc_id": "S100WLHT",
+    "fy_end": "2025-05-31",
+    "submit_date_time": "2025-08-28 10:41",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "8383",
+    "doc_id": "S100YDT2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 12:44",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "8772",
+    "doc_id": "S100YI2V",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 14:50",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 60,
+    "periods": [
+      "前期"
+    ],
+    "code": "9561",
+    "doc_id": "S100XV2A",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:39",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "9824",
+    "doc_id": "S100XHVV",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-28 13:19",
+    "pick_reason": "bucket3"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "3686",
+    "doc_id": "S100W9FR",
+    "fy_end": "2025-03-31",
+    "submit_date_time": "2025-06-30 13:14",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 96,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "6702",
+    "doc_id": "S100YM3K",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 15:30",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 8,
+    "n_facts": 124,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "6758",
+    "doc_id": "S100YE2C",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 15:38",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "4733",
+    "doc_id": "S100YD49",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 10:49",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 123,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "7203",
+    "doc_id": "S100Y8NY",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-10 15:33",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "6459",
+    "doc_id": "S100XU5A",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 13:01",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 121,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "6326",
+    "doc_id": "S100XR0M",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-16 15:00",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "6301",
+    "doc_id": "S100YD25",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 11:46",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 148,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "3474",
+    "doc_id": "S100XUW1",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:30",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 7,
+    "n_facts": 142,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "3177",
+    "doc_id": "S100Y7HH",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-29 10:37",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 3,
+    "n_facts": 172,
+    "periods": [
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "4766",
+    "doc_id": "S100XUYO",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 16:00",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 10,
+    "n_facts": 213,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "5021",
+    "doc_id": "S100YI3A",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:30",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 60,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "7602",
+    "doc_id": "S100YKCQ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 10:30",
+    "pick_reason": "bucket2"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 153,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9994",
+    "doc_id": "S100YIXT",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 10:08",
+    "pick_reason": "bucket1_separate_tables"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "9990",
+    "doc_id": "S100YJ0B",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 10:30",
+    "pick_reason": "bucket1_compare_and_separate"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9974",
+    "doc_id": "S100Y4X3",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-20 16:03",
+    "pick_reason": "bucket1_one_table_two_columns"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期"
+    ],
+    "code": "9908",
+    "doc_id": "S100YDG7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 09:23",
+    "pick_reason": "bucket1_current_only"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 160,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9993",
+    "doc_id": "S100Y6JY",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-27 13:06",
+    "pick_reason": "bucket1_separate_tables"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "当期"
+    ],
+    "code": "9978",
+    "doc_id": "S100X6SE",
+    "fy_end": "2025-08-31",
+    "submit_date_time": "2025-11-26 14:49",
+    "pick_reason": "bucket1_compare_and_separate"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較",
+      "比較"
+    ],
+    "code": "9948",
+    "doc_id": "S100Y640",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-25 15:50",
+    "pick_reason": "bucket1_one_table_two_columns"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期"
+    ],
+    "code": "9419",
+    "doc_id": "S100XSUO",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-24 09:42",
+    "pick_reason": "bucket1_current_only"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 144,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9989",
+    "doc_id": "S100YL7Q",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 13:06",
+    "pick_reason": "bucket1_separate_tables"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "xbrl_facts",
+    "n_tables": 10,
+    "n_facts": 241,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "比較",
+      "比較",
+      "比較",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9956",
+    "doc_id": "S100YHUD",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:32",
+    "pick_reason": "bucket1_compare_and_separate"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9942",
+    "doc_id": "S100Z1WR",
+    "fy_end": "2026-06-30",
+    "submit_date_time": "2026-09-14 17:08",
+    "pick_reason": "bucket1_one_table_two_columns"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 6,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期",
+      "当期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9279",
+    "doc_id": "S100XHK4",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-27 13:30",
+    "pick_reason": "bucket1_current_only"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 130,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9973",
+    "doc_id": "S100XVJC",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-30 15:01",
+    "pick_reason": "bucket1_separate_tables"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "xbrl_facts",
+    "n_tables": 9,
+    "n_facts": 96,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "9946",
+    "doc_id": "S100Y4UH",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-20 13:39",
+    "pick_reason": "bucket1_compare_and_separate"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9928",
+    "doc_id": "S100YKDZ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 10:17",
+    "pick_reason": "bucket1_one_table_two_columns"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "410A",
+    "doc_id": "S100XR0F",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-17 15:31",
+    "pick_reason": "empty_for_usable_none"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "3333",
+    "doc_id": "S100Y2X4",
+    "fy_end": "2026-02-20",
+    "submit_date_time": "2026-05-13 10:13",
+    "pick_reason": "empty_for_usable_none"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "9625",
+    "doc_id": "S100YF00",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 10:02",
+    "pick_reason": "empty_for_usable_none"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "2586",
+    "doc_id": "S100YKRG",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:31",
+    "pick_reason": "empty_for_usable_none"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "4591",
+    "doc_id": "S100YF0X",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 10:52",
+    "pick_reason": "empty_for_usable_none"
+  }
+]
