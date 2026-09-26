@@ -63,6 +63,18 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 
 `_NonConsolidated` が含まれるコンテキストは個別財務諸表の値です。
 
+### 2.3 注記 HTML 表の当期 / 前期（`BreakdownTable.period`）
+
+セグメント・地域・収益認識の TextBlock HTML 表は、公開値が `当期` / `前期` / `比較`。根拠は内部の `periodBasis` のみ（REST / MCP の形は変えない）。LLM は使わない。優先順:
+
+1. **contextRef** — 専用の地域売上・製品サービス別 TextBlock が `Prior1YearDuration` / `CurrentYearDuration` に分かれているとき。HTML に期間見出しが無い。同じ `CurrentYearDuration` に前期・当期表が同居する mixed / 事業セグメントは使わない。
+2. **caption** — 同一 TextBlock 内で表から直前へ遡る。単位行やラッパー `div` は飛ばし、直前の `<table>` と `【…】` の別注記見出しで止める。語: 前/当連結会計年度、前/当事業年度、前/当年度、前期/当期。複合語（当期純利益・前期比・前期末比・前年同期比等）は期間にしない。裸の 前期末/当期末 は残す。祖先側は期間語で始まる見出しか `（自…至…）` だけ採用し、導入文は見ない。`（自 YYYY年M月D日 至 YYYY年M月D日）` と「YYYY年度」は書類の `CurrentYearDuration` 期末と照合する。
+3. **header** — グリッド先頭 3 行。列に前・当が並ぶと比較。
+4. **pair** — 隣接 2 表のヘッダー＋行ラベルが同じ（数値無視）で、手がかりが矛盾しなければ先=前期・後=当期。
+5. **fallback** — 残った数値表は当期。単独表を交互ルールで前期にしない（当期表が落ちるため）。
+
+細粒度の訂正なので `cache_version` はバンプしない。対象コードは `--codes` で再 ingest する。
+
 ---
 
 ## 3. スモークテスト

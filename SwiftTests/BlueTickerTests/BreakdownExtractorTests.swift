@@ -49,8 +49,18 @@ import Foundation
         #expect(BreakdownExtractor.detectPeriodFromGrid([["前連結会計年度", "数値"], ["売上高", "900"]]) == "前期")
     }
 
-    @Test func detectPeriodComparisonWhenBothPresent() {
-        #expect(BreakdownExtractor.detectPeriodFromGrid([["前連結会計年度", "当連結会計年度"], ["900", "1000"]]) == "比較")
+    @Test func detectPeriodBusinessYearHeaderIsComparison() {
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["", "前事業年度", "当事業年度"], ["日本", "100", "120"]]
+            ) == "比較")
+    }
+
+    @Test func detectPeriodNendoHeaderIsComparison() {
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["前年度", "当年度"], ["900", "1000"]]
+            ) == "比較")
     }
 
     @Test func detectPeriodShortFormCurrent() {
@@ -79,6 +89,17 @@ import Foundation
         #expect(BreakdownExtractor.detectPeriodFromGrid([]) == nil)
     }
 
+    @Test func detectPeriodIgnoresCompoundWordsInGrid() {
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["科目", "当期純利益"], ["事業A", "500"]]
+            ) == nil)
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["前期比", "増減"], ["事業A", "10"]]
+            ) == nil)
+    }
+
     // MARK: - applyPeriodOrdering
 
     @Test func periodOrderingUnlabeledGetsAlternatingLabels() {
@@ -87,6 +108,7 @@ import Foundation
         }
         BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables.map(\.period) == ["前期", "当期", "前期", "当期"])
+        #expect(tables.map(\.periodBasis) == [.pair, .pair, .pair, .pair])
     }
 
     @Test func periodOrderingSkipsQualitativeTablesWithoutNumbers() {
@@ -106,7 +128,10 @@ import Foundation
         ]
         BreakdownExtractor.applyPeriodOrdering(&tables)
         #expect(tables[0].period == "当期")
-        #expect(tables[1].period == "前期")
+        // 隣接同一レイアウトなら pair（先=前期）だが、先頭は既に当期なので pair しない。
+        // 残った単独の未ラベル数値表は fallback で当期（前期にはしない）。
+        #expect(tables[1].period == "当期")
+        #expect(tables[1].periodBasis == .fallback)
     }
 
     @Test func periodOrderingAllLabeledUnchanged() {
@@ -530,6 +555,8 @@ import Foundation
         #expect(tables[0].markdown.contains("主要な製品及びサービス"))
         #expect(tables[0].period == nil)
         #expect(tables[1].markdown.contains("38840"))
+        #expect(tables[1].period == "当期")
+        #expect(tables[1].periodBasis == .fallback)
         #expect(tables[1].unitCaption == "百万円")
         #expect(!tables.contains { $0.markdown.contains("単位") })
     }
@@ -2763,6 +2790,8 @@ import Foundation
         #expect(tables[1]["period"] == nil)  // nil は出力しない（Python NotRequired と同じ）
         #expect(tables[0]["unitCaption"] == nil)
         #expect(tables[1]["unitCaption"] == nil)
+        #expect(tables[0]["periodBasis"] == nil)
+        #expect(tables[1]["periodBasis"] == nil)
 
         let facts = try #require(dict["facts"] as? [[String: Any]])
         #expect(facts[0]["label"] == nil)
