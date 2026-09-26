@@ -93,7 +93,10 @@ struct BreakdownUnitScanRow: Codable {
             let new = BreakdownLLMAmountScale.resolve(
                 headerToken: header, declaredUnit: row.llmUnit, rawAmounts: rawAmounts,
                 consolidatedSales: row.denominator)
-            let ratio = old.multiplier == 0 ? 0 : new.multiplier / old.multiplier
+            let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
+            let newAmount = rawRef * new.multiplier
+            let stored = row.maxAmount ?? (rawRef * old.multiplier)
+            let ratio = stored == 0 ? 0 : newAmount / stored
             let captions = extracted.tables.map { $0.unitCaption ?? "" }
             let snippets = extracted.tables.prefix(4).map { table in
                 String(table.markdown.prefix(160)).replacingOccurrences(of: "\n", with: " | ")

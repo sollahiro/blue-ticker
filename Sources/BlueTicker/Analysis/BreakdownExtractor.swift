@@ -728,13 +728,20 @@ enum BreakdownExtractor {
         }
     }
 
-    /// グリッドの見出し／キャプション行から単位を拾う（数値行は見ない）。
+    /// グリッドの見出し／キャプション行から単位を拾う。無ければ数値セルの「6,553,546千円」
+    /// のような接尾辞、および数値行に混ざった「（単位：千円）」セルも見る
+    /// （実データ: 2139 S100YHNL）。
     static func unitCaption(from grid: [[String]]) -> String? {
         let captionRows = grid.filter { row in
             !row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
         }
-        let source = captionRows.isEmpty ? grid : captionRows
-        return parseUnitCaption(source.flatMap { $0 }.joined(separator: " "))
+        if let token = parseUnitCaption(captionRows.flatMap { $0 }.joined(separator: " ")) {
+            return token
+        }
+        for cell in grid.flatMap({ $0 }) {
+            if let token = parseUnitCaption(cell) { return token }
+        }
+        return parseUnitCaption(grid.flatMap { $0 }.joined(separator: " "))
     }
 
     /// 「（単位：百万円）」「(Thousands of yen)」等から単位語を取り出す。

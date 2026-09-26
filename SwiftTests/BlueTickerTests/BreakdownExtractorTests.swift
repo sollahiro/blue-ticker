@@ -662,6 +662,30 @@ import Foundation
         #expect(keyword.contains { $0.unitCaption == "千円" })
     }
 
+    /// 2139 S100YHNL: 単位は表ヘッダー行ではなく金額セル接尾辞「6,553,546千円」。
+    @Test func senYenSuffixOnAmountCellsSetsUnitCaption() {
+        let html = """
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>自社メディア広告</td><td>6,553,546千円</td><td>6,693,644千円</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係")
+        #expect(tables[0].unitCaption == "千円")
+    }
+
+    /// 2224 S100YICN: 列見出し「金額（千円）」。
+    @Test func amountColumnHeaderWithSenYenSetsUnitCaption() {
+        let html = """
+            <table>
+              <tr><td>主たる販売経路</td><td>金額（千円）</td></tr>
+              <tr><td>生活協同組合</td><td>7,323,754</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係")
+        #expect(tables[0].unitCaption == "千円")
+    }
+
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")
