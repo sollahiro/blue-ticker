@@ -19,6 +19,8 @@ primary_region = "nrt"
 
 [build]
   dockerfile = "Dockerfile"
+  # このファイルは deploy.yml のパス判定対象。Depot が deadline_exceeded したときは
+  # ワークフロー側で legacy builder まで再試行する（.github/workflows/deploy.yml）。
 
 # キャッシュ・設定の永続化（sync の真実源は Neon。これは EDINET 取得キャッシュ等）。
 [[mounts]]

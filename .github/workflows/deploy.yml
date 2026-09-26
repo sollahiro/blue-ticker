@@ -82,7 +82,28 @@ jobs:
 
       - name: Deploy to Fly.io
         if: steps.paths.outputs.changed == 'true'
-        run: flyctl deploy --remote-only
+        # Depot リモートビルダが swift release の終盤で deadline_exceeded することがある
+        #（run 36224321558: 950/952 で EOF）。同一コマンドを数回試し、最後は legacy builder。
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            if [ "$attempt" -lt 3 ]; then
+              echo "flyctl deploy attempt ${attempt}/3 (Depot)"
+              flyctl deploy --remote-only
+            else
+              echo "flyctl deploy attempt ${attempt}/3 (legacy builder, --depot=false)"
+              flyctl deploy --remote-only --depot=false
+            fi
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            echo "deploy attempt ${attempt} failed with status ${status}"
+            if [ "$attempt" -lt 3 ]; then
+              sleep 30
+            fi
+          done
+          exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
