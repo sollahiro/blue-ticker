@@ -567,7 +567,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
 
         @discardableResult
         private func ensureHost(
-            in nav: UINavigationController, onFittedPill: (CGRect) -> Void
+            in nav: UINavigationController, onFittedPill: @escaping (CGRect) -> Void
         ) -> Bool {
             if host != nil { return false }
             guard let window = nav.view.window else { return false }
