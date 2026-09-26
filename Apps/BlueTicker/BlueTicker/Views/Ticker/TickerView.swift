@@ -788,7 +788,11 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 // 中間幅のまま字を固定解除すると、社名がアイコンだけに欠ける。
                 self.model.expansion = expanded ? 1 : 0
                 self.model.visibleWidth = end.width
-                self.model.freezesGlyphs = false
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    self.model.freezesGlyphs = false
+                }
                 UIView.performWithoutAnimation {
                     container.frame = end
                     container.layer.cornerRadius = radius
@@ -998,7 +1002,7 @@ private final class CompanyGlassModel {
     var expansion: CGFloat = 0
     /// ガラスの中身を組む幅。枠のアニメーションでは変えない。
     var cardWidth: CGFloat = 0
-    /// いま見えている枠の幅。閉じるボタンと、開閉中の社名行の幅に使う。
+    /// いま見えている枠の幅。閉じるボタンの位置だけに使う。
     var visibleWidth: CGFloat = 0
     /// 開閉中は社名の字間を組み直さない。はみ出しは枠が隠す。
     var freezesGlyphs = false
@@ -1016,7 +1020,7 @@ private final class CompanyGlassModel {
 
     func setExpanded(_ value: Bool) {
         guard expanded != value else { return }
-        // 1行目の字間は先に固定する。2行目は見える幅で…し、閉じ切ってから跳ねない。
+        // 1行目の字間は先に固定する。閉じ終わりの「…」はアニメーションさせない。
         freezesGlyphs = true
         expanded = value
         if value {
@@ -1100,12 +1104,12 @@ private struct CompanyMorphStack: View {
                     .accessibilityHidden(true)
                 CompanyPillLabel(
                     company: model.company,
-                    trailingReserve: (32 + 8) * expansion,
+                    trailingReserve: showsWideName ? 32 + 8 : 0,
                     nameLock: model.nameLock,
                     freezeGlyphs: model.freezesGlyphs
                 )
                 .frame(
-                    width: nameRowWidth,
+                    width: showsWideName ? nil : collapsedNameWidth,
                     height: showsWideName ? nil : collapsedNameHeight,
                     alignment: .leading
                 )
@@ -1122,6 +1126,7 @@ private struct CompanyMorphStack: View {
                         .buttonStyle(.plain)
                         .padding(.trailing, Theme.headerPillHorizontalPadding)
                         .opacity(expansion)
+                        .offset(x: showsWideName ? model.visibleWidth - model.cardWidth : 0)
                         .accessibilityLabel("閉じる")
                         .accessibilityHidden(!model.expanded)
                     }
@@ -1152,19 +1157,9 @@ private struct CompanyMorphStack: View {
         model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(model.company.sector)"
     }
 
-    /// 開いているあいだはカード用の余白を取る。社名の1行目は固定したまま。
+    /// 開閉中はカード幅のまま字を置く。枠だけが伸び縮みする。
     private var showsWideName: Bool {
         model.freezesGlyphs || model.expanded
-    }
-
-    /// 社名行は見えている枠幅に合わせる。カード幅のまま縮めると、閉じたあと「…」へ跳ぶ。
-    private var nameRowWidth: CGFloat? {
-        if showsWideName {
-            if model.visibleWidth > 1 { return model.visibleWidth }
-            if model.cardWidth > 1 { return model.cardWidth }
-            return nil
-        }
-        return collapsedNameWidth
     }
 
     private var collapsedNameWidth: CGFloat? {
