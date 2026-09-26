@@ -156,14 +156,20 @@ enum GeographyBreakdownLLMNormalizer {
         }
         guard !parsed.isEmpty else { return (nil, audit) }
 
-        let scale = BreakdownLLMAmountScale.yenMultiplier(
+        let scale = BreakdownLLMAmountScale.scaling(
             declaredUnit: unit,
+            tables: result.tables,
+            sourceTableIndex: audit.sourceTableIndex,
             rawAmounts: parsed.map(\.rawAmount),
             consolidatedSales: consolidatedSales
         )
         if scale.unresolved {
             needsReview = true
             warnings.append("llm_unit_unresolved")
+        }
+        if scale.headerLlmMismatch {
+            needsReview = true
+            warnings.append(BreakdownLLMAmountScale.headerLlmMismatchWarning)
         }
         let unitMultiplier = scale.multiplier
 

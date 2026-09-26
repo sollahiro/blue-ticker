@@ -892,20 +892,13 @@ enum BreakdownExtractor {
 
     /// `unitCaption`（`parseUnitCaption` の語）を優先し、無ければ表内の単位表記。
     /// `十億円` / `億円` を百万円扱いにしない（部分一致順にも依存させない）。
+    /// 単位語が無いときの既定は百万円（顧客契約連結の決定論経路。LLM 経路は
+    /// `BreakdownLLMAmountScale` が fail closed する）。
     private static func yenMultiplier(for table: BreakdownTable) -> Double {
-        let token = table.unitCaption.flatMap(parseUnitCaption)
-            ?? parseUnitCaption(table.markdown)
-        return yenScale(forUnitToken: token)
-    }
-
-    private static func yenScale(forUnitToken token: String?) -> Double {
-        guard let token else { return Financial.millionYen }
-        if token.contains("十億円") { return 1_000_000_000 }
-        if token.contains("億円") { return 100_000_000 }
-        if token.contains("百万円") { return Financial.millionYen }
-        if token.contains("千円") { return 1_000 }
-        if token == "円" { return 1 }
-        return Financial.millionYen
+        guard let token = BreakdownLLMAmountScale.headerUnitToken(from: table),
+            let scale = BreakdownLLMAmountScale.yenScale(forHeaderToken: token)
+        else { return Financial.millionYen }
+        return scale
     }
 
     /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。
@@ -1039,6 +1032,28 @@ enum BreakdownExtractor {
                 result = "当期"
             } else if priorPeriodKeywords.contains(where: text.contains) {
                 result = "前期"
+            }
+        }
+        return result
+    }
+
+    /// 表の直前にある「（単位：千円）」等を拾う。期間見出しと同じ親要素の先行兄弟を見る。
+    private static func detectUnitFromPreceding(_ table: Element) -> String? {
+        guard let parent = table.parent() else { return nil }
+        var result: String?
+        for node in parent.getChildNodes() {
+            guard node.siblingIndex < table.siblingIndex else { break }
+            let text: String
+            if let el = node as? Element {
+                text = bs4Text(el, strip: true)
+            } else if let tn = node as? TextNode {
+                text = tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                continue
+            }
+            if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
+            if let token = parseUnitCaption(text) {
+                result = token
             }
         }
         return result
@@ -1368,6 +1383,7 @@ enum BreakdownExtractor {
                     markdown: gridToMarkdown(grid),
                     period: pendingPeriod,
                     unitCaption: unitCaption(from: grid) ?? pendingUnitCaption
+                        ?? pendingElement.flatMap(detectUnitFromPreceding)
                 ))
             }
             pendingElement = nil
@@ -1622,6 +1638,7 @@ enum BreakdownExtractor {
                         markdown: gridToMarkdown(published),
                         period: workingPeriod,
                         unitCaption: unitCaption(from: published) ?? pendingUnitCaption
+                            ?? detectUnitFromPreceding(workingTable)
                     ))
 
                     // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。

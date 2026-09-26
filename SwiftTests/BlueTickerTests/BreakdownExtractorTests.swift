@@ -542,6 +542,10 @@ import Foundation
         #expect(BreakdownExtractor.parseUnitCaption("（単位：十億円）") == "十億円")
         #expect(BreakdownExtractor.parseUnitCaption("(Millions of yen)") == "百万円")
         #expect(BreakdownExtractor.parseUnitCaption("(Thousands of yen)") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("単位:千円") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("(単位:円)") == "円")
+        #expect(BreakdownExtractor.parseUnitCaption("単位は千円") == "千円")
+        #expect(BreakdownExtractor.parseUnitCaption("（単位： 千 円 ）") == "千円")
         #expect(BreakdownExtractor.parseUnitCaption("日本 100") == nil)
         #expect(BreakdownExtractor.unitCaption(from: [["（単位：百万円）"]]) == "百万円")
     }
@@ -616,6 +620,23 @@ import Foundation
         #expect(tables[0].unitCaption == "百万円")
         #expect(tables[0].markdown.contains("38840"))
         #expect(!tables[0].markdown.contains("単位"))
+    }
+
+    @Test func precedingParagraphUnitCaptionAttachesToDataTable() {
+        let html = """
+            <p>収益の分解情報</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td>サービス別</td><td>当連結会計年度</td></tr>
+              <tr><td>自社サービス</td><td>7,820,013</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係")
+        #expect(tables.count == 1)
+        #expect(tables[0].unitCaption == "千円")
+        #expect(tables[0].markdown.contains("7,820,013"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(html, keywords: ["収益の分解情報"])
+        #expect(keyword.contains { $0.unitCaption == "千円" })
     }
 
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
