@@ -197,3 +197,16 @@ Bucket 3 full list is in `part_a_audit.json` → `bucket3_full`.
 
 Bucket 3 full list is in `part_a_audit.json` → `bucket3_full`.
 
+
+## R2 GET re-extraction (187 docs, 0 download failures)
+
+Subset used for Part B. `period_source` distinguishes explicit HTML grid labels vs unlabeled (preceding caption / contextRef / `applyPeriodOrdering` / year header).
+
+| axis | docs | (1) explicit | (2) heuristic | (3) no 当期 table or empty | unique existing_answer |
+|---|---:|---:|---:|---:|---:|
+| revenue_recognition | 75 | 35 | 21 | 19 | 49 |
+| segment_info | 75 | 36 | 18 | 21 | 43 |
+| geography | 97 | 25 | 24 | 48 | 94 |
+
+Notes sample (from XBRL TextBlock HTML): `lease_liabilities` mostly 比較 (two-column IFRS tables); `borrowings_schedule` separate 前期/当期 tables with explicit labels; `issued_shares_and_capital` is a single 年月日 event table (not 前期/当期) — existing_answer is that table.
+
