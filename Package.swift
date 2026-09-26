@@ -120,5 +120,17 @@ let package = Package(
             ],
             path: "SwiftTests/BltMcpServerCoreTests"
         ),
+        .testTarget(
+            name: "PocJevExport",
+            dependencies: [
+                "BlueTickerCore",
+            ],
+            path: "scripts/poc-jev",
+            exclude: [
+                "README.md",
+                "snapshots",
+                "out",
+            ]
+        ),
     ]
 )

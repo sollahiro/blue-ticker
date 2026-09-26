@@ -1,0 +1,3768 @@
+[
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:00",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "2224",
+    "doc_id": "S100YICN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:43",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 14:53",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:31",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "3968",
+    "doc_id": "S100XTVB",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 15:38",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "4167",
+    "doc_id": "S100YKE7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:35",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "4231",
+    "doc_id": "S100YK4M",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:00",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 50132914000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 23197476000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 18058028000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米州その他",
+        "label_raw": null,
+        "amount": 3700946000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "東南アジア",
+        "label_raw": null,
+        "amount": 2558666000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 2608591000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 9205000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 50132914000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "4389",
+    "doc_id": "S100YHXO",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 13:38",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "4481",
+    "doc_id": "S100XUKI",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 16:28",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "5237",
+    "doc_id": "S100YK4Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 12:00",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "6039",
+    "doc_id": "S100YGKM",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 14:58",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "6424",
+    "doc_id": "S100YEQL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 16:01",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:25",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 42192309000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 18508413000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 6895349000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 8309033000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 8479513000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 42192309000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "fy_end": "2026-04-30",
+    "submit_date_time": "2026-07-29 16:01",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7073",
+    "doc_id": "S100Y1BL",
+    "fy_end": "2026-01-31",
+    "submit_date_time": "2026-04-28 11:30",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7096",
+    "doc_id": "S100YI32",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 15:33",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:30",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7345",
+    "doc_id": "S100YHKS",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 09:20",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:55",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 16:09",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7464",
+    "doc_id": "S100YJG0",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:47",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7567",
+    "doc_id": "S100YJKR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:14",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "7734",
+    "doc_id": "S100YIB1",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:37",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "other",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 55212234000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 29122646000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 13442307000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 10127597000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 2143634000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の地域",
+        "label_raw": null,
+        "amount": 3760490000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 26089588000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結売上高",
+        "label_raw": null,
+        "amount": 55212234000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "8147",
+    "doc_id": "S100YJEU",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:01",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 22935113000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 12814151000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 4063214000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他北米",
+        "label_raw": null,
+        "amount": 2076496000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 3530776000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 450474000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 22935113000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "9780",
+    "doc_id": "S100Y7GN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:30",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "9853",
+    "doc_id": "S100YJPB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 16:45",
+    "pick_reason": "reingest_today",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "1887",
+    "doc_id": "S100YXXI",
+    "fy_end": "2026-05-31",
+    "submit_date_time": "2026-08-21 15:01",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 135207000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 121492000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 13715000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 135207000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "192A",
+    "doc_id": "S100YZEV",
+    "fy_end": "2026-05-31",
+    "submit_date_time": "2026-08-31 13:25",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "2146",
+    "doc_id": "S100YKK1",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-29 09:13",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 194748000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 165591000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ベトナム",
+        "label_raw": null,
+        "amount": 29157000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 194748000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "2158",
+    "doc_id": "S100YGJA",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 16:00",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "2286",
+    "doc_id": "S100YJI4",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:03",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 45586000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 40724000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 8132000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 411000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 49267000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "2587",
+    "doc_id": "S100XSOA",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-23 13:44",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "3416",
+    "doc_id": "S100XUME",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:31",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "3858",
+    "doc_id": "S100YDYA",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-29 16:31",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4563",
+    "doc_id": "S100XTMQ",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 10:06",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4568",
+    "doc_id": "S100YEY0",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 12:57",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2123045000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 580112000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 749401000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 497375000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 296155000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結",
+        "label_raw": null,
+        "amount": 2123045000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4612",
+    "doc_id": "S100XU2S",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 15:16",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4765",
+    "doc_id": "S100YCOR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-16 17:00",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4889",
+    "doc_id": "S100YGXR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 15:37",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4890",
+    "doc_id": "S100YFH9",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 15:57",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "5938",
+    "doc_id": "S100YD5L",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-17 15:00",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "6185",
+    "doc_id": "S100YIYU",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:32",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "6706",
+    "doc_id": "S100YH6S",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-30 11:26",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 35446000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 27938000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 2502000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 1210000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 43000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 887000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 32582000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "7963",
+    "doc_id": "S100XTH9",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 15:00",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "8139",
+    "doc_id": "S100YJAK",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:30",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "9474",
+    "doc_id": "S100YD65",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 09:30",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "9612",
+    "doc_id": "S100XUUG",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:47",
+    "pick_reason": "bucket3",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "7203",
+    "doc_id": "S100Y8NY",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-10 15:33",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 50684952000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 10985614000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 18493969000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 21205369000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 50684952000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "6702",
+    "doc_id": "S100YM3K",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 15:30",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3502971000000.0,
+    "rows": [
+      {
+        "label": "国内（日本）",
+        "label_raw": null,
+        "amount": 2541607000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 580838000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アメリカ",
+        "label_raw": null,
+        "amount": 187583000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジアパシフィック",
+        "label_raw": null,
+        "amount": 152652000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "東アジア",
+        "label_raw": null,
+        "amount": 35096000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 5195000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 3502971000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "2502",
+    "doc_id": "S100YSGA",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-07-27 16:30",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2894676000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 1274430000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "海外",
+        "label_raw": null,
+        "amount": 1620245000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 2894676000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "6326",
+    "doc_id": "S100XR0M",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-16 15:00",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3018891000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 685184000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 1218454000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 348954000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア(日本除く)",
+        "label_raw": null,
+        "amount": 672460000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 93839000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 3018891000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 7,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "6301",
+    "doc_id": "S100YD25",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 11:46",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 4132751000000.0,
+    "rows": [
+      {
+        "label": "米州",
+        "label_raw": null,
+        "amount": 1811209000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州・アフリカ・中近東",
+        "label_raw": null,
+        "amount": 672350000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "オセアニア・アジア・CIS",
+        "label_raw": null,
+        "amount": 1184231000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 436605000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結",
+        "label_raw": null,
+        "amount": 4104395000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "2503",
+    "doc_id": "S100XTVS",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:06",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2433363000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 1286658000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "オセアニア",
+        "label_raw": null,
+        "amount": 226862000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アメリカ",
+        "label_raw": null,
+        "amount": 657490000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 262353000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 2433363000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "9984",
+    "doc_id": "S100YGH5",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 13:38",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7798650000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 6780450000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1018200000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 7798650000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "2914",
+    "doc_id": "S100XSSA",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-23 16:00",
+    "pick_reason": "bucket2",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3467675000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 627099000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "海外",
+        "label_raw": null,
+        "amount": 2840577000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結",
+        "label_raw": null,
+        "amount": 3467675000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9766",
+    "doc_id": "S100YKX5",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 10:30",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 493677000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 352015000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 84202000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 35101000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア・オセアニア",
+        "label_raw": null,
+        "amount": 22359000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結計",
+        "label_raw": null,
+        "amount": 493677000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 7,
+    "n_facts": 0,
+    "periods": [
+      null,
+      "前期",
+      "当期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "8604",
+    "doc_id": "S100YC5C",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 15:36",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2167713000000.0,
+    "rows": [
+      {
+        "label": "米州",
+        "label_raw": null,
+        "amount": 669998000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 261522000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア・オセアニア",
+        "label_raw": null,
+        "amount": 148415000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "小計",
+        "label_raw": null,
+        "amount": 1079935000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 1087778000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結",
+        "label_raw": null,
+        "amount": 2167713000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "4523",
+    "doc_id": "S100YB05",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-12 09:48",
+    "pick_reason": "bucket1_current_only",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 825378000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 237028000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米州",
+        "label_raw": null,
+        "amount": 310083000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 70991000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 127235000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 80041000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 825378000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "当期"
+    ],
+    "code": "8591",
+    "doc_id": "S100YG5L",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 10:00",
+    "pick_reason": "bucket1_compare_and_separate",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3330831000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 2423388000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米州地域",
+        "label_raw": null,
+        "amount": 405209000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他海外",
+        "label_raw": null,
+        "amount": 502234000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "連結合計",
+        "label_raw": null,
+        "amount": 3330831000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9449",
+    "doc_id": "S100XSG3",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-23 16:33",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "前期",
+      "当期",
+      "当期"
+    ],
+    "code": "2160",
+    "doc_id": "S100XV4B",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 16:55",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9435",
+    "doc_id": "S100YN0V",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-29 15:30",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 734791000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 699678000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "日本以外",
+        "label_raw": null,
+        "amount": 35112000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 734791000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9432",
+    "doc_id": "S100YCP3",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-16 15:51",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 14409121000000.0,
+    "rows": [
+      {
+        "label": "国内",
+        "label_raw": null,
+        "amount": 11189280000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "海外",
+        "label_raw": null,
+        "amount": 3219841000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 14409121000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9268",
+    "doc_id": "S100YJVB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 16:14",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 315507000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 5291000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ニュージーランド",
+        "label_raw": null,
+        "amount": 44996000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "オーストラリア",
+        "label_raw": null,
+        "amount": 243817000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の地域",
+        "label_raw": null,
+        "amount": 21402000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 315507000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9158",
+    "doc_id": "S100YKO7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:12",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 54353000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 47362000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 293000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 6698000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 54353000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      null
+    ],
+    "code": "9147",
+    "doc_id": "S100XTG8",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 15:35",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2574826000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 1535496000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米州",
+        "label_raw": null,
+        "amount": 216268000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 409747000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "東アジア",
+        "label_raw": null,
+        "amount": 260937000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "南アジア・オセアニア",
+        "label_raw": null,
+        "amount": 152377000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 2574826000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "8876",
+    "doc_id": "S100YE6Y",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 09:08",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "8766",
+    "doc_id": "S100YLS8",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 15:32",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7693560000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 3215868000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 2876105000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1601586000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 7693560000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "8725",
+    "doc_id": "S100YNCJ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-30 10:07",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "8630",
+    "doc_id": "S100YC6Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-17 14:16",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "geography",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "not_found"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "5446",
+    "doc_id": "S100YG3Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 14:37",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "1867",
+    "doc_id": "S100YIPR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 14:00",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "7804",
+    "doc_id": "S100XHVC",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-28 13:15",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "8399",
+    "doc_id": "S100YCM2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-17 16:15",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "5139",
+    "doc_id": "S100XTDI",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-24 16:10",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "3861",
+    "doc_id": "S100YJ8J",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:09",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 1861709000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 1082370000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 190881000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 256495000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 45387000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "南米",
+        "label_raw": null,
+        "amount": 32961000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 165449000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "オセアニア",
+        "label_raw": null,
+        "amount": 75603000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 12561000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 1861709000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 9,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "3004",
+    "doc_id": "S100YANZ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 11:57",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "7613",
+    "doc_id": "S100XUJ0",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:30",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "9828",
+    "doc_id": "S100YCXM",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-17 16:27",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "3863",
+    "doc_id": "S100YJ5X",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 14:12",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 1192606000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 856951000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "オセアニア",
+        "label_raw": null,
+        "amount": 147362000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 93584000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 66355000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 66355000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 28352000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 1192606000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "4888",
+    "doc_id": "S100YDYN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 15:30",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6859",
+    "doc_id": "S100YG4Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 13:27",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6277",
+    "doc_id": "S100XB4O",
+    "fy_end": "2025-09-30",
+    "submit_date_time": "2025-12-19 13:33",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6659",
+    "doc_id": "S100YHY4",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:35",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2337146000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 725641000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 1238896000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "豪州",
+        "label_raw": null,
+        "amount": 328866000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 43743000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 2337146000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "7112",
+    "doc_id": "S100XTL6",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 16:00",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "5010",
+    "doc_id": "S100XTUB",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 13:44",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6832",
+    "doc_id": "S100YLRR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:22",
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 38323311000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 35159653000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア",
+        "label_raw": null,
+        "amount": 3072505000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米州",
+        "label_raw": null,
+        "amount": 51898000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 39254000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 38323311000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "3591",
+    "doc_id": "S100YKJC",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 13:00",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 171510000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 101953000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア・オセアニア",
+        "label_raw": null,
+        "amount": 17590000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧米",
+        "label_raw": null,
+        "amount": 51967000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 171510000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "6981",
+    "doc_id": "S100YHPY",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:37",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 1830856000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 132765000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "南北アメリカ",
+        "label_raw": null,
+        "amount": 303849000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ヨーロッパ",
+        "label_raw": null,
+        "amount": 153038000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中華圏",
+        "label_raw": null,
+        "amount": 865007000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "アジア・その他",
+        "label_raw": null,
+        "amount": 376197000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 1830856000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "7593",
+    "doc_id": "S100YEXL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 16:45",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6525",
+    "doc_id": "S100YJUA",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:00",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 235079000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 22796000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 7807000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 90597000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "台湾",
+        "label_raw": null,
+        "amount": 43149000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "韓国",
+        "label_raw": null,
+        "amount": 57570000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他アジア",
+        "label_raw": null,
+        "amount": 11581000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州他",
+        "label_raw": null,
+        "amount": 1579000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "海外計",
+        "label_raw": null,
+        "amount": 212283000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 235079000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 9,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "4023",
+    "doc_id": "S100YFHO",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 13:57",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "429A",
+    "doc_id": "S100YJ5L",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 16:00",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "4565",
+    "doc_id": "S100XTYN",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-25 16:01",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "code": "6479",
+    "doc_id": "S100YISS",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:40",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 1664387000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 477880000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中国",
+        "label_raw": null,
+        "amount": 291354000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "韓国",
+        "label_raw": null,
+        "amount": 46949000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "タイ",
+        "label_raw": null,
+        "amount": 109261000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "米国",
+        "label_raw": null,
+        "amount": 366276000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "欧州",
+        "label_raw": null,
+        "amount": 184399000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 188268000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 1664387000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 8,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "8253",
+    "doc_id": "S100YCDE",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-16 11:38",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 546271000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 484060000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "インド",
+        "label_raw": null,
+        "amount": 56056000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 6154000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 546271000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "code": "4506",
+    "doc_id": "S100YH3M",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 10:27",
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "pick_reason": "fill_to_70_tables",
+    "axis": "geography",
+    "source": "geography_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 453294000000.0,
+    "rows": [
+      {
+        "label": "日本",
+        "label_raw": null,
+        "amount": 84769000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "北米",
+        "label_raw": null,
+        "amount": 322540000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 45985000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 453294000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  }
+]

@@ -1,0 +1,3398 @@
+[
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "当期",
+      "当期"
+    ],
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:00",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 12153429000.0,
+    "rows": [
+      {
+        "label": "自社メディア広告",
+        "label_raw": null,
+        "amount": 6693644000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "セールスプロモーション等",
+        "label_raw": null,
+        "amount": 5280268000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 179516000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 12153429000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 12153429000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "2224",
+    "doc_id": "S100YICN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:43",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7323754000.0,
+    "rows": [
+      {
+        "label": "生活協同組合",
+        "label_raw": null,
+        "amount": 2471069000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "自動販売機オペレーター",
+        "label_raw": null,
+        "amount": 1844578000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "量販店",
+        "label_raw": null,
+        "amount": 980838000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "卸問屋",
+        "label_raw": null,
+        "amount": 648023000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1379243000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 7323754000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 7323754000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 14:53",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 64933693000.0,
+    "rows": [
+      {
+        "label": "フィットネス部門",
+        "label_raw": null,
+        "amount": 28960533000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "スクール部門",
+        "label_raw": null,
+        "amount": 19963828000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "プロショップ部門",
+        "label_raw": null,
+        "amount": 819778000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収入(注)",
+        "label_raw": null,
+        "amount": 5161664000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "地域・企業等の健康づくり",
+        "label_raw": null,
+        "amount": 3382478000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "介護リハビリ",
+        "label_raw": null,
+        "amount": 2467443000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ホームフィットネス",
+        "label_raw": null,
+        "amount": 3938247000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 64693974000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 239718000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 64933693000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 10,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期"
+    ],
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:31",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "other",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7150453000.0,
+    "rows": [
+      {
+        "label": "IoT/DXプラットフォームサービス",
+        "label_raw": null,
+        "amount": 2030053000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "MVNEサービス",
+        "label_raw": null,
+        "amount": 5120400000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 7150453000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 7150453000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 5,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "前期",
+      "当期",
+      "当期"
+    ],
+    "code": "3968",
+    "doc_id": "S100XTVB",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 15:38",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "other",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 25074483000.0,
+    "rows": [
+      {
+        "label": "ソリューションプロダクト事業",
+        "label_raw": null,
+        "amount": 16633166000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ソリューションサービス事業",
+        "label_raw": null,
+        "amount": 8441316000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 25074483000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "4167",
+    "doc_id": "S100YKE7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:35",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 1758338000.0,
+    "rows": [
+      {
+        "label": "Big Advance",
+        "label_raw": null,
+        "amount": 1433504000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他のサービス(注)１",
+        "label_raw": null,
+        "amount": 324833000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 1758338000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "4231",
+    "doc_id": "S100YK4M",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:00",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 50132914000.0,
+    "rows": [
+      {
+        "label": "ホース",
+        "label_raw": null,
+        "amount": 14090271000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ゴムシート",
+        "label_raw": null,
+        "amount": 5474252000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "成形品",
+        "label_raw": null,
+        "amount": 29011532000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1556857000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 50132914000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "4389",
+    "doc_id": "S100YHXO",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 13:38",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3721215000.0,
+    "rows": [
+      {
+        "label": "クラウドサービス",
+        "label_raw": null,
+        "amount": 1958131000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ソリューションサービス",
+        "label_raw": null,
+        "amount": 1249504000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他（注）",
+        "label_raw": null,
+        "amount": 513579000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 3721215000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "4481",
+    "doc_id": "S100XUKI",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 16:28",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 21787441000.0,
+    "rows": [
+      {
+        "label": "ソフトウェア受託開発",
+        "label_raw": null,
+        "amount": 21787441000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 1,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "当期",
+      "当期"
+    ],
+    "code": "5237",
+    "doc_id": "S100YK4Z",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 12:00",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 22312878000.0,
+    "rows": [
+      {
+        "label": "押出成形",
+        "label_raw": null,
+        "amount": 17492688000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "セメント製品",
+        "label_raw": null,
+        "amount": 988795000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "関連スレート関連",
+        "label_raw": null,
+        "amount": 1029738000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "耐火被覆等その他",
+        "label_raw": null,
+        "amount": 2759906000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 22271129000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 41749000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 22312878000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 7,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "6039",
+    "doc_id": "S100YGKM",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 14:58",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 6192468000.0,
+    "rows": [
+      {
+        "label": "二次診療サービス",
+        "label_raw": null,
+        "amount": 4514672000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "画像診断サービス",
+        "label_raw": null,
+        "amount": 647923000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "動物用医療機器・健康管理機器（在宅ケア）のレンタル・販売サービス",
+        "label_raw": null,
+        "amount": 1017827000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 12044000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 6192468000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 6192468000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "6424",
+    "doc_id": "S100YEQL",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 16:01",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 12897950000.0,
+    "rows": [
+      {
+        "label": "交通システム機器",
+        "label_raw": null,
+        "amount": 7625001000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "メカトロ機器",
+        "label_raw": null,
+        "amount": 1675980000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "特機システム機器",
+        "label_raw": null,
+        "amount": 3596968000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 12897950000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 16:25",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 42192309000.0,
+    "rows": [
+      {
+        "label": "製品",
+        "label_raw": null,
+        "amount": 42163192000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 29116000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 42192309000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客に対する売上高",
+        "label_raw": null,
+        "amount": 42192309000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "fy_end": "2026-04-30",
+    "submit_date_time": "2026-07-29 16:01",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 29948603000.0,
+    "rows": [
+      {
+        "label": "プロモーション事業",
+        "label_raw": null,
+        "amount": 29948603000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 29948603000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 2,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "当期"
+    ],
+    "code": "7073",
+    "doc_id": "S100Y1BL",
+    "fy_end": "2026-01-31",
+    "submit_date_time": "2026-04-28 11:30",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 4475801000.0,
+    "rows": [
+      {
+        "label": "New Career Business",
+        "label_raw": null,
+        "amount": 1586616000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "First Career Business",
+        "label_raw": null,
+        "amount": 1770266000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "Human Growth Businessその他",
+        "label_raw": null,
+        "amount": 1118918000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 4475801000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 4475801000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "7096",
+    "doc_id": "S100YI32",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 15:33",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 2811344000.0,
+    "rows": [
+      {
+        "label": "細胞バンク事業",
+        "label_raw": null,
+        "amount": 2811344000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 1,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:30",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7820013000.0,
+    "rows": [
+      {
+        "label": "BtoBコマースサービス",
+        "label_raw": null,
+        "amount": 6348109000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "BtoCコマースサービス",
+        "label_raw": null,
+        "amount": 1135527000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "HRサービス",
+        "label_raw": null,
+        "amount": 336376000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 7820013000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 0,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への収益",
+        "label_raw": null,
+        "amount": 7820013000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "7345",
+    "doc_id": "S100YHKS",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 09:20",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 4584869000.0,
+    "rows": [
+      {
+        "label": "金融商品仲介業",
+        "label_raw": null,
+        "amount": 4071291000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "システム使用料",
+        "label_raw": null,
+        "amount": 235152000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "保険代理店その他",
+        "label_raw": null,
+        "amount": 278426000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 4584869000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 0,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 4584869000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 11:55",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "other",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 4751616000.0,
+    "rows": [
+      {
+        "label": "油脂",
+        "label_raw": null,
+        "amount": 410483000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "乳製品",
+        "label_raw": null,
+        "amount": 1592960000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "調味料",
+        "label_raw": null,
+        "amount": 1080049000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "嗜好品・飲料",
+        "label_raw": null,
+        "amount": 259850000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "乾物・雑穀",
+        "label_raw": null,
+        "amount": 1233827000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "副食品",
+        "label_raw": null,
+        "amount": 118499000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "栄養補助食品",
+        "label_raw": null,
+        "amount": 55945000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 4751616000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 0,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 4751616000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 10,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 16:09",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 35212653000.0,
+    "rows": [
+      {
+        "label": "重衣料",
+        "label_raw": null,
+        "amount": 15047573000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "中衣料",
+        "label_raw": null,
+        "amount": 3453633000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "軽衣料",
+        "label_raw": null,
+        "amount": 15795876000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "補修加工賃収入",
+        "label_raw": null,
+        "amount": 915569000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 35212653000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "7464",
+    "doc_id": "S100YJG0",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:47",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 10111048000.0,
+    "rows": [
+      {
+        "label": "標識・標示板",
+        "label_raw": null,
+        "amount": 1377658000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "安全機材",
+        "label_raw": null,
+        "amount": 578768000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "保安警告サイン",
+        "label_raw": null,
+        "amount": 643259000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "安全防災用品",
+        "label_raw": null,
+        "amount": 832457000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1073255000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "小　　計",
+        "label_raw": null,
+        "amount": 4505400000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の源泉から生じる収益",
+        "label_raw": null,
+        "amount": 5605648000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合　　計",
+        "label_raw": null,
+        "amount": 10111048000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 8,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "7567",
+    "doc_id": "S100YJKR",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 09:14",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 7330361000.0,
+    "rows": [
+      {
+        "label": "一般電子部品",
+        "label_raw": null,
+        "amount": 4472871000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "電源",
+        "label_raw": null,
+        "amount": 1344390000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "電子デバイス",
+        "label_raw": null,
+        "amount": 215566000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ＩｏＴ機器",
+        "label_raw": null,
+        "amount": 289977000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "センサー",
+        "label_raw": null,
+        "amount": 83142000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 924413000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 7330361000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 7330361000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 8,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較",
+      "比較"
+    ],
+    "code": "7734",
+    "doc_id": "S100YIB1",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:37",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 55212234000.0,
+    "rows": [
+      {
+        "label": "定置型ガス検知警報機器",
+        "label_raw": null,
+        "amount": 33616884000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "可搬型ガス検知警報機器",
+        "label_raw": null,
+        "amount": 20238762000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他測定機器",
+        "label_raw": null,
+        "amount": 1356587000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 55212234000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 0,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 55212234000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "8147",
+    "doc_id": "S100YJEU",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 11:01",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 22935113000.0,
+    "rows": [
+      {
+        "label": "機械",
+        "label_raw": null,
+        "amount": 10978672000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "工具等",
+        "label_raw": null,
+        "amount": 11956440000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 22935113000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 22935113000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 4,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "比較"
+    ],
+    "code": "9780",
+    "doc_id": "S100Y7GN",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:30",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 30944787000.0,
+    "rows": [
+      {
+        "label": "清掃業務",
+        "label_raw": null,
+        "amount": 11246623000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "設備保守管理業務",
+        "label_raw": null,
+        "amount": 3138822000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "警備業務",
+        "label_raw": null,
+        "amount": 2413341000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "工営業務",
+        "label_raw": null,
+        "amount": 7099797000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 7046202000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "合計",
+        "label_raw": null,
+        "amount": 30944787000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "比較"
+    ],
+    "code": "9853",
+    "doc_id": "S100YJPB",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 16:45",
+    "pick_reason": "reingest_today",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 8347421000.0,
+    "rows": [
+      {
+        "label": "飲料・食品",
+        "label_raw": null,
+        "amount": 8312839000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "雑貨",
+        "label_raw": null,
+        "amount": 32803000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 1777000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "label_raw": null,
+        "amount": 8347421000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他の収益",
+        "label_raw": null,
+        "amount": 0,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 8347421000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 36,
+    "periods": [
+      "前期"
+    ],
+    "code": "215A",
+    "doc_id": "S100YS8Y",
+    "fy_end": "2026-04-30",
+    "submit_date_time": "2026-07-27 15:30",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 21006437000.0,
+    "rows": [
+      {
+        "label": "EntityTotal",
+        "label_raw": null,
+        "amount": 21006437000,
+        "profit": 3812504000,
+        "row_kind": null
+      },
+      {
+        "label": "OtherReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 636276000,
+        "profit": -107005000,
+        "row_kind": null
+      },
+      {
+        "label": "ReconcilingItemsMember",
+        "label_raw": null,
+        "amount": 0,
+        "profit": 0,
+        "row_kind": null
+      },
+      {
+        "label": "タイミー事業",
+        "label_raw": null,
+        "amount": 20370160000,
+        "profit": 3919510000,
+        "row_kind": null
+      },
+      {
+        "label": "TotalOfReportableSegmentsAndOthersMember",
+        "label_raw": null,
+        "amount": 21006437000,
+        "profit": 3812504000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 97,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "2370",
+    "doc_id": "S100XB0H",
+    "fy_end": "2025-09-30",
+    "submit_date_time": "2025-12-17 15:32",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 210,
+    "periods": [
+      "前期"
+    ],
+    "code": "3440",
+    "doc_id": "S100X6MC",
+    "fy_end": "2025-08-31",
+    "submit_date_time": "2025-11-26 10:05",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 72,
+    "periods": [
+      "前期"
+    ],
+    "code": "350A",
+    "doc_id": "S100WXET",
+    "fy_end": "2025-07-31",
+    "submit_date_time": "2025-10-30 15:41",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 85,
+    "periods": [
+      "前期"
+    ],
+    "code": "4378",
+    "doc_id": "S100XHNB",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-28 15:59",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 55,
+    "periods": [
+      "前期"
+    ],
+    "code": "463A",
+    "doc_id": "S100YYT8",
+    "fy_end": "2026-05-31",
+    "submit_date_time": "2026-08-26 16:32",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "4891",
+    "doc_id": "S100XVBS",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-30 10:11",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "4976",
+    "doc_id": "S100Z3JC",
+    "fy_end": "2026-06-30",
+    "submit_date_time": "2026-09-24 15:57",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "no_current_period_table",
+    "layout": "unlabeled_or_other",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 110,
+    "periods": [
+      null,
+      null
+    ],
+    "code": "5704",
+    "doc_id": "S100XSBE",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-24 15:31",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "6635",
+    "doc_id": "S100XUDS",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 12:01",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 52,
+    "periods": [
+      "前期"
+    ],
+    "code": "7357",
+    "doc_id": "S100Y7GV",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-29 10:34",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "7434",
+    "doc_id": "S100WLHT",
+    "fy_end": "2025-05-31",
+    "submit_date_time": "2025-08-28 10:41",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "8383",
+    "doc_id": "S100YDT2",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 12:44",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "8772",
+    "doc_id": "S100YI2V",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-23 14:50",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "xbrl_facts",
+    "n_tables": 1,
+    "n_facts": 60,
+    "periods": [
+      "前期"
+    ],
+    "code": "9561",
+    "doc_id": "S100XV2A",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:39",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 3,
+    "reason": "tables_labeled_prior_only",
+    "layout": "prior_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "前期"
+    ],
+    "code": "9824",
+    "doc_id": "S100XHVV",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-28 13:19",
+    "pick_reason": "bucket3",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "3686",
+    "doc_id": "S100W9FR",
+    "fy_end": "2025-03-31",
+    "submit_date_time": "2025-06-30 13:14",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 96,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "6702",
+    "doc_id": "S100YM3K",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 15:30",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3502971000000.0,
+    "rows": [
+      {
+        "label": "ハードウェアソリューション",
+        "label_raw": null,
+        "amount": 933329000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "全社消去",
+        "label_raw": null,
+        "amount": 25316000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 3477655000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "サービスソリューション",
+        "label_raw": null,
+        "amount": 2314793000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ユビキタスソリューション",
+        "label_raw": null,
+        "amount": 229533000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 8,
+    "n_facts": 124,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "6758",
+    "doc_id": "S100YE2C",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 15:38",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 12479620000000.0,
+    "rows": [
+      {
+        "label": "エンタテインメント・テクノロジー＆サービス",
+        "label_raw": null,
+        "amount": 2184815000000,
+        "profit": 158584000000,
+        "row_kind": null
+      },
+      {
+        "label": "ゲーム＆ネットワークサービス",
+        "label_raw": null,
+        "amount": 4570053000000,
+        "profit": 463258000000,
+        "row_kind": null
+      },
+      {
+        "label": "イメージング＆センシング・ソリューション",
+        "label_raw": null,
+        "amount": 2059020000000,
+        "profit": 357318000000,
+        "row_kind": null
+      },
+      {
+        "label": "音楽",
+        "label_raw": null,
+        "amount": 2090534000000,
+        "profit": 446986000000,
+        "row_kind": null
+      },
+      {
+        "label": "OtherReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 74564000000,
+        "profit": -74646000000,
+        "row_kind": null
+      },
+      {
+        "label": "映画",
+        "label_raw": null,
+        "amount": 1486296000000,
+        "profit": 104872000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 1,
+    "n_facts": 0,
+    "periods": [
+      "当期"
+    ],
+    "code": "4733",
+    "doc_id": "S100YD49",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 10:49",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 123,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "7203",
+    "doc_id": "S100Y8NY",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-10 15:33",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 50684952000000.0,
+    "rows": [
+      {
+        "label": "自動車",
+        "label_raw": null,
+        "amount": 45201924000000,
+        "profit": 2777049000000,
+        "row_kind": null
+      },
+      {
+        "label": "消去又は全社",
+        "label_raw": null,
+        "amount": 0,
+        "profit": 5366000000,
+        "row_kind": null
+      },
+      {
+        "label": "EntityTotal",
+        "label_raw": null,
+        "amount": 50684952000000,
+        "profit": 3766216000000,
+        "row_kind": null
+      },
+      {
+        "label": "金融",
+        "label_raw": null,
+        "amount": 4819003000000,
+        "profit": 851722000000,
+        "row_kind": null
+      },
+      {
+        "label": "OtherReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 664026000000,
+        "profit": 132079000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "6459",
+    "doc_id": "S100XU5A",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-26 13:01",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 121,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "6326",
+    "doc_id": "S100XR0M",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-16 15:00",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 3018891000000.0,
+    "rows": [
+      {
+        "label": "EntityTotal",
+        "label_raw": null,
+        "amount": 3018891000000,
+        "profit": 265470000000,
+        "row_kind": null
+      },
+      {
+        "label": "機械",
+        "label_raw": null,
+        "amount": 2628618000000,
+        "profit": 253638000000,
+        "row_kind": null
+      },
+      {
+        "label": "OtherReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 15921000000,
+        "profit": 824000000,
+        "row_kind": null
+      },
+      {
+        "label": "調整",
+        "label_raw": null,
+        "amount": 0,
+        "profit": -21975000000,
+        "row_kind": null
+      },
+      {
+        "label": "水・環境",
+        "label_raw": null,
+        "amount": 374352000000,
+        "profit": 32983000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_year_header_unused_by_detector",
+    "layout": "separate_tables",
+    "method": "html_table",
+    "n_tables": 4,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "6301",
+    "doc_id": "S100YD25",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 11:46",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": "segment_info_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 4132751000000.0,
+    "rows": [
+      {
+        "label": "建設機械・車両",
+        "label_raw": null,
+        "amount": 3796100000000,
+        "profit": 491118000000,
+        "row_kind": null
+      },
+      {
+        "label": "リテールファイナンス",
+        "label_raw": null,
+        "amount": 100520000000,
+        "profit": 36588000000,
+        "row_kind": null
+      },
+      {
+        "label": "産業機械他",
+        "label_raw": null,
+        "amount": 236131000000,
+        "profit": 37937000000,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 4132751000000,
+        "profit": 565643000000,
+        "row_kind": null
+      },
+      {
+        "label": "消去又は全社",
+        "label_raw": null,
+        "amount": 0,
+        "profit": 5523000000,
+        "row_kind": null
+      },
+      {
+        "label": "連結",
+        "label_raw": null,
+        "amount": 4132751000000,
+        "profit": 571166000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 6,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 2,
+    "n_facts": 148,
+    "periods": [
+      "前期",
+      "当期"
+    ],
+    "code": "3474",
+    "doc_id": "S100XUW1",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 15:30",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 7,
+    "n_facts": 142,
+    "periods": [
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "3177",
+    "doc_id": "S100Y7HH",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-29 10:37",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 3,
+    "n_facts": 172,
+    "periods": [
+      "前期",
+      "当期",
+      "前期"
+    ],
+    "code": "4766",
+    "doc_id": "S100XUYO",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-27 16:00",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 10,
+    "n_facts": 213,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "5021",
+    "doc_id": "S100YI3A",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 15:30",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 2,
+    "reason": "heuristic_unlabeled_preceding_context_or_ordering",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 4,
+    "n_facts": 60,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "7602",
+    "doc_id": "S100YKCQ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 10:30",
+    "pick_reason": "bucket2",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 153,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9994",
+    "doc_id": "S100YIXT",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 10:08",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "前期",
+      "当期",
+      "比較"
+    ],
+    "code": "9990",
+    "doc_id": "S100YJ0B",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-24 10:30",
+    "pick_reason": "bucket1_compare_and_separate",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9974",
+    "doc_id": "S100Y4X3",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-20 16:03",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期"
+    ],
+    "code": "9908",
+    "doc_id": "S100YDG7",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-18 09:23",
+    "pick_reason": "bucket1_current_only",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 160,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9993",
+    "doc_id": "S100Y6JY",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-27 13:06",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "前期",
+      "当期"
+    ],
+    "code": "9978",
+    "doc_id": "S100X6SE",
+    "fy_end": "2025-08-31",
+    "submit_date_time": "2025-11-26 14:49",
+    "pick_reason": "bucket1_compare_and_separate",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 3,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較",
+      "比較"
+    ],
+    "code": "9948",
+    "doc_id": "S100Y640",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-25 15:50",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期"
+    ],
+    "code": "9419",
+    "doc_id": "S100XSUO",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-24 09:42",
+    "pick_reason": "bucket1_current_only",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 144,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9989",
+    "doc_id": "S100YL7Q",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-26 13:06",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 842512000000.0,
+    "rows": [
+      {
+        "label": "ディスカウントストア事業",
+        "label_raw": null,
+        "amount": 364108000000,
+        "profit": 19350000000,
+        "row_kind": null
+      },
+      {
+        "label": "ドラッグストア事業",
+        "label_raw": null,
+        "amount": 478404000000,
+        "profit": 27481000000,
+        "row_kind": null
+      },
+      {
+        "label": "EntityTotal",
+        "label_raw": null,
+        "amount": 842512000000,
+        "profit": 46831000000,
+        "row_kind": null
+      },
+      {
+        "label": "ReconcilingItemsMember",
+        "label_raw": null,
+        "amount": 0,
+        "profit": 0,
+        "row_kind": null
+      },
+      {
+        "label": "TotalOfReportableSegmentsAndOthersMember",
+        "label_raw": null,
+        "amount": 842512000000,
+        "profit": 46831000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 5,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "xbrl_facts",
+    "n_tables": 10,
+    "n_facts": 241,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "比較",
+      "比較",
+      "比較",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9956",
+    "doc_id": "S100YHUD",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:32",
+    "pick_reason": "bucket1_compare_and_separate",
+    "axis": "business",
+    "source": "xbrl_facts",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 896199000000.0,
+    "rows": [
+      {
+        "label": "ホームセンター(HC)事業",
+        "label_raw": null,
+        "amount": 124073000000,
+        "profit": 4771000000,
+        "row_kind": null
+      },
+      {
+        "label": "ドラッグストア事業",
+        "label_raw": null,
+        "amount": 184459000000,
+        "profit": 3784000000,
+        "row_kind": null
+      },
+      {
+        "label": "スポーツクラブ事業",
+        "label_raw": null,
+        "amount": 11251000000,
+        "profit": 174000000,
+        "row_kind": null
+      },
+      {
+        "label": "流通関連事業",
+        "label_raw": null,
+        "amount": 22475000000,
+        "profit": 4657000000,
+        "row_kind": null
+      },
+      {
+        "label": "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+        "label_raw": null,
+        "amount": 5589000000,
+        "profit": 182000000,
+        "row_kind": null
+      },
+      {
+        "label": "ペットショップ事業",
+        "label_raw": null,
+        "amount": 35504000000,
+        "profit": 509000000,
+        "row_kind": null
+      },
+      {
+        "label": "ReportableSegmentsMember",
+        "label_raw": null,
+        "amount": 918524000000,
+        "profit": 36020000000,
+        "row_kind": null
+      },
+      {
+        "label": "スーパーマーケット(SM)事業",
+        "label_raw": null,
+        "amount": 540761000000,
+        "profit": 22123000000,
+        "row_kind": null
+      },
+      {
+        "label": "TotalOfReportableSegmentsAndOthersMember",
+        "label_raw": null,
+        "amount": 924114000000,
+        "profit": 36203000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 9,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9942",
+    "doc_id": "S100Z1WR",
+    "fy_end": "2026-06-30",
+    "submit_date_time": "2026-09-14 17:08",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "current_only",
+    "method": "html_table",
+    "n_tables": 6,
+    "n_facts": 0,
+    "periods": [
+      "当期",
+      "当期",
+      "当期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9279",
+    "doc_id": "S100XHK4",
+    "fy_end": "2025-10-31",
+    "submit_date_time": "2026-01-27 13:30",
+    "pick_reason": "bucket1_current_only",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "separate_tables",
+    "method": "xbrl_facts",
+    "n_tables": 6,
+    "n_facts": 130,
+    "periods": [
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "当期",
+      "当期"
+    ],
+    "code": "9973",
+    "doc_id": "S100XVJC",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-30 15:01",
+    "pick_reason": "bucket1_separate_tables",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "compare_and_separate",
+    "method": "xbrl_facts",
+    "n_tables": 9,
+    "n_facts": 96,
+    "periods": [
+      "前期",
+      "当期",
+      "比較",
+      "前期",
+      "当期",
+      "前期",
+      "当期",
+      "前期",
+      "当期"
+    ],
+    "code": "9946",
+    "doc_id": "S100Y4UH",
+    "fy_end": "2026-02-28",
+    "submit_date_time": "2026-05-20 13:39",
+    "pick_reason": "bucket1_compare_and_separate",
+    "axis": "business",
+    "source": "segment_info_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 91788000000.0,
+    "rows": [
+      {
+        "label": "国内事業",
+        "label_raw": null,
+        "amount": 82347000000,
+        "profit": -3335000000,
+        "row_kind": null
+      },
+      {
+        "label": "海外事業",
+        "label_raw": null,
+        "amount": 9441000000,
+        "profit": -274000000,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 91788000000,
+        "profit": -3610000000,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 3,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": 1,
+    "reason": "explicit_period_label",
+    "layout": "one_table_two_columns",
+    "method": "html_table",
+    "n_tables": 2,
+    "n_facts": 0,
+    "periods": [
+      "比較",
+      "比較"
+    ],
+    "code": "9928",
+    "doc_id": "S100YKDZ",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 10:17",
+    "pick_reason": "bucket1_one_table_two_columns",
+    "axis": "business",
+    "source": "revenue_recognition_llm",
+    "stored_unit": "million_yen",
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 48926000000.0,
+    "rows": [
+      {
+        "label": "ハードウェア",
+        "label_raw": null,
+        "amount": 5648000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ソフトウェア",
+        "label_raw": null,
+        "amount": 10794000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ユースウェア",
+        "label_raw": null,
+        "amount": 7771000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 2414000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "トータル・バリューサービス（TVS）",
+        "label_raw": null,
+        "amount": 2653000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ソフト使用料",
+        "label_raw": null,
+        "amount": 10100000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ソフトウェア運用支援サービス",
+        "label_raw": null,
+        "amount": 6161000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "ハードウェア・ネットワーク保守サービス",
+        "label_raw": null,
+        "amount": 1784000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "サプライ・オフィス用品",
+        "label_raw": null,
+        "amount": 463000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "計",
+        "label_raw": null,
+        "amount": 21164000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "その他",
+        "label_raw": null,
+        "amount": 3546000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "顧客との契約から生じる収益合計",
+        "label_raw": null,
+        "amount": 48926000000,
+        "profit": null,
+        "row_kind": null
+      },
+      {
+        "label": "外部顧客への売上高",
+        "label_raw": null,
+        "amount": 48926000000,
+        "profit": null,
+        "row_kind": null
+      }
+    ],
+    "n_rows": 13,
+    "needs_review": false,
+    "not_applicable_reason": null
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "410A",
+    "doc_id": "S100XR0F",
+    "fy_end": "2025-12-31",
+    "submit_date_time": "2026-03-17 15:31",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "3333",
+    "doc_id": "S100Y2X4",
+    "fy_end": "2026-02-20",
+    "submit_date_time": "2026-05-13 10:13",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "9625",
+    "doc_id": "S100YF00",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-22 10:02",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "2586",
+    "doc_id": "S100YKRG",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-25 15:31",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "business",
+    "source": "not_applicable",
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": 0.0,
+    "rows": [],
+    "n_rows": 0,
+    "needs_review": false,
+    "not_applicable_reason": "single_segment_disclosed"
+  },
+  {
+    "bucket": null,
+    "reason": "axis_empty_not_found",
+    "layout": "no_tables",
+    "method": "not_found",
+    "n_tables": 0,
+    "n_facts": 0,
+    "periods": [],
+    "code": "4591",
+    "doc_id": "S100YF0X",
+    "fy_end": "2026-03-31",
+    "submit_date_time": "2026-06-19 10:52",
+    "pick_reason": "empty_for_usable_none",
+    "axis": "business",
+    "source": null,
+    "stored_unit": null,
+    "stored_table_index": null,
+    "stored_period_column": null,
+    "denominator": null,
+    "rows": []
+  }
+]
