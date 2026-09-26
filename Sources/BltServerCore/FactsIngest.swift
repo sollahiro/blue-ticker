@@ -176,7 +176,9 @@ let unpublishedBreakdownIngestLimit = 30
 /// 数値 fact 取り込みは `targets` に含めない。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// `docIDs` は会社-FY（原本 120 の doc_id）単位の再 ingest（CLI: `--doc-ids S100W0S7`）。
-/// 指定時は該当書類だけを keep し、skip を外して再計算する。financials は会社1行のため
+/// 指定時は該当書類だけを keep し、cache_version / needs_review に関係なく再計算する（分類で
+/// missing に入れたあと実処理ループでも fresh skip しない。艦隊の skip は変えない）。
+/// financials は会社1行のため
 /// その doc の発行体だけ再計算する（他 FY は原本 120 を再読。overlay は訂正がある FY だけ）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。

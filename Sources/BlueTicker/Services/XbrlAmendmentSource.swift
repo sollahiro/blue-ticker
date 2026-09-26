@@ -70,6 +70,7 @@ public func preferredCorrectionDocIDsByOriginal(
 /// 原本 ZIP を土台に、パースできる訂正を提出が古い順へ overlay した展開ディレクトリを返す。
 /// 訂正の取得失敗・パース失敗はその件だけ飛ばす。適格な訂正が無ければ原本。
 /// `correctionDocIDs` は新しい順（`matchingXbrlCorrections` と同じ）。
+/// 回帰ガードはレイヤ全体を捨てず、該当 fact だけ直前値へ戻す。
 public func resolveAnnualXbrlDirectory(
     originalDocID: String,
     correctionDocIDs: [String],
@@ -83,28 +84,22 @@ public func resolveAnnualXbrlDirectory(
         overlayFactValues(XBRLUtils.collectAllNumericFacts(in: $0, nilAsZero: false))
     }
     var overlayDirs: [URL] = []
-    var regressions: [XbrlOverlayRegression] = []
-    var currentFacts = factsOf(originalDir)
+    var overlayDocIDs: [String] = []
+    var layers: [(correctionDocID: String, facts: [String: [String: Double]])] = []
     for docID in correctionDocIDs.reversed() {
         guard let dir = await download(docID), parses(dir) else { continue }
-        let layer = factsOf(dir)
-        let candidate = overlayKeyedFacts(base: currentFacts, overlay: layer)
-        let found = xbrlOverlayRegressions(
-            before: currentFacts, after: candidate, originalDocID: originalDocID,
-            correctionDocID: docID)
-        if found.isEmpty {
-            currentFacts = candidate
-            overlayDirs.append(dir)
-        } else {
-            regressions.append(contentsOf: found)
-        }
+        overlayDirs.append(dir)
+        overlayDocIDs.append(docID)
+        layers.append((correctionDocID: docID, facts: factsOf(dir)))
     }
-    if overlayDirs.isEmpty, regressions.isEmpty { return originalDir }
-    let skippedRegressions = regressions
+    let skippedRegressions = applyGuardedXbrlOverlays(
+        base: factsOf(originalDir), layers: layers, originalDocID: originalDocID
+    ).skipped
+    if overlayDirs.isEmpty, skippedRegressions.isEmpty { return originalDir }
     let merged = (materialize ?? {
         materializeOverlaidXbrlDirectory(
             original: $0, overlayDirs: $1, originalDocID: originalDocID,
-            regressions: skippedRegressions)
+            regressions: skippedRegressions, overlayDocIDs: overlayDocIDs)
     })(originalDir, overlayDirs)
     if let merged {
         writeOverlayRegressions(skippedRegressions, originalDocID: originalDocID, to: merged)
@@ -120,7 +115,7 @@ public func xbrlPackageParses(_ dir: URL) -> Bool {
 /// 原本をコピーし、訂正ディレクトリへのマニフェストを書く。収集側が fact / TextBlock を overlay する。
 func materializeOverlaidXbrlDirectory(
     original: URL, overlayDirs: [URL], originalDocID: String = "",
-    regressions: [XbrlOverlayRegression] = []
+    regressions: [XbrlOverlayRegression] = [], overlayDocIDs: [String] = []
 ) -> URL? {
     if overlayDirs.isEmpty, regressions.isEmpty { return original }
     let merged = FileManager.default.temporaryDirectory
@@ -128,7 +123,14 @@ func materializeOverlaidXbrlDirectory(
     do {
         try FileManager.default.copyItem(at: original, to: merged)
         if !overlayDirs.isEmpty {
-            let body = overlayDirs.map(\.path).joined(separator: "\n") + "\n"
+            let body: String
+            if overlayDocIDs.count == overlayDirs.count {
+                body =
+                    zip(overlayDocIDs, overlayDirs).map { "\($0)\t\($1.path)" }.joined(
+                        separator: "\n") + "\n"
+            } else {
+                body = overlayDirs.map(\.path).joined(separator: "\n") + "\n"
+            }
             try body.write(
                 to: merged.appendingPathComponent(xbrlOverlayManifestFileName),
                 atomically: true, encoding: .utf8)
@@ -140,14 +142,51 @@ func materializeOverlaidXbrlDirectory(
     }
 }
 
+/// マニフェスト 1 行（任意の訂正 docID と展開パス）。
+struct XbrlOverlayDirectoryEntry: Equatable, Sendable {
+    var correctionDocID: String?
+    var url: URL
+}
+
 /// マニフェストに書かれた訂正展開ディレクトリ（提出が古い順）。無ければ空。
-func overlayDirectories(in dir: URL) -> [URL] {
+func overlayDirectoryEntries(in dir: URL) -> [XbrlOverlayDirectoryEntry] {
     let marker = dir.appendingPathComponent(xbrlOverlayManifestFileName)
     guard let text = try? String(contentsOf: marker, encoding: .utf8) else { return [] }
     return text.split(whereSeparator: \.isNewline).compactMap { line in
-        let path = line.trimmingCharacters(in: .whitespaces)
-        return path.isEmpty ? nil : URL(fileURLWithPath: path)
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if let tab = trimmed.firstIndex(of: "\t") {
+            let docID = String(trimmed[..<tab]).trimmingCharacters(in: .whitespaces)
+            let path = String(trimmed[trimmed.index(after: tab)...]).trimmingCharacters(
+                in: .whitespaces)
+            guard !path.isEmpty else { return nil }
+            return XbrlOverlayDirectoryEntry(
+                correctionDocID: docID.isEmpty ? nil : docID, url: URL(fileURLWithPath: path))
+        }
+        return XbrlOverlayDirectoryEntry(correctionDocID: nil, url: URL(fileURLWithPath: trimmed))
     }
+}
+
+/// マニフェストに書かれた訂正展開ディレクトリ（提出が古い順）。無ければ空。
+func overlayDirectories(in dir: URL) -> [URL] {
+    overlayDirectoryEntries(in: dir).map(\.url)
+}
+
+/// 訂正 overlay を回帰マスク付きで重ねる。
+func overlayFactsApplyingLayerReverts<Value>(
+    base: [String: [String: Value]],
+    correctionDocID: String?,
+    overlay: [String: [String: Value]],
+    reverts: [XbrlOverlayRegression]
+) -> [String: [String: Value]] {
+    let layerReverts: [XbrlOverlayRegression]
+    if let correctionDocID {
+        layerReverts = reverts.filter { $0.correctionDocID == correctionDocID }
+    } else {
+        layerReverts = []
+    }
+    return overlayKeyedFacts(
+        base: base, overlay: excludingRevertedFacts(overlay, reverts: layerReverts))
 }
 
 /// 原本ディレクトリに続き、訂正 overlay を提出が古い順で返す。

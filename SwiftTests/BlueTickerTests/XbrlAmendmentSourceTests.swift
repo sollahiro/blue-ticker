@@ -236,15 +236,22 @@ import Testing
         #expect(!isRowMemberContext("CurrentYearDuration_ReportableSegmentMember"))
     }
 
-    @Test func resolveAnnualXbrlDirectorySkipsRegressingRowLossCorrection() async {
+    @Test func resolveAnnualXbrlDirectoryAppliesRegressingLayerButRevertsRowLossTable() async {
         let originalURL = URL(fileURLWithPath: "/tmp/orig-8316")
         let wrzh = URL(fileURLWithPath: "/tmp/wrzh-8316")
         let x7dx = URL(fileURLWithPath: "/tmp/x7dx-8316")
         let merged = URL(fileURLWithPath: "/tmp/merged-8316")
         let tag = "HoldingShares"
+        let capex = "CapitalExpendituresOverviewOfCapitalExpendituresEtc"
         let facts: [String: [String: [String: Double]]] = [
-            originalURL.path: [tag: overlayTestRowMembers(13)],
-            wrzh.path: [tag: overlayTestRowMembers(70)],
+            originalURL.path: [
+                tag: overlayTestRowMembers(13),
+                capex: ["CurrentYearDuration": 3_705_000_000],
+            ],
+            wrzh.path: [
+                tag: overlayTestRowMembers(70),
+                capex: ["CurrentYearDuration": 370_500_000_000],
+            ],
             x7dx.path: [tag: overlayTestRowMembers(13)],
         ]
         let box = OverlayCapture()
@@ -265,7 +272,7 @@ import Testing
             },
             numericFacts: { facts[$0.path] ?? [:] })
         #expect(chosen == merged)
-        #expect(box.overlays == [wrzh])
+        #expect(box.overlays == [wrzh, x7dx])
     }
 }
 
