@@ -12,6 +12,14 @@ import FoundationXML
 #endif
 import SwiftSoup
 
+/// `unitCaption` の由来。公開 payload / LLM prompt には出さない（`toDictionary` 非掲載）。
+enum BreakdownUnitCaptionOrigin: Equatable {
+    /// 対象表自身のキャプション行・markdown・見出し、または単位スタブ表からの引き継ぎ。
+    case table
+    /// `detectUnitFromPreceding`（直前の `<table>` より後のノードだけ）。
+    case preceding
+}
+
 struct BreakdownTable: Equatable {
     var heading: String
     var markdown: String
@@ -19,6 +27,8 @@ struct BreakdownTable: Equatable {
     /// 注記の単位キャプション（百万円 / 千円 等）。単位専用表は period 候補から落とすが、
     /// このフィールドへ引き継いで LLM プロンプトへ載せる。content_hash には含めない。
     var unitCaption: String? = nil
+    /// スケール時に sibling / preceding 借りかを分ける。辞書往復では落とす。
+    var unitCaptionOrigin: BreakdownUnitCaptionOrigin? = nil
 }
 
 struct BreakdownFact: Equatable {
@@ -728,13 +738,20 @@ enum BreakdownExtractor {
         }
     }
 
-    /// グリッドの見出し／キャプション行から単位を拾う（数値行は見ない）。
+    /// グリッドの見出し／キャプション行から単位を拾う。無ければ数値セルの「6,553,546千円」
+    /// のような接尾辞、および数値行に混ざった「（単位：千円）」セルも見る
+    /// （実データ: 2139 S100YHNL）。
     static func unitCaption(from grid: [[String]]) -> String? {
         let captionRows = grid.filter { row in
             !row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
         }
-        let source = captionRows.isEmpty ? grid : captionRows
-        return parseUnitCaption(source.flatMap { $0 }.joined(separator: " "))
+        if let token = parseUnitCaption(captionRows.flatMap { $0 }.joined(separator: " ")) {
+            return token
+        }
+        for cell in grid.flatMap({ $0 }) {
+            if let token = parseUnitCaption(cell) { return token }
+        }
+        return parseUnitCaption(grid.flatMap { $0 }.joined(separator: " "))
     }
 
     /// 「（単位：百万円）」「(Thousands of yen)」等から単位語を取り出す。
@@ -890,22 +907,26 @@ enum BreakdownExtractor {
         return false
     }
 
-    /// `unitCaption`（`parseUnitCaption` の語）を優先し、無ければ表内の単位表記。
-    /// `十億円` / `億円` を百万円扱いにしない（部分一致順にも依存させない）。
-    private static func yenMultiplier(for table: BreakdownTable) -> Double {
-        let token = table.unitCaption.flatMap(parseUnitCaption)
-            ?? parseUnitCaption(table.markdown)
-        return yenScale(forUnitToken: token)
+    /// スキャン用: `detectUnitFromPreceding` 由来の caption を外し、スタブ／表内単位だけ残す。
+    static func strippingPrecedingUnitCaptions(_ tables: [BreakdownTable]) -> [BreakdownTable] {
+        tables.map { table in
+            guard table.unitCaptionOrigin == .preceding else { return table }
+            var copy = table
+            copy.unitCaption = nil
+            copy.unitCaptionOrigin = nil
+            return copy
+        }
     }
 
-    private static func yenScale(forUnitToken token: String?) -> Double {
-        guard let token else { return Financial.millionYen }
-        if token.contains("十億円") { return 1_000_000_000 }
-        if token.contains("億円") { return 100_000_000 }
-        if token.contains("百万円") { return Financial.millionYen }
-        if token.contains("千円") { return 1_000 }
-        if token == "円" { return 1 }
-        return Financial.millionYen
+    /// `unitCaption`（`parseUnitCaption` の語）を優先し、無ければ表内の単位表記。
+    /// `十億円` / `億円` を百万円扱いにしない（部分一致順にも依存させない）。
+    /// 単位語が無いときの既定は百万円（顧客契約連結の決定論経路。LLM 経路は
+    /// `BreakdownLLMAmountScale` が fail closed する）。
+    private static func yenMultiplier(for table: BreakdownTable) -> Double {
+        guard let token = BreakdownLLMAmountScale.headerUnitToken(from: table),
+            let scale = BreakdownLLMAmountScale.yenScale(forHeaderToken: token)
+        else { return Financial.millionYen }
+        return scale
     }
 
     /// 地域の内数子列だけ落とす。geography 抽出経路からのみ呼ぶ。
@@ -1042,6 +1063,70 @@ enum BreakdownExtractor {
             }
         }
         return result
+    }
+
+    /// 表の直前にある「（単位：千円）」等を拾う。
+    /// 親を遡った先行兄弟も含める（実データ: 7114 S100YJIB / 7416 S100YLJD は
+    /// `<p>（単位：千円）</p><div><table>…` で、表の直接の親 div には単位が無い）。
+    /// 直前の `<table>`（または table を含む要素）より前のノードは見ない。
+    /// その窓の中の単位は対象表自身として扱い、兄弟表からの借りとはしない。
+    private static func detectUnitFromPreceding(_ table: Element) -> String? {
+        var current: Element? = table
+        while let node = current {
+            guard let parent = node.parent() else { break }
+            var tokenAfterPreviousTable: String?
+            var sawPrecedingTable = false
+            for child in parent.getChildNodes() {
+                guard child.siblingIndex < node.siblingIndex else { break }
+                if let el = child as? Element, elementIsOrContainsTable(el) {
+                    sawPrecedingTable = true
+                    tokenAfterPreviousTable = nil
+                    continue
+                }
+                let text: String
+                if let el = child as? Element {
+                    text = bs4Text(el, strip: true)
+                } else if let tn = child as? TextNode {
+                    text = tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    continue
+                }
+                if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength {
+                    continue
+                }
+                if let token = parseUnitCaption(text) {
+                    tokenAfterPreviousTable = token
+                }
+            }
+            if let tokenAfterPreviousTable {
+                return tokenAfterPreviousTable
+            }
+            if sawPrecedingTable { return nil }
+            current = parent
+            if parent.tagName() == "body" || parent.tagName() == "html" { break }
+        }
+        return nil
+    }
+
+    private static func elementIsOrContainsTable(_ el: Element) -> Bool {
+        if el.tagName() == "table" { return true }
+        return (try? el.select("table").first()) != nil
+    }
+
+    /// グリッド自身 → 単位スタブの引き継ぎ → 直前表より後の preceding。由来を残す。
+    private static func resolvedUnitCaption(
+        grid: [[String]], pending: String?, table: Element?
+    ) -> (String?, BreakdownUnitCaptionOrigin?) {
+        if let own = unitCaption(from: grid) {
+            return (own, .table)
+        }
+        if let pending, !pending.isEmpty {
+            return (pending, .table)
+        }
+        if let table, let preceding = detectUnitFromPreceding(table) {
+            return (preceding, .preceding)
+        }
+        return (nil, nil)
     }
 
     /// 見出し行に埋め込まれた西暦年度ラベル（例:「2024年度」「2025年度」）を除去した正規化文字列。
@@ -1363,11 +1448,14 @@ enum BreakdownExtractor {
             guard let raw = pendingGrid else { return }
             let grid = dropOfWhichRegionColumns ? dropOfWhichHeaderColumns(raw) : raw
             if !isUnitCaptionOrDecorativeStub(grid) {
+                let (caption, origin) = resolvedUnitCaption(
+                    grid: grid, pending: pendingUnitCaption, table: pendingElement)
                 tables.append(BreakdownTable(
                     heading: defaultHeading,
                     markdown: gridToMarkdown(grid),
                     period: pendingPeriod,
-                    unitCaption: unitCaption(from: grid) ?? pendingUnitCaption
+                    unitCaption: caption,
+                    unitCaptionOrigin: origin
                 ))
             }
             pendingElement = nil
@@ -1617,11 +1705,14 @@ enum BreakdownExtractor {
                         candidate = findNextTable(after: workingTable)
                         continue
                     }
+                    let (caption, origin) = resolvedUnitCaption(
+                        grid: published, pending: pendingUnitCaption, table: workingTable)
                     tables.append(BreakdownTable(
                         heading: keyword,
                         markdown: gridToMarkdown(published),
                         period: workingPeriod,
-                        unitCaption: unitCaption(from: published) ?? pendingUnitCaption
+                        unitCaption: caption,
+                        unitCaptionOrigin: origin
                     ))
 
                     // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。

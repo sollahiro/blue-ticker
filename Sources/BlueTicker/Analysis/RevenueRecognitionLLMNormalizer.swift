@@ -171,15 +171,15 @@ enum RevenueRecognitionLLMNormalizer {
         }
         guard !parsed.isEmpty else { return (nil, audit) }
 
-        let scale = BreakdownLLMAmountScale.yenMultiplier(
+        let scale = BreakdownLLMAmountScale.scaling(
             declaredUnit: unit,
+            tables: result.tables,
+            sourceTableIndex: audit.sourceTableIndex,
             rawAmounts: parsed.map(\.rawAmount),
             consolidatedSales: consolidatedSales
         )
-        if scale.unresolved {
-            needsReview = true
-            warnings.append("llm_unit_unresolved")
-        }
+        BreakdownLLMAmountScale.applyPublicFlags(
+            scale, needsReview: &needsReview, warnings: &warnings)
         let unitMultiplier = scale.multiplier
 
         var rows: [BreakdownRow] = []
