@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreText
 
 struct SummaryView: View {
     var code: String
@@ -147,8 +146,8 @@ struct FillWidth: Layout {
     }
 }
 
-/// 表と同じ幅で折り返し、途中の行は文字間隔で両端揃え、最終行は左揃え。
-/// 高さ計算と描画は同じ UIFont を使う。
+/// 表と同じ幅で折り返す。途中の行は行フラグメント内で両端揃え、最終行は左揃え。
+/// 字間を後から足さない。高さ計算と描画は同じ TextKit を使う。
 struct JustifiedOverviewText: UIViewRepresentable {
     var text: String
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -159,7 +158,7 @@ struct JustifiedOverviewText: UIViewRepresentable {
 
     func updateUIView(_ view: JustifiedOverviewLabel, context: Context) {
         _ = dynamicTypeSize
-        view.text = text
+        view.setOverview(text)
     }
 
     func sizeThatFits(
@@ -167,20 +166,18 @@ struct JustifiedOverviewText: UIViewRepresentable {
     ) -> CGSize? {
         let width = proposal.width ?? 0
         guard width > 0 else { return .zero }
-        uiView.text = text
+        uiView.setOverview(text)
         return uiView.fittingSize(width: width)
     }
 }
 
 final class JustifiedOverviewLabel: UIView {
-    var text = "" {
-        didSet {
-            guard oldValue != text else { return }
-            setNeedsDisplay()
-        }
-    }
-
     private let maxLines = 5
+    private let storage = NSTextStorage()
+    private let manager = NSLayoutManager()
+    private let container = NSTextContainer()
+    private var text = ""
+
     private var font: UIFont { UIFont.preferredFont(forTextStyle: .footnote) }
     private var color: UIColor { UIColor(Theme.textMuted) }
 
@@ -192,85 +189,58 @@ final class JustifiedOverviewLabel: UIView {
         isAccessibilityElement = false
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        storage.addLayoutManager(manager)
+        manager.addTextContainer(container)
+        container.lineFragmentPadding = 0
+        container.maximumNumberOfLines = maxLines
+        container.lineBreakMode = .byCharWrapping
     }
 
     required init?(coder: NSCoder) {
         nil
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
+    func setOverview(_ text: String) {
+        self.text = text
+        storage.setAttributedString(makeAttributed())
         setNeedsDisplay()
     }
 
     func fittingSize(width: CGFloat) -> CGSize {
-        var fitRange = CFRange()
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(
-            CTFramesetterCreateWithAttributedString(attributedText()),
-            CFRange(location: 0, length: 0),
-            nil,
-            CGSize(width: width, height: font.lineHeight * CGFloat(maxLines)),
-            &fitRange
-        )
-        return CGSize(width: width, height: ceil(size.height))
+        storage.setAttributedString(makeAttributed())
+        container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        manager.ensureLayout(for: container)
+        let used = manager.usedRect(for: container)
+        return CGSize(width: width, height: ceil(used.height))
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        container.size = bounds.size
+        manager.ensureLayout(for: container)
+        setNeedsDisplay()
     }
 
     override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext(), !text.isEmpty, bounds.width > 0 else { return }
-        ctx.saveGState()
-        ctx.textMatrix = .identity
-        ctx.translateBy(x: 0, y: bounds.height)
-        ctx.scaleBy(x: 1, y: -1)
-        let attributed = attributedText()
-        let path = CGPath(rect: bounds, transform: nil)
-        let frame = CTFramesetterCreateFrame(
-            CTFramesetterCreateWithAttributedString(attributed),
-            CFRange(location: 0, length: 0),
-            path,
-            nil
-        )
-        let lines = CTFrameGetLines(frame) as? [CTLine] ?? []
-        var origins = Array(repeating: CGPoint.zero, count: lines.count)
-        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: lines.count), &origins)
-        for (index, line) in lines.enumerated() {
-            let drawn = index == lines.count - 1
-                ? line
-                : Self.justifiedLine(line, from: attributed, width: bounds.width, font: font, color: color)
-            ctx.textPosition = origins[index]
-            CTLineDraw(drawn, ctx)
-        }
-        ctx.restoreGState()
+        guard !text.isEmpty, bounds.width > 0 else { return }
+        container.size = bounds.size
+        manager.ensureLayout(for: container)
+        let glyphs = manager.glyphRange(for: container)
+        manager.drawGlyphs(forGlyphRange: glyphs, at: .zero)
     }
 
-    private func attributedText() -> NSAttributedString {
-        NSAttributedString(
+    private func makeAttributed() -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .justified
+        style.lineBreakMode = .byCharWrapping
+        return NSAttributedString(
             string: text,
             attributes: [
                 .font: font,
                 .foregroundColor: color,
+                .paragraphStyle: style,
             ]
         )
-    }
-
-    private static func justifiedLine(
-        _ line: CTLine, from attributed: NSAttributedString, width: CGFloat, font: UIFont, color: UIColor
-    ) -> CTLine {
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let used = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
-        let slack = width - used
-        let range = CTLineGetStringRange(line)
-        guard slack > 0.5, range.length > 1 else { return line }
-        let nsText = attributed.string as NSString
-        let substring = nsText.substring(with: NSRange(location: range.location, length: range.length))
-        let kern = slack / CGFloat(range.length - 1)
-        let filled = NSMutableAttributedString(
-            string: substring,
-            attributes: [.font: font, .foregroundColor: color]
-        )
-        filled.addAttribute(.kern, value: kern, range: NSRange(location: 0, length: filled.length - 1))
-        return CTLineCreateWithAttributedString(filled)
     }
 }
 
