@@ -137,11 +137,11 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 
 ### 3.3 訂正有報(130) の XBRL overlay
 
-有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間・同一 `parentDocID` の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。
+有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間・同一 `parentDocID` の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
 
 - **数値 fact**: キーは element + contextRef。訂正に無い項目は原本の値。
 - **行メンバー表**（`Row{N}Member`）: 訂正がその表を含めば行ごと置換（セル混在しない）。
-- **TextBlock**: 訂正に同じ要素があればその本文。無ければ原本。
+- **TextBlock**: 訂正に同じ要素があればその本文。無ければ原本。breakdown の html_table は TextBlock 由来なので overlay 後の本文を使う。
 - **HTML 見出し経路**: filing-sections の honbun 抽出と US-GAAP 0105010 本表は原本 HTML。Overview は overlay があるとき TextBlock を先に見る。
 - パースできない 130 はその件だけ飛ばす。期間が違う・親が違う訂正は選ばない。複数なら後勝ち。
 - 回帰は `XbrlAmendmentSourceTests`。`cache_version` はバンプしない（データ源の refinement。対象会社-FY は `--doc-ids` で再 ingest）。
